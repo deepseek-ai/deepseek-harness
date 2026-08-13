@@ -15,7 +15,7 @@
     "dayjs": "1.11.21",
     "debug": "4.4.3",
     "mermaid": "11.16.0",
-    "vite": "^5.4.14",
+    "vite": "^8.1.4",
     "vitepress": "^1.6.4",
     "vitepress-plugin-mermaid": "^2.0.17"
   }
