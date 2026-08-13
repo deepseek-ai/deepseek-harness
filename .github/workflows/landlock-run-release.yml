@@ -72,7 +72,7 @@ jobs:
         run: node ./scripts/verify-launcher-binary.mjs ${{ matrix.dir }}
 
       - name: Upload prebuild artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: native/landlock-run/${{ matrix.dir }}/bin/*
@@ -130,7 +130,7 @@ jobs:
           NALR_REQUIRE_LANDLOCK: 1
 
       - name: Upload npm tarballs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: npm-tarballs
           path: native/landlock-run/dist/npm/*

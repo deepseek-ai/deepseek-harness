@@ -85,7 +85,7 @@ jobs:
       - name: Verify packed install
         run: pnpm run release:verify-packed-install --family vendor --from dist/npm-vendor
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: vendor-npm-tarballs
           path: dist/npm-vendor/*

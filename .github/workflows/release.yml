@@ -99,7 +99,7 @@ jobs:
       - name: Verify packed install
         run: pnpm run release:verify-packed-install --family dsh --from dist/npm --from dist/npm-vendor --from dist/npm-landlock
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: dsh-npm-tarballs
           path: dist/npm/*
