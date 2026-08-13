@@ -173,7 +173,7 @@
     "publint": "^0.3.21",
     "smol-toml": "^1.7.1",
     "spdx-expression-parse": "^5.0.0",
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.22.7",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vite-tsconfig-paths": "^6.1.1",
