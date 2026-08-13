@@ -172,7 +172,7 @@ jobs:
 
       # Cache pkg's target Node binary; lockfile changes roll the
       # exact key while the restore prefix can seed its replacement.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.pkg-cache
           key: pkg-fetch-${{ matrix.target }}-${{ hashFiles('pnpm-lock.yaml') }}
