@@ -51,7 +51,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "react": "^18.2.0"
+    "react": "^19.2.7"
   },
   "peerDependencies": {
     "@deepseek-ai/dsh-client-locale": "workspace:^",
@@ -76,7 +76,7 @@
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-tool-workflow": "workspace:^",
     "@deepseek-ai/dsh-workflow": "workspace:^",
-    "@types/react": "~18.3.1",
+    "@types/react": "~19.2.17",
     "@deepseek-ai/cordis": "workspace:^"
   }
 }

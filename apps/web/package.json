@@ -27,7 +27,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-client-web": "workspace:^",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
@@ -39,7 +39,7 @@
     "@deepseek-ai/dsh-cmdline": "workspace:^",
     "@deepseek-ai/dsh-pwsh-local": "workspace:^",
     "@types/node": "^22.0.0",
-    "@types/react": "~18.3.1",
+    "@types/react": "~19.2.17",
     "@types/react-dom": "~18.3.0",
     "@vitejs/plugin-react": "^4.0.0",
     "playwright": "^1.49.0",

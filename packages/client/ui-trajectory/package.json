@@ -57,7 +57,7 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
@@ -71,10 +71,10 @@
     "@deepseek-ai/dsh-compaction": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
-    "@types/react": "~18.3.1",
+    "@types/react": "~19.2.17",
     "@types/react-dom": "~18.3.0",
     "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0"
   },
   "files": [

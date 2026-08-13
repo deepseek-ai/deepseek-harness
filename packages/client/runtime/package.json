@@ -55,7 +55,7 @@
     "@deepseek-ai/dsh-session-title": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "immer": "^10.1.1",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "zustand": "~4.4.7"
   },
   "peerDependencies": {
@@ -72,7 +72,7 @@
     "@deepseek-ai/dsh-timeout": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/dsh-typert-registry": "workspace:^",
-    "@types/react": "~18.3.1"
+    "@types/react": "~19.2.17"
   },
   "files": [
     "lib/index.js",

@@ -57,7 +57,7 @@
     "@deepseek-ai/dsh-message-feedback": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "react": "^19.2.7"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
@@ -73,8 +73,8 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@testing-library/react": "^16.1.0",
-    "@types/react": "~18.3.1",
-    "react": "^18.2.0",
+    "@types/react": "~19.2.17",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0"
   },
   "files": [

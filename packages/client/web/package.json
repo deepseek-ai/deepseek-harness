@@ -34,7 +34,7 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-client-ui-theme": "workspace:^",
     "@deepseek-ai/dsh-client-web-react": "workspace:^",
-    "react": "^18.2.0",
+    "react": "^19.2.7",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
@@ -42,7 +42,7 @@
     "@deepseek-ai/dsh-client-runtime": "workspace:^",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@types/react": "~18.3.1",
+    "@types/react": "~19.2.17",
     "@types/react-dom": "~18.3.0",
     "@deepseek-ai/cordis": "workspace:^",
     "typescript": "^6.0.3"

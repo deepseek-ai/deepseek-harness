@@ -58,7 +58,7 @@
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "clsx": "^2.1.1",
     "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "react": "^19.2.7"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
@@ -72,10 +72,10 @@
     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@types/react": "~18.3.1",
+    "@types/react": "~19.2.17",
     "clsx": "^2.1.1",
     "@deepseek-ai/cordis": "workspace:^",
-    "react": "^18.2.0"
+    "react": "^19.2.7"
   },
   "files": [
     "lib/index.js",
