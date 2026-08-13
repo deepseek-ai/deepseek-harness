@@ -154,7 +154,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
       # setup-node's built-in pnpm store cache keys on platform AND arch, so
       # the Linux architectures sharing runner.os stay on separate caches.
