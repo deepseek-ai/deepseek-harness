@@ -108,7 +108,7 @@ jobs:
           RELEASE_PUBLISH: ${{ inputs.publish }}
 
       - name: Download prebuild artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: prebuild-*
           path: native/landlock-run/.release/prebuild-artifacts
@@ -159,7 +159,7 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Download npm tarballs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: npm-tarballs
           path: native/landlock-run/dist/npm
