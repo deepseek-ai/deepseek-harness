@@ -36,7 +36,7 @@
     "@deepseek-ai/cordis": "workspace:^"
   },
   "dependencies": {
-    "e2b": "2.29.1",
+    "e2b": "2.33.0",
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
