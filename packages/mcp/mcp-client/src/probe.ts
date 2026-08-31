@@ -11,6 +11,7 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import { withDeadline } from './deadline.ts'
 import { createTransport } from './transport.ts'
 import type { Config } from './index.ts'
 
@@ -62,22 +63,7 @@ const PROBE_MAX_TOOL_NAMES = 512
 
 /** Reject when the shared probe budget elapses before `promise` settles. */
 function withProbeDeadline<T>(promise: Promise<T>, remainingMs: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`probe timed out after its ${String(remainingMs)}ms remaining budget`))
-    }, Math.max(1, remainingMs))
-    timer.unref()
-    promise.then(
-      (value) => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (error: unknown) => {
-        clearTimeout(timer)
-        reject(error instanceof Error ? error : new Error(String(error)))
-      },
-    )
-  })
+  return withDeadline(promise, remainingMs, `probe timed out after its ${String(remainingMs)}ms remaining budget`)
 }
 
 /**

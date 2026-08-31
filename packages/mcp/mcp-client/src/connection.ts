@@ -19,6 +19,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { withDeadline } from './deadline.ts'
 import type { McpStatusCell } from './status.ts'
 import { createTransport } from './transport.ts'
 import { syncTools } from './tools.ts'
@@ -118,22 +119,7 @@ export interface ConnectionHandle {
  * the same containment path as any other attempt failure.
  */
 function withStartupBudget<T>(promise: Promise<T>, remainingMs: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`${label}: startup timed out after the configured startupTimeoutMs budget`))
-    }, Math.max(1, remainingMs))
-    timer.unref()
-    promise.then(
-      (value) => {
-        clearTimeout(timer)
-        resolve(value)
-      },
-      (error: unknown) => {
-        clearTimeout(timer)
-        reject(error instanceof Error ? error : new Error(String(error)))
-      },
-    )
-  })
+  return withDeadline(promise, remainingMs, `${label}: startup timed out after the configured startupTimeoutMs budget`)
 }
 
 /**
