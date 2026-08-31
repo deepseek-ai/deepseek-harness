@@ -367,6 +367,8 @@
       "@deepseek-ai/dsh-lsp-stdio/invariant": ["./packages/lsp/lsp-stdio/src/invariant.ts"],
       "@deepseek-ai/dsh-mcp-client": ["./packages/mcp/mcp-client/src"],
       "@deepseek-ai/dsh-mcp-client/invariant": ["./packages/mcp/mcp-client/src/invariant.ts"],
+      "@deepseek-ai/dsh-mcp-manager": ["./packages/mcp/mcp-manager/src"],
+      "@deepseek-ai/dsh-mcp-manager/invariant": ["./packages/mcp/mcp-manager/src/invariant.ts"],
       "@deepseek-ai/dsh-message-feedback": ["./packages/feedback/message-feedback/src"],
       "@deepseek-ai/dsh-message-feedback/invariant": ["./packages/feedback/message-feedback/src/invariant.ts"],
       "@deepseek-ai/dsh-native-command": ["./packages/util/native-command/src"],

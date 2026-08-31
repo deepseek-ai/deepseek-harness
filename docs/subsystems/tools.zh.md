@@ -475,6 +475,45 @@ type ObjectJsonSchema = JsonSchemaNode & { type: 'object' }
 
 Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnpm run verify-cordis-catalog` in doc-sync; regenerate with `pnpm run gen-cordis-catalog`) — the language sides differ only in locale-specific paired document paths. Signature blocks use a `ts cordis-catalog` fence and keep the original source JSDoc; dispatch modes are defined in the [primer](../cordis-primer.zh.md#dispatch-modes), and the framework-inherited `ctx` API lives in [cordis-api/inherited.md](../cordis-api/inherited.md).
 
+<a id="ctxmcpservers--mcpservermanager"></a>
+
+### `ctx.mcpServers` — `McpServerManager`
+
+The manager service. Reconciliation, `restart`, and rotation-driven rebuilds are serialized on one operation tail, so two lifecycle operations can never interleave one instance's unmount/mount.
+
+```ts cordis-catalog
+/**
+ * Every configured server with its durable intent, deletability, and
+ * current runtime status. Read-only: listing never mounts, connects, or
+ * probes anything.
+ * @returns one view per configured entry, in document order.
+ */
+list(): McpManagedServerView[]
+
+/**
+ * Rebuild one server from its current configuration: dispose the live
+ * instance (if any) and mount a fresh one. This is the manual recovery for
+ * every terminal `failed` state — a fresh instance starts a fresh reconnect
+ * budget — and the plain reconnect affordance while connected.
+ * @param name - the configured entry key.
+ * @throws when no entry of that name is configured.
+ */
+async restart(name: string): Promise<void>
+
+/**
+ * Probe one configured server without touching its live instance: resolve
+ * the entry's templates, connect, list tools, close. A disabled entry can be
+ * probed — that is how a management surface tests it before enabling.
+ * @param name - the configured entry key.
+ * @param options - probe budget and abort signal.
+ * @returns the stage-classified probe outcome.
+ * @throws when no entry of that name is configured or its templates do not resolve.
+ */
+async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>
+```
+
+Source: [`packages/mcp/mcp-manager/src/index.ts`](../../packages/mcp/mcp-manager/src/index.ts)
+
 <a id="ctxtools--toolruntime"></a>
 
 ### `ctx.tools` — `ToolRuntime`
@@ -572,6 +611,32 @@ async execute(exec: ToolExecutionInput): Promise<ToolExecutionResult>
 Types: [ScopeKey](scope.zh.md)
 
 Source: [`packages/core/tools/src/index.ts`](../../packages/core/tools/src/index.ts)
+
+<a id="mcp-manager-events"></a>
+
+### `mcp-manager/*` events
+
+<a id="mcp-managerstatus--emit"></a>
+
+#### `mcp-manager/status` — emit
+
+One managed server's status transitioned. Emitted for every published change while the entry exists — connection-state transitions mirrored from the instance, `disabled` when the entry is configured off, and the manager-side `failed` reasons. Not emitted for an entry removed from configuration; observers learn removals from the settings document.
+
+```ts cordis-catalog
+/**
+ * One managed server's status transitioned. Emitted for every published
+ * change while the entry exists — connection-state transitions mirrored
+ * from the instance, `disabled` when the entry is configured off, and the
+ * manager-side `failed` reasons. Not emitted for an entry removed from
+ * configuration; observers learn removals from the settings document.
+ * @param name - the `mcp.servers` entry key.
+ * @param status - the status now current for that server.
+ * @mode emit
+ */
+'mcp-manager/status'(name: string, status: McpManagedServerStatus): void
+```
+
+Source: [`packages/mcp/mcp-manager/src/types.ts`](../../packages/mcp/mcp-manager/src/types.ts)
 
 <a id="tools-events"></a>
 

@@ -1206,6 +1206,32 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'mcpServers',
+    summary: 'The manager service.',
+    description: 'The manager service. Reconciliation, `restart`, and rotation-driven rebuilds are serialized on one operation tail, so two lifecycle operations can never interleave one instance\'s unmount/mount.',
+    methods: [
+      {
+        signature: 'list(): McpManagedServerView[]',
+        description: 'Every configured server with its durable intent, deletability, and current runtime status. Read-only: listing never mounts, connects, or probes anything.',
+        parameters: [],
+        returns: 'one view per configured entry, in document order.',
+      },
+      {
+        signature: 'async restart(name: string): Promise<void>',
+        description: 'Rebuild one server from its current configuration: dispose the live instance (if any) and mount a fresh one. This is the manual recovery for every terminal `failed` state — a fresh instance starts a fresh reconnect budget — and the plain reconnect affordance while connected.',
+        parameters: [{ name: 'name', description: 'the configured entry key.' }],
+        throws: ['when no entry of that name is configured.'],
+      },
+      {
+        signature: 'async probe(name: string, options?: McpProbeOptions): Promise<McpProbeResult>',
+        description: 'Probe one configured server without touching its live instance: resolve the entry\'s templates, connect, list tools, close. A disabled entry can be probed — that is how a management surface tests it before enabling.',
+        parameters: [{ name: 'name', description: 'the configured entry key.' }, { name: 'options', description: 'probe budget and abort signal.' }],
+        returns: 'the stage-classified probe outcome.',
+        throws: ['when no entry of that name is configured or its templates do not resolve.'],
+      },
+    ],
+  },
+  {
     key: 'messageFeedback',
     summary: 'Storage-domain sidecar service.',
     description: 'Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.',
@@ -3184,6 +3210,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; their messages already obey the immutable creation contract.' }],
   },
   {
+    name: 'mcp-manager/status',
+    mode: 'emit',
+    signature: '\'mcp-manager/status\'(name: string, status: McpManagedServerStatus): void',
+    summary: 'One managed server\'s status transitioned.',
+    description: 'One managed server\'s status transitioned. Emitted for every published change while the entry exists — connection-state transitions mirrored from the instance, `disabled` when the entry is configured off, and the manager-side `failed` reasons. Not emitted for an entry removed from configuration; observers learn removals from the settings document.',
+    parameters: [{ name: 'name', description: 'the `mcp.servers` entry key.' }, { name: 'status', description: 'the status now current for that server.' }],
+  },
+  {
     name: 'session-telemetry/record',
     mode: 'waterfall',
     signature: '\'session-telemetry/record\'(record: SessionTelemetryRecord, next: () => SessionTelemetryRecord): SessionTelemetryRecord',
@@ -4390,6 +4424,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'McpConnectionStatus',
+    declaration: 'export type McpConnectionStatus = {\n    state: \'connecting\';\n    attempt: number;\n} | {\n    state: \'connected\';\n    toolCount: number;\n    connectedAt: number;\n} | {\n    state: \'reconnecting\';\n    attempt: number;\n    maxAttempts: number;\n    nextRetryAtMs: number;\n    lastError: string;\n} | {\n    state: \'failed\';\n    reason: \'gave-up\' | \'reconnect-disabled\' | \'unclosed-generation\';\n    lastError?: string;\n};',
+  },
+  {
+    name: 'McpManagedServerStatus',
+    declaration: 'export type McpManagedServerStatus = McpConnectionStatus | {\n    state: \'disabled\';\n} | {\n    state: \'failed\';\n    reason: \'resolve\' | \'load\';\n    lastError: string;\n};',
+  },
+  {
+    name: 'McpManagedServerView',
+    declaration: 'export interface McpManagedServerView {\n    name: string;\n    transport: \'stdio\' | \'streamable-http\';\n    enabled: boolean;\n    deletable: boolean;\n    status: McpManagedServerStatus;\n}',
+  },
+  {
+    name: 'McpProbeFailure',
+    declaration: 'export interface McpProbeFailure {\n    ok: false;\n    stage: McpProbeStage;\n    message: string;\n    durationMs: number;\n}',
+  },
+  {
+    name: 'McpProbeOptions',
+    declaration: 'export interface McpProbeOptions {\n    timeoutMs?: number;\n    signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'McpProbeResult',
+    declaration: 'export type McpProbeResult = McpProbeSuccess | McpProbeFailure;',
+  },
+  {
+    name: 'McpProbeStage',
+    declaration: 'export type McpProbeStage = \'connect\' | \'list\';',
+  },
+  {
+    name: 'McpProbeSuccess',
+    declaration: 'export interface McpProbeSuccess {\n    ok: true;\n    serverInfo?: {\n        name: string;\n        version: string;\n    };\n    toolNames: string[];\n    truncated: boolean;\n    durationMs: number;\n}',
   },
   {
     name: 'Message',

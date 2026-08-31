@@ -1377,6 +1377,8 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
+  startupTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1399,6 +1401,8 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
+  startupTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1418,7 +1422,57 @@ export interface ReconnectConfig {
 }
 ```
 
-来源：[`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+来源：[`packages/mcp/mcp-client/src/index.ts:124`](../packages/mcp/mcp-client/src/index.ts)
+
+<a id="deepseek-aidsh-mcp-manager"></a>
+
+## `@deepseek-ai/dsh-mcp-manager`
+
+需要：`tools`
+
+```ts config-catalog
+/** Manager configuration: the composition-base server set. */
+export interface Config {
+  /** Managed servers keyed by `serverName`. */
+  servers: Record<string, McpManagedServerEntry>
+}
+
+/**
+ * One managed server entry. Deliberately flat rather than a per-transport
+ * union: settings-wire secret redaction follows `object`/`dict`/`array`
+ * containers only, so the `role('secret')` env and header values must not sit
+ * inside a union branch. {@link validateServers} enforces the per-transport
+ * field rules a union schema would have expressed.
+ */
+export interface McpManagedServerEntry {
+  /** Which transport the instance uses. */
+  transport: 'stdio' | 'streamable-http'
+  /** stdio: executable used to start the server; `''` while unset. */
+  command: string
+  /** stdio: arguments passed without shell interpolation. */
+  args: string[]
+  /** stdio: extra child environment; values may use `${env:…}` / `${credential:…}` templates. */
+  env: Record<string, string>
+  /** stdio: working directory for the child process. */
+  cwd: string
+  /** streamable-http: MCP endpoint URL; `''` while unset. */
+  url: string
+  /** streamable-http: extra request headers; values may use templates. */
+  headers: Record<string, string>
+  /** Durable intent: whether the entry asks for a running instance. */
+  enabled: boolean
+  /** Per-tool-call timeout override in milliseconds; omission uses the mcp-client default. */
+  toolCallTimeoutMs?: number
+  /** Per-attempt startup budget override in milliseconds; omission uses the mcp-client default. */
+  startupTimeoutMs?: number
+  /** Reconnect policy; the schema fills the mcp-client defaults. */
+  reconnect: ReconnectConfig
+}
+```
+
+依赖：[`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts)
+
+来源：[`packages/mcp/mcp-manager/src/index.ts:74`](../packages/mcp/mcp-manager/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 

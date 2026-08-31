@@ -55,6 +55,7 @@ export { REGION_BEGIN, REGION_END }
  */
 export const SERVICE_PAGE: Record<string, string> = {
   agentLoop: 'core.md',
+  mcpServers: 'tools.md',
   agentDefaultModel: 'core.md',
   agentPresets: 'core.md',
   agents: 'core.md',
@@ -196,6 +197,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'fs': 'filesystem.md',
   'goal': 'goal.md',
   'llm': 'llm-streaming.md',
+  'mcp-manager': 'tools.md',
   'session': 'session.md',
   'settings': 'settings.md',
   'skills': 'skills.md',
@@ -657,6 +659,10 @@ export const TYPE_LINK_EXEMPTIONS: Readonly<Record<string, string>> = {
   ConsumeTokenRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   InsertTextRequest: 'event-local request contract is owned by packages/client/ui-input-trigger/src/types.ts',
   AgentHandle: 'agent ownership handle is owned by packages/core/agent/README.md',
+  McpManagedServerStatus: 'managed-server status union is owned by packages/mcp/mcp-manager/README.md',
+  McpManagedServerView: 'managed-server list view is owned by packages/mcp/mcp-manager/README.md',
+  McpProbeOptions: 'probe options are owned by packages/mcp/mcp-client/README.md',
+  McpProbeResult: 'probe outcome union is owned by packages/mcp/mcp-client/README.md',
   AgentPreset: 'discovered preset record is owned by packages/preset/agent-presets/README.md',
   AgentPresetRoster: 'path-free preset roster is owned by packages/preset/agent-presets/README.md',
   AgentPresetDocument: 'preset composition view is owned by packages/preset/agent-presets/README.md',
