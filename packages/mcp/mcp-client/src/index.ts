@@ -19,11 +19,16 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
+import { McpStatusCell, connectionStatusIn, registerStatusCell } from './status.ts'
+import type { McpConnectionStatusHandle } from './status.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
 export type { McpResult } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
+export type { McpConnectionStatus, McpConnectionStatusHandle } from './status.ts'
+export { probeServer } from './probe.ts'
+export type { McpProbeOptions, McpProbeResult, McpProbeStage } from './probe.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-client'
@@ -34,8 +39,11 @@ export const inject = ['tools']
 /** Default timeout for individual MCP tool calls (ms). */
 const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 
+/** Default budget for one connection attempt plus its initial tool sync (ms). */
+const DEFAULT_STARTUP_TIMEOUT_MS = 30_000
+
 /** Valid `serverName`, kept below the public tool-name budget. */
-const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
+export const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
 /**
  * Live `serverName` reservations per registration scope. Agent-scoped MCP
@@ -43,6 +51,20 @@ const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
  * duplicates inside one Agent remain mutually exclusive.
  */
 const activeServerNames = new WeakMap<object, Set<string>>()
+
+/**
+ * The connection-status handle of the live mcp-client instance named
+ * `serverName` in `ctx`'s registration scope. Same-scope callers — a manager
+ * that plugged the instance, or a sibling plugin — observe connection state
+ * without owning the instance; the handle disappears when the instance is
+ * disposed.
+ * @param ctx - a context sharing the instance's registration scope.
+ * @param serverName - the instance's configured namespace.
+ * @returns the read-and-observe handle, or `undefined` when the name has no live instance in this scope.
+ */
+export function connectionStatusOf(ctx: Context, serverName: string): McpConnectionStatusHandle | undefined {
+  return connectionStatusIn(scopeOf(ctx) ?? ctx.root, serverName)
+}
 
 // ---- Config ----
 
@@ -66,6 +88,8 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
+  startupTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -88,6 +112,8 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
+  startupTimeoutMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -97,13 +123,18 @@ export interface StreamableHttpConfig {
 /** Configuration for one stdio or Streamable HTTP MCP server. */
 export type Config = StdioConfig | StreamableHttpConfig
 
-type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
+type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>
+  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>
+  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
-const Reconnect: z<ReconnectConfig> = z.object({
+/**
+ * Reconnect-policy section schema, exported so a manager composing mcp-client
+ * instances (`dsh-mcp-manager`) validates the same fields, defaults, and
+ * bounds without restating them.
+ */
+export const ReconnectSchema: z<ReconnectConfig> = z.object({
   enabled: z.boolean().default(RECONNECT_DEFAULTS.enabled),
   initialDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.initialDelayMs),
   maxDelayMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(RECONNECT_DEFAULTS.maxDelayMs),
@@ -119,8 +150,9 @@ export const Config = z.union([
     env: z.dict(String).default({}),
     cwd: z.string().default(''),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STARTUP_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
-    reconnect: Reconnect,
+    reconnect: ReconnectSchema,
   }),
   z.object({
     transport: z.const('streamable-http'),
@@ -128,8 +160,9 @@ export const Config = z.union([
     url: z.string().required(),
     headers: z.dict(String).default({}),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STARTUP_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
-    reconnect: Reconnect,
+    reconnect: ReconnectSchema,
   }),
 ]) as unknown as z<ConfigInput, Config>
 
@@ -151,6 +184,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.
+  // The status cell registers and releases with the reservation, so the
+  // per-scope status lookup answers exactly while this instance is live.
+  const status = new McpStatusCell((message, error) => {
+    ctx.logger.warn(`mcp-client(${config.serverName}): ${message}`)
+    ctx.logger.warn(error)
+  })
   ctx.effect(() => {
     const owner = scopeOf(ctx) ?? ctx.root
     let names = activeServerNames.get(owner)
@@ -164,13 +203,17 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       )
     }
     names.add(config.serverName)
-    return () => void names.delete(config.serverName)
+    const releaseCell = registerStatusCell(owner, config.serverName, status)
+    return () => {
+      releaseCell()
+      names.delete(config.serverName)
+    }
   }, 'mcp-client.serverName')
 
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
+  const connection = startConnection(ctx, config, reconnect, status)
 
   ctx.effect(() => {
     return () => connection.dispose()

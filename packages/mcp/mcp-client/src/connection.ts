@@ -19,6 +19,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import type { McpStatusCell } from './status.ts'
 import { createTransport } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
@@ -112,15 +113,40 @@ export interface ConnectionHandle {
 }
 
 /**
+ * Reject `promise` when the shared startup budget runs out before it settles.
+ * The caller owns the failed generation's close, so a timeout rejection takes
+ * the same containment path as any other attempt failure.
+ */
+function withStartupBudget<T>(promise: Promise<T>, remainingMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`${label}: startup timed out after the configured startupTimeoutMs budget`))
+    }, Math.max(1, remainingMs))
+    timer.unref()
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error: unknown) => {
+        clearTimeout(timer)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      },
+    )
+  })
+}
+
+/**
  * Start the supervised connection for one MCP server and keep it alive per
  * the reconnect policy.
  *
  * @param ctx - Cordis context providing the `tools` registry and logger.
  * @param config - Resolved plugin config selecting the transport and server identity.
  * @param policy - Resolved reconnect policy from {@link resolveReconnectPolicy}.
+ * @param status - Instance status cell this supervisor publishes transitions to.
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
-export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
+export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy, status: McpStatusCell): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
   const opts: ToolBridgeOptions = {
     registrationFailure: 'contain',
@@ -148,6 +174,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   let connectedAt: number | undefined
   /** The real error from the first connection attempt, for startup-await diagnostics. */
   let firstAttemptError: unknown
+  /** Diagnostic text of the most recent connection failure, for status payloads. */
+  let lastErrorText: string | undefined
 
   /** A generation may act only while it is the current one on a live plugin. */
   const isCurrent = (generation: Client): boolean => !disposed && client === generation
@@ -191,11 +219,15 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
 
   function scheduleReconnect(): void {
     const lostEstablishedConnection = connectedAt !== undefined
+    // A lost established connection carries no thrown error; the close signal
+    // itself is the most recent failure the status can report.
+    if (lostEstablishedConnection) lastErrorText = 'connection closed'
     if (!policy.enabled) {
       const message = lostEstablishedConnection
         ? 'connection lost and reconnect is disabled — registered tools will fail until an HMR reload or Host restart'
         : 'connection failed and reconnect is disabled — no tools were registered; reload the plugin or restart the Host to connect'
       ctx.logger.error(`${label}: ${message}`)
+      status.update({ state: 'failed', reason: 'reconnect-disabled', ...lastErrorText === undefined ? {} : { lastError: lastErrorText } })
       return
     }
     // A connection that stayed up past the stability window (= maxDelayMs, the
@@ -211,13 +243,22 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         disposers = new Map()
       })
       ctx.logger.error(`${label}: giving up after ${policy.maxAttempts} consecutive failed reconnect attempts — tools unregistered; reload the plugin or restart the Host to reconnect`)
+      status.update({ state: 'failed', reason: 'gave-up', ...lastErrorText === undefined ? {} : { lastError: lastErrorText } })
       return
     }
     const delayMs = Math.min(policy.maxDelayMs, policy.initialDelayMs * 2 ** (failedAttempts - 1))
     const action = lostEstablishedConnection ? 'connection lost; reconnecting' : 'connection failed; retrying'
     ctx.logger.warn(`${label}: ${action} in ${delayMs}ms (attempt ${failedAttempts}/${policy.maxAttempts})`)
+    status.update({
+      state: 'reconnecting',
+      attempt: failedAttempts,
+      maxAttempts: policy.maxAttempts,
+      nextRetryAtMs: Date.now() + delayMs,
+      lastError: lastErrorText ?? 'connection closed',
+    })
     reconnectTimer = setTimeout(() => {
       reconnectTimer = undefined
+      status.update({ state: 'connecting', attempt: failedAttempts })
       settling = connectGeneration(false)
     }, delayMs)
     // An armed reconnect timer must never hold the process open on its own.
@@ -261,6 +302,11 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         ctx.logger.info(`${label}: tool list changed, re-syncing`)
         try {
           await enqueueSync(generation)
+          // A successful re-sync may have changed the registered set; republish
+          // the connected status so observers see the current tool count.
+          if (isCurrent(generation) && connectedAt !== undefined) {
+            status.update({ state: 'connected', toolCount: disposers.size, connectedAt })
+          }
         } catch (error) {
           // Fetch-phase failure: the previous generation is still registered
           // and `disposers` still owns it — keep serving the last good list.
@@ -269,15 +315,24 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       },
     )
     try {
-      await generation.connect(createTransport(config))
+      // One budget spans connect plus the initial tool sync, so a server that
+      // accepts the transport but stalls discovery cannot hold startup —
+      // or a reconnect attempt — open past the configured bound.
+      const startedAt = Date.now()
+      await withStartupBudget(generation.connect(createTransport(config)), config.startupTimeoutMs, label)
       if (hasClosed()) {
         attemptSettled = true
         generationDown(generation)
         return
       }
-      await enqueueSync(generation, startup ? startupOpts : opts)
+      await withStartupBudget(
+        enqueueSync(generation, startup ? startupOpts : opts),
+        config.startupTimeoutMs - (Date.now() - startedAt),
+        label,
+      )
     } catch (error) {
       if (firstAttemptError === undefined) firstAttemptError = error
+      lastErrorText = String(error)
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
       if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
@@ -289,6 +344,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         client = undefined
         clientClosed = undefined
         ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
+        status.update({ state: 'failed', reason: 'unclosed-generation', lastError: String(error) })
         return
       }
       generationDown(generation)
@@ -301,6 +357,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     }
     if (!isCurrent(generation)) return
     connectedAt = Date.now()
+    status.update({ state: 'connected', toolCount: disposers.size, connectedAt })
     if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
   }
 

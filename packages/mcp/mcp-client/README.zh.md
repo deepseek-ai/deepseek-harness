@@ -59,6 +59,7 @@ kind: "package-reference"
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗过的环境之上的额外环境变量、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 调用的超时 |
+| `startupTimeoutMs` | `30,000` | 单次连接尝试加初次工具同步的预算 |
 | `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝插件激活 |
 | `reconnect.enabled` | `true` | 连接丢失后自动重新连接 |
 | `reconnect.initialDelayMs` | `500` | 首次重连延迟；每次连续失败尝试翻倍 |
@@ -86,7 +87,7 @@ kind: "package-reference"
 
 ### 启动、工具更新与重连
 
-服务器的工具会在 harness 开始首个轮次之前出现。服务器更改工具列表时，模型的工具集会自动更新；更新失败时，上一组工具继续可用。
+服务器的工具会在 harness 开始首个轮次之前出现。每次连接尝试——首次连接与每次重连——都受 `startupTimeoutMs`（默认 30 秒）约束，覆盖连接加初次工具发现，因此无响应的服务器无法拖住启动。服务器更改工具列表时，模型的工具集会自动更新；更新失败时，上一组工具继续可用。
 
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
 
@@ -116,11 +117,15 @@ kind: "package-reference"
 | [`src/connection.ts`](src/connection.ts) | 连接监督器：客户端世代、重连策略、尝试预算、dispose |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
+| [`src/status.ts`](src/status.ts) | 状态面：每实例状态单元与按作用域的查询 |
+| [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；世代只能通过工具注册表观察） |
 
 ### 生命周期与同步
 
 `apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 Agent 作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭活动客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。[自动重连 Agent Note](../../../.agents/notes/implemented/feature/2026-08-06-mcp-client-auto-reconnect.zh.md) 拥有重连决策。
+
+组合实例的管理器（如 `dsh-mcp-manager`）通过 `connectionStatusOf(ctx, serverName)` 观察单个实例：这是对监督器状态单元（`connecting`、`connected`、`reconnecting`、`failed`）的读取加订阅句柄，随 `serverName` 预留一起注册与释放。`probeServer(config)` 回答配置界面的「测试该服务器」，既不预留名字也不触碰 `ctx.tools`。
 
 监督器监听 `notifications/tools/list_changed` 并排队一次重新同步；获取阶段失败时保留上一世代注册，注册冲突则回滚本次尝试的世代。每次中断共享一个尝试预算：连续失败达到 `maxAttempts` 次后工具被注销、重连停止；连接存活超过 `maxDelayMs` 会重置预算。
 
@@ -189,7 +194,7 @@ kind: "package-reference"
 这些限制说明你无法用本插件做什么、以及何时需要运维注意。它们是当前包约束，不是与其他 MCP 客户端的对比，也不是任务积压。
 
 - **只桥接 MCP 的工具能力**——Resources 与 Prompts 没有 harness 消费机制，暂缓实现。
-- **启动与发现超时继承自 MCP SDK**——插件不暴露连接或发现超时；每次 `initialize` 与分页 `tools/list` 请求都使用 SDK 默认的 60 秒请求超时，因此无响应的服务器或 cursor chain 在初始同步完成期间可能同时延迟激活与 teardown。
+- **只有启动尝试受预算约束** —— `startupTimeoutMs` 覆盖每次连接尝试加其初次工具同步；通知驱动的重同步发出的 `tools/list` 请求仍使用 MCP SDK 的 60 秒请求默认值。
 - **重连在传输关闭时触发**——崩溃的 stdio 子进程会触发重连；Streamable HTTP 失败按请求经 SDK 传输自身的恢复机制暴露，因此不可达的 HTTP 服务器会按调用重试，而非由 supervisor 重新 spawn。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **不强制执行不受支持的 MCP 输出 schema**——已声明 schema 使用 harness 子集之外的词汇时，`structuredContent` 回退为 `JsonValue`。
@@ -204,7 +209,6 @@ kind: "package-reference"
 本开发备注是维护者的工作上下文：开放设计问题与尚未决定的探索方向。它明确不具权威性——已交付行为、限制与既定理由以上文、包代码与所链接的 Agent Note 为准。
 
 - 公开名称算法是由测试固定的 v1 约定；发布后更改会破坏会话历史与权限规则。
-- 由 DSH 显式拥有的连接与发现超时是开放的探索方向；SDK 的 60 秒默认值约束着启动与 teardown。
 - Streamable HTTP 的重连归属仍未决定：按请求重试是 SDK 行为，supervisor 也可以拥有 HTTP 世代。
 - 桥接 MCP Resources 需要 harness 侧的注入决策（系统提示词、按需或模型触发）；桥接 Prompts 需要 harness 缺少的提示词模板概念。
 - 固定的 MCP SDK 仍在演化；上游破坏性变更需要更新桥接。

@@ -59,6 +59,7 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra env merged over scrubbed ambient env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` invocation |
+| `startupTimeoutMs` | `30,000` | Budget for one connection attempt plus its initial tool sync |
 | `failOnStartupError` | `false` | Reject plugin activation when the initial connection or tool synchronization fails |
 | `reconnect.enabled` | `true` | Reconnect automatically after a lost connection |
 | `reconnect.initialDelayMs` | `500` | First reconnect delay; doubles per consecutive failed attempt |
@@ -86,7 +87,7 @@ Images are supported when the current model accepts image input and the harness 
 
 ### Startup, updates, and reconnection
 
-The server's tools appear before the harness starts its first turn. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
+The server's tools appear before the harness starts its first turn. Every connection attempt — the first one and each reconnect — is bounded by `startupTimeoutMs` (default 30 seconds) covering the connection plus the initial tool discovery, so an unresponsive server cannot hold startup open. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
 
 When a server connection drops — for example a local server process crashes — the plugin reconnects automatically with delays that double from 500 ms up to 30 s and then refreshes the tool set; reconnect progress is visible in the logs. During an outage the last known tools stay listed but calls to them fail until the server recovers. After ten consecutive failed attempts the server's tools are removed and reconnection stops until you reload the configuration or restart the harness; a server that stays connected for a while resets that counter. Set `reconnect.enabled: false` to disable automatic reconnection — tools then stay listed but fail until you reload. Editing the configuration entry reloads the server connection in place, and unchanged names stay unchanged.
 
@@ -116,11 +117,15 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/connection.ts`](src/connection.ts) | Connection supervisor: client generations, reconnect policy, attempt budget, disposal |
 | [`src/tools.ts`](src/tools.ts) | Tool bridge: discovery, naming, registration swap, execution, image projection |
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |
+| [`src/status.ts`](src/status.ts) | Status surface: the per-instance status cell and the per-scope lookup |
+| [`src/probe.ts`](src/probe.ts) | One-shot probe: connect, identify, list tools, close — nothing registers |
 | [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; generations are observable only through the tool registry) |
 
 ### Lifecycle and sync
 
 `apply` resolves the reconnect policy, reserves the `serverName` inside the current registration scope, starts the supervisor, and awaits the initial connection plus discovery. Independent Agent scopes may reuse the same namespace because their tools and transports are isolated; a duplicate inside one scope fails at load. The supervisor serializes every sync — initial, notification, and reconnect — through one queue so two syncs can never interleave their dispose-previous/register-next swap. Disposal cancels pending reconnects, closes the live client, waits for the in-flight attempt and queued syncs to quiesce, and unregisters the current generation. The [auto-reconnect Agent Note](../../../.agents/notes/implemented/feature/2026-08-06-mcp-client-auto-reconnect.md) owns the reconnect decision.
+
+A manager composing instances (such as `dsh-mcp-manager`) observes one instance through `connectionStatusOf(ctx, serverName)`: a read-and-observe handle over the supervisor's status cell (`connecting`, `connected`, `reconnecting`, `failed`), registered and released with the `serverName` reservation. `probeServer(config)` answers a configuration surface's "test this server" without reserving a name or touching `ctx.tools`.
 
 The supervisor listens for `notifications/tools/list_changed` and queues a re-sync; a fetch-phase failure keeps the previous generation registered, while a registration conflict rolls back the attempted generation. Each outage shares one attempt budget: after `maxAttempts` consecutive failures the tools are unregistered and reconnection stops, and a connection that stays up past `maxDelayMs` resets the budget.
 
@@ -189,7 +194,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits describe what you cannot do with this plugin and when it needs operational attention. They are current package constraints, not a comparison with other MCP clients or a task backlog.
 
 - **Tools are the only bridged MCP capability** — Resources and Prompts have no harness consumer mechanism and are deferred.
-- **Startup and discovery timeouts are inherited from the MCP SDK** — the plugin exposes no connection or discovery timeout; each `initialize` and paginated `tools/list` request uses the SDK's 60-second request default, so an unresponsive server or cursor chain can delay both activation and teardown while the initial synchronization settles.
+- **Only startup attempts are budget-bounded** — `startupTimeoutMs` covers each connection attempt plus its initial tool sync; a notification-driven re-sync's `tools/list` requests still ride the MCP SDK's 60-second request default.
 - **Reconnect triggers on transport close** — a crashed stdio child fires it; Streamable HTTP failures surface per request through the SDK transport's own recovery, so an unreachable HTTP server is retried per call rather than respawned by the supervisor.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Unsupported MCP output schemas are not enforced** — `structuredContent` falls back to `JsonValue` when the advertised schema uses vocabulary outside the harness subset.
@@ -204,7 +209,6 @@ These limits describe what you cannot do with this plugin and when it needs oper
 This Dev Note is working context for maintainers: open design questions and directions that are not decided. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
 - The public-name algorithm is a v1 contract pinned by tests; changing it after release would break session history and permission rules.
-- An explicit DSH-owned connection and discovery timeout is an open direction; the SDK's 60-second default bounds startup and teardown.
 - Reconnect ownership for Streamable HTTP is open: per-request retry is SDK behavior, and the supervisor could also own the HTTP generation.
 - Bridging MCP Resources needs a harness-side injection decision (system prompt, on demand, or model-triggered); bridging Prompts needs a prompt-template concept the harness lacks.
 - The pinned MCP SDK is still evolving; a breaking upstream change requires updating the bridge.

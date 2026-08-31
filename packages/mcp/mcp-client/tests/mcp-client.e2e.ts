@@ -24,7 +24,7 @@ import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { ToolCallId, LlmAdapter, LlmRuntime } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, LlmResolvedModelInfo, StreamChunk } from '@deepseek-ai/dsh-llm'
-import { apply } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { apply, probeServer } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 import { publicToolName } from '@deepseek-ai/dsh-mcp-client/src/tools.ts'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -105,6 +105,7 @@ describe('fixture server — controlled scenarios', () => {
     env: {},
     cwd: packageDir,
     toolCallTimeoutMs: 15_000,
+    startupTimeoutMs: 30_000,
     failOnStartupError: false,
   }
 
@@ -204,6 +205,7 @@ describe('fixture server — duplicate serverName', () => {
       env: {},
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -226,6 +228,7 @@ describe('fixture server — disposal', () => {
       env: {},
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
     })
 
@@ -249,6 +252,7 @@ describe('fixture server — crash recovery', () => {
       env: {},
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
       reconnect,
     }
@@ -333,6 +337,7 @@ describe('server-everything — official test server', () => {
     env: {},
     cwd: '',
     toolCallTimeoutMs: 30_000,
+    startupTimeoutMs: 30_000,
     failOnStartupError: false,
   }
 
@@ -402,6 +407,7 @@ describe('server-filesystem — real filesystem operations', () => {
       env: {},
       cwd: '',
       toolCallTimeoutMs: 30_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -519,6 +525,7 @@ describe('streamable-http — in-process MCP server', () => {
       url: baseUrl,
       headers: { Authorization: 'Bearer e2e-test-token' },
       toolCallTimeoutMs: 15_000,
+      startupTimeoutMs: 30_000,
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -560,4 +567,46 @@ describe('streamable-http — in-process MCP server', () => {
     expect(seenAuth.length).toBeGreaterThan(0)
     for (const auth of seenAuth) expect(auth).toBe('Bearer e2e-test-token')
   })
+})
+
+describe('fixture server — probe', () => {
+  it('probes the stdio fixture without registering tools, then classifies a dead command', async () => {
+    const ctx = await mountRegistry()
+    try {
+      const result = await probeServer({
+        transport: 'stdio',
+        serverName: 'probe',
+        command: process.execPath,
+        args: [fixtureServerPath],
+        env: {},
+        cwd: packageDir,
+        toolCallTimeoutMs: 15_000,
+        startupTimeoutMs: 30_000,
+        failOnStartupError: false,
+      }, { timeoutMs: 20_000 })
+      expect(result).toMatchObject({
+        ok: true,
+        serverInfo: { name: 'fixture-server', version: '1.0.0' },
+        truncated: false,
+      })
+      expect((result as { toolNames: string[] }).toolNames).toContain('add')
+      // Nothing registered: probing is observation, not attachment.
+      expect(ctx.tools.get('mcp__probe__add')).toBeUndefined()
+
+      const dead = await probeServer({
+        transport: 'stdio',
+        serverName: 'probe',
+        command: process.execPath,
+        args: ['--eval', 'process.exit(3)'],
+        env: {},
+        cwd: packageDir,
+        toolCallTimeoutMs: 5_000,
+        startupTimeoutMs: 5_000,
+        failOnStartupError: false,
+      }, { timeoutMs: 5_000 })
+      expect(dead).toMatchObject({ ok: false, stage: 'connect' })
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  }, 40_000)
 })
