@@ -42,6 +42,9 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 /** Default budget for one connection attempt plus its initial tool sync (ms). */
 const DEFAULT_STARTUP_TIMEOUT_MS = 30_000
 
+/** Default spacing between liveness pings on an established connection. */
+const DEFAULT_HEALTH_CHECK_INTERVAL_MS = 30_000
+
 /** Valid `serverName`, kept below the public tool-name budget. */
 export const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
 
@@ -90,6 +93,14 @@ export interface StdioConfig {
   toolCallTimeoutMs: number
   /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
   startupTimeoutMs: number
+  /**
+   * Spacing between liveness pings on an established connection, in
+   * milliseconds; the same value bounds each ping's answer. A failed or
+   * timed-out ping closes the generation into the reconnect path — the only
+   * way a silently dead Streamable HTTP server (no close signal between
+   * requests) is detected.
+   */
+  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -114,6 +125,14 @@ export interface StreamableHttpConfig {
   toolCallTimeoutMs: number
   /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
   startupTimeoutMs: number
+  /**
+   * Spacing between liveness pings on an established connection, in
+   * milliseconds; the same value bounds each ping's answer. A failed or
+   * timed-out ping closes the generation into the reconnect path — the only
+   * way a silently dead Streamable HTTP server (no close signal between
+   * requests) is detected.
+   */
+  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -123,10 +142,10 @@ export interface StreamableHttpConfig {
 /** Configuration for one stdio or Streamable HTTP MCP server. */
 export type Config = StdioConfig | StreamableHttpConfig
 
-type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'failOnStartupError'>>
+type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError'>
+  & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError'>>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError'>
+  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'startupTimeoutMs' | 'healthCheckIntervalMs' | 'failOnStartupError'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
 /**
@@ -141,6 +160,9 @@ export const ReconnectSchema: z<ReconnectConfig> = z.object({
   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
 })
 
+/* jscpd:ignore-start */
+// The catalog generator statically walks this literal and rejects spreads and
+// computed keys, so the branches restate their shared rows by construction.
 export const Config = z.union([
   z.object({
     transport: z.const('stdio'),
@@ -151,6 +173,7 @@ export const Config = z.union([
     cwd: z.string().default(''),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STARTUP_TIMEOUT_MS),
+    healthCheckIntervalMs: z.number().min(1_000).max(MAX_TIMER_DELAY_MS).default(DEFAULT_HEALTH_CHECK_INTERVAL_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: ReconnectSchema,
   }),
@@ -161,10 +184,12 @@ export const Config = z.union([
     headers: z.dict(String).default({}),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS).default(DEFAULT_STARTUP_TIMEOUT_MS),
+    healthCheckIntervalMs: z.number().min(1_000).max(MAX_TIMER_DELAY_MS).default(DEFAULT_HEALTH_CHECK_INTERVAL_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: ReconnectSchema,
   }),
 ]) as unknown as z<ConfigInput, Config>
+/* jscpd:ignore-end */
 
 // ---- Plugin apply ----
 

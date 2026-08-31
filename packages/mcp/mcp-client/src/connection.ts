@@ -183,9 +183,57 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     return run
   }
 
+  /**
+   * The diagnostic the next scheduleReconnect reports for a lost established
+   * connection; set by the health ping so its failure is not flattened to the
+   * generic close text.
+   */
+  let pendingDownReason: string | undefined
+
+  /** Armed while a generation is established: one liveness ping per interval. */
+  let healthTimer: NodeJS.Timeout | undefined
+
+  function stopHealthCheck(): void {
+    if (healthTimer !== undefined) {
+      clearTimeout(healthTimer)
+      healthTimer = undefined
+    }
+  }
+
+  /**
+   * Chain the next liveness ping on the established generation. Stdio deaths
+   * already close the transport, but Streamable HTTP has no connection between
+   * requests, so only this ping turns a silently dead server into the
+   * onclose-driven reconnect path. The next ping arms only after the previous
+   * one settles, and the interval doubles as each ping's answer budget.
+   */
+  function armHealthPing(generation: Client): void {
+    stopHealthCheck()
+    healthTimer = setTimeout(() => {
+      healthTimer = undefined
+      void withDeadline(
+        generation.ping(),
+        config.healthCheckIntervalMs,
+        `${label}: health ping timed out after ${config.healthCheckIntervalMs}ms`,
+      ).then(
+        () => { if (isCurrent(generation)) armHealthPing(generation) },
+        (error: unknown) => {
+          if (!isCurrent(generation)) return
+          pendingDownReason = String(error)
+          ctx.logger.warn(`${label}: health ping failed: ${String(error)} — closing the connection to reconnect`)
+          // A close that completes reaches generationDown through onclose; a
+          // transport too broken to close still must not strand the supervisor.
+          generation.close().catch(() => { generationDown(generation) })
+        },
+      )
+    }, config.healthCheckIntervalMs)
+    healthTimer.unref()
+  }
+
   /** One disconnect decision per generation: the isCurrent guard makes racing close/error signals idempotent. */
   function generationDown(generation: Client): void {
     if (!isCurrent(generation)) return
+    stopHealthCheck()
     client = undefined
     clientClosed = undefined
     scheduleReconnect()
@@ -206,8 +254,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   function scheduleReconnect(): void {
     const lostEstablishedConnection = connectedAt !== undefined
     // A lost established connection carries no thrown error; the close signal
-    // itself is the most recent failure the status can report.
-    if (lostEstablishedConnection) lastErrorText = 'connection closed'
+    // itself — or the health ping failure that forced it — is the most recent
+    // failure the status can report.
+    if (lostEstablishedConnection) lastErrorText = pendingDownReason ?? 'connection closed'
+    pendingDownReason = undefined
     if (!policy.enabled) {
       const message = lostEstablishedConnection
         ? 'connection lost and reconnect is disabled — registered tools will fail until an HMR reload or Host restart'
@@ -344,6 +394,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     if (!isCurrent(generation)) return
     connectedAt = Date.now()
     status.update({ state: 'connected', toolCount: disposers.size, connectedAt })
+    armHealthPing(generation)
     if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
   }
 
@@ -369,6 +420,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     ready,
     async dispose(): Promise<void> {
       disposed = true
+      stopHealthCheck()
       if (reconnectTimer !== undefined) {
         clearTimeout(reconnectTimer)
         reconnectTimer = undefined

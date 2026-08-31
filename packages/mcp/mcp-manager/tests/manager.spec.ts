@@ -28,6 +28,7 @@ const { mockConnect, mockClose, mockListTools, MockClient, instances, transportC
   class MockClient {
     onclose: (() => void) | undefined
     connect = mockConnect
+    ping = (): Promise<void> => Promise.resolve()
     close = mockClose
     request = mockRequest
     getServerVersion = (): { name: string; version: string } => ({ name: 'fixture', version: '1.0.0' })
@@ -217,7 +218,7 @@ describe('mcp-manager', () => {
     mockListTools.mockResolvedValue(listing('changed'))
     await settings!.update('mcp', {
       servers: {
-        alpha: { args: ['--fast'], toolCallTimeoutMs: 5_000, startupTimeoutMs: 4_000, reconnect: { maxAttempts: 3 } },
+        alpha: { args: ['--fast'], toolCallTimeoutMs: 5_000, startupTimeoutMs: 4_000, healthCheckIntervalMs: 60_000, reconnect: { maxAttempts: 3 } },
       },
     })
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__alpha__changed')).toBeDefined() })
@@ -351,6 +352,7 @@ describe('mcp-manager', () => {
       cwd: '',
       toolCallTimeoutMs: 60_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
     // The manager learns about "dup" only now, through a live settings attach.

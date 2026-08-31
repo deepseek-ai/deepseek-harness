@@ -32,6 +32,7 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
   })
   class MockClient {
     connect = mockConnect
+    ping = (): Promise<void> => Promise.resolve()
     close = mockClose
     listTools = mockListTools
     callTool = mockCallTool
@@ -84,6 +85,7 @@ const stdioConfig: Config = {
   cwd: '',
   toolCallTimeoutMs: 60_000,
   startupTimeoutMs: 30_000,
+  healthCheckIntervalMs: 30_000,
   failOnStartupError: false,
 }
 
@@ -405,6 +407,7 @@ describe('apply (plugin lifecycle)', () => {
       headers: { Authorization: 'Bearer x' },
       toolCallTimeoutMs: 30_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     }
 

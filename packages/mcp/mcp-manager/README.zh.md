@@ -68,7 +68,7 @@ mcp:
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、附加子进程环境、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与附加请求头 |
 | `enabled` | `true` | 持久意图：`false` 卸载实例但保留条目 |
-| `toolCallTimeoutMs` / `startupTimeoutMs` / `reconnect` | mcp-client 默认值 | 逐服务器覆盖，原样传给实例 |
+| `toolCallTimeoutMs` / `startupTimeoutMs` / `healthCheckIntervalMs` / `reconnect` | mcp-client 默认值 | 逐服务器覆盖，原样传给实例 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-manager)是每个可接受字段的详尽出处。
 

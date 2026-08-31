@@ -15,9 +15,12 @@ import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // vi.mock factories are hoisted above every import/const, so the mock fns and
 // class must be created inside vi.hoisted to exist when the factories run.
-const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances } = vi.hoisted(() => {
+const {
+  mockConnect, mockClose, mockPing, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances,
+} = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
   const mockClose = vi.fn<() => Promise<void>>()
+  const mockPing = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
   const mockCallTool = vi.fn<(
     _params?: Record<string, unknown>, _compatibilitySchema?: unknown, _options?: unknown,
@@ -36,12 +39,13 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
     onclose: (() => void) | undefined
     connect = mockConnect
     close = mockClose
+    ping = mockPing
     request = mockRequest
     setNotificationHandler = mockSetNotificationHandler
     constructor() { instances.push(this) }
   }
   const instances: MockClient[] = []
-  return { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances }
+  return { mockConnect, mockClose, mockPing, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances }
 })
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
@@ -103,6 +107,7 @@ function stdioConfig(reconnect?: Config['reconnect']): Config {
     cwd: '',
     toolCallTimeoutMs: 60_000,
     startupTimeoutMs: 30_000,
+    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
     ...reconnect === undefined ? {} : { reconnect },
   }
@@ -123,6 +128,113 @@ function nextCallId(): ToolCallId {
 
 // ---- Tests ----
 
+describe('health ping', () => {
+  let ctx: Context
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    instances.length = 0
+    mockConnect.mockResolvedValue(undefined)
+    mockPing.mockResolvedValue(undefined)
+    mockClose.mockImplementation(function (this: { onclose?: () => void }) {
+      this.onclose?.()
+      return Promise.resolve()
+    })
+    mockListTools.mockResolvedValue(listing('remote'))
+    ctx = await mountRegistry()
+  })
+
+  /** Supervisor under an owned lifecycle: every test disposes what it started. */
+  function superviseWith(config: Config): { seen: string[]; dispose: () => Promise<void>; ready: Promise<unknown> } {
+    const status = new McpStatusCell(() => {})
+    const seen: string[] = []
+    status.onChange((next) => {
+      seen.push(next.state === 'reconnecting' ? `reconnecting:${next.lastError}` : next.state)
+    })
+    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'test'), status)
+    return { seen, dispose: handle.dispose.bind(handle), ready: handle.ready }
+  }
+
+  it('re-arms after a healthy ping and turns a failed ping into reconnect with its diagnostic', async () => {
+    const { warns } = captureLogs(ctx)
+    mockPing.mockResolvedValueOnce(undefined)
+    mockPing.mockRejectedValueOnce(new Error('boom'))
+    const supervisor = superviseWith({ ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 }), healthCheckIntervalMs: 20 })
+    try {
+      await supervisor.ready
+      // Ping 1 succeeds and re-arms; ping 2 fails and closes the generation.
+      await vi.waitFor(() => { expect(mockPing).toHaveBeenCalledTimes(2) })
+      await vi.waitFor(() => { expect(supervisor.seen.includes('reconnecting:Error: boom')).toBe(true) })
+      expect(warns.some(line => line.includes('health ping failed: Error: boom'))).toBe(true)
+      // The supervisor recovers onto a fresh generation and resumes pinging it.
+      await vi.waitFor(() => { expect(supervisor.seen.filter(state => state === 'connected').length).toBeGreaterThan(1) })
+      expect(instances.length).toBeGreaterThan(1)
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+
+  it('a ping that cannot even close the generation still reaches the reconnect path', async () => {
+    const { warns } = captureLogs(ctx)
+    mockPing.mockRejectedValueOnce(new Error('gone'))
+    const supervisor = superviseWith({ ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 3 }), healthCheckIntervalMs: 15 })
+    try {
+      await supervisor.ready
+      mockClose.mockImplementation(() => Promise.reject(new Error('cannot close')))
+      await vi.waitFor(() => { expect(warns.some(line => line.includes('health ping failed: Error: gone'))).toBe(true) })
+      await vi.waitFor(() => { expect(supervisor.seen.some(state => state.startsWith('reconnecting:'))).toBe(true) })
+      // Let the recovery generation close normally again so disposal quiesces.
+      mockClose.mockImplementation(function (this: { onclose?: () => void }) {
+        this.onclose?.()
+        return Promise.resolve()
+      })
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+
+  it('a ping settling after its generation went down neither re-arms nor reports', async () => {
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockPing.mockImplementation(() => gate.promise)
+    // A wide interval keeps the ping's own deadline (= the interval) from
+    // firing before the test settles the gated ping by hand.
+    const supervisor = superviseWith({ ...stdioConfig({ enabled: false }), healthCheckIntervalMs: 1_000 })
+    try {
+      await supervisor.ready
+      await vi.waitFor(() => { expect(mockPing).toHaveBeenCalledTimes(1) }, { timeout: 3_000 })
+      // The server dies while the ping is in flight; reconnect is disabled.
+      instances[0]!.onclose?.()
+      await vi.waitFor(() => { expect(supervisor.seen.includes('failed')).toBe(true) })
+      gate.resolve()
+      await sleep(60)
+      expect(mockPing).toHaveBeenCalledTimes(1)
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+
+  it('a ping rejecting after its generation went down is absorbed silently', async () => {
+    const { warns } = captureLogs(ctx)
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockPing.mockImplementation(() => gate.promise)
+    // A wide interval keeps the ping's own deadline (= the interval) from
+    // firing before the test settles the gated ping by hand.
+    const supervisor = superviseWith({ ...stdioConfig({ enabled: false }), healthCheckIntervalMs: 1_000 })
+    try {
+      await supervisor.ready
+      await vi.waitFor(() => { expect(mockPing).toHaveBeenCalledTimes(1) }, { timeout: 3_000 })
+      instances[0]!.onclose?.()
+      await vi.waitFor(() => { expect(supervisor.seen.includes('failed')).toBe(true) })
+      gate.reject(new Error('late'))
+      await sleep(60)
+      expect(warns.some(line => line.includes('health ping failed'))).toBe(false)
+      expect(mockPing).toHaveBeenCalledTimes(1)
+    } finally {
+      await supervisor.dispose()
+    }
+  })
+})
+
 describe('reconnect supervisor', () => {
   let ctx: Context
 
@@ -130,6 +242,7 @@ describe('reconnect supervisor', () => {
     vi.clearAllMocks()
     instances.length = 0
     mockConnect.mockResolvedValue(undefined)
+    mockPing.mockResolvedValue(undefined)
     mockClose.mockImplementation(function (this: { onclose?: () => void }) {
       this.onclose?.()
       return Promise.resolve()

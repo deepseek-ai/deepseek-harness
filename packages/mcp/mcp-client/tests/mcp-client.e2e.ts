@@ -106,6 +106,7 @@ describe('fixture server — controlled scenarios', () => {
     cwd: packageDir,
     toolCallTimeoutMs: 15_000,
     startupTimeoutMs: 30_000,
+    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
   }
 
@@ -206,6 +207,7 @@ describe('fixture server — duplicate serverName', () => {
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -229,6 +231,7 @@ describe('fixture server — disposal', () => {
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     })
 
@@ -253,6 +256,7 @@ describe('fixture server — crash recovery', () => {
       cwd: packageDir,
       toolCallTimeoutMs: 15_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
       reconnect,
     }
@@ -338,6 +342,7 @@ describe('server-everything — official test server', () => {
     cwd: '',
     toolCallTimeoutMs: 30_000,
     startupTimeoutMs: 30_000,
+    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
   }
 
@@ -408,6 +413,7 @@ describe('server-filesystem — real filesystem operations', () => {
       cwd: '',
       toolCallTimeoutMs: 30_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -526,6 +532,7 @@ describe('streamable-http — in-process MCP server', () => {
       headers: { Authorization: 'Bearer e2e-test-token' },
       toolCallTimeoutMs: 15_000,
       startupTimeoutMs: 30_000,
+      healthCheckIntervalMs: 30_000,
       failOnStartupError: false,
     }
     await apply(ctx, config)
@@ -582,6 +589,7 @@ describe('fixture server — probe', () => {
         cwd: packageDir,
         toolCallTimeoutMs: 15_000,
         startupTimeoutMs: 30_000,
+        healthCheckIntervalMs: 30_000,
         failOnStartupError: false,
       }, { timeoutMs: 20_000 })
       expect(result).toMatchObject({
@@ -602,6 +610,7 @@ describe('fixture server — probe', () => {
         cwd: packageDir,
         toolCallTimeoutMs: 5_000,
         startupTimeoutMs: 5_000,
+        healthCheckIntervalMs: 30_000,
         failOnStartupError: false,
       }, { timeoutMs: 5_000 })
       expect(dead).toMatchObject({ ok: false, stage: 'connect' })

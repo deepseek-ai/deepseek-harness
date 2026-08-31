@@ -24,6 +24,7 @@ const { mockConnect, mockClose, mockListTools, mockSetNotificationHandler, MockC
   class MockClient {
     onclose: (() => void) | undefined
     connect = mockConnect
+    ping = (): Promise<void> => Promise.resolve()
     close = mockClose
     request = mockRequest
     setNotificationHandler = mockSetNotificationHandler
@@ -70,6 +71,7 @@ function stdioConfig(overrides?: Partial<Config> & { reconnect?: Config['reconne
     cwd: '',
     toolCallTimeoutMs: 60_000,
     startupTimeoutMs: 30_000,
+    healthCheckIntervalMs: 30_000,
     failOnStartupError: false,
     ...overrides,
   } as Config

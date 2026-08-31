@@ -1379,6 +1379,14 @@ export interface StdioConfig {
   toolCallTimeoutMs: number
   /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
   startupTimeoutMs: number
+  /**
+   * Spacing between liveness pings on an established connection, in
+   * milliseconds; the same value bounds each ping's answer. A failed or
+   * timed-out ping closes the generation into the reconnect path — the only
+   * way a silently dead Streamable HTTP server (no close signal between
+   * requests) is detected.
+   */
+  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1403,6 +1411,14 @@ export interface StreamableHttpConfig {
   toolCallTimeoutMs: number
   /** Budget for one connection attempt plus its initial tool sync, in milliseconds. */
   startupTimeoutMs: number
+  /**
+   * Spacing between liveness pings on an established connection, in
+   * milliseconds; the same value bounds each ping's answer. A failed or
+   * timed-out ping closes the generation into the reconnect path — the only
+   * way a silently dead Streamable HTTP server (no close signal between
+   * requests) is detected.
+   */
+  healthCheckIntervalMs: number
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1422,7 +1438,7 @@ export interface ReconnectConfig {
 }
 ```
 
-来源：[`packages/mcp/mcp-client/src/index.ts:124`](../packages/mcp/mcp-client/src/index.ts)
+来源：[`packages/mcp/mcp-client/src/index.ts:143`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-mcp-manager"></a>
 
@@ -1465,6 +1481,8 @@ export interface McpManagedServerEntry {
   toolCallTimeoutMs?: number
   /** Per-attempt startup budget override in milliseconds; omission uses the mcp-client default. */
   startupTimeoutMs?: number
+  /** Liveness-ping spacing override in milliseconds; omission uses the mcp-client default. */
+  healthCheckIntervalMs?: number
   /** Reconnect policy; the schema fills the mcp-client defaults. */
   reconnect: ReconnectConfig
 }
@@ -1472,7 +1490,7 @@ export interface McpManagedServerEntry {
 
 依赖：[`ReconnectConfig`](../packages/mcp/mcp-client/src/index.ts)
 
-来源：[`packages/mcp/mcp-manager/src/index.ts:74`](../packages/mcp/mcp-manager/src/index.ts)
+来源：[`packages/mcp/mcp-manager/src/index.ts:76`](../packages/mcp/mcp-manager/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 

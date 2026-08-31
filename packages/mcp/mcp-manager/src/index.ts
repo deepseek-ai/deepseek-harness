@@ -66,6 +66,8 @@ export interface McpManagedServerEntry {
   toolCallTimeoutMs?: number
   /** Per-attempt startup budget override in milliseconds; omission uses the mcp-client default. */
   startupTimeoutMs?: number
+  /** Liveness-ping spacing override in milliseconds; omission uses the mcp-client default. */
+  healthCheckIntervalMs?: number
   /** Reconnect policy; the schema fills the mcp-client defaults. */
   reconnect: ReconnectConfig
 }
@@ -93,6 +95,7 @@ const ServerEntrySchema = z.object({
   enabled: z.boolean().default(true),
   toolCallTimeoutMs: z.number(),
   startupTimeoutMs: z.number(),
+  healthCheckIntervalMs: z.number(),
   reconnect: ReconnectSchema,
 })
 
@@ -525,6 +528,7 @@ export default class McpServerManager extends Service {
       failOnStartupError: false,
       ...entry.toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs: entry.toolCallTimeoutMs },
       ...entry.startupTimeoutMs === undefined ? {} : { startupTimeoutMs: entry.startupTimeoutMs },
+      ...entry.healthCheckIntervalMs === undefined ? {} : { healthCheckIntervalMs: entry.healthCheckIntervalMs },
       reconnect: entry.reconnect,
     }
     if (entry.transport === 'stdio') {

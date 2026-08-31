@@ -68,7 +68,7 @@ mcp:
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra child env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `enabled` | `true` | Durable intent: `false` unmounts the instance and keeps the entry |
-| `toolCallTimeoutMs` / `startupTimeoutMs` / `reconnect` | mcp-client defaults | Per-server overrides passed through to the instance |
+| `toolCallTimeoutMs` / `startupTimeoutMs` / `healthCheckIntervalMs` / `reconnect` | mcp-client defaults | Per-server overrides passed through to the instance |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-manager) is the exhaustive source for every accepted field.
 

@@ -60,6 +60,7 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` invocation |
 | `startupTimeoutMs` | `30,000` | Budget for one connection attempt plus its initial tool sync |
+| `healthCheckIntervalMs` | `30,000` | Spacing between liveness pings on an established connection (also each ping's answer budget) |
 | `failOnStartupError` | `false` | Reject plugin activation when the initial connection or tool synchronization fails |
 | `reconnect.enabled` | `true` | Reconnect automatically after a lost connection |
 | `reconnect.initialDelayMs` | `500` | First reconnect delay; doubles per consecutive failed attempt |
@@ -87,7 +88,7 @@ Images are supported when the current model accepts image input and the harness 
 
 ### Startup, updates, and reconnection
 
-The server's tools appear before the harness starts its first turn. Every connection attempt — the first one and each reconnect — is bounded by `startupTimeoutMs` (default 30 seconds) covering the connection plus the initial tool discovery, so an unresponsive server cannot hold startup open. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
+The server's tools appear before the harness starts its first turn. Every connection attempt — the first one and each reconnect — is bounded by `startupTimeoutMs` (default 30 seconds) covering the connection plus the initial tool discovery, so an unresponsive server cannot hold startup open. An established connection is pinged every `healthCheckIntervalMs` (default 30 seconds): a stdio server's death closes the transport by itself, but a Streamable HTTP server holds no connection between requests, so the failed or timed-out ping is what moves a silently dead server into the reconnect path. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
 
 When a server connection drops — for example a local server process crashes — the plugin reconnects automatically with delays that double from 500 ms up to 30 s and then refreshes the tool set; reconnect progress is visible in the logs. During an outage the last known tools stay listed but calls to them fail until the server recovers. After ten consecutive failed attempts the server's tools are removed and reconnection stops until you reload the configuration or restart the harness; a server that stays connected for a while resets that counter. Set `reconnect.enabled: false` to disable automatic reconnection — tools then stay listed but fail until you reload. Editing the configuration entry reloads the server connection in place, and unchanged names stay unchanged.
 
