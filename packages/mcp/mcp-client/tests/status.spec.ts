@@ -81,6 +81,21 @@ function listing(...names: string[]): { tools: { name: string; inputSchema: { ty
   return { tools: names.map(name => ({ name, inputSchema: { type: 'object' } })), nextCursor: undefined }
 }
 
+describe('async status observers', () => {
+  it('contains an async observer rejection through the cell warn callback', async () => {
+    const warned: string[] = []
+    const cell = new McpStatusCell((message) => { warned.push(message) })
+    cell.onChange(async () => {
+      await Promise.resolve()
+      throw new Error('late observer failure')
+    })
+    cell.update({ state: 'connecting', attempt: 0 })
+    await vi.waitFor(() => {
+      expect(warned.some(line => line.includes('an onChange status observer failed'))).toBe(true)
+    })
+  })
+})
+
 describe('connection status surface', () => {
   let ctx: Context
 

@@ -53,7 +53,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 }))
 
 import { apply as applyMcpClient } from '@deepseek-ai/dsh-mcp-client'
-import McpServerManager, { validateServers } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
+import McpServerManager, { ConfigSchema, validateServers } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import { MemorySettings } from './memory-settings.ts'
 
@@ -382,6 +382,21 @@ describe('mcp-manager', () => {
     await expect(manager.probe('ghost')).rejects.toThrow(/unknown server "ghost"/)
   })
 
+  it('contains a throwing status listener so the lifecycle operation completes', async () => {
+    const { ctx, manager, settings } = await mountWorld({
+      settingsDoc: { mcp: { servers: { srv: stdioEntry() } } },
+    })
+    await waitForState(manager, 'srv', 'connected')
+    const errors: string[] = []
+    ctx.logger.error = ((message: unknown) => { errors.push(String(message)) }) as typeof ctx.logger.error
+    ctx.on('mcp-manager/status', () => {
+      throw new Error('listener bomb')
+    })
+    await settings!.update('mcp', { servers: { srv: { enabled: false } } })
+    await waitForState(manager, 'srv', 'disabled')
+    expect(errors.some(line => line.includes('mcp-manager/status listener failed'))).toBe(true)
+  })
+
   it('unwinds every instance and its tools when the manager is disposed, then refuses operations', async () => {
     const { ctx, manager, managerFiber } = await mountWorld({
       settingsDoc: { mcp: { servers: { one: stdioEntry(), two: stdioEntry({ command: 'two' }) } } },
@@ -507,6 +522,24 @@ describe('mcp-manager', () => {
   })
 })
 
+describe('entry schema bounds', () => {
+  it.each([
+    [{ startupTimeoutMs: 0 }],
+    [{ startupTimeoutMs: -5 }],
+    [{ healthCheckIntervalMs: 500 }],
+  ])('refuses %j at the write instead of at mount', (patch) => {
+    expect(() => {
+      ConfigSchema({ servers: { a: { transport: 'stdio', command: 'echo', ...patch } } })
+    }).toThrow()
+  })
+
+  it('accepts in-bounds overrides', () => {
+    expect(() => {
+      ConfigSchema({ servers: { a: { transport: 'stdio', command: 'echo', startupTimeoutMs: 5_000, healthCheckIntervalMs: 15_000 } } })
+    }).not.toThrow()
+  })
+})
+
 describe('validateServers', () => {
   const base = (servers: Record<string, unknown>): Config => ({ servers }) as Config
 
@@ -530,6 +563,10 @@ describe('validateServers', () => {
     [{ a: { transport: 'streamable-http', url: 'http://x', command: '', args: [], env: { k: 'v' }, cwd: '', headers: {}, enabled: true } }, /"env" is not a streamable-http field/],
     [{ a: { transport: 'streamable-http', url: 'http://x', command: '', args: [], env: {}, cwd: '/tmp', headers: {}, enabled: true } }, /"cwd" is not a streamable-http field/],
     [{ a: { transport: 'stdio', command: 'x', url: '', args: [], env: { k: '${vault:nope}' }, cwd: '', headers: {}, enabled: true } }, /not a template token/],
+    // A nested `${` merely CONTAINS a valid token; the resolver would leave
+    // its prefix behind as a literal, so the write must refuse it.
+    [{ a: { transport: 'stdio', command: '${x${env:A}', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true } }, /not a template token/],
+    [{ a: { transport: 'stdio', command: 'x', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true, reconnect: { enabled: true, initialDelayMs: 5_000, maxDelayMs: 100, maxAttempts: 3 } } }, /initialDelayMs must be less than or equal to maxDelayMs/],
   ])('rejects %j', (servers, expected) => {
     expect(() => {
       validateServers(base(servers))

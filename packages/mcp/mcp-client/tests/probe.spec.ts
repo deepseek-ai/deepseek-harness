@@ -131,6 +131,32 @@ describe('probeServer', () => {
     expect((result as { toolNames: string[] }).toolNames).toHaveLength(512)
   })
 
+  it('answers a pre-aborted signal without ever connecting', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const result = await probeServer(httpConfig(), { signal: controller.signal })
+    expect(result).toMatchObject({ ok: false, stage: 'connect', message: 'probe aborted', durationMs: 0 })
+    expect(mockConnect).not.toHaveBeenCalled()
+  })
+
+  it('breaks a hung connect by closing the client when the signal aborts', async () => {
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockConnect.mockReturnValue(gate.promise)
+    mockClose.mockImplementation(() => {
+      gate.reject(new Error('closed by abort'))
+      // A client that never connected rejects its close; both the abort
+      // lever's catch and the final close containment must absorb it.
+      return Promise.reject(new Error('never connected'))
+    })
+    const controller = new AbortController()
+    const pending = probeServer(httpConfig(), { signal: controller.signal })
+    await Promise.resolve()
+    controller.abort()
+    const result = await pending
+    expect(result).toMatchObject({ ok: false, stage: 'connect', message: 'probe aborted' })
+    expect(mockClose).toHaveBeenCalled()
+  })
+
   it('rejects a non-positive budget before doing anything', async () => {
     await expect(probeServer(httpConfig(), { timeoutMs: 0 })).rejects.toThrow(TypeError)
     expect(mockConnect).not.toHaveBeenCalled()

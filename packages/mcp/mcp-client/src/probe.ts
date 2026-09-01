@@ -20,7 +20,11 @@ import type { Config } from './index.ts'
 export interface McpProbeOptions {
   /** Budget for the whole probe (connect + listing) in milliseconds; default 10000. */
   timeoutMs?: number
-  /** Abort the in-flight probe; settles as a failure at the current stage. */
+  /**
+   * Abort the in-flight probe; settles as a failure at the current stage. A
+   * hung connect is broken by closing the client, and listing requests carry
+   * the signal directly.
+   */
   signal?: AbortSignal
 }
 
@@ -80,8 +84,21 @@ export async function probeServer(config: Config, options: McpProbeOptions = {})
   }
   const startedAt = Date.now()
   const remaining = (): number => timeoutMs - (Date.now() - startedAt)
-  const client = new Client({ name: 'dsh-mcp-probe', version: '0.0.1' }, { capabilities: {} })
   let stage: McpProbeStage = 'connect'
+  const signal = options.signal
+  // A helper, not a direct property read: flow narrowing would otherwise pin
+  // `aborted` to its pre-connect value across the awaits below.
+  const aborted = (): boolean => signal?.aborted === true
+  if (aborted()) {
+    return { ok: false, stage, message: 'probe aborted', durationMs: 0 }
+  }
+  const client = new Client({ name: 'dsh-mcp-probe', version: '0.0.1' }, { capabilities: {} })
+  // Closing the client is the abort lever the SDK gives a hung connect; the
+  // listing stage additionally carries the signal on each request.
+  const onAbort = (): void => {
+    void client.close().catch(() => undefined)
+  }
+  signal?.addEventListener('abort', onAbort, { once: true })
   try {
     await withProbeDeadline(client.connect(createTransport(config)), remaining())
     const identity = client.getServerVersion()
@@ -118,8 +135,10 @@ export async function probeServer(config: Config, options: McpProbeOptions = {})
       durationMs: Date.now() - startedAt,
     }
   } catch (error) {
-    return { ok: false, stage, message: describeError(error), durationMs: Date.now() - startedAt }
+    const message = aborted() ? 'probe aborted' : describeError(error)
+    return { ok: false, stage, message, durationMs: Date.now() - startedAt }
   } finally {
+    signal?.removeEventListener('abort', onAbort)
     try {
       await client.close()
     } catch {

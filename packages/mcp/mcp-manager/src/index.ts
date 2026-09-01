@@ -21,7 +21,8 @@ import type { Fiber } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import * as McpClient from '@deepseek-ai/dsh-mcp-client'
-import { ReconnectSchema, SERVER_NAME_PATTERN, connectionStatusOf, probeServer } from '@deepseek-ai/dsh-mcp-client'
+import { ReconnectSchema, SERVER_NAME_PATTERN, connectionStatusOf, probeServer, resolveReconnectPolicy } from '@deepseek-ai/dsh-mcp-client'
+import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { McpProbeOptions, McpProbeResult, ReconnectConfig } from '@deepseek-ai/dsh-mcp-client'
 import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import { assertTemplateSyntax, credentialRefsIn, resolveTemplateString } from './templates.ts'
@@ -93,8 +94,8 @@ const ServerEntrySchema = z.object({
   headers: z.dict(String).default({}),
   enabled: z.boolean().default(true),
   toolCallTimeoutMs: z.number(),
-  startupTimeoutMs: z.number(),
-  healthCheckIntervalMs: z.number(),
+  startupTimeoutMs: z.number().min(1).max(MAX_TIMER_DELAY_MS),
+  healthCheckIntervalMs: z.number().min(1_000).max(MAX_TIMER_DELAY_MS),
   reconnect: ReconnectSchema,
 })
 
@@ -158,16 +159,19 @@ export function validateServers(config: Config): void {
       }
     }
     for (const [value, where] of templatedStrings(name, entry)) assertTemplateSyntax(value, where)
+    // The same cross-field reconnect rules the instance would apply at mount
+    // (initialDelayMs <= maxDelayMs, bounds), judged where the entry is written.
+    resolveReconnectPolicy(entry.reconnect, `${path}.reconnect`)
   }
 }
 
 /** Template-resolved strings of one entry, ready for the mcp-client config. */
 interface ResolvedEntryStrings {
-  command?: string
+  command: string
   args: string[]
   env: Record<string, string>
   cwd: string
-  url?: string
+  url: string
   headers: Record<string, string>
 }
 
@@ -391,10 +395,11 @@ export default class McpServerManager extends Service {
       this.setStatus(name, { state: 'failed', reason: 'resolve', lastError: String(error) })
       return
     }
-    // Template resolution yielded: the configuration may have moved while it
-    // ran, and the reconcile for that change already executed if it committed
-    // before this point — mounting anyway would leave an instance no reconcile
-    // ever visits. Only the entry as currently configured may mount.
+    // Template resolution yielded: a settings change committed meanwhile has
+    // queued its own reconcile behind this operation on the serialized tail,
+    // and that reconcile would unmount whatever is started here. The guard
+    // only spares a deleted or changed entry the brief child spawn/dial; it
+    // is not what prevents orphans.
     if (!deepEqualJson(this.currentConfig().servers[name], entry)) return
     const record: ManagedRecord = {
       entrySnapshot: structuredClone(entry),
@@ -460,7 +465,16 @@ export default class McpServerManager extends Service {
     const previous = this.statuses.get(name)
     if (previous !== undefined && deepEqualJson(previous, status)) return
     this.statuses.set(name, status)
-    this.ctx.emit('mcp-manager/status', name, status)
+    // A consumer's throwing listener must not break the lifecycle operation
+    // publishing the status (docs/defensive-patterns.md: contain callback
+    // exceptions). Invariant companions report through their own reporter,
+    // not by throwing here, so containment costs them nothing.
+    try {
+      this.ctx.emit('mcp-manager/status', name, status)
+    } catch (error) {
+      this.ctx.logger.error(`mcp-manager: a mcp-manager/status listener failed for "${name}"`)
+      this.ctx.logger.error(error)
+    }
   }
 
   /** Template lookups: the process environment and the optional credential seam. */
@@ -499,6 +513,7 @@ export default class McpServerManager extends Service {
         args,
         env,
         cwd: await resolveOne(entry.cwd, `${path}.cwd`),
+        url: '',
         headers: {},
       }
     }
@@ -507,6 +522,7 @@ export default class McpServerManager extends Service {
       headers[key] = await resolveOne(value, `${path}.headers.${key}`)
     }
     return {
+      command: '',
       args: [],
       env: {},
       cwd: '',
@@ -524,28 +540,31 @@ export default class McpServerManager extends Service {
   private toClientConfig(name: string, entry: McpManagedServerEntry, resolved: ResolvedEntryStrings): McpClient.Config {
     const shared = {
       serverName: name,
-      failOnStartupError: false,
+      failOnStartupError: false as const,
       ...entry.toolCallTimeoutMs === undefined ? {} : { toolCallTimeoutMs: entry.toolCallTimeoutMs },
       ...entry.startupTimeoutMs === undefined ? {} : { startupTimeoutMs: entry.startupTimeoutMs },
       ...entry.healthCheckIntervalMs === undefined ? {} : { healthCheckIntervalMs: entry.healthCheckIntervalMs },
       reconnect: entry.reconnect,
     }
+    // Resolving through the client's own schema fills its defaults here (no
+    // restatement) and returns a real Config with no type assertion; the
+    // write-time validation above keeps this resolution from ever refusing.
     if (entry.transport === 'stdio') {
-      return {
+      return McpClient.Config({
         transport: 'stdio',
         command: resolved.command,
         args: resolved.args,
         env: resolved.env,
         cwd: resolved.cwd,
         ...shared,
-      } as McpClient.Config
+      })
     }
-    return {
+    return McpClient.Config({
       transport: 'streamable-http',
       url: resolved.url,
       headers: resolved.headers,
       ...shared,
-    } as McpClient.Config
+    })
   }
 }
 

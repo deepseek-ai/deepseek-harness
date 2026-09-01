@@ -276,7 +276,14 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       // Enqueue the give-up disposal so it cannot race an in-flight sync's
       // phase-2 swap (which checks isCurrent inside the queue).
       syncChain = syncChain.then(() => {
-        for (const dispose of disposers.values()) dispose()
+        for (const dispose of disposers.values()) {
+          try {
+            dispose()
+          } catch (error) {
+            /* v8 ignore next -- registry disposers do not throw today; containment only keeps the sync chain alive if one ever does */
+            ctx.logger.error(`${label}: unregistering a tool after giving up failed: ${describeError(error)}`)
+          }
+        }
         disposers = new Map()
       })
       ctx.logger.error(`${label}: giving up after ${policy.maxAttempts} consecutive failed reconnect attempts — tools unregistered; reload the plugin or restart the Host to reconnect`)

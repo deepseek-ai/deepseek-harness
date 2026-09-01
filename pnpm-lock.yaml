@@ -6804,6 +6804,9 @@ importers:
 
   packages/mcp/mcp-manager:
     dependencies:
+      '@deepseek-ai/dsh-timeout':
+        specifier: workspace:^
+        version: link:../../util/timeout
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery

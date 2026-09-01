@@ -57,10 +57,15 @@ export function credentialRefsIn(value: string): string[] {
  * @param value - the configured string.
  * @param where - configuration path used in the thrown message.
  */
+/** One whole occurrence must BE a token; containment is not enough. */
+const TOKEN_EXACT = /^\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}$/
+
 export function assertTemplateSyntax(value: string, where: string): void {
   for (const occurrence of value.matchAll(SUSPECT)) {
-    TOKEN.lastIndex = 0
-    if (!TOKEN.test(occurrence[0])) {
+    // Anchored equality, not containment: `${x${env:A}` contains a valid
+    // token but the resolver would leave its `${x` prefix behind as a
+    // literal, so only an occurrence that IS a token may pass.
+    if (!TOKEN_EXACT.test(occurrence[0])) {
       throw new Error(
         `${where}: "${occurrence[0]}" is not a template token — use \${env:NAME} or \${credential:REF}`,
       )

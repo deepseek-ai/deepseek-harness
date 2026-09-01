@@ -69,13 +69,15 @@ export interface McpConnectionStatusHandle {
    * @param callback - invoked with each published status.
    * @returns the disposer removing this observer.
    */
-  onChange(callback: (status: McpConnectionStatus) => void): () => void
+  onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void
 }
 
 /** Writable status cell owned by one plugin instance's supervisor. */
 export class McpStatusCell implements McpConnectionStatusHandle {
   private value: McpConnectionStatus = { state: 'connecting', attempt: 0 }
-  private readonly listeners = new Set<(status: McpConnectionStatus) => void>()
+  // Stored with an unknown return: dispatch inspects the returned value for
+  // a promise to contain, which a void-typed call expression cannot express.
+  private readonly listeners = new Set<(status: McpConnectionStatus) => unknown>()
 
   /**
    * @param warn - contained-listener diagnostic sink (the owning plugin's logger).
@@ -95,7 +97,7 @@ export class McpStatusCell implements McpConnectionStatusHandle {
    * @param callback - invoked with each published status.
    * @returns the disposer removing this observer.
    */
-  onChange(callback: (status: McpConnectionStatus) => void): () => void {
+  onChange(callback: (status: McpConnectionStatus) => void | Promise<void>): () => void {
     this.listeners.add(callback)
     return () => void this.listeners.delete(callback)
   }
@@ -109,7 +111,14 @@ export class McpStatusCell implements McpConnectionStatusHandle {
     this.value = next
     for (const listener of [...this.listeners]) {
       try {
-        listener(next)
+        // An async observer's rejection must land in the same containment as
+        // a sync throw; the callback type admits it explicitly.
+        const returned = listener(next)
+        if (typeof (returned as PromiseLike<unknown> | undefined)?.then === 'function') {
+          void Promise.resolve(returned).catch((error: unknown) => {
+            this.warn('an onChange status observer failed', error)
+          })
+        }
       } catch (error) {
         this.warn('an onChange status observer failed', error)
       }

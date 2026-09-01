@@ -1438,7 +1438,7 @@ export interface ReconnectConfig {
 }
 ```
 
-来源：[`packages/mcp/mcp-client/src/index.ts:143`](../packages/mcp/mcp-client/src/index.ts)
+来源：[`packages/mcp/mcp-client/src/index.ts:145`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-mcp-manager"></a>
 
@@ -1455,10 +1455,9 @@ export interface Config {
 
 /**
  * One managed server entry. Deliberately flat rather than a per-transport
- * union: settings-wire secret redaction follows `object`/`dict`/`array`
- * containers only, so the `role('secret')` env and header values must not sit
- * inside a union branch. {@link validateServers} enforces the per-transport
- * field rules a union schema would have expressed.
+ * union: {@link validateServers} owns the per-transport field rules, and its
+ * write-time refusals name the offending field where a union's shape error
+ * would not.
  */
 export interface McpManagedServerEntry {
   /** Which transport the instance uses. */
