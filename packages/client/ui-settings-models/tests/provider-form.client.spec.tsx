@@ -661,25 +661,44 @@ describe('endpoint interrogation', () => {
     expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'a' }, { id: 'b', maxTokens: 2048 }])
   })
 
-  it('selects and clears every discovered candidate in one action', async () => {
+  it('filters by model id or name and scopes bulk selection to visible candidates', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([
-      { id: 'a' }, { id: 'b' }, { id: 'c' },
+      { id: 'alpha' }, { id: 'opaque-id', name: 'Beta Display' }, { id: 'gamma' },
     ])))
     await mountSection({ discover })
     openEditor('openai')
 
     fireEvent.click(screen.getByText(en.fetchModels))
     const dialog = await screen.findByRole('dialog')
-    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes.map(box => box.checked)).toEqual([true, true, true])
+    const search = screen.getByLabelText<HTMLInputElement>(en.fetchSearch)
+    expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .map(box => box.checked)).toEqual([true, true, true])
+
+    fireEvent.change(search, { target: { value: 'ALP' } })
+    expect(dialog.textContent).toContain('alpha')
+    expect(dialog.textContent).not.toContain('opaque-id')
+
+    // The display name is searchable even though adoption and the row use id.
+    fireEvent.change(search, { target: { value: 'beta' } })
+    expect(dialog.textContent).toContain('opaque-id')
+    expect(dialog.textContent).not.toContain('alpha')
 
     fireEvent.click(within_(dialog, en.fetchDeselectAll))
-    expect(boxes.map(box => box.checked)).toEqual([false, false, false])
-    expect(within_(dialog, en.fetchSelectAll)).toBeTruthy()
+    expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .map(box => box.checked)).toEqual([false])
+
+    // Clearing the filter restores every row and preserves hidden selections.
+    fireEvent.change(search, { target: { value: '' } })
+    const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+    expect(boxes.map(box => box.checked)).toEqual([true, false, true])
 
     fireEvent.click(within_(dialog, en.fetchSelectAll))
     expect(boxes.map(box => box.checked)).toEqual([true, true, true])
     expect(within_(dialog, en.fetchDeselectAll)).toBeTruthy()
+
+    fireEvent.change(search, { target: { value: 'missing' } })
+    expect(screen.getByText(en.fetchNoMatches)).toBeTruthy()
+    expect((within_(dialog, en.fetchSelectAll) as HTMLButtonElement).disabled).toBe(true)
   })
 })
 

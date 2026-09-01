@@ -180,21 +180,27 @@ function usableProbeKey(raw: string): string {
   )
 }
 
+/** Host-owned profile inputs that a configuration draft deliberately omits. */
+export interface StoredModelDiscoveryProfile {
+  /** Deployment headers configured on the named route. */
+  readonly headers: Readonly<Record<string, string>> | undefined
+  /** Resolve the named route's credential only when the draft carries none. */
+  readonly resolveApiKey: () => Promise<string | undefined>
+}
+
 /**
  * Interrogate one draft provider endpoint for the models it advertises.
  * @param request - the endpoint, protocol, and one-shot credential to use.
- * @param storedApiKey - the credential the named route already stored, asked
- *   for only when the draft carries none and only on the path that reaches the
- *   network. A configuration surface never holds a stored secret — it edits a
- *   redacted descriptor — so without this an already-configured route would be
- *   interrogated unauthenticated and answer 401.
+ * @param storedProfile - Host-owned headers and lazy credential resolution for
+ *   the named route. It is read only on the path that reaches the network; the
+ *   credential is resolved only when the draft carries none.
  * @returns the advertised models in endpoint order.
  * @throws LlmError when the protocol has no readable listing, the endpoint
  *   refuses or fails the request, or the reply is not a model listing.
  */
 export async function discoverModels(
   request: LlmModelDiscoveryOperation,
-  storedApiKey?: () => Promise<string | undefined>,
+  storedProfile?: () => StoredModelDiscoveryProfile | undefined,
 ): Promise<readonly LlmDiscoveredModel[]> {
   // A catalog route already has its answer, and a better one: the installed
   // entries carry context windows and output caps no listing endpoint reports.
@@ -230,24 +236,23 @@ export async function discoverModels(
     )
   }
   const url = listingUrl(request.baseURL)
-  // A key typed into the form wins: it is the one the user is testing, and it
-  // may be the replacement for exactly the stored key that is failing. The
-  // stored one is only asked for here, past the catalog short-circuit and the
-  // protocol check, so a route answered from the registry costs no credential
-  // lookup — and no diagnostic about a credential it never needed.
-  // A probe carrying no key stays unauthenticated, which is how a route that
-  // relies on the provider's own ambient discovery is meant to be asked.
-  const supplied = request.apiKey ?? await storedApiKey?.()
+  // A key typed into the form wins: it may replace the stored key that is
+  // failing. The stored profile is asked past the catalog and protocol checks,
+  // and its credential resolver remains lazy so a typed key cannot fail over a
+  // stored credential it supersedes. A route may still authenticate through a
+  // deployment-owned Authorization header when neither key exists.
+  const stored = storedProfile?.()
+  const supplied = request.apiKey ?? await stored?.resolveApiKey()
   const apiKey = supplied === undefined ? undefined : usableProbeKey(supplied)
   let response: Response
   try {
+    const headers = new Headers(stored?.headers === undefined ? undefined : Object.entries(stored.headers))
+    headers.set('accept', 'application/json')
+    if (apiKey !== undefined) headers.set('authorization', `Bearer ${apiKey}`)
+    for (const [name, value] of Object.entries(attributionHeaders())) headers.set(name, value)
     response = await fetch(url, {
       method: 'GET',
-      headers: {
-        accept: 'application/json',
-        ...apiKey === undefined ? {} : { authorization: `Bearer ${apiKey}` },
-        ...attributionHeaders(),
-      },
+      headers,
       ...request.signal === undefined ? {} : { signal: request.signal },
     })
   } catch (error: unknown) {

@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
-import LlmRuntime, { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createMessage, createUserMessage, userAgent } from '@deepseek-ai/dsh-llm'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import FileSettingsProvider from '@deepseek-ai/dsh-settings-file'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
@@ -121,6 +121,42 @@ describe('llm-pi-ai real dormant composition', () => {
     const result = await assemble(ctx, { provider: 'deepseek', model: 'deepseek-v4-flash', messages: [] })
     expect(result.message.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(server.headers[0]?.authorization).toBe('Bearer key-from-store')
+  })
+
+  it('uses settings-only route headers for model discovery', async () => {
+    vi.stubEnv('PI_COMPOSITION_KEY', '')
+    const server = await mockServer([{ body: JSON.stringify({ data: [{ id: 'acme-private' }] }) }])
+    const { ctx, settingsPath } = await loadComposition()
+
+    await writeFile(settingsPath, [
+      'llm-pi-ai:',
+      '  providers:',
+      '    acme-gateway:',
+      '      apiKeyEnv: PI_COMPOSITION_KEY',
+      '      api: openai-completions',
+      `      baseURL: ${server.url}`,
+      '      headers:',
+      '        X-Company-Code: private-tenant',
+      '        Accept: text/plain',
+      '        User-Agent: deployment-owned',
+      '      models:',
+      '        - id: acme-bootstrap',
+      '',
+    ].join('\n'))
+    await vi.waitFor(() => {
+      expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['acme-gateway'])
+    }, { timeout: 5000 })
+
+    await expect(ctx.llm.discoverModels('llm-pi-ai', {
+      provider: 'acme-gateway',
+      baseURL: server.url,
+      api: 'openai-completions',
+    })).resolves.toEqual([{ id: 'acme-private' }])
+    expect(server.paths).toEqual(['/models'])
+    expect(server.headers[0]?.['x-company-code']).toBe('private-tenant')
+    expect(server.headers[0]?.authorization).toBe('Bearer key-from-store')
+    expect(server.headers[0]?.accept).toBe('application/json')
+    expect(server.headers[0]?.['user-agent']).toBe(userAgent())
   })
 
   it('continues natively after max-token assembly drops a tool call, with pruned replay metadata', async () => {
