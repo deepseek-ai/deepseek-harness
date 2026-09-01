@@ -285,6 +285,22 @@ describe('reconnect supervisor', () => {
     expect(instances).toHaveLength(2)
   })
 
+  it('a startup listing that outlives the budget publishes no tools', async () => {
+    const { errors } = captureLogs(ctx)
+    const gate: PromiseWithResolvers<unknown> = Promise.withResolvers()
+    mockListTools.mockImplementation(() => gate.promise)
+    // Reconnect disabled: no later generation would ever replace a zombie set.
+    await apply(ctx, { ...stdioConfig({ enabled: false }), startupTimeoutMs: 40 })
+    await vi.waitFor(() => {
+      expect(errors.some(line => line.includes('no tools were registered'))).toBe(true)
+    })
+    // The abandoned attempt's listing answers only now; the commit-point
+    // eligibility check must refuse the swap.
+    gate.resolve(listing('late'))
+    await sleep(30)
+    expect(ctx.tools.get('mcp__srv__late')).toBeUndefined()
+  })
+
   it('stops at the failure cap, unregisters the tools, and reports final failure', async () => {
     const { warns, errors } = captureLogs(ctx)
     await apply(ctx, stdioConfig({ initialDelayMs: 2, maxDelayMs: 8, maxAttempts: 2 }))

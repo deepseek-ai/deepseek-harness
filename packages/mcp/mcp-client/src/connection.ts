@@ -174,10 +174,12 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
    * generation and leak another).
    */
   let syncChain: Promise<void> = Promise.resolve()
-  function enqueueSync(generation: Client, syncOpts: ToolBridgeOptions = opts): Promise<void> {
+  function enqueueSync(generation: Client, syncOpts: ToolBridgeOptions = opts, eligible: () => boolean = () => true): Promise<void> {
     const run = syncChain.then(async () => {
       if (!isCurrent(generation)) return
-      disposers = await syncTools(generation, ctx, syncOpts, disposers)
+      // Commit eligibility re-includes currency: the listing inside syncTools
+      // is where a close or an abandoned startup can overtake this sync.
+      disposers = await syncTools(generation, ctx, syncOpts, disposers, () => isCurrent(generation) && eligible())
     })
     // The chain tail must survive a failed sync; the enqueuing caller owns reporting.
     syncChain = run.catch(() => {})
@@ -326,6 +328,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     )
     const closed: PromiseWithResolvers<void> = Promise.withResolvers()
     let attemptSettled = false
+    // Set synchronously the moment this attempt is given up, so a listing
+    // completing later cannot commit tools for it (the close that would clear
+    // currency only lands after awaits).
+    let abandoned = false
     let closeObserved = false
     const hasClosed = (): boolean => closeObserved
     client = generation
@@ -370,11 +376,12 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         return
       }
       await withStartupBudget(
-        enqueueSync(generation, startup ? startupOpts : opts),
+        enqueueSync(generation, startup ? startupOpts : opts, () => !abandoned),
         config.startupTimeoutMs - (Date.now() - startedAt),
         label,
       )
     } catch (error) {
+      abandoned = true
       if (firstAttemptError === undefined) firstAttemptError = error
       lastErrorText = describeError(error)
       // Disposal clears current ownership before it closes the generation, so
