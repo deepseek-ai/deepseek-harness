@@ -163,7 +163,9 @@ describe('health ping', () => {
     try {
       await supervisor.ready
       // Ping 1 succeeds and re-arms; ping 2 fails and closes the generation.
-      await vi.waitFor(() => { expect(mockPing).toHaveBeenCalledTimes(2) })
+      // A floor, not equality: pings resume on the recovery generation, so the
+      // count keeps growing and an exact-2 wait races the reconnect on slow runners.
+      await vi.waitFor(() => { expect(mockPing.mock.calls.length).toBeGreaterThanOrEqual(2) })
       await vi.waitFor(() => { expect(supervisor.seen.includes('reconnecting:Error: boom')).toBe(true) })
       expect(warns.some(line => line.includes('health ping failed: Error: boom'))).toBe(true)
       // The supervisor recovers onto a fresh generation and resumes pinging it.
