@@ -11,6 +11,7 @@
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import { describeError } from './diagnostic.ts'
 import { withDeadline } from './deadline.ts'
 import { createTransport } from './transport.ts'
 import type { Config } from './index.ts'
@@ -117,7 +118,7 @@ export async function probeServer(config: Config, options: McpProbeOptions = {})
       durationMs: Date.now() - startedAt,
     }
   } catch (error) {
-    return { ok: false, stage, message: String(error), durationMs: Date.now() - startedAt }
+    return { ok: false, stage, message: describeError(error), durationMs: Date.now() - startedAt }
   } finally {
     try {
       await client.close()

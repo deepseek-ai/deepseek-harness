@@ -19,6 +19,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { describeError } from './diagnostic.ts'
 import { withDeadline } from './deadline.ts'
 import type { McpStatusCell } from './status.ts'
 import { createTransport } from './transport.ts'
@@ -219,8 +220,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         () => { if (isCurrent(generation)) armHealthPing(generation) },
         (error: unknown) => {
           if (!isCurrent(generation)) return
-          pendingDownReason = String(error)
-          ctx.logger.warn(`${label}: health ping failed: ${String(error)} — closing the connection to reconnect`)
+          pendingDownReason = describeError(error)
+          ctx.logger.warn(`${label}: health ping failed: ${describeError(error)} — closing the connection to reconnect`)
           // A close that completes reaches generationDown through onclose; a
           // transport too broken to close still must not strand the supervisor.
           generation.close().catch(() => { generationDown(generation) })
@@ -368,10 +369,10 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       )
     } catch (error) {
       if (firstAttemptError === undefined) firstAttemptError = error
-      lastErrorText = String(error)
+      lastErrorText = describeError(error)
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
-      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
+      if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${describeError(error)}`)
       try { await generation.close() } catch { /* transport already gone */ }
       const quiesced = hasClosed() || await waitForClose(closed.promise)
       attemptSettled = true
@@ -380,7 +381,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         client = undefined
         clientClosed = undefined
         ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
-        status.update({ state: 'failed', reason: 'unclosed-generation', lastError: String(error) })
+        status.update({ state: 'failed', reason: 'unclosed-generation', lastError: describeError(error) })
         return
       }
       generationDown(generation)
