@@ -51,15 +51,15 @@ export function credentialRefsIn(value: string): string[] {
     .map(token => token[2] as string)
 }
 
+/** One whole occurrence must BE a token; containment is not enough. */
+const TOKEN_EXACT = /^\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}$/
+
 /**
  * Reject a string whose `${…}` occurrences are not all well-formed template
  * tokens, naming the offending occurrence and where it sits.
  * @param value - the configured string.
  * @param where - configuration path used in the thrown message.
  */
-/** One whole occurrence must BE a token; containment is not enough. */
-const TOKEN_EXACT = /^\$\{(env|credential):([A-Za-z_][A-Za-z0-9_]*)\}$/
-
 export function assertTemplateSyntax(value: string, where: string): void {
   for (const occurrence of value.matchAll(SUSPECT)) {
     // Anchored equality, not containment: `${x${env:A}` contains a valid
