@@ -12,9 +12,9 @@ Status: implemented
 
 `packages/mcp/mcp-manager` 是一个服务插件（`ctx.mcpServers`），拥有 `mcp` 设置命名空间并对一支普通 `dsh-mcp-client` 子实例编队做对账；`packages/mcp/mcp-client` 补上了管理器需要的三个原语——状态面、探测与启动预算——其重连语义不变。
 
-**配置即设置命名空间，CRUD 不需要新 API。** 管理器经 `installSection` 注册 `mcp`：自身组合条目是基层（可被用户文档覆盖、停用，但不可删除），用户层添加与覆盖条目，管理界面的每次写入都是带 revision 围栏与密钥脱敏的普通设置变更。外部 `settings.yaml` 编辑与 Remote 写入走同一条提交后 watch 的路径。
+**配置即设置命名空间，CRUD 不需要新 API。** 管理器经 `installSection` 注册 `mcp`：自身组合条目是基层（可被用户文档覆盖、停用，但不可删除），用户层添加与覆盖条目，管理界面的每次写入都是带 revision 围栏的普通设置变更。外部 `settings.yaml` 编辑与 Remote 写入走同一条提交后 watch 的路径。
 
-**扁平条目 schema，跨字段校验。** 设置 wire 的密钥脱敏只追 `object`/`dict`/`array` 容器，标记 `role('secret')` 的 env 与 header 值不能落在 union 分支里。因此条目是带 `transport` 判别字段的扁平结构，`validateServers` 在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下。
+**扁平条目 schema，跨字段校验。** 条目是带 `transport` 判别字段的扁平结构，`validateServers` 在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下，且拒绝会点名出错字段，union 的形状错误做不到。
 
 **子实例是插件实例，不是库调用。** 每个启用条目经 `ctx.plugin()` 在管理器 fiber 下挂载 `dsh-mcp-client`。这复用了经过测试的激活/销毁语义，让 `serverName` 预留与静态组合实例正确冲突（以带可操作消息的 `failed`/`load` 状态浮出），并让管理器销毁经普通 fiber 收卷解除每个实例及其工具。
 
@@ -22,7 +22,7 @@ Status: implemented
 
 **状态是按作用域的句柄，不是广播。** mcp-client 的监督器发布一个状态单元（带载荷的 `connecting`/`connected`/`reconnecting`/`failed`），随 `serverName` 预留一起注册，经 `connectionStatusOf(ctx, name)` 读取——与预留同样按作用域取键，Agent 作用域实例绝不泄漏进全局面，归属也无需在载荷里塞身份令牌。管理器把单元聚合为 `list()` 加 `mcp-manager/status` 事件（吸收相等状态、丢弃配置已不含的名字、销毁后静默）；其不变量伴生断言每次发出都点名活管理器所列出的服务器。首次对账等待管理器自身 fiber 激活，因为严格服务读取只对激活的 fiber 作答。
 
-**模板让密钥不进文档。** `${env:NAME}` 与 `${credential:REF}` 在挂载时解析；引用缺失让那一台服务器失败并在消息里给出修复方式。凭据轮换通过静态扫描原始配置（而非追踪已挂实例的引用）来定位受影响服务器，因此那台因凭据缺失而挂载失败的服务器会在凭据存入时被治愈。
+**模板让密钥不进文档，而文档保持可读。** 存储的 env 与 header 值不做 wire 脱敏：编辑器回显文档里存的原文，必须隐藏的值应写成模板。 `${env:NAME}` 与 `${credential:REF}` 在挂载时解析；引用缺失让那一台服务器失败并在消息里给出修复方式。凭据轮换通过静态扫描原始配置（而非追踪已挂实例的引用）来定位受影响服务器，因此那台因凭据缺失而挂载失败的服务器会在凭据存入时被治愈。
 
 **mcp-client 增补。** `startupTimeoutMs`（默认 30 秒）为每次连接尝试加初次工具同步设界，关闭了继承 SDK 超时的缺口；`probeServer()` 连接、读服务器身份、列工具（16 页 / 512 名，超出报告截断）后关闭，不预留名字也不触碰 `ctx.tools`——对已存条目与未保存草稿一体适用的「测试该服务器」。
 

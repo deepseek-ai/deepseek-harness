@@ -40,10 +40,9 @@ export const MCP_SETTINGS_NAMESPACE = 'mcp'
 
 /**
  * One managed server entry. Deliberately flat rather than a per-transport
- * union: settings-wire secret redaction follows `object`/`dict`/`array`
- * containers only, so the `role('secret')` env and header values must not sit
- * inside a union branch. {@link validateServers} enforces the per-transport
- * field rules a union schema would have expressed.
+ * union: {@link validateServers} owns the per-transport field rules, and its
+ * write-time refusals name the offending field where a union's shape error
+ * would not.
  */
 export interface McpManagedServerEntry {
   /** Which transport the instance uses. */
@@ -88,10 +87,10 @@ const ServerEntrySchema = z.object({
   transport: z.union(['stdio', 'streamable-http']).required(),
   command: z.string().default(''),
   args: z.array(String).default([]),
-  env: z.dict(z.string().role('secret')).default({}),
+  env: z.dict(String).default({}),
   cwd: z.string().default(''),
   url: z.string().default(''),
-  headers: z.dict(z.string().role('secret')).default({}),
+  headers: z.dict(String).default({}),
   enabled: z.boolean().default(true),
   toolCallTimeoutMs: z.number(),
   startupTimeoutMs: z.number(),
