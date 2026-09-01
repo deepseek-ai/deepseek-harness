@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 为可继续子级添加全局控制工具：`send_message` 投递一条成为子级下一轮次的后续消息，`interrupt_agent` 停止子级当前轮次但保留其队列与后代，`list_agents`（来自可单独加载的 `list-agents` 插件）按持久化 id 与标签列出可继续子级。这些工具是全局的，因此任意数量的委派工具都不会产生重复。这些工具只覆盖父到子方向；子到父方向属于独立安装的 `dsh-tool-subagent-report`。是否加载这些工具不会决定委派工具是否启动可继续工作。
+`dsh-tool-subagent-control` 为可继续子级添加全局控制工具：`send_message` 在直接 parent 与 child 之间 steer，`interrupt_agent` 停止 child 当前轮次但保留其 inbox 与后代，`list_agents`（来自可单独加载的 `list-agents` 插件）按持久化 id 与标签列出可继续 child。parent 与可继续 child 继承相同的 `send_message` 定义和顺序，因此模型通信不会增加 child 专属工具 schema。是否加载这些工具不会决定委派工具是否启动可继续工作。
 
 ## 目录
 
@@ -46,7 +46,7 @@ kind: "package-reference"
 
 ### send_message
 
-发送一条消息，使之成为子级的下一 FIFO 轮次：正在工作的子级会先完成其当前轮次，因此消息无法重定向已经进行的工作。调用只返回接受结果（被接受消息的稳定 `messageId`），绝不返回子级的回复——通过其 id 查看子级 transcript（文本记录）才是它完成了哪些工作的真源。失败——未授权或未知子级、缺少描述符而无法恢复的子级，或准入被拒——会明确说明消息未送达。
+向 `agent_id` 指定的 Agent 发送消息：任何确切在线 Agent 都可以指定自己的直接可继续 child，而驻留的可继续 child 还可以指定自己的直接 parent。正在工作的目标通过 Steer 在最近的 step 边界接收消息；空闲目标会启动一个轮次，冷状态的直接 child 会通过继续执行生命周期恢复。调用只返回接受结果（被接受消息的稳定 `messageId`），绝不返回回复。失败——不受支持的目标、不可用的 parent、未知 child、缺少描述符而无法恢复的 child，或准入被拒——会明确说明消息未送达。
 
 ### interrupt_agent
 
@@ -68,11 +68,11 @@ kind: "package-reference"
 
 ### 设计理念
 
-`ctx.subagents.followup()`、`interrupt()` 与列表投影之上的轻量适配器；工具不执行任何生命周期路由。驻留、冷恢复与中断授权归服务所有，工具把确切在线的调用 agent（`exec.agent`）作为服务对照目标已记录 lineage 校验的权限凭据传入。
+`ctx.subagents.sendMessage()`、`interrupt()` 与列表投影之上的轻量适配器；工具不执行任何生命周期路由。驻留、冷恢复与授权归服务所有，工具把确切在线的调用 Agent（`exec.agent`）同时作为 sender 与权限凭据传入。
 
 ### 投递与信号所有权
 
-工具转发其执行信号，该信号只在 inbox 接受之前掌管准入。子级一旦接受消息，已接受的轮次便无法再通过本工具取消。每条消息都记录协调者来源 `{ kind: 'coordinator', senderSessionId: parent.id }`；服务会保留该来源，但绝不将其视为权限。
+工具转发其执行信号，该信号只在 inbox 接受之前掌管准入。目标一旦接受消息，该消息便无法再通过本工具取消。每条消息都以 `Agent <sender-id> sent a message:` 作为前缀，并记录 `{ kind: 'agent-message', form: 'relay', senderSessionId: sender.id }`；该来源信息由服务推导，且绝不被视为权限。
 
 ### 列表投影
 
@@ -97,7 +97,6 @@ kind: "package-reference"
 
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——可继续子级、Activation、inbox、中断与后续消息权限。
 - [dsh-tool-subagent](../tool-subagent/README.zh.md)——启动可继续子级的委派工具。
-- [dsh-tool-subagent-report](../tool-subagent-report/README.zh.md)——子到父的上报通道。
 - [生成工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)——三个工具的 schema。
 
 -----
@@ -109,7 +108,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接受 `subagent_id` 与 `message`；`interrupt_agent` 接受 `agent_id`；`list_agents` 接受可选的 `scope` 枚举。
+已生成的 [schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-subagent-control)：`send_message` 接受 `agent_id` 与 `message`；`interrupt_agent` 接受 `agent_id`；`list_agents` 接受可选的 `scope` 枚举。
 
 #### Token 影响
 
@@ -137,11 +136,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `message queued as the next turn for subagent <subagent_id>`；规范输出携带被接受的 `messageId`。失败——未授权或未知子级、缺少描述符而无法恢复的子级，或准入被拒——会成为出错的结果，其消息说明该消息未送达。
+接受时返回 `message delivered to agent <agent_id>`；规范输出携带被接受的 `messageId`。失败——非相邻目标、不可用的 parent、未知 child、缺少描述符而无法恢复的 child，或准入被拒——会成为出错的结果，其消息说明该消息未送达。
 
 #### Token 影响
 
-每次调用产生一条简短确认消息；子级的响应绝不会通过本次调用返回。单独授予的 `report` 可以把选定内容追加到父级历史中。
+每次调用产生一条简短确认消息；目标的响应绝不会通过本次调用返回。child 使用同一个工具和初始任务中的 parent id，把选定内容追加到 parent 历史中。
 
 #### KV Cache 影响
 
@@ -168,8 +167,8 @@ kind: "package-reference"
 
 这些限制说明控制工具无法观察或引导什么；它们是当前包约束。
 
-- **已排队的消息没有独立结果**——接受时只返回其 inbox `messageId`；子级的工作会落入持久化子级会话，绝不会通过本工具收集。获得 `report` 的子级可以单独发回选定内容，但该消息不是本次调用的结果。
-- **不对当前轮次进行 steering（中途引导）**——每条消息都会开启后续 FIFO 轮次，因此在子级工作时发送的消息只会在其当前轮次结束后运行，无法将其重定向。
+- **已投递消息没有独立结果**——接受时只返回其 inbox `messageId`；目标后续工作会落入该目标的持久化会话，绝不会通过本工具收集。回复是另一条显式指定地址的 `send_message`，而非本次调用的结果。
+- **只有受支持的相邻 Agent 可以通信**——每个 sender 都可以指定直接可继续 child，只有具备驻留可继续 Activation 的 sender 可以指定自己的直接 parent，且该 parent 必须仍在线；sibling 与更深的后代不能作为消息目标，只有直接 child 投递支持冷激活。
 - **列表是快照，而非投递承诺**——它可能与发布、dispose（资源释放）或后续消息发生竞态，另一个进程也可能激活当前进程报告为 `ready` 的子级；跨进程准确性需要共享租约。`interrupt_agent` 自己执行权威的在线 lineage 检查，因此过期的发现结果不会授予权限。
 - **没有分页或删除**——系统返回完整且稳定排序的集合；只要子级会话仍在持久化存储中，它就会继续出现在列表中，服务级上限或删除操作留待后续产品决策。
 

@@ -1,10 +1,10 @@
 version: 1
-scenario: subagent-report
+scenario: subagent-send-message
 profile: sdk
-composition: subagent-report
+composition: subagent-send-message
 recording: authored
 header:
-  class: subagent-report
+  class: subagent-send-message
   pin: true
   systemPromptSource: session/text-turn
   toolSchemasSource: session/text-turn

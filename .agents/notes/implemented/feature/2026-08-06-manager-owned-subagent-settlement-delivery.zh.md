@@ -8,7 +8,7 @@ Status: implemented
 
 可继续后台委派是模型唯一一种能够发起、却无法抵达终点的异步操作。其他每一种形态都有取回原语或返回值：后台 bash 命令与一次性后台 subagent 都通过 Task 结算，`job_output(wait: true)` 可以阻塞等待；workflow 与前台 subagent 会把结果返回给调用方。可继续后台 child 只返回它持久化的 id，而父级既没有可等待的对象，也不会被交付任何东西。
 
-[报告义务](2026-08-06-continuable-child-report-obligation.zh.md)通过要求 child 在结束前上报，补上了这一缺口中协作的那一半。指令无法补上其余部分。被 token 上限、模型失败、取消或拆卸终止的 child 永远走不到能够遵守的那一步——不是很少，而是从不——而这些恰恰是等待中的父级最需要被告知的结束方式。可观察到的下游症状包括：父级忙轮询 `list_agents`、向已经结算的 child 反复发送消息，以及部署放弃 `subagent` 转用 `workflow`，因为 workflow 至少会返回点什么。
+由 child 编写的消息补上了这一缺口中协作的那一半：child 可以向直接 parent 发送进度与最终交接。模型选择无法补上其余部分。被 token 上限、模型失败、取消或拆卸终止的 child 可能永远不会发送这种消息，而这些恰恰是等待中的父级最需要被告知的结束方式。可观察到的下游症状包括：父级忙轮询 `list_agents`、向已经结算的 child 反复发送消息，以及部署放弃 `subagent` 转用 `workflow`，因为 workflow 至少会返回点什么。
 
 信号本身早就存在。自可继续 Activation 发布以来，`subagent/end` 就一直携带 `stopReason` 与 `lastAssistantMessage`。缺的是把它变成父级模型能看到的上下文的那个消费者。
 
@@ -20,7 +20,7 @@ Status: implemented
 
 ### 来源信息
 
-该通知携带 `{ kind: 'subagent-settled', form: 'notice', summary, senderSessionId }`，刻意不复用既有的 `subagent-report` kind。上报是 child 选择的内容；这条消息则是运行时在陈述这个 child 后来怎样了。把两者合并会把 child 从未写过的话算到它头上，也会让持久化日志无法区分「child 说它做完了」和「harness 观察到它停下了」。`notice` 形态还为 UI 提供了这条消息想要的折叠单行呈现，而 `relay` 会把它呈现为往来信件。
+该通知携带 `{ kind: 'subagent-settled', form: 'notice', summary, senderSessionId }`，刻意不复用 `send_message` 使用的 `agent-message` kind。Agent 消息是 child 选择的内容；这条消息则是运行时在陈述这个 child 后来怎样了。把两者合并会把 child 从未写过的话算到它头上，也会让持久化日志无法区分「child 说它做完了」和「harness 观察到它停下了」。`notice` 形态还为 UI 提供了这条消息想要的折叠单行呈现，而 `relay` 会把 Agent 往来消息呈现为通信。
 
 ### 两条顺序规则，以及为什么归管理器所有
 
@@ -56,13 +56,13 @@ Status: implemented
 
 ### 快照覆盖
 
-三个整体组装的 ACP 场景覆盖该通知：一个从不上报的 child、一个先上报的 child，以及一个被多轮 follow-up 驱动的 child。三者都需要显式栅栏。通知在 child 拆卸完成后才到达，会与父级当时正在做的事竞争，因此每个场景都会把 child 保持到父级启动轮次结束，再等待该通知开启的那个父级轮次（先 `waitForTurnStart` 到该轮次，再 `waitForTurnEnd`），然后脚本才继续。等待一个运行并未被栅栏保证会产生的轮次不算覆盖：一旦通知落进已经在跑的那个轮次，它就是一次超时。
+三个整体组装的 ACP 场景覆盖该通知：一个不发送消息的 child、一个先发送消息的 child，以及一个被多轮 Agent 消息驱动的 child。三者都需要显式栅栏。通知在 child 拆卸完成后才到达，会与父级当时正在做的事竞争，因此每个场景都会把 child 保持到父级启动轮次结束，再等待该通知开启的那个父级轮次（先 `waitForTurnStart` 到该轮次，再 `waitForTurnEnd`），然后脚本才继续。等待一个运行并未被栅栏保证会产生的轮次不算覆盖：一旦通知落进已经在跑的那个轮次，它就是一次超时。
 
 `subagent-continuable` 是其中固定失败结局的那个。它的 child 最后一个轮次在被强制的持久化检查点上死亡，且未进入任何 step，因此该 transcript 正是上面那条终止原因规则的端到端可见之处：通知说该 child **失败**，把此前的 `SECOND_OK` 作为它最后产出的内容而非结果携带，而父级自己的确认轮次会到达 ACP 客户端。
 
-另有一个无密钥的 headless Loader 快照端到端覆盖用户可见路径。其重放父级省略 `run_in_background` 以覆盖可继续后台默认路径，从不调用 `list_agents`、`send_message` 或 Task 工具，消费管理器写入的 `subagent-settled` 通知，并给出最终答案。child 从不调用 `report`，因此该 transcript 不可能经由协作式上报路径通过。一个仅用于测试的 Loader 栅栏会把父级启动后的请求保持到真实管理器通知进入其 inbox 为止，从 transcript 中排除平台调度差异，但不会伪造该通知。
+另有一个无密钥的 headless Loader 快照端到端覆盖用户可见路径。其重放父级省略 `run_in_background` 以覆盖可继续后台默认路径，从不调用 `list_agents`、`send_message` 或 Task 工具，消费管理器写入的 `subagent-settled` 通知，并给出最终答案。child 不发送 Agent 消息，因此该 transcript 只依赖运行时通知。一个仅用于测试的 Loader 栅栏会把父级启动后的请求保持到真实管理器通知进入其 inbox 为止，从 transcript 中排除平台调度差异，但不会伪造该通知。
 
-`subagent-report` 场景使用默认 next-step 报告投递。一个仅用于快照的围栏会让 child 等到 parent 的派生轮次结束，随后让 parent 保持 maintenance，直至结算跟在报告之后到达。恢复的 parent 会先领取 next-step 报告、再领取排队的 next-turn 结算。[报告与结算顺序决策](../bug-fix/2026-08-17-subagent-report-settlement-ordering.zh.md)负责说明这种跨状态顺序。
+`subagent-send-message` 场景会让 child 等到 parent 的派生轮次结束，随后让 parent 保持 maintenance，直至结算跟在 child 编写的消息之后到达。恢复的 parent 会先领取 next-step Agent 消息、再领取排队的 next-turn 结算。[消息与结算顺序决策](../bug-fix/2026-08-17-subagent-message-settlement-ordering.zh.md)负责说明这种跨状态顺序。
 
 拒绝与中断两种措辞在单元测试中逐字钉死，而不进入重放 transcript：触发它们需要一个会拒绝的策略插件、或一次在 step 边界被栅栏卡住的取消，而无密钥组装本身并不携带这些；通知通路本身已由整体组装场景端到端钉住。
 
@@ -72,7 +72,7 @@ Status: implemented
 
 **挂一个外部 `subagent/end` listener。** 因上文三点被否决——payload 里没有父级、child handle 已被 dispose，以及 listener 无法影响的顺序。listener 还必须严格同步才能抢在释放之前，而该 seam 上没有任何东西强制这一点，因此正确的版本只能靠碰巧正确。
 
-**仅在 child 没有上报时投递。** 这是最初的设计。它需要按 Activation 记账，仍会漏掉「报了进度、随后在给出结果前死掉」的 child，而且最关键的是：它让面向父级的承诺变成有条件的。「通常你会被告知」不是工具描述能陈述的契约，而无法依赖该通知的模型无论如何都会去轮询。
+**仅在 child 没有发送消息时投递。** 这是最初的设计。它需要按 Activation 记账，仍会漏掉「发送了进度、随后在给出结果前死掉」的 child，而且最关键的是：它让面向父级的承诺变成有条件的。「通常你会被告知」不是工具描述能陈述的契约，而无法依赖该通知的模型无论如何都会去轮询。
 
 **把投递做成可配置。** 部署开关会把面向模型的文本重新变回「通常」，而这正是本次改动要消除的失效。协议常量与安全不变量保持固定；这就是其中之一。
 
@@ -87,8 +87,8 @@ Status: implemented
 - `Activation` 携带 `parentSession` 与 `announced`。前者存在是因为 child handle 在投递前已被 dispose；后者让被回滚的物化保持静默。
 - `foldConsumedWork()` 取代 `dsh-session` 的 `findLastMessageTurnEnd()`，并迁移到 `dsh-agent`——它拥有该 fold 所读取的 inbox 标记；一次性 in-process 路径折叠同一个答案，不会把被中途切断的一次性 child 归类为 `completed`。
 - 单元覆盖固定了无条件约定、每种终止原因、空闲与繁忙两种调度、批量语义、维护期回归、释放前顺序、父级已消失，以及一次不得让拆卸失败的发送被拒。
-- 三个 ACP 场景使用显式的结算围栏，`subagent-report` 固定默认的报告先于结算的 next-step 顺序。
-- 一个无密钥的 headless Loader 快照固定了「后台启动 → 管理器写入的结算通知 → 父级最终答案」路径，其中没有轮询，也没有 child `report` 调用。
+- 三个 ACP 场景使用显式的结算围栏，`subagent-send-message` 固定 Agent 消息先于结算的 next-step 顺序。
+- 一个无密钥的 headless Loader 快照固定了「后台启动 → 管理器写入的结算通知 → 父级最终答案」路径，其中没有轮询，也没有 child 编写的消息。
 
 ### 已接受的风险
 
@@ -100,4 +100,4 @@ Status: implemented
 
 对于深或宽的树，轮次放大是真实存在的，而且按设计不可配置。step 边界的批量语义只能约束同时结算的情形，无法约束分散结算的 child。
 
-报告与其稍后的结算通知通过 parent 的 next-step FIFO 排序。来自同级 child 的独立结算保留其实际投递顺序，不会虚构同级间的顺序。
+Agent 消息与其稍后的结算通知通过 parent 的 next-step FIFO 排序。来自同级 child 的独立结算保留其实际投递顺序，不会虚构同级间的顺序。

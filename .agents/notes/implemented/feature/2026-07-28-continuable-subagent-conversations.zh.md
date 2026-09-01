@@ -44,7 +44,7 @@ inbox 接受消息前发生任何失败，操作都会在不返回任何 id 的�
 
 `SubagentProvider.start()` 和 `SubagentRun` 只保留在不变的 one-shot 路径上。可继续激活直接持有自身的 `AgentHandle`，绝不创建、包装或保留 `SubagentRun`；因此，`SubagentRun.steer?()` 不存在。
 
-`ctx.subagents.followup(parent, childId, content, { source, signal })` 仍是唯一的从 parent 到 child 的继续执行消息操作。确切的在线 parent Agent 授权投递；冷恢复会在重建前检查该权限，每条路径还会在最终无 await 的 inbox 准入区间再次检查，因此在物化期间被注销或替换的 parent 无法授权投递。`source` 记录谁提供了获准消息，不赋予任何权限。面向模型的 `send_message` 工具只保留稳定的 `subagent_id` 和 `message` 字段，并始终提交一个 follow-up 轮次。start 和 follow-up 都返回已接受的 `MessageId`，两者都不报告管理器如何物化激活。
+`ctx.subagents.sendMessage(sender, targetId, content, { signal })` 是唯一由模型编写的继续执行消息操作。确切在线 sender 授权向其直接 parent 或直接可继续 child 投递；冷恢复会在重建前检查直接 child 权限，每条路径还会在最终无 await 的 inbox 准入区间再次检查，因此在物化期间被注销或替换的 Agent 无法授权投递。服务从该 sender 推导持久化 `agent-message` 来源信息。面向模型的 `send_message` 工具只保留 `agent_id` 和 `message`，并使用固定 Steer 调度。start 与 send 都返回已接受的 `MessageId`，两者都不报告管理器如何物化 Activation。
 
 对于 start 和 follow-up，调用方 signal 只在 inbox 接受消息前持有查找、物化和准入。操作返回 `MessageId` 后，管理器会独立持有该激活；调用方之后的取消不会取消已接受的轮次，也不会 dispose child。
 
@@ -111,15 +111,13 @@ Agent inbox 是唯一队列。每条继续执行消息都使用 `Agent.followup(
 
 activation-owner 作用域之所以存在，是因为普通 Cordis owner effect 按注册逆序撤销，无法表达动态 child 图。管理器初始化时先注册私有作用域的结构化 disposer，再注册自身的 drain disposer，使逆序撤销先执行 drain、再释放该作用域；如果只在与后续 Agent handle 相同的作用域上注册 cleanup effect，结构化 handle dispose 就可能绕过 child-first 顺序。每个物化过程都会在启动内部事务前注册其屏障参与项，并对其确切的在线祖先建立快照，然后保持跟踪，直到安装 Activation 或完全回滚。Activation 会保留其在这组祖先中的弱成员关系，因此中间 Agent 即使离开注册表，也不会让仍在线的后代脱离宿主根节点的可见范围。每个 Activation 都会在取消或递归回调前安装一个记忆化的 dispose promise，使限定作用域的宿主关闭、全局管理器卸载、child 释放和正常结算能够汇合，而不会重复释放。取消会在等待缓慢的后代清理之前自顶向下传播；handle 释放仍是 child-first。同级分支独立 drain；系统会记录单次 dispose 失败，但仍会尝试其余选中 handle，聚合 drain 则在所有选中分支结算后报告失败。这次进程内拆卸不会销毁持久化 child 会话。
 
-### 报告投递扩展
+### 相邻 Agent 消息
 
-后来添加的可选 child 作用域 `report(output)` 工具不会改变 Activation 驻留状态，也不会增加另一条队列。它每轮可调用零次或多次，不允许指定接收方，而是推导在线的直接 parent；投递采用静默注入还是唤醒 parent follow-up，由部署配置选择。[report 工具 Agent Note](2026-07-30-continuable-subagent-report-tool.zh.md)规定其权限、确认、设置贡献和投递约定。
+共享的 `sendMessage(sender, targetId, content, options)` 服务操作不会增加第二条队列。它接收确切在线 sender，只允许其直接 parent 或直接可继续 child，并通过 Agent inbox 使用固定 Steer 调度。全局 `send_message({ agent_id, message })` 工具在两个方向暴露同一个操作；当 child 可以看到该工具时，其初始任务会标明直接 parent。[相邻 Agent 消息 Agent Note](../architecture/2026-08-27-adjacent-agent-steer-messaging.zh.md)规定其 schema、权限、来源信息与提示词位置。
 
-### 延后的 steering（中途引导）
+### 固定 Steer 调度
 
-本版本不暴露 subagent steering 操作。parent 的继续执行消息始终开启后续 FIFO 轮次，因此继续执行层不存储当前轮次控制方，也不新增能够感知控制方的 Agent 准入约定。
-
-后续宿主 UI 可以分别暴露 **Steer** 和 **Follow up** 操作。宿主 steering 必须严格且仅限在线使用：只有当激活接受下一步骤时，它才能调用现有的 Agent steering 路径；其他情况必须拒绝，而且绝不能转为排队或冷恢复。是否通过面向模型的工具暴露 parent steering 仍需单独设计。
+每条已接受的 Agent 消息都使用 `Agent.steer()`。运行中的目标会在最近的 step 边界领取消息；空闲或冷恢复的目标会启动一个轮次。继续执行层不暴露由调用方选择的 quiet、next-turn 或 follow-up 模式。
 
 ### 权限与已记录的发送方身份
 

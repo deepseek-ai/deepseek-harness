@@ -157,11 +157,11 @@ describe('SubagentRuntime', () => {
       request: baseRequest(),
       signal: new AbortController().signal,
     })).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
-    await expect(subagents.followup(
+    await expect(subagents.sendMessage(
       fakeParent(),
       SessionId('child'),
       [{ type: 'text', text: 'hello' }],
-      { source: { kind: 'user' }, signal: new AbortController().signal },
+      { signal: new AbortController().signal },
     )).rejects.toMatchObject({ code: 'CONTINUATION_UNAVAILABLE' })
   })
 

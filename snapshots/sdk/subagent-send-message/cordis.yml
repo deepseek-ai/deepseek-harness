@@ -1,0 +1,6 @@
+# Snapshot-only overlay fencing the child behind its parent's spawn turn and
+# holding the parent in maintenance until settlement follows the child's
+# next-step Agent message. The resumed parent claims both notices in causal order.
+- insert:
+    - id: send-message-fence
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-send-message-fence.ts'

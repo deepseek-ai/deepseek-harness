@@ -82,9 +82,9 @@ One difference from spawn, expressed as data: the backend computes the balanced 
 
 On `start`, the prefix is sliced from the parent's event log up to and including the last `turn/end`; the shared driver then creates the child with that seed, applies the same persona, tool-filter, and structured-output setup, drives one task, reads the child's own final output, and disposes quiescently. The provider advertises `agentOptions` plus the same output, depth, filter, and persona capabilities as spawn. `prepareContinuable` captures the prefix once, at creation, because it becomes part of the child's own durable transcript.
 
-### One-shot binding
+### Lifecycle binding
 
-The base bundle and ACP/headless examples bind this provider to `backgroundMode: one-shot`: a continuable fork child carries the child-scoped `report` tool and its prompt section before the inherited history, defeating byte-identical prefix reuse. The CLI presets retain `continuable` fork and accept that prefix loss ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
+The base bundle and ACP/headless examples bind this provider to `backgroundMode: one-shot`, while the CLI presets select `continuable`. Both preserve the inherited request prefix: parent and child receive the same messaging tool definition and ordering, and the continuable child's parent id and return guidance live in its initial user task after inherited history ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
 
 </details>
 
@@ -119,7 +119,7 @@ Forking duplicates retained completed history into the child's request, which th
 
 #### KV Cache effect
 
-The child may reuse the inherited byte-identical prefix under the same provider and model. Persona, tool-filter, generated-SDK, or route changes may invalidate reuse before inherited history; later child history is append-only. The base bundle and ACP/headless examples use one-shot fork to preserve this prefix. The CLI presets retain continuable fork and accept that the child-scoped `report` tool and its prompt section invalidate it ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
+The child may reuse the inherited byte-identical prefix under the same provider and model. Persona, tool-filter, generated-SDK, or route changes may invalidate reuse before inherited history; later child history is append-only. Continuable messaging adds no child-only system-prompt section or tool schema; the parent id and return guidance follow inherited history in the initial user task ([cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md)).
 
 ### Parent tool result, indirectly
 
@@ -143,7 +143,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 These limits define when the backend is the wrong choice; they are current package constraints.
 
 - **The seed is a one-time snapshot** — the child sees the parent's completed turns as of the fork and nothing the parent logs afterwards; there is no live context sharing.
-- **Fork lifecycle policy differs by composition** — the base bundle and ACP/headless examples use one-shot fork to preserve prefix reuse, while the CLI presets use continuable fork and accept the child-scoped [`report` return channel](../tool-subagent-report/README.md) invalidating that prefix. Making continuable fork cache-preserving requires the child system prompt and tool schemas to match the parent's byte for byte. Rationale and the reintroduction condition: the [cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md).
+- **Fork lifecycle policy differs by composition** — the base bundle and ACP/headless examples use one-shot fork, while the CLI presets use continuable fork. Both keep the inherited prefix eligible for reuse because parent and child messaging definitions match byte for byte; explicit persona, tool filtering, generated-SDK, or route changes can still break equality. Rationale: the [cache-preserving fork Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.md).
 - **Shipped fork tools do not expose child LLM route selection** — they inherit the parent's provider and model so the copied history remains eligible for KV Cache reuse. Route selection stays disabled until a change can preserve reuse or expose a bounded recomputation cost; the [model-selected route Agent Note](../../../.agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.md) owns that restriction.
 
 <a id="dev-note"></a>

@@ -82,9 +82,9 @@ kind: "package-reference"
 
 `start` 时，从父级事件日志中截取截至最后一个 `turn/end` 的前缀；共享驱动器随后以该初始内容创建子 agent，应用相同的 persona、工具过滤器与结构化输出设置，驱动一项任务，读取子 agent 自身的最终输出，并完全停稳地 dispose。该提供方声明 `agentOptions`，以及与 spawn 相同的输出、深度、过滤与 persona 能力。`prepareContinuable` 在创建时只捕获一次前缀，因为它会成为子 agent 自身持久 transcript（文本记录）的一部分。
 
-### 一次性绑定
+### 生命周期绑定
 
-base bundle 与 ACP/headless 示例在委派工具上把本提供方绑定为 `backgroundMode: one-shot`：可继续 fork 子 agent 会在继承历史之前携带子级作用域的 `report` 工具及其提示词 section，从而破坏逐字节前缀复用。CLI preset 保留可继续 fork，并接受该前缀损失（见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)）。
+base bundle 与 ACP/headless 示例在委派工具上把本提供方绑定为 `backgroundMode: one-shot`，CLI preset 则选择 `continuable`。两者都保留继承的请求前缀：parent 与 child 获得定义和顺序相同的消息工具，可继续 child 的 parent id 与返回指导位于继承历史之后的初始用户任务中（见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)）。
 
 </details>
 
@@ -119,7 +119,7 @@ fork 会把保留的已完成历史复制到子 agent 的请求中，子 agent �
 
 #### KV Cache 影响
 
-在提供方与模型相同的前提下，子 agent 可以复用继承的逐字节相同前缀。persona、工具过滤、生成 SDK 或路由变化可能在继承历史之前使复用失效；后续子 agent 历史仅追加。base bundle 与 ACP/headless 示例使用一次性 fork 来保留此前缀。CLI preset 保留可继续 fork，并接受子级作用域的 `report` 工具及其提示词 section 使此前缀失效（见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)）。
+在提供方与模型相同的前提下，子 agent 可以复用继承的逐字节相同前缀。persona、工具过滤、生成 SDK 或路由变化可能在继承历史之前使复用失效；后续子 agent 历史仅追加。可继续消息不增加 child 专属系统提示词 section 或工具 schema；parent id 与返回指导在初始用户任务中位于继承历史之后（见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)）。
 
 ### 父级工具结果（间接）
 
@@ -143,7 +143,7 @@ fork 会把保留的已完成历史复制到子 agent 的请求中，子 agent �
 这些限制说明何时选择该后端是错误的；它们是当前包约束。
 
 - **初始内容是一次性快照**——子 agent 只能看到 fork 时父级已完成的轮次，看不到父级此后记录的任何内容；不会实时共享上下文。
-- **fork 生命周期策略因组合而异**——base bundle 与 ACP/headless 示例使用一次性 fork 来保留前缀复用；CLI preset 使用可继续 fork，并接受子级作用域的 [`report` 返回通道](../tool-subagent-report/README.zh.md)使此前缀失效。要让可继续 fork 保留缓存，子 agent 的系统提示词与工具 schema 必须和父级逐字节一致。理由与重新开放条件见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)。
+- **fork 生命周期策略因组合而异**——base bundle 与 ACP/headless 示例使用一次性 fork，CLI preset 使用可继续 fork。两者都因 parent 与 child 消息定义逐字节相同而让继承前缀保持可复用；显式 persona、工具过滤、生成 SDK 或路由变化仍可破坏相等性。理由见[保持 fork 缓存的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-10-fork-children-stay-one-shot.zh.md)。
 - **随附 fork 工具不公开子级 LLM 路由选择**——它们继承父级提供方与模型，使复制的历史仍有资格复用 KV Cache。在某项改动能保留复用或公开有界重算成本前，路由选择保持禁用；[模型选择路由 Agent Note](../../../.agents/notes/implemented/feature/2026-08-18-model-selected-subagent-routes.zh.md)说明这项限制。
 
 <a id="dev-note"></a>

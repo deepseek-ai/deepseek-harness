@@ -1,4 +1,4 @@
-# Agent Note: Forked children stay one-shot
+# Agent Note: Forked children preserve the parent request prefix
 
 Status: implemented
 
@@ -6,44 +6,36 @@ English | [中文](2026-08-10-fork-children-stay-one-shot.zh.md)
 
 ## Problem
 
-Fork's only difference from spawn is that the child Session is seeded with the parent's completed-turn prefix ([subagent-fork-in-process](../../../../packages/subagent/subagent-fork-in-process/README.md)). That seed costs real tokens — the inherited history is re-sent in every child request — and its one concrete payoff is provider-side prefix reuse: under the same provider and model, a child request whose leading bytes are identical to the parent's re-prefills none of the shared span. Anything a child scope adds *ahead* of the inherited history spends that payoff, because reuse stops at the first differing byte.
+Fork differs from spawn by seeding the child Session with the parent's completed-turn prefix. That seed costs tokens, and its intended payoff is provider-side prefix reuse: under the same provider and model, a child request whose leading bytes match the parent's does not prefill the shared span again. A child-only system-prompt section or tool schema ahead of the inherited history defeats that payoff.
 
-The child-scoped `report` return channel is now the largest such addition, and since [the report obligation](../feature/2026-08-06-continuable-child-report-obligation.md) it is two deltas rather than one: the `report` tool schema and the `tool:report` system-prompt section. Both live in the request head — the system block and the tool block precede every message — so a continuable forked child invalidates reuse before the first inherited turn and re-prefills the whole transcript it was forked to reuse. That composition pays fork's duplication cost and collects none of its benefit, while the parent still holds a reusable prefix the child could have shared.
+The earlier shipped composition avoided this mismatch by keeping forked children one-shot. That restriction was a consequence of the former child-only return tool, not an intrinsic property of continuable fork.
 
 ## Decision
 
-Every shipped composition inherits the fork delegation tool's `backgroundMode: one-shot` from the [base bundle](../../../../packages/bundle/base/cordis.patch.yml). The base bundle leaves `run_in_background` available because it also mounts the task service needed to settle background work.
+The model-facing `send_message` tool is registered globally for every Agent in a composition. A continuable forked child therefore receives the same tool name, description, schema, and ordering as its parent. Its initial task is appended after the inherited Session seed, and the task includes the direct parent id plus guidance to return results with `send_message({ agent_id, message })` when that tool is visible to the child.
 
-One-shot children — foreground and background alike — are created through `SubagentRuntime.start()`, which never enters the continuable activation-setup registry, so neither `report` nor its prompt section is installed. A forked one-shot child's system prompt and tool schemas therefore equal its parent's, apart from the `persona` and `toolFilter` deltas a deployment opts into per delegation tool.
+The base and headless compositions retain one-shot fork as their conservative lifecycle policy. The `cordis`, `standard`, and `ptc` CLI presets may bind fork to the continuable lifecycle because that binding no longer inserts child-only request-head fields. `ForkInProcessProvider.prepareContinuable()` and `ctx.subagents.startContinuable()` remain the implementation seam for those presets.
 
-`spawn` keeps `backgroundMode: continuable`. Continuable children and the report obligation ship unchanged for the provider whose child starts with no inherited prefix to protect, so this decision costs the report channel nothing.
-
-### The restriction is composition, not code
-
-`ForkInProcessProvider.prepareContinuable` stays implemented and `ctx.subagents.startContinuable()` still accepts `fork`; only the shipped `cordis.yml` rows changed. `tool-subagent` knows both the provider's `inheritsParentContext` and its own `backgroundMode` at mount, so a load-time rejection of the pair was available and is deliberately not added: the pair is not wrong in general. It is wrong only while a child-scope delta precedes inherited history, and the package that creates that delta — [`dsh-tool-subagent-report`](../../../../packages/subagent/tool-subagent-report/README.md) — is separately installable and, by its own design, invisible to `tool-subagent`. A deployment that omits the report package can run continuable forked children with the prefix intact. Encoding one roster's consequence as a delegation-tool invariant would make the tool assert something it cannot observe.
-
-The reintroduction condition is recorded as a `TODO(fork-continuable-prefix-reuse)` marker on `prepareContinuable` itself, the one method the shipped compositions do not call, and tracked as issue #2124: continuable fork reopens when a child's system prompt and tool schemas can match its parent's byte for byte.
+Byte-identical prefix reuse is qualified by explicit deployment choices. A fork delegation that applies a child persona or `toolFilter` may still change the request head. In particular, filtering out `send_message` removes both the schema and the return guidance from the child; the runtime does not bypass an explicit allow-list.
 
 ## Alternatives considered
 
-**Reject `inheritsParentContext` + `continuable` at mount.** A loud load-time failure would prevent silent reintroduction, which is what the configuration change cannot do. Rejected because the delegation tool cannot see the report package and the combination is legitimate without it; the invariant would be false for a deployment that never installs a child-scope delta, and `tool-subagent` would be asserting a fact owned by the roster.
+**Keep every fork one-shot.** This preserves the prefix but unnecessarily gives up durable, multi-turn forked children after the child-only schema difference is gone.
 
-**Stop mounting the fork provider at all.** This was the broader form of the restriction. Rejected because foreground fork *is* the prefix-reusing case and is untouched by the report channel, so a full ban gives up the capability without buying anything the one-shot binding does not already buy — and would leave no shipped composition exercising session seeding.
+**Install a child-only return alias.** A recipient-free alias would make child calls shorter, but it would recreate a tool-schema and prompt delta before inherited history and duplicate the adjacent-Agent operation.
 
-**Ship continuable forked children and accept the loss.** Rejected because the loss is total rather than marginal: reuse breaks ahead of the inherited history, so the child pays full prefill on a transcript it duplicated for the sole purpose of not paying it. A deployment that wants a long-lived child with no inherited context already has `spawn`.
+**Add the return instruction to the system prompt.** This would place child-only bytes ahead of inherited messages. Appending it to the initial user task preserves the inherited prefix and keeps the parent id next to the task that needs it.
 
-**Make `report` visible to every Agent.** A global registration would restore byte-identical prefixes by giving parent and child the same schema and section. Rejected because roots, one-shot children, remote children, and agentless callers would advertise a tool with no derivable recipient, and execution-time rejection would make schema visibility disagree with authority — the scope-local decision the [report tool Agent Note](../feature/2026-07-30-continuable-subagent-report-tool.md) already settled.
-
-**Install the child-scope deltas after the inherited history.** Rejected as unrepresentable: the system prompt and the tool schemas are request-head structures in every provider's wire format, so no ordering within them can place a child-only addition behind the message list.
+**Ignore an explicit child `toolFilter`.** Structural return tools previously bypassed the child allow-list. Rejected because a declared tool restriction must determine both schema visibility and guidance; hidden authority would make the model-facing roster inaccurate.
 
 ## Consequences
 
-- No shipped composition creates a continuable forked child; `subagent_fork` returns a result to its caller's turn, and `send_message` addresses only spawned children.
-- A forked child's request prefix stays byte-identical to its parent's unless the deployment configures `persona` or `toolFilter` on the fork delegation tool, so the token cost of seeding buys provider-side reuse again.
-- The fork provider's continuable path has no production caller and no assembled-composition coverage. It keeps its package-level tests, and the seam still accepts it, so a bundle or `--patch` overlay can reintroduce it with no code change and no warning.
-- `subagent_fork`'s model-visible schema changes: the continuable background wording is replaced by the one-shot task wording in the base bundle, and disappears entirely from the two examples. The affected keyless snapshot tool-schema sidecars are re-recorded in the same change.
-- The report obligation's reach narrows to spawned children in shipped deployments. Its default `next-step` scheduling, authority model, and coverage remain independent of fork composition.
+- Parent and continuable-fork child expose byte-identical ordered tool schemas when the delegation does not request a persona or tool filter.
+- The inherited Session seed precedes the child's initial task and return guidance.
+- The base and headless profiles keep one-shot fork, while selected CLI presets exercise continuable fork without a child-only request-head addition.
+- A child sends zero or more messages to its direct parent explicitly; its final answer is not implicitly copied. The manager-owned settlement notice remains unconditional and separate.
+- Keyless snapshots and package tests pin schema equality, inherited-history ordering, parent-id guidance, and child-to-parent delivery through the same `send_message` operation used in the other direction.
 
 ### Accepted risks
 
-The constraint lives in three configuration files and a code comment, not in a gate. A future bundle row or profile patch can set `backgroundMode: continuable` on a fork tool and silently reintroduce the prefix loss; nothing fails loud. That is the accepted cost of not encoding one roster's consequence into `tool-subagent`.
+Provider-side prefix reuse still depends on the selected provider and model and on the absence of explicit persona or tool-filter differences. The harness proves equality of its assembled request-head inputs, not a provider's cache behavior.

@@ -1174,12 +1174,14 @@ export async function captureStableAria(
  * @param page - the page under test.
  * @param selector - the region locator selector.
  * @param workspaceCwd - normalization input.
+ * @param options - optional user-visible state to establish before capture.
  * @returns the stable normalized expanded snapshot.
  */
 export async function captureExpandedTurnProcessAria(
   page: Page,
   selector: string,
   workspaceCwd: string,
+  options: { scrollToBottom?: boolean } = {},
 ): Promise<string> {
   const controls = page.locator('[data-turn-process]')
   const count = await controls.count()
@@ -1192,6 +1194,17 @@ export async function captureExpandedTurnProcessAria(
     opened.push(index)
   }
   try {
+    if (options.scrollToBottom === true) {
+      const backToBottom = page.getByRole('button', { name: 'Back to bottom', exact: true })
+      const scroll = page.locator('[data-conversation-scroll]')
+      await expect.poll(async () => {
+        const distanceFromBottom = await scroll.evaluate((host) => {
+          host.scrollTop = host.scrollHeight
+          return host.scrollHeight - host.clientHeight - host.scrollTop
+        })
+        return Math.abs(distanceFromBottom) <= 1 && await backToBottom.count() === 0
+      }, { timeout: 10_000 }).toBe(true)
+    }
     return await captureStableAria(page, selector, workspaceCwd)
   } finally {
     for (const index of opened.reverse()) {

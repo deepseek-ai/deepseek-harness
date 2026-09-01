@@ -24,7 +24,7 @@ Status: implemented
 | 工作模式 | `plan:policy` 500、`team:policy` 600 |
 | 调用前置说明 | `tools:ptc-only` 800、`context:file-reference` 900 |
 | 本地工具 | `tool:bash` 1000、`tool:pwsh` 1010、`tool:read` 1100、`tool:write` 1200、`tool:edit` 1300、`tool:glob` 1400、`tool:grep` 1500、`tool:jobs` 1600、`tool:pty` 1700 |
-| 高层工具 | `tool:web_search` 2000、`tool:web_fetch` 2100、`tool:lsp` 2200、`tool:session-query` 2300、`tool:goal` 2400、`tool:cordis` 2500、`tool:workflow` 2600、`tool:ralph` 2700、可继续运行的 subagent 指导 2800、`tool:report` 2900 |
+| 高层工具 | `tool:web_search` 2000、`tool:web_fetch` 2100、`tool:lsp` 2200、`tool:session-query` 2300、`tool:goal` 2400、`tool:cordis` 2500、`tool:workflow` 2600、`tool:ralph` 2700、可继续运行的 subagent 指导 2800 |
 | 生成协议 | `tools:sdk` 5000 |
 | 最终输出义务 | 可交付文件引用 9000、`tool:structured_output` 9900 |
 

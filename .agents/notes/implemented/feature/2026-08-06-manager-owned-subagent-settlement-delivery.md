@@ -8,7 +8,7 @@ English | [中文](2026-08-06-manager-owned-subagent-settlement-delivery.zh.md)
 
 Continuable background delegation was the one asynchronous operation a model could start but could not reach the end of. Every other shape has a retrieval primitive or a return value: a background bash command and a one-shot background subagent both settle through a Task that `job_output(wait: true)` can block on, a workflow and a foreground subagent return their result to the caller. A continuable background child returned only its durable id, and nothing existed that a parent could wait on or would be handed.
 
-[The report obligation](2026-08-06-continuable-child-report-obligation.md) closed the cooperative half of that gap by instructing the child to report before it finishes. Instruction cannot close the rest. A child stopped by a token ceiling, a model failure, cancellation, or teardown never reaches the point where it could comply — not rarely, but never — and those are precisely the endings a waiting parent most needs to hear about. The observable downstream symptoms were parents busy-polling `list_agents`, re-sending messages to children that had already settled, and deployments abandoning `subagent` for `workflow` because a workflow at least returns something.
+Child-authored messages close the cooperative half of that gap: a child can send progress and a final handoff to its direct parent. Model choice cannot close the rest. A child stopped by a token ceiling, a model failure, cancellation, or teardown may never send such a message, and those are precisely the endings a waiting parent most needs to hear about. The observable downstream symptoms were parents busy-polling `list_agents`, re-sending messages to children that had already settled, and deployments abandoning `subagent` for `workflow` because a workflow at least returns something.
 
 The signal already existed. `subagent/end` has carried `stopReason` and `lastAssistantMessage` since continuable Activations shipped. What was missing was any consumer that turned it into context the parent's model could see.
 
@@ -20,7 +20,7 @@ When a resident Activation settles, `notifySettlement()` resolves the child's du
 
 ### Provenance
 
-The notice carries `{ kind: 'subagent-settled', form: 'notice', summary, senderSessionId }`. It is deliberately not the existing `subagent-report` kind. A report is content the child chose; this is the runtime stating what became of the child. Merging them would credit the child with words it never wrote, and would make a durable log unable to distinguish "the child said it was done" from "the harness observed that it stopped". The `notice` form also gives a UI the collapsed one-line presentation this message wants, where `relay` would present it as correspondence.
+The notice carries `{ kind: 'subagent-settled', form: 'notice', summary, senderSessionId }`. It is deliberately not the `agent-message` kind used by `send_message`. An Agent message is content the child chose; this is the runtime stating what became of the child. Merging them would credit the child with words it never wrote, and would make a durable log unable to distinguish "the child said it was done" from "the harness observed that it stopped". The `notice` form also gives a UI the collapsed one-line presentation this message wants, where `relay` presents Agent correspondence.
 
 ### Two ordering rules, and why the manager owns them
 
@@ -56,13 +56,13 @@ Both matter past the notice: `subagent/end` carries `stopReason` to the jsonrpc 
 
 ### Snapshot coverage
 
-Three assembled ACP scenarios cover the notice: a child that never reports, a child that reports first, and a child driven through several follow-up turns. All three needed an explicit fence. The notice arrives once the child's teardown finishes, which races whatever the parent is already doing, so each scenario holds the child behind the parent's spawn turn and then waits for the parent turn the notice opens (`waitForTurnStart` at that turn, then `waitForTurnEnd`) before the script continues. Waiting for a turn the run is not fenced to produce is not coverage: it is a timeout when the notice lands in the turn already running instead.
+Three assembled ACP scenarios cover the notice: a child that sends no message, a child that sends a message first, and a child driven through several Agent-message turns. All three need an explicit fence. The notice arrives once the child's teardown finishes, which races whatever the parent is already doing, so each scenario holds the child behind the parent's spawn turn and then waits for the parent turn the notice opens (`waitForTurnStart` at that turn, then `waitForTurnEnd`) before the script continues. Waiting for a turn the run is not fenced to produce is not coverage: it is a timeout when the notice lands in the turn already running instead.
 
 `subagent-continuable` is the one that pins a failure. Its child's last turn dies on the forced durability checkpoint without entering a step, so that transcript is where the stop-reason rule above is visible end to end: the notice says the child *failed*, carries the earlier `SECOND_OK` as its last content rather than as a result, and the parent's own acknowledgement turn reaches the ACP client.
 
-A keyless headless Loader snapshot covers the user-visible path end to end. Its replay parent omits `run_in_background` to exercise the continuable background default, never calls `list_agents`, `send_message`, or Task tools, consumes the manager-authored `subagent-settled` notice, and produces its final answer. The child never calls `report`, so the transcript cannot pass through the cooperative report path. A test-only Loader fence holds the parent's post-spawn request until the real manager notice enters its inbox, removing platform scheduling from the transcript without synthesizing the notice.
+A keyless headless Loader snapshot covers the user-visible path end to end. Its replay parent omits `run_in_background` to exercise the continuable background default, never calls `list_agents`, `send_message`, or Task tools, consumes the manager-authored `subagent-settled` notice, and produces its final answer. The child sends no Agent message, so the transcript depends only on the runtime notice. A test-only Loader fence holds the parent's post-spawn request until the real manager notice enters its inbox, removing platform scheduling from the transcript without synthesizing the notice.
 
-The `subagent-report` scenario uses the default next-step report delivery. A snapshot-only fence holds the child until the parent's spawn turn ends, then holds the parent in maintenance until settlement follows the report. The resumed parent claims the next-step report before the queued next-turn settlement. The [report/settlement ordering decision](../bug-fix/2026-08-17-subagent-report-settlement-ordering.md) owns this cross-state ordering.
+The `subagent-send-message` scenario holds the child until the parent's spawn turn ends, then holds the parent in maintenance until settlement follows the child-authored message. The resumed parent claims the next-step Agent message before the queued next-turn settlement. The [message/settlement ordering decision](../bug-fix/2026-08-17-subagent-message-settlement-ordering.md) owns this cross-state ordering.
 
 The refusal and interruption wordings are pinned verbatim in unit tests rather than in a replayed transcript: producing them needs a rejecting policy plugin or a cancellation fenced at a step boundary, which the keyless assemblies do not otherwise carry, and the assembled scenarios already pin the notice pathway itself end to end.
 
@@ -72,7 +72,7 @@ The refusal and interruption wordings are pinned verbatim in unit tests rather t
 
 **Attach an external `subagent/end` listener.** Rejected on three counts above — no parent in the payload, a disposed child handle, and an ordering the listener cannot influence. A listener would also have to be strictly synchronous to beat the release, and nothing at that seam enforces it, so the correct version would be correct only by accident.
 
-**Deliver only when the child did not report.** This was the first design. It needs per-Activation bookkeeping, still misses the child that reported progress and then died before its result, and — decisively — makes the parent-facing promise conditional. "Usually you are told" is not a contract a tool description can state, and a model that cannot rely on the notice will poll anyway.
+**Deliver only when the child sent no message.** This was the first design. It needs per-Activation bookkeeping, still misses the child that sent progress and then died before its result, and — decisively — makes the parent-facing promise conditional. "Usually you are told" is not a contract a tool description can state, and a model that cannot rely on the notice will poll anyway.
 
 **Make delivery configurable.** A deployment switch would return the model-facing text to "usually", which is the failure this change exists to remove. Protocol constants and safety invariants stay fixed; this is one of them.
 
@@ -87,8 +87,8 @@ The refusal and interruption wordings are pinned verbatim in unit tests rather t
 - `Activation` carries `parentSession` and `announced`. The first exists because the child handle is disposed before delivery; the second is what keeps a rolled-back materialization silent.
 - `foldConsumedWork()` replaces `dsh-session`'s `findLastMessageTurnEnd()` and moves to `dsh-agent`, which owns the inbox marker it reads; the one-shot in-process path folds the same answer and does not classify a cut-short one-shot child as `completed`.
 - Unit coverage pins the unconditional contract, each terminal reason, idle and busy scheduling, the batch, the maintenance regression, the pre-release ordering, a parent that is gone, and a rejected send that must not fail teardown.
-- Three ACP scenarios use an explicit settlement fence, and `subagent-report` pins the default report-before-settlement next-step order.
-- A keyless headless Loader snapshot pins background start → manager-authored settlement notice → final parent answer with no polling or child `report` call.
+- Three ACP scenarios use an explicit settlement fence, and `subagent-send-message` pins the Agent-message-before-settlement next-step order.
+- A keyless headless Loader snapshot pins background start → manager-authored settlement notice → final parent answer with no polling or child-authored message.
 
 ### Accepted risks
 
@@ -100,4 +100,4 @@ Stop-reason attribution is a best effort over the log's existing splice vocabula
 
 Turn amplification is real for deep or wide trees, and it is not configurable by design. The step-boundary batch bounds it for simultaneous settlement but not for children that settle apart.
 
-Reports and their later settlement notices are ordered through the parent's next-step FIFO. Independent settlements from sibling children retain their actual delivery order rather than a synthetic sibling ordering.
+Agent messages and their later settlement notices are ordered through the parent's next-step FIFO. Independent settlements from sibling children retain their actual delivery order rather than a synthetic sibling ordering.

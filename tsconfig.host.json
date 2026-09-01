@@ -284,7 +284,6 @@
     { "path": "./packages/subagent/subagent" },
     { "path": "./packages/subagent/tool-subagent" },
     { "path": "./packages/subagent/tool-subagent-control" },
-    { "path": "./packages/subagent/tool-subagent-report" },
     { "path": "./packages/subagent/subagent-in-process-driver" },
     { "path": "./packages/subagent/subagent-spawn-in-process" },
     { "path": "./packages/subagent/subagent-fork-in-process" },

@@ -8,7 +8,7 @@ English | [中文](2026-08-11-background-first-continuable-delegation.zh.md)
 
 A continuable child already has a durable id, independent turns, follow-up messaging, and a manager-owned settlement notice. Treating an omitted `run_in_background` as foreground makes that lifecycle depend on the model restating `true` on every call. It also obscures the useful scheduling test: the parent should wait only when its next action requires the child's result.
 
-The child-scoped `report` prompt requires a self-contained final report, while [manager-owned settlement delivery](2026-08-06-manager-owned-subagent-settlement-delivery.md) independently sends the run outcome and closing message. A completed child can therefore wake its parent with a final report and again with settlement. Background-first scheduling must preserve both deliveries: the child-authored handoff remains mandatory guidance, while the manager-authored notice covers every terminal path regardless of model compliance.
+The child's initial task tells it how to address its direct parent with the shared `send_message` tool, while [manager-owned settlement delivery](2026-08-06-manager-owned-subagent-settlement-delivery.md) independently sends the run outcome and closing message. A child may send progress or a final handoff before settlement. Background-first scheduling preserves both: Agent-authored messages remain explicit model choices, while the manager-authored notice covers every terminal path regardless of model compliance.
 
 ## Decision
 
@@ -20,9 +20,9 @@ The model-facing text divides responsibility by location:
 - the `run_in_background` parameter states the lifecycle-specific default and when to override it;
 - a `tool:<toolName>` system-prompt section tells the model to start independent delegations together, continue useful work while they run, and choose foreground only when the next action depends on the result. The section renders only when that tool remains visible in the assembly scope, so a child tool restriction removes the schema and its guidance together.
 
-The [continuable child report obligation](2026-08-06-continuable-child-report-obligation.md) remains unchanged: the child prompt requires one self-contained final report and earlier reports for findings that change the parent's next action. Manager-owned settlement remains unconditional and does not inspect whether a report arrived. The two messages may repeat final content, but they retain distinct authors and purposes: `report` is the child's explicit handoff, while settlement records how the run ended and preserves terminal output when the child cannot cooperate. `reportDelivery` remains deployment scheduling policy with `next-step` as its default, preserving report-before-settlement order through the parent inbox.
+The child receives its direct parent id and return guidance in the initial task after any inherited fork seed. It may call `send_message` zero or more times, including for findings that change the parent's next action and for a self-contained final handoff. Manager-owned settlement remains unconditional and does not inspect whether an Agent message arrived. The two messages may repeat final content, but they retain distinct authors and purposes: `send_message` carries content the child chose, while settlement records how the run ended and preserves terminal output when the child cannot cooperate. Both use the Agent inbox and fixed Steer scheduling; the accepted child message precedes the later settlement notice.
 
-The keyless headless `subagent-settlement` scenario omits `run_in_background`, receives the immediate child id, and reaches the final parent answer through the manager-authored settlement notice even though its fixture deliberately does not call `report`. Package tests separately pin explicit `false` as foreground, the parent scheduling text, and the child's mandatory-report prompt.
+The keyless headless `subagent-settlement` scenario omits `run_in_background`, receives the immediate child id, and reaches the final parent answer through the manager-authored settlement notice even though its fixture deliberately sends no child-authored message. Package tests separately pin explicit `false` as foreground, the parent scheduling text, and the child's parent-id return guidance.
 
 ## Alternatives considered
 
@@ -32,14 +32,14 @@ The keyless headless `subagent-settlement` scenario omits `run_in_background`, r
 
 **Change only the prompt.** Prompt preference without runtime resolution still turns an omitted argument into foreground. The model must be able to rely on the advertised default rather than reproduce it perfectly on every tool call.
 
-**Suppress settlement after a final report arrives.** Conditional settlement reintroduces per-Activation bookkeeping and loses the unconditional runtime guarantee when a child reports progress and then fails. Settlement remains unconditional even when the resulting message overlaps a final report.
+**Suppress settlement after a final Agent message arrives.** Conditional settlement reintroduces per-Activation bookkeeping and loses the unconditional runtime guarantee when a child sends progress and then fails. Settlement remains unconditional even when the resulting message overlaps a final handoff.
 
-**Use `report` only for progress before settlement.** This removes duplicate final content but also removes the explicit child-authored handoff from the child prompt. The final-report obligation remains, and runtime settlement remains its independent fallback and terminal record.
+**Reserve `send_message` for progress before settlement.** This removes duplicate final content but makes the shared adjacent-Agent operation depend on message purpose. The child may explicitly hand off a final result, while runtime settlement remains its independent fallback and terminal record.
 
 ## Consequences
 
 - An ordinary continuable call is non-blocking without spelling `run_in_background: true`; serialized delegation is an explicit `false` choice.
 - Independent subagent calls in one assistant message overlap under the tool loop's concurrency-safe dispatch, while dependent foreground calls can still be issued one at a time.
 - Parent guidance, tool schema, runtime resolution, and settlement delivery state the same default.
-- A compliant child reports one self-contained final result and may report important findings earlier. Every Activation also produces an unconditional settlement notice, so a completed run may deliver overlapping final content twice.
+- A child may send one self-contained final result and important findings earlier. Every Activation also produces an unconditional settlement notice, so a completed run may deliver overlapping final content twice.
 - One-shot background Jobs and disabled-background tool instances retain their existing behavior.

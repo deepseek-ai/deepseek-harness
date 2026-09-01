@@ -151,6 +151,11 @@ describe('dsh-tool-team', () => {
     expect(childAssembly.tools.map(schema => schema.name).filter(name => TOOL_NAMES.includes(name)).sort())
       .toEqual(TOOL_NAMES)
     expect(renderPrompt(childAssembly)).toContain('Your Team role is teammate; your Team name is tool-worker')
+    const initialPrompt = child.session.snapshotEvents().find(event => event.type === 'user/message'
+      && event.data.source.kind === 'user')
+    expect(initialPrompt?.type === 'user/message'
+      ? initialPrompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
+      : []).toEqual(['stay available'])
 
     const denied = await execute(ctx, child, 'spawn_teammate', {
       name: 'nested', description: 'not allowed', prompt: 'no',
@@ -374,7 +379,7 @@ describe('dsh-tool-team', () => {
 
     await fiber.dispose()
     const legacySchema = (await assembly(ctx, lead)).tools.find(schema => schema.name === 'send_message')
-    expect(JSON.stringify(legacySchema)).toContain('subagent_id')
+    expect(JSON.stringify(legacySchema)).toContain('agent_id')
   })
 
   it('rolls back partial scoped installation after a same-scope collision', async () => {

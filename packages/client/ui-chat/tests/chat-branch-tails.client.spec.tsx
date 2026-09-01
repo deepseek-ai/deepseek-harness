@@ -706,7 +706,7 @@ describe('MessageItem arms', () => {
     // reach it, and the row marker must not claim a form that did not render.
     const cases = [
       { form: 'snapshot', source: { kind: 'plugin', form: 'snapshot', sections: 'not-a-list' }, label: 'plugin' },
-      { form: 'relay', source: { kind: 'subagent-report', form: 'relay' }, label: 'subagent-report' },
+      { form: 'relay', source: { kind: 'agent-message', form: 'relay' }, label: 'agent-message' },
       { form: 'recall', source: { kind: 'session-reference', form: 'recall', references: [{ label: 'x' }] }, label: 'session-reference' },
     ] as const
     for (const { form, source, label } of cases) {
@@ -746,13 +746,13 @@ describe('MessageItem arms', () => {
         kind: 'context',
         seq: 3,
         content: [{ type: 'text', text: 'child report body' }],
-        source: { kind: 'subagent-report', form: 'relay', senderSessionId: 'child-7' },
-        provenance: { role: 'inject', label: 'subagent-report' },
+        source: { kind: 'agent-message', form: 'relay', senderSessionId: 'child-7' },
+        provenance: { role: 'inject', label: 'agent-message' },
         form: 'relay',
       } as never}
       />,
     )
-    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*subagent-report$/ }))
+    fireEvent.click(view.getByRole('button', { name: /^上下文注入\s*agent-message$/ }))
     expect(view.container.querySelector('[data-context-relay-sender]')?.textContent).toBe('来自会话 child-7')
     expect(view.container.querySelector('[data-context-text]')?.textContent).toBe('child report body')
   })

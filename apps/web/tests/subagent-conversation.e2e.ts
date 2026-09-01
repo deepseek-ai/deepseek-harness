@@ -359,7 +359,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
     await page.getByRole('button', { name: '3 subagents' }).hover()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
     await expect.poll(
-      () => page.getByText(INITIAL_PROMPT, { exact: true }).count(),
+      () => page.getByText(/^Explain event sourcing in one sentence\.Your parent agent id is /).count(),
       { timeout: 15_000 },
     ).toBe(1)
     if (scaffold.ctx.agents.get(childId) !== undefined) {
@@ -442,6 +442,7 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
       page,
       '[class*="centerCol"]',
       scaffold.workspaceCwd,
+      { scrollToBottom: true },
     )
     await compareOrRefreshGolden(AVAILABLE_CHILD_EXPANDED_EXPECTED, expanded, MODE)
     expect(tripwire.pageErrors).toEqual([])

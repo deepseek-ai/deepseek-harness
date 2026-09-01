@@ -90,10 +90,6 @@
   name: '@deepseek-ai/dsh-tool-subagent'
   disabled: true
 
-- id: tool-subagent-report
-  name: '@deepseek-ai/dsh-tool-subagent-report'
-  disabled: true
-
 - id: tool-workflow
   name: '@deepseek-ai/dsh-tool-workflow'
   disabled: true

@@ -115,7 +115,6 @@ Read these pages when the package-level contract is not enough; they move from t
 
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — providers, one-shot start requests, continuable children and activations.
 - [dsh-tool-subagent-control](../tool-subagent-control/README.md) — messaging, interrupt, and listing tools for continuable children.
-- [dsh-tool-subagent-report](../tool-subagent-report/README.md) — the child-to-parent report channel.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-subagent) — the default schema and per-mode wording.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-subagent) — every accepted config field.
 - [Background subagent tasks](../../../.agents/notes/implemented/feature/2026-07-08-background-subagent-tasks.md) — the one-shot background route.

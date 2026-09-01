@@ -1216,6 +1216,8 @@ describe('dsh-tool-subagent continuable background mode', () => {
     expect(schema.description).not.toContain('job_output')
     expect(schema.description).not.toContain('job_kill')
     expect(schema.description).toContain('send_message')
+    expect(schema.description).toContain('steers the child\'s nearest step while it is running')
+    expect(schema.description).not.toContain('send_message` starts a later turn')
     expect(schema.description).toContain('runs in the background by default')
     expect(schema.description).not.toContain('never poll or wait on it')
     const properties = (schema.parameters as {

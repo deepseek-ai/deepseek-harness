@@ -1,18 +1,18 @@
 /**
- * Loader fixture that holds the report child until its parent's spawn turn ends,
- * then parks the parent until child settlement follows the report.
- * @module subagent-report-fence
+ * Loader fixture that holds the child until its parent's spawn turn ends,
+ * then parks the parent until settlement follows its Agent message.
+ * @module subagent-send-message-fence
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent-loop'
 
 /** Fixture plugin name. */
-export const name = 'subagent-report-fence'
+export const name = 'subagent-send-message-fence'
 
 /**
  * Keep replay scheduling from folding settlement into the parent's first turn
- * or starting a second parent request between report and settlement.
+ * or starting a second parent request between the Agent message and settlement.
  * @param ctx - assembled ACP-agent context.
  */
 export function apply(ctx: Context): void {
@@ -64,5 +64,5 @@ export function apply(ctx: Context): void {
       disposeStatus()
       disposeSession()
     }
-  }, 'subagent-report-fence.listeners')
+  }, 'subagent-send-message-fence.listeners')
 }

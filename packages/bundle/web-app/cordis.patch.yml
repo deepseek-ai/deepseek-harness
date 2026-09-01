@@ -412,12 +412,6 @@
 - id: tool-subagent-fork
   disabled: true
 
-# `tool-subagent-report` is host-plane for the same reason as the registry, not
-# because a preset may not want it: it registers a CONTINUABLE SETUP on that
-# singleton rather than a tool this agent calls, and the setup list is not
-# scope-aware — one copy per mounted preset means every child gets `report`
-# registered once per live session, which throws on the second.
-
 - id: workflow-worker-thread
   disabled: true
 

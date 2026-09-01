@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The subagent group is the delegation family: it lets an agent hand a task to a child agent, wait for or continue the child's work, and keep every child discoverable. One contract (`ctx.subagents`) serves any number of named providers, so a single composition can mix in-process children (fresh, or forked from the parent's completed history) with out-of-process children — an ACP agent, a real Codex or Claude Code installation, or a complete Harness runtime over the SDK. The model-facing tools expose delegation, follow-up, and listing to agents, and a parent can always see which children exist and whether they are live or stored. This page maps the group; each package README owns its package contract.
+The subagent group is the delegation family: it lets an agent hand a task to a child agent, wait for or continue the child's work, and keep every child discoverable. One contract (`ctx.subagents`) serves any number of named providers, so a single composition can mix in-process children (fresh, or forked from the parent's completed history) with out-of-process children — an ACP agent, a real Codex or Claude Code installation, or a complete Harness runtime over the SDK. The model-facing tools expose delegation, adjacent-Agent messaging, and listing to agents, and a parent can always see which children exist and whether they are live or stored. This page maps the group; each package README owns its package contract.
 
 ## Table of Contents
 
@@ -33,8 +33,7 @@ The subagent group is the delegation family: it lets an agent hand a task to a c
 | [`subagent-claude-code/`](subagent-claude-code/README.md) | Runs a real Claude Code child through the official Agent SDK | registers on `ctx.subagents` |
 | [`subagent-dsh-sdk/`](subagent-dsh-sdk/README.md) | Runs an out-of-process Harness child through the TypeScript SDK | registers on `ctx.subagents` |
 | [`tool-subagent/`](tool-subagent/README.md) | Exposes delegation to the model | registers on `ctx.tools` |
-| [`tool-subagent-control/`](tool-subagent-control/README.md) | Exposes follow-up, interrupt, and listing to the model | registers on `ctx.tools` |
-| [`tool-subagent-report/`](tool-subagent-report/README.md) | Provides the child-to-parent report channel | registers in child scopes |
+| [`tool-subagent-control/`](tool-subagent-control/README.md) | Exposes adjacent-Agent messaging, interrupt, and listing to the model | registers on `ctx.tools` |
 
 -----
 

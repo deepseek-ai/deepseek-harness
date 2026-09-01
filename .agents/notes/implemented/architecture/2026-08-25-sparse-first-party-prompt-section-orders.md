@@ -24,7 +24,7 @@ The allocation preserves the established first-party sequence except for two del
 | Work modes | `plan:policy` 500, `team:policy` 600 |
 | Invocation prelude | `tools:ptc-only` 800, `context:file-reference` 900 |
 | Local tools | `tool:bash` 1000, `tool:pwsh` 1010, `tool:read` 1100, `tool:write` 1200, `tool:edit` 1300, `tool:glob` 1400, `tool:grep` 1500, `tool:jobs` 1600, `tool:pty` 1700 |
-| Higher-level tools | `tool:web_search` 2000, `tool:web_fetch` 2100, `tool:lsp` 2200, `tool:session-query` 2300, `tool:goal` 2400, `tool:cordis` 2500, `tool:workflow` 2600, `tool:ralph` 2700, continuable-subagent guidance 2800, `tool:report` 2900 |
+| Higher-level tools | `tool:web_search` 2000, `tool:web_fetch` 2100, `tool:lsp` 2200, `tool:session-query` 2300, `tool:goal` 2400, `tool:cordis` 2500, `tool:workflow` 2600, `tool:ralph` 2700, continuable-subagent guidance 2800 |
 | Generated protocol | `tools:sdk` 5000 |
 | Final-output obligations | deliverable file references 9000, `tool:structured_output` 9900 |
 

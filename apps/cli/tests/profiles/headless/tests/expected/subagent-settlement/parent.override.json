@@ -3,8 +3,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "start-child", "name": "subagent", "argumentsDelta": "{\"description\":\"Return child result\",\"prompt\":\"Reply with exactly CHILD_RESULT and nothing else. Do not call report.\"}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "start-child", "name": "subagent", "arguments": "{\"description\":\"Return child result\",\"prompt\":\"Reply with exactly CHILD_RESULT and nothing else. Do not call report.\"}" } },
+      { "type": "tool-call-delta", "index": 0, "id": "start-child", "name": "subagent", "argumentsDelta": "{\"description\":\"Return child result\",\"prompt\":\"Reply with exactly CHILD_RESULT and nothing else. Do not call send_message.\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "start-child", "name": "subagent", "arguments": "{\"description\":\"Return child result\",\"prompt\":\"Reply with exactly CHILD_RESULT and nothing else. Do not call send_message.\"}" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

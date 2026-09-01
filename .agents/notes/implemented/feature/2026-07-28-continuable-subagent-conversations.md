@@ -44,7 +44,7 @@ Cold resume does not dispatch through a subagent provider. The continuation mana
 
 `SubagentProvider.start()` and `SubagentRun` remain exclusively on the unchanged one-shot path. A continuable Activation directly owns its `AgentHandle` and never creates, wraps, or retains a `SubagentRun`; `SubagentRun.steer?()` is therefore absent.
 
-`ctx.subagents.followup(parent, childId, content, { source, signal })` remains the sole parent-to-child continuation-message operation. The exact live parent Agent authorizes delivery; cold resume checks that authority before reconstruction and every path checks it again in the final no-await inbox-admission span, so a parent unregistered or replaced during materialization cannot authorize delivery. `source` records who supplied the admitted message and grants no authority. The model-facing `send_message` tool keeps only its stable `subagent_id` and `message` fields and always submits a follow-up turn. Both start and follow-up return the accepted `MessageId`, and neither reports how the manager materialized the Activation.
+`ctx.subagents.sendMessage(sender, targetId, content, { signal })` is the sole model-authored continuation-message operation. The exact live sender authorizes delivery to its direct parent or direct continuable child; cold resume checks direct-child authority before reconstruction and every path checks again in the final no-await inbox-admission span, so an Agent unregistered or replaced during materialization cannot authorize delivery. The service derives durable `agent-message` provenance from that sender. The model-facing `send_message` tool keeps only `agent_id` and `message` and uses fixed Steer scheduling. Both start and send return the accepted `MessageId`, and neither reports how the manager materialized the Activation.
 
 For start and follow-up, the caller signal owns lookup, materialization, and admission only until inbox acceptance. After the operation returns its `MessageId`, the manager owns the Activation independently; later caller cancellation does not cancel the accepted turn or dispose the child.
 
@@ -111,15 +111,13 @@ Top-level teardown is host-owned rather than represented as another Activation. 
 
 The activation-owner scope exists because ordinary Cordis owner effects unwind in reverse registration order, which cannot express the dynamic child graph. Manager initialization registers the private scope's structural disposer first and its drain disposer afterward, so reverse unwind invokes the drain before releasing that scope; merely registering a cleanup effect on the same scope as later Agent handles would allow structural handle disposal to bypass child-first ordering. Each materialization registers its barrier participant and snapshots its exact live ancestry before starting the inner transaction, then remains tracked until it installs an Activation or fully rolls back. The Activation retains weak membership of that ancestry, so an intermediate Agent may leave the registry without hiding a still-live descendant from its host root. Each Activation installs one memoized disposal promise before cancellation or recursive callbacks, allowing scoped host shutdown, global manager unload, child release, and normal settlement to converge without double release. Cancellation propagates top-down before slow descendant cleanup; handle release remains child-first. Sibling branches drain independently; one disposal failure is recorded but does not prevent the manager from attempting the remaining selected handles, and the aggregate drain reports failure after all selected branches settle. Durable child Sessions survive this process-local teardown.
 
-### Report delivery extension
+### Adjacent-Agent messaging
 
-The optional child-scoped `report(output)` tool was added later without changing Activation residency or adding another queue. It can be called zero or multiple times per turn, derives the live direct parent rather than accepting a recipient, and selects quiet injection or a waking parent follow-up through deployment config. The [report-tool Agent Note](2026-07-30-continuable-subagent-report-tool.md) owns its authority, acknowledgement, setup-contribution, and delivery contracts.
+The shared `sendMessage(sender, targetId, content, options)` service operation adds no second queue. It accepts an exact live sender, permits only its direct parent or direct continuable child, and uses fixed Steer scheduling through the Agent inbox. The global `send_message({ agent_id, message })` tool exposes that same operation in both directions; the child's initial task identifies its direct parent when the tool is visible. The [adjacent-Agent messaging Agent Note](../architecture/2026-08-27-adjacent-agent-steer-messaging.md) owns its schema, authority, attribution, and prompt placement.
 
-### Deferred steering
+### Fixed Steer scheduling
 
-This version exposes no subagent steering operation. Parent continuation messages always open later FIFO turns, so the continuation layer stores no current-turn controller and adds no controller-aware Agent admission contract.
-
-A later host UI may expose separate **Steer** and **Follow up** actions. Host steering would be strict and live-only: it may call the existing Agent steering path only while the Activation accepts a next step, must reject otherwise, and must never fall back to queueing or cold resume. Exposing parent steering to a model-facing tool remains a separate design.
+Every accepted Agent message uses `Agent.steer()`. A running target claims it at the nearest step boundary; an idle or cold-resumed target starts a turn. The continuation layer does not expose a caller-selectable quiet, next-turn, or follow-up mode.
 
 ### Authority and recorded sender identity
 

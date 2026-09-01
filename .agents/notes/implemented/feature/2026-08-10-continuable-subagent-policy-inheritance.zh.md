@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-自[进程内策略继承决策](2026-07-25-subagent-policy-inheritance.zh.md)以来，一次性进程内驱动器一直会把父级的沙箱／审批覆盖项注入其子级，但可继续路径从未这样做：`SubagentContinuationManager` 的物化只应用子级组合与 Activation（激活）设置注册表。默认组合包把两个委派工具都配置为 `backgroundMode: continuable`，因此在默认部署中，每个后台子 agent（智能体）都静默回退到部署默认值：切换到 `danger-full-access` 的父级产出的子 agent 卡在 `workspace-write`，每次工作区外操作都会触发审批提示；父级无人值守的 `'never'` 审批立场也退回为发起提示的行为（[dsh-external/issues#334](https://github.com/dsh-external/issues/issues/334)）。
+自[进程内策略继承决策](2026-07-25-subagent-policy-inheritance.zh.md)以来，一次性进程内驱动器一直会把父级的沙箱／审批覆盖项注入其子级，但可继续路径从未这样做：`SubagentContinuationManager` 的物化只应用子级组合。默认组合包把两个委派工具都配置为 `backgroundMode: continuable`，因此在默认部署中，每个后台子 agent（智能体）都静默回退到部署默认值：切换到 `danger-full-access` 的父级产出的子 agent 卡在 `workspace-write`，每次工作区外操作都会触发审批提示；父级无人值守的 `'never'` 审批立场也退回为发起提示的行为（[dsh-external/issues#334](https://github.com/dsh-external/issues/issues/334)）。
 
 ## 决策
 
@@ -16,7 +16,7 @@ Status: implemented
 
 ## 考虑过的替代方案
 
-- **一项 Activation 设置注册表贡献**（`registerContinuableSetup`）：不予采纳。贡献只接收子级上下文，因此无法在委派边界捕获父级的覆盖项；该注册表在冷恢复与全新创建时都会应用，会导致重复追加或重复捕获；而且没有任何机制把贡献的捕获绑定到 start 调用的同步前缀，await 前捕获的保证会因此丢失。
+- **一项通用 child 设置贡献**：不予采纳。贡献只接收子级上下文，因此无法在委派边界捕获父级的覆盖项；在冷恢复与全新创建时都应用它会导致重复追加或重复捕获；而且没有任何机制把它的捕获绑定到 start 调用的同步前缀，await 前捕获的保证会因此丢失。
 - **在冷恢复时重新捕获父级覆盖项**：不予采纳。恢复的子 agent 会随父级后续切换静默改变策略，这会破坏委派时快照的语义，并让生效策略取决于恢复时机而非子级自身的日志。希望恢复的子 agent 采用新策略的父级应重新委派。
 - **让继续执行管理器导入一次性驱动器的内联逻辑**：不予采纳。Service Definition 包不能依赖自己的提供方包，而在 `continuation.ts` 中复制捕获／追加这对函数会招致偏差；`child-agent.ts` 已经承载其余每个共享组合步骤。
 - **把这些事件写入描述符种子轮次**：不予采纳。种子为每个调用方组装时，捕获值尚不可知；而且一次性路径的先例已经确立：在未发布的设置阶段追加，才是把继承事实排在 fork 历史之后、同时保持 `firstLiveSeq` 不变的顺序。

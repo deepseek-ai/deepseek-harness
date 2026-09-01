@@ -1,6 +1,0 @@
-# Snapshot-only overlay fencing the child behind its parent's spawn turn and
-# holding the parent in maintenance until settlement follows the default
-# next-step report. The resumed parent claims both notices in causal order.
-- insert:
-    - id: report-fence
-      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-report-fence.ts'

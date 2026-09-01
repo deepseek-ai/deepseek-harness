@@ -115,6 +115,8 @@ describe('dsh-tool-subagent-control/list-agents', () => {
     expect(parameters.properties?.scope?.enum).toEqual(['children', 'descendants'])
     expect(parameters.required ?? []).toEqual([])
     expect(schemas[0]!.description).toContain('send_message')
+    expect(schemas[0]!.description).toContain('steers a running child at its nearest step boundary')
+    expect(schemas[0]!.description).not.toContain('send_message` starts a new turn')
     expect(schemas[0]!.description).toContain('interrupt_agent')
   })
 

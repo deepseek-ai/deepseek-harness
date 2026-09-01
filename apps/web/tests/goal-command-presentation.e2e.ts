@@ -95,6 +95,8 @@ describe('web e2e: /goal human transcript presentation', () => {
     expect(events.some(event => event.type === 'step/start')).toBe(false)
     expect(events.some(event => event.type === 'request/header')).toBe(false)
 
+    // The command result can arrive before Lexical clears the submitted claim.
+    await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
   }, 60_000)

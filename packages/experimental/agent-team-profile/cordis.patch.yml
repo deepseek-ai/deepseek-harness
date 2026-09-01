@@ -8,9 +8,6 @@
 - id: tool-subagent-list-agents
   disabled: true
 
-- id: tool-subagent-report
-  disabled: true
-
 - id: tool-subagent
   config:
     provider: spawn

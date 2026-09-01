@@ -1,4 +1,4 @@
-# Keyless counterpart to subagent-report.cordis.yml: replace the live adapter
+# Keyless counterpart to subagent-send-message/cordis.yml: replace the live adapter
 # with replay and preserve its child and parent scheduling fence.
 - id: llm-deepseek
   name: '@deepseek-ai/dsh-llm-deepseek'
@@ -52,5 +52,5 @@
               - id: deepseek-v4-pro
 
 - insert:
-    - id: report-fence
-      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-report-fence.ts'
+    - id: send-message-fence
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/subagent-send-message-fence.ts'

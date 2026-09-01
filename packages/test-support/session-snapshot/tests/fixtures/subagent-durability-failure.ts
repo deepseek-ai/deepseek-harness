@@ -86,10 +86,10 @@ export function apply(ctx: Context): void {
   // never reach the live inbox.
   let realChildId: string | undefined
   const subagents = ctx.subagents as unknown as {
-    followup: (authority: unknown, childId: SessionId, content: unknown, options: unknown) => Promise<unknown>
+    sendMessage: (authority: unknown, childId: SessionId, content: unknown, options: unknown) => Promise<unknown>
   }
-  const deliver = subagents.followup.bind(subagents)
-  subagents.followup = (authority, childId, content, options) => {
+  const deliver = subagents.sendMessage.bind(subagents)
+  subagents.sendMessage = (authority, childId, content, options) => {
     const mapped = childId === PLACEHOLDER_CHILD_ID && realChildId !== undefined
       ? SessionId(realChildId)
       : childId
