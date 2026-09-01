@@ -92,7 +92,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：配置、固定策略文本与十个 scoped 工具注册 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；委托只能通过 `ctx.agentTeams` 观察） |
+| — | 不发布运行时不变式伴生入口；委托只能通过 `ctx.agentTeams` 观察。 |
 
 ### 策略与工具
 

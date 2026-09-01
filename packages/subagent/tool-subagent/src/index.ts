@@ -617,6 +617,8 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   const selectForAgent = (agent: NonNullable<Context['agent']>): ModelSelectionPolicy | undefined => {
+    const freshSession = agent.session.firstLiveSeq === 0
+      && agent.session.eventAt(0)?.type !== 'session/end-seed'
     let allowedModels = subagentModelSelectionPolicy(ctx.sessionProjections, agent.session)
     if (allowedModels === undefined) {
       const parentId = agent.session.header.origin === 'subagent'
@@ -627,7 +629,7 @@ export function apply(ctx: Context, config: Config): void {
         allowedModels = parent === undefined
           ? undefined
           : subagentModelSelectionPolicy(ctx.sessionProjections, parent.session)
-      } else if (agent.session.firstLiveSeq === 0) {
+      } else if (freshSession) {
         const current = settings.current()
         allowedModels = current.enabled ? current.allowedModels : undefined
       }

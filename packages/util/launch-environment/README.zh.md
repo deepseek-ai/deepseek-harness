@@ -66,7 +66,7 @@ const endpoint = launchEnvironmentOf(ctx).get('DEEPSEEK_BASE_URL')?.value
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `createLaunchEnvironmentSnapshot`、`launchEnvironmentOf` 与 `ctx.launchEnvironment` 槽位 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；快照在任何 fiber 启动前即已冻结） |
+| — | 不发布运行时不变式伴生入口；快照在任何 fiber 启动前即已冻结。 |
 
 ### 快照如何保持冻结
 

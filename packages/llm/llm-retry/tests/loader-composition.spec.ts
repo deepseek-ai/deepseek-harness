@@ -112,7 +112,7 @@ describe('real Loader composition', () => {
     await agent.whenIdle()
 
     expect(adapter.requests).toBe(2)
-    expect(agent.session.events.filter(event => event.type === 'llm/retry')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry')).toHaveLength(1)
     expect(agent.session.deriveMessages().at(-1)).toMatchObject({
       role: 'assistant',
       content: [{ type: 'text', text: 'recovered' }],

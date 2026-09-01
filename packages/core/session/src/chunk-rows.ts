@@ -7,7 +7,7 @@
  * `tool-call-chunks` — and expands rows back to the exact original events.
  *
  * Packed rows are an encoding vocabulary, NOT session events: they never enter
- * `Session.events`, have no `SessionEventMap` entry, and use bare (slash-less)
+ * `Session.snapshotEvents()`, have no `SessionEventMap` entry, and use bare (slash-less)
  * type tags so a reader cannot confuse them with the event taxonomy
  * (precedent: the JSONL header line's `session` tag). Persistence and bounded
  * history transport both use the codec. The encoder whitelists exact shapes —

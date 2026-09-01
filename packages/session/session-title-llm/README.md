@@ -127,3 +127,5 @@ These limits define the accepted generation shapes. They are current package con
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This stateless helper validates and freezes each auxiliary request before dispatch; deadline, stream, cited message seqs, and provider/model fields are checked synchronously and by tests.

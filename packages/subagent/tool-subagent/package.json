@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-subagent",
   "description": "Model-facing subagent delegation tool over the ctx.subagents seam",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

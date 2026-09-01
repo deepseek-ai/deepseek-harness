@@ -18,6 +18,8 @@ Trajectory 针对共享的 [`ConversationNodeAssembler`](2026-08-09-client-conve
 
 每个 Definition 只属于一个 target。Chat 与 Trajectory 可以识别同一持久 Event 族，但分别维护自己的 State 和最终 Node payload。它们只共享 Assembler 的精确 ID 匹配、有序 Match、Location 事实、Reader 依赖、发布调度，以及 replace/prepend/append 生命周期。
 
+Trajectory 的 target source 在首次订阅时激活 View Builder。在此次订阅之前，其 Definition 会维护最新 State，而 Assembler 跳过 `buildViewNode()` 和 snapshot assembly。取消订阅后 target 仍保持 active，因此后续访问会复用持续增量维护的 snapshot。
+
 既有的 [Trajectory 检查记录表](../feature/2026-07-27-trajectory-inspection-ledger.zh.md)继续作为视图模型。Trajectory Builder 把已物化的 target Node 转换为原有的 `eventNodes`、Requests、Tool schema、运行中调用和 Location map；layout、表格虚拟化、选择、Overview 与检查器行为不会成为通用 Conversation 约定。
 
 ### 业务 Definition
@@ -40,7 +42,7 @@ Assistant chunk 只更新对应的 `turn:step` Context。带内容的 chunk 请�
 
 Trajectory 从持久 inbox 历史恢复 steering，使用与 [Chat steering 决策](../feature/2026-08-04-web-context-source-and-steer-marks.zh.md)相同的标识规则，但不共享 Chat 的最终 Node。
 
-每条目标为 `next-step` 的 `agent/inbox/spliced` Event 都会启动一个以 Event seq 标识的不可见 Context。它的 `start()` 读取最近的前序 inbox Context，应用 splice，并存储待处理标识以及累计的已领取 message ID 集合。后续用户来源的 `user/message` 读取最近的前序 inbox Context：已领取的 ID 生成 Steering Node，其余用户来源消息生成普通 User Node。
+每条目标为 `next-step` 的 `agent/inbox/spliced` Event 都会启动一个以 Event seq 标识的不可见 Context。它的 `start()` 读取最近的前序 inbox Context，把 splice 追加到持久的 pending ID state，并只在 claim 时 materialize 该 state、替换当前 claimed batch。AgentLoop 会在领取下一批消息之前追加当前 claim 接纳的全部消息；被拒绝的 claim 不追加 `user/message`。后续用户来源的 `user/message` 读取最近的前序 inbox Context：ID 属于当前 claim 时生成 Steering Node，其余用户来源消息生成普通 User Node。
 
 仍有更早历史时，Reader miss 会记录 window-gap 依赖。prepend 补齐缺失的前驱后，Assembler 按 Event 正序重放受影响的 inbox chain 与 message Context。因此，历史分页方向不会永久错误分类消息。
 
@@ -52,11 +54,11 @@ Trajectory 从持久 inbox 历史恢复 steering，使用与 [Chat steering 决�
 
 | 链路 | Context 工作量 | Target snapshot 工作量 | 结果 |
 |---|---|---|---|
-| 初始尾页或重连 replace | 以 `O(E × D)` 匹配已加载窗口，并按 Event 正序构造 State | 构造并排序 `C` 个 contribution | 完整 replace 仍与已加载窗口成正比 |
-| 更早页面 prepend | 只匹配新 Event，并只重放 Match、Location 或 Reader 答案发生变化的 Context，成本为 `O(P × D + Mᵣ)` | 从 `C` 个 contribution 重建 stage snapshot | 业务 fold 不会从头重跑全部 `E` 个 Event |
-| 实时 append | 以 `O(D)` 匹配，以 `O(1)` 找到 keyed Context，并只更新对应 State | snapshot 组装前，以 `O(1)` 替换 anchor 未变的 contribution | 业务关联成本与已加载 Event 历史无关 |
+| 初始尾页或重连 replace | 以 `O(E × D)` 匹配已加载窗口，并按 Event 正序构造 State | inactive：无；active：构造并排序 `C` 个 contribution | 完整 Context replace 仍与已加载窗口成正比 |
+| 更早页面 prepend | 只匹配新 Event，并只重放 Match、Location 或 Reader 答案发生变化的 Context，成本为 `O(P × D + Mᵣ)` | inactive：无；active：从 `C` 个 contribution 重建 stage snapshot | 业务 fold 不会从头重跑全部 `E` 个 Event |
+| 实时 append | 以 `O(D)` 匹配，以 `O(1)` 找到 keyed Context，并只更新对应 State | inactive：无；active：在 snapshot 组装前以 `O(1)` 替换 anchor 未变的 contribution | 业务关联成本与已加载 Event 历史无关 |
 
-Builder 按 Context key 保存 contribution，并维护 key-to-position index。anchor 相同的内容更新会原位替换一个 contribution；新增 contribution 或 anchor 变化才会重建并排序 contribution 顺序。随后，snapshot assembly 遍历 `C` 个 contribution，用 Map 索引 Request header 与 Tool schema，并以线性游标或索引处理 Compaction boundary 与 Turn error。
+首次激活会从当前 `C` 个 target Context 构建 Node，而不会重新匹配 Event，并调用一次 `replace()`。激活后，Builder 按 Context key 保存 contribution，并维护 key-to-position index。anchor 相同的内容更新会原位替换一个 contribution；新增 contribution 或 anchor 变化才会重建并排序 contribution 顺序。随后，snapshot assembly 遍历 `C` 个 contribution，用 Map 索引 Request header 与 Tool schema，并以线性游标或索引处理 Compaction boundary 与 Turn error。
 
 最终 Event 和 Request 排序使单次发布的当前上界保持为 `O(C log C)`。本次迁移移除了重复反向查找和旧的原始历史 refold，但不声称端到端发布达到 `O(1)`。Chat 保持既有 keyed snapshot 行为与复杂度；增加 Trajectory target 不会让 Chat 扫描 Trajectory Context 或 Node。
 
@@ -90,7 +92,7 @@ Context 迁移与下列表现层优化解决的是不同成本。这些优化保
 
 ## 验证
 
-Runtime 测试固定 target 注册、精确 ID append、先 update 后 start 的 replay、prepend identity、Reader window-gap 修复、Location replay，以及 Chat 与 Trajectory snapshot 隔离。
+Runtime 测试固定 target 注册、首次订阅 activation、精确 ID append、先 update 后 start 的 replay、prepend identity、Reader window-gap 修复、Location replay，以及 Chat 与 Trajectory snapshot 隔离。
 
 Trajectory Definition 与 Builder 测试固定 Assistant streaming 与 interruption、嵌套 Tool call 和并行 interruption、Compaction 与 prompt 继承、Steering 分类和 Step 位置、Request 标记顺序、稳定 contribution 替换与 prepend 扩展。Table、layout、Timeline 与搜索测试固定延迟 Markdown 工作、节流索引更新、Tooltip 展示时格式化，以及 append/prepend 期间稳定的搜索结果。
 
@@ -98,7 +100,7 @@ Trajectory Definition 与 Builder 测试固定 Assistant streaming 与 interrupt
 
 Trajectory 业务组装的成本随变化页面或 keyed Context 增长，不再从完整原始 Event 窗口重新开始。target 自有 Definition 可以独立于 Chat 演进，同时继续共享一份 Session 窗口和一套生命周期规则。steering 会在实际所属 Step 位置成为一等 Trajectory record，不需要向 Session 增加 steering 专属状态。
 
-保留的 stage-oriented Builder 仍会执行与已物化 Trajectory contribution 数量成正比的工作，并可能在发布时排序。输入 layout 变化时，搜索索引仍会执行一次轻量线性签名检查。这些成本是显式的 target view 工作，不是隐藏的完整 Event refold。
+首次激活后，保留的 stage-oriented Builder 仍会执行与已物化 Trajectory contribution 数量成正比的工作，并可能在发布时排序。激活前，target 保留 Context State 和一个 target 索引，但不保留 Builder、已物化 Node 或 snapshot。输入 layout 变化时，搜索索引仍会执行一次轻量线性签名检查。
 
 Definition 作者必须提供稳定的协议标识。缺少必要 ID 的旧 Event 可能不会出现在受影响的 Trajectory 业务视图中；与合并无关记录或让历史加载失败相比，这是更安全的退化方式。要求完整展示的生产方必须记录该标识。
 

@@ -130,7 +130,7 @@ describe('command-compact real Loader composition', () => {
       text: 'Compacted 3 history items (~99 tokens).',
       sourceEventSeq: RESULT.summarySeq,
     })
-    expect(session.events.map(event => ({ type: event.type, data: event.data }))).toEqual([
+    expect(session.snapshotEvents().map(event => ({ type: event.type, data: event.data }))).toEqual([
       {
         type: 'command/run',
         data: {

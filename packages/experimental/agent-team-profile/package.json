@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-team-profile",
   "description": "Private profile bundle enabling Agent Teams over dsh-base",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "private": true,
   "repository": {
     "type": "git",
@@ -16,17 +16,12 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
   ],
@@ -41,12 +36,10 @@
     "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "js-yaml": "^4.2.0"
   }

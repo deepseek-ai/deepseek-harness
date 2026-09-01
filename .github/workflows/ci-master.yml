@@ -208,6 +208,7 @@ jobs:
         shell: pwsh
         env:
           DSH_COVERAGE_MAX_WORKERS: '1'
+          DSH_COVERAGE_TEST_TIMEOUT_MS: '90000'
           DSH_GATE_CONCURRENCY: '1'
           DSH_PUBLINT_CONCURRENCY: '1'
         run: pnpm run check:ci:windows-complete

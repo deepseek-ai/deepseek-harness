@@ -7,10 +7,10 @@
   "include": ["src"],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../../core/tools" },
     { "path": "../fs" },
     { "path": "../../sandbox/sandbox" },
-    { "path": "../../sandbox/sandbox-policy" },
-    { "path": "../../runtime-diagnostics/invariants" }
+    { "path": "../../sandbox/sandbox-policy" }
   ]
 }

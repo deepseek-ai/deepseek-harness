@@ -93,7 +93,7 @@ kind: "package-reference"
 
 ### 捕获接线
 
-`FULL` 以 `live` 模式组装协调器，并放行直接服务调用；`FEEDBACK_ONLY` 以 `on-demand` 模式组装协调器，给协调器一个私有后端能力，并且只对权威日志中精确的反馈记录触发 `captureSession(session, event.seq)`；`DISABLED` 除了在 `feedback/record` 上发出警告外不注册任何内容。后端刻意不实现 `flush()`：常规 flush 由批处理器负责，把提示转发给 `forceFlush()` 会成为并发 flush 的唯一来源，而它与关闭排空的交互没有文档。
+`FULL` 以 `live` 模式组装协调器，并放行直接服务调用；`FEEDBACK_ONLY` 以 `on-demand` 模式组装协调器，给协调器一个私有后端能力，并且仅在 `session.eventAt(event.seq) === event` 确认精确的权威反馈记录时触发 `captureSession(session, event.seq)`；`DISABLED` 除了在 `feedback/record` 上发出警告外不注册任何内容。后端刻意不实现 `flush()`：常规 flush 由批处理器负责，把提示转发给 `forceFlush()` 会成为并发 flush 的唯一来源，而它与关闭排空的交互没有文档。
 
 ### 字段映射
 
@@ -144,3 +144,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。mode 只改变 capture handoff、SDK setup 与本地 diagnostics，不改变可由独立 companion 对照的 Session 或 service 状态。

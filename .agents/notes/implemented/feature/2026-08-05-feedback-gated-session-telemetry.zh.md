@@ -18,7 +18,7 @@ Status: implemented
 
 通用遥测协调器拥有 `live` 与 `on-demand` 捕获。实时捕获在会话 firehose 上投影、深拷贝、脱敏每个事件，并将其交给后端。按需捕获不注册持续捕获监听器；`captureSession(session, throughSeq)` 从 handoff 游标起读取权威日志，直至含边界的指定序列号，然后投影、深拷贝、脱敏并交接该前缀。游标只为已交接记录推进。[无缓冲回放决策](../simplification/2026-08-06-buffer-free-feedback-telemetry.zh.md)说明了按需路径为何使用权威日志而非记录副本。
 
-模式解析采用封闭式检查，并在设置前失败：通过直接构造传入未知值时，会在读取传输配置前失败。只有 `FULL` 向 SDK 流水线开放公共服务的 `emit()` 路径。`FEEDBACK_ONLY` 向其按需协调器提供私有后端能力；其监听器向 `captureSession()` 传递事件的唯一条件，是该事件与那个 `feedback/record` 对象身份完全相同，且该对象已存储于 `session.events[event.seq]`。`Session.append` 在发布 `session/event` 前已提交该对象，因此回放包含该反馈，但不会越过其边界。`DISABLED` 既不创建该能力，也不创建 SDK 流水线，并且不检查导出器配置。
+模式解析采用封闭式检查，并在设置前失败：通过直接构造传入未知值时，会在读取传输配置前失败。只有 `FULL` 向 SDK 流水线开放公共服务的 `emit()` 路径。`FEEDBACK_ONLY` 向其按需协调器提供私有后端能力；其监听器向 `captureSession()` 传递事件的唯一条件，是 `session.eventAt(event.seq)` 返回完全相同的 `feedback/record` 对象。`Session.append` 在发布 `session/event` 前已提交该对象，因此回放包含该反馈，但不会越过其边界。`DISABLED` 既不创建该能力，也不创建 SDK 流水线，并且不检查导出器配置。
 
 ## 考虑过的替代方案
 

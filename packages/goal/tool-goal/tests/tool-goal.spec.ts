@@ -49,7 +49,7 @@ function stubAgent(rawId: string, supplied?: Session): StubAgent {
 
 /** Open one message-triggered turn with its accepted model-visible input. */
 function openTurn(stub: StubAgent, source: MessageSource, text = 'prompt'): number {
-  const turn = stub.session.events
+  const turn = stub.session.snapshotEvents()
     .filter(event => event.type === 'turn/start')
     .reduce((max, event) => Math.max(max, event.data.turn), 0) + 1
   const message = createUserMessage({
@@ -262,7 +262,7 @@ describe('goal tool execution authority', () => {
     const created = ctx.goals.create(root.agent, { objective: 'resume the fork' })
     closeTurn(root, originalTurn)
     const forkId = SessionId('goal-tool-resumed-fork')
-    const forkSession = Session.create(forkId, root.session.events, {
+    const forkSession = Session.create(forkId, root.session.snapshotEvents(), {
       version: SESSION_FORMAT_VERSION,
       id: forkId,
       createdAt: Date.now(),

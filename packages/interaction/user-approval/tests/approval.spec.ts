@@ -7,22 +7,26 @@ import type { Scope } from '@deepseek-ai/dsh-scope'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ApprovalService, { ApprovalOutcome, ApprovalRequest, effectiveApprovalPolicy, setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
+import ApprovalService, { ApprovalOutcome, ApprovalRequest, setApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 
 /**
  * A minimal Agent stand-in — the service only reaches `agent.session.append`
- * and folds `.events`. Seeded inside an open turn by default (request()'s
+ * and indexed log reads. Seeded inside an open turn by default (request()'s
  * turn-enclosure precondition); pass `seed` to stage idle/closed logs.
  * Returns the recorded audit appends alongside the fake.
  */
 function fakeAgent(seed: Array<{ type: string }> = [{ type: 'turn/start' }, { type: 'user/message' }]): { agent: Agent; appended: Array<{ type: string; data: Record<string, unknown> }> } {
   const appended: Array<{ type: string; data: Record<string, unknown> }> = []
+  const events: Array<{ type: string; data?: Record<string, unknown> }> = [...seed]
   const agent = {
     session: {
-      events: seed,
+      get seq() { return events.length },
+      eventAt: (seq: number) => events[seq],
       append: (type: string, data: Record<string, unknown>) => {
-        appended.push({ type, data })
-        return { type, data } as unknown as SessionEvent
+        const event = { type, data }
+        events.push(event)
+        appended.push(event)
+        return event as unknown as SessionEvent
       },
     },
   } as unknown as Agent
@@ -128,9 +132,9 @@ describe('ApprovalService.request', () => {
 
     await expect(ctx.approval.request(requestOf(agent))).resolves.toBe('allowed-once')
 
-    const audit = session.events.filter(event => event.type.startsWith('approval/'))
-    const asked = session.events.find((event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked')
-    const decided = session.events.find((event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided')
+    const audit = session.snapshotEvents().filter(event => event.type.startsWith('approval/'))
+    const asked = session.snapshotEvents().find((event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked')
+    const decided = session.snapshotEvents().find((event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided')
     expect(audit.map(event => event.type)).toEqual(['approval/asked', 'approval/decided'])
     expect(decided?.data.id).toBe(asked?.data.id)
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('session/event listener threw: Error: observer failed after asked append'))
@@ -151,9 +155,9 @@ describe('ApprovalService.request', () => {
 
     await expect(ctx.approval.request(requestOf(agent))).resolves.toBe('rejected')
 
-    const audit = session.events.filter(event => event.type.startsWith('approval/'))
-    const asked = session.events.find((event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked')
-    const decided = session.events.find((event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided')
+    const audit = session.snapshotEvents().filter(event => event.type.startsWith('approval/'))
+    const asked = session.snapshotEvents().find((event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked')
+    const decided = session.snapshotEvents().find((event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided')
     expect(audit.map(event => event.type)).toEqual(['approval/asked', 'approval/decided'])
     expect(decided?.data).toMatchObject({ id: asked?.data.id, outcome: 'rejected' })
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('session/event listener threw: Error: observer failed after decided append'))
@@ -164,7 +168,8 @@ describe('ApprovalService.request', () => {
     const failure = new Error('append failed before log growth')
     const agent = {
       session: {
-        events: [{ type: 'turn/start' }],
+        seq: 1,
+        eventAt: () => ({ type: 'turn/start' }),
         append: () => { throw failure },
       },
     } as unknown as Agent
@@ -365,12 +370,13 @@ describe('approval policy (the approval/policy fold)', () => {
   }
 
   it('folds to the last event, or undefined without one', () => {
+    const service = new ApprovalService(new Context(), {})
     const { session } = sessionAgent('sess-fold')
-    expect(effectiveApprovalPolicy(session.events)).toBeUndefined()
+    expect(service.overrideOf(session)).toBeUndefined()
     setApprovalPolicy(session, 'never')
     setApprovalPolicy(session, 'ask')
-    expect(effectiveApprovalPolicy(session.events)).toBe('ask')
-    expect(session.events.at(-1)).toMatchObject({ type: 'approval/policy', data: { policy: 'ask' } })
+    expect(service.overrideOf(session)).toBe('ask')
+    expect(session.snapshotEvents().at(-1)).toMatchObject({ type: 'approval/policy', data: { policy: 'ask' } })
   })
 
   it('rejects a policy outside the closed vocabulary before appending', () => {
@@ -409,8 +415,8 @@ describe('approval policy (the approval/policy fold)', () => {
     await expect(ctx.approval.request({ agent, toolName: 'bash' })).resolves.toBe('rejected')
     expect(consulted).not.toHaveBeenCalled()
     // The audit pair still lands on the session log.
-    expect(session.events.filter(e => e.type === 'approval/asked')).toHaveLength(1)
-    expect(session.events.filter(e => e.type === 'approval/decided')).toHaveLength(1)
+    expect(session.snapshotEvents().filter(e => e.type === 'approval/asked')).toHaveLength(1)
+    expect(session.snapshotEvents().filter(e => e.type === 'approval/decided')).toHaveLength(1)
   })
 
   it('the gate decides FIRST even against an answerer registered before the service (prepend)', async () => {
@@ -458,7 +464,7 @@ describe('approval policy (the approval/policy fold)', () => {
     ctx.approval.setPolicy(liveAgent, 'never')
     ctx.approval.setPolicy(liveAgent, 'never')
 
-    expect(effectiveApprovalPolicy(session.events)).toBe('never')
+    expect(ctx.approval.overrideOf(session)).toBe('never')
     expect(inject).toHaveBeenCalledOnce()
     expect(inject.mock.calls[0]?.[0]).toMatchObject({
       content: [{

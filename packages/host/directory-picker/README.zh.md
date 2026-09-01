@@ -109,3 +109,5 @@ web GUI 宿主通过一份约定让操作者选择工作区目录：一个只提
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个无状态 Service Definition 只定义 capability vocabulary，观察由 backend 与 Remote controller 负责。

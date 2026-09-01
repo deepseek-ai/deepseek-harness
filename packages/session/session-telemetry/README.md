@@ -125,3 +125,5 @@ These limits define the delivery and data-protection guarantees a deployment get
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The package's whole output is the backend handoff — a synchronous `emit()` call outside every authoritative event stream — and its capture side never appends session events, so no event/data relation exists for an independent companion to observe.

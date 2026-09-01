@@ -158,8 +158,8 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     expect(child).toBeDefined()
     expect(child!.status).toBe('idle')
     expect(child!.inbox.nextTurn).toHaveLength(1)
-    expect(child!.session.events.filter(event => event.type === 'turn/start')).toHaveLength(1)
-    const lastEnd = child!.session.events.filter(event => event.type === 'turn/end').at(-1)
+    expect(child!.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+    const lastEnd = child!.session.snapshotEvents().filter(event => event.type === 'turn/end').at(-1)
     expect((lastEnd)?.data.reason.kind).toBe('aborted')
 
     // Only an explicit waking send resumes the parked queue, FIFO, then the

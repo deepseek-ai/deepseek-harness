@@ -66,10 +66,10 @@ describe('todo snapshot invariants', () => {
     const session = ctx.sessions.create()
     session.append('turn/start', { turn: 1 })
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const before = [...session.events]
+    const before = session.snapshotEvents()
 
     expect(() => session.append('todo/write', { todos: [] })).toThrow(/outside any open turn/)
-    expect(session.events).toEqual(before)
+    expect(session.snapshotEvents()).toEqual(before)
   })
 
   it('rejects an existing snapshot outside an open turn on late registration', async () => {

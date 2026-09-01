@@ -84,7 +84,7 @@ The provider is a thin adapter over Perplexity's chat-completions endpoint with 
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, environment fallback, provider registration |
 | [`src/provider.ts`](src/provider.ts) | The `PerplexitySearchProvider`: request dispatch, abort classification, answer and source mapping |
 | [`src/types.ts`](src/types.ts) | Perplexity wire types for the chat-completions response |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; contracts are enforced at the service) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Request and mapping flow
 

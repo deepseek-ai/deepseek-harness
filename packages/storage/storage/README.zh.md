@@ -86,7 +86,7 @@ kind: "package-reference"
 | [`src/registry.ts`](src/registry.ts) | `BackendRegistry`：名称 → 后端表、注册资源释放函数 |
 | [`src/backend.ts`](src/backend.ts) | 后端约定：分面、单元、`UNIT_NAME_RE` |
 | [`src/error.ts`](src/error.ts) | 枢纽与每个后端共享的 `StorageError` 代码 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式：纯注册表） |
+| — | 不发布运行时不变式伴生入口；纯注册表。 |
 | [`tests/contract.ts`](tests/contract.ts) | 针对每个后端运行的共享一致性套件 |
 
 </details>

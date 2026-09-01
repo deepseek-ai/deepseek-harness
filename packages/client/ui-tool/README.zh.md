@@ -61,7 +61,7 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
 
 ### 详情与卡片
 
-本包通过 `ToolDetails` 填充 `conversation.details.tool`。行 renderer 与 Details renderer 分别为 terminal、read、diff、search 和 web 卡片复用同一个纯 card model。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、Code Dispatch `parentCallId` 与 Session 路径事实。不受支持或格式错误的输入使用压平的工具结果文本。各类卡片的上限与 fallback 规则仍由对应的 [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.zh.md)、[diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.zh.md)、[read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.zh.md)、[search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.zh.md)、[web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.zh.md) 与 [question](../../../.agents/notes/implemented/feature/2026-07-29-ask-question-web-presentation.zh.md) 笔记负责。
+本包通过 `ToolDetails` 填充 `conversation.details.tool`。行 renderer 与 Details renderer 分别为 terminal、read、diff、search 和 web 卡片复用同一个纯 card model。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、Code Dispatch `parentCallId` 与 Session 路径事实。Generic row 保留原始 `argsRaw` 引用，只在展开期间格式化 input body；结构化卡片跳过 generic body 格式化。不受支持或格式错误的输入使用压平的工具结果文本。各类卡片的上限与 fallback 规则仍由对应的 [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.zh.md)、[diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.zh.md)、[read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.zh.md)、[search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.zh.md)、[web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.zh.md) 与 [question](../../../.agents/notes/implemented/feature/2026-07-29-ask-question-web-presentation.zh.md) 笔记负责。
 
 </details>
 
@@ -109,3 +109,5 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。Tool composition 只存在于浏览器，不贡献事件或跨插件可变状态；slot 所有权由 ui-slots 校验。

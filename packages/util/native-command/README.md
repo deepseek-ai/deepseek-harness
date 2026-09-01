@@ -64,7 +64,7 @@ The command runner is a thin wrapper over Node's `execFile`. The path opener sel
 | [`src/index.ts`](src/index.ts) | Public command-runner and path-opener exports |
 | [`src/runner.ts`](src/runner.ts) | Shell-free `execFile` adapter |
 | [`src/path-opener.ts`](src/path-opener.ts) | Desktop detection, open intents, browser preference, and WSL translation |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; each run is one stateless child-process round trip) |
+| — | No runtime invariant companion is published; each run is one stateless child-process round trip with no owned event stream or mutable runtime data; behavior is enforced by unit tests. |
 
 ### What execFile gives the runner
 

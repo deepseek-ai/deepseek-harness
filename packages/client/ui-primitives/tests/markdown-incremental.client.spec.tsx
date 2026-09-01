@@ -117,6 +117,16 @@ describe('incremental streaming rendering', () => {
     live.unmount()
     settled.unmount()
   })
+
+  it('keeps a highlighted fence mounted across the final full-document parse', () => {
+    const doc = 'before.\n\n```ts\nconst answer = 42\n```\n\nafter.'
+    const live = render(<MarkdownText text={doc} streaming />)
+    const line = live.container.querySelector('pre.shiki .line')
+    expect(line).not.toBeNull()
+    live.rerender(<MarkdownText text={doc} />)
+    expect(live.container.querySelector('pre.shiki .line')).toBe(line)
+    live.unmount()
+  })
 })
 
 describe('incremental parsing is actually in effect', () => {
@@ -143,6 +153,25 @@ describe('incremental parsing is actually in effect', () => {
     // would have accumulated ~40/2 times the document length here.
     const totalParsed = calls.reduce((sum, call) => sum + call.length, 0)
     expect(totalParsed).toBeLessThan(text.length * 5)
+  })
+
+  it('parses an open fence through bounded grammar slices as completed lines accumulate', () => {
+    const calls: string[] = []
+    const recording = (text: string): Root => {
+      calls.push(text)
+      return parseGfm(text)
+    }
+    const parser = new IncrementalMarkdownParser(recording)
+    let text = '```ts\n'
+    let result = parser.update(text)
+    for (let index = 0; index < 800; index += 1) {
+      text += `const value${String(index)} = ${String(index)}\n`
+      result = parser.update(text)
+    }
+    const parsed = calls.reduce((sum, call) => sum + call.length, 0)
+    expect(Math.max(...calls.slice(10).map(call => call.length))).toBeLessThan(80)
+    expect(parsed).toBeLessThan(text.length * 4)
+    expect(result.tail.at(-1)?.node).toEqual(parseGfm(text).children[0])
   })
 
   it('shows the documented streaming fingerprint: a definition frozen earlier no longer resolves a new reference, and settling heals it', () => {
@@ -195,6 +224,98 @@ describe('freeze dynamics around frontier-sensitive constructs', () => {
     expect(closed.frozen.length).toBeGreaterThan(frozenAtOpen)
     const frozenCode = closed.frozen.find(block => block.node.type === 'code')?.node
     expect(frozenCode?.type === 'code' && frozenCode.value).toContain('looks like a list')
+  })
+
+  it('keeps indented CRLF fence nodes equal to a fresh parse, then falls back when the fence closes', () => {
+    const parser = new IncrementalMarkdownParser(parseGfm)
+    const opening = 'p1.\n\np2.\n\np3.\n\n  ```ts\r\n'
+    const suffix = '    const a = 1\r\n   const b = 2\r\n  ```\r\nafter'
+    let text = ''
+    for (const char of `${opening}${suffix}`) {
+      text += char
+      const result = parser.update(text)
+      const actual = [...result.frozen, ...result.tail].at(-1)
+      const expected = parseGfm(text).children.at(-1)
+      expect(actual?.key).toBe(expected?.position?.start.offset)
+      expect(actual?.node.type).toBe(expected?.type)
+      if (actual?.node.type === 'code' && expected?.type === 'code') {
+        expect({ lang: actual.node.lang, meta: actual.node.meta, value: actual.node.value })
+          .toEqual({ lang: expected.lang, meta: expected.meta, value: expected.value })
+      }
+    }
+  })
+
+  it('preserves lone-CR fence lines and ignores indented code as a fence frontier', () => {
+    const parser = new IncrementalMarkdownParser(parseGfm)
+    let text = '```ts\rfirst\r'
+    parser.update(text)
+    text += 'second\rthird'
+    const result = parser.update(text)
+    expect(result.tail.at(-1)?.node).toEqual(parseGfm(text).children.at(-1))
+
+    const indented = '    alpha\n    beta\n'
+    const indentedResult = new IncrementalMarkdownParser(parseGfm).update(indented)
+    expect(indentedResult.tail.at(-1)?.node).toEqual(parseGfm(indented).children.at(-1))
+  })
+
+  it('falls back to the full grammar tail when a custom grammar rejects fence slices', () => {
+    type Corruption = 'many' | 'paragraph' | 'mismatch'
+    const custom = (corruption: Corruption): ((text: string) => Root) => (text) => {
+      if (!text.startsWith('```\n')) return parseGfm(text)
+      if (corruption === 'many') return parseGfm('one\n\ntwo')
+      if (corruption === 'paragraph') return parseGfm('one')
+      const root = parseGfm(text)
+      const node = root.children[0]
+      if (node?.type === 'code') node.value += 'mismatch'
+      return root
+    }
+    const cases = [
+      { corruption: 'many' as const, text: '```ts\nfirst' },
+      { corruption: 'paragraph' as const, text: '```ts\nfirst' },
+      { corruption: 'many' as const, text: '```ts\nfirst\nsecond\nthird' },
+      { corruption: 'mismatch' as const, text: '```ts\nfirst' },
+    ]
+    for (const { corruption, text } of cases) {
+      const result = new IncrementalMarkdownParser(custom(corruption)).update(text)
+      expect(result.tail.at(-1)?.node).toEqual(parseGfm(text).children.at(-1))
+    }
+
+    const positionless = new IncrementalMarkdownParser((text) => {
+      const root = parseGfm(text)
+      for (const node of root.children) delete node.position
+      return root
+    }).update('```ts\nfirst')
+    expect(positionless.tail.at(-1)?.node.type).toBe('code')
+  })
+
+  it('abandons an installed fence frontier when later custom-grammar slices fail', () => {
+    let syntheticCall = 0
+    let reject: 'none' | 'first' | 'second' = 'none'
+    const custom = (text: string): Root => {
+      if (!text.startsWith('```\n')) return parseGfm(text)
+      syntheticCall += 1
+      if (reject === 'first' && syntheticCall === 1) return parseGfm('one\n\ntwo')
+      if (reject === 'second' && syntheticCall === 2) return parseGfm('one\n\ntwo')
+      return parseGfm(text)
+    }
+
+    const pendingParser = new IncrementalMarkdownParser(custom)
+    let text = '```ts\nfirst\nsecond'
+    pendingParser.update(text)
+    syntheticCall = 0
+    reject = 'first'
+    text += ' tail'
+    expect(pendingParser.update(text).tail.at(-1)?.node).toEqual(parseGfm(text).children.at(-1))
+
+    reject = 'none'
+    syntheticCall = 0
+    const stableParser = new IncrementalMarkdownParser(custom)
+    text = '```ts\nfirst\nsecond'
+    stableParser.update(text)
+    syntheticCall = 0
+    reject = 'second'
+    text += '\nthird\nfourth'
+    expect(stableParser.update(text).tail.at(-1)?.node).toEqual(parseGfm(text).children.at(-1))
   })
 
   it('a list can keep extending across blank lines until it freezes whole', () => {

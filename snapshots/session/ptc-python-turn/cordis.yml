@@ -1,0 +1,38 @@
+# Private Python PTC composition: replace the headless worker provider through
+# the real Loader and render the generated Python SDK prompt.
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-pro
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: !!js 'process.env.DSH_SNAPSHOT === undefined ? ''zstd'' : ''none'''
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: tools
+  name: '@deepseek-ai/dsh-tools'
+  config:
+    mode: ptc
+
+- id: code-runtime
+  disabled: true
+
+- insert:
+    - id: code-runtime-python
+      name: '@deepseek-ai/dsh-experimental-code-runtime-python'
+
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    persona: |
+      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.

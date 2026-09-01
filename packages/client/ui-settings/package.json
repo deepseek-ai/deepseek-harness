@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings",
   "description": "Settings domain base plugin: the settings-namespace scope service and the canonical settings slot-type contract",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -51,7 +47,6 @@
     "@deepseek-ai/dsh-client-store": "workspace:^",
     "@deepseek-ai/dsh-client-test-runtime": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-settings": "workspace:^",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",
@@ -60,7 +55,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ]

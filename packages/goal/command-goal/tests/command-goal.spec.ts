@@ -6,7 +6,7 @@ import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import GoalService from '@deepseek-ai/dsh-goal'
 import type { GoalRef } from '@deepseek-ai/dsh-goal'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as commandGoal from '@deepseek-ai/dsh-command-goal'
 
@@ -56,18 +56,18 @@ async function harness(): Promise<Harness> {
 }
 
 /** The log with executor-owned command lifecycle bookkeeping stripped (goal assertions target domain events). */
-function domainEvents(session: Session): readonly Session['events'][number][] {
+function domainEvents(session: Session): readonly SessionEvent[] {
   const lifecycle = new Set<number>()
-  for (const event of session.events) {
+  for (const event of session.snapshotEvents()) {
     if (event.type !== 'command/run' && event.type !== 'command/done') continue
     lifecycle.add(event.seq)
     // The zero-step wrap around a lifecycle event is bookkeeping too.
-    const before = session.events[event.seq - 1]
-    const after = session.events[event.seq + 1]
+    const before = session.snapshotEvents()[event.seq - 1]
+    const after = session.snapshotEvents()[event.seq + 1]
     if (before?.type === 'turn/start') lifecycle.add(before.seq)
     if (after?.type === 'turn/end') lifecycle.add(after.seq)
   }
-  return session.events.filter(event => !lifecycle.has(event.seq))
+  return session.snapshotEvents().filter(event => !lifecycle.has(event.seq))
 }
 
 /** Execute `/goal` through the same registry boundary as a UI adapter. */

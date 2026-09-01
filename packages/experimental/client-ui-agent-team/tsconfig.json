@@ -17,7 +17,6 @@
     { "path": "../../client/ui-session" },
     { "path": "../../client/ui-slots" },
     { "path": "../../core/session" },
-    { "path": "../../typert/protocol" },
-    { "path": "../../runtime-diagnostics/invariants" }
+    { "path": "../../typert/protocol" }
   ]
 }

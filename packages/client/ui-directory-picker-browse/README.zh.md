@@ -85,3 +85,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。插件只注册一个 workspace directory-flow owner，HMR 测试覆盖释放；显示的目录内容每次都从 Host 重读。

@@ -96,7 +96,7 @@ The seam is built on one separation: the service owns process coordinates and li
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: abstract `SubprocessRuntime`, `ctx.subprocess` registration, the shared `scrubbedParentEnv` scrub |
 | [`src/types.ts`](src/types.ts) | Vocabulary: spawn spec, stdio modes, handles, readers, outcomes, `DSH_*` namespace |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; providers own observations) |
+| — | No runtime invariant companion is published; this stateless Service Definition owns spawn-spec/handle types, while Service Providers own observations. |
 
 ### Data model and flow
 

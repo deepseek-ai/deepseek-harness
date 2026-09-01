@@ -41,8 +41,8 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   })
 }
 
-function events(agent: Agent): SessionEvent[] {
-  return [...agent.session.events]
+function events(agent: Agent): readonly SessionEvent[] {
+  return agent.session.snapshotEvents()
 }
 
 /** Build one assistant response containing the supplied tool calls. */

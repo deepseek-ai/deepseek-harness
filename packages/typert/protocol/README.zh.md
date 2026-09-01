@@ -100,7 +100,7 @@ Host 装配以转发给消费端的 Cordis 事件扩展 `TypertRemoteEventSelect
 | [`src/index.ts`](src/index.ts) | 装饰器、Gateway 绑定、`remoteMethods`、段校验 |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` 与结构式识别函数 `remoteErrorOf` |
 | [`src/types.ts`](src/types.ts) | 协议映射、`RemoteErrorDetailsMap`、`RemoteResult`、`InvocationDescriptor`、编解码器、提供方约定、注册表接口、`TypertClientRemote` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变量伴生入口；decorator 只保留私有不可变声明，binding 也是冻结值，没有可供交叉核对的独立事件流。 |
 
 </details>
 

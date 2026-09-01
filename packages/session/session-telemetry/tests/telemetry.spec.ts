@@ -96,12 +96,12 @@ describe('SessionTelemetryCoordinator capture', () => {
     const start = backend.ledger()[0]!
     const message = backend.ledger()[1]!
     expect(start.attributes).toMatchObject({ 'session.id': 'cap', 'event.type': 'turn/start', 'event.seq': 0 })
-    expect(start.time).toBe(session.events[0]!.time)
+    expect(start.time).toBe(session.snapshotEvents()[0]!.time)
     expect(start.severity).toBe('info')
     expect(message.attributes['event.seq']).toBe(1)
     // Deep-copy isolation: mutating the handed-off body never reaches the log.
     ;(message.body as { content: { text: string }[] }).content[0]!.text = 'tampered'
-    const logged = session.events[1] as SessionEvent<'user/message'>
+    const logged = session.snapshotEvents()[1] as SessionEvent<'user/message'>
     expect(logged.data.content[0]).toMatchObject({ text: 'hello' })
   })
 
@@ -183,7 +183,7 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
     const { ctx, backend, coordinator } = await setup(new FakeBackend(), 'on-demand')
     const session = liveSession(ctx, 'on-demand-prefix')
     appendTurn(session)
-    const firstBoundary = session.events[1]!.seq
+    const firstBoundary = session.snapshotEvents()[1]!.seq
     session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     expect(backend.records).toEqual([])
 
@@ -288,7 +288,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
       inject: ['sessions'],
       apply: (inner: Context) => void new SessionTelemetryCoordinator(inner, backend),
     })
-    const child = ctx.sessions.prepare(SessionId('seeded'), { seed: [...parent.events], meta: {} })
+    const child = ctx.sessions.prepare(SessionId('seeded'), { seed: parent.snapshotEvents(), meta: {} })
     child.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
     ctx.sessions.enter(child)
     ctx.sessions.announce(child)
@@ -307,7 +307,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
     const donor = ctx.sessions.create(SessionId('donor'), { meta: {} })
     donor.append('turn/start', { turn: 1 })
     donor.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'first' } })
-    const resumed = ctx.sessions.create(SessionId('resumed'), { seed: [...donor.events], meta: {} })
+    const resumed = ctx.sessions.create(SessionId('resumed'), { seed: donor.snapshotEvents(), meta: {} })
     await ctx.plugin({
       name: 'fake-telemetry',
       inject: ['sessions'],
@@ -335,7 +335,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
     const parent = liveSession(ctx, 'stitch-parent')
     appendTurn(parent)
     const child = ctx.sessions.create(SessionId('stitch-child'), {
-      seed: [...parent.events],
+      seed: parent.snapshotEvents(),
       meta: { parentSession: SessionId('stitch-parent'), seedLength: 2 },
     })
     await ctx.plugin({

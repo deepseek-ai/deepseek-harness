@@ -101,3 +101,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。本包只持有一个只读 Settings contribution。

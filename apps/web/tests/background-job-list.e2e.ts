@@ -111,7 +111,7 @@ describe.skipIf(MODE === 'record')('web e2e: background job list', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-background-job-settled'))
     expect(scaffold.ctx.jobs.kill(jobId, agent, 'web e2e cancellation')).toBe('requested')
 
-    const idle = page.getByRole('button', { name: '1 background job' })
+    const idle = page.getByRole('button', { name: '1 background job', exact: true })
     await idle.waitFor({ timeout: 20_000 })
 
     const snapshot = await captureStableAria(page, '[class*="menu"]', scaffold.workspaceCwd)

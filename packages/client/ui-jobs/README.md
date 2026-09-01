@@ -85,3 +85,5 @@ These limits define the current job list. They are current package constraints, 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package is a read-only projection of the `jobsBySession` mirror onto one header slot entry. It emits no cordis events, owns no cross-plugin mutable state, and its single slot registration proves disposal through the HMR-safety spec.

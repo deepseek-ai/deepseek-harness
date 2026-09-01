@@ -75,7 +75,7 @@ This section explains the design decisions behind the tool and where the code re
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, tool registration, system-prompt section, execution |
 | [`src/render.ts`](src/render.ts) | Pure formatting, coordinate conversion, URI resolution, result caps, UI presentation |
 | [`src/session-cwd.ts`](src/session-cwd.ts) | Workspace root from the session `header.cwd` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; stateless adapter) |
+| — | No runtime invariant companion is published; this stateless adapter contributes one tool and prompt section, while query lifecycle and result relations remain owned by the tool and LSP seams it composes. |
 
 </details>
 

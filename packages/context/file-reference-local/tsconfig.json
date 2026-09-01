@@ -24,9 +24,6 @@
       "path": "../../core/tools"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../file-reference"
     }
   ]

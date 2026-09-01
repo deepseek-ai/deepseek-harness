@@ -73,7 +73,7 @@ kind: "package-reference"
 | [`src/projection.ts`](src/projection.ts) | 当前表层投影与字节预算保留 |
 | [`src/serialization.ts`](src/serialization.ts) | 快照载荷的标签安全 JSON 转义 |
 | [`src/types.ts`](src/types.ts) | `SessionReferenceInput`／`Candidate` 与来源类型 |
-| [`src/invariant.ts`](src/invariant.ts) | 引用约定的不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；prepare 返回构建时已校验的不可变单次快照；持久 context 的准入、冻结与回放由 Agent 和 Session 层负责。 |
 
 ### 主要流程
 

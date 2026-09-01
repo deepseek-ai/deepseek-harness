@@ -108,3 +108,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。settings scope 校验并发布持久 theme section，registry 与自身变更同步发出 `theme/change`；两者关系由 Host、scope 与 service 测试覆盖。

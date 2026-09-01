@@ -121,7 +121,7 @@ function openMessageTurn(session: Session, turn: number): void {
 
 function contextTexts(session: Session): string[] {
   const texts: string[] = []
-  for (const event of session.events) {
+  for (const event of session.snapshotEvents()) {
     if (event.type === 'user/message'
       && event.data.source.kind === 'plugin'
       && event.data.source.plugin === 'tmux-context') {
@@ -169,7 +169,7 @@ describe('tmux-context injection', () => {
       + 'window active=1, pane active=0, '
       + 'layout d517,270x71,0,0{135x71,0,0,87,134x71,136,0[134x35,136,0,90,134x35,136,36,93]}',
     ])
-    const event = session.events.at(-1)
+    const event = session.snapshotEvents().at(-1)
     if (event?.type !== 'user/message') throw new Error('missing tmux context')
     // `snapshot` form: one named contribution carrying exactly the reading the
     // model saw, so a consumer attributes it without re-splitting prose.

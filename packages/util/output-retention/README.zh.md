@@ -105,7 +105,7 @@ const footer = formatRetentionNotice(
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `ItemRetainer`、`TextRetainer`、`describeOmitted` 与 `formatRetentionNotice` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；保留运算由单元测试覆盖） |
+| — | 不发布运行时不变式伴生入口；保留运算由单元测试覆盖。 |
 
 ### 两个 retainer，两种资源模型
 

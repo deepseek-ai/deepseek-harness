@@ -137,13 +137,13 @@ function visibleInstructionChanges(
   agent: Agent,
   authorityMessages: readonly UserMessage[],
 ): Map<string, AgentInstructionChange> {
-  const visibleSeqs = new Set(agent.session.surface.nodes)
   const visible = new Map<string, AgentInstructionChange>()
-  for (const [seq, event] of agent.session.events.entries()) {
-    if (event.type !== 'user/message' || !isWorkspaceContextSource(event.data.source)) continue
+  for (const seq of agent.session.surface.nodes) {
+    const event = agent.session.eventAt(seq)
+    if (event?.type !== 'user/message' || !isWorkspaceContextSource(event.data.source)) continue
     const changes = workspaceInstructionChanges(event.data.source)
     for (const change of changes) {
-      if (visibleSeqs.has(seq)) visible.set(change.scope, change)
+      visible.set(change.scope, change)
     }
   }
   for (const message of authorityMessages) {

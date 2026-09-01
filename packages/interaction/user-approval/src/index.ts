@@ -10,7 +10,7 @@ import z from '@deepseek-ai/schemastery'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
@@ -25,7 +25,7 @@ declare module '@deepseek-ai/dsh-session/types' {
      * The session's approval policy was switched — log-only, durable,
      * replayable, never in the model transcript (the model learns the policy
      * from the runtime-context snapshot and live switch notices). The LAST
-     * such event is the session's override ({@link effectiveApprovalPolicy}).
+     * such event is the session's override.
      * `source: 'delegation'` marks an override seeded into a child; an absent
      * source is a runtime switch.
      */
@@ -67,31 +67,15 @@ const NEVER_SENTENCE = 'Approval prompts are disabled in this session: actions t
 const ASK_SENTENCE = 'Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed.'
 
 /**
- * The session's approval-policy override: the last `approval/policy` event in
- * the log, or undefined when the session never switched (callers apply the
- * plugin's configured default). The pure fold — resume needs no catch-up
- * machinery because replaying the log IS the state.
- * @param events - session events in log order (other event types are skipped).
- * @returns the policy of the last switch event, or undefined without one.
- */
-export function effectiveApprovalPolicy(events: readonly SessionEvent[]): ApprovalPolicy | undefined {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index] as SessionEvent
-    if (event.type === 'approval/policy') return event.data.policy
-  }
-  return undefined
-}
-
-/**
  * Whether the log currently sits inside an open turn (a `turn/start` not yet
  * closed by a `turn/end`) — the {@link ApprovalService.request} precondition.
  * The audit pair must be turn-enclosed: the turn is the durable log's
  * commit/replay boundary, so a bare event appended between turns is
  * indistinguishable from a crash tail and silently dropped on reload.
  */
-function hasOpenTurn(events: readonly SessionEvent[]): boolean {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const type = (events[index] as SessionEvent).type
+function hasOpenTurn(session: Session): boolean {
+  for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
+    const type = session.eventAt(seq)?.type
     if (type === 'turn/start') return true
     if (type === 'turn/end') return false
   }
@@ -221,7 +205,7 @@ export class ApprovalService extends Service {
    */
   async request(req: ApprovalRequest): Promise<ApprovalOutcome> {
     const session = req.agent.session
-    if (!hasOpenTurn(session.events)) {
+    if (!hasOpenTurn(session)) {
       throw new Error(
         'approval.request() outside an open turn: the approval/asked + approval/decided audit pair '
         + 'must be turn-enclosed (a bare event between turns is crash-tail garbage on reload). '
@@ -257,7 +241,11 @@ export class ApprovalService extends Service {
    * @returns the last logged policy, or `undefined` without one.
    */
   overrideOf(session: Session): ApprovalPolicy | undefined {
-    return effectiveApprovalPolicy(session.events)
+    for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
+      const event = session.eventAt(seq)
+      if (event?.type === 'approval/policy') return event.data.policy
+    }
+    return undefined
   }
 
   /**

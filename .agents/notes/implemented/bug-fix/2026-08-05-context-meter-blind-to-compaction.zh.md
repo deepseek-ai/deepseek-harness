@@ -27,7 +27,7 @@ AFTER  compact:  ring=4%  header=~4227/100000   rows=[system 18, tools 0, messag
 
 ## 备选方案
 
-**改为投影 `measure().totalTokens`。** 测量服务本来就合成了正是这个量（`baseline` 锚点加有符号的 `surfaceDeltaTokens`），而且反应正确——同一次压缩前后实测为 4383 → 304。但它是一个建立在私有重放状态上的服务，不是纯折叠，投影无法调用它。要在 `ProjectionDefinition` 内部复现它的锚点，需要 `_estimateProviderAssistant` 对按 seq 引用的分片事件进行随机访问（`session.events[seq]`），而 `apply(state, event)` 拿不到。以取样时的表层总量作为锚点，是同一个思路在纯逐事件折叠中可达的版本。
+**改为投影 `measure().totalTokens`。** 测量服务本来就合成了正是这个量（`baseline` 锚点加有符号的 `surfaceDeltaTokens`），而且反应正确——同一次压缩前后实测为 4383 → 304。但它是一个建立在私有重放状态上的服务，不是纯折叠，投影无法调用它。要在 `ProjectionDefinition` 内部复现它的锚点，需要 `_estimateProviderAssistant` 对按 seq 引用的分片事件进行随机访问（`session.eventAt(seq)`），而 `apply(state, event)` 拿不到。以取样时的表层总量作为锚点，是同一个思路在纯逐事件折叠中可达的版本。
 
 **在压缩结束时补写一条合成的用量记录。** 这确实能推动 `pressureTokens` 本身，但压缩手上唯一的用量是摘要请求自己的用量——那是完全另一个提示词。把它记成本对话的提示词规模，等于把谎言写进持久日志，而不只是写进某一处展示。
 

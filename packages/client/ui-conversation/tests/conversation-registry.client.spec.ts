@@ -51,6 +51,7 @@ function fakeSession(): SessionFace {
     cancel: () => Promise.reject(new Error('unused fake Session operation')),
     rename: () => Promise.reject(new Error('unused fake Session operation')),
     loadOlder: () => Promise.reject(new Error('unused fake Session operation')),
+    loadThrough: () => Promise.reject(new Error('unused fake Session operation')),
     command: () => Promise.reject(new Error('unused fake Session operation')),
   }
 }
@@ -244,5 +245,41 @@ describe('Conversation registries', () => {
     await Promise.resolve()
     expect(rebuild).toHaveBeenCalledTimes(2)
     rebuild.mockRestore()
+  })
+
+  it('activates each target on explicit selection or first use and never deactivates it', async () => {
+    const { uiConversation, binding, views } = await bootRegistries()
+    const chat = viewDefinition('chat')
+    const trajectory = viewDefinition('trajectory')
+    const createChat = vi.spyOn(chat, 'create')
+    const createTrajectory = vi.spyOn(trajectory, 'create')
+    views.register(chat)
+    const disposeTrajectory = views.register(trajectory)
+    await Promise.resolve()
+
+    const conversation = uiConversation.binding(binding)
+    const chatSource = conversation.target('chat')
+    const trajectorySource = conversation.target('trajectory')
+    expect(createChat).not.toHaveBeenCalled()
+    expect(createTrajectory).not.toHaveBeenCalled()
+
+    conversation.activate('chat')
+    expect(createChat).toHaveBeenCalledOnce()
+
+    const unsubscribeChat = chatSource.subscribe(vi.fn())
+    const trajectoryListener = vi.fn()
+    const unsubscribeTrajectory = trajectorySource.subscribe(trajectoryListener)
+    unsubscribeChat()
+    const unsubscribeTrajectoryAgain = trajectorySource.subscribe(vi.fn())
+    unsubscribeTrajectoryAgain()
+    expect(createChat).toHaveBeenCalledOnce()
+    expect(createTrajectory).toHaveBeenCalledOnce()
+    expect(trajectoryListener).toHaveBeenCalledOnce()
+
+    disposeTrajectory()
+    await Promise.resolve()
+    expect(trajectorySource.getSnapshot()).toBeUndefined()
+    expect(trajectoryListener).toHaveBeenCalledTimes(2)
+    unsubscribeTrajectory()
   })
 })

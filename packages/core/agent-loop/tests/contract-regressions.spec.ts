@@ -73,7 +73,7 @@ describe('assistant replay provider and model fields', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    const recorded = agent.session.events.find(event => event.type === 'assistant/message')
+    const recorded = agent.session.snapshotEvents().find(event => event.type === 'assistant/message')
     expect(recorded?.type === 'assistant/message' && recorded.data.message.source).toEqual({
       kind: 'model', provider: 'mock', model: 'next-model', replayState,
     })
@@ -112,7 +112,7 @@ describe('abort during tool execution ends the turn', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    expect(agent.session.events
+    expect(agent.session.snapshotEvents()
       .filter(event => event.type === 'tool/result'
         || (event.type === 'user/message' && event.data.source.kind === 'plugin')
         || event.type === 'step/end' || event.type === 'turn/end')
@@ -125,7 +125,7 @@ describe('abort during tool execution ends the turn', () => {
     send(agent, 'wake')
     await idle
 
-    expect(agent.session.events
+    expect(agent.session.snapshotEvents()
       .flatMap(event => event.type === 'user/message' && event.data.source.kind === 'plugin'
         ? [event.data.content]
         : []))
@@ -175,7 +175,7 @@ describe('abort during tool execution ends the turn', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    const events = [...agent.session.events]
+    const events = agent.session.snapshotEvents()
     expect(events
       .filter(event => event.type === 'tool/result'
         || (event.type === 'user/message' && event.data.source.kind === 'plugin')
@@ -200,10 +200,10 @@ describe('abort during tool execution ends the turn', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(0)
-    expect(agent.session.events.filter(event => event.type === 'turn/start'
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start'
       || event.type === 'step/start' || event.type === 'turn/end').map(event => event.type))
       .toEqual(['turn/start', 'turn/end'])
-    expect(agent.session.events.find(event => event.type === 'turn/end')?.data)
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data)
       .toEqual({ turn: 1, reason: { kind: 'completed' } })
     expect(agent.inbox.nextTurn).toHaveLength(0)
   })
@@ -244,16 +244,16 @@ describe('abort during tool execution ends the turn', () => {
     await started.promise
     await fiber.dispose()
 
-    expect(agent.session.events
+    expect(agent.session.snapshotEvents()
       .flatMap(event => event.type === 'user/message' && event.data.source.kind === 'plugin'
         ? [event.data.content]
         : []))
       .toEqual([])
     expect(agent.inbox.nextStep.map(inboxText))
       .toEqual(['accepted result context during disposal'])
-    expect(agent.session.events.filter(event => event.type === 'turn/start'))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start'))
       .toHaveLength(1)
-    expect(agent.session.events.find(event => event.type === 'turn/end')?.data.reason)
+    expect(agent.session.snapshotEvents().find(event => event.type === 'turn/end')?.data.reason)
       .toEqual({ kind: 'aborted', reason: { kind: 'disposed' } })
   })
 
@@ -307,7 +307,7 @@ describe('abort during tool execution ends the turn', () => {
     send(agent, 'start a text-only turn')
     await waitForIdle(ctx, agent)
 
-    expect(agent.session.events.flatMap(event =>
+    expect(agent.session.snapshotEvents().flatMap(event =>
       event.type === 'user/message' && event.data.source.kind === 'plugin'
         ? [event.data.content]
         : [])[0])
@@ -359,7 +359,7 @@ describe('plugin exceptions are contained', () => {
 
     send(agent, 'first')
     await waitForIdle(ctx, agent)
-    expect(agent.session.events.findLast(event => event.type === 'turn/end')).toMatchObject({
+    expect(agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')).toMatchObject({
       data: { reason: { kind: 'error', error: { message: 'broken continuation plugin', code: 'UNKNOWN' } } },
     })
 
@@ -395,8 +395,8 @@ describe('disposal leaves the two-state status contract balanced', () => {
 
     expect(statuses).toEqual(['running', 'idle'])
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'disposed' } }])
-    expect(agent.session.events.filter(event => event.type === 'turn/start')).toHaveLength(1)
-    const messages = agent.session.events
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(1)
+    const messages = agent.session.snapshotEvents()
       .filter(event => event.type === 'user/message')
       .flatMap(event => event.data.content)
       .flatMap(block => block.type === 'text' ? [block.text] : [])
@@ -445,7 +445,7 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
 
     send(agent, 'go')
     await waitForIdle(ctx, agent)
-    const turnEnd = agent.session.events.findLast(event => event.type === 'turn/end')
+    const turnEnd = agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind === 'error'
       ? turnEnd.data.reason.error.message
       : undefined).toContain('has no provider/model')
@@ -507,9 +507,58 @@ describe('adapter registration, routing, and accepted-input ownership', () => {
       ['content', 'id', 'role', 'source'],
     ])
     expect(targets).toEqual(['next-turn', 'next-step'])
-    const steeringSources = agent.session.events.flatMap(e =>
+    const steeringSources = agent.session.snapshotEvents().flatMap(e =>
       e.type === 'user/message' && e.data.source.kind === 'plugin' ? [e.data.source] : [])
     expect(steeringSources).toEqual([{ kind: 'plugin', plugin: 'goal' }])
+  })
+
+  it('records each admitted next-step batch before the following claim', async () => {
+    const adapter = new MockAdapter([
+      toolCallResponse('c1', 'steer_next', {}),
+      toolCallResponse('c2', 'steer_next', {}),
+      textResponse('done'),
+    ])
+    const ctx = await harness(adapter)
+    const steering = [
+      createUserMessage({ content: [{ type: 'text', text: 'first steer' }], source: { kind: 'user' } }),
+      createUserMessage({ content: [{ type: 'text', text: 'second steer' }], source: { kind: 'user' } }),
+    ]
+    const agent = ctx.agentLoop.create(SessionId('claim-order'), { provider: 'mock', model: 'mock' })
+    let execution = 0
+    ctx.tools.register(defineContentToolFixture({
+      name: 'steer_next',
+      description: '',
+      parameters: {},
+      async execute() {
+        const message = steering[execution]
+        execution += 1
+        if (message !== undefined) agent.steer(message)
+        return []
+      },
+    }))
+
+    send(agent, 'go')
+    await waitForIdle(ctx, agent)
+
+    const events = agent.session.snapshotEvents()
+    const claims = events.flatMap(event => event.type === 'agent/inbox/spliced'
+      && event.data.target === 'next-step'
+      && event.data.outcome !== 'canceled'
+      && (event.data.removedCount ?? 0) > 0
+      ? [event]
+      : [])
+    expect(claims).toHaveLength(2)
+    for (const [index, message] of steering.entries()) {
+      const claim = claims[index]
+      const admitted = events.find(event =>
+        event.type === 'user/message' && event.data.id === message.id)
+      expect(claim).toBeDefined()
+      expect(admitted).toBeDefined()
+      if (claim === undefined || admitted === undefined) continue
+      expect(admitted.seq).toBeGreaterThan(claim.seq)
+      const nextClaim = claims[index + 1]
+      if (nextClaim !== undefined) expect(admitted.seq).toBeLessThan(nextClaim.seq)
+    }
   })
 
 })
@@ -534,7 +583,7 @@ describe('turn numbering continues across seeded sessions', () => {
     await ctx2.plugin(AgentLoop, { agents: [] })
     ctx2.llm.registerAdapter(['mock'], second)
 
-    const seeded = ctx2.sessions.create(SessionId('forked'), { seed: [...agent.session.events] })
+    const seeded = ctx2.sessions.create(SessionId('forked'), { seed: agent.session.snapshotEvents() })
     const forked = new ReactLoopAgent(
       ctx2, SessionId('forked-agent'), { provider: 'mock', model: 'mock' }, seeded,
     )
@@ -603,7 +652,7 @@ describe('a finish-error stream chunk ends the turn as error, not completed', ()
     expect(errors[0]).toBeInstanceOf(LlmError)
     expect((errors[0] as LlmError).failure).toEqual(failure)
 
-    const events = [...agent.session.events]
+    const events = agent.session.snapshotEvents()
     const turnEnd = events.find(event => event.type === 'turn/end')
     expect(turnEnd).toMatchObject({ data: { reason: { kind: 'error', error: failure } } })
     // A failed step must not synthesize an assistant message.
@@ -625,7 +674,7 @@ describe('a finish-error stream chunk ends the turn as error, not completed', ()
     await waitForIdle(ctx, agent)
 
     expect(reasons).toEqual([{ kind: 'error', error: { message: 'model stream aborted', code: 'ABORTED' } }])
-    expect([...agent.session.events].some(event => event.type === 'assistant/message')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'assistant/message')).toBe(false)
   })
 
   it('handles a finish error without a code (code key omitted)', async () => {
@@ -647,7 +696,7 @@ describe('a finish-error stream chunk ends the turn as error, not completed', ()
 })
 
 describe('step boundary publication order', () => {
-  it('the step/start event is in session.events when its session/event listener fires', async () => {
+  it('the step/start event is in session.snapshotEvents() when its session/event listener fires', async () => {
     const adapter = new MockAdapter([textResponse('done')])
     const ctx = await harness(adapter)
     const agent = ctx.agentLoop.create(SessionId('a-step-order'), { provider: 'mock', model: 'mock' })
@@ -655,7 +704,7 @@ describe('step boundary publication order', () => {
     const observed: { turn: number; step: number; lastEventType: string | undefined; sawStepStart: boolean }[] = []
     ctx.on('session/event', (subject, event) => {
       if (subject !== agent.session || event.type !== 'step/start') return
-      const events = [...subject.events]
+      const events = subject.snapshotEvents()
       const last = events.at(-1)
       observed.push({
         turn: event.data.turn,
@@ -691,7 +740,7 @@ describe('turn and step boundary recovery', () => {
 
   /** Count turn/step boundary events for balance assertions. */
   function boundaryCounts(agent: Agent) {
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     return {
       turnStart: e.filter(x => x.type === 'turn/start').length,
       turnEnd: e.filter(x => x.type === 'turn/end').length,
@@ -721,7 +770,7 @@ describe('turn and step boundary recovery', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     const c = boundaryCounts(agent)
     expect(c).toMatchObject({ turnStart: 1, turnEnd: 1, stepStart: 1, stepEnd: 1, errors: 0 })
     expect(errors).toEqual([])
@@ -754,7 +803,7 @@ describe('turn and step boundary recovery', () => {
     send(agent, 'rejected')
     await waitForIdle(ctx, agent)
 
-    expect(agent.session.events.some(event => event.type === 'turn/start'
+    expect(agent.session.snapshotEvents().some(event => event.type === 'turn/start'
       || event.type === 'user/message')).toBe(false)
     expect(agent.inbox.nextTurn).toHaveLength(1)
     expect(errors.map(error => error.message)).toEqual(['reject turn-start before commit'])
@@ -785,7 +834,7 @@ describe('turn and step boundary recovery', () => {
       stepEnd: 0,
       errors: 1,
     })
-    expect(agent.session.events.findLast(event => event.type === 'turn/end')).toMatchObject({
+    expect(agent.session.snapshotEvents().findLast(event => event.type === 'turn/end')).toMatchObject({
       data: { reason: { kind: 'error', error: { message: 'reject step-start before commit', code: 'UNKNOWN' } } },
     })
   })
@@ -878,7 +927,7 @@ describe('turn and step boundary recovery', () => {
     await fiber.dispose() // dispose during the hanging step
     await driverDone(agent)
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     const turnStarts = e.filter(x => x.type === 'turn/start').length
     const turnEnds = e.filter(x => x.type === 'turn/end').length
     expect(turnStarts).toBe(1)
@@ -911,7 +960,7 @@ describe('turn and step boundary recovery', () => {
     send(agent, 'go')
     await agent.whenIdle()
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.find(x => x.type === 'turn/end')?.data.reason)
@@ -940,12 +989,12 @@ describe('turn and step boundary recovery', () => {
     expect(errors).toEqual([])
     // Session contains the observer failure per listener, so the committed turn
     // remains visible to later observers and executes normally.
-    const types = [...agent.session.events].map(e => e.type)
+    const types = agent.session.snapshotEvents().map(e => e.type)
     expect(types.filter(t => t === 'turn/start')).toHaveLength(1)
     expect(types.filter(t => t === 'turn/end')).toHaveLength(1)
-    const lastBoundary = [...agent.session.events].reverse().find(e => e.type === 'turn/start' || e.type === 'turn/end')
+    const lastBoundary = agent.session.snapshotEvents().findLast(e => e.type === 'turn/start' || e.type === 'turn/end')
     expect(lastBoundary?.type).toBe('turn/end')
-    expect(agent.session.events.at(-1)?.type).toBe('turn/end')
+    expect(agent.session.snapshotEvents().at(-1)?.type).toBe('turn/end')
 
     // loop survives: a second turn runs normally.
     send(agent, 'second')
@@ -977,7 +1026,7 @@ describe('turn and step boundary recovery', () => {
       .toEqual({ kind: 'completed' })
 
     // step/end precedes turn/end (ordering contract)
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     const stepEndIdx = e.findIndex(x => x.type === 'step/end')
     const turnEndIdx = e.findIndex(x => x.type === 'turn/end')
     expect(stepEndIdx).toBeGreaterThanOrEqual(0)
@@ -1011,7 +1060,7 @@ describe('turn and step boundary recovery', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     // Both step/end and turn/end are present — finalization ran to completion.
     expect(e.some(x => x.type === 'step/end')).toBe(true)
     expect(e.some(x => x.type === 'turn/end')).toBe(true)
@@ -1041,7 +1090,7 @@ describe('turn and step boundary recovery', () => {
     send(agent, 'go')
     await waitForIdle(ctx, agent)
     // turn 1 is balanced despite the throwing turn/end listener.
-    const e1 = [...agent.session.events]
+    const e1 = agent.session.snapshotEvents()
     expect(e1.filter(x => x.type === 'turn/start')).toHaveLength(1)
     expect(e1.filter(x => x.type === 'turn/end')).toHaveLength(1)
     expect(e1.at(-1)?.type).toBe('turn/end')
@@ -1050,7 +1099,7 @@ describe('turn and step boundary recovery', () => {
     send(agent, 'again')
     await waitForIdle(ctx, agent)
     expect(adapter.requests).toHaveLength(2)
-    expect([...agent.session.events].filter(x => x.type === 'turn/end')).toHaveLength(2)
+    expect(agent.session.snapshotEvents().filter(x => x.type === 'turn/end')).toHaveLength(2)
   })
 })
 
@@ -1082,7 +1131,7 @@ describe('tool result call identity', () => {
     await waitForIdle(ctx, agent)
 
     // The logged tool/result.callId is the originating call.id.
-    const resultEvent = [...agent.session.events].find(e => e.type === 'tool/result')
+    const resultEvent = agent.session.snapshotEvents().find(e => e.type === 'tool/result')
     expect(resultEvent?.type).toBe('tool/result')
     if (resultEvent?.type === 'tool/result') {
       expect(resultEvent.data.message.source.callId).toBe(ToolCallId('c1'))
@@ -1146,7 +1195,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
     await driverDone(agent)
     unlisten()
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
@@ -1194,7 +1243,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
     await driverDone(agent)
     unlisten()
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
@@ -1244,7 +1293,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
     await driverDone(agent)
 
     // The post-listener cancellation check catches disposal before any step or LLM call.
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
@@ -1291,7 +1340,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
     await fiber.dispose()
     await driverDone(agent)
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
@@ -1336,7 +1385,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
     await disposalDone
     await driverDone(agent)
 
-    const e = [...agent.session.events]
+    const e = agent.session.snapshotEvents()
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.find(x => x.type === 'turn/end')?.data.reason)

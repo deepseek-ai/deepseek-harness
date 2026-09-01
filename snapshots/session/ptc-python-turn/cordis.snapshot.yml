@@ -1,0 +1,55 @@
+# Keyless private Python PTC composition through the real headless Loader.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: deepseek-official
+    model: deepseek-v4-flash
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: agent-instructions
+  name: '@deepseek-ai/dsh-agent-instructions'
+  config:
+    maxBytes: 65536
+
+- id: tools
+  name: '@deepseek-ai/dsh-tools'
+  config:
+    mode: ptc
+
+- id: code-runtime
+  disabled: true
+
+- insert:
+    - id: code-runtime-python
+      name: '@deepseek-ai/dsh-experimental-code-runtime-python'
+
+- id: system-prompt
+  name: '@deepseek-ai/dsh-system-prompt'
+  config:
+    persona: |
+      You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}.
+
+      Verify your work by running the code or tests. Keep answers brief and factual.
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+              - id: deepseek-v4-pro

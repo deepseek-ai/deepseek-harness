@@ -68,3 +68,5 @@ profile 会在 base 工具与上下文贡献之前提供 `You are a coding agent
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。该 bundle 只增加进程传输与启动 latch；帧纯度、help 排除和关闭行为由源码及构建产物的 stdio 测试负责。

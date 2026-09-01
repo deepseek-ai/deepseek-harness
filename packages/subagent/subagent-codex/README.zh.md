@@ -191,3 +191,5 @@ Codex 子级会在一个全新的临时线程中，以单个轮次接收这些�
 - **版本锁定的协议**——运行时依赖锁定为 `@openai/codex@0.149.1`；升级需要重新生成上游 schema 证据并重新运行带凭证的随机数测试。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。生命周期配对属于共享 subagent service，process-tree 所有权属于 subprocess service。

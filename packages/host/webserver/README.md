@@ -75,6 +75,7 @@ The package is a plain route registry with no harness vocabulary: `WebServer` ex
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `WebServer` service: route tables, fallback seat, index rendering, matching, lifecycle |
+| — | No runtime invariant companion is published; route registration and disposal mutate one route table through the same service, so a register/dispose probe only re-executes the implementation. Real routing and HMR tests own the behavior. |
 | [`src/injections.ts`](src/injections.ts) | Structured `IndexInjection` rows and `renderIndexInjections` row rendering |
 
 </details>

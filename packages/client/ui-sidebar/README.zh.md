@@ -99,3 +99,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是从标准 `useSessions` delivery 直接派生行的纯消费插件，不发出 Cordis 事件，也不持有跨插件可变状态。

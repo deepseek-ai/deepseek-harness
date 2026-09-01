@@ -44,8 +44,9 @@ interface PendingMatch {
 
 interface ViewState {
   readonly target: string
-  readonly builder: ConversationViewBuilder
+  readonly definition: ConversationViewDefinition
   readonly isActive: ((snapshot: unknown) => boolean) | undefined
+  builder: ConversationViewBuilder | undefined
   snapshot: unknown
 }
 
@@ -158,12 +159,15 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   private readonly contexts = new Map<string, InternalContext>()
   private readonly contextsByKind = new Map<string, InternalContext[]>()
   private readonly contextsBySeq = new Map<number, Set<InternalContext>>()
+  private readonly contextsByTarget = new Map<string, Set<InternalContext>>()
   private readonly inputs = new Map<number, SessionEventLikeEntry>()
   private readonly locationIndex = new ConversationLocationIndex()
   private readonly dirty = new Set<InternalContext>()
+  private readonly dirtyByTarget = new Map<string, Set<InternalContext>>()
   private readonly revised = new Set<InternalContext>()
   private readonly dependents = new Map<string, Set<InternalContext>>()
   private readonly views = new Map<string, ViewState>()
+  private readonly activeTargets = new Set<string>()
   private hasMore = false
   private replacePending = true
   private timelineDirty = true
@@ -189,8 +193,10 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     this.contexts.clear()
     this.contextsByKind.clear()
     this.contextsBySeq.clear()
+    this.contextsByTarget.clear()
     this.inputs.clear()
     this.dirty.clear()
+    this.dirtyByTarget.clear()
     this.revised.clear()
     this.dependents.clear()
     this.hasMore = hasMore
@@ -201,7 +207,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     for (const entry of sorted) this.matchInput(entry)
     this.replayDependencies()
     this.revised.clear()
-    for (const context of this.contexts.values()) this.dirty.add(context)
+    for (const context of this.contexts.values()) this.markDirty(context)
     this.replacePending = true
     return 'immediate'
   }
@@ -278,68 +284,74 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   }
 
   /**
-   * Materialize dirty Contexts and advance every registered view builder.
+   * Materialize dirty Contexts and advance every active view builder.
    * @returns whether any view snapshot was rebuilt or incrementally applied.
    */
   flush(): boolean {
     if (!this.replacePending && this.dirty.size === 0 && !this.timelineDirty) return false
     if (this.replacePending) {
       this.replaceLocationData()
-      const allByTarget = new Map<string, ConversationViewNode[]>()
-      for (const target of this.views.keys()) allByTarget.set(target, [])
-      for (const context of this.contexts.values()) {
-        const target = context.definition.target
-        if (target === undefined || !this.views.has(target)) continue
-        const node = this.buildNode(context, target)
-        context.current.set(target, node)
-        if (node !== null) allByTarget.get(target)?.push(node)
-      }
-      for (const view of this.views.values()) {
-        view.snapshot = view.builder.replace({
-          nodes: allByTarget.get(view.target) ?? [],
+      let published = false
+      for (const target of this.activeTargets) {
+        const view = this.views.get(target)
+        if (view === undefined) continue
+        const builder = view.builder ?? view.definition.create()
+        view.builder = builder
+        view.snapshot = builder.replace({
+          nodes: this.buildTargetNodes(target, this.contextsByTarget.get(target)),
           timeline: this.locationIndex.snapshot(),
         })
+        published = true
       }
       this.replacePending = false
       this.dirty.clear()
+      this.dirtyByTarget.clear()
       this.timelineDirty = false
-      return true
+      return published
     }
 
-    const upsertsByTarget = new Map<string, ConversationViewNode[]>()
-    for (const target of this.views.keys()) upsertsByTarget.set(target, [])
+    let published = false
     if (this.applyDirtyLocationData()) this.timelineDirty = true
-    for (const context of this.dirty) {
-      const target = context.definition.target
-      if (target === undefined || !this.views.has(target)) continue
-      const previous = context.current.get(target) ?? null
-      const node = this.buildNode(context, target)
-      if (node === null && previous !== null) {
-        throw new Error(
-          `conversation Definition "${context.kind}" withdrew materialized target "${target}"; return the same key with hidden visibility instead`,
-        )
-      }
-      context.current.set(target, node)
-      if (node !== null) upsertsByTarget.get(target)?.push(node)
-    }
-    this.dirty.clear()
     const timelineDirty = this.timelineDirty
-    this.timelineDirty = false
-    for (const view of this.views.values()) {
-      const upserts = upsertsByTarget.get(view.target) ?? []
+    for (const target of this.activeTargets) {
+      const view = this.views.get(target)
+      if (view === undefined) continue
+      const builder = view.builder
+      if (builder === undefined) continue
+      const upserts = this.buildTargetUpserts(target, this.dirtyByTarget.get(target))
       if (upserts.length === 0 && !timelineDirty) continue
-      view.snapshot = view.builder.apply({
+      view.snapshot = builder.apply({
         upserts,
         timeline: this.locationIndex.snapshot(),
       })
+      published = true
     }
+    this.dirty.clear()
+    this.dirtyByTarget.clear()
+    this.timelineDirty = false
+    return published
+  }
+
+  /**
+   * Add one target to the monotonic active set and materialize its current snapshot.
+   * Pending Context work is flushed before the first complete replacement.
+   * @param target - registered or subsequently registered view target.
+   * @returns whether any active target snapshot changed.
+   */
+  activateTarget(target: string): boolean {
+    const view = this.views.get(target)
+    if (this.activeTargets.has(target)) return false
+    const published = this.flush()
+    this.activeTargets.add(target)
+    if (view === undefined) return published
+    this.replaceView(view)
     return true
   }
 
   /**
    * Read the latest snapshot of a registered target.
    * @param target - registered view target.
-   * @returns target snapshot, or undefined when no builder is registered.
+   * @returns target snapshot, or undefined before registration or activation.
    */
   snapshot(target: string): unknown {
     return this.views.get(target)?.snapshot
@@ -353,11 +365,13 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
 
   /**
    * Read targets whose owners classify their latest snapshot as visible activity.
-   * @returns active target ids.
+   * @returns target ids contributing visible activity.
    */
-  activeTargets(): ReadonlySet<string> {
+  activityTargets(): ReadonlySet<string> {
     const active = new Set<string>()
-    for (const view of this.views.values()) {
+    for (const target of this.activeTargets) {
+      const view = this.views.get(target)
+      if (view === undefined) continue
       if (view.isActive?.(view.snapshot) === true) active.add(view.target)
     }
     return active
@@ -419,6 +433,30 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     return publication
   }
 
+  private createContext(
+    definition: ConversationNodeDefinition,
+    id: string,
+    key: string,
+  ): InternalContext {
+    const context: InternalContext = {
+      key,
+      kind: definition.kind,
+      id,
+      definition,
+      startSeq: undefined,
+      start: undefined,
+      matches: [],
+      state: undefined,
+      revision: 0,
+      current: new Map(),
+      locationData: emptyLocationData(),
+      dependencies: new Map(),
+    }
+    this.contexts.set(key, context)
+    this.indexTargetContext(context)
+    return context
+  }
+
   private acceptMatch(
     definition: ConversationNodeDefinition,
     id: string,
@@ -430,23 +468,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     if (role === 'start' && context?.start !== undefined) {
       throw new Error(`conversation Context ${key} received more than one start Match`)
     }
-    if (context === undefined) {
-      context = {
-        key,
-        kind: definition.kind,
-        id,
-        definition,
-        startSeq: undefined,
-        start: undefined,
-        matches: [],
-        state: undefined,
-        revision: 0,
-        current: new Map(),
-        locationData: emptyLocationData(),
-        dependencies: new Map(),
-      }
-      this.contexts.set(key, context)
-    }
+    context ??= this.createContext(definition, id, key)
     const match = conversationMatch(
       key,
       input,
@@ -478,7 +500,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
       context.revision++
       this.revised.add(context)
     }
-    this.dirty.add(context)
+    this.markDirty(context)
     return definition.publication?.(match) ?? 'immediate'
   }
 
@@ -491,23 +513,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
       const first = entries[0]
       if (first === undefined) continue
       let context = this.contexts.get(key)
-      if (context === undefined) {
-        context = {
-          key,
-          kind: first.definition.kind,
-          id: first.id,
-          definition: first.definition,
-          startSeq: undefined,
-          start: undefined,
-          matches: [],
-          state: undefined,
-          revision: 0,
-          current: new Map(),
-          locationData: emptyLocationData(),
-          dependencies: new Map(),
-        }
-        this.contexts.set(key, context)
-      }
+      context ??= this.createContext(first.definition, first.id, key)
       let discoveredStart: ConversationStartMatch | undefined
       const additions = entries
         .map((entry) => {
@@ -538,7 +544,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
         throw new Error(`conversation Context ${context.key} received an update before its start Match`)
       }
       affected.add(context)
-      this.dirty.add(context)
+      this.markDirty(context)
     }
     for (const [kind, contexts] of startsByKind) this.indexStartedContexts(kind, contexts)
   }
@@ -549,7 +555,7 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     for (const context of ordered) {
       if (context.start === undefined) {
         context.state = undefined
-        this.dirty.add(context)
+        this.markDirty(context)
         continue
       }
       this.replayContext(context)
@@ -586,7 +592,24 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     }
     context.revision++
     this.revised.add(context)
+    this.markDirty(context)
+  }
+
+  private indexTargetContext(context: InternalContext): void {
+    const target = context.definition.target
+    if (target === undefined) return
+    const contexts = this.contextsByTarget.get(target) ?? new Set<InternalContext>()
+    contexts.add(context)
+    this.contextsByTarget.set(target, contexts)
+  }
+
+  private markDirty(context: InternalContext): void {
     this.dirty.add(context)
+    const target = context.definition.target
+    if (target === undefined || !this.activeTargets.has(target)) return
+    const contexts = this.dirtyByTarget.get(target) ?? new Set<InternalContext>()
+    contexts.add(context)
+    this.dirtyByTarget.set(target, contexts)
   }
 
   private replaceDependencies(context: InternalContext, dependencies: Map<string, Dependency>): void {
@@ -759,6 +782,47 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
     return node
   }
 
+  private replaceView(view: ViewState): void {
+    const builder = view.builder ?? view.definition.create()
+    view.builder = builder
+    view.snapshot = builder.replace({
+      nodes: this.buildTargetNodes(view.target, this.contextsByTarget.get(view.target)),
+      timeline: this.locationIndex.snapshot(),
+    })
+  }
+
+  private buildTargetNodes(
+    target: string,
+    contexts: Iterable<InternalContext> | undefined,
+  ): ConversationViewNode[] {
+    const nodes: ConversationViewNode[] = []
+    for (const context of contexts ?? []) {
+      const node = this.buildNode(context, target)
+      context.current.set(target, node)
+      if (node !== null) nodes.push(node)
+    }
+    return nodes
+  }
+
+  private buildTargetUpserts(
+    target: string,
+    contexts: Iterable<InternalContext> | undefined,
+  ): ConversationViewNode[] {
+    const upserts: ConversationViewNode[] = []
+    for (const context of contexts ?? []) {
+      const previous = context.current.get(target) ?? null
+      const node = this.buildNode(context, target)
+      if (node === null && previous !== null) {
+        throw new Error(
+          `conversation Definition "${context.kind}" withdrew materialized target "${target}"; return the same key with hidden visibility instead`,
+        )
+      }
+      context.current.set(target, node)
+      if (node !== null) upserts.push(node)
+    }
+    return upserts
+  }
+
   private buildLocationData(
     context: InternalContext,
     scope: ConversationLocationDataScope,
@@ -817,15 +881,16 @@ export class ConversationNodeAssembler implements ConversationViewSnapshotStore 
   private resetViewBuilders(): void {
     this.views.clear()
     for (const definition of this.viewDefinitions.entries()) {
-      const builder = definition.create()
-      this.views.set(definition.target, {
+      const view: ViewState = {
         target: definition.target,
-        builder,
+        definition,
         isActive: definition.isActive === undefined
           ? undefined
           : snapshot => definition.isActive?.(snapshot) === true,
-        snapshot: builder.empty,
-      })
+        builder: undefined,
+        snapshot: undefined,
+      }
+      this.views.set(definition.target, view)
     }
     this.replacePending = true
   }

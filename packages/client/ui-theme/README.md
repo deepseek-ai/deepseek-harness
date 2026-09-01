@@ -108,3 +108,5 @@ These limits define the theme extension surface and the color authority; they ar
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The settings scope validates and publishes the durable theme section, while the registry emits `theme/change` synchronously with its own mutations. Store/registry agreement is covered directly by this package's Host, scope, and service behavior specs.

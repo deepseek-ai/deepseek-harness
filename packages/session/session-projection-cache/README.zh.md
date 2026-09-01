@@ -88,7 +88,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SessionProjectionCache` 服务、写后监听器、缓存读取 |
 | [`src/spec.ts`](src/spec.ts) | `session_projcache` 域 spec 与记录身份类型 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；正确性在写入与读取路径强制） |
+| — | 不发布运行时不变式伴生入口；正确性在写入与读取路径强制。 |
 
 </details>
 

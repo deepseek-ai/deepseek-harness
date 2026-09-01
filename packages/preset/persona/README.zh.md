@@ -72,7 +72,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、人设段落注册、runtime-context 抑制 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；身份、完整提示词执行与资源释放归提示词注册表） |
+| — | 不发布运行时不变式伴生入口；身份、完整提示词执行与资源释放归提示词注册表。 |
 
 </details>
 

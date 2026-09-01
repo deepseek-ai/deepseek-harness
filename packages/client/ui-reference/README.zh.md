@@ -100,3 +100,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。插件只注册一个 slash source，HMR 测试覆盖释放；它不发出 Cordis 事件，也不持有跨插件可变状态。

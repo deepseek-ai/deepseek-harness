@@ -97,7 +97,7 @@ The bench copies no production logic: it mounts the production `SlotRegistry`, p
 | [`src/remote.ts`](src/remote.ts) | `TestRemote` double for host RPC, `RemoteError` value re-export |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | Translation and pinned-browser-language test helpers |
 | [`src/settings-scope.ts`](src/settings-scope.ts) | `stubSettingsScope` with test-driven publications and a write spy |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the mounted production packages own theirs) |
+| — | No runtime invariant companion is published; this test-support package owns no production event stream or mutable data — it assembles the runtime SlotRegistry and renderer (whose packages own their invariants) around test doubles; its own behavior is exercised by its package tests. |
 
 ### Lifecycle
 

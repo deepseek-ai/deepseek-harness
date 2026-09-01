@@ -76,7 +76,7 @@ console.log(result.finalResponse)
 | [`src/dispose.ts`](src/dispose.ts) | 私有关闭阶梯：stdin EOF → SIGTERM → SIGKILL 直到真正退出 |
 | [`src/types.ts`](src/types.ts) | 启动与超时选项、通知结构、`RunResult` |
 | [`src/index.ts`](src/index.ts) | 消费方接口：两层客户端与面向调用方的类型 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套插件（无运行时不变式——对端是独立运行时进程） |
+| — | 不发布运行时不变式伴生入口；对端是独立运行时进程。 |
 
 ### 自有活动流程
 

@@ -79,7 +79,7 @@ The provider treats the process tree as the unit of lifetime. POSIX children spa
 | [`src/terminal.ts`](src/terminal.ts) | `node-pty` terminal handle: foreground inspection, session cleanup, Windows teardown |
 | [`src/process-inspector.ts`](src/process-inspector.ts) | POSIX process-tree and session inspection |
 | [`src/windows-inspector.ts`](src/windows-inspector.ts) | Windows Toolhelp32 process-table inspection via koffi |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the seam owns the contract) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Main flow
 

@@ -90,3 +90,5 @@ These limits define the current preset surfaces. They are current package constr
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This is a browser-side surface plugin whose node half owns no event stream or mutable runtime data; the roster and the settings write are host contracts covered there.

@@ -330,7 +330,7 @@ describe('web e2e: continuous conversation grown through the composer', () => {
     }
 
     if (sessionId === undefined) throw new Error('continuous conversation completed no turn')
-    expect(scaffold.ctx.agents.get(sessionId)?.session.events.filter(event => (
+    expect(scaffold.ctx.agents.get(sessionId)?.session.snapshotEvents().filter(event => (
       event.type === 'turn/end' && event.data.reason.kind === 'completed'
     ))).toHaveLength(TURN_COUNT)
     expect(sessionEvents.flatMap(event =>

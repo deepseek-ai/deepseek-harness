@@ -113,3 +113,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。唯一关系是单个 fallback seat，但 teardown event 在 disposer 前发出，运行时探测会误报；register/release 对称性由真实组合的 HMR 测试覆盖。

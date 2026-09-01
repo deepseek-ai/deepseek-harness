@@ -75,7 +75,7 @@ await withFileLock('/home/u/.dsh/settings.yaml', async () => {
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `writeFileAtomic` 与 `withFileLock`，即本包的全部接口 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；替换约定由单元测试覆盖） |
+| — | 不发布运行时不变式伴生入口；替换约定由单元测试覆盖。 |
 
 ### 写入路径
 

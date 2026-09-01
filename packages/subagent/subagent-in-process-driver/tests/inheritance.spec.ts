@@ -71,7 +71,7 @@ function spawnRequest(parent: Agent) {
 }
 
 function toolResultTexts(agent: Agent): string[] {
-  return agent.session.events
+  return agent.session.snapshotEvents()
     .filter((event): event is SessionEvent<'tool/result'> => event.type === 'tool/result')
     .map(event => event.data.message.content
       .flatMap(block => block.content)
@@ -88,7 +88,7 @@ describe('in-process policy inheritance', () => {
     setSandboxMode(parent.session, 'read-only')
     // No parent approval override: the child pin must not depend on one.
     expect(ctx.approval.overrideOf(parent.session)).toBeUndefined()
-    const parentLogLength = parent.session.events.length
+    const parentLogLength = parent.session.snapshotEvents().length
     script.push(
       toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }),
       textResponse('child done'),
@@ -102,7 +102,7 @@ describe('in-process policy inheritance', () => {
       await expect(readFile(blocked, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
       expect(toolResultTexts(child).join('\n')).toContain(READ_ONLY_DENIAL)
       expect(result.stopReason).toBe('completed')
-      expect(child.session.events.slice(0, 2)).toMatchObject([
+      expect(child.session.snapshotEvents().slice(0, 2)).toMatchObject([
         { type: 'sandbox/mode', seq: 0, data: { mode: 'read-only', source: 'delegation' } },
         { type: 'approval/policy', seq: 1, data: { policy: 'never', source: 'delegation' } },
       ])
@@ -110,10 +110,10 @@ describe('in-process policy inheritance', () => {
       expect(child.session.header.seedLength).toBeUndefined()
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
       expect(ctx.approval.overrideOf(child.session)).toBe('never')
-      const request = child.session.events.find(
+      const request = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'request/header'> => event.type === 'request/header',
       )
-      const runtimeContext = child.session.events.find(
+      const runtimeContext = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'user/message'> => event.type === 'user/message'
           && event.data.source.kind === 'plugin'
           && event.data.source.plugin === '@deepseek-ai/dsh-system-prompt',
@@ -130,7 +130,7 @@ describe('in-process policy inheritance', () => {
       expect(contextText).toContain('You are a delegated subagent')
       expect(request.data.header.system).not.toContain('Approval prompts are disabled')
       expect(request.data.header.system).not.toContain('You are a delegated subagent')
-      expect(parent.session.events).toHaveLength(parentLogLength)
+      expect(parent.session.snapshotEvents()).toHaveLength(parentLogLength)
     } finally {
       await run.dispose()
     }
@@ -141,7 +141,7 @@ describe('in-process policy inheritance', () => {
     const { ctx, parent } = await setupWalled(script)
     const blocked = join(workspace, 'fork-blocked.txt')
     setSandboxMode(parent.session, 'workspace-write')
-    const seed = [...parent.session.events]
+    const seed = parent.session.snapshotEvents()
     setSandboxMode(parent.session, 'read-only')
     script.push(
       toolCallResponse('write', 'write', { file_path: blocked, content: 'escaped' }),
@@ -156,7 +156,7 @@ describe('in-process policy inheritance', () => {
       expect(child.session.header.seedLength).toBe(1)
       expect(child.session.firstLiveSeq).toBe(seed.length)
       // seq 1 is the constructor's end-seed marker.
-      expect(child.session.events.filter(event => event.type === 'sandbox/mode')).toMatchObject([
+      expect(child.session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toMatchObject([
         { seq: 0, data: { mode: 'workspace-write' } },
         { seq: 2, data: { mode: 'read-only', source: 'delegation' } },
       ])
@@ -202,8 +202,8 @@ describe('in-process policy inheritance', () => {
       await run.result
       const child = run.localAgent as Agent
       expect(await readFile(allowed, 'utf8')).toBe('fine')
-      expect(child.session.events.some(event => event.type === 'sandbox/mode')).toBe(false)
-      expect(child.session.events.filter(event => event.type === 'approval/policy')).toMatchObject([
+      expect(child.session.snapshotEvents().some(event => event.type === 'sandbox/mode')).toBe(false)
+      expect(child.session.snapshotEvents().filter(event => event.type === 'approval/policy')).toMatchObject([
         { seq: 0, data: { policy: 'never', source: 'delegation' } },
       ])
       expect(child.session.firstLiveSeq).toBe(0)
@@ -242,10 +242,10 @@ describe('in-process policy inheritance', () => {
       expect(consulted).toBe(false)
       expect(toolResultTexts(child).join('\n'))
         .toContain('the user rejected escalating this operation to "workspace-write"')
-      const asked = child.session.events.find(
+      const asked = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'approval/asked'> => event.type === 'approval/asked',
       )
-      const decided = child.session.events.find(
+      const decided = child.session.snapshotEvents().find(
         (event): event is SessionEvent<'approval/decided'> => event.type === 'approval/decided',
       )
       expect(asked?.data.toolName).toBe('write')

@@ -93,7 +93,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`PwshLocalExecutor`、`Config`、设置接线、argv seam |
 | [`src/resolve.ts`](src/resolve.ts) | 纯函数 `resolvePwshPath`/`candidatePwshPaths` 可执行文件解析 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；约定在所属 seam 处执行） |
+| — | 不发布运行时不变式伴生入口；约定在所属 seam 处执行。 |
 | `tests/` | 已演练的行为：预算、分类、解析、后台句柄 |
 
 ### 主要流程

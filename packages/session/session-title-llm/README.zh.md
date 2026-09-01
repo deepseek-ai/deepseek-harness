@@ -127,3 +127,5 @@ kind: "package-library"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个无状态 helper 会在 dispatch 前校验并冻结每个辅助请求；deadline、stream、message seq、provider 与 model 由同步检查和测试覆盖。

@@ -193,3 +193,5 @@ This Dev Note is working context for maintainers: open questions and undecided d
 - **Version-pinned protocol** — the runtime dependency is pinned to Agent SDK 0.3.241; upgrading pins a new SDK version and requires re-running the keyless real-product and loader-composition evidence.
 
 </details>
+
+**Runtime invariant:** No companion is published. Lifecycle pairing belongs to the shared subagent service and process-tree ownership belongs to the subprocess service.

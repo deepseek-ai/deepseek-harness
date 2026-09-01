@@ -23,9 +23,6 @@
     },
     {
       "path": "../../core/tools"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

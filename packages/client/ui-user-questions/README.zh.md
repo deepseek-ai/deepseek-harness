@@ -101,3 +101,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。tool 与 slot 注册都是由各自 registry 持有和观察的 effect；Host pending table 通过公开 wire protocol 测试。

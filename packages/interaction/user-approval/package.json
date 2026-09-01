@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-user-approval",
   "description": "User-approval seam (ctx.approval) for the DeepSeek Harness: one-shot permission decisions dispatched to composed answerers over the approval/request waterfall, fail-closed by default",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

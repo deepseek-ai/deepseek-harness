@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-web",
   "description": "Web boot kernel: static module table, Cordis loader, framework-free boot page, and UI-renderer handoff",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,10 +18,6 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
@@ -33,7 +29,6 @@
     "@deepseek-ai/dsh-client-ui-renderer": "workspace:^",
     "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
     "@deepseek-ai/cordis": "workspace:^",
@@ -46,7 +41,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/**/*.css",
     "lib/types/**/*.d.ts"
   ]

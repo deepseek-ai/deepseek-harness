@@ -306,7 +306,7 @@ export class TeamMailbox {
 
   /** Whether a target Session already contains the durable message identity. */
   private targetRecorded(session: Session, messageId: TeamMessageId): boolean {
-    const suffix = session.events.slice(session.header.seedLength ?? 0)
+    const suffix = session.snapshotEvents(session.header.seedLength ?? 0)
     return messageAccepted(suffix, message => message.source.kind === 'team-message'
       && message.source.messageId === messageId)
   }

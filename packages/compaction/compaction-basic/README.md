@@ -134,7 +134,7 @@ The transaction validates the surface span and the durable lock, appends `compac
 | [`src/summarizer.ts`](src/summarizer.ts) | Default `ctx.llm.stream()` summarization, checkpoint framing, safe-summary projection |
 | [`src/config.ts`](src/config.ts) | Load-time validation and routed-model policy resolution |
 | [`src/types.ts`](src/types.ts) | `BasicCompactionConfig` and resolved policy vocabulary |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the durable bracket is observable in the session log) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 </details>
 

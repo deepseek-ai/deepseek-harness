@@ -131,7 +131,7 @@ function markdownImageFixture(remoteUrl: string): string {
     // the stats line renders its LLM segment only while the step's measured
     // milliseconds exceed zero, so a fixture that leaves the times unset lets
     // the replay's own speed decide whether the golden matches.
-    ...session.events.map(event => JSON.stringify({
+    ...session.snapshotEvents().map(event => JSON.stringify({
       ...event,
       time: eventTimeOrigin + event.seq * 1_000,
     })),

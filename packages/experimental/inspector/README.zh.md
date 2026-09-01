@@ -152,3 +152,5 @@ CDP target 通过 `Runtime.evaluate` 提供 Host 和已连接 Client realm 中�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。wire 解析、generation、Worker 生命周期与 CDP session 会在所属操作中拒绝无效关系。

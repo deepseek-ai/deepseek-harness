@@ -85,3 +85,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。插件持有一个 slot 注册和按 Session 的 controller map，两者由同一 effect disposer 释放；生命周期测试已直接观察该关系。

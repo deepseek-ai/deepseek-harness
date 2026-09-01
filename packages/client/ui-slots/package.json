@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-slots",
   "description": "Slot registry pure core: SlotMap declaration merging, single register composition API, four-share props types, store-seat types, renderer install seam",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,23 +18,17 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "license": "MIT",
   "devDependencies": {
     "@deepseek-ai/dsh-client-store": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@types/react": "~18.3.1",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "peerDependencies": {

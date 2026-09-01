@@ -48,7 +48,7 @@ function entry(seq: number, type: string, data: unknown): SessionLiveEventEntry 
 function snapshot(entries: readonly SessionLiveEventEntry[], hasMore = false): ChatSnapshot {
   const assembler = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
   assembler.replaceWindow(entries, hasMore)
-  assembler.flush()
+  assembler.activateTarget('chat')
   const value = assembler.snapshot('chat') as ChatSnapshot | undefined
   if (value === undefined) throw new Error('chat view was not registered')
   return value

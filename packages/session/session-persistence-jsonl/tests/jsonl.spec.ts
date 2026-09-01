@@ -592,13 +592,13 @@ describe('JsonlSessionPersistence: durability and crash semantics', () => {
     const loaded = await ctx.sessionPersistence.load(child.id)
 
     // The constructor seed reaches disk verbatim, then the child's end-seed.
-    expect(loaded.events.slice(0, source.events.length)).toEqual(source.events)
-    expect(loaded.events.at(-1)).toMatchObject({ type: 'session/end-seed', seq: source.events.length })
+    expect(loaded.events.slice(0, source.snapshotEvents().length)).toEqual(source.snapshotEvents())
+    expect(loaded.events.at(-1)).toMatchObject({ type: 'session/end-seed', seq: source.snapshotEvents().length })
     expect(loaded.meta).toMatchObject({
       id: SessionId('persist-child'),
       cwd: '/workspace',
       parentSession: SessionId('persist-parent'),
-      seedLength: source.events.length,
+      seedLength: source.snapshotEvents().length,
     })
   })
 
@@ -1647,13 +1647,13 @@ describe('JsonlSessionPersistence: edge cases', () => {
   it('Session.append rejects a non-serializable event at the source (never enters the log)', () => {
     const session = ctx.sessions.create(SessionId('reject-bad'))
     // Serializability is enforced at the source: Session.append throws on a BigInt-bearing
-    // event before it enters session.events, so the durable log can never diverge from the live
+    // event before it enters session.snapshotEvents(), so the durable log can never diverge from the live
     // log. The error therefore surfaces synchronously at append, not later during backend flush.
     expect(() => {
       session.append('user/message', { content: [{ type: 'text', text: 'bad' }], source: { kind: 'user' }, bad: 1n } as never, { surfaceOp: 'append' })
     }).toThrow(/non-JSON-serializable/)
     // The bad event was rejected, so the log stayed empty.
-    expect(session.events.length).toBe(0)
+    expect(session.snapshotEvents().length).toBe(0)
   })
 
 })

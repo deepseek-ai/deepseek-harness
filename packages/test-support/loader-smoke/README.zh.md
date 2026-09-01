@@ -81,7 +81,7 @@ harness 建立在一个分离之上：冒烟测试在隔离世界中的子进程
 |---|---|
 | [`src/index.ts`](src/index.ts) | 模式解析器、`runLoaderSmoke` 子进程 harness、选项与结果类型 |
 | [`src/agent-turn.ts`](src/agent-turn.ts) | `runFixtureTurn` 直接 agent driver 与结果信封 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；消费它的测试套件会检验该 harness） |
+| — | 不发布运行时不变量伴生入口；消费它的测试套件会检验该 harness。 |
 | [`tests/fixtures/production-profile.ts`](tests/fixtures/production-profile.ts) | 仅限仓库内部、供集成 fixture 使用的交付 profile 组装 helper |
 
 </details>

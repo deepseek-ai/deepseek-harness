@@ -8,13 +8,14 @@ kind: "package-reference"
 
 ## 概述
 
-Conversation 组装的浏览器 Chat target。本包注册 Chat event definition 与 snapshot 构造、提供 `useChat`、渲染 transcript node 和详情，并拥有 Chat 专属 store、action、本地化与滚动位置恢复；历史图片 URL 通过 Conversation 持有的按会话缓存（`ctx.uiConversation.imageUrl`）解析。其中 Assistant 与 Turn Tail definition 会直接 fold packed Assistant 历史 run，不展开其成员。本地提交回显（`SessionSnapshot.pendingSubmissions`）保留提交开始时选定的区域：transcript 回显位于消息流末尾，steering 回显带 pending-steering 标记，queued 回显不进入 Chat。一旦 user/steering 节点或 queue occurrence 携带回显的 prompt `rpcId`，该回显即在同一渲染中隐藏，因此交接是原子的。
+Conversation 组装的浏览器 Chat target。本包注册 Chat event definition 与 snapshot 构造、提供 `useChat`、渲染 transcript node 和详情，并拥有 Chat 专属 store、action、本地化与滚动位置恢复；历史图片 URL 通过 Conversation 持有的按会话缓存（`ctx.uiConversation.imageUrl`）解析。其中 Assistant 与 Turn Tail definition 会直接 fold packed Assistant 历史 run，不展开其成员。steering 分类通过持久 splice state 只保留 next-step Inbox ID；next-turn splice 不创建 Chat Context。本地提交回显（`SessionSnapshot.pendingSubmissions`）保留提交开始时选定的区域：transcript 回显位于消息流末尾，steering 回显带 pending-steering 标记，queued 回显不进入 Chat。一旦 user/steering 节点或 queue occurrence 携带回显的 prompt `rpcId`，该回显即在同一渲染中隐藏，因此交接是原子的。
 
 ## 目录
 
 - [系统提示词行](#system-prompt-row)
 - [轮次 token 用量](#turn-token-usage)
 - [轮次过程折叠](#turn-process-folding)
+- [滚动归属](#scroll-ownership)
 - [模型体验](#model-experience)
 - [已知限制与暂缓事项](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
@@ -42,6 +43,13 @@ Chat 会为每个非空的初始或恢复请求、显式消息序列起点或真
 
 -----
 
+<a id="scroll-ownership"></a>
+## 滚动归属
+
+Chat 会在历史前插与 renderer 重新挂载时恢复语义锚点。读者跟随底部时，`ResizeObserver` 追随新的底部，并且无需读取行几何就选中最后一个已加载 Turn；读者离开底部后，高度变化会保持顶部位置，再由阅读线几何选择活跃 Turn（[已加载 Turn 导航](../../../.agents/notes/implemented/feature/2026-08-25-loaded-turn-chat-navigation.zh.md)）。
+
+-----
+
 <a id="model-experience"></a>
 ## 模型体验
 
@@ -55,7 +63,8 @@ Chat 会为每个非空的初始或恢复请求、显式消息序列起点或真
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **视图只反映已加载的 Session 窗口**——只有 Session Controller 加载前一页 event 后，更早的 transcript node 才会出现。轮次导航同样只表示已加载的 Turn；加载更早一页时，已有 Turn 刻度保持身份不变，完整的已加载集合在紧凑轨道中重新排布，不显示未加载历史占位。刻度默认相隔 10px，仅在已加载集合超过可用高度时压缩间距。
+- **transcript 只反映已加载的 Session 窗口**——只有 Session Controller 加载前一页 event 后，更早的 transcript node 才会出现。轮次导航比窗口更宽：轨道把已加载的 Turn 与宿主 `turnOutline` 投影合并，每个已开始的 Turn 都有固定间距刻度（相隔 10px；阶梯高于外框时在框内滚动并以渐变淡出标示可滚方向），激活未加载刻度会先把历史分页拉到该 Turn 的 `turn/start` seq 再落到它的行上。没有该投影时（未挂载 `dsh-session-turn-outline` 的装配），轨道回退到仅显示已加载 Turn。
+- **导航预览按卡片尺寸截断**——提示词一行（50 字符）、回复至多三行（120 字符），已加载与未加载 Turn 一致；未加载 Turn 的回复要等该轮落定后才随大纲到达，进行中的轮次在此之前只预览提示词（或仅轮次号）。
 
 
 <a id="dev-note"></a>
@@ -67,3 +76,5 @@ Chat 会为每个非空的初始或恢复请求、显式消息序列起点或真
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。Conversation 与 Slot 注册已经强制 Chat target 一致。

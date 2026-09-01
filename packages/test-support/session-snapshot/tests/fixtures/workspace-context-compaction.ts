@@ -19,7 +19,7 @@ export function apply(ctx: Context): void {
       || exec.arguments.file_path !== 'nested/task.txt') return downstream
     const agent = exec.agent
     const baseline = agent.session.surface.nodes
-      .map(seq => agent.session.events[seq])
+      .map(seq => agent.session.snapshotEvents()[seq])
       .find(event => event?.type === 'user/message'
         && event.data.source.kind === 'agent-instructions'
         && event.data.source.baseline === true)

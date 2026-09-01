@@ -82,7 +82,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('log-derived request cache hits (
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Thanks. Repeat that value one more time.' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
-    const usages = [...agent.session.events]
+    const usages = agent.session.snapshotEvents()
       .filter(e => e.type === 'assistant/message')
       .map(e => e.data.usage)
     expect(usages.length).toBeGreaterThanOrEqual(3) // 2 steps in turn 1 + ≥1 in turn 2

@@ -68,3 +68,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。settings 与 credential seam 负责存储和更新事件，本包只把它们的方法投影到 wire。

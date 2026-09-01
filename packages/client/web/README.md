@@ -121,3 +121,5 @@ These limits define what the boot kernel does not support. They are current pack
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The vite entry shell — boot glue and module-table seeding with no cordis events and no cross-plugin mutable state; the boot chain (loading page → settled → one-flip UI) is asserted by the web smoke e2e against the real carrier.

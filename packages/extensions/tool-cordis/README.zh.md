@@ -192,3 +192,5 @@ Dynamic Cordis plugins temporarily extend the current DSH process. A Plugin uses
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个模型侧 adapter 没有独立 lifecycle stream；执行关系由它调用的 capability seam 负责。

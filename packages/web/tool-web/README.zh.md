@@ -103,7 +103,7 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段、非�
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、启用状态、超时预算、工具注册 |
 | [`src/search.ts`](src/search.ts) | `web_search` 工具：参数校验、查询扇出、合并、格式化、呈现元数据 |
 | [`src/fetch.ts`](src/fetch.ts) | `web_fetch` 工具：HTML→markdown 转换、输出上限、格式化、呈现元数据 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；约定在工具处强制执行） |
+| — | 不发布运行时不变式伴生入口；约定在工具处强制执行。 |
 
 ### 搜索流程
 

@@ -121,7 +121,7 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/status.ts`](src/status.ts) | Status surface: the per-instance status cell and the per-scope lookup |
 | [`src/probe.ts`](src/probe.ts) | One-shot probe: connect, identify, list tools, close — nothing registers |
 | [`src/deadline.ts`](src/deadline.ts) | Shared settlement deadline behind the startup and probe budgets |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; generations are observable only through the tool registry) |
+| — | No runtime invariant companion is published; MCP generations contribute through the tool registry, but the bridge exposes no independent server-to-tool snapshot after an asynchronous resync. |
 
 ### Lifecycle and sync
 

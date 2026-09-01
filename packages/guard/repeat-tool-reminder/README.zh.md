@@ -95,7 +95,7 @@ guard 建立在四项承诺之上：
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、快速失败校验、链监听器 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式：链私有于一个 post-execute 监听器） |
+| — | 不发布运行时不变式伴生入口；链私有于一个 post-execute 监听器。 |
 
 </details>
 

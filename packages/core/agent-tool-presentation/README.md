@@ -68,7 +68,7 @@ The tool registry cannot move into a preset: its consumers are all host-plane �
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `mode` config, `apply` wiring `ctx.tools.presentAs` for the mounting scope |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; this package makes exactly one scoped call into `ctx.tools` and owns no event or snapshot of its own; the relation it establishes — which presentation one agent's assembly uses — is the tool registry's to hold, and `dsh-tools` observes it there. |
 
 ### Behavior notes
 

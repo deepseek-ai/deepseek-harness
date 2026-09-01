@@ -140,7 +140,7 @@ function registerReportConflict(child: Agent): () => void {
 
 /** Reports already visible or still pending in one Agent. */
 function reports(agent: Agent): { id: string; text: string; sender: string }[] {
-  const visible = agent.session.events.flatMap(event => event.type === 'user/message' ? [event.data] : [])
+  const visible = agent.session.snapshotEvents().flatMap(event => event.type === 'user/message' ? [event.data] : [])
   return [...visible, ...agent.inbox.nextStep].flatMap((message) => {
     if (message.source.kind !== 'subagent-report') return []
     return [{

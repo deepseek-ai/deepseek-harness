@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-headless",
   "description": "The dsh one-shot bundle: a direct core Agent/Session runner over dsh-base with no Host, HTTP, or browser layer",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -22,17 +22,12 @@
       "types": "./lib/types/startup.d.ts",
       "default": "./lib/startup.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/startup.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
@@ -56,7 +51,6 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-default-model": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^"
   },
@@ -65,7 +59,6 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-default-model": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^"
   }

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createConversationStore } from '../src/client/stores.ts'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { createConversationStore, readConversationViewPreference } from '../src/client/stores.ts'
 
 const KEY = 'dsh.conversation'
 
@@ -53,5 +54,15 @@ describe('createConversationStore', () => {
     const second = handle.create()
     first.actions.setDraft('only first')
     expect(second.store.getSnapshot().draft).toBe('')
+  })
+
+  it('reads only a usable persisted View preference', () => {
+    const sessionId = 'sess-1' as SessionId
+    const store = createConversationStore().create(sessionId)
+    store.actions.setView('trajectory')
+    expect(readConversationViewPreference(sessionId)).toBe('trajectory')
+
+    localStorage.setItem(`${KEY}.${sessionId}`, '{invalid')
+    expect(readConversationViewPreference(sessionId)).toBeNull()
   })
 })

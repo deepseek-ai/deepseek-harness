@@ -186,3 +186,5 @@ This Dev Note is working context for maintainers: open questions and undecided d
 - **Remote runtimes** — a remote runtime would need its own backend and workspace mapping.
 
 </details>
+
+**Runtime invariant:** No companion is published. Run lifecycle pairing is owned and checked by the subagent seam's invariant; this backend's own state lives in the child process beyond this context's event streams.

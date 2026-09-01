@@ -60,7 +60,7 @@ The package separates an abstract discovery service from a shared, browser-safe 
 | [`src/index.ts`](src/index.ts) | Abstract `FileReferenceService` and `FILE_REFERENCE_PROMPT` |
 | [`src/grammar.ts`](src/grammar.ts) | `activeAtToken` recognition and `formatFileMention` rendering |
 | [`src/types.ts`](src/types.ts) | `FileReferenceCandidate` path-only result type |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion for the discovery contract |
+| — | No runtime invariant companion is published; the interface retains no candidate or lifecycle state; concrete providers own their cache and invalidation relationships. |
 
 ### Main flow
 

@@ -516,7 +516,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
 
       const agent = scaffold.ctx.agents.get(SessionId(SEED_ID))
       if (agent === undefined) throw new Error('seeded session did not attach an agent')
-      const done = agent.session.events.filter(event => event.type === 'command/done').at(-1)
+      const done = agent.session.snapshotEvents().filter(event => event.type === 'command/done').at(-1)
       if (done?.type !== 'command/done') throw new Error('feedback command did not settle')
       const [sessionLine, userLine, extraLine] = done.data.text?.split('\n') ?? []
       expect(sessionLine).toBe(`Feedback recorded for session ${SEED_ID}`)

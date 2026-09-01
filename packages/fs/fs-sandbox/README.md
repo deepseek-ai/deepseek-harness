@@ -133,3 +133,5 @@ These limits define when the sandbox backend is a poor fit or needs special oper
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This stateless adapter delegates policy and filesystem relations to their owning seams.

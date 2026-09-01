@@ -96,7 +96,7 @@ profile 是同一套 dsh 安装提供不同应用界面的方式：`web`、`head
 |---|---|
 | [`src/index.ts`](src/index.ts) | 启动 helper：配置解析、环境加载、会明确报错的保护机制、激活审计、patch 解析、配置 dump、harness 源码段落 |
 | [`src/profile.ts`](src/profile.ts) | profile 发现、初始化、组合包解析、模块后备机制 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；边界与回放测试覆盖其协议映射） |
+| — | 不发布运行时不变式伴生入口；边界与回放测试覆盖其协议映射。 |
 
 </details>
 

@@ -24,7 +24,7 @@ A `git` or `node` spawn spike on the shared-volume runners no longer decides eit
 
 Both budgets widen what counts as an acceptable duration, so a real slowdown into tens of seconds now passes where the previous ceilings would have caught it. That detection is traded away deliberately: those ceilings were firing on host contention rather than on regressions.
 
-The hook change applies wherever `DSH_COVERAGE_TEST_TIMEOUT_MS` is set, which today is the Windows coverage lane alone. Lanes that leave it unset keep every Vitest default, including the 10 s hook budget.
+The hook change applies wherever `DSH_COVERAGE_TEST_TIMEOUT_MS` is set: the Windows coverage lane in [ci.yml](../../../../.github/workflows/ci.yml) and the `serial-windows` master standby in [ci-master.yml](../../../../.github/workflows/ci-master.yml) ([the serial-windows notices timeout note](../process/2026-08-31-serial-windows-notices-timeout-budget.md) records the second lane's adoption). Lanes that leave it unset keep every Vitest default, including the 10 s hook budget.
 
 ## Alternatives considered
 

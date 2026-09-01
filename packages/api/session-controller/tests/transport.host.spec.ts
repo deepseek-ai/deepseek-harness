@@ -34,6 +34,16 @@ function event(type: string, seq: number, data: unknown = {}): SessionEvent {
   } as SessionEvent
 }
 
+function eventSession(header: SessionHeader, events: readonly SessionEvent[]): Session {
+  return {
+    id: header.id,
+    header,
+    seq: events.length,
+    eventAt: (seq: number) => events[seq],
+    snapshotEvents: (fromSeq = 0, toSeqExclusive = events.length) => events.slice(fromSeq, toSeqExclusive),
+  } as unknown as Session
+}
+
 function cold(
   ctx: Context,
   header: SessionHeader,
@@ -164,12 +174,10 @@ describe('SessionHistoryController', () => {
       [Symbol.asyncIterator]()
     const opening = iterator.next()
 
-    ctx.emit('session/event', {
-      id: SessionId('unrelated'), events: [event('fixture/other', 0)],
-    } as unknown as Session, event('fixture/other', 0))
-    ctx.emit('session/event', {
-      id: sessionId, events: [event('fixture/start', 0)],
-    } as unknown as Session, event('fixture/start', 0))
+    const unrelated = event('fixture/other', 0)
+    const start = event('fixture/start', 0)
+    ctx.emit('session/event', eventSession({ ...header, id: SessionId('unrelated') }, [unrelated]), unrelated)
+    ctx.emit('session/event', eventSession(header, [start]), start)
     inspected.resolve({ meta: header, events: [event('fixture/start', 0)] })
     await expect(opening).resolves.toMatchObject({ done: false, value: { type: 'snapshot', cursor: 0 } })
 
@@ -195,7 +203,7 @@ describe('SessionHistoryController', () => {
     observed.resolve({
       source: 'live',
       header: attached.header,
-      events: attached.events,
+      events: attached.snapshotEvents(),
       cursor: attached.seq - 1,
       projections: { asOfSeq: attached.seq - 1, values: {} },
       retain: vi.fn(),
@@ -293,10 +301,7 @@ describe('SessionHistoryController', () => {
     await expect(followed.next()).resolves.toMatchObject({ done: false, value: { type: 'snapshot', cursor: 0 } })
     const skipped = event('fixture/skipped', 1)
     const gap = event('fixture/gap', 2)
-    live.ctx.emit('session/event', {
-      id: session.id,
-      events: [event('fixture/start', 0), skipped, gap],
-    } as unknown as Session, gap)
+    live.ctx.emit('session/event', eventSession(session.header, [event('fixture/start', 0), skipped, gap]), gap)
     await expect(followed.next()).rejects.toMatchObject({ code: 'gateway/internal' })
   })
 

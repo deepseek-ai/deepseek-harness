@@ -81,7 +81,7 @@ Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host �
 | [`src/service.ts`](src/service.ts) | `TypertRegistry` 服务、存储、校验、effect 接线 |
 | [`src/types.ts`](src/types.ts) | 贡献、记录与过滤器类型 |
 | [`src/client/index.ts`](src/client/index.ts) | 安装同一注册表的 Client face |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；schema 与 package-reflection record 在 register/dispose 内一起变更，没有独立 event 或第二数据源可供交叉核对；重复 identity 在所属操作处失败。 |
 
 </details>
 

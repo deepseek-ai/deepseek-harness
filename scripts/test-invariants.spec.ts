@@ -95,7 +95,7 @@ async function withDelayedFirstCompanion(
 }
 
 describe('global test invariant host', () => {
-  it('uses one exhaustive topology to reserve every package name with enabled checks', async () => {
+  it('uses one topology to reserve every companion owner with enabled checks', async () => {
     const ctx = new Context()
     await ctx.plugin(TestInvariantProbe)
 
@@ -117,9 +117,10 @@ describe('global test invariant host', () => {
     expect(unreserved).toEqual([])
   })
 
-  it('mounts the owning package companion while leaving non-package roots service-only', () => {
+  it('mounts an owning companion and leaves omitted or non-package roots service-only', () => {
     expect(testInvariantCompanionPaths('/repo/packages/core/tools/tests/tools.spec.ts'))
       .toEqual(['../packages/core/tools/src/invariant.ts'])
+    expect(testInvariantCompanionPaths('/repo/packages/util/brand/tests/brand.spec.ts')).toEqual([])
     expect(testInvariantCompanionPaths('/repo/apps/cli/tests/profiles/headless/example.spec.ts')).toEqual([])
     expect(testInvariantCompanionPaths('/repo/scripts/test-invariants.spec.ts'))
       .toEqual(Object.keys(testInvariantCompanions).sort())

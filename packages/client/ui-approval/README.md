@@ -43,3 +43,5 @@ None; approval request and response rendering does not alter a model request.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Registries own and observe the Remote listener and temporary Slot entry.

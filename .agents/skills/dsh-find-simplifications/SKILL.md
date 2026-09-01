@@ -30,6 +30,10 @@ A strong simplification removes, folds, or demotes something real and has clear 
 
 Thin candidates are not enough for an Agent Note: deleting one typo, running `knip` once, removing an intentionally documented backend/adapter, or flagging "this looks complex" without call-site proof.
 
+### Audit invariant companions
+
+Treat an invariant companion as useful only when it compares independently produced observations that can diverge. Remove empty installers and checks that merely inspect service presence, plugin metadata, fixed examples, or the result of calling the same mutation they claim to verify. For every omission, remove the export, build entry, invariant-only compiler reference or dependency, and companion-only test, then record the package-specific reason in both package READMEs. Keep a companion when it compares distinct event producers, durable history, or independently mutable data, even if the package also validates inputs synchronously.
+
 ## Survey Broadly
 
 Use parallel subagents when the user asks for breadth or many candidates. Give each agent a domain and require evidence, not guesses. Useful domains:

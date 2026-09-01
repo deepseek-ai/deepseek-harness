@@ -28,7 +28,7 @@ function validateDeliveryAccepted(session: Session, event: SessionEvent<'session
 
 /** Validate acceptance watermarks already present in one Session. */
 function validateSession(session: Session, fail: InvariantFailure): void {
-  for (const event of session.events) {
+  for (const event of session.snapshotEvents()) {
     if (event.type === 'session-log-deepseek/delivery-accepted') validateDeliveryAccepted(session, event, fail)
   }
 }

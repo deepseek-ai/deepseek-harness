@@ -64,17 +64,6 @@ export default defineConfig([{
   dts: false,
   clean: false,
 }, {
-  // The invariant companion ships as its own bundle, like every package,
-  // from the tsc-emitted artifact plane the root build also consumes.
-  entry: ['lib/types/invariant.js'],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'neutral',
-  target: 'es2024',
-  fixedExtension: false,
-  dts: false,
-  clean: false,
-}, {
   // The worker artifact: the host tree's Node-compatibility layer plus the
   // assembly, bundled whole — a worker served from a static URL can fetch no
   // sibling chunk.

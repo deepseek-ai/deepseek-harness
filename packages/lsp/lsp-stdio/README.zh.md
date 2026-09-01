@@ -106,7 +106,7 @@ kind: "package-reference"
 | [`src/protocol.ts`](src/protocol.ts) | 协议类型子集：能力、位置、悬停、文本文档同步 |
 | [`src/translate.ts`](src/translate.ts) | 能力检查、UTF-16 协商、`Location`／`LocationLink`／hover 规范化 |
 | [`src/abort.ts`](src/abort.ts) | 融合调用方与释放信号的取消辅助 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；进程池与队列是私有状态） |
+| — | 不发布运行时不变式伴生入口；进程池与队列是私有状态。 |
 
 ### 协议行为
 

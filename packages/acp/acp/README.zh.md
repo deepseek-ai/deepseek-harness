@@ -102,7 +102,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`AgentSideConnection` 接线、按会话记录、准入与结算、清理 |
 | [`src/content.ts`](src/content.ts) | 协议内容准入与投影：图片校验、路由重查、提示词重建、assistant 块转换 |
 | [`src/codec.ts`](src/codec.ts) | 轮次结束到 ACP `stopReason` 的纯映射 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；本传输不拥有持久包内事件流） |
+| — | 不发布运行时不变式伴生入口；本传输不拥有持久包内事件流。 |
 
 ### 准入与提示词结算
 

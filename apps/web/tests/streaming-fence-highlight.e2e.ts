@@ -24,28 +24,48 @@ const MODE = webSnapshotMode()
 const PROVIDER = 'streaming-fence-highlight-test'
 const MODEL = 'streaming-fence'
 const PROMPT = 'Stream one TypeScript fence for the highlighting snapshot.'
-const OPEN_REPLY = '```ts\nconst first: number = 1\nconst second = "two"\nlet tail'
+const FIRST_REPLY = '```ts\nconst first: number = 1\n'
+const OPEN_REPLY = `${FIRST_REPLY}const second = "two"\nlet tail`
 const REPLY = `${OPEN_REPLY}\n\`\`\``
 
-/** Deterministic model response held after the visible fence body arrives. */
+/** Deterministic model response held after each visible fence-growth frame. */
 class StreamingFenceAdapter extends LlmAdapter {
-  private resolvePaused!: () => void
-  private resolveContinuation!: () => void
-  private continued = false
-  readonly paused = new Promise<void>((resolve) => { this.resolvePaused = resolve })
-  private readonly continuation = new Promise<void>((resolve) => { this.resolveContinuation = resolve })
+  private resolveFirstPaused!: () => void
+  private resolveFirstContinuation!: () => void
+  private resolveSecondPaused!: () => void
+  private resolveSecondContinuation!: () => void
+  private firstContinued = false
+  private secondContinued = false
+  readonly firstPaused = new Promise<void>((resolve) => { this.resolveFirstPaused = resolve })
+  readonly secondPaused = new Promise<void>((resolve) => { this.resolveSecondPaused = resolve })
+  private readonly firstContinuation = new Promise<void>((resolve) => { this.resolveFirstContinuation = resolve })
+  private readonly secondContinuation = new Promise<void>((resolve) => { this.resolveSecondContinuation = resolve })
+
+  grow(): void {
+    if (this.firstContinued) return
+    this.firstContinued = true
+    this.resolveFirstContinuation()
+  }
+
+  finish(): void {
+    if (this.secondContinued) return
+    this.secondContinued = true
+    this.resolveSecondContinuation()
+  }
 
   continue(): void {
-    if (this.continued) return
-    this.continued = true
-    this.resolveContinuation()
+    this.grow()
+    this.finish()
   }
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     yield { type: 'block-start', index: 0, blockType: 'text' }
-    yield { type: 'text-delta', index: 0, text: OPEN_REPLY }
-    this.resolvePaused()
-    await this.continuation
+    yield { type: 'text-delta', index: 0, text: FIRST_REPLY }
+    this.resolveFirstPaused()
+    await this.firstContinuation
+    yield { type: 'text-delta', index: 0, text: OPEN_REPLY.slice(FIRST_REPLY.length) }
+    this.resolveSecondPaused()
+    await this.secondContinuation
     if (options.signal?.aborted === true) throw options.signal.reason
     yield { type: 'text-delta', index: 0, text: '\n```' }
     yield { type: 'block-end', index: 0, block: { type: 'text', text: REPLY } }
@@ -115,12 +135,26 @@ describe.skipIf(MODE === 'record')('web e2e: streaming code-fence highlighting',
     const settled = scaffold.whenTurnSettled(30_000)
     await writeComposerDraft(page, input, PROMPT)
     await input.press('Enter')
-    await adapter.paused
+    await adapter.firstPaused
 
     const streaming = page.locator('[data-streaming="true"]')
     await streaming.waitFor({ timeout: 10_000 })
     const block = streaming.locator('.md-code-block').filter({ hasText: 'const first' })
     await block.locator('pre.shiki span[style]').first().waitFor({ timeout: 10_000 })
+    await block.evaluate((element) => {
+      element.setAttribute('data-stream-block-retained', 'true')
+      element.querySelector('pre.shiki')?.setAttribute('data-stream-pre-retained', 'true')
+      element.querySelector('pre.shiki .line')?.setAttribute('data-stream-line-retained', 'true')
+    })
+
+    adapter.grow()
+    await adapter.secondPaused
+    await expect.poll(() => block.locator('pre.shiki .line').count()).toBe(3)
+    expect(await block.evaluate(element => ({
+      block: element.getAttribute('data-stream-block-retained'),
+      pre: element.querySelector('pre.shiki')?.getAttribute('data-stream-pre-retained'),
+      line: element.querySelector('pre.shiki .line')?.getAttribute('data-stream-line-retained'),
+    }))).toEqual({ block: 'true', pre: 'true', line: 'true' })
     const midTree = await fenceTree(block)
     expect(midTree.language).toBe('ts')
     expect(midTree.lines).toHaveLength(3)
@@ -133,12 +167,17 @@ describe.skipIf(MODE === 'record')('web e2e: streaming code-fence highlighting',
       MODE,
     )
 
-    adapter.continue()
+    adapter.finish()
     await settled
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), { timeout: 10_000 }).toBe(0)
     const settledBlock = page.locator('.md-code-block').filter({ hasText: 'const first' })
     await settledBlock.locator('pre.shiki').waitFor({ timeout: 10_000 })
     expect(await fenceTree(settledBlock)).toEqual(midTree)
+    expect(await settledBlock.evaluate(element => ({
+      block: element.getAttribute('data-stream-block-retained'),
+      pre: element.querySelector('pre.shiki')?.getAttribute('data-stream-pre-retained'),
+      line: element.querySelector('pre.shiki .line')?.getAttribute('data-stream-line-retained'),
+    }))).toEqual({ block: 'true', pre: 'true', line: 'true' })
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, ['mid-stream.expected.md'])

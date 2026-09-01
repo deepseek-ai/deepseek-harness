@@ -46,9 +46,6 @@
     },
     {
       "path": "../../typert/protocol"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

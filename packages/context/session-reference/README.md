@@ -73,7 +73,7 @@ Preparation reads each referenced session's current surface exactly once, when t
 | [`src/projection.ts`](src/projection.ts) | Current-surface projection and byte-budget retention |
 | [`src/serialization.ts`](src/serialization.ts) | Tag-safe JSON escaping for snapshot payloads |
 | [`src/types.ts`](src/types.ts) | `SessionReferenceInput`/`Candidate` and source types |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion for the reference contract |
+| — | No runtime invariant companion is published; preparation returns immutable per-call snapshots validated while they are built, and the agent/session layers own durable context admission, freezing, and replay. |
 
 ### Main flow
 

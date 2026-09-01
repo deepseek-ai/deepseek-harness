@@ -150,7 +150,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-client-web': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The CPython side ships as source .py files, published as-is rather than built.
-  '@deepseek-ai/dsh-code-runtime-python': ['py/**/*.py'],
+  '@deepseek-ai/dsh-experimental-code-runtime-python': ['py/**/*.py'],
   // The shipped preset compositions travel inside the roster package.
   '@deepseek-ai/dsh-agent-presets': ['presets'],
   // The Web Host mounts the default-off settings owner independently of each
@@ -181,9 +181,9 @@ export function expectedDshPackageFiles(manifest: PackageManifest): readonly str
   ]
   return [
     'lib/index.js',
-    // Every package publishes its invariant ownership companion as a separate
-    // bundle; the package-invariant gate validates the companion itself.
-    'lib/invariant.js',
+    // Packages with an invariant export publish its runtime as a separate
+    // bundle; the package-invariant gate validates the source/export pairing.
+    ...manifest.exports?.['./invariant'] ? ['lib/invariant.js'] : [],
     ...manifest.bin ? ['lib/bin.js'] : [],
     // Worker-thread packages ship a CJS worker entry; the browser worker
     // bundle is an ES module a page loads with `new Worker(type: 'module')`.

@@ -94,3 +94,5 @@ Client export 挂载来自 [`@deepseek-ai/dsh-experimental-agent-team/remote`](.
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。RPC 是权威来源，本包只持有一个可释放的 slot 注册。

@@ -16,9 +16,6 @@
     },
     {
       "path": "../../../vendor/loader"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

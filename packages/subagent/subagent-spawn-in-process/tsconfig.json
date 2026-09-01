@@ -22,9 +22,6 @@
     },
     {
       "path": "../subagent-in-process-driver"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

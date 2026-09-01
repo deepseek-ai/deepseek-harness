@@ -43,9 +43,6 @@
     },
     {
       "path": "../../client/ui-tool"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

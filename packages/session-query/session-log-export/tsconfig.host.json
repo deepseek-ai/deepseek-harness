@@ -7,8 +7,7 @@
   },
   "files": [
     "src/archive.ts",
-    "src/index.ts",
-    "src/invariant.ts"
+    "src/index.ts"
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
@@ -17,7 +16,6 @@
     { "path": "../../util/brand" },
     { "path": "../../core/session" },
     { "path": "../../interaction/commands" },
-    { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../session/session-persistence" },
     { "path": "../session-query" }
   ]

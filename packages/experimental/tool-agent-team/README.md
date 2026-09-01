@@ -92,7 +92,7 @@ The [Agent Teams Agent Note](../../../.agents/notes/implemented/feature/2026-08-
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: config, the fixed policy text, and the ten scoped tool registrations |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; delegation is observable only through `ctx.agentTeams`) |
+| — | No runtime invariant companion is published; the Team service owns durable and authorization relations. |
 
 ### Policy and tools
 

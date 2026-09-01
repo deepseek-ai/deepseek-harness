@@ -148,3 +148,5 @@ const price = ctx.tokenMeter.estimateMessage(message)
 - 按提供方的精确分词器尚未决定；保持单一确定性启发式规则，正是让每个消费方的测量一致且回放稳定的原因。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。token estimate 是按调用输出，私有 Session cache 在事件变更处失效；其 projection 与计价均来自同一 schema 和 heuristic，没有可独立交叉核对的运行时关系。

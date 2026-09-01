@@ -205,8 +205,8 @@ function sandboxAgent(
   ctx?: Context,
   onAppend?: (type: string) => void,
 ): Agent {
-  const events: Array<{ type: string; data?: Record<string, unknown> }> = [{ type: 'turn/start', data: { turn: 1 } }]
-  if (mode !== undefined) events.push({ type: 'sandbox/mode', data: { mode } })
+  const events: Array<{ type: string; data?: Record<string, unknown>; seq: number }> = [{ type: 'turn/start', seq: 0, data: { turn: 1 } }]
+  if (mode !== undefined) events.push({ type: 'sandbox/mode', seq: events.length, data: { mode } })
   const id = SessionId('sandbox-session')
   return {
     id,
@@ -214,9 +214,11 @@ function sandboxAgent(
     session: {
       id,
       header: { version: 0, id, createdAt: 0 },
-      events,
+      get seq() { return events.length },
+      eventAt: (seq: number) => events[seq],
+      snapshotEvents: () => events,
       append: (type: string, data: Record<string, unknown>) => {
-        const event = { type, data }
+        const event = { type, data, seq: events.length }
         events.push(event)
         onAppend?.(type)
         return event
@@ -625,9 +627,10 @@ describe('sandbox escalation through the generic task producer', () => {
     expect(prompted).not.toHaveBeenCalled()
 
     const malformed = sandboxAgent()
-    ;(malformed.session.events as unknown as Array<{ type: string; data: { mode: string } }>).push({
+    ;(malformed.session.snapshotEvents() as unknown as Array<{ type: string; data: { mode: string }; seq: number }>).push({
       type: 'sandbox/mode',
       data: { mode: 'unknown-mode' },
+      seq: malformed.session.seq,
     })
     expect(text(await call(ctx, 'bash', escalate, malformed))).toContain('not strictly wider')
   })

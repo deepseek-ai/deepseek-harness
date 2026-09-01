@@ -97,7 +97,7 @@ kind: "package-library"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `CmdlineArgs`/`AppExit` 类型、`provideCmdline`、`parseCmdline`、commander 退出／输出路由 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；Loader 结算会报告缺失的服务） |
+| — | 不发布运行时不变式伴生入口；Loader 结算会报告缺失的服务。 |
 
 </details>
 

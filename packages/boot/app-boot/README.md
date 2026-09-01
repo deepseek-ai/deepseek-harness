@@ -96,7 +96,7 @@ The exports each own one stage of the boot: config resolution and snapshot repla
 |---|---|
 | [`src/index.ts`](src/index.ts) | Boot helpers: config resolution, environment loading, fail-loud guard, activation audit, patch parsing, config dump, harness-source section |
 | [`src/profile.ts`](src/profile.ts) | Profile discovery, initialization, bundle resolution, module fallback |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; boundary and replay tests cover the protocol mapping) |
+| — | No runtime invariant companion is published; this presentation adapter owns no durable package-local event stream; boundary and replay tests cover its protocol mapping. |
 
 </details>
 

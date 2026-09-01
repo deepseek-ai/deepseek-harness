@@ -18,6 +18,8 @@ Client Runtime provides a target-neutral Conversation Node assembly engine. Busi
 
 This Note retains the derivation, business-by-business validation, responsibilities, algorithms, and trade-offs that remain relevant after implementation.
 
+Chat registers an Inbox Definition only for `next-step`, because message classification is its sole consumer; `next-turn` splices remain durable Session inputs but create no Chat Context. Chat and Trajectory each keep target-owned next-step state. Every insertion stores only message IDs in an immutable splice node. A successful claim materializes the pending chain once, replaces the previous claimed set with that batch, and lets later Contexts share the set until another claim. The AgentLoop appends every message admitted from that claim before it can claim another batch; a rejected claim appends no `user/message`, so later classification needs only the current batch. Historical Contexts therefore retain linear ID state instead of cumulative array and Set snapshots.
+
 ### Responsibility layers
 
 | Layer | Durable responsibility | Explicitly does not own |
@@ -257,8 +259,7 @@ Page size, record packing, the number of history loads, and RAF coalescing affec
 
 | Business / `kind` | Stable ID | Start Match | Update Matches | State and cross-Context reads |
 |---|---|---|---|---|
-| Next-turn Inbox / `inbox-next-turn` | Splice Event seq | Each `agent/inbox/spliced` targeting next-turn | None | Apply the current splice to the pending/claimed instantaneous state from `reader.previous(ownKind)` |
-| Next-step Inbox / `inbox-next-step` | Splice Event seq | Each `agent/inbox/spliced` targeting next-step | None | Build the same per-instruction instantaneous state; Message reads its claimed set |
+| Next-step Inbox / `inbox-next-step` | Splice Event seq | Each `agent/inbox/spliced` targeting next-step | None | Append message IDs to persistent splice state; materialize once per claim and expose the shared current claimed batch to Message |
 | Message / `input-message` | Message ID | Append-surface `user/message` | None | Use source for a context message, or read the nearest next-step Inbox to distinguish user from steering |
 | Request Prompt / `request-prompt` | Header Event seq | Each `request/header` | None | Read the preceding Request Prompt through Reader, retain the full prompt state, and classify system/tool changes |
 | Assistant / `assistant-step` | `turn:step` | `step/start` | Scalar or packed `assistant/chunk`, final `assistant/message`, and same-step Retry | Aggregate blocks, usage, first-token time, final evidence, and retry-hidden state, then publish same-key Step data |
@@ -275,7 +276,7 @@ Page size, record packing, the number of history loads, and RAF coalescing affec
 
 | Business | `publication()` | Chat output | History and runtime behavior |
 |---|---|---|---|
-| Inbox | `none` | No Node | Recompute instantaneous states along the Reader chain when prepend supplies earlier splices |
+| Inbox | `none` | No Node | Recompute next-step ID state along the Reader chain when prepend supplies earlier splices; next-turn creates no Chat Context |
 | Message | Immediate by default | `user`, `steering`, or `context` | Window-gap repair can reclassify the same message key |
 | Request Prompt | Immediate by default | One `system-prompt` for every header carrying a non-empty system field | A step's first header anchors before its request messages; a later same-step series anchors after its surface rewrite; prepend of the preceding header can correct a partial-window anchor |
 | Assistant | RAF for scalar chunks and packed runs, immediate for final, none for pure usage/finish | Same-key `assistant-step` with running/settled/interrupted status | Scalar and packed reducers are equivalent; Matches support fallback without `step/start`; Location close produces interruption presentation |
@@ -288,7 +289,7 @@ Page size, record packing, the number of history loads, and RAF coalescing affec
 | Deliverables | Immediate by default | No Node | Tool settlement incrementally updates Turn data; the Turn Tail extension slot reads produced files |
 | Fallback | Immediate by default | `unknown` JSON row | Covers only append-surface Events; an ordinary business that claimed but has not rendered an Event does not duplicate it |
 
-Inbox demonstrates that every Event can be a start-only instantaneous-state Context; not every business requires a start/update pair. Reader links each state to the prior same-kind Context instead of inventing a lifecycle ID for the entire Inbox.
+Inbox demonstrates that every Event can be a start-only instantaneous-state Context; not every business requires a start/update pair. Reader links each next-step state to the prior same-kind Context instead of inventing a lifecycle ID for the entire Inbox. The state itself shares immutable pending splice nodes and one current claimed-batch Set, while unconsumed next-turn input remains outside Conversation because no Chat or Trajectory classification reads it.
 
 Request Prompt demonstrates shared pure interpretation without shared target State: Chat and Trajectory call `inspectRequestPrompt()` from their own Definitions. The function canonicalizes the full header and classifies model-visible system/tool differences; each target then chooses its own output. Chat materializes every header carrying a non-empty system field, including `series` snapshots that repeat an unchanged header for an explicitly declared series or a post-replacement request, while Trajectory retains the complete request fact and its change classification. Ordinary append-only later Turns do not write another unchanged header. The first header in a Step follows the provider envelope rather than the header Event position: step one uses the owning Turn start and later steps use their Step start, placing the system field before the request's user-role messages; a later header in the same Step stays at its own Event after the surface rewrite that began the new series. When the preceding header is outside a partial window, a non-`initial` header stays at its own Event until prepend supplies that predecessor. Every header is a full snapshot, so a first loaded `resume`, `change`, or `series` header can render its system field without fabricating a comparison to unloaded history.
 
@@ -306,9 +307,13 @@ Unknown fallback demonstrates Registry ownership: it handles only append-surface
 
 ## View Builder and React identity
 
-[`ConversationViewRegistry`](../../../../packages/client/ui-conversation/src/client/conversation/view-registry.ts) creates an independent per-Session builder for each target. The Registry stores factories and shares no Session's ordering or caches.
+[`ConversationViewRegistry`](../../../../packages/client/ui-conversation/src/client/conversation/view-registry.ts) stores an independent builder factory for each target and shares no Session's ordering or caches.
 
-The Assembler calls `replace({ nodes, timeline })` on low-frequency complete replacements and `apply({ upserts, timeline })` for ordinary prepend/append flushes. Builders receive only final target Nodes already constructed by Definitions.
+A shell selection or a target source's first subscriber adds that target to the Session's monotonic active-target set. The Assembler indexes each Context under its sole target but creates no builder, Node, or snapshot for an inactive target. First activation flushes pending target-neutral work, creates the builder, and calls `replace({ nodes, timeline })` once from that target's current Contexts.
+
+The shell synchronously resolves the persisted selection when a Session binding becomes available, when a cached binding becomes current, or when the View roster changes, then explicitly activates that registered View or the Chat fallback. Tab and focus actions activate their resolved target before updating selection state. A blank Session does not render the View slot, and `ConversationSnapshot.activeTargets` derives only from materialized active snapshots without querying inactive target Contexts for activity.
+
+Ordinary prepend and append flushes call `apply({ upserts, timeline })` only for active targets. Complete window replacement and Registry rebuild call `replace()` only for active targets. Unsubscription does not remove a target, so returning to an opened View does not rebuild it.
 
 [`ChatSnapshotBuilder`](../../../../packages/client/ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts) maintains `order`, a keyed `nodes` store, the turn/step `locations` index, `timeline`, and the `legacy` slice used by StatsLine and mirrored into top-level public compatibility fields.
 
@@ -345,15 +350,15 @@ SessionEventLike window
        -> Context matches + State + Location
        -> Definition.buildLocationData(step -> turn)
             -> StepLocation.data / TurnLocation.data
-       -> Definition.buildViewNode() for its declared target
-  -> target View Builder
+       -> Definition.buildViewNode() for each active target
+  -> active target View Builder
        -> chat: ChatSnapshotBuilder -> ChatView -> keyed ChatNodeSeat
        -> trajectory: TrajectorySnapshotBuilder -> stages/layout/table
 ```
 
 ## Verification
 
-Runtime tests pin Definition lifecycle registration, exact-ID append, update-before-start collection followed by forward replay after start, prepend identity, Reader window-gap repair, transitive dependencies, Location closure, Step→Turn data phase order, Location data replacement, publication cadence, illegal withdrawal, and per-target Builders.
+Runtime tests pin Definition lifecycle registration, exact-ID append, update-before-start collection followed by forward replay after start, prepend identity, Reader window-gap repair, transitive dependencies, Location closure, Step→Turn data phase order, Location data replacement, publication cadence, illegal withdrawal, first-subscription activation, monotonic active targets, and per-target Builders.
 
 Conversation tests cover every built-in Chat Definition, Assistant Step data, Turn Tail and Deliverables Turn data, Chat ordering and structural sharing, selector isolation, Assistant and Tool running-to-settled identity, nested Code Dispatch, steering, Compaction, Retry, interruption, load-older anchoring, and slot dispatch. Trajectory tests cover its independently registered Message, Assistant, Tool, Compaction, Request-header, and boundary Definitions together with the preserved stage-oriented view model.
 
@@ -389,6 +394,8 @@ History-path tests cover complete replace, non-overlapping prepend, complete-ran
 
 **Reuse one Event Definition across Chat and Trajectory by branching in `buildViewNode(target)`.** Rejected: the views require different business State and intermediate records, so a shared Definition would make each package carry the other's conditions and payloads. Separate target-owned Definitions keep those choices local while sharing the Assembler's ingestion and lifecycle contracts.
 
+**Deactivate a target when its last subscriber leaves.** Rejected: returning to the View would repeatedly rebuild its complete snapshot. Subscription establishes first use; the target then stays incremental for the remaining Session lifetime.
+
 **Add a generic layout model above final business Nodes.** Rejected: activity, tail candidacy, and layout enums would centralize current Chat business semantics in the engine again. Final Nodes carry renderer-required data directly and share only identity, ordering, and Location facts.
 
 **Register the Turn-data Hook only on the Assistant renderer.** Rejected: current-Node Location access is a common capability of the `conversation.chat.node` slot, not one business renderer. The parent Chat entry registers common inject once, and every keyed renderer shares the same strongly typed contract.
@@ -407,7 +414,11 @@ Append does not scan historical Contexts; prepend replays only Contexts whose Ma
 
 Separating State updates from publication cadence folds every live Assistant delta and each historical packed run while materializing at most once per animation frame. Step or Turn close and final Events can immediately publish the latest State.
 
+An inactive target retains Definition State and a target Context index but no builder, materialized Nodes, or snapshot. The mounted built-in or third-party View activates its own target through normal subscription; previously opened targets continue receiving incremental updates.
+
 Steps and Turns are stable homes for cross-business aggregates. Turn Tail and Deliverables derive their values without renderer scans of global Nodes; slot-level `useTurnData()` narrows common reads to the current Node's Turn and uses selector equality to isolate unrelated updates.
+
+Inbox Context retention grows with splice count and claimed message count rather than their cumulative prefixes. This removes duplicate state growth but does not deduplicate message content in durable Session events or bound the loaded event window.
 
 The cost is new Runtime contracts for Registry, Assembler, Location data, dependency replay, and per-target Builders, plus parent-owned common inject and per-occurrence `hookContext` in UI Slots. Definitions that consume Assistant deltas also maintain equivalent scalar and packed update branches. Definition authors must understand stable IDs, unique scalar starts, forward replay, Step→Turn publication order, read-only Reader access, and the prohibition on Node withdrawal.
 

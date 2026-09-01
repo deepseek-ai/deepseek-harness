@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-directory-picker-auto",
   "description": "Adaptive chooser of the directory-picker seam: resolves the host situation at boot and mounts the native or browse backend for the DeepSeek Harness web GUI host",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,16 +18,11 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -38,8 +33,7 @@
     "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^"
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -50,7 +44,6 @@
     "@deepseek-ai/dsh-host-directory-picker": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^"
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   }
 }

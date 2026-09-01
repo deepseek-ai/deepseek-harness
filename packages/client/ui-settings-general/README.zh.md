@@ -109,3 +109,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。settings seam 校验并发布持久 onboarding section，slot core 会拒绝冲突；本地 document action 由 store 与组件测试覆盖。

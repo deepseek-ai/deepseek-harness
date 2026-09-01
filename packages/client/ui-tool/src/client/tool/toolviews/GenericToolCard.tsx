@@ -51,7 +51,7 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
       // Single-file tools never expose an args body — the path link is the only
       // args interaction. A card is not an args body: a read/write/edit row is
       // single-file AND carries a card, so the card expands under the path link.
-      body={singleFile ? null : model.body}
+      bodyRaw={singleFile ? null : model.bodyRaw}
       output={model.output}
       errorSummary={model.errorSummary}
       terminal={terminal}

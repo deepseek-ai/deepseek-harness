@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-pwsh-sandbox",
   "description": "Sandbox-consuming implementation of the DeepSeek Harness PowerShell executor seam (confines every command via ctx.sandbox, reports denial/enforcement result facts)",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,22 +18,16 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-shell": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-pwsh-local": "workspace:^",
     "@deepseek-ai/dsh-sandbox": "workspace:^",
     "@deepseek-ai/dsh-sandbox-policy": "workspace:^",
@@ -41,7 +35,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-shell": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-pwsh-local": "workspace:^",
     "@deepseek-ai/dsh-sandbox": "workspace:^",
     "@deepseek-ai/dsh-sandbox-local": "workspace:^",

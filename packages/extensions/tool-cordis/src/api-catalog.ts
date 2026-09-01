@@ -598,7 +598,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'abstract readonly language: string',
-        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tools` presents; only `\'typescript\'` has a published backend.',
+        description: 'The source language run expects `program` to be written in, as a lowercase identifier. Informational, not gating — a consumer that generates language-specific presentation (typed SDK stubs, usage instructions) switches on it and fails loud on a language it cannot present. Well-known values: `\'typescript\'` and `\'python\'`, those `dsh-tools` presents; the TypeScript backend is released, the Python backend is experimental and private (not published).',
         parameters: [],
       },
       {
@@ -1367,7 +1367,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the live Agent or the stable Session-domain failure.',
       },
       {
-        signature: 'inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<{ meta: SessionHeader; events: SessionEvent[] }>',
+        signature: 'inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<{ meta: SessionHeader; events: readonly SessionEvent[] }>',
         description: 'Inspect one attached or persisted Session without activating its Agent.',
         parameters: [{ name: 'sessionId', description: 'durable Session identity.' }, { name: 'signal', description: 'optional caller cancellation for persistence reads.' }],
         returns: 'the current attached state or persisted header and event prefix.',
@@ -1600,7 +1600,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
   {
     key: 'sessionProjections',
     summary: '`ctx.sessionProjections`: the projection unit table and its drive.',
-    description: '`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit\'s `apply` (eager drive), and a changed state reference in a client-visible unit notifies the change feed with the schema-validated view. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Registration is an effect (disposer rides the calling fiber): an unloaded domain plugin\'s key disappears from snapshots and clients read it as capability absence. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject([\'sessionProjections\'], ...)`. Registrants sharing a key share one unit and are counted: the same tool package mounted in N agent presets registers N times, and the key survives until the last one unloads.',
+    description: '`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit\'s `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Registration is an effect (disposer rides the calling fiber): an unloaded domain plugin\'s key disappears from snapshots and clients read it as capability absence. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject([\'sessionProjections\'], ...)`. Registrants sharing a key share one unit and are counted: the same tool package mounted in N agent presets registers N times, and the key survives until the last one unloads.',
     methods: [
       {
         signature: 'register< K extends keyof SessionProjectionMap, S extends SessionProjectionStateMap[K], >( definition: Omit<ProjectionDefinition<K, S>, \'wire\'> & { wire: NonNullable<ProjectionDefinition<K, S>[\'wire\']> }, ): () => void',
@@ -1617,7 +1617,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'onChanged(listener: ProjectionChangeListener): () => void',
         description: 'Subscribe to the change feed. The registration is an effect on the calling context\'s fiber.',
-        parameters: [{ name: 'listener', description: 'called once per client-visible unit whose state reference changed, per committed event.' }],
+        parameters: [{ name: 'listener', description: 'called once per client-visible unit whose raw view changed by `Object.is`, per committed event.' }],
         returns: 'the exact disposer that unsubscribes.',
       },
       {
@@ -4871,7 +4871,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'Session',
-    declaration: 'export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    get id(): SessionId;\n    readonly firstLiveSeq: number;\n    static create(id: SessionId, seed?: readonly SessionEvent[], header?: SessionHeader): Session;\n    static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader): Session;\n    get events(): readonly SessionEvent[];\n    get seq(): number;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [\n        opts: SurfaceIntent\n    ] : [\n    ]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}',
+    declaration: 'export class Session {\n    get surface(): SessionSurface;\n    readonly header: SessionHeader;\n    get id(): SessionId;\n    readonly firstLiveSeq: number;\n    static create(id: SessionId, seed?: readonly SessionEvent[], header?: SessionHeader): Session;\n    static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader): Session;\n    eventAt(seq: number): SessionEvent | undefined;\n    snapshotEvents(fromSeq: number = 0, toSeqExclusive: number = this.log.length): readonly SessionEvent[];\n    get seq(): number;\n    append<T extends SessionEventType>(type: T, data: SessionEventMap[T], ...opts: T extends SurfaceEventType ? [\n        opts: SurfaceIntent\n    ] : [\n    ]): SessionEvent<T>;\n    requestHeader(): EpochHeader | undefined;\n    requestContext(): RequestContext | undefined;\n    deriveMessages(): Message[];\n    deriveEventMessage(event: SessionEvent): Message | null;\n}',
   },
   {
     name: 'SessionAddress',

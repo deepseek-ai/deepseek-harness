@@ -1,12 +1,10 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as applyLocale, inject as localeInject } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as applyNode } from '../src/index.ts'
-import * as ScheduleInvariant from '../src/invariant.ts'
 import { en, NS, zh } from '../src/client/locales.ts'
 
 const Empty = () => null
@@ -80,22 +78,8 @@ describe('ui-schedule browser half', () => {
   })
 })
 
-describe('ui-schedule node and invariant halves', () => {
+describe('ui-schedule node half', () => {
   it('keeps the node half inert', () => {
     expect(applyNode).not.toThrow()
-  })
-
-  it('reserves package ownership under its invariant companion name', async () => {
-    const ctx = new Context()
-    await ctx.plugin(InvariantRegistry, { enabled: true })
-    const fiber = ctx.plugin(ScheduleInvariant)
-    await fiber.await()
-    expect(ScheduleInvariant.name).toBe('client-ui-schedule-invariant')
-    expect(ScheduleInvariant.inject).toEqual(['invariants'])
-    expect(() => {
-      Reflect.apply(ctx.emit.bind(ctx), undefined, ['unrelated/event'])
-    }).not.toThrow()
-    await fiber.dispose()
-    await ctx.fiber.dispose()
   })
 })

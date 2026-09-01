@@ -126,7 +126,7 @@ describe('generateSessionTitleWithLlm', () => {
     const providerRequest = request(ctx)
     let requestWasLoggedAtDispatch = false
     const adapter = new RecordingAdapter(SCRIPT, () => {
-      requestWasLoggedAtDispatch = providerRequest.session.events
+      requestWasLoggedAtDispatch = providerRequest.session.snapshotEvents()
         .some(event => event.type === 'session/title-llm-request')
     })
     ctx.llm.registerAdapter(['current-route'], adapter)
@@ -162,7 +162,7 @@ describe('generateSessionTitleWithLlm', () => {
     const prompt = options.messages[0]?.content[0]
     expect(prompt?.type === 'text' && prompt.text).toContain('first prompt')
     expect(prompt?.type === 'text' && prompt.text).toContain('第二个问题')
-    expect(providerRequest.session.events.findLast(event => event.type === 'session/title-llm-request')?.data)
+    expect(providerRequest.session.snapshotEvents().findLast(event => event.type === 'session/title-llm-request')?.data)
       .toEqual({
         titleProvider: TITLE_PROVIDER,
         messageSeqs: providerRequest.messages.map(message => message.seq),
@@ -193,7 +193,7 @@ describe('generateSessionTitleWithLlm', () => {
     await expect(generateSessionTitleWithLlm(ctx, config, oversized, [selected], TITLE_PROVIDER))
       .rejects.toThrow(/input.*bytes.*maxInputBytes/i)
     expect(adapter.requests).toEqual([])
-    expect(oversized.session.events.some(event => event.type === 'session/title-llm-request')).toBe(false)
+    expect(oversized.session.snapshotEvents().some(event => event.type === 'session/title-llm-request')).toBe(false)
 
     const withinLimit = resolveSessionTitleLlmConfig({ ...config, maxInputBytes: 1_000 })
     const within = request(ctx)
@@ -261,7 +261,7 @@ describe('generateSessionTitleWithLlm', () => {
       providerRequest.messages,
       TITLE_PROVIDER,
     )).rejects.toMatchObject({ message, code })
-    expect(providerRequest.session.events.some(event => event.type === 'session/title-llm-request')).toBe(true)
+    expect(providerRequest.session.snapshotEvents().some(event => event.type === 'session/title-llm-request')).toBe(true)
   })
 
   it.each([

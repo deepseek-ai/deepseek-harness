@@ -33,8 +33,8 @@ export class RuntimeContextProjection {
    */
   constructor(ctx: Context, session: Session) {
     const surface = new Set(session.surface.nodes)
-    for (let index = session.events.length - 1; index >= 0; index -= 1) {
-      const event = session.events[index]
+    for (let index = session.seq - 1; index >= 0; index -= 1) {
+      const event = session.eventAt(index)
       if (event?.type !== 'user/message' || !isOwned(event.data)) continue
       this.retained ??= null
       if (surface.has(event.seq)) {

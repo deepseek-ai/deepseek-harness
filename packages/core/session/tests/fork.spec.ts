@@ -47,14 +47,14 @@ function firstUserMessage(events: readonly SessionEvent[]): SessionEvent<'user/m
 }
 
 function lastSeq(session: Session): number {
-  const event = session.events.at(-1)
+  const event = session.snapshotEvents().at(-1)
   if (event === undefined) throw new Error('missing last event')
   return event.seq
 }
 
 /** A seeded child's constructor seed: its log minus the end-seed marker. */
 function inherited(session: Session): readonly SessionEvent[] {
-  const events = session.events
+  const events = session.snapshotEvents()
   const last = events.at(-1)
   if (last?.type !== 'session/end-seed') throw new Error('seeded child is missing its end-seed marker')
   return events.slice(0, -1)
@@ -83,19 +83,19 @@ describe('SessionStore.fork', () => {
 
     const child = sessions.fork(SessionId('parent'), undefined, SessionId('child'))
 
-    expect(inherited(child)).toEqual(source.events)
-    expect(child.events).not.toBe(source.events)
-    expect(child.events[1]).not.toBe(source.events[1])
+    expect(inherited(child)).toEqual(source.snapshotEvents())
+    expect(child.snapshotEvents()).not.toBe(source.snapshotEvents())
+    expect(child.snapshotEvents()[1]).not.toBe(source.snapshotEvents()[1])
     expect(() => {
-      firstUserMessage(child.events).data.content[0] = { type: 'text', text: 'child mutation' }
+      firstUserMessage(child.snapshotEvents()).data.content[0] = { type: 'text', text: 'child mutation' }
     }).toThrow(TypeError)
-    expect(firstUserMessage(source.events).data.content).toEqual([{ type: 'text', text: 'hello' }])
-    expect(firstUserMessage(child.events).data.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(firstUserMessage(source.snapshotEvents()).data.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(firstUserMessage(child.snapshotEvents()).data.content).toEqual([{ type: 'text', text: 'hello' }])
     expect(child.header).toMatchObject({
       id: SessionId('child'),
       cwd: '/workspace',
       parentSession: SessionId('parent'),
-      seedLength: source.events.length,
+      seedLength: source.snapshotEvents().length,
     })
   })
 
@@ -107,7 +107,7 @@ describe('SessionStore.fork', () => {
 
     const child = sessions.fork(source, undefined, SessionId('log-only-child'))
 
-    expect(inherited(child)).toEqual(source.events)
+    expect(inherited(child)).toEqual(source.snapshotEvents())
     expect(inherited(child).at(-1)).toMatchObject({
       type: 'test/log-only',
       data: { value: 'after execution' },
@@ -124,7 +124,7 @@ describe('SessionStore.fork', () => {
 
     const child = sessions.fork(source, firstBoundary, SessionId('child-from-first'))
 
-    expect(inherited(child)).toEqual(source.events.slice(0, firstBoundary + 1))
+    expect(inherited(child)).toEqual(source.snapshotEvents().slice(0, firstBoundary + 1))
     expect(child.header.seedLength).toBe(firstBoundary + 1)
     expect(child.deriveMessages()).toEqual([{
       id: expect.any(String) as unknown,
@@ -152,7 +152,7 @@ describe('SessionStore.fork', () => {
       const child = sessions.fork(source, lastSeq(source), SessionId(`child-${index}`))
 
       expect(inherited(child).at(-1)?.type).toBe('turn/end')
-      expect(child.header.seedLength).toBe(source.events.length)
+      expect(child.header.seedLength).toBe(source.snapshotEvents().length)
     }
   })
 
@@ -167,10 +167,10 @@ describe('SessionStore.fork', () => {
     const child = sessions.fork(parent, undefined, SessionId('bracket-child'))
 
     // Parent: no end-seed event follows the bracket, so its owner treats it as live.
-    expect(parent.events.at(-1)).toBe(open)
-    expect(parent.events.some(event => event.type === 'session/end-seed')).toBe(false)
+    expect(parent.snapshotEvents().at(-1)).toBe(open)
+    expect(parent.snapshotEvents().some(event => event.type === 'session/end-seed')).toBe(false)
     // Child: the same bracket is before end-seed, so it belongs to the seed.
-    const boundary = child.events.at(-1)
+    const boundary = child.snapshotEvents().at(-1)
     expect(boundary).toMatchObject({ type: 'session/end-seed' })
     expect(boundary!.seq).toBeGreaterThan(open.seq)
     expect(child.firstLiveSeq).toBe(open.seq + 1)

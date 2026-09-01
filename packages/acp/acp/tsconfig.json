@@ -40,9 +40,6 @@
     },
     {
       "path": "../../interaction/user-approval"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

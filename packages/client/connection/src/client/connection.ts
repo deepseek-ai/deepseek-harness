@@ -278,8 +278,7 @@ export class ConnectionController {
           this.callSink(() => { this.sinks.onConnected?.(host) })
         }
       } catch {
-        // Transport failure: treat as generation failure, then enter the shared retry path.
-        if (!ac.signal.aborted) ac.abort()
+        // Source settlement and controller cancellation already abort the generation.
       }
 
       await failed
@@ -306,12 +305,12 @@ export class ConnectionController {
   }
 }
 
-/** Await source readiness without letting a stalled carrier wedge startup forever. */
+/** Await source readiness while reporting, but not cancelling, a slow Host. */
 function waitForReady<T>(ready: Promise<T>, timeoutMs: number, signal: AbortSignal): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false
     const timeout = setTimeout(() => {
-      finish({ error: new Error(`connection generation was not ready within ${String(timeoutMs)}ms`) })
+      console.warn(`[connection] generation is still not ready after ${String(timeoutMs)}ms`)
     }, timeoutMs)
     const aborted = (): void => {
       finish({ error: new Error('connection generation aborted', { cause: signal.reason }) })

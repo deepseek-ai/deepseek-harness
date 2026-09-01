@@ -9,6 +9,7 @@ import { usePinnedBrowserLanguages } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject, NS } from '../src/client/index.ts'
 import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
 import type { PluginInventorySettingsTabInjected } from '../src/client/PluginInventorySettingsTab.tsx'
+import { apply as hostApply } from '../src/index.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 afterEach(cleanup)
@@ -43,6 +44,10 @@ function declare(slots: SlotRegistry): () => void {
 }
 
 describe('ui-settings-plugin-inventory browser plugin', () => {
+  it('keeps the host Loader entry inert', () => {
+    expect(hostApply).not.toThrow()
+  })
+
   it('declares only the services used by the Settings Remote contribution', () => {
     expect(inject).toEqual(['slots', 'locale', 'remote', 'remote.pluginInventory'])
   })

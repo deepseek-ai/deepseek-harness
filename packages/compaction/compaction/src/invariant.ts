@@ -251,8 +251,9 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   const seed = (session: Session): SessionTrace => {
     const trace: SessionTrace = { openTurn: null, compaction: undefined }
     traces.set(session, trace)
-    const staleOrphanStartSeqs = inheritedOrphanStartSeqs(session.events)
-    for (const event of session.events) {
+    const events = session.snapshotEvents()
+    const staleOrphanStartSeqs = inheritedOrphanStartSeqs(events)
+    for (const event of events) {
       // Constructor-seed repair boundaries can precede the end-seed marker
       // that proves an inherited orphan stale. Replay that inherited prefix
       // without letting the soon-to-be-cleared bracket veto its repair.

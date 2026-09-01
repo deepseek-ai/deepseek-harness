@@ -255,3 +255,5 @@ These limits define when the tool suite is a poor fit or needs special operation
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls.

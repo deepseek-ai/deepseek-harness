@@ -29,7 +29,6 @@ import {
   workflowRunDefinition, type WorkflowRunChatData,
 } from '../src/client/workflow-definition.ts'
 import { apply as applyNode } from '../src/index.ts'
-import { apply as applyInvariant } from '../src/invariant.ts'
 import type {} from '../src/client/index.ts'
 
 afterEach(cleanup)
@@ -100,7 +99,7 @@ function matched(input: SessionLiveEventEntry, role: ConversationMatch['role']):
 function assembler(entries: readonly SessionLiveEventEntry[], hasMore = false): ConversationNodeAssembler {
   const value = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
   value.replaceWindow(entries, hasMore)
-  value.flush()
+  value.activateTarget('chat')
   return value
 }
 
@@ -906,15 +905,7 @@ describe('plugin lifecycle', () => {
     await replacement.dispose()
   })
 
-  it('keeps the node half inert and registers invariant ownership', async () => {
+  it('keeps the node half inert', () => {
     applyNode()
-    const registered: string[] = []
-    const ctx = new Context()
-    ctx.provide('invariants')
-    ctx.set('invariants', {
-      register: (pkg: string) => { registered.push(pkg); return () => {} },
-    } as never)
-    await applyInvariant(ctx)
-    expect(registered).toEqual(['@deepseek-ai/dsh-client-ui-workflow-run'])
   })
 })

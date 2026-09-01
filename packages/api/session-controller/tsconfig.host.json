@@ -7,7 +7,6 @@
   },
   "files": [
     "src/index.ts",
-    "src/invariant.ts",
     "src/types.ts",
     "src/remote-events.ts",
     "src/agent.ts",
@@ -35,7 +34,6 @@
     { "path": "../../util/deque" },
     { "path": "../../util/native-command" },
     { "path": "../../preset/agent-presets" },
-    { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../session/session-persistence" },
     { "path": "../../session/session-projection" },
     { "path": "../../session/session-projection-cache" },

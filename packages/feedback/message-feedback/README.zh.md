@@ -97,7 +97,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 服务类：配置校验、按 Session 队列、持久性屏障、`@Remote` 方法 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、值与失败词汇（仅类型，供生成的 Remote 客户端使用） |
 | [`src/spec.ts`](src/spec.ts) | storage-domain 声明：`message_feedback` 域、`sessions` 表、行 schema |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；域 schema 在重开时校验行） |
+| — | 不发布运行时不变式伴生入口；域 schema 在重开时校验行。 |
 
 </details>
 

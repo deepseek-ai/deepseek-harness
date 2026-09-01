@@ -35,7 +35,7 @@ The shipped Web graph already resolves `@deepseek-ai/dsh-client-ui-schedule` thr
 
 ### Read and dismiss the catalog
 
-Each row shows the complete wrapping prompt, a separate Scheduled or Overdue status, localized Once or the largest exact whole unit for a repeating interval, browser-local target time, and browser-clock-relative time. Intervals are never rounded, and the three metadata fields wrap across lines instead of clipping valid large values. The 336px popover scrolls vertically when needed and exposes no Schedule id, raw UTC value, details, or action controls.
+Each row shows the complete wrapping prompt, a separate Scheduled or Overdue status, localized Once or the largest exact whole unit for a repeating interval, browser-local target time, and browser-clock-relative time. Intervals are never rounded, and the three metadata fields wrap across lines instead of clipping valid large values. The body-portaled popover targets 336px, shares the trigger's left edge when space permits, and shifts left to retain a 16px viewport margin when the trigger is near the right edge; its maximum width is the viewport width minus 32px. It scrolls vertically when needed and exposes no Schedule id, raw UTC value, details, or action controls.
 
 Only the native trigger button enters the tab order. Enter and Space use normal button activation; while focus remains on the trigger or catalog, Escape closes the popover and restores trigger focus; an outside pointer press dismisses it. If a live update removes the final record, the component closes and unmounts without moving focus to another header action. A failed Session open hides the trigger even when a tentative cached projection exists.
 
@@ -47,7 +47,7 @@ Only the native trigger button enters the tab order. Enter and Space use normal 
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The browser plugin contributes `schedule-catalog` to `conversation.session.header.actions` at order 10, after static Agent and Subagent context and before background Jobs. It reads `openState` through the standard Session hook and the complete value through `useProjection('schedule')`; popover visibility is its only local interaction state. Browser formatting uses the viewing locale, time zone, and clock, while durable Schedule records remain unchanged.
+The browser plugin contributes `schedule-catalog` to `conversation.session.header.actions` at order 10, after static Agent and Subagent context and before background Jobs. It reads `openState` through the standard Session hook and the complete value through `useProjection('schedule')`; popover visibility is its only local interaction state. The component portals the catalog to `document.body` and gives its trigger and panel refs to `useAnchoredPosition`, which publishes fixed coordinates after measuring the rendered panel, keeps a 5px gap below the trigger, clamps to a 16px viewport margin, and remeasures on resize, captured scroll, and panel resize. The catalog ref also makes pointer presses inside the portal part of the existing dismissal boundary. Browser formatting uses the viewing locale, time zone, and clock, while durable Schedule records remain unchanged.
 
 ### Source map
 
@@ -57,7 +57,7 @@ The browser plugin contributes `schedule-catalog` to `conversation.session.heade
 | [`src/client/ScheduleCatalogAction.tsx`](src/client/ScheduleCatalogAction.tsx) | Visibility, ordering, formatting, popover, and keyboard behavior |
 | [`src/client/locales.ts`](src/client/locales.ts) | English and Chinese catalog copy |
 | [`src/index.ts`](src/index.ts) | Empty Host apply that keeps the optional browser feature addressable by Loader |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion; the package owns no mutable cross-plugin state |
+| — | No runtime invariant companion is published because this read-only client catalog owns no mutable cross-plugin state. |
 
 The [durable Web Schedule Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-durable-web-schedule.md) owns the active projection and opt-in presentation boundary; this package owns the catalog's timing and accessibility behavior.
 

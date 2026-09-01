@@ -56,7 +56,7 @@ async function harness(dir: string, adapter: MockAdapter, beforeHooks?: (ctx: Co
 function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
   return agent.whenIdle()
 }
-function events(agent: Agent): SessionEvent[] { return [...agent.session.events] }
+function events(agent: Agent): readonly SessionEvent[] { return agent.session.snapshotEvents() }
 
 /** Poll `predicate` until true or the deadline passes (detached hook effects can't be awaited directly). */
 async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10): Promise<void> {

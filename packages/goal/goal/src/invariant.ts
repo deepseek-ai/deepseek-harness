@@ -43,7 +43,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
 
   const seed = (session: Session): GoalFoldState => {
     const state = emptyGoalFoldState()
-    for (const event of session.events) applyChecked(state, event, fail)
+    for (const event of session.snapshotEvents()) applyChecked(state, event, fail)
     states.set(session, state)
     return state
   }

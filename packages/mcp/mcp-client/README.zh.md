@@ -121,7 +121,7 @@ kind: "package-reference"
 | [`src/status.ts`](src/status.ts) | 状态面：每实例状态单元与按作用域的查询 |
 | [`src/probe.ts`](src/probe.ts) | 一次性探测：连接、取身份、列工具、关闭——不注册任何东西 |
 | [`src/deadline.ts`](src/deadline.ts) | 启动与探测预算共用的结算截止器 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；世代只能通过工具注册表观察） |
+| — | 不发布运行时不变式伴生入口；世代只能通过工具注册表观察。 |
 
 ### 生命周期与同步
 

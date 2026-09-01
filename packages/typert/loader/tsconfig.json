@@ -22,9 +22,6 @@
     },
     {
       "path": "../registry"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

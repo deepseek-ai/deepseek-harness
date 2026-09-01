@@ -83,7 +83,6 @@ describe('package payload constraints', () => {
       dsh: { bundle: { patch: './cordis.patch.yml' } },
     })).toEqual([
       'lib/index.js',
-      'lib/invariant.js',
       'cordis.patch.yml',
       'lib/types/**/*.d.ts',
     ])

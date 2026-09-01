@@ -232,3 +232,5 @@ This Dev Note is non-authoritative working context: undecided directions and not
 - The `compat` switch set is pinned to pi-ai's compat types by drift gates; an upstream upgrade that adds a field, gives a further protocol a compat type, or widens a value union fails the build until someone classifies it.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.

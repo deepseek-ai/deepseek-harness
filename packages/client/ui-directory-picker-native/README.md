@@ -85,3 +85,5 @@ These limits define when the native chooser fits. They are current package const
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The plugin registers a renderless flow occupant into two workspace holes as one transactional effect, whose disposal the HMR-safety spec proves, and it retains no state between picks.

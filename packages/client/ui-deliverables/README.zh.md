@@ -98,3 +98,5 @@ Node 半部注册静态 `ui:deliverable-file-references` 系统提示词段，�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。prompt section、slot、dictionary、event definition 与可选 service 注册都归 effect 所有，释放由插件测试证明；本包不持有可变状态。

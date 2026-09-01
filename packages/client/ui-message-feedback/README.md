@@ -85,3 +85,5 @@ These limits define the current feedback surface. They are current package const
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The plugin owns one slot registration and one per-session controller map, both released by the same effect disposer. The lifecycle spec proves the registration is withdrawn and every controller is dropped when the owning fiber is disposed, so no second authority exists to check at runtime.

@@ -8,7 +8,7 @@
   pointer-events: none;
 }
 
-.rail {
+.frame {
   /* The band a reader actually sees: the scrollport minus the sticky composer
      stack covering its floor. ConversationRoot publishes both measurements on
      the scrollport; the fallbacks carry the first paint before its observer
@@ -24,9 +24,9 @@
      padding, so the rail gives that inset back and keeps 12px of its own. */
   right: calc(12px - (var(--dsh-composer-side-clearance) + 16px));
   width: 28px;
-  /* Never taller than the band it centers in: a short window (a tall composer,
-     a low viewport) shrinks the rail instead of pushing marks under the
-     composer or above the scrollport. */
+  /* Fixed-pitch marks never compress: a ladder taller than the band scrolls
+     inside this frame instead of pushing marks under the composer or above
+     the scrollport. */
   height: min(
     var(--turn-natural-height),
     max(0px, calc(var(--turn-rail-band) - 64px)),
@@ -38,14 +38,46 @@
   transition: height 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.marks {
+/* The frame's inner scroller: no visible scrollbar, no scroll chaining into
+   the transcript, and gradient fades over the ends that can still scroll. */
+.scroller {
   position: absolute;
-  inset: var(--turn-rail-inset) 0;
+  inset: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.fadeTop {
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px, #000 100%);
+}
+
+.fadeBottom {
+  mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 24px), transparent 100%);
+}
+
+.fadeTop.fadeBottom {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 24px,
+    #000 calc(100% - 24px),
+    transparent 100%
+  );
+}
+
+.marks {
+  position: relative;
+  height: var(--turn-natural-height);
 }
 
 .markPosition {
   position: absolute;
-  top: min(var(--turn-natural-position), var(--turn-position));
+  top: calc(var(--turn-natural-position) + var(--turn-rail-inset));
   right: 0;
   left: 0;
   height: 10px;
@@ -83,9 +115,19 @@
   transition: width 140ms ease, background-color 140ms ease;
 }
 
+/* Ordered before hover/active so those states keep their stronger tick. */
+.markUnloaded::before {
+  width: 8px;
+  opacity: 0.6;
+}
+
 .markPreview::before {
   width: 18px;
   background: var(--dsw-alias-label-tertiary);
+}
+
+.markBusy::before {
+  animation: dsh-turn-mark-busy 1s ease-in-out infinite;
 }
 
 .markActive::before {
@@ -108,13 +150,14 @@
 
 .preview {
   position: absolute;
-  /* Centered on its mark (mark positions are measured inside the rail inset),
-     then held clear of both rail ends. */
+  /* Centered on its mark. Mark positions live in the scrolled ladder, so the
+     frame-level preview subtracts the scroller's offset, then holds clear of
+     both frame ends. */
   top: clamp(
     0px,
     calc(
-      min(var(--turn-natural-position), var(--turn-position))
-      + var(--turn-rail-inset) - var(--turn-preview-height) / 2
+      var(--turn-natural-position) + var(--turn-rail-inset)
+      - var(--turn-scroll-top, 0px) - var(--turn-preview-height) / 2
     ),
     calc(100% - var(--turn-preview-height))
   );
@@ -143,14 +186,14 @@
 
 .previewPrompt {
   font: var(--dsw-font-xs-strong-13);
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .previewResponse {
   margin-top: 4px;
   color: var(--dsw-alias-label-caption);
   font: var(--dsw-font-xxs-12);
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 @keyframes dsh-turn-mark-enter {
@@ -163,6 +206,12 @@
   to { opacity: 1; transform: translateX(0); }
 }
 
+@keyframes dsh-turn-mark-busy {
+  0%,
+  100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
 @container (max-width: 900px) {
   .slot {
     display: none;
@@ -170,11 +219,14 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rail,
+  .frame,
+  .scroller,
   .markPosition,
   .mark::before,
+  .markBusy::before,
   .preview {
     transition: none;
     animation: none;
+    scroll-behavior: auto;
   }
 }

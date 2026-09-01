@@ -47,7 +47,10 @@ interface ProjectionDefinition<
     /** Validates the wire payload before it leaves the host. */
     viewSchema: ZodType<SessionProjectionMap[K]>
     /**
-     * State → wire payload (the read-side projection).
+     * State → wire payload (the read-side projection). The live drive keeps
+     * the two latest raw results and compares them with `Object.is`; an
+     * object-valued view must reuse its reference to suppress publication
+     * across internal-only state changes.
      * @param state - the current state.
      * @returns the whole current value for this unit's key.
      */
@@ -83,9 +86,9 @@ interface ProjectionSnapshot {
 
 ```ts type-equiv
 /**
- * Change-feed listener: one unit's value changed for one session. `value` is
- * the schema-validated `view` output; `seq` is the unit's watermark at
- * emission (the seq of the event that caused the change).
+ * Change-feed listener: one unit's raw `view` result changed by `Object.is`
+ * for one session. `value` is the schema-validated output; `seq` is the
+ * unit's watermark at emission (the seq of the event that caused the change).
  */
 type ProjectionChangeListener = (
   session: Session,
@@ -95,7 +98,7 @@ type ProjectionChangeListener = (
 ) => void
 ```
 
-`snapshot(session)` is fully synchronous: a carrier reads it in the same tick as its page slice, so `asOfSeq` covers both reads at one sequence number. It returns only client views, and every value passes its unit's `viewSchema` before return. `stateOf(session, key)` reads one live host state without computing unrelated views; callers must not mutate the borrowed reference. The change feed fires once per client-visible unit whose state *reference* changed for each committed event; `apply` must return the same reference when its state did not change.
+`snapshot(session)` is fully synchronous: a carrier reads it in the same tick as its page slice, so `asOfSeq` covers both reads at one sequence number. It returns only client views, and every value passes its unit's `viewSchema` before return. `stateOf(session, key)` reads one live host state without computing unrelated views; callers must not mutate the borrowed reference. A state-reference change computes one cached raw view, and the change feed fires only when that result changes by `Object.is`; an object-valued view must preserve its reference to suppress publication across internal-only state changes.
 
 ## The registry: `ctx.sessionProjections`
 
@@ -177,7 +180,7 @@ Source: [`packages/session/session-projection-cache/src/index.ts`](../../package
 
 ### `ctx.sessionProjections` — `SessionProjectionRegistry`
 
-`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive), and a changed state reference in a client-visible unit notifies the change feed with the schema-validated view. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Registration is an effect (disposer rides the calling fiber): an unloaded domain plugin's key disappears from snapshots and clients read it as capability absence. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject(['sessionProjections'], ...)`. Registrants sharing a key share one unit and are counted: the same tool package mounted in N agent presets registers N times, and the key survives until the last one unloads.
+`ctx.sessionProjections`: the projection unit table and its drive. The service subscribes to `session/event` once; every committed event passes every registered unit's `apply` (eager drive). A changed state reference computes the next client view; the change feed is notified only when its raw result changes by `Object.is`. Cells build lazily — a unit registered after events flowed, or a session older than the registry, folds `init` over the in-memory log on first touch (event or read). Registration is an effect (disposer rides the calling fiber): an unloaded domain plugin's key disappears from snapshots and clients read it as capability absence. A host reader either declares `sessionProjections` in its plugin `inject` or fails explicitly when the registry or required key is absent. Contributors may preserve optional registration through `ctx.inject(['sessionProjections'], ...)`. Registrants sharing a key share one unit and are counted: the same tool package mounted in N agent presets registers N times, and the key survives until the last one unloads.
 
 ```ts cordis-catalog
 /**
@@ -201,7 +204,7 @@ register< K extends Exclude<keyof SessionProjectionStateMap, keyof SessionProjec
 /**
  * Subscribe to the change feed. The registration is an effect on the
  * calling context's fiber.
- * @param listener - called once per client-visible unit whose state reference changed, per committed event.
+ * @param listener - called once per client-visible unit whose raw view changed by `Object.is`, per committed event.
  * @returns the exact disposer that unsubscribes.
  */
 onChanged(listener: ProjectionChangeListener): () => void

@@ -73,7 +73,7 @@ kind: "package-library"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 运行驱动器：创建、单轮驱动、结果读取、dispose |
 | [`src/structured.ts`](src/structured.ts) | 结构化输出运行时：捕获工具、提示词段、防护、提交 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；本包没有独立事件序列或可变数据关系，相关约定在所属 seam 强制执行。 |
 
 </details>
 

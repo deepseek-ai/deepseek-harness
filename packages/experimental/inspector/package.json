@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-inspector",
   "description": "Experimental cross-realm CDP hub for Host debugging and Client Runtime inspection",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "private": true,
   "repository": {
     "type": "git",
@@ -20,10 +20,6 @@
       "types": "./lib/types/client/index.d.ts",
       "default": "./lib/client.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
@@ -36,7 +32,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ],
@@ -51,15 +46,13 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-client-modules": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^"
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/cordis-plugin-include": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@types/ws": "^8.18.1",
     "playwright": "^1.49.0",
     "tsx": "^4.19.2"

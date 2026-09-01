@@ -66,3 +66,5 @@ None; this package neither assembles nor sends a provider request.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package is pre-Cordis platform glue — the tree it boots runs the product packages' own invariants, and the assembly's contracts (image contract gate, tunnel refusals) fail loud at boot rather than drifting at run time.

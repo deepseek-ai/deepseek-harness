@@ -71,7 +71,7 @@ agent（智能体）及其宿主 UI 获得 `@file` mention 的排序路径候选
 |---|---|
 | [`src/index.ts`](src/index.ts) | `LocalFileReferenceService`：配置校验、按 agent 搜索、提示词安装 |
 | [`src/search.ts`](src/search.ts) | `WorkspaceFileSearch`：遍历、排序、排除、陈旧标记与后台重建 |
-| [`src/invariant.ts`](src/invariant.ts) | 发现约定的不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；按 Agent 的 index 是私有 advisory cache，其失效与释放通过 service 测试直接观察。 |
 
 ### 主要流程
 

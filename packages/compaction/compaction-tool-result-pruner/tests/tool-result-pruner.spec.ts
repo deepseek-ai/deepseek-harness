@@ -185,8 +185,8 @@ describe('ToolResultPruner session transaction', () => {
     expect(entry).toMatchObject({ originalSeq, callId: ToolCallId('one'), charsBefore: 100 })
     expect(entry.charsAfter).toBeLessThanOrEqual(50)
 
-    const original = session.events[originalSeq]!
-    const replacement = session.events[entry.replacementSeq]! as SurfaceEvent
+    const original = session.snapshotEvents()[originalSeq]!
+    const replacement = session.snapshotEvents()[entry.replacementSeq]! as SurfaceEvent
     expect(original).toMatchObject({
       type: 'tool/result',
       data: {
@@ -219,7 +219,7 @@ describe('ToolResultPruner session transaction', () => {
     // Shadow-price protocol: the metering event sits directly before the
     // replacement and prices the shadowed node with the shared estimator.
     if (original.type !== 'tool/result') throw new Error('original is not a tool/result')
-    expect(session.events[entry.replacementSeq - 1]).toMatchObject({
+    expect(session.snapshotEvents()[entry.replacementSeq - 1]).toMatchObject({
       type: 'compaction/prune',
       data: {
         shadowedRange: { start: originalSeq, end: originalSeq },
@@ -254,7 +254,7 @@ describe('ToolResultPruner session transaction', () => {
       turn: 2,
     })
     service().pruneSession(session)
-    const replay = Session.create(session.id, [...session.events])
+    const replay = Session.create(session.id, session.snapshotEvents())
     expect(replay.deriveMessages()).toEqual(session.deriveMessages())
     expect(replay.surface.replaceGeneration).toBe(session.surface.replaceGeneration)
   })

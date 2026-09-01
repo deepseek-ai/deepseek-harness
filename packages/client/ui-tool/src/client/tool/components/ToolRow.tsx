@@ -15,7 +15,9 @@ import {
   diffBlockLabels, readBlockLabels, searchBlockLabels, webBlockLabels,
 } from '../models/primitive-labels.ts'
 import type { AskQuestionCardModel } from '../models/ask-question-card-model.ts'
-import type { ToolRowState, ToolRowVariant } from '../models/tool-call-model.ts'
+import {
+  formatToolBody, type ToolRowState, type ToolRowVariant,
+} from '../models/tool-call-model.ts'
 import type { WebCardModelProps } from '../models/web-card-model.ts'
 import { AskQuestionCard } from './AskQuestionCard.tsx'
 import css from './ToolRow.module.css'
@@ -36,8 +38,8 @@ export interface ToolRowProps {
    * error row, whose collapsed summary is the failure line instead.
    */
   summarySuffix?: string | null | undefined
-  /** Expanded-body input text; null = no input section. */
-  body: string | null
+  /** Original argument JSON formatted only while the row is expanded. */
+  bodyRaw?: string | null | undefined
   /** Flattened result text for the expanded Output section; null/absent = no output section. */
   output?: string | null | undefined
   /** Ask-user transcript card; card fields are mutually exclusive and replace text sections. */
@@ -94,7 +96,7 @@ export function ToolRow({
   title,
   summary,
   summarySuffix,
-  body,
+  bodyRaw,
   output,
   askQuestion,
   errorSummary,
@@ -124,8 +126,12 @@ export function ToolRow({
   const askQuestionBody = askQuestion ?? null
   const outputText = output ?? null
   const card = askQuestionBody ?? terminalBody ?? diffBody ?? readBody ?? searchBody ?? webBody
-  const expandable = body !== null || outputText !== null || card !== null
+  const expandable = bodyRaw != null || outputText !== null || card !== null
   const open = expanded && expandable
+  const bodyText = useMemo(
+    () => open && card === null && bodyRaw != null ? formatToolBody(variant, bodyRaw) : null,
+    [bodyRaw, card, open, variant],
+  )
   const status = stateStatus(state, t)
   // A failure must replace, not supplement, the normal summary.
   const failureLine = state === 'error' ? errorSummary ?? null : null
@@ -156,7 +162,7 @@ export function ToolRow({
   }
   // The code variant's program renders through CodeBlock (shiki), so only its
   // output joins the IN/OUT card; every other variant's input does too.
-  const cardBody = variant === 'code' ? null : body
+  const cardBody = variant === 'code' ? null : bodyText
   return (
     <div className={css.root} data-variant={variant} data-tool={toolName} data-state={state}>
       {status !== null && <span className={css.visuallyHidden}>{status}</span>}
@@ -235,9 +241,9 @@ export function ToolRow({
                       ? <WebBlock {...webBody} labels={webLabels} className={css.webBody} />
                       : (
                         <>
-                          {variant === 'code' && body !== null && (
+                          {variant === 'code' && bodyText !== null && (
                             <div className={css.bodyScroll}>
-                              <CodeBlock code={body} lang="typescript" copyLabel={t('copy')} copiedLabel={t('copied')} className={css.codeBody} />
+                              <CodeBlock code={bodyText} lang="typescript" copyLabel={t('copy')} copiedLabel={t('copied')} className={css.codeBody} />
                             </div>
                           )}
                           {(cardBody !== null || outputText !== null) && (

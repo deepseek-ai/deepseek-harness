@@ -4,10 +4,8 @@ import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Storage, { storageBackendServiceKey } from '@deepseek-ai/dsh-storage'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { runKvBackendContract } from '../../storage/tests/contract.ts'
 import { Config, JsonStorageBackend, apply } from '../src/index.ts'
-import * as InvariantCompanion from '../src/invariant.ts'
 
 const roots: string[] = []
 
@@ -196,15 +194,6 @@ describe('json backend specifics', () => {
     expect(() => ctx.storage.backend.get('json')).toThrow()
     expect(ctx.get(storageBackendServiceKey('json'))).toBeUndefined()
     await expect(unit.putRecord('t', 'x', {})).rejects.toMatchObject({ code: 'closed' })
-  })
-
-  it('registers the invariant companion and disposes cleanly', async () => {
-    const ctx = new Context()
-    await ctx.plugin(InvariantRegistry)
-    const fiber = await ctx.plugin(InvariantCompanion)
-    // Disposal releases the reservation: a fresh mount succeeds.
-    await fiber.dispose()
-    await ctx.plugin(InvariantCompanion)
   })
 
   it('close drains in-flight writes and blocks in-flight opens', async () => {

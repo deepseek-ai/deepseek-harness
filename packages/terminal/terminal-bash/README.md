@@ -177,3 +177,5 @@ These limits define where the backend is a poor fit or needs special operational
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Readiness, terminal buffers, and process-tree state are private per-session implementation state, and the backend publishes no independent lifecycle stream or snapshot.

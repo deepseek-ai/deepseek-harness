@@ -82,7 +82,7 @@ This section explains the design decisions behind the tool and points at the cod
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: shell registry, prompt setup, command wrapping, scrollback polling, extraction and rendering |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; shell reuse is observable through tool execution) |
+| — | No runtime invariant companion is published; the adapter's private owner-to-shell cache has no observable event or data relation. Lifecycle tests prove its cleanup without adding a public API solely for an invariant. |
 
 ### Command flow
 

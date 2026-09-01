@@ -2,30 +2,55 @@ import type { ChatNode } from '../contract/chat-nodes.ts'
 import type { ChatLocationNodeIndex, ChatNodeStore, TurnNavigationItem } from '../contract/snapshot.ts'
 
 /**
- * Preview budget per field. The rail clamps two short lines, so anything past
- * this is invisible; copying whole transcripts into navigation state would
+ * Preview budgets, sized to the rail card's clamps (one prompt line, up to
+ * three response lines) and mirrored by the turnOutline projection so a turn
+ * shows the same words before and after its events load. Anything past a
+ * budget is invisible; copying whole transcripts into navigation state would
  * otherwise grow with the loaded window on every structural update.
  */
-const PREVIEW_LIMIT = 160
+const PROMPT_PREVIEW_LIMIT = 50
+const RESPONSE_PREVIEW_LIMIT = 120
 
-/** Join rendered text until the preview budget is met, then stop reading. */
-function preview(parts: Iterable<string>): string {
+/** Join rendered text, collapse whitespace, and cap at `limit` with a trailing ellipsis when clipped. */
+// Deliberate mirror of the turnOutline projection's preview(): the wire
+// boundary forbids sharing code with the host package.
+/* jscpd:ignore-start */
+function preview(parts: Iterable<string>, limit: number): string {
   let text = ''
+  let unread = false
   for (const part of parts) {
-    text += text === '' ? part : ` ${part}`
-    if (text.length >= PREVIEW_LIMIT) break
+    if (text.length >= limit * 2) {
+      unread = true
+      break
+    }
+    // Per-part bound: this runs on every structural rail update, so one huge
+    // text block must not be concatenated (and regex-normalized) whole for a
+    // preview this short.
+    const clipped = part.length > limit * 2
+    const chunk = clipped ? part.slice(0, limit * 2) : part
+    text += text === '' ? chunk : ` ${chunk}`
+    if (clipped) {
+      unread = true
+      break
+    }
   }
-  return text.replace(/\s+/g, ' ').trim().slice(0, PREVIEW_LIMIT)
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (normalized.length > limit - 1) return `${normalized.slice(0, limit - 1).trimEnd()}…`
+  return unread ? `${normalized}…` : normalized
 }
+/* jscpd:ignore-end */
 
 function promptText(node: ChatNode): string {
   if (node.kind !== 'user') return ''
-  return preview(node.data.content.flatMap(block => block.type === 'text' ? [block.text] : []))
+  return preview(node.data.content.flatMap(block => block.type === 'text' ? [block.text] : []), PROMPT_PREVIEW_LIMIT)
 }
 
 function responseText(node: ChatNode): string {
   if (node.kind !== 'assistant-step') return ''
-  return preview(node.data.blocks.flatMap(block => block.kind === 'text' ? [block.text] : []))
+  return preview(
+    node.data.blocks.flatMap(block => block.kind === 'text' ? [block.text] : []),
+    RESPONSE_PREVIEW_LIMIT,
+  )
 }
 
 /**

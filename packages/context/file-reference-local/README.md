@@ -71,7 +71,7 @@ The provider maintains one reusable `WorkspaceFileSearch` per agent, rooted at t
 |---|---|
 | [`src/index.ts`](src/index.ts) | `LocalFileReferenceService`: config validation, per-agent searches, prompt install |
 | [`src/search.ts`](src/search.ts) | `WorkspaceFileSearch`: traversal, ranking, exclusion, staleness and background rebuild |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion for the discovery contract |
+| — | No runtime invariant companion is published; per-agent indexes are private advisory caches whose invalidation and disposal are observed directly through service tests. |
 
 ### Main flow
 

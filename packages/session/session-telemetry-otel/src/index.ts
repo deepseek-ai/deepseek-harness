@@ -244,7 +244,7 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'feedback/record') return
       // Consent is the committed record, not an independently emitted bus value.
-      if (session.events[event.seq] !== event) {
+      if (session.eventAt(event.seq) !== event) {
         ctx.logger.warn(NON_CANONICAL_FEEDBACK_WARNING)
         return
       }

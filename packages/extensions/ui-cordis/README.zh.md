@@ -126,3 +126,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。插件只注册一个 keyed toolview，HMR 测试覆盖释放；per-definition run-state 只存在于浏览器进程，Host 不变式无法观察。

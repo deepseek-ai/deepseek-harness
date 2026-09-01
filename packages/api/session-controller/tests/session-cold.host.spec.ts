@@ -325,7 +325,7 @@ describe('attached updatedAt tracks human prompts', () => {
       meta: { cwd: '/proj', createdAt: 500 },
     })
     ctx.agents.register({ id: resumed.id, session: resumed, status: 'idle', ctx } as Agent)
-    const boundary = resumed.events.at(-1)
+    const boundary = resumed.snapshotEvents().at(-1)
     expect(boundary?.type).toBe('session/end-seed')
     expect(boundary?.time).toBeGreaterThan(worked)
 

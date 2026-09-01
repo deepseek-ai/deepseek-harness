@@ -152,7 +152,7 @@ describe('tool-pipeline invariants', () => {
       name: 'echo',
       arguments: {},
     })).toThrow(/parentCallId child does not belong to rootCallId another-root/)
-    expect(session.events.some(event => event.type === 'tool/code-dispatch-start'
+    expect(session.snapshotEvents().some(event => event.type === 'tool/code-dispatch-start'
       && String(event.data.subCallId) === 'invalid-grandchild')).toBe(false)
   })
 

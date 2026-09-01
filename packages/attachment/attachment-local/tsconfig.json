@@ -5,8 +5,8 @@
   "references": [
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../attachment" },
-    { "path": "../../util/home-paths" },
-    { "path": "../../runtime-diagnostics/invariants" }
+    { "path": "../../util/home-paths" }
   ]
 }

@@ -82,7 +82,7 @@ describe('foldRequestHeader', () => {
       content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     session.append('request/header', { header: { config: { provider: 'mock', model: 'other' }, tools: [] }, reason: 'change' })
-    expect(foldRequestHeader(session.events)).toEqual({ config: { provider: 'mock', model: 'other' } })
+    expect(foldRequestHeader(session.snapshotEvents())).toEqual({ config: { provider: 'mock', model: 'other' } })
   })
 })
 
@@ -97,7 +97,7 @@ describe('legacy request-header format', () => {
     const appendLegacy = session.append.bind(session) as (type: string, data: unknown) => SessionEvent
     expect(() => appendLegacy('request/header-delta', { config: CONFIG }))
       .toThrow(/unsupported legacy request\/header-delta/)
-    expect(session.events).toHaveLength(0)
+    expect(session.snapshotEvents()).toHaveLength(0)
   })
 
   it('rejects the removed fallback reason in seeds and untyped appends', () => {
@@ -111,7 +111,7 @@ describe('legacy request-header format', () => {
     const appendLegacy = session.append.bind(session) as (type: string, data: unknown) => SessionEvent
     expect(() => appendLegacy('request/header', { header: { config: CONFIG }, reason: 'fallback' }))
       .toThrow('unsupported legacy request/header reason "fallback"')
-    expect(session.events).toHaveLength(0)
+    expect(session.snapshotEvents()).toHaveLength(0)
   })
 })
 

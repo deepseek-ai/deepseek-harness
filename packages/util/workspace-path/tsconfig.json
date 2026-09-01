@@ -6,10 +6,5 @@
   },
   "include": [
     "src"
-  ],
-  "references": [
-    {
-      "path": "../../runtime-diagnostics/invariants"
-    }
   ]
 }

@@ -83,7 +83,7 @@ The executor is the pwsh twin of `dsh-bash-sandbox`: it inherits `dsh-pwsh-local
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxPwshExecutor`, per-process fact retention, run/start wrapping |
 | [`src/helpers.ts`](src/helpers.ts) | Denial, runner-failure, and runner-spawn-failure classification |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; classification is observable in results) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seams. |
 | `tests/` | Exercised behavior across the ACL and platform runners |
 
 ### Main flow

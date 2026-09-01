@@ -390,7 +390,7 @@ declare class Session {
    * When this lifecycle appends the marker, it occupies this seq before the
    * store attaches and therefore does not publish either. Otherwise this seq
    * holds an ordinary published write.
-   */
+  */
   readonly firstLiveSeq: number;
   /**
    * Create a detached session by validating and snapshotting borrowed seed
@@ -412,12 +412,20 @@ declare class Session {
    */
   static fromRestore(id: SessionId, seed: readonly SessionEvent[], header: SessionHeader): Session;
   /**
-   * An immutable snapshot of the append-only event log. The snapshot is reused
-   * until the next append; a previously returned array does not grow later.
-   * Events and their nested data are deep-frozen at acceptance, so neither a
-   * cast nor ordinary JavaScript can rewrite durable history.
+   * Return the immutable event stored at one exact sequence number.
+   * @param seq - event sequence number.
+   * @returns the accepted event, or undefined when the log does not contain it.
    */
-  get events(): readonly SessionEvent[];
+  eventAt(seq: number): SessionEvent | undefined;
+  /**
+   * Materialize an immutable snapshot of a half-open event sequence range.
+   * A full current snapshot is reused until the next append; every previously
+   * returned snapshot remains stable after later appends.
+   * @param fromSeq - non-negative inclusive sequence number; defaults to the log start.
+   * @param toSeqExclusive - non-negative exclusive sequence number; defaults to the current end.
+   * @returns a frozen array of the selected deeply frozen events.
+   */
+  snapshotEvents(fromSeq: number = 0, toSeqExclusive: number = this.log.length): readonly SessionEvent[];
   /** The next event's sequence number — always the log length (the `seq = log.length` contiguity contract). */
   get seq(): number;
   /**
@@ -464,7 +472,7 @@ declare class Session {
    * The {@link EpochHeader} in force after the log's last header event — the
    * header the NEXT request will be compared against — or undefined before
    * the first `request/header` snapshot. The live, incrementally-maintained
-   * form of `foldRequestHeader(session.events)`: each header event is folded
+   * form of `foldRequestHeader(session.snapshotEvents())`: each header event is folded
    * once, when first seen, so a per-step read costs O(new events).
    * @returns the folded header, or undefined when no header event exists yet.
    */
@@ -588,7 +596,7 @@ interface TurnEndReasonMap {
 
 ## 持久性约定
 
-持久化后端依赖的约定如下：持久日志无损保存每个事件，**包括** `assistant/chunk`；`seq` 必须连续，因此不能从规范日志中过滤分片。后端可以为事件批次选择自己的存储编码，只要 `load` 返回与追加时完全一致的事件即可（JSONL 后端默认启用的打包分片行就是此类编码；见 [persistence.md](persistence.zh.md)）。所有 `event.data` 都必须可序列化为 JSON；`Session.append` 会从源头强制这一要求（遇到不可序列化数据时抛出），因此错误事件绝不会进入日志，`session.events` 始终与后端可持久化的内容一致。新增会携带不可序列化数据、破坏核心执行嵌套或违反事件所有方声明关系的事件类型，都会构成磁盘格式的破坏性变更。
+持久化后端依赖的约定如下：持久日志无损保存每个事件，**包括** `assistant/chunk`；`seq` 必须连续，因此不能从规范日志中过滤分片。后端可以为事件批次选择自己的存储编码，只要 `load` 返回与追加时完全一致的事件即可（JSONL 后端默认启用的打包分片行就是此类编码；见 [persistence.md](persistence.zh.md)）。所有 `event.data` 都必须可序列化为 JSON；`Session.append` 会从源头强制这一要求（遇到不可序列化数据时抛出），因此错误事件绝不会进入日志，`session.snapshotEvents()` 始终与后端可持久化的内容一致。新增会携带不可序列化数据、破坏核心执行嵌套或违反事件所有方声明关系的事件类型，都会构成磁盘格式的破坏性变更。
 
 消费此约定的后端见 [persistence.md](persistence.zh.md)。
 
@@ -626,7 +634,7 @@ resolveAgent(sessionId: SessionId): Promise<ApiSessionAgentResult>
  * @param signal - optional caller cancellation for persistence reads.
  * @returns the current attached state or persisted header and event prefix.
  */
-inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<{ meta: SessionHeader; events: SessionEvent[] }>
+inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<{ meta: SessionHeader; events: readonly SessionEvent[] }>
 
 /**
  * Read all visible Session rows without resuming an Agent.

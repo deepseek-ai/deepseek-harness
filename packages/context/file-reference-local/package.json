@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-file-reference-local",
   "description": "Local-filesystem ctx.fileReferences provider with bounded fuzzy indexes",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -22,16 +22,11 @@
       "types": "./lib/types/search.d.ts",
       "default": "./lib/types/search.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -42,7 +37,6 @@
   "peerDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-file-reference": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
@@ -50,7 +44,6 @@
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-file-reference": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"

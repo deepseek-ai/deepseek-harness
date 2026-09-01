@@ -69,7 +69,7 @@ The provider is an immutable, synchronously registered skill source: it register
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry and the immutable provider: one candidate, resource base, body load |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; the package owns one immutable provider registration, while the skill registry owns registration uniqueness and lifecycle checks. |
 | [`assets/`](assets/) | Packaged skill body (`dsh-badge.md`) and PNG asset (`dsh-badge.png`) |
 
 </details>

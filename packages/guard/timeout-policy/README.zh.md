@@ -77,7 +77,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`TOOL_TIMEOUT`、`name`／`inject`／`apply`、`tools/execute` 包装层 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式：无状态包装层不拥有包级事件历史） |
+| — | 不发布运行时不变式伴生入口；无状态包装层不拥有包级事件历史。 |
 
 </details>
 

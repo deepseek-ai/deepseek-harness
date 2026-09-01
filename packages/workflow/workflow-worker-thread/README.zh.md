@@ -85,7 +85,7 @@ kind: "package-reference"
 | [`src/protocol.ts`](src/protocol.ts) | 带类型的宿主／worker 消息协议 |
 | [`src/meta.ts`](src/meta.ts) | `meta` 形状校验与规范化 |
 | [`src/session.ts`](src/session.ts) | 子 agent 运行在跨入 worker 前的投影与快照 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；worker 测试覆盖该边界） |
+| — | 不发布运行时不变式伴生入口；worker 测试覆盖该边界。 |
 
 ### 运行顺序
 

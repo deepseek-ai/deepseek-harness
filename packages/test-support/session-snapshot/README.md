@@ -116,7 +116,7 @@ The shared core owns manifests, workspace setup/comparison, typed identity mappi
 | [`src/workspace.ts`](src/workspace.ts) | Scenario workspace setup and complete expected-state comparison |
 | [`src/suite.ts`](src/suite.ts) | Scenario-table suite factory, fixture guards, record/refresh write-back |
 | [`src/index.ts`](src/index.ts) | Package entry re-exporting the four layers |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; consuming test suites exercise the kit) |
+| — | No runtime invariant companion is published; this test-support package owns no production event stream or mutable data; consuming test suites exercise its behavior. |
 
 ### Data flow
 

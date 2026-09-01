@@ -63,7 +63,7 @@ This section explains the design of the helper; the observable behavior is fully
 
 ### Design
 
-The helper is one function, `mountAgentLoopTestDependencies`, that mounts five service plugins in a fixed dependency order — LLM, session, system-prompt, tool registry, then agent registry — and deliberately stops before `AgentLoop` itself, so the caller controls loop load order and the topology under test. Ownership stays with the caller's context: every mounted service is context-owned, a plugin-load failure rejects the promise, and earlier services unwind with the context. The implementation lives in [`src/index.ts`](src/index.ts); the [`src/invariant.ts`](src/invariant.ts) companion declares no runtime invariant because the package owns no production event stream or mutable data — consuming test suites exercise its behavior.
+**Runtime invariant:** No companion is published. This test-support package owns no production event stream or mutable data; consuming test suites exercise its behavior.
 
 </details>
 

@@ -138,3 +138,5 @@ This Dev Note is working context for maintainers: open design questions and dire
 The download is deliberately browser-scoped; a Host-path or native folder export would need a new endpoint contract and a decision on where the ZIP lands.
 
 </details>
+
+**Runtime invariant:** No companion is published. Connection and the command registry own both registrations, while each export reads authoritative Session services.

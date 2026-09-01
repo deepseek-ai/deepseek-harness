@@ -12,6 +12,9 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {
@@ -48,13 +51,13 @@
       "path": "../../llm/token-meter"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../util/workspace-path"
     },
     {
       "path": "../../session/session-stats"
+    },
+    {
+      "path": "../../session/session-turn-outline"
     },
     {
       "path": "../../settings/settings"

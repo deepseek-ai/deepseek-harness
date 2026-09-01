@@ -93,7 +93,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxProvider` 服务、模式/强制执行/策略类型、故障关闭错误 |
 | [`src/escalation.ts`](src/escalation.ts) | 升权词汇：更宽模式阶梯、参数校验、拒绝与提示标记、审批编排 |
 | [`src/roots.ts`](src/roots.ts) | 可写根目录推导，Seatbelt profile 与进程内 fs 栅栏共享 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；抽象 seam 不注册事件或数据关系） |
+| — | 不发布运行时不变式伴生入口；抽象 seam 不注册事件或数据关系。 |
 
 ### 升权编排
 

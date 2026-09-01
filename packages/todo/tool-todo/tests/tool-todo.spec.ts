@@ -82,7 +82,7 @@ describe('dsh-tool-todo', () => {
     })
     expect(text(result)).toContain('1 pending, 1 in progress, 0 completed')
 
-    const event = agent.session.events.findLast(e => e.type === 'todo/write')!
+    const event = agent.session.snapshotEvents().findLast(e => e.type === 'todo/write')!
     expect(event.data.todos).toEqual(todos)
   })
 
@@ -92,7 +92,7 @@ describe('dsh-tool-todo', () => {
     const result = await callTodo(ctx, { todos: [{ content: '  plan the work  ', status: 'pending' }] }, { agent })
     expect(result.isError).toBe(false)
 
-    const event = agent.session.events.findLast(e => e.type === 'todo/write')!
+    const event = agent.session.snapshotEvents().findLast(e => e.type === 'todo/write')!
     expect(event.data.todos).toEqual([{ content: 'plan the work', status: 'pending' }])
   })
 
@@ -105,7 +105,7 @@ describe('dsh-tool-todo', () => {
       { content: 'b', status: 'in_progress' },
     ] }, { agent })
 
-    const current = agent.session.events.findLast(e => e.type === 'todo/write')!.data.todos
+    const current = agent.session.snapshotEvents().findLast(e => e.type === 'todo/write')!.data.todos
     expect(current).toEqual([
       { content: 'a', status: 'completed' },
       { content: 'b', status: 'in_progress' },
@@ -139,7 +139,7 @@ describe('dsh-tool-todo', () => {
       todos,
       counts: { pending: 1, inProgress: 2, completed: 0 },
     })
-    expect(agent.session.events.findLast(e => e.type === 'todo/write')!.data.todos).toEqual(todos)
+    expect(agent.session.snapshotEvents().findLast(e => e.type === 'todo/write')!.data.todos).toEqual(todos)
   })
 
   describe('allowParallelInProgress', () => {
@@ -155,7 +155,7 @@ describe('dsh-tool-todo', () => {
       expect(result.isError).toBe(true)
       expect(text(result)).toContain('at most one task may be in_progress')
       // A rejected call must not reach the durable log.
-      expect(agent.session.events.some(e => e.type === 'todo/write')).toBe(false)
+      expect(agent.session.snapshotEvents().some(e => e.type === 'todo/write')).toBe(false)
     })
 
     it('false still accepts one active item', async () => {
@@ -247,7 +247,7 @@ describe('todo/write event', () => {
     ]
     session.append('todo/write', { todos })
 
-    const event = session.events.findLast(e => e.type === 'todo/write')!
+    const event = session.snapshotEvents().findLast(e => e.type === 'todo/write')!
     expect(event.type).toBe('todo/write')
     expect(event.data.todos).toEqual(todos)
 
@@ -268,7 +268,7 @@ describe('todo/write event', () => {
       { content: 'second', status: 'in_progress' },
     ] })
 
-    const current = session.events.findLast(e => e.type === 'todo/write')!.data.todos
+    const current = session.snapshotEvents().findLast(e => e.type === 'todo/write')!.data.todos
     expect(current).toEqual([
       { content: 'first', status: 'completed' },
       { content: 'second', status: 'in_progress' },
@@ -293,11 +293,11 @@ describe('todo/write event', () => {
     original.append('turn/start', { turn: 1 })
     original.append('todo/write', { todos: [{ content: 'only', status: 'completed' }] })
     original.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
-    const replayed = Session.create(SessionId('t4-replay'), [...original.events])
+    const replayed = Session.create(SessionId('t4-replay'), original.snapshotEvents())
 
-    expect(replayed.events.findLast(e => e.type === 'todo/write')!.data.todos)
+    expect(replayed.snapshotEvents().findLast(e => e.type === 'todo/write')!.data.todos)
       .toEqual([{ content: 'only', status: 'completed' }])
-    expect(replayed.events.slice(0, original.seq)).toEqual(original.events)
+    expect(replayed.snapshotEvents(0, original.seq)).toEqual(original.snapshotEvents())
     expect(replayed.firstLiveSeq).toBe(original.seq)
   })
 })

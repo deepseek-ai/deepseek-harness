@@ -96,7 +96,7 @@ kind: "package-reference"
 | [`src/per-record-unit.ts`](src/per-record-unit.ts) | 一个 `per-record` 单元：目录树读取、路径安全记录与单文档写入 |
 | [`src/format.ts`](src/format.ts) | 带版本校验的整单元与记录序列化 |
 | [`src/atomic.ts`](src/atomic.ts) | 原子文件替换：临时文件写入、fsync、rename、目录 fsync |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式：正确性靠往返持久性） |
+| — | 不发布运行时不变式伴生入口；正确性靠往返持久性。 |
 
 </details>
 

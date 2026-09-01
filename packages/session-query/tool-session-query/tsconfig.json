@@ -33,9 +33,6 @@
       "path": "../session-query"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../util/timeout"
     },
     {

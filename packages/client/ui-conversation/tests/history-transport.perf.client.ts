@@ -441,7 +441,8 @@ function assemble(entries: readonly SessionEventLikeEntry[]): FoldSnapshots {
     { entries: () => [viewDefinition('chat'), viewDefinition('trajectory')] },
   )
   assembler.replaceWindow(entries, false)
-  assembler.flush()
+  assembler.activateTarget('chat')
+  assembler.activateTarget('trajectory')
   return {
     chat: assembler.snapshot('chat'),
     trajectory: assembler.snapshot('trajectory'),

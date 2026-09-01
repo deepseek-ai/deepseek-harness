@@ -101,3 +101,5 @@ These limits define the freshness and reach of the inventory view; they are curr
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package owns a read-only Settings contribution.

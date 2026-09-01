@@ -186,3 +186,5 @@ kind: "package-reference"
 - **远程运行时**——远程运行时需要独立的后端与工作区映射。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。run 生命周期配对由 subagent seam 的不变式检查；backend 自身状态位于子进程中，超出当前 Context 的事件流。

@@ -135,7 +135,7 @@ class TestPersistence extends SessionPersistence {
     const explicit = this.logical.get(id)
     if (explicit !== undefined) return Promise.resolve(explicit)
     const live = this.ctx.sessions.get(id)
-    if (live !== undefined) return Promise.resolve({ meta: live.header, events: live.events })
+    if (live !== undefined) return Promise.resolve({ meta: live.header, events: live.snapshotEvents() })
     const stored = this.durable.get(id)
     return stored === undefined
       ? Promise.reject(new Error(`test persistence: session '${id}' not found`))
@@ -171,7 +171,7 @@ class TestPersistence extends SessionPersistence {
   }
 
   persist(session: Session): void {
-    this.durable.set(session.id, { meta: session.header, events: session.events })
+    this.durable.set(session.id, { meta: session.header, events: session.snapshotEvents() })
   }
 
   setDurable(inspection: SessionInspection): void {

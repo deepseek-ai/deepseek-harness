@@ -182,3 +182,5 @@ spawn 返回 id 与有界启动输出。发送与读取返回有界终端文本�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个无状态 adapter 只贡献 tool 与 prompt guidance；PTY lifecycle 与 background-job 关系属于其组合的 service。

@@ -43,3 +43,5 @@ None; the stores neither assemble nor send model requests.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The package exports a library engine and creates no process-global state; each store instance is covered by its owning tests.

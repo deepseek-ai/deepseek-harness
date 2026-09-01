@@ -318,7 +318,7 @@ describe('SurfaceManager', () => {
       }),
     }, { surfaceOp: { op: 'replace', start: 2, end: 1 }, sourceEventSeqs: [2, 1] })
 
-    const folded = foldSurface(s.events)
+    const folded = foldSurface(s.snapshotEvents())
     expect(folded.nodes).toEqual(s.surface.nodes)
     expect(folded.replacements).toEqual([
       { seq: 2, start: 0, end: 0, shadowedSeqs: [0] },
@@ -327,8 +327,8 @@ describe('SurfaceManager', () => {
     folded.nodes[0] = 99
     folded.replacements[0]!.shadowedSeqs.push(99)
     expect(s.surface.nodes).toEqual([3])
-    expect(foldSurface(s.events).nodes).toEqual([3])
-    expect(foldSurface(s.events).replacements[0]!.shadowedSeqs).toEqual([0])
+    expect(foldSurface(s.snapshotEvents()).nodes).toEqual([3])
+    expect(foldSurface(s.snapshotEvents()).replacements[0]!.shadowedSeqs).toEqual([0])
   })
 
   it('does not retain fold-only replacement history in incremental state', () => {
@@ -351,7 +351,7 @@ describe('SurfaceManager', () => {
     expect(s.surface.nodes).toEqual([1])
     const manager = s.surface as unknown as { _state: object }
     expect(Object.hasOwn(manager._state, 'replacements')).toBe(false)
-    expect(foldSurface(s.events).replacements).toEqual([
+    expect(foldSurface(s.snapshotEvents()).replacements).toEqual([
       { seq: 1, start: 0, end: 0, shadowedSeqs: [0] },
     ])
   })
@@ -375,7 +375,7 @@ describe('SurfaceManager', () => {
     const surface = s.surface
     const nodes = surface.nodes
 
-    expect(nodes).toEqual(foldSurface(s.events).nodes)
+    expect(nodes).toEqual(foldSurface(s.snapshotEvents()).nodes)
     expect(surface.replaceGeneration).toBe(0)
 
     expect(() => s.append(
@@ -394,11 +394,11 @@ describe('SurfaceManager', () => {
       { surfaceOp: { op: 'replace', start: 0, end: 0 } },
     )).toThrow(/missing 0/)
 
-    expect(s.events).toHaveLength(1)
+    expect(s.snapshotEvents()).toHaveLength(1)
     expect(s.surface).toBe(surface)
     expect(surface.nodes).toEqual([0])
     expect(surface.replaceGeneration).toBe(0)
-    expect(surface.nodes).toEqual(foldSurface(s.events).nodes)
+    expect(surface.nodes).toEqual(foldSurface(s.snapshotEvents()).nodes)
 
     s.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'b' }], source: { kind: 'user' },
@@ -406,7 +406,7 @@ describe('SurfaceManager', () => {
     expect(surface.nodes).toBe(nodes)
     expect(surface.nodes).toEqual([0, 1])
     expect(surface.replaceGeneration).toBe(0)
-    expect(surface.nodes).toEqual(foldSurface(s.events).nodes)
+    expect(surface.nodes).toEqual(foldSurface(s.snapshotEvents()).nodes)
   })
 
   it('foldSurface rejects a surface-eligible event without its mandatory marker', () => {
@@ -479,7 +479,7 @@ describe('SurfaceManager', () => {
         isError: false,
       }),
     }, { surfaceOp: 'append' })
-    const replayed = Session.create(SessionId('replay'), [...original.events])
+    const replayed = Session.create(SessionId('replay'), original.snapshotEvents())
     expect(replayed.surface.nodes).toEqual([1, 2, 4])
     expect(replayed.deriveMessages()).toEqual(original.deriveMessages())
   })
@@ -645,7 +645,7 @@ describe('SurfaceManager', () => {
     // Mutate caller's array after append.
     sources.push(1)
     sources[0] = 99
-    const logged = s.events[1]! as SurfaceEvent
+    const logged = s.snapshotEvents()[1]! as SurfaceEvent
     expect(logged.sourceEventSeqs).toEqual([0])
   })
 
@@ -697,7 +697,7 @@ describe('SurfaceManager', () => {
     }, { surfaceOp: op, sourceEventSeqs: [0] })
     // Mutate caller's object after append.
     op.start = 99
-    const logged = s.events[1]! as SurfaceEvent
+    const logged = s.snapshotEvents()[1]! as SurfaceEvent
     expect(logged.surfaceOp).toEqual({ op: 'replace', start: 0, end: 0 })
   })
 })
@@ -797,8 +797,8 @@ describe('Session.append surface opts', () => {
     expect(event.sourceEventSeqs).toEqual([0, 1])
     expect(event.surfaceOp).toBe('append')
     // The logged event matches the returned event.
-    expect((s.events[2]! as SurfaceEvent).sourceEventSeqs).toEqual([0, 1])
-    expect((s.events[2]! as SurfaceEvent).surfaceOp).toBe('append')
+    expect((s.snapshotEvents()[2]! as SurfaceEvent).sourceEventSeqs).toEqual([0, 1])
+    expect((s.snapshotEvents()[2]! as SurfaceEvent).surfaceOp).toBe('append')
   })
 
   it('deriveMessages skips a surface node that derives to null (empty assistant/message)', () => {
@@ -830,8 +830,8 @@ describe('Session.append surface opts', () => {
   it('a non-surface event carries no surface fields', () => {
     const s = Session.create(SessionId('noopts'))
     s.append('turn/start', { turn: 1 })
-    expect((s.events[0] as SessionEvent<SurfaceEventType>).sourceEventSeqs).toBeUndefined()
-    expect((s.events[0] as SessionEvent<SurfaceEventType>).surfaceOp).toBeUndefined()
+    expect((s.snapshotEvents()[0] as SessionEvent<SurfaceEventType>).sourceEventSeqs).toBeUndefined()
+    expect((s.snapshotEvents()[0] as SessionEvent<SurfaceEventType>).surfaceOp).toBeUndefined()
   })
 
   it('surfaceOp primitives are not cloned (they are immutable)', () => {
@@ -882,13 +882,13 @@ describe('surface type guards', () => {
 
   it('isSurfaceEvent narrows a fully-formed surface event', () => {
     const s = surfaceSession()
-    const userMessage = s.events.find(e => e.type === 'user/message')!
+    const userMessage = s.snapshotEvents().find(e => e.type === 'user/message')!
     expect(isSurfaceEvent(userMessage)).toBe(true)
   })
 
   it('isSurfaceEvent rejects a non-surface-eligible type', () => {
     const s = surfaceSession()
-    const turnStart = s.events.find(e => e.type === 'turn/start')!
+    const turnStart = s.snapshotEvents().find(e => e.type === 'turn/start')!
     expect(isSurfaceEvent(turnStart)).toBe(false)
   })
 
@@ -913,8 +913,8 @@ describe('surface type guards', () => {
     s.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'checkpoint' }], source: { kind: 'plugin', plugin: 'compact' },
     }), { surfaceOp: { op: 'replace', start: 1, end: 2 }, sourceEventSeqs: [1, 2] })
-    const appended = s.events.find(e => e.type === 'user/message')!
-    const replacement = s.events.at(-1)!
+    const appended = s.snapshotEvents().find(e => e.type === 'user/message')!
+    const replacement = s.snapshotEvents().at(-1)!
 
     expect(isAppendSurfaceEvent(appended)).toBe(true)
     expect(isReplacementSurfaceEvent(appended)).toBe(false)
@@ -924,7 +924,7 @@ describe('surface type guards', () => {
 
   it('rejects log-only and markerless events from both marker guards', () => {
     const s = surfaceSession()
-    const turnStart = s.events.find(e => e.type === 'turn/start')!
+    const turnStart = s.snapshotEvents().find(e => e.type === 'turn/start')!
     // A surface-eligible type whose mandatory marker is absent has no origin at
     // all: it never entered the surface.
     const markerless: SessionEvent = {

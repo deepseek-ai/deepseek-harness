@@ -117,3 +117,5 @@ These limits define the editor's field coverage and the page's reach; they are c
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A nav-entry-only section plugin rendering a fixed empty content column — it emits no cordis events and owns no cross-plugin mutable relation.

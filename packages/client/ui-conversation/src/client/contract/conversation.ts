@@ -253,7 +253,7 @@ export interface ConversationViewBuilder<Node extends ConversationViewNode = Con
   }): Snapshot
 }
 
-/** Registry contribution that creates one isolated view builder per Session. */
+/** Registry contribution that creates an isolated builder when a Session first uses this target. */
 export interface ConversationViewDefinition<Node extends ConversationViewNode = ConversationViewNode, Snapshot = unknown> {
   readonly target: string
   /** @returns a new Session-owned incremental builder. */

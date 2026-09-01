@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-client-ui-agent-team",
   "description": "Web Agent Teams roster, task board, and teammate navigation",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "private": true,
   "repository": {
     "type": "git",
@@ -15,10 +15,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -57,7 +53,6 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-team": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
@@ -73,7 +68,6 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-team": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@testing-library/react": "^16.1.0",
@@ -83,7 +77,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ]

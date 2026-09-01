@@ -31,9 +31,6 @@
     },
     {
       "path": "../../shell/pwsh-local"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

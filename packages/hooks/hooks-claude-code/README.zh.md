@@ -114,7 +114,7 @@ matcher subject 是工具名称（`PreToolUse`／`PostToolUse`）、会话源（
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：配置校验、监听器注册、逐事件 payload、决策映射 |
 | [`src/config.ts`](src/config.ts) | Claude Code 配置解析：受支持事件、matcher 校验、命令替换 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；`hook/*` 配对检查位于 `dsh-hook-protocol`） |
+| — | 不发布运行时不变式伴生入口；`hook/*` 配对检查位于 `dsh-hook-protocol`。 |
 
 </details>
 

@@ -29,7 +29,7 @@ Choose this package when you compose a deployment that executes model-written pr
 
 ### Run a program
 
-Give the runtime a program source and one or more binding namespaces. Each namespace becomes one global object of async functions inside the program — PTC mode passes one under `tools`. The program runs as the body of an async function, so top-level `await` and `return` work; a lossless-JSON completion becomes `result.value`, emitted text arrives in order as `result.logs`, and any failure is reported in `result.error` with a kind you can branch on. The runtime never rejects for a program failure — rejection means you misused the seam, for example by submitting a run after disposal.
+Give the runtime a program source and one or more binding namespaces. Each namespace becomes one global object of async functions inside the program — PTC mode passes one under `tools`. The program runs as the body of an async function, so top-level `await` and `return` work; a lossless-JSON completion becomes `result.value`, each output channel preserves its own order in `result.logs` while cross-channel interleaving is backend-dependent, and any failure is reported in `result.error` with a kind you can branch on. The runtime never rejects for a program failure — rejection means you misused the seam, for example by submitting a run after disposal.
 
 ```text
 const result = await ctx.codeRuntime.run({
@@ -41,7 +41,7 @@ const result = await ctx.codeRuntime.run({
 
 ### Choose a backend
 
-Backends declare two descriptors you can rely on: `language` — what the program must be written in, with `'typescript'` and `'python'` as the well-known values and only TypeScript shipped — and `isolation` — the execution substrate (`'worker-thread'`, `'process'`, `'container'`), a label for deployments and diagnostics, not a security claim. The shipped backend is [`dsh-code-runtime-worker-thread`](../code-runtime-worker-thread/README.md), which executes TypeScript in a fresh Node worker thread; [`dsh-code-runtime-python`](../code-runtime-python/README.md) owns the wire protocol for the CPython backend.
+Backends declare two descriptors you can rely on: `language` — what the program must be written in, with `'typescript'` and `'python'` as the well-known values — and `isolation` — the execution substrate (`'worker-thread'`, `'process'`, `'container'`), a label for deployments and diagnostics, not a security claim. [`dsh-code-runtime-worker-thread`](../code-runtime-worker-thread/README.md) executes TypeScript in a fresh Node worker thread; the private [`dsh-experimental-code-runtime-python`](../../experimental/code-runtime-python/README.md) package executes Python in a fresh CPython subprocess for opt-in compositions.
 
 ### Name your bindings portably
 
@@ -73,7 +73,7 @@ The exhaustive semantics live in the [code runtime subsystem reference](../../..
 
 ### Vocabulary
 
-`CodeRunRequest` (`program`, `bindings`, `signal?`) carries everything the runtime acts on; defaulting (time budgets, output caps) is each provider's validated config, never a hidden `??` inside `run()`. `bindings` is a list of `CodeBindingNamespace`s (`global` + `functions` + optional `errorClass`), each exposed to the program as one global object of async callables returning `CodeJsonValue` — the seam's structural lossless-JSON type. An `errorClass` descriptor names a real program-global constructor and the own property that receives the rejected member name, so backends never learn consumer terms such as `ToolCallError`. `CodeRunResult` reports the lossless-JSON completion `value?`, ordered `logs: string[]`, and `error?` (`CodeRunFailure`: orthogonal `kind` + model-feedable `message`). See `src/types.ts` for the full contracts.
+`CodeRunRequest` (`program`, `bindings`, `signal?`) carries everything the runtime acts on; defaulting (time budgets, output caps) is each provider's validated config, never a hidden `??` inside `run()`. `bindings` is a list of `CodeBindingNamespace`s (`global` + `functions` + optional `errorClass`), each exposed to the program as one global object of async callables returning `CodeJsonValue` — the seam's structural lossless-JSON type. An `errorClass` descriptor names a real program-global constructor and the own property that receives the rejected member name, so backends never learn consumer terms such as `ToolCallError`. `CodeRunResult` reports the lossless-JSON completion `value?`, per-channel-ordered `logs: string[]` with backend-dependent cross-channel interleaving, and `error?` (`CodeRunFailure`: orthogonal `kind` + model-feedable `message`). See `src/types.ts` for the full contracts.
 
 ### Portable identifiers
 
@@ -85,7 +85,7 @@ Binding-global and error-class names are language-portable: they must match the 
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: abstract `CodeRuntime` service and the portable-identifier exclusion sets |
 | [`src/types.ts`](src/types.ts) | Vocabulary: `CodeRunRequest`, `CodeBindingNamespace`, `CodeJsonValue`, `CodeRunResult`, `CodeRunFailure` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the seam registers no mutable data relation) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 </details>
 
@@ -94,11 +94,11 @@ Binding-global and error-class names are language-portable: they must match the 
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these when the package-level contract is not enough. They move from the PTC mode consumer to the shipped backends and the capability-seam model.
+Read these when the package-level contract is not enough. They move from the PTC mode consumer to the backends and the capability-seam model.
 
 - [PTC mode Agent Note](../../../.agents/notes/implemented/feature/2026-06-15-ptc.md) — how the tool registry consumes `ctx.codeRuntime` and presents `run_code` to the model.
 - [Worker-thread backend](../code-runtime-worker-thread/README.md) — the shipped TypeScript execution backend.
-- [Python protocol package](../code-runtime-python/README.md) — the wire protocol for the CPython backend.
+- [Experimental Python backend](../../experimental/code-runtime-python/README.md) — the private CPython subprocess provider and its fd-3 protocol.
 - [Code runtime subsystem reference](../../../docs/subsystems/code-runtime.md) — request/result vocabulary, bindings, and the `ctx.codeRuntime` cordis surface.
 - [Capability seams](../../../.agents/notes/implemented/architecture/2026-06-13-capability-seams.md) — the Service Definition / Service Provider / Consumer split.
 
@@ -122,8 +122,8 @@ These limits define what the seam cannot do; they are current package constraint
 
 - **`run()` is one-shot** — `logs` arrive only on the resolved `CodeRunResult`; the seam exposes no streaming-log or progress API for a live program's output.
 - **No state survives between runs** — every request runs against a fresh world; a persistent REPL-style kernel is deferred until a backend brings its own logging story.
-- **Only the worker-thread backend ships** — `'process'` and `'container'` are declared well-known `isolation` values with no implementation; a hard security boundary awaits a container backend.
-- **Intermediate binding values have no byte cap** — implementations remain subject to structured-clone cost and process memory, while a provider may already impose its own acquisition bound.
+- **The worker-thread backend ships; the Python process backend is private experimental; `'container'` has no implementation** — a hard security boundary awaits a container backend.
+- **Intermediate binding values have no byte cap** — implementations remain subject to structured-clone cost and process memory, while a provider or executor may already have imposed its own acquisition bound.
 
 <a id="dev-note"></a>
 ### Dev Note

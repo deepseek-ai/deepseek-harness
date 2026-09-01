@@ -49,6 +49,10 @@ session.deriveMessages()         // the derived model history
 
 Surface events (`user/message`, `assistant/message`, `tool/result`) must declare how they join the ordered surface; raw chunks, boundaries, and other log-only events never produce a message.
 
+### Read the log
+
+`session.seq` reads the current log length without materializing an array, and `session.eventAt(seq)` reads one accepted, deeply frozen event by sequence number. `session.snapshotEvents(fromSeq?, toSeqExclusive?)` materializes a frozen, stable snapshot of a half-open range; a complete current snapshot is cached until the next append. Callers that only need a length or one event use `seq` or `eventAt()`.
+
 ### Fork a session
 
 `ctx.sessions.fork(source, boundary?, childSessionId?)` selects source events through an inclusive `boundary` seq (default: the current last event), requires the prefix to end outside an open turn, and creates a live child session with lineage metadata. A tool-time delegation that must branch mid-turn clips to a completed prefix instead.

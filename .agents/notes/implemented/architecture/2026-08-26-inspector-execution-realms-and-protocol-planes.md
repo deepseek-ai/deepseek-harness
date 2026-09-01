@@ -16,7 +16,7 @@ The [cross-realm CDP inspector decision](2026-08-23-cross-realm-cdp-inspector.md
 
 Top-level source directories identify execution ownership. `client/` contains only browser Client code, `host/` only Host Node-main-thread code, `worker/` only Worker-thread code, and `shared/` code that is safe in every environment. A module that executes in the Worker on behalf of a Client belongs under `worker/`, not `client/`.
 
-The repository-required `src/index.ts` and `src/invariant.ts` discovery entries are the only root-level source exceptions. They expose the Host package entry and its service type or register the invariant companion, contain no Inspector runtime implementation, and remain at fixed paths for repository tooling.
+The repository-required `src/index.ts` discovery entry is the only root-level source exception in this package. It exposes the Host package entry and its service type, contains no Inspector runtime implementation, and remains at a fixed path for repository tooling. The package publishes no invariant companion because its relationships fail in their owning wire, generation, Worker, or CDP operations, as recorded in the README.
 
 ```text
 src/

@@ -159,7 +159,7 @@ describe('Schedule tool protocol', () => {
     expect(value(await execute(test, 'schedule_create', { prompt: 'x', every_seconds: 299 })))
       .toEqual({ code: 'frequency_too_high', message: 'every_seconds must be at least 300.' })
     expect(test.flushes.count).toBe(0)
-    expect(test.agent.session.events.filter(event => event.type === 'schedule/change')).toEqual([])
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change')).toEqual([])
   })
 
   it('creates, lists, marks overdue, deletes, and never reuses an id', async () => {
@@ -232,7 +232,7 @@ describe('Schedule tool protocol', () => {
       expect.objectContaining({ id: 'schedule-1', kind: 'at' }),
       expect.objectContaining({ id: 'schedule-2', kind: 'at' }),
     ])
-    const changes = test.agent.session.events
+    const changes = test.agent.session.snapshotEvents()
       .filter(event => event.type === 'schedule/change' && event.data.operation === 'create')
     expect(changes.map((change) => {
       if (change.type !== 'schedule/change' || change.data.operation !== 'create') {
@@ -300,7 +300,7 @@ describe('Schedule tool protocol', () => {
       message: 'The scheduled time must be strictly in the future.',
     })
     expect(test.flushes.count).toBe(3)
-    expect(test.agent.session.events.filter(event => event.type === 'schedule/change')).toEqual([])
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change')).toEqual([])
   })
 
   it('returns a range error only after the create preflight', async () => {
@@ -312,7 +312,7 @@ describe('Schedule tool protocol', () => {
       message: 'The scheduled time must be representable as a four-digit-year RFC 3339 UTC instant.',
     })
     expect(test.flushes.count).toBe(1)
-    expect(test.agent.session.events.filter(event => event.type === 'schedule/change')).toEqual([])
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change')).toEqual([])
 
     const internal = await harness()
     const now = vi.spyOn(Date, 'now').mockImplementationOnce(() => { throw new Error('clock unavailable') })
@@ -350,9 +350,9 @@ describe('Schedule tool protocol', () => {
 describe('Schedule persistence failure boundaries', () => {
   it('does not fold an unconfirmed corrupt live suffix before preflight succeeds', async () => {
     const test = await harness()
-    Object.defineProperty(test.agent.session, 'events', {
+    Object.defineProperty(test.agent.session, 'snapshotEvents', {
       configurable: true,
-      value: [{
+      value: () => [{
         type: 'schedule/change',
         seq: 0,
         time: Date.now(),
@@ -438,7 +438,7 @@ describe('Schedule persistence failure boundaries', () => {
       error: { info: { name: 'AbortError', code: 'ABORTED' } },
     })
     expect(test.flushes.count).toBe(0)
-    expect(test.agent.session.events.filter(event => event.type === 'schedule/change')).toEqual([])
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change')).toEqual([])
   })
 
   it('does not persist a create cancelled during its first preflight', async () => {
@@ -462,7 +462,7 @@ describe('Schedule persistence failure boundaries', () => {
       error: { info: { name: 'AbortError', code: 'ABORTED' } },
     })
     expect(test.flushes.count).toBe(1)
-    expect(test.agent.session.events.filter(event => event.type === 'schedule/change')).toEqual([])
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change')).toEqual([])
   })
 
   it('does not persist a delete cancelled during its first preflight', async () => {
@@ -485,7 +485,7 @@ describe('Schedule persistence failure boundaries', () => {
       error: { info: { name: 'AbortError', code: 'ABORTED' } },
     })
     expect(test.flushes.count).toBe(3)
-    expect(test.agent.session.events.filter(event => event.type === 'schedule/change'))
+    expect(test.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change'))
       .toHaveLength(1)
     expect(value(await execute(test, 'schedule_list', {})))
       .toEqual([expect.objectContaining({ id: 'schedule-1' })])
@@ -496,21 +496,21 @@ describe('Schedule persistence failure boundaries', () => {
     createTest.flushes.outcomes.push('reject')
     expect(value(await execute(createTest, 'schedule_create', { prompt: 'later', after_seconds: 1 })))
       .toMatchObject({ code: 'persistence_uncertain', operation: 'create' })
-    expect(createTest.agent.session.events.filter(event => event.type === 'schedule/change')).toEqual([])
+    expect(createTest.agent.session.snapshotEvents().filter(event => event.type === 'schedule/change')).toEqual([])
 
     const deleteTest = await harness()
     await execute(deleteTest, 'schedule_create', { prompt: 'keep', after_seconds: 1 })
     deleteTest.flushes.outcomes.push('reject')
     expect(value(await execute(deleteTest, 'schedule_delete', { id: 'schedule-1' })))
       .toMatchObject({ code: 'persistence_uncertain', operation: 'delete', id: 'schedule-1' })
-    expect(deleteTest.agent.session.events.at(-1)?.data).toMatchObject({ operation: 'create' })
+    expect(deleteTest.agent.session.snapshotEvents().at(-1)?.data).toMatchObject({ operation: 'create' })
   })
 
   it('maps corrupt and unreadable folds for create, list, and delete', async () => {
     const corrupt = await harness()
-    Object.defineProperty(corrupt.agent.session, 'events', {
+    Object.defineProperty(corrupt.agent.session, 'snapshotEvents', {
       configurable: true,
-      value: [{
+      value: () => [{
         type: 'schedule/change', seq: 0, time: Date.now(),
         data: { version: 9, operation: 'delete', id: 'schedule-1' },
       }],
@@ -521,9 +521,9 @@ describe('Schedule persistence failure boundaries', () => {
       .toMatchObject({ code: 'corrupt_schedule_log' })
 
     const unreadable = await harness()
-    Object.defineProperty(unreadable.agent.session, 'events', {
+    Object.defineProperty(unreadable.agent.session, 'snapshotEvents', {
       configurable: true,
-      get() { throw 'unreadable log' },
+      value: () => { throw 'unreadable log' },
     })
     expect(value(await execute(unreadable, 'schedule_list', {})))
       .toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })

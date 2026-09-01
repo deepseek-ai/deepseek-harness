@@ -3,7 +3,7 @@ import { defineConfig } from 'tsdown'
 /** Node-only backend: listing and creation primitives over the host filesystem. */
 export default defineConfig([
   {
-    entry: ['lib/types/index.js', 'lib/types/invariant.js'],
+    entry: ['lib/types/index.js'],
     outDir: 'lib',
     format: ['esm'],
     platform: 'node',

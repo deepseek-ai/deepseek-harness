@@ -96,7 +96,7 @@ Request versions live below `<DSH_HOME>/attachments/v1/request-images/`. `readIm
 | [`src/normalization.ts`](src/normalization.ts) + [`src/encoding.ts`](src/encoding.ts) | Provider-independent normalization and bounded format/quality candidates |
 | [`src/request-image.ts`](src/request-image.ts) | Route-specific request transforms, cache identity, and singleflight |
 | [`src/image.ts`](src/image.ts) | Full raster decode and metadata verification |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; immutable writes and verified reads enforced at the backend boundary) |
+| — | No runtime invariant companion is published; immutable writes and verified reads are enforced directly at the backend boundary. |
 
 </details>
 

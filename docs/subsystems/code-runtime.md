@@ -52,7 +52,11 @@ interface CodeRunResult {
    * rendered string; a failed or value-less run leaves this absent.
    */
   value?: CodeJsonValue
-  /** Text the program emitted, in order, bounded only as part of the outer result. */
+  /**
+   * Captured text. Each source channel preserves emission order; interleaving
+   * across independent channels is backend-dependent. Bounded only as part of
+   * the outer result.
+   */
   logs: string[]
   /** Present iff the run failed; see {@link CodeRunFailure} for the taxonomy. */
   error?: CodeRunFailure
@@ -131,7 +135,7 @@ type CodeBindingFunction = (args: unknown) => Promise<CodeJsonValue>
 
 ## Captured output and the failure taxonomy
 
-Logs are plain strings in emission order. The runtime captures the program's console and stream output, but channel and console-method metadata are not part of the seam because consumers render only the text. Implementations cap the serialized outer log-array plus completion-value or failure-message payload; fixed result-envelope syntax and consumer presentation whitespace are not part of that variable-payload ledger. Overflow is an explicit failure rather than in-band value substitution.
+Logs are plain strings. Each source channel preserves emission order, while interleaving across independent channels is backend-dependent because channel metadata is not part of the seam. The runtime captures the program's console and stream output, and consumers render only the text. Implementations cap the serialized outer log-array plus completion-value or failure-message payload; fixed result-envelope syntax and consumer presentation whitespace are not part of that variable-payload ledger. Overflow is an explicit failure rather than in-band value substitution.
 
 Failure kinds are **orthogonal outcomes reported independently** (per [defensive-patterns](../defensive-patterns.md)): a budget expiry is not an exception, an abort is not a timeout, and a substrate death (e.g. OOM) is neither:
 
@@ -158,7 +162,7 @@ interface CodeRunFailure {
 
 ## The service
 
-`CodeRuntime` (`ctx.codeRuntime`, abstract — defined in [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)) is `run(request)` plus two readonly descriptors: `language` (what the program must be written in — `'typescript'` and `'python'` are the well-known values, those `dsh-tools` presents, and only `'typescript'` has a published backend; a consumer generating language-specific presentation switches on it and fails loud on one it cannot present) and `isolation` (the execution substrate — `'worker-thread'`, `'process'`, `'container'`; a diagnostic label, **not a security claim**). Implementations must keep runs isolated from each other (no cross-run state) and dispose to quiescence: in-flight runs are terminated and awaited before teardown completes.
+`CodeRuntime` (`ctx.codeRuntime`, abstract — defined in [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)) is `run(request)` plus two readonly descriptors: `language` (what the program must be written in — `'typescript'` and `'python'` are the well-known values, those `dsh-tools` presents, the TypeScript backend released and the Python backend experimental and private (not published); a consumer generating language-specific presentation switches on it and fails loud on one it cannot present) and `isolation` (the execution substrate — `'worker-thread'`, `'process'`, `'container'`; a diagnostic label, **not a security claim**). Implementations must keep runs isolated from each other (no cross-run state) and dispose to quiescence: in-flight runs are terminated and awaited before teardown completes.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

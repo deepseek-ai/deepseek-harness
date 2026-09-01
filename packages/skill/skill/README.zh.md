@@ -86,7 +86,7 @@ agent（智能体）和用户可以通过单一查找使用可复用的任务专
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口、`SkillRegistry` 服务、候选项与定义验证、共享的面向模型渲染 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；provider/runtime map 与带 revision 的 cache 在 registry 内原子变更，且没有独立 change event 或 snapshot 可供交叉核对。 |
 
 ### 目录收集
 

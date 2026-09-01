@@ -13,6 +13,7 @@ import {
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
 import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
 import { WelcomeNotice } from '../src/client/WelcomeNotice.tsx'
+import { apply as hostApply } from '../src/index.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -61,6 +62,10 @@ function declare(slots: SlotRegistry): () => void {
 }
 
 describe('ui-settings-models apply', () => {
+  it('keeps the host Loader entry inert', () => {
+    expect(hostApply).not.toThrow()
+  })
+
   it('declares the services it uses', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'remote', 'remote.credentials', 'remote.llm', 'remote.settings',

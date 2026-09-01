@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent,
+} from 'react'
+import { createPortal } from 'react-dom'
 import type { ScheduleRecord } from '@deepseek-ai/dsh-schedule/client'
 import {
   IconAlarmClockOutline16,
   IconChevronDownOutline14,
+  useAnchoredPosition,
   useDismissOnOutsidePointer,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
@@ -19,6 +23,7 @@ type TimeUnit = 'day' | 'hour' | 'minute' | 'second'
 const EMPTY_RECORDS: readonly ScheduleRecord[] = []
 const SECOND_MS = 1_000
 const SECOND_UNIT = { unit: 'second', seconds: 1 } as const
+const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
 const UNIT_SECONDS: readonly { unit: TimeUnit; seconds: number }[] = [
   { unit: 'day', seconds: 86_400 },
   { unit: 'hour', seconds: 3_600 },
@@ -105,8 +110,17 @@ export function ScheduleCatalogAction({ useSession, useProjection, t }: Schedule
   const [now, setNow] = useState(() => Date.now())
   const rootRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const catalogRef = useRef<HTMLUListElement>(null)
+  const catalogPosition = useAnchoredPosition({
+    open,
+    anchorRef: triggerRef,
+    panelRef: catalogRef,
+    side: 'bottom',
+    gap: 5,
+    margin: 16,
+  })
 
-  useDismissOnOutsidePointer(rootRef, open, setOpen)
+  useDismissOnOutsidePointer(rootRef, open, setOpen, catalogRef)
 
   useEffect(() => {
     if (!open) return
@@ -151,8 +165,13 @@ export function ScheduleCatalogAction({ useSession, useProjection, t }: Schedule
     </button>
   )
   const catalog = open
-    ? (
-      <ul className={css.menu} aria-label={t('list.aria')}>
+    ? createPortal((
+      <ul
+        ref={catalogRef}
+        className={css.menu}
+        style={catalogPosition ?? MEASURE_STYLE}
+        aria-label={t('list.aria')}
+      >
         {rows.map((record) => {
           const overdue = Date.parse(record.scheduledAt) <= now
           return (
@@ -178,7 +197,7 @@ export function ScheduleCatalogAction({ useSession, useProjection, t }: Schedule
           )
         })}
       </ul>
-    )
+    ), document.body)
     : null
 
   return (

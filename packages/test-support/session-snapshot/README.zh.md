@@ -116,7 +116,7 @@ defineAcpSnapshotSuite({
 | [`src/workspace.ts`](src/workspace.ts) | 场景 workspace 设置与完整预期状态比较 |
 | [`src/suite.ts`](src/suite.ts) | 场景表套件工厂、fixture 保护、录制/刷新回写 |
 | [`src/index.ts`](src/index.ts) | 再导出四个层的包入口 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；消费它的测试套件会检验该工具包） |
+| — | 不发布运行时不变式伴生入口；消费它的测试套件会检验该工具包。 |
 
 ### 数据流
 

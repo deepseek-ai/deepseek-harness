@@ -151,7 +151,7 @@ export class SessionObservationReader {
     session: Session,
     projectionMode: NonNullable<SessionObservationOptions['projectionMode']>,
   ): SessionObservation {
-    const events = Object.freeze([...session.events])
+    const events = session.snapshotEvents()
     const projections = projectionMode === 'none'
       ? undefined
       : this.ctx.get('sessionProjections')?.snapshot(session)

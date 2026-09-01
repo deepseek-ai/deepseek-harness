@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import clsx from 'clsx'
 import { FoldToggle } from './FoldToggle.tsx'
 import { writeClipboard } from './clipboard.ts'
@@ -8,6 +8,7 @@ import {
   subscribeGrammarLoaded,
   type HighlightSpan,
 } from './markdown/highlight.ts'
+import { useViewportHighlighting } from './markdown/useViewportHighlighting.ts'
 import css from './ReadBlock.module.css'
 
 /**
@@ -72,6 +73,8 @@ export function ReadBlock({
   maxLines = DEFAULT_READ_MAX_LINES,
   className,
 }: ReadBlockProps) {
+  const rootRef = useRef<HTMLDivElement>(null)
+  const highlighting = useViewportHighlighting(rootRef, lang)
   // Whole-window highlighting preserves multiline grammar context; copy uses
   // the same text without gutter or banner chrome.
   const raw = useMemo(() => lines.map(line => line.text).join('\n'), [lines])
@@ -79,7 +82,10 @@ export function ReadBlock({
   // plain text while its language's grammar imported picks up highlighting. The
   // snapshot value is opaque; only its change across renders drives the memo.
   const loaded = useSyncExternalStore(subscribeGrammarLoaded, grammarLoadCount, grammarLoadCount)
-  const highlighted = useMemo(() => highlightLines(raw, lang), [raw, lang, loaded])
+  const highlighted = useMemo(
+    () => highlighting ? highlightLines(raw, lang) : undefined,
+    [highlighting, raw, lang, loaded],
+  )
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -114,7 +120,7 @@ export function ReadBlock({
     [line, highlighted?.[index]])
 
   return (
-    <div className={clsx(css.block, className)} data-read="">
+    <div ref={rootRef} className={clsx(css.block, className)} data-read="">
       <div className={css.banner}>
         <div className={css.label}>{label ?? ''}</div>
         <div className={css.action}>

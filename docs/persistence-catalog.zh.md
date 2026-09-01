@@ -191,7 +191,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * The session's approval policy was switched — log-only, durable,
  * replayable, never in the model transcript (the model learns the policy
  * from the runtime-context snapshot and live switch notices). The LAST
- * such event is the session's override ({@link effectiveApprovalPolicy}).
+ * such event is the session's override.
  * `source: 'delegation'` marks an override seeded into a child; an absent
  * source is a runtime switch.
  */

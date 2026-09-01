@@ -22,6 +22,8 @@ Conversation 数据组装遵循后续的 [Conversation 业务节点决策](2026-
 
 details panel 是第二个工具展示点，但不是调用树所有者。`ui-conversation` 定位 selected call，并通过 `'conversation.details.tool'` 委托 output body；`ui-tool` 复用 card model，插件缺席时 conversation fallback 保留 raw result text。
 
+Generic row model 保留原始参数字符串 `bodyRaw`，不暴露预格式化 body。`ToolRow` 与 Bash fallback 只在展开后的 generic input section 可见时格式化该字符串；收起行会移除格式化文本，渲染结构化卡片的行则跳过 generic body 格式化。
+
 ## 运行时与渲染路径
 
 ```text
@@ -33,6 +35,8 @@ Session Event window
        -> tool.call.toolview(entryKey = toolName)
             |- registered atomic view
             `- GenericToolCard fallback
+                 |- collapsed or structured card: retain argsRaw only
+                 `- expanded generic input: format argsRaw
 ```
 
 ## 所有权边界
@@ -42,12 +46,12 @@ Session Event window
 | Client 运行时 Conversation engine | 上下文 identity、Location、历史回放、view Node 发布 | 工具事件含义、调用树、工具 renderer |
 | `ui-conversation` 工具 Definition | call/result 配对、Code Dispatch 拓扑、running/settled/interrupted `ToolCallBlock`、Chat 排序 anchor | 工具名称分发、card model、递归 React 结构 |
 | `ui-conversation` Chat view | keyed Node 顺序、scroll anchor、selection 与宿主动作 | 工具 lifecycle、subcall 组合、原子工具 renderer |
-| `ui-tool` | root/subcall 递归渲染、原子 keyed dispatch、fallback、card model 与 details output | 会话事件 fold、Chat 排序 |
+| `ui-tool` | root/subcall 递归渲染、原子 keyed dispatch、fallback、card model、展开时参数格式化与 details output | 会话事件 fold、Chat 排序 |
 | 业务工具插件 | 一个或多个 wire 工具名称的原子 renderer | root/subcall 位置、生命周期配对、会话 projector |
 
 ## 验证
 
-`ui-conversation` 测试固定工具 Definition 的 call/result 配对、Code Dispatch、interruption 和 running-to-settled keyed identity，不导入 `ui-tool` 的生产 renderer。`ui-tool` 测试挂载真实 conversation 宿主，固定 root/subcall 递归、keyed dispatch、Generic fallback、selection、details 和具体工具 card。组装后的 Web 测试覆盖两个插件共同装载的路径。
+`ui-conversation` 测试固定工具 Definition 的 call/result 配对、Code Dispatch、interruption 和 running-to-settled keyed identity，不导入 `ui-tool` 的生产 renderer。`ui-tool` 测试挂载真实 conversation 宿主，固定 root/subcall 递归、keyed dispatch、Generic fallback、selection、details、具体工具 card 与只在展开时执行的 generic body 格式化。组装后的 Web 测试覆盖两个插件共同装载的路径。
 
 ## 考虑过的替代方案
 
@@ -61,8 +65,12 @@ Session Event window
 
 **让 `ui-conversation` 直接导入 `ui-tool` 组件。** 拒绝：这会反转功能依赖并把工具展示变成必选能力。slot 保留独立装载、生命周期和 fallback。
 
+**为兼容性在 row model 上保留预格式化 body。** 拒绝：每个折叠行都会保留第二份完整参数字符串，而且兼容字段会让后续消费方恢复 eager 格式化。model 只暴露 `bodyRaw`，使展开时格式化成为唯一 generic 路径。
+
 ## 后果
 
 `ui-conversation` 不再依赖工具名称对应的业务展示，root 与 subcall 也不会漂移到不同分发路径。业务包可以独立拥有原子工具 renderer；`ui-tool` 缺席时，Conversation 数据组装仍然成立，Chat Node 使用通用 fallback，details 保留 raw result。
+
+折叠的工具行只保留既有 `argsRaw` 引用，不创建 pretty-print 副本，也不执行对应的格式化调用。展开 generic input 时才为当前可见行完成这项工作，收起后派生文本可以被回收；重复展开以有界重算换取更低的常驻内存。
 
 代价是 `ui-tool` 明确依赖 conversation 声明的业务 Node slot 和 locale namespace，并拥有一个工具专属子 slot。工具 Definition 暂时位于 `ui-conversation`，因为本次没有拆包；它以后可以沿 Conversation 注册表 seam 移动，而不会改变本记录规定的展示所有权。

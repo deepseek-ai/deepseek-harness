@@ -53,7 +53,7 @@ describe('all-messages LLM title provider', () => {
     ctx.llm.registerAdapter(['current-route'], adapter)
     await ctx.plugin(providerPlugin, LLM_CONFIG)
     const session = ctx.sessions.create(SessionId('all-plugin'), {
-      seed: seeded.events,
+      seed: seeded.snapshotEvents(),
       meta: { parentSession: seeded.id, seedLength: seeded.seq },
     })
     session.append('turn/start', { turn: 2 })

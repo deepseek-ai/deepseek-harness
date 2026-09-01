@@ -81,7 +81,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：固定脚本、提供方路由、报告校验、工具注册 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；工作流与 subagent 归属方校验它启动的运行与子 agent） |
+| — | 不发布运行时不变式伴生入口；工作流与 subagent 归属方校验它启动的运行与子 agent。 |
 
 </details>
 

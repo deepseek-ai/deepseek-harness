@@ -68,7 +68,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   })
 }
 
-function finalText(events: SessionEvent[]): string {
+function finalText(events: readonly SessionEvent[]): string {
   const message = events.findLast(event => event.type === 'assistant/message')
   if (message?.type !== 'assistant/message') return ''
   return message.data.message.content
@@ -84,7 +84,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('workspace context e2e: real mode
     live.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Workspace context handshake?' }], source: { kind: 'user' } }))
     await waitForIdle(live.ctx, live.agent)
 
-    expect(finalText([...live.agent.session.events])).toContain(PROBE)
+    expect(finalText(live.agent.session.snapshotEvents())).toContain(PROBE)
   }, 120_000)
 
   it('loads a nested AGENTS.md after the real read tool touches a descendant file', async () => {
@@ -96,7 +96,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('workspace context e2e: real mode
     live.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Use the read tool to inspect pkg/deep/file.txt. After reading it, answer: nested instruction handshake?' }], source: { kind: 'user' } }))
     await waitForIdle(live.ctx, live.agent)
 
-    expect(finalText([...live.agent.session.events])).toContain(NESTED_PROBE)
+    expect(finalText(live.agent.session.snapshotEvents())).toContain(NESTED_PROBE)
   }, 120_000)
 
   it('appends changed baseline instructions after a real file-tool touch without rewriting the frozen prefix', async () => {
@@ -109,7 +109,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('workspace context e2e: real mode
     live.agent.followup(createUserMessage({ content: [{ type: 'text', text: 'You must use the read tool to inspect trigger.txt. After reading it, answer: updated workspace context handshake?' }], source: { kind: 'user' } }))
     await waitForIdle(live.ctx, live.agent)
 
-    const events = [...live.agent.session.events]
+    const events = live.agent.session.snapshotEvents()
     const update = events.find(event => event.type === 'user/message'
       && event.data.source.kind === 'agent-instructions'
       && event.data.source.baseline !== true)

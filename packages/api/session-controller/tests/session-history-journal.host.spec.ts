@@ -146,7 +146,7 @@ describe('Session history raw journal', () => {
       value: { type: 'event', event: { type: 'tool/call', data: { callId: 'live-fast' } } },
     })
 
-    const events = vi.spyOn(session, 'events', 'get').mockImplementation(() => {
+    const events = vi.spyOn(session, 'snapshotEvents').mockImplementation(() => {
       throw new Error('live result rescanned Session history')
     })
     try {
@@ -366,7 +366,7 @@ describe('Session history raw journal', () => {
     await expect(iterator.next()).resolves.toMatchObject({
       value: { type: 'event', event: { type: 'turn/end' } },
     })
-    const events = vi.spyOn(session, 'events', 'get').mockImplementation(() => {
+    const events = vi.spyOn(session, 'snapshotEvents').mockImplementation(() => {
       throw new Error('live result rescanned Session history')
     })
     try {

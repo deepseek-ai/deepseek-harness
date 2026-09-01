@@ -86,7 +86,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 可继续子级设置：`installReportTool`、`Config`、投递解析 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；这个 adapter 没有独立 lifecycle stream；sender authorization 与 delivery 关系属于 subagent service。 |
 
 </details>
 

@@ -76,7 +76,7 @@ describe('sessions.rename', () => {
     expect(renamed.ok).toBe(true)
     if (!renamed.ok) return
     expect(renamed.value.title).toBe('new name')
-    const event = source.events.findLast(item => item.type === 'session/title')
+    const event = source.snapshotEvents().findLast(item => item.type === 'session/title')
     expect(event?.seq).toBe(renamed.value.seq)
     expect(event?.data).toMatchObject({ title: 'new name', source: { kind: 'user' } })
   })

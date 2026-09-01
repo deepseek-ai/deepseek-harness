@@ -54,7 +54,7 @@ async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOp
 function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
   return agent.whenIdle()
 }
-function events(agent: Agent): SessionEvent[] { return [...agent.session.events] }
+function events(agent: Agent): readonly SessionEvent[] { return agent.session.snapshotEvents() }
 /** Poll until `predicate` holds or the deadline passes — robust to detached
  * emit-listener hooks firing on a `.then` (a fixed sleep flakes under load). */
 async function waitFor(predicate: () => boolean, timeout = 5000, interval = 10): Promise<void> {

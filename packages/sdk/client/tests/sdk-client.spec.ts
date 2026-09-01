@@ -308,7 +308,10 @@ describe('HarnessClient', () => {
         description: 'dsh profile "profile-without-sdk-server"',
         initializeTimeoutMs: 50,
         disposeEofGraceMs: 100,
-        disposeGraceMs: 100,
+        // Wide SIGKILL confirmation: the hang-init child may still be
+        // starting up on a contended runner when close() escalates, so a
+        // tight window misreports a slow reap as a dispose failure.
+        disposeGraceMs: 3_000,
       },
     ))
     cleanups.push(() => client.close())
@@ -416,7 +419,7 @@ describe('HarnessClient', () => {
     const sigtermFile = join(dir, 'sigterm.txt')
     const client = processClient(fakeLaunch(
       { FAKE_IGNORE_EOF: '1', FAKE_SIGTERM_FILE: sigtermFile },
-      { shutdownTimeoutMs: 100, disposeEofGraceMs: 100, disposeGraceMs: 1_000 },
+      { shutdownTimeoutMs: 100, disposeEofGraceMs: 100, disposeGraceMs: 3_000 },
     ))
     await client.initialize({ cwd: process.cwd(), provider: 'p', model: 'm' })
     await client.close()
@@ -430,7 +433,7 @@ describe('HarnessClient', () => {
   it('escalates to SIGKILL when the runtime traps SIGTERM too', async () => {
     const client = processClient(fakeLaunch(
       { FAKE_IGNORE_EOF: '1', FAKE_TRAP_SIGTERM: '1' },
-      { shutdownTimeoutMs: 100, disposeEofGraceMs: 100, disposeGraceMs: 300 },
+      { shutdownTimeoutMs: 100, disposeEofGraceMs: 100, disposeGraceMs: 3_000 },
     ))
     await client.initialize({ cwd: process.cwd(), provider: 'p', model: 'm' })
     // Resolves (does not hang or reject): the SIGKILL rung reaped the child.

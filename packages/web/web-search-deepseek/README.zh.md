@@ -91,7 +91,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、Settings 段安装、逐次选项投影 |
 | [`src/provider.ts`](src/provider.ts) | `DeepSeekSearchProvider`：Messages 请求分发、块解析、引用拼接、凭据解析 |
 | [`src/types.ts`](src/types.ts) | 搜索响应的 Anthropic 协议类型 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；约定在服务处强制执行） |
+| — | 不发布运行时不变式伴生入口；约定在服务处强制执行。 |
 
 ### 请求流程
 

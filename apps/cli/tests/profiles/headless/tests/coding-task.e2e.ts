@@ -67,7 +67,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('coding task: fix a failing test 
     await waitForIdle(ctx, agent)
 
     // The agent claims success…
-    const summary = finalText([...agent.session.events]).toLowerCase()
+    const summary = finalText(agent.session.snapshotEvents()).toLowerCase()
     expect(summary.length).toBeGreaterThan(0)
 
     // …and the world agrees: the test passes when WE run it, and the test

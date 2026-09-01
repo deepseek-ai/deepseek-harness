@@ -82,3 +82,5 @@ No direct effect; mounted Host capabilities own any model-visible behavior they 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Typert and the Agent/Session registries own the observed relationships.

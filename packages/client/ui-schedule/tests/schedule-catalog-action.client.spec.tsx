@@ -27,6 +27,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.useRealTimers()
 })
 
@@ -121,6 +122,34 @@ describe('ScheduleCatalogAction visibility', () => {
     expect(screen.queryByRole('button', { name: '1 reminder' })).toBeNull()
     expect(document.activeElement).toBe(document.body)
     expect(screen.getByRole('button', { name: 'Neighbor' })).not.toBe(document.activeElement)
+  })
+})
+
+describe('ScheduleCatalogAction positioning', () => {
+  it('portals the catalog to the body and left-aligns it when space is available', () => {
+    const active = [record('active', 'after', START + 60_000)]
+    const view = render(<ScheduleCatalogAction {...props(active)} />)
+    const trigger = screen.getByRole('button', { name: '1 reminder' })
+    vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue({
+      x: 240,
+      y: 20,
+      left: 240,
+      right: 320,
+      top: 20,
+      bottom: 48,
+      width: 80,
+      height: 28,
+      toJSON: () => ({}),
+    })
+
+    fireEvent.click(trigger)
+
+    const catalog = screen.getByRole('list', { name: en['list.aria'] })
+    expect(view.container.contains(catalog)).toBe(false)
+    expect(catalog.parentElement).toBe(document.body)
+    expect(catalog.style.left).toBe('240px')
+    expect(catalog.style.top).toBe('53px')
+    expect(catalog.style.visibility).toBe('')
   })
 })
 
@@ -238,11 +267,13 @@ describe('ScheduleCatalogAction dismissal', () => {
     expect(document.activeElement).toBe(sibling)
   })
 
-  it('toggles from the trigger and dismisses only on an outside pointer press', () => {
+  it('keeps a pointer press inside the portaled catalog open and dismisses outside', () => {
     render(<ScheduleCatalogAction {...props(active)} />)
     const trigger = screen.getByRole('button')
     fireEvent.click(trigger)
-    fireEvent.pointerDown(screen.getByRole('list', { name: en['list.aria'] }))
+    const catalog = screen.getByRole('list', { name: en['list.aria'] })
+    expect(catalog.parentElement).toBe(document.body)
+    fireEvent.pointerDown(catalog)
     expect(trigger.getAttribute('aria-expanded')).toBe('true')
     fireEvent.pointerDown(document.body)
     expect(trigger.getAttribute('aria-expanded')).toBe('false')

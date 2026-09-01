@@ -882,7 +882,7 @@ describe('automation-only ACP bridge', () => {
     expect(secondImage.attachment.mediaType).toBe('image/jpeg')
     expect(secondImage.attachment.bytes).toBe(1)
     const agent = harness.ctx.agents.get(SessionId(sessionId))
-    expect(JSON.stringify(agent?.session.events)).not.toContain('AQ==')
+    expect(JSON.stringify(agent?.session.snapshotEvents())).not.toContain('AQ==')
   })
 
   it('rejects a malformed image batch atomically and frees the prompt slot', async () => {
@@ -953,7 +953,7 @@ describe('automation-only ACP bridge', () => {
       sessionId,
       prompt: [{ type: 'image', data: '', mimeType: 'image/png' }],
     })).rejects.toThrow(/inline image prompts were not advertised/)
-    expect(harness.ctx.agents.get(SessionId(sessionId))?.session.events.some(event => event.type === 'turn/start')).toBe(false)
+    expect(harness.ctx.agents.get(SessionId(sessionId))?.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
   })
 
   it('renders baseline resource links as textual references in the user message', async () => {

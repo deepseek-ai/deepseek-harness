@@ -39,9 +39,6 @@
       "path": "../../interaction/permission-presets"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {

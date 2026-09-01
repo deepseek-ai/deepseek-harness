@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   collectPackageInvariantViolations,
+  packageInvariantOwners,
 } from './package-invariants.ts'
 import { usesFlattenedPackageDependencies } from './package-dependency-policy.ts'
 
@@ -28,15 +29,18 @@ export const apply = (ctx: { invariants: { register(name: string, install: typeo
 }
 
 function fixture(options: {
+  companion?: boolean
   packageName?: string
   packageDirectory?: string
   source?: string
   clientDeclaration?: boolean
   clientExport?: boolean
   invariantExport?: boolean
+  invariantFile?: boolean
   invariantDependency?: boolean
   invariantReference?: boolean
   buildEntry?: boolean
+  omissionReason?: boolean
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-package-invariants-'))
   roots.push(root)
@@ -44,11 +48,17 @@ function fixture(options: {
   const dir = join(root, packageDirectory)
   mkdirSync(join(dir, 'src'), { recursive: true })
   const packageName = options.packageName ?? '@deepseek-ai/dsh-probe'
-  const exports = options.invariantExport === false ? {} : {
-    './invariant': {
+  const companion = options.companion ?? true
+  const invariantExport = options.invariantExport ?? companion
+  const invariantFile = options.invariantFile ?? companion
+  const invariantDependency = options.invariantDependency ?? companion
+  const invariantReference = options.invariantReference ?? companion
+  const buildEntry = options.buildEntry ?? companion
+  const exports = {
+    ...(invariantExport ? { './invariant': {
       types: './lib/types/invariant.d.ts',
       default: './lib/invariant.js',
-    },
+    } } : {}),
     ...(options.clientExport === true ? {
       './client': {
         types: './lib/types/client/index.d.ts',
@@ -66,22 +76,28 @@ function fixture(options: {
     name: packageName,
     ...(dsh === undefined ? {} : { dsh }),
     exports,
-    files: ['lib/index.js', 'lib/invariant.js'],
-    peerDependencies: options.invariantDependency === false || developmentOnlyInvariant ? {} : {
+    files: ['lib/index.js', ...invariantFile ? ['lib/invariant.js'] : []],
+    peerDependencies: !invariantDependency || developmentOnlyInvariant ? {} : {
       '@deepseek-ai/dsh-invariants': 'workspace:^',
     },
-    devDependencies: options.invariantDependency === false ? {} : {
+    devDependencies: !invariantDependency ? {} : {
       '@deepseek-ai/dsh-invariants': 'workspace:^',
     },
   }
   writeFileSync(join(dir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`)
   writeFileSync(join(dir, 'tsconfig.json'), `${JSON.stringify({
-    references: options.invariantReference === false ? [] : [{ path: '../../runtime-diagnostics/invariants' }],
+    references: invariantReference ? [{ path: '../../runtime-diagnostics/invariants' }] : [],
   }, null, 2)}\n`)
-  writeFileSync(join(dir, 'src/invariant.ts'), options.source ?? handwrittenInvariant(packageName))
+  if (companion) {
+    writeFileSync(join(dir, 'src/invariant.ts'), options.source ?? handwrittenInvariant(packageName))
+  }
   writeFileSync(
     join(dir, 'tsdown.config.ts'),
-    options.buildEntry === false ? "export default { entry: ['lib/types/index.js'] }\n" : "export default { entry: ['lib/types/index.js', 'lib/types/invariant.js'] }\n",
+    buildEntry ? "export default { entry: ['lib/types/index.js', 'lib/types/invariant.js'] }\n" : "export default { entry: ['lib/types/index.js'] }\n",
+  )
+  writeFileSync(
+    join(dir, 'README.md'),
+    options.omissionReason === false ? '# Probe\n' : '# Probe\n\nNo runtime invariant companion is published because this fixture owns no diverging observations.\n',
   )
   return root
 }
@@ -89,6 +105,23 @@ function fixture(options: {
 describe('package invariant gate', () => {
   it('accepts a hand-owned checking companion with publication metadata', () => {
     expect(collectPackageInvariantViolations(fixture())).toEqual([])
+  })
+
+  it('accepts a package that cleanly omits an invariant companion', () => {
+    const root = fixture({ companion: false })
+    expect(collectPackageInvariantViolations(root)).toEqual([])
+    expect(packageInvariantOwners(root)).toEqual([])
+  })
+
+  it('requires an omitted companion to have a README reason sentence', () => {
+    const violations = collectPackageInvariantViolations(fixture({
+      companion: false,
+      omissionReason: false,
+    }))
+    expect(violations).toContainEqual({
+      path: 'packages/core/probe/README.md',
+      message: 'omitted companion requires a README "No ... companion is published" reason sentence',
+    })
   })
 
   it('accepts development-only invariants for configured Host dependencies', () => {
@@ -135,6 +168,7 @@ describe('package invariant gate', () => {
   it('rejects missing publication metadata and build output', () => {
     const violations = collectPackageInvariantViolations(fixture({
       invariantExport: false,
+      invariantFile: false,
       invariantDependency: false,
       invariantReference: false,
       buildEntry: false,
@@ -145,6 +179,22 @@ describe('package invariant gate', () => {
       expect.stringContaining('devDependency'),
       expect.stringContaining('TypeScript project references'),
       expect.stringContaining('must bundle lib/types/invariant.js'),
+    ]))
+  })
+
+  it('rejects publication and build wiring left behind after omission', () => {
+    const violations = collectPackageInvariantViolations(fixture({
+      companion: false,
+      invariantExport: true,
+      invariantFile: true,
+      invariantReference: true,
+      buildEntry: true,
+    }))
+    expect(violations.map(violation => violation.message)).toEqual(expect.arrayContaining([
+      expect.stringContaining('exports["./invariant"] must be omitted'),
+      expect.stringContaining('files must omit lib/invariant.js'),
+      expect.stringContaining('TypeScript project references must omit ../../runtime-diagnostics/invariants'),
+      expect.stringContaining('build override must omit lib/types/invariant.js'),
     ]))
   })
 
@@ -221,19 +271,8 @@ export const apply = (ctx: { invariants: { register(name: string, install: () =>
       .toContain('must not default-export; Loader must retain the companion namespace')
   })
 
-  it('accepts explained empty installers and rejects unexplained ones', () => {
-    const explained = `
-export const name = 'probe-invariant'
-export const inject = ['invariants']
-const PACKAGE_NAME = '@deepseek-ai/dsh-probe'
-/** No runtime invariant: this pure package owns no events or mutable data. */
-const install = () => {}
-export const apply = (ctx: { invariants: { register(name: string, install: () => void): () => void } }) =>
-  ctx.invariants.register(PACKAGE_NAME, install)
-`
-    expect(collectPackageInvariantViolations(fixture({ source: explained }))).toEqual([])
-
-    const unexplained = `
+  it('rejects empty installers because packages without a check omit the companion', () => {
+    const source = `
 export const name = 'probe-invariant'
 export const inject = ['invariants']
 const PACKAGE_NAME = '@deepseek-ai/dsh-probe'
@@ -241,7 +280,7 @@ const install = () => {}
 export const apply = (ctx: { invariants: { register(name: string, install: () => void): () => void } }) =>
   ctx.invariants.register(PACKAGE_NAME, install)
 `
-    expect(collectPackageInvariantViolations(fixture({ source: unexplained })).map(violation => violation.message))
-      .toContain('empty install function must explain why with a "No runtime invariant:" comment')
+    expect(collectPackageInvariantViolations(fixture({ source })).map(violation => violation.message))
+      .toContain('empty install function is unnecessary; omit the companion and its publication wiring')
   })
 })

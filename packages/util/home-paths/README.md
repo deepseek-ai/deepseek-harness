@@ -64,7 +64,7 @@ The package is built on one principle: all harness user data lives under one roo
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Home resolution, path joining, display, tilde expansion, and watch-path canonicalization |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the resolution rules are exercised by unit tests) |
+| — | No runtime invariant companion is published; this pure utility owns no event stream or mutable runtime data; its value algebra is enforced by unit tests. |
 
 ### Resolution rules
 

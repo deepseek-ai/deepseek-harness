@@ -306,7 +306,7 @@ describe('SubagentModelSelectionConfig', () => {
 
     const enabledSeed = Session.create(SessionId('enabled-seed'))
     enabledSeed.append('subagent/model-selection-policy', { allowedModels: ALLOWED_MODELS })
-    const resumedEnabled = await createAgent(ctx, 'resumed-enabled', { seed: enabledSeed.events })
+    const resumedEnabled = await createAgent(ctx, 'resumed-enabled', { seed: enabledSeed.snapshotEvents() })
     expect(selectable(ctx, resumedEnabled)).toBe(true)
 
     const oldSeed = Session.create(SessionId('old-seed'), [])
@@ -314,7 +314,11 @@ describe('SubagentModelSelectionConfig', () => {
       enabled: true,
       allowedModels: ALLOWED_MODELS,
     })
-    const resumedDisabled = await createAgent(ctx, 'resumed-disabled', { seed: oldSeed.events })
+    const resumedEmpty = await createAgent(ctx, 'resumed-empty', { seed: [] })
+    expect(selectable(ctx, resumedEmpty)).toBe(false)
+    expect(subagentModelSelectionPolicy(ctx.sessionProjections, resumedEmpty.session)).toBeUndefined()
+
+    const resumedDisabled = await createAgent(ctx, 'resumed-disabled', { seed: oldSeed.snapshotEvents() })
     expect(selectable(ctx, resumedDisabled)).toBe(false)
     expect(subagentModelSelectionPolicy(ctx.sessionProjections, resumedDisabled.session)).toBeUndefined()
     await ctx.fiber.dispose()

@@ -310,6 +310,21 @@ describe('headless runner', () => {
     await test.ctx.fiber.dispose()
   })
 
+  it('fails when an event below the captured Session length cannot be read', async () => {
+    const test = await bench({
+      afterPrompt(session, message) {
+        appendTurn(session, 1, message, 'unreachable', true)
+        Object.defineProperty(session, 'eventAt', { value: () => undefined })
+      },
+    })
+    expect(await test.run()).toMatchObject({
+      code: 1,
+      out: '',
+      err: 'dsh: headless summary cannot read seq 0 below captured length 7\n',
+    })
+    await test.ctx.fiber.dispose()
+  })
+
   it('reports a direct Agent creation failure', async () => {
     const ctx = new Context()
     let err = ''

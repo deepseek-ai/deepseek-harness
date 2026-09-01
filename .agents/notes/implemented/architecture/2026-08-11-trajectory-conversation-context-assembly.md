@@ -18,6 +18,8 @@ Trajectory registers target-owned Conversation Definitions and a `trajectory` Vi
 
 Each Definition belongs to one target. Chat and Trajectory may recognize the same durable Event family, but they keep separate State and final Node payloads. They share only the Assembler's exact-ID matching, ordered Matches, Location facts, Reader dependencies, publication scheduling, and replace/prepend/append lifecycle.
 
+Trajectory's target source activates its View Builder on first subscription. Before that subscription, its Definitions maintain current State while the Assembler skips `buildViewNode()` and snapshot assembly. The target remains active after unsubscription, so later visits reuse the incrementally maintained snapshot.
+
 The existing [Trajectory inspection ledger](../feature/2026-07-27-trajectory-inspection-ledger.md) remains the view model. The Trajectory Builder converts materialized target Nodes into its established `eventNodes`, Requests, Tool schemas, running calls, and Location map; layout, table virtualization, selection, Overview, and inspector behavior do not become generic Conversation contracts.
 
 ### Business Definitions
@@ -40,7 +42,7 @@ Assistant chunks update only their `turn:step` Context. Content-bearing chunks r
 
 Trajectory reconstructs steering from durable inbox history, using the same identity rule as the [Chat steering decision](../feature/2026-08-04-web-context-source-and-steer-marks.md) without sharing Chat's final Node.
 
-Each `agent/inbox/spliced` Event targeting `next-step` starts an invisible Context identified by its Event seq. Its `start()` reads the nearest earlier inbox Context, applies the splice, and stores the pending identities plus the cumulative set of claimed message IDs. A later user-origin `user/message` reads the nearest earlier inbox Context: a claimed ID produces a Steering Node, while every other user-origin message produces an ordinary User Node.
+Each `agent/inbox/spliced` Event targeting `next-step` starts an invisible Context identified by its Event seq. Its `start()` reads the nearest earlier inbox Context, appends the splice to persistent pending-ID state, and materializes that state only when a claim replaces the current claimed batch. The AgentLoop appends every admitted message from one claim before it can claim another batch; a rejected claim appends no `user/message`. A later user-origin `user/message` reads the nearest earlier inbox Context: an ID in the current claim produces a Steering Node, while every other user-origin message produces an ordinary User Node.
 
 A Reader miss while older history remains records a window-gap dependency. When prepend supplies the missing predecessor, the Assembler replays the affected inbox chain and message Contexts in forward Event order. Historical page direction therefore cannot permanently misclassify a message.
 
@@ -52,11 +54,11 @@ Let `E` be the loaded raw Event count, `P` one newly prepended page, `D` the num
 
 | Path | Context work | Target snapshot work | Result |
 |---|---|---|---|
-| Initial tail or reconnect replace | Match the loaded window in `O(E × D)` and build State in forward Event order | Build and order `C` contributions | A full replace remains proportional to the loaded window |
-| Older-page prepend | Match only fresh Events and replay only Contexts whose Match, Location, or Reader answer changed, in `O(P × D + Mᵣ)` | Rebuild the stage snapshot from `C` contributions | Business folding does not restart over all `E` Events |
-| Live append | Match in `O(D)`, locate the keyed Context in `O(1)`, and update only that State | Replace a same-anchor contribution in `O(1)` before snapshot assembly | Business correlation is independent of loaded Event history |
+| Initial tail or reconnect replace | Match the loaded window in `O(E × D)` and build State in forward Event order | Inactive: none; active: build and order `C` contributions | A full Context replace remains proportional to the loaded window |
+| Older-page prepend | Match only fresh Events and replay only Contexts whose Match, Location, or Reader answer changed, in `O(P × D + Mᵣ)` | Inactive: none; active: rebuild the stage snapshot from `C` contributions | Business folding does not restart over all `E` Events |
+| Live append | Match in `O(D)`, locate the keyed Context in `O(1)`, and update only that State | Inactive: none; active: replace a same-anchor contribution in `O(1)` before snapshot assembly | Business correlation is independent of loaded Event history |
 
-The Builder stores contributions by Context key and keeps a key-to-position index. A content update with the same anchor replaces one contribution in place; a new contribution or anchor change rebuilds and sorts contribution order. Snapshot assembly then walks `C` contributions, indexes Request headers and Tool schemas with Maps, and handles Compaction boundaries and Turn errors with linear cursors or indexes.
+First activation builds the current `C` target Contexts without rematching Events and calls `replace()` once. Once active, the Builder stores contributions by Context key and keeps a key-to-position index. A content update with the same anchor replaces one contribution in place; a new contribution or anchor change rebuilds and sorts contribution order. Snapshot assembly then walks `C` contributions, indexes Request headers and Tool schemas with Maps, and handles Compaction boundaries and Turn errors with linear cursors or indexes.
 
 Final Event and Request ordering keeps a publication's current upper bound at `O(C log C)`. The migration removes repeated reverse lookups and the old raw-history refold, but it does not claim end-to-end `O(1)` publication. Chat retains its existing keyed snapshot behavior and complexity; adding the Trajectory target does not make Chat scan Trajectory Contexts or Nodes.
 
@@ -90,7 +92,7 @@ Display memoization and search indexing stay separate. Search must include off-s
 
 ## Verification
 
-Runtime tests pin target registration, exact-ID append, update-before-start replay, prepend identity, Reader window-gap repair, Location replay, and isolation between Chat and Trajectory snapshots.
+Runtime tests pin target registration, first-subscription activation, exact-ID append, update-before-start replay, prepend identity, Reader window-gap repair, Location replay, and isolation between Chat and Trajectory snapshots.
 
 Trajectory Definition and Builder tests pin Assistant streaming and interruption, nested Tool calls and parallel interruption, Compaction and prompt inheritance, Steering classification and Step placement, Request marker order, stable contribution replacement, and prepend expansion. Table, layout, Timeline, and search tests pin deferred Markdown work, throttled index updates, tooltip-time formatting, and stable search results across append and prepend.
 
@@ -98,7 +100,7 @@ Trajectory Definition and Builder tests pin Assistant streaming and interruption
 
 Trajectory business assembly now scales with the changed page or keyed Context instead of restarting from the complete raw Event window. Target-owned Definitions can evolve independently from Chat while retaining one Session window and one set of lifecycle rules. Steering becomes a first-class Trajectory record at its actual Step position without adding steering-specific state to Session.
 
-The retained stage-oriented Builder still performs work proportional to materialized Trajectory contributions and may sort on publication. The search index still performs a light linear signature pass when its input layout changes. These costs are explicit target-view work, not hidden full Event refolding.
+After first activation, the retained stage-oriented Builder still performs work proportional to materialized Trajectory contributions and may sort on publication. Before activation, the target retains Context State and one target index but no Builder, materialized Node, or snapshot. The search index still performs a light linear signature pass when its input layout changes.
 
 Definition authors must provide stable protocol identities. Old Events without a required ID can disappear from the affected Trajectory business view, which is preferable to joining unrelated records or failing history load; producers that require faithful display must log the identity.
 

@@ -207,9 +207,9 @@ export class TokenMeter extends Service {
       this.states.set(session, state)
     }
 
-    while (state.consumedEvents < session.events.length) {
+    while (state.consumedEvents < session.seq) {
       // oxlint-disable-next-line typescript/no-non-null-assertion -- contiguous session seqs index the durable log
-      const event = session.events[state.consumedEvents]!
+      const event = session.eventAt(state.consumedEvents)!
       this._foldEvent(session, state, event)
       state.consumedEvents += 1
     }
@@ -315,7 +315,7 @@ export class TokenMeter extends Service {
       seen.add(seq)
       // Session construction validates contiguous seqs, and the explicit
       // earlier-than-assistant check above therefore guarantees existence.
-      const source = session.events[seq]
+      const source = session.eventAt(seq)
       // oxlint-disable-next-line typescript/no-non-null-assertion
       const sourceEvent = source!
       if (sourceEvent.type !== 'assistant/chunk') {

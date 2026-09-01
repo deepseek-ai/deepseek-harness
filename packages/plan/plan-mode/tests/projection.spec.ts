@@ -155,7 +155,7 @@ describe('plan projection unit', () => {
     // A second registry over the same log (the cold-read shape): no service
     // memory involved, the fold alone answers {active:false, pending:true}.
     const cold = await harness(true)
-    for (const event of bench.session.events) {
+    for (const event of bench.session.snapshotEvents()) {
       if (event.type === 'command/run' || event.type === 'command/done' || event.type === 'plan/mode') {
         cold.session.append(event.type, event.data)
       }

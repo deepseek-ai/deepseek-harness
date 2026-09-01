@@ -80,7 +80,7 @@ This section explains the design decisions behind the registry and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `LocalJobRegistry`, admission, lifecycle, teardown |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; snapshot checks live in `dsh-jobs/invariant`) |
+| — | No runtime invariant companion is published; `@deepseek-ai/dsh-jobs/invariant` owns per-snapshot identity, status, timestamp, and owner checks. This provider's admission decision uses private configuration and must fail before a backend starter runs; `LocalJobRegistry.start()` enforces it synchronously for current producers. Repeating an aggregate after publication would expose private configuration solely to this companion and would not verify the fail-closed pre-start guarantee. |
 
 ### Scope layers
 

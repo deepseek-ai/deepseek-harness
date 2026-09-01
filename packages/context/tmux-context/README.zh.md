@@ -70,7 +70,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：第一步监听器、shell 查询、变化抑制、调度 |
-| [`src/invariant.ts`](src/invariant.ts) | 快照约定的不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；每次读取都是外部 tmux 状态的单轮快照，Session 没有可检查的跨事件关系；调度与格式由 pipeline 测试负责。 |
 
 ### 主要流程
 

@@ -144,3 +144,5 @@ These limits define when the local backend is a poor fit or needs special operat
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.

@@ -106,3 +106,5 @@ These limits define which plugins appear and how fresh the list is; they are cur
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This is a browser-side settings surface whose node half owns no event stream or mutable runtime data; the layering and write refusals are Host contracts covered by the owning plugins and the api-proxy.

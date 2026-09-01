@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-message-feedback",
   "description": "Lifecycle-bound per-message rating and note sidecar for the DeepSeek Harness",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./types": {
       "types": "./lib/types/types.d.ts",
@@ -39,7 +35,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
@@ -50,7 +45,6 @@
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-brand": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence": "workspace:^",
@@ -66,7 +60,6 @@
     "@deepseek-ai/cordis-plugin-include": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-brand": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence": "workspace:^",

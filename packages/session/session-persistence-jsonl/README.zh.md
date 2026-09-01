@@ -100,7 +100,7 @@ kind: "package-reference"
 | [`src/format.ts`](src/format.ts) | 日志路径派生、header 编码、记录扫描、打包行布局 |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard 帧压缩、解码与帧扫描 |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through 发布与目录创建 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；身份在存储层强制） |
+| — | 不发布运行时不变式伴生入口；身份在存储层强制。 |
 
 </details>
 

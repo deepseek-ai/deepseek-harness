@@ -93,7 +93,7 @@ export interface Config {
 | [`src/render.ts`](src/render.ts) | 指令渲染、预算截断、变更记录 |
 | [`src/state.ts`](src/state.ts) | 持久消息来源、版本／digest 缓存、对账 |
 | [`src/digest.ts`](src/digest.ts) | SHA-1 内容标识与每目录重复键 |
-| [`src/invariant.ts`](src/invariant.ts) | 持久上下文约定的不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；回放会容忍未知或格式错误的 workspace source，私有 pending/cache 状态转换由聚焦 pipeline 测试覆盖。 |
 
 ### 主要流程
 

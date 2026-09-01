@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-permission-presets",
   "description": "Permission surfaces: a new-session default in General settings and a current-session /permission popup over the permissions projection",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -61,7 +57,6 @@
     "@deepseek-ai/dsh-client-ui-settings": "workspace:^",
     "@deepseek-ai/dsh-client-ui-input-trigger": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-permission-presets": "workspace:^",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",
@@ -70,7 +65,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ]

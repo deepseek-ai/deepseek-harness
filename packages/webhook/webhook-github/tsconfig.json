@@ -31,9 +31,6 @@
     },
     {
       "path": "../webhook"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

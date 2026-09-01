@@ -20,6 +20,12 @@ The Session Controller owns the contiguous loaded logical-event window. Each `Se
 
 Chat and Trajectory may recognize the same durable event family, but each keeps its own Definition State and final node payload. Shared target-neutral machinery is limited to identity routing, ordered replay, Location data, predecessor dependencies, and publication cadence.
 
+## Target activation
+
+Each Session keeps a monotonic set of active targets. Creating or reading a target source does not activate it. The shell explicitly activates its persisted or newly selected View, while another consumer activates a target through its first source subscription. First activation creates that target's builder and calls `replace()` once from the current target-indexed Contexts. Later flushes call `apply()` for every active target, and unsubscription does not remove one.
+
+The shell owns View selection and resolves the registered preferred View or Chat fallback before rendering when a binding is created or selected as current, and after View-roster changes. The assembler receives only the resolved target id and does not select Chat or another default target. A third-party View participates through the same selection and activation operations.
+
 ## Replayable event families
 
 Choose one stable business id before writing the Definition. Every event that contributes to the same Node must carry that id or derive it independently from its own payload; the client must never assign an update to “the latest unfinished” Context.
@@ -247,5 +253,6 @@ Add focused tests that establish these outcomes:
 5. Repeated visible deltas preserve `context.key` and publish at most once per animation frame when requested.
 6. The keyed renderer consumes `node.data` and constrained Location hooks only; it does not scan the Session event window, Contexts, or Chat Nodes.
 7. Scalar and packed Assistant history produce the same final State, timing boundaries, and target snapshot, while one packed run remains one Match through replace, prepend, Location replay, and registry rebuild.
+8. Creating a target source performs no builder work; explicit selection or the first subscription performs one complete replacement, later updates reach every active target, and repeated activation performs no replacement.
 
 Use [`packages/client/ui-chat/src/client/conversation-nodes/assistant.ts`](../../packages/client/ui-chat/src/client/conversation-nodes/assistant.ts) for streaming and interruption, [`inbox.ts`](../../packages/client/ui-chat/src/client/conversation-nodes/inbox.ts) plus [`message.ts`](../../packages/client/ui-chat/src/client/conversation-nodes/message.ts) for predecessor queries, and [`packages/client/ui-deliverables`](../../packages/client/ui-deliverables) for a Definition that publishes Turn data without creating its own Node.

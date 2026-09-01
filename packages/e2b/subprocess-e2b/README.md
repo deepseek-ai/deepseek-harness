@@ -85,7 +85,7 @@ This section explains the design decisions behind the provider and points at the
 | [`src/environment.ts`](src/environment.ts) | Remote environment probe, scrubbing, serialization |
 | [`src/output.ts`](src/output.ts) | Base64 decoder and bounded output readers |
 | [`src/remote.ts`](src/remote.ts) | Shared control-shell helpers: option shaping, poll ticks, group signalling |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; live remote handles are private teardown ownership) |
+| — | No runtime invariant companion is published; live remote handles are private teardown ownership, and the E2B command event stream is the sole outcome authority. |
 
 ### Remote wrapper
 

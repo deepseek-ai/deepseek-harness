@@ -68,7 +68,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`mode` 配置、把 `ctx.tools.presentAs` 接到挂载作用域的 `apply` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套 |
+| — | 不发布运行时不变式伴生入口；本包只对 `ctx.tools` 发起一次 scoped 调用，不持有事件或快照；所选 presentation 的关系由 tool registry 持有并由 `dsh-tools` 观察。 |
 
 ### 行为说明
 

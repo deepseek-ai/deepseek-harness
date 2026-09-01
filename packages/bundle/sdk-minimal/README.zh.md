@@ -54,7 +54,7 @@ dsh --profile sdk-minimal
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | 完整独立 profile 配置树及其环境默认值 |
 | [`src/index.ts`](src/index.ts) | Bundle 包入口 |
-| [`src/invariant.ts`](src/invariant.ts) | 静态组合的不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；本包只是静态 patch 列表载体，插入的各行分别拥有自己的运行时关系和不变式。 |
 | [`tests/sdk-minimal.spec.ts`](tests/sdk-minimal.spec.ts) | 精确组合、profile 名称与平台选择检查 |
 
 </details>

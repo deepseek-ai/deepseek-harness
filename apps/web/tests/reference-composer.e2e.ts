@@ -58,7 +58,7 @@ function sourceSessionFixture(): string {
       createdAt: 0,
       cwd: '{{cwd}}',
     }),
-    ...session.events.map(event => JSON.stringify(event)),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
     '',
   ].join('\n')
 }
@@ -105,7 +105,7 @@ function targetSessionFixture(): string {
       createdAt: 0,
       cwd: '{{cwd}}',
     }),
-    ...session.events.map(event => JSON.stringify(event)),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
     '',
   ].join('\n')
 }

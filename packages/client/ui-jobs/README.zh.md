@@ -85,3 +85,5 @@ Escape 关闭列表并把焦点交还触发器，在其外部按下指针同理�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。本包只把 `jobsBySession` mirror 只读投影到一个 header slot，不发出 Cordis 事件，也不持有跨插件可变状态。

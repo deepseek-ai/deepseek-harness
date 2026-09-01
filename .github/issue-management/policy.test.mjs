@@ -3,8 +3,11 @@ import test from 'node:test'
 
 import {
   countVisibleUnits,
+  initializeIssueStartDate,
+  initializePullRequestStartDates,
   nextResolvingIssueStatus,
   parseReferences,
+  projectDate,
   retainIssueReferences,
   resolvingIssueStatusCommand,
   requiresPullRequestPolicy,
@@ -12,6 +15,63 @@ import {
   validateIssue,
   validatePullRequest,
 } from './policy.mjs'
+
+const projectGraphqlData = ({
+  projectItem = true,
+  startDate = null,
+  startDateField = true,
+  startDateType = 'DATE',
+} = {}) => ({
+  organization: {
+    projectV2: {
+      id: 'project-id',
+      title: 'DSH Issue Management',
+      fields: {
+        nodes: [
+          { id: 'status-field-id', name: 'Status', dataType: 'SINGLE_SELECT', options: [] },
+          ...(startDateField
+            ? [{ id: 'start-date-field-id', name: 'Start date', dataType: startDateType }]
+            : []),
+        ],
+      },
+    },
+  },
+  repository: {
+    issue: {
+      id: 'issue-id',
+      projectItems: {
+        nodes: projectItem
+          ? [
+              {
+                id: 'item-id',
+                project: { id: 'project-id' },
+                fieldValueByName: { name: 'Inbox', optionId: 'inbox-option-id' },
+                startDateValue: startDate === null ? null : { date: startDate },
+              },
+            ]
+          : [],
+      },
+    },
+  },
+})
+
+const mockGraphql = (t, resolve) => {
+  const requests = []
+  const previousToken = process.env.GH_TOKEN
+  process.env.GH_TOKEN = 'test-token'
+  t.after(() => {
+    if (previousToken === undefined) delete process.env.GH_TOKEN
+    else process.env.GH_TOKEN = previousToken
+  })
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, 'https://api.github.com/graphql')
+    assert.equal(options.headers.Authorization, 'Bearer test-token')
+    const request = JSON.parse(options.body)
+    requests.push(request)
+    return Response.json({ data: resolve(request, requests.length - 1) })
+  })
+  return requests
+}
 
 const withDetails = (summary) =>
   `${summary}\n\n<details><summary>验收与细节</summary>待补充。</details>`
@@ -169,6 +229,85 @@ test('separates resolving and informational references', () => {
     }),
     { all: [4, 7, 12], resolving: [12], related: [4, 7] },
   )
+})
+
+test('converts PR creation timestamps to Shanghai Project dates', () => {
+  assert.equal(projectDate('2026-08-27T15:59:59Z', 'Asia/Shanghai'), '2026-08-27')
+  assert.equal(projectDate('2026-08-27T16:00:00Z', 'Asia/Shanghai'), '2026-08-28')
+  assert.throws(() => projectDate('invalid', 'Asia/Shanghai'), /无效的 PR 创建时间/)
+})
+
+test('initializes every referenced Issue only for a PR opened event', async () => {
+  const writes = []
+  const pull = {
+    createdAt: '2026-08-27T16:00:00Z',
+    references: { all: [4, 7, 12] },
+  }
+  const initialize = async (number, date) => writes.push({ number, date })
+
+  await initializePullRequestStartDates(pull, 'opened', initialize)
+  assert.deepEqual(writes, [
+    { number: 4, date: '2026-08-28' },
+    { number: 7, date: '2026-08-28' },
+    { number: 12, date: '2026-08-28' },
+  ])
+
+  for (const action of ['edited', 'synchronize', 'reopened']) {
+    await initializePullRequestStartDates(pull, action, initialize)
+  }
+  assert.equal(writes.length, 3)
+})
+
+test('writes an empty Project Start date with the configured field', async (t) => {
+  const requests = mockGraphql(t, (request) => {
+    if (request.query.includes('query(')) return projectGraphqlData()
+    return { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'item-id' } } }
+  })
+
+  await initializeIssueStartDate(42, '2026-08-28')
+
+  assert.equal(requests.length, 2)
+  assert.match(requests[1].query, /value: \{date: \$date\}/)
+  assert.deepEqual(requests[1].variables, {
+    projectId: 'project-id',
+    itemId: 'item-id',
+    fieldId: 'start-date-field-id',
+    date: '2026-08-28',
+  })
+})
+
+test('preserves an existing Project Start date', async (t) => {
+  const requests = mockGraphql(t, () => projectGraphqlData({ startDate: '2026-08-01' }))
+
+  await initializeIssueStartDate(42, '2026-08-28')
+
+  assert.equal(requests.length, 1)
+})
+
+test('adds a referenced Issue to the Project before setting Start date', async (t) => {
+  const requests = mockGraphql(t, (request) => {
+    if (request.query.includes('query(')) return projectGraphqlData({ projectItem: false })
+    if (request.query.includes('addProjectV2ItemById')) {
+      return { addProjectV2ItemById: { item: { id: 'new-item-id' } } }
+    }
+    return { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'new-item-id' } } }
+  })
+
+  await initializeIssueStartDate(42, '2026-08-28')
+
+  assert.equal(requests.length, 3)
+  assert.deepEqual(requests[1].variables, { projectId: 'project-id', contentId: 'issue-id' })
+  assert.equal(requests[2].variables.itemId, 'new-item-id')
+})
+
+test('rejects a missing or non-Date Start date field', async (t) => {
+  let response = projectGraphqlData({ startDateField: false })
+  const requests = mockGraphql(t, () => response)
+
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project 缺少 Start date 字段/)
+  response = projectGraphqlData({ startDateType: 'TEXT' })
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Start date 字段必须为 Date/)
+  assert.equal(requests.length, 2)
 })
 
 test('does not treat pull request references as Issue associations', () => {

@@ -88,7 +88,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`ToolResultPruner` 服务、`pruneSession` / `pruneContent` / `measureContent` |
 | [`src/config.ts`](src/config.ts) | `PRUNE_MARKER`、默认值、码点计数、预算验证 |
 | [`src/types.ts`](src/types.ts) | `ToolResultPruneConfig`、`ResolvedConfig`、`PrunedEntry`、`PruneResult` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；替换可在会话日志中观察） |
+| — | 不发布运行时不变式伴生入口；替换可在会话日志中观察。 |
 
 </details>
 

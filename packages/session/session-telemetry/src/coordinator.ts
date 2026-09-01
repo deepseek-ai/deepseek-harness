@@ -139,7 +139,7 @@ export class SessionTelemetryCoordinator {
     const cursor = handoffCursor.get(session) ?? session.firstLiveSeq - 1
     // Containment is PER EVENT: one rejected record is withheld fail-closed
     // while the rest of the historical replay proceeds.
-    for (const event of session.events) {
+    for (const event of session.snapshotEvents()) {
       if (throughSeq !== undefined && event.seq > throughSeq) break
       this.contain(() => {
         if (event.seq <= cursor) this.track(session, event)

@@ -71,7 +71,7 @@ The plugin is a thin presentation adapter: [`HarnessSdkJsonRpcServer`](src/serve
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, stdio wiring, request dispatch, shared shutdown/exit task |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`: protocol methods, per-session agent creation, lifecycle subscriptions, teardown |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant — boundary and replay tests cover the protocol mapping) |
+| — | No runtime invariant companion is published; this presentation adapter owns no durable package-local event stream; boundary and replay tests cover its protocol mapping. |
 
 ### Request flow
 

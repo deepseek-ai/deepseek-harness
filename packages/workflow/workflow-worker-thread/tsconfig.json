@@ -37,9 +37,6 @@
     },
     {
       "path": "../workflow"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

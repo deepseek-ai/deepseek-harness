@@ -28,7 +28,7 @@ These three packages together provide program execution; each README describes w
 |---|---|---|
 | [`code-runtime/`](code-runtime/README.md) | Defines what a code runtime does: run one program against host-provided bindings and report what it printed and returned | `ctx.codeRuntime` |
 | [`code-runtime-worker-thread/`](code-runtime-worker-thread/README.md) | Executes TypeScript programs, each in a fresh Node worker thread | registers `ctx.codeRuntime` |
-| [`code-runtime-python/`](code-runtime-python/README.md) | Owns the fd-3 wire protocol between a Node host and a CPython subprocess, the Python backend's protocol layer | — |
+| [`experimental/code-runtime-python/`](../experimental/code-runtime-python/README.md) | The experimental Python backend: owns the fd-3 wire protocol between a Node host and a CPython subprocess and the CPython runtime implementation | — |
 
 -----
 

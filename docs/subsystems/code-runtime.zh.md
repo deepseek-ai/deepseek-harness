@@ -52,7 +52,11 @@ interface CodeRunResult {
    * rendered string; a failed or value-less run leaves this absent.
    */
   value?: CodeJsonValue
-  /** Text the program emitted, in order, bounded only as part of the outer result. */
+  /**
+   * Captured text. Each source channel preserves emission order; interleaving
+   * across independent channels is backend-dependent. Bounded only as part of
+   * the outer result.
+   */
   logs: string[]
   /** Present iff the run failed; see {@link CodeRunFailure} for the taxonomy. */
   error?: CodeRunFailure
@@ -131,7 +135,7 @@ type CodeBindingFunction = (args: unknown) => Promise<CodeJsonValue>
 
 ## 捕获的输出与失败分类体系
 
-日志是按发出顺序排列的纯字符串。运行时捕获程序的 console 与流输出，但通道和 console 方法的元数据不属于 seam，因为 Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
+日志是纯字符串。每个来源通道保留自身的发出顺序；由于通道元数据不属于 seam，相互独立的通道如何交错由后端决定。运行时捕获程序的 console 与流输出，Consumer 只渲染文本。实现会对序列化后的外层日志数组，以及完成值或失败消息的组合载荷设置上限；固定的结果封装语法与 Consumer 展示空白不计入这份可变载荷计量。超限会显式失败，而不会在值中插入替代内容。
 
 失败类型是**正交的结果，独立报告**（见 [defensive-patterns](../defensive-patterns.zh.md)）：预算耗尽不是异常，中止不是超时，基底崩溃（如 OOM）也不是二者中的任何一个：
 
@@ -158,7 +162,7 @@ interface CodeRunFailure {
 
 ## 服务
 
-`CodeRuntime`（`ctx.codeRuntime`，抽象服务，定义于 [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)）由 `run(request)` 加两个只读描述符组成：`language`（程序必须使用的语言，已知值为 `'typescript'` 与 `'python'`，即 `dsh-tools` 能呈现的那些，其中只有 `'typescript'` 有已发布的后端；生成语言相关展示的 Consumer 据此切换，遇到无法展示的语言时应显式报错）和 `isolation`（执行基底，`'worker-thread'`、`'process'`、`'container'`；仅为诊断标签，**不构成安全承诺**）。实现必须保证各次运行彼此隔离（无跨运行状态），并在 dispose（资源释放）时等待系统完全停稳：teardown 要等到所有进行中的运行均已终止并结算后才完成。
+`CodeRuntime`（`ctx.codeRuntime`，抽象服务，定义于 [`packages/code-runtime/code-runtime/src/index.ts`](../../packages/code-runtime/code-runtime/src/index.ts)）由 `run(request)` 加两个只读描述符组成：`language`（程序必须使用的语言，已知值为 `'typescript'` 与 `'python'`，即 `dsh-tools` 能呈现的那些，TypeScript 后端已发布、Python 后端为实验性且私有（未发布）；生成语言相关展示的 Consumer 据此切换，遇到无法展示的语言时应显式报错）和 `isolation`（执行基底，`'worker-thread'`、`'process'`、`'container'`；仅为诊断标签，**不构成安全承诺**）。实现必须保证各次运行彼此隔离（无跨运行状态），并在 dispose（资源释放）时等待系统完全停稳：teardown 要等到所有进行中的运行均已终止并结算后才完成。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

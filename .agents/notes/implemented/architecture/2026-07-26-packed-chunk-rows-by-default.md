@@ -18,7 +18,7 @@ Reading is unconditional and layout-blind. Packed, unpacked, and mixed files loa
 
 ### Logical events and physical rows
 
-The JSONL packing path stays at the `dsh-session` storage seam through `packChunkRuns()` and `decodeStorageRecord()`. The encoder recognizes exact delta-event shapes, preserves unrecognized events verbatim, and packs only runs of at least three. A packed row is encoding vocabulary, not a `SessionEventMap` member: it never enters `Session.events` or fires `session/event`. The [packed session-history transport decision](2026-08-15-packed-session-history-transport.md) reuses this vocabulary for a bounded lossless wire interval without changing those event semantics.
+The JSONL packing path stays at the `dsh-session` storage seam through `packChunkRuns()` and `decodeStorageRecord()`. The encoder recognizes exact delta-event shapes, preserves unrecognized events verbatim, and packs only runs of at least three. A packed row is encoding vocabulary, not a `SessionEventMap` member: it never enters the Session log or fires `session/event`. The [packed session-history transport decision](2026-08-15-packed-session-history-transport.md) reuses this vocabulary for a bounded lossless wire interval without changing those event semantics.
 
 The JSONL backend packs each durable append batch. Raw `compression: 'none'` and default Zstandard framing carry the same logical storage records; selecting raw mode for reviewable fixtures does not disable packing. Repository replay readers and normalizers decode the shared row format instead of maintaining snapshot-specific codecs.
 

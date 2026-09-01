@@ -86,3 +86,5 @@ These limits define the current layout behavior. They are current package constr
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The shell viewing-state store behind ctx.layout emits no cordis events; clamp/prune/concession-chain sequencing is asserted directly by this package's columns and service specs.

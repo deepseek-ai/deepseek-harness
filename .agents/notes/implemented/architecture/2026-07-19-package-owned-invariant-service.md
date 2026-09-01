@@ -10,7 +10,7 @@ Runtime invariant checks span session traces, agent state, scoped dispatch, and 
 
 Deployments that opt into diagnostics need more than presence or absence of one plugin. Such a composition carries the known invariant contributions while permitting a global off switch and package-selective diagnostics. Selection must remain stable when a package loads later or reloads under HMR, and disabled contributions must not allow two plugins to claim the same package name silently.
 
-Package ownership must also be exhaustive. Without a mechanical repository rule, a new package can omit the companion, dependency, or publication wiring and remain invisible to diagnostics until a maintainer notices the gap.
+Published ownership must be mechanically complete. Without a repository rule, a package can expose a partial companion, dependency, or publication map and remain broken until a maintainer notices the gap; packages that publish none must keep their reason reviewable in the README.
 
 ## Decision
 
@@ -18,7 +18,7 @@ Package ownership must also be exhaustive. Without a mechanical repository rule,
 
 `@deepseek-ai/dsh-invariants` is a product-independent Cordis service plugin that registers `ctx.invariants`. It owns configuration, registration uniqueness, child-fiber lifecycle, and package-attributed failures. It imports no session, agent, scope, or agent-loop package and contains none of their checks.
 
-Every workspace package publishes a `./invariant` companion plugin that registers its exact full npm name. A companion checks a meaningful event or mutable-data relationship when its owner has one; otherwise it carries an owner-specific explanation for its empty installer. Generated ownership placeholders and synthetic API-shape assertions are forbidden by the follow-up [runtime-contract Agent Note](2026-07-19-package-invariant-runtime-contracts.md). Package root entrypoints do not import or register diagnostics implicitly, so loading a root package does not change runtime checking or require the invariant service.
+A workspace package publishes a `./invariant` companion plugin only when it owns an independently observable event or mutable-data relationship. The companion registers its exact full npm name. Packages without such a relationship omit the companion and publication wiring and record the reason in their README; generated placeholders, empty installers, and synthetic API-shape assertions are forbidden by the [runtime-contract Agent Note](2026-07-19-package-invariant-runtime-contracts.md) and [omission decision](../simplification/2026-08-28-omit-unneeded-invariant-companions.md). Package root entrypoints do not import or register diagnostics implicitly, so loading a root package does not change runtime checking or require the invariant service.
 
 ### Configuration and selection
 
@@ -64,9 +64,9 @@ The former functional-plugin entry point and one-argument `InvariantError` const
 | `@deepseek-ai/dsh-scope/invariant` | `@deepseek-ai/dsh-scope` | scoped-event carrier presence and subject consistency |
 | `@deepseek-ai/dsh-agent-loop/invariant` | `@deepseek-ai/dsh-agent-loop` | model-request reconstruction |
 
-These four owners supplied the initial stateful checks. The follow-up runtime-contract decision adds checks for seventeen more owners with real event or mutable-data relationships and records justified empty companions for the rest. Every companion is a separately bundled `./invariant` export with its own declarations and Loader-safe namespace plugin shape; the service package's own companion imports its local service type to avoid a self-dependency.
+These four owners supplied the initial stateful checks. Later owners add companions for real event or mutable-data relationships, while packages without one omit the companion and document why. Every published companion is a separately bundled `./invariant` export with its own declarations and Loader-safe namespace plugin shape.
 
-`verify-package-invariants` discovers every workspace package and rejects missing companion source, generated markers, unexplained empty installers, non-empty installers that omit or ignore the reporter, foreign or unresolved registration names, missing `./invariant` exports or published files, missing invariant peer/development dependencies and project references, and bundle overrides that omit the companion entry.
+`verify-package-invariants` discovers every workspace package, accepts clean omission, and rejects partial companion wiring, generated markers, empty installers, installers that omit or ignore the reporter, foreign or unresolved registration names, missing `./invariant` exports or published files, missing invariant peer/development dependencies and project references, and bundle overrides that omit a published companion entry.
 
 ### Scoped-event semantic map
 
@@ -84,7 +84,7 @@ Service tests cover defaults, global disablement, allow/block selection, blockli
 
 Composition tests cover standard-spine forwarding and generated SDK entries. Loader tests preserve each companion namespace, while built plain-Node smokes exercise the compiled subpath exports. The scoped-event freshness gate reruns its semantic Program analysis.
 
-Every Vitest configuration loads a test host that mounts an explicitly enabled service before an ordinary Cordis root's first plugin and adds the current test package's companion. One exhaustive topology mounts all package companions once; focused service and owner tests construct their own invariant topology so they can exercise disablement, filtering, rollback, and reload without duplicate ownership. Gate tests also execute every companion's `apply` function and verify that it calls `register` with its manifest name, rather than accepting source text alone.
+Every Vitest configuration loads a test host that mounts an explicitly enabled service before an ordinary Cordis root's first plugin and adds the current test package's companion when one exists. One exhaustive topology mounts all published companions once; focused service and owner tests construct their own invariant topology so they can exercise disablement, filtering, rollback, and reload without duplicate ownership. Gate tests also execute every published companion's `apply` function and verify that it calls `register` with its manifest name, rather than accepting source text alone.
 
 ## Alternatives considered
 
@@ -96,10 +96,10 @@ Every Vitest configuration loads a test host that mounts an explicitly enabled s
 ## Consequences
 
 - Product packages own and test their relational assertions while the service stays product-independent.
-- Every package pays the publication and dependency cost of a companion; only owners with a meaningful runtime relationship add listener or trace-state cost.
+- Only owners with a meaningful runtime relationship pay the publication, dependency, listener, or trace-state cost of a companion; other packages record the omission reason in their README.
 - Compositions that mount the diagnostics can disable all checks or select package names without changing their plugin tree.
 - Explicit companion entries make diagnostic cost and ownership visible in Cordis config and package exports.
-- One selected executable contribution adds one child fiber and its listener/state cost; a selected empty contribution has no listener or trace-state cost, while filtered registrations retain only name ownership.
+- One selected contribution adds one child fiber and its listener/state cost, while filtered registrations retain only name ownership.
 - Regex sources are deployment configuration and remain fixed until the service reloads.
-- Ordinary Vitest roots install the owning test package's selected companion; one exhaustive topology pays the full child-fiber cost once for repository-wide registration coverage.
+- Ordinary Vitest roots install the owning test package's selected companion when published; one exhaustive topology pays the full child-fiber cost once for repository-wide registration coverage.
 - Session storage validation, snapshotting, freezing, cited source-event validation, and surface acceptance remain always on and are not affected by invariant selection.

@@ -338,7 +338,7 @@ function digestCatalogEntries(entries: SkillCatalogSource['entries']): string {
  * Entries of one durable catalog message, or undefined when the record is not a
  * usable catalog.
  *
- * `agent.session.events` may be a resumed, forked, or externally written seed,
+ * `agent.session.snapshotEvents()` may contain a resumed, forked, or externally written seed,
  * and seed validation only guarantees a source object with a non-empty `kind`;
  * no per-kind field is checked there. An unreadable record is therefore treated
  * as "not this plugin's catalog" — the posture the replaced content digest had —
@@ -360,12 +360,12 @@ function readCatalogEntries(source: unknown): SkillCatalogSource['entries'] | un
 
 function catalogHistory(agent: Agent): { visibleDigest?: string; published: boolean } {
   const visible = new Set(agent.session.surface.nodes)
-  const events = agent.session.events
   let published = false
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    // The loop bounds prove the read-only event view contains this index.
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const event = events[index]!
+  for (let index = agent.session.seq - 1; index >= 0; index -= 1) {
+    const event = agent.session.eventAt(index)
+    if (event === undefined) {
+      throw new Error(`skill catalog cannot read seq ${String(index)} below the current Session length`)
+    }
     if (event.type !== 'user/message' || event.data.source.kind !== 'skill-catalog') continue
     const entries = readCatalogEntries(event.data.source)
     if (entries === undefined) continue

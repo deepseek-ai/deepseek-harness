@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-webhook-github",
   "description": "Signed GitHub HTTP webhook adapter for the DeepSeek Harness webhook runtime",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -22,16 +22,11 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -40,7 +35,6 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-webhook": "workspace:^"
   },
@@ -55,7 +49,6 @@
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-webhook": "workspace:^"
   }

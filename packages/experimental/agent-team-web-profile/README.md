@@ -54,7 +54,7 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | Ordered Web patch containing the `ui-agent-team` row |
 | [`src/index.ts`](src/index.ts) | Empty module entry; the patch is the runtime content |
-| [`src/invariant.ts`](src/invariant.ts) | Empty invariant companion for the static bundle |
+| — | No runtime invariant companion is published; the package carries only a static profile patch. The Remote assembly and Team UI own their activation requirements. |
 
 </details>
 

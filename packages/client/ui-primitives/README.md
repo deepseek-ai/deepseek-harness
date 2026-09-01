@@ -33,7 +33,7 @@ Compose feature UI from these atoms whenever the web client needs a standard con
 
 ### Rendering agent output
 
-`MarkdownText` renders untrusted GFM and TeX math, blocks unsafe links and images, and can turn resolved file mentions into explicit controls. While a reply streams, it freezes completed blocks and highlights a growing fence from saved Shiki grammar state; the final render uses the same span tree ([incremental renderer](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.md), [streaming fence highlighting](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.md)). `TerminalBlock`, `ReadBlock`, `DiffBlock`, `SearchBlock`, and `WebBlock` render the matching tool-result intent with copy controls, overflow handling, and ANSI processing where applicable. `JsonTree` and `JsonBlock` inspect JSON values read-only, while `MessageText` remains the literal-text primitive for user-authored content.
+`MarkdownText` renders untrusted GFM and TeX math, blocks unsafe links and images, and can turn resolved file mentions into explicit controls. While a reply streams, it freezes completed blocks, advances a top-level open fence by completed lines, and highlights that fence from saved Shiki grammar state. Completed token lines enter fixed-size React groups, so later chunks reconcile only the growing group; an unchanged fence retains that DOM when the final full parse resolves cross-document syntax ([incremental renderer](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.md), [streaming fence highlighting](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.md)). `TerminalBlock`, `ReadBlock`, `DiffBlock`, `SearchBlock`, and `WebBlock` render the matching tool-result intent with copy controls, overflow handling, and ANSI processing where applicable. `JsonTree` and `JsonBlock` inspect JSON values read-only, while `MessageText` remains the literal-text primitive for user-authored content.
 
 ### Localizing copy
 
@@ -63,7 +63,7 @@ The package is one separation: presentational React atoms with zero Cordis and z
 
 ### Streaming markdown
 
-While a reply streams, `MarkdownText` parses incrementally: all but the trailing two blocks freeze as cached React elements and only the source tail re-parses per chunk, so per-chunk work tracks the tail instead of the whole reply. A growing fenced block tokenizes completed text from saved Shiki grammar state plus the unfinished last line; completed lines retain their DOM, and the settled render uses the same span tree. The settled full parse at finalize also resolves references that crossed the freeze boundary ([incremental renderer](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.md), [streaming fence highlighting](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.md)).
+While a reply streams, `MarkdownText` parses incrementally: all but the trailing two blocks freeze as cached React elements and only the source tail re-parses per chunk, so per-chunk work tracks the tail instead of the whole reply. A final unclosed top-level fence keeps its parsed code node and sends only the last completed line plus the current partial line through the same GFM grammar; a closing fence or ambiguous parse returns to the ordinary tail path. Highlighting likewise resumes from saved Shiki grammar state and publishes only newly completed lines plus the mutable tail. `CodeBlock` seals completed lines into fixed-size React groups, reuses earlier groups, and retains the whole highlighted tree across settlement when code and language are unchanged. The settled full parse still resolves references that crossed the freeze boundary ([incremental renderer](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.md), [streaming fence highlighting](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.md)).
 
 ### Geometry and overflow
 
@@ -103,6 +103,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define how the atoms behave at the edges; they are current package constraints, not a component roadmap.
 
 - **Streaming defers cross-boundary reference resolution** — a reference-style link or footnote whose definition sits on the other side of the incremental freeze boundary renders as literal text while the reply streams; the settled full parse at finalize resolves it.
+- **A long highlighted fence retains its complete token DOM** — streaming avoids re-parsing, re-tokenizing, and reconciling the completed prefix, but it does not discard old colors or virtualize token spans. Final DOM cardinality therefore still follows the fence's token count; nested/container fences and a pathological single long line remain on the general tail path.
 - **Glyph-level icons are redrawn approximations** — the fish logo and the sparkle mark come from font glyphs whose vector geometry is not exportable from the local design data; hand-authored recreations stand in until an exact export path exists.
 - **`Pill` and `Input` have no design source** — both atoms are self-defined; the sidebar search field and view-tab strip that resemble them are consumer-owned compositions, not these atoms.
 - **No `Active` `StateDot` variant** — the supported states are done, warning, ongoing, and error.
@@ -118,3 +119,5 @@ These limits define how the atoms behave at the edges; they are current package 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Pure props-in React atoms with no Cordis API — no events, no services, no mutable cross-plugin state; rendering contracts are asserted directly by this package's component specs.

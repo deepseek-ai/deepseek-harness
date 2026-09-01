@@ -22,7 +22,7 @@ Responsibility is split between an always-on storage boundary and optional devel
 
 `Session` accepts an event only after one recursive pass has materialized a lossless JSON snapshot. That pass rejects unsupported values and produces the exact detached record that enters the log, so validation and storage cannot observe different values from a stateful getter or retain caller-owned nested references.
 
-The accepted event and all of its descendants are deep-frozen before publication. `append()` returns that owned frozen event, `session/event` observers receive the same record, and `session.events` returns a frozen array snapshot. A previously returned array does not grow after a later append. Seed records pass through the same validation, snapshot, and freeze boundary before construction succeeds.
+The accepted event and all of its descendants are deep-frozen before publication. `append()` returns that owned frozen event, and `session/event` observers and `eventAt(seq)` receive the same record. `snapshotEvents(fromSeq?, toSeqExclusive?)` returns a frozen array snapshot; a previously returned array does not grow after a later append. `seq` and `eventAt()` avoid array materialization when a caller needs only the current length or one event. Seed records pass through the same validation, snapshot, and freeze boundary before construction succeeds.
 
 This guarantee belongs in `Session`, not in an optional listener, because every composition relies on trustworthy history. A production deployment, a focused test, or a custom embedding receives the same storage semantics whether or not development support plugins are registered.
 
@@ -32,7 +32,7 @@ This guarantee belongs in `Session`, not in an optional listener, because every 
 
 ### Package-owned invariant companions check relationships
 
-`dsh-invariants` registers the configurable `ctx.invariants` service and contains no product checks. Every package publishes a `./invariant` ownership companion; `dsh-session`, `dsh-agent`, `dsh-scope`, and `dsh-agent-loop` currently add the rules that require trace state or observation of another seam: monotonic sequence numbers, turn and step nesting, tool-call/result pairing, legal agent-status transitions, subject-correct scoped dispatch, and equality between a loop-built request and the request reconstructed from its session-log prefix. Global enablement and package-name regex filters belong to the service ([package-owned invariant service](2026-07-19-package-owned-invariant-service.md)).
+`dsh-invariants` registers the configurable `ctx.invariants` service and contains no product checks. A package publishes a `./invariant` ownership companion only for an independently observable runtime relationship; packages without one omit the companion and record the reason in their README. `dsh-session`, `dsh-agent`, `dsh-scope`, and `dsh-agent-loop` provide the initial rules that require trace state or observation of another seam: monotonic sequence numbers, turn and step nesting, tool-call/result pairing, legal agent-status transitions, subject-correct scoped dispatch, and equality between a loop-built request and the request reconstructed from its session-log prefix. Global enablement and package-name regex filters belong to the service ([package-owned invariant service](2026-07-19-package-owned-invariant-service.md); [omission decision](../simplification/2026-08-28-omit-unneeded-invariant-companions.md)).
 
 When the session companion attaches to an existing or seeded session, it replays the immutable log to rebuild trace state. The service gives each contribution a disposable child fiber, so hot reload is safe in the middle of a turn without giving diagnostics ownership of session storage.
 
@@ -48,12 +48,12 @@ Freezing history only when an invariants plugin is installed would make the core
 
 ### Clone only when deriving messages
 
-Detaching `deriveMessages()` would protect the most common request path but leave other readers of `session.events`, append return values, and session-event observers able to mutate durable history. The log must protect its own boundary; derived projections are an additional isolation boundary, not a substitute.
+Detaching `deriveMessages()` would protect the most common request path but leave other readers of `snapshotEvents()`, `eventAt()`, append return values, and session-event observers able to mutate durable history. The log must protect its own boundary; derived projections are an additional isolation boundary, not a substitute.
 
 ## Consequences
 
 - Every accepted live or seeded session event is detached from caller-owned inputs and deeply immutable before any observer can receive it.
-- `session.events` exposes stable immutable snapshots instead of the private growing array.
+- `snapshotEvents()` exposes stable immutable snapshots instead of the private growing array; `seq` and `eventAt()` serve scalar reads without copying that array.
 - Request-side mutation cannot reach stored history through derived messages.
 - Development builds can enable relational assertions without changing storage behavior, and disposing or filtering a companion does not weaken log immutability.
 - `dsh-invariants` configures global enablement plus package allow/block regex lists; each check remains owned and tested by its product package.

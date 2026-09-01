@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-attachment-local",
   "description": "Private content-addressed DSH_HOME attachment storage",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -15,15 +15,13 @@
   "types": "lib/types/index.d.ts",
   "exports": {
     ".": { "types": "./lib/types/index.d.ts", "default": "./lib/index.js" },
-    "./invariant": { "types": "./lib/types/invariant.d.ts", "default": "./lib/invariant.js" },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
-  "files": ["lib/index.js", "lib/invariant.js", "lib/types/**/*.d.ts"],
+  "files": ["lib/index.js", "lib/types/**/*.d.ts"],
   "license": "MIT",
   "peerDependencies": {
     "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
@@ -33,7 +31,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh-attachment": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-home-paths": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   }

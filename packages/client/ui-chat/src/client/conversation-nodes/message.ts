@@ -58,7 +58,8 @@ export const messageDefinition: ConversationNodeDefinition<MessageNode> = {
         form: contextForm(event.data.source),
       }
     }
-    const claimed = reader.previous<InboxState>('inbox-next-step')?.state.claimed.has(String(event.data.id)) === true
+    const claimed = reader.previous<InboxState>('inbox-next-step')
+      ?.state.currentClaimed.has(String(event.data.id)) === true
     return claimed
       ? {
         kind: 'steering',

@@ -92,7 +92,7 @@ async function agentOn(ctx: Context, id: string, presetId?: string): Promise<Age
 
 /** The recorded preset a restart replays, which is what a switch must move. */
 const recordedPreset = (agent: Agent): unknown =>
-  agent.session.events.findLast(event => event.type === 'agent-preset/selected')?.data
+  agent.session.snapshotEvents().findLast(event => event.type === 'agent-preset/selected')?.data
 
 describe('the roster a client reads', () => {
   it('projects path-free rows, marking the default and carrying published metadata', async () => {

@@ -83,7 +83,7 @@ This section explains the design decisions behind the tools and points at the co
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: tool registrations, completion listener, prompt section, output capping |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; execution relations are owned by the capability seam) |
+| — | No runtime invariant companion is published; this model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls. |
 
 ### Output capping
 

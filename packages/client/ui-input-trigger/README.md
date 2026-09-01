@@ -86,3 +86,5 @@ These limits define the current trigger pipeline. They are current package const
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The trigger pipeline is a browser-side pure core (detect/reduce/match) plus a registry whose disposal is proven by the HMR-safety spec; it emits no cordis events and owns no cross-plugin mutable state.

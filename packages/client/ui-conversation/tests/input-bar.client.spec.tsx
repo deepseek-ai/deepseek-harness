@@ -1335,11 +1335,11 @@ describe('command launcher chrome and control seats', () => {
       .every(icon => icon.closest('[aria-hidden="true"]') !== null)).toBe(true)
     fireEvent.click(trigger)
     const items = view.getAllByRole('menuitem')
-    expect(items.map(o => o.textContent)).toEqual(['仅可查看', '可写入工作区', '完全权限'])
+    expect(items.map(o => o.textContent)).toEqual(['仅可查看', '工作区内修改', '完全权限'])
     fireEvent.click(items[1]!)
     // Optimistic pick + disable until admission resolves (command stub resolves true).
     const busy = view.getByLabelText(/^访问模式/) as HTMLButtonElement
-    expect(busy.textContent).toBe('可写入工作区')
+    expect(busy.textContent).toBe('工作区内修改')
     expect(busy.disabled).toBe(true)
     expect(command).toHaveBeenCalledWith('/permission workspace-write')
     await act(async () => {})
@@ -1413,7 +1413,7 @@ describe('command launcher chrome and control seats', () => {
     fireEvent.click(view.getByRole('checkbox'))
     fireEvent.click(view.getByRole('button', { name: '取消' }))
     expect(command).not.toHaveBeenCalled()
-    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('可写入工作区')
+    expect((view.getByLabelText(/^访问模式/) as HTMLButtonElement).textContent).toBe('工作区内修改')
 
     openConfirmation()
     expect((view.getByRole('checkbox') as HTMLInputElement).checked).toBe(false)

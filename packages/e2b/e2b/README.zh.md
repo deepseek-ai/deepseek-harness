@@ -83,7 +83,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`E2BRuntime` 服务、`Config` schema、校验、沙箱创建与拆除 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；沙箱创建与拆除只有一个 SDK promise，没有可交叉核对的独立事件或可变数据关系） |
+| — | 不发布运行时不变式伴生入口；沙箱创建与拆除只有一个 SDK promise，没有可交叉核对的独立事件或可变数据关系。 |
 
 ### 生命周期
 

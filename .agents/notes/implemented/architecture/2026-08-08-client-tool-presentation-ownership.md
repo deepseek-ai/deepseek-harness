@@ -22,6 +22,8 @@ A business Tool plugin receives one standard `ToolCallBlock`, identity, workspac
 
 The details panel is a second Tool presentation point, not the call-tree owner. `ui-conversation` locates the selected call and delegates its output body through `'conversation.details.tool'`; `ui-tool` reuses the card model, while the conversation fallback retains raw result text when the plugin is absent.
 
+Generic row models retain the original argument string as `bodyRaw` and expose no preformatted body. `ToolRow` and the Bash fallback format it only while an expanded generic input section is visible; closing the row removes the formatted text, and rows rendering a structured card skip generic-body formatting.
+
 ## Runtime and render path
 
 ```text
@@ -33,6 +35,8 @@ Session Event window
        -> tool.call.toolview(entryKey = toolName)
             |- registered atomic view
             `- GenericToolCard fallback
+                 |- collapsed or structured card: retain argsRaw only
+                 `- expanded generic input: format argsRaw
 ```
 
 ## Ownership boundary
@@ -42,12 +46,12 @@ Session Event window
 | Client Runtime Conversation engine | Context identity, Location, history replay, view Node publication | Tool event meaning, call tree, Tool renderer |
 | `ui-conversation` Tool Definition | call/result pairing, Code Dispatch topology, running/settled/interrupted `ToolCallBlock`, Chat ordering anchor | Tool-name dispatch, card models, recursive React structure |
 | `ui-conversation` Chat view | keyed Node order, scroll anchors, selection, and host actions | Tool lifecycle, subcall composition, atomic Tool renderers |
-| `ui-tool` | root/subcall recursive rendering, atomic keyed dispatch, fallback, card models, and details output | Session Event fold, Chat ordering |
+| `ui-tool` | root/subcall recursive rendering, atomic keyed dispatch, fallback, card models, expansion-time argument formatting, and details output | Session Event fold, Chat ordering |
 | Business Tool plugin | atomic renderers for one or more wire Tool names | root/subcall placement, lifecycle pairing, Session projectors |
 
 ## Verification
 
-`ui-conversation` tests pin the Tool Definition's call/result pairing, Code Dispatch, interruption, and running-to-settled keyed identity without importing production `ui-tool` renderers. `ui-tool` tests mount the real conversation host and pin root/subcall recursion, keyed dispatch, Generic fallback, selection, details, and concrete Tool cards. Assembled Web tests cover the path with both plugins loaded.
+`ui-conversation` tests pin the Tool Definition's call/result pairing, Code Dispatch, interruption, and running-to-settled keyed identity without importing production `ui-tool` renderers. `ui-tool` tests mount the real conversation host and pin root/subcall recursion, keyed dispatch, Generic fallback, selection, details, concrete Tool cards, and expansion-only generic-body formatting. Assembled Web tests cover the path with both plugins loaded.
 
 ## Alternatives considered
 
@@ -61,8 +65,12 @@ Session Event window
 
 **Let `ui-conversation` import `ui-tool` components directly.** Rejected: this would reverse the feature dependency and make Tool presentation mandatory. Slots preserve independent loading, lifecycle, and fallback behavior.
 
+**Keep a preformatted body on the row model for compatibility.** Rejected: every collapsed row would retain a second full argument string, and the compatibility field would let future consumers restore eager formatting. The model exposes only `bodyRaw`, making expansion-time formatting the only generic path.
+
 ## Consequences
 
 `ui-conversation` no longer depends on presentation for concrete Tool names, and root and subcalls cannot drift onto different dispatch paths. Business packages can independently own atomic Tool renderers; if `ui-tool` is absent, Conversation data assembly remains valid, Chat Nodes use the generic fallback, and details retain raw results.
+
+Collapsed Tool rows retain the existing `argsRaw` reference without a pretty-printed copy or its formatting call. Expanding a generic input performs that work for the visible row, and closing it permits the derived text to be collected; repeated expansion trades bounded recomputation for lower retained memory.
 
 The cost is an explicit dependency from `ui-tool` on the business Node slot and locale namespace declared by conversation, plus one Tool-specific child slot. Tool Definition remains in `ui-conversation` because this change does not split packages; it can later move through the Conversation registry seam without changing the presentation ownership recorded here.

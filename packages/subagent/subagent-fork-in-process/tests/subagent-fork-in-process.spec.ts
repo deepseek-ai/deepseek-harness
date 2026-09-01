@@ -85,7 +85,7 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(text(result.output)).toBe('fresh child')
     const child = ctx.agents.get(run.id)!
     // Only the child's own turn — no seeded parent turns.
-    expect(child.session.events.filter(e => e.type === 'turn/end')).toHaveLength(1)
+    expect(child.session.snapshotEvents().filter(e => e.type === 'turn/end')).toHaveLength(1)
     expect(child.session.header.seedLength).toBeUndefined()
     await run.dispose()
   })
@@ -96,14 +96,14 @@ describe('dsh-subagent-fork-in-process', () => {
     await parent.whenIdle()
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'q2' }], source: { kind: 'user' } }))
     await parent.whenIdle()
-    const parentPrefixLen = parent.session.events.length
+    const parentPrefixLen = parent.session.snapshotEvents().length
 
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child q' }], parent })
     await run.result
     const child = ctx.agents.get(run.id)!
     expect(child.session.header.seedLength).toBe(parentPrefixLen)
-    expect(child.session.events.slice(0, parentPrefixLen).at(-1)?.type).toBe('turn/end')
-    expect(child.session.events.slice(0, parentPrefixLen).filter(e => e.type === 'turn/end')).toHaveLength(2)
+    expect(child.session.snapshotEvents().slice(0, parentPrefixLen).at(-1)?.type).toBe('turn/end')
+    expect(child.session.snapshotEvents().slice(0, parentPrefixLen).filter(e => e.type === 'turn/end')).toHaveLength(2)
     await run.dispose()
   })
 
@@ -111,7 +111,7 @@ describe('dsh-subagent-fork-in-process', () => {
     const { ctx, parent } = await setup([textResponse('parent answer'), textResponse('child answer')])
     parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent question' }], source: { kind: 'user' } }))
     await parent.whenIdle()
-    const parentPrefixLen = parent.session.events.length
+    const parentPrefixLen = parent.session.snapshotEvents().length
 
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child question' }], parent })
     const result = await run.result
@@ -120,9 +120,9 @@ describe('dsh-subagent-fork-in-process', () => {
 
     const child = ctx.agents.get(run.id)!
     // The child's log STARTS with the parent's prefix (seeded), then its own turn.
-    expect(child.session.events.length).toBeGreaterThan(parentPrefixLen)
+    expect(child.session.snapshotEvents().length).toBeGreaterThan(parentPrefixLen)
     // The seeded prefix carried the parent's user message.
-    const seededUser = child.session.events.slice(0, parentPrefixLen).find(e => e.type === 'user/message')
+    const seededUser = child.session.snapshotEvents().slice(0, parentPrefixLen).find(e => e.type === 'user/message')
     expect(seededUser).toBeDefined()
     // Lineage stamped.
     expect(child.session.header.parentSession).toBe(parent.session.header.id)
@@ -152,7 +152,7 @@ describe('dsh-subagent-fork-in-process', () => {
 
     const child = ctx.agents.get(run.id)!
     // The child's seed has exactly the ONE completed parent turn (the open one excluded).
-    const seedTurnEnds = child.session.events.filter(e => e.type === 'turn/end')
+    const seedTurnEnds = child.session.snapshotEvents().filter(e => e.type === 'turn/end')
     // 1 from the seeded parent turn + 1 from the child's own completed turn.
     expect(seedTurnEnds.length).toBe(2)
 

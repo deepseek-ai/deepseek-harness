@@ -25,7 +25,7 @@ Service Definition 同时把可移植标识符子集收窄为 `[A-Za-z_][A-Za-z0
 
 ## Scope
 
-本决策只交付 Service Definition 扩展与 worker 对它的采用。`py-types` 渲染器与 PTC mode 的语言分发归[语言分发 note](../feature/2026-07-31-ptc-language-dispatch.zh.md) 所有；Python 后端尚不存在。Service Definition README 因此保留仅描述 worker 的措辞：链接到一个不存在的 `dsh-code-runtime-python` README 会破坏死链 gate。
+本决策交付 Service Definition 扩展与 worker-thread 后端对它的采用。`py-types` 渲染器与 PTC mode 的语言分发归[语言分发 note](../feature/2026-07-31-ptc-language-dispatch.zh.md)所有。私有的实验性 CPython 子进程后端（`dsh-experimental-code-runtime-python`）采用同一 portable-identifier 契约。
 
 `RESERVED_BINDING_GLOBALS` 先于后端本身编码了 Python bootstrap 的具体设计：它恰好 seed `__builtins__`/`__name__`，并把程序包装在 `__dsh_main__` 之下。任何 seed 额外模块 global（`__doc__`、`__loader__`、`__spec__`、`__file__`、`__package__` 等）的 Python 后端必须在同一改动中扩宽此集合，正如新增一门语言即扩宽 `PORTABLE_RESERVED_WORDS`——bootstrap 会 seed 却不在集合中的名称，正是本约定要防止的可移植性分裂。
 

@@ -92,7 +92,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` 校验、两个 waterfall 监听器、共享替换辅助函数 |
 | [`src/types.ts`](src/types.ts) | `SpillPolicyExec`：策略读取所属会话 id 所需的最小结构化工具执行视图 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；约定在 seam 处强制执行） |
+| — | 不发布运行时不变式伴生入口；约定在 seam 处强制执行。 |
 
 ### 故障模式
 

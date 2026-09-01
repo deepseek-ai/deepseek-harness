@@ -161,11 +161,12 @@ function validateReading(
 /* jscpd:ignore-start -- package companions share replay and dispatch plumbing */
 /** Validate all package-owned readings already present in one session. */
 function validateSession(session: Session, fail: InvariantFailure): void {
-  for (const [index, event] of session.events.entries()) {
+  const events = session.snapshotEvents()
+  for (const [index, event] of events.entries()) {
     if (event.type !== 'user/message'
       || event.data.source.kind !== 'plugin'
       || event.data.source.plugin !== SOURCE_NAME) continue
-    validateReading(session.events.slice(0, index), event, fail)
+    validateReading(events.slice(0, index), event, fail)
   }
 }
 
@@ -179,7 +180,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
     if (event.type !== 'user/message'
       || event.data.source.kind !== 'plugin'
       || event.data.source.plugin !== SOURCE_NAME) return
-    validateReading(session.events, event, fail)
+    validateReading(session.snapshotEvents(), event, fail)
   }, { global: true })
 }, { inject: ['sessions'] })
 /* jscpd:ignore-end */

@@ -206,7 +206,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   const seedSession = (session: Session): SessionTrace => {
     const trace = freshTrace()
     traces.set(session, trace)
-    for (const event of session.events) {
+    for (const event of session.snapshotEvents()) {
       applyTransition(trace, validateEvent(trace, event, fail))
     }
     return trace

@@ -195,7 +195,7 @@ describe('SubagentRuntime.startContinuable', () => {
     ctx.on('agent/inbox/inserted', ({ agent, message }) => {
       // Acceptance is the boundary `startContinuable` resolves at, so observe
       // the log state exactly there rather than after later microtasks.
-      enqueued.push({ id: message.id, loggedYet: hasUserText(agent.session.events, 'child task') })
+      enqueued.push({ id: message.id, loggedYet: hasUserText(agent.session.snapshotEvents(), 'child task') })
     })
 
     const started = await ctx.subagents.startContinuable(startSpec(parent))
@@ -405,7 +405,7 @@ describe('SubagentRuntime.startContinuable', () => {
       expect(found).toBeDefined()
       return found!
     })
-    const descriptor = child.session.events.find(event => event.type === 'subagent/descriptor')
+    const descriptor = child.session.snapshotEvents().find(event => event.type === 'subagent/descriptor')
 
     expect(descriptor?.data).toEqual({
       version: SUBAGENT_DESCRIPTOR_VERSION,
@@ -440,7 +440,7 @@ describe('SubagentRuntime.startContinuable', () => {
       return found!
     })
 
-    expect(child.session.events.find(event => event.type === 'subagent/descriptor')?.data)
+    expect(child.session.snapshotEvents().find(event => event.type === 'subagent/descriptor')?.data)
       .toEqual({
         version: SUBAGENT_DESCRIPTOR_VERSION,
         mode: 'continuable',
@@ -1482,7 +1482,7 @@ describe('continuable review regressions', () => {
     const started = await ctx.subagents.startContinuable(startSpec(parent))
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(1) })
     const child = ctx.agents.get(started.childId)!
-    const before = child.session.events.length
+    const before = child.session.snapshotEvents().length
 
     const controller = new AbortController()
     controller.abort('caller gave up')
@@ -1815,7 +1815,7 @@ describe('continuable review regressions', () => {
 
 /** Every settlement notice this agent received, in order, as flat text. */
 function settlementNotices(agent: Agent): { sender: string; text: string; summary: string }[] {
-  const logged = agent.session.events.flatMap(event => event.type === 'user/message' ? [event.data] : [])
+  const logged = agent.session.snapshotEvents().flatMap(event => event.type === 'user/message' ? [event.data] : [])
   return [...logged, ...agent.inbox.nextStep, ...agent.inbox.nextTurn].flatMap((message) => {
     if (message.source.kind !== 'subagent-settled') return []
     return [{
@@ -1850,7 +1850,7 @@ describe('continuable report delivery', () => {
     await vi.waitFor(() => {
       expect(adapter.requests.filter(request => request.sessionId === parent.id)).toHaveLength(1)
     })
-    const report = parent.session.events.flatMap(event => event.type === 'user/message'
+    const report = parent.session.snapshotEvents().flatMap(event => event.type === 'user/message'
       && event.data.source.kind === 'subagent-report' ? [event.data] : [])[0]
     expect(report?.id).toBe(messageId)
 
@@ -2087,7 +2087,7 @@ describe('continuable settlement delivery', () => {
 
     // Turn 1 closed cleanly and no later turn opened, so the cancelled queue is
     // the only record that this epoch was cut short.
-    expect(hasUserText(child.session.events, 'never runs')).toBe(false)
+    expect(hasUserText(child.session.snapshotEvents(), 'never runs')).toBe(false)
     await vi.waitFor(() => { expect(settlementNotices(parent)).toHaveLength(1) })
     expect(settlementNotices(parent)[0]!.text).toBe(
       `Background subagent ${started.childId} was stopped before it finished.`
@@ -2264,8 +2264,8 @@ describe('continuable settlement delivery', () => {
       `Background subagent ${started.childId} was stopped before it finished.`
       + '\nIt left no closing message.',
     )
-    expect(parent.session.events.some(event => event.type === 'agent/inbox/spliced')).toBe(true)
-    expect(parent.session.events.some(event => event.type === 'turn/start')).toBe(false)
+    expect(parent.session.snapshotEvents().some(event => event.type === 'agent/inbox/spliced')).toBe(true)
+    expect(parent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
     expect(parent.status).toBe('idle')
   })
 
@@ -2281,7 +2281,7 @@ describe('continuable settlement delivery', () => {
     await drained
 
     expect(settlementNotices(parent)).toHaveLength(1)
-    expect(parent.session.events.some(event => event.type === 'turn/start')).toBe(false)
+    expect(parent.session.snapshotEvents().some(event => event.type === 'turn/start')).toBe(false)
   })
 
   it('records but cannot deliver a teardown notice once the parent is disposed too', async () => {

@@ -88,7 +88,7 @@ The cache stores one version-stamped document per session in the `session_projca
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SessionProjectionCache` service, write-behind listeners, cache reads |
 | [`src/spec.ts`](src/spec.ts) | The `session_projcache` domain spec and record identity types |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; correctness is enforced at the write and read paths) |
+| — | No runtime invariant companion is published; the cache's correctness relation (a stored row equals the registry fold at its `seq` watermark) is only checkable by re-running the fold over the persisted log — duplicating the implementation rather than detecting drift — and its staleness is by design (fail-soft writes). The durable boundary is schema-validated by the cache's own zod parse on every read, and the read ladder's version/watermark guards are proven by the package spec. |
 
 </details>
 

@@ -63,3 +63,5 @@ None; this package neither assembles nor sends a provider request.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package is a build-time pass with no production event stream or mutable data; the pack's own gates (unresolvable own requests, the all-or-nothing wrapper contract) fail the pack instead.

@@ -228,8 +228,6 @@ describe('directory-picker-native client half', () => {
 })
 
 describe('directory-picker-native node half', () => {
-  // The invariant companion is mounted by the vitest-wide invariant host on
-  // every Context this suite creates; its registration is covered there.
   it('the node apply is an inert loader seat', () => {
     expect(() => { nodeApply() }).not.toThrow()
   })

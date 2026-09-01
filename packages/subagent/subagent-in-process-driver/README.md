@@ -73,7 +73,7 @@ The required request signal covers both startup and the live run. Before publica
 |---|---|
 | [`src/index.ts`](src/index.ts) | Run driver: creation, one-turn drive, result reading, disposal |
 | [`src/structured.ts`](src/structured.ts) | Structured-output runtime: capture tool, prompt section, guard, commit |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 </details>
 

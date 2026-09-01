@@ -120,7 +120,11 @@ export interface CodeRunResult {
    * rendered string; a failed or value-less run leaves this absent.
    */
   value?: CodeJsonValue
-  /** Text the program emitted, in order, bounded only as part of the outer result. */
+  /**
+   * Captured text. Each source channel preserves emission order; interleaving
+   * across independent channels is backend-dependent. Bounded only as part of
+   * the outer result.
+   */
   logs: string[]
   /** Present iff the run failed; see {@link CodeRunFailure} for the taxonomy. */
   error?: CodeRunFailure

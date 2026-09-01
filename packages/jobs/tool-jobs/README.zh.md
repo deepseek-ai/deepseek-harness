@@ -83,7 +83,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、完成监听器、提示词区段、输出上限 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；执行关系归能力 seam 所有） |
+| — | 不发布运行时不变式伴生入口；执行关系归能力 seam 所有。 |
 
 ### 输出上限
 

@@ -90,3 +90,5 @@ These limits define the current plan chip. They are current package constraints,
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Plan state and boundary ownership are audited by dsh-plan-mode, while the control is a slot effect whose declaration, registration, and teardown are exercised by this package.

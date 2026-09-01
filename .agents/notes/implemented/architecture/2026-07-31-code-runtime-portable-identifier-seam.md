@@ -25,7 +25,7 @@ The constants live in the Service Definition even though the worker is the only 
 
 ## Scope
 
-This decision delivers only the Service Definition extension and the worker's adoption of it. The `py-types` renderer and PTC mode language dispatch are owned by the [language-dispatch note](../feature/2026-07-31-ptc-language-dispatch.md); a Python backend does not exist yet. The Service Definition README keeps its worker-only wording for that reason: linking to a `dsh-code-runtime-python` README that does not exist would break the dead-link gate.
+This decision delivers the Service Definition extension and the worker-thread backend's adoption of it. The `py-types` renderer and PTC mode language dispatch are owned by the [language-dispatch note](../feature/2026-07-31-ptc-language-dispatch.md). The private experimental CPython subprocess backend (`dsh-experimental-code-runtime-python`) adopts the same portable-identifier contract.
 
 `RESERVED_BINDING_GLOBALS` encodes the Python bootstrap's concrete design ahead of the backend itself: it seeds exactly `__builtins__`/`__name__` and wraps the program under `__dsh_main__`. A Python backend that seeds any additional module global (`__doc__`, `__loader__`, `__spec__`, `__file__`, `__package__`, …) MUST widen this set in the same change, exactly as adding a language widens `PORTABLE_RESERVED_WORDS` — a name the bootstrap seeds but the set omits is the portability split this contract exists to prevent.
 

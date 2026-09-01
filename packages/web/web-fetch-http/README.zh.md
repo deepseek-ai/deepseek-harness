@@ -92,7 +92,7 @@ const page = await ctx.web.fetch({ url: 'https://example.com' })
 | [`src/provider.ts`](src/provider.ts) | `HttpFetchProvider`：固定连接、重定向跟随、有界读取、charset 解码 |
 | [`src/network.ts`](src/network.ts) | 公开地址解析、DNS64 发现与连接固定 |
 | [`src/policy.ts`](src/policy.ts) | URL 校验、同源检查、内容类型分类、charset 解析 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；上限在提供方处强制执行） |
+| — | 不发布运行时不变式伴生入口；上限在提供方处强制执行。 |
 
 ### 读取路径
 

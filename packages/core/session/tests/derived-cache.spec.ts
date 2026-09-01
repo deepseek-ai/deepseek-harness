@@ -16,7 +16,7 @@ function userText(session: Session, text: string): void {
 
 /** From-scratch oracle: replay the log into a fresh session and derive. */
 function scratch(session: Session): unknown {
-  return Session.create(SessionId(`${session.id}-scratch-${session.seq}`), [...session.events]).deriveMessages()
+  return Session.create(SessionId(`${session.id}-scratch-${session.seq}`), session.snapshotEvents()).deriveMessages()
 }
 
 describe('derived-message cache', () => {

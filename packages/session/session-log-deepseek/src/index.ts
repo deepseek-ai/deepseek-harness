@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { DeepSeekSessionLogExtension } from './types.ts'
 
 export type * from './types.ts'
@@ -45,10 +45,13 @@ const acceptanceFolds = new WeakMap<Session, AcceptanceFold>()
 export function acceptedThrough(session: Session): number {
   const previous = acceptanceFolds.get(session)
   let throughSeq = previous?.throughSeq ?? -1
-  const events = session.events
+  const length = session.seq
   const start = previous?.scannedEvents ?? 0
-  for (let index = start; index < events.length; index++) {
-    const event = events[index] as SessionEvent
+  for (let index = start; index < length; index++) {
+    const event = session.eventAt(index)
+    if (event === undefined) {
+      throw new Error(`session-log-deepseek: missing event ${String(index)} below captured length ${String(length)}`)
+    }
     if (event.type !== 'session-log-deepseek/delivery-accepted') continue
     if (typeof event.data.sessionId !== 'string' || event.data.sessionId.length === 0
       || !Number.isSafeInteger(event.data.throughSeq) || event.data.throughSeq < 0
@@ -58,7 +61,7 @@ export function acceptedThrough(session: Session): number {
     if (event.data.sessionId !== session.id) continue
     throughSeq = Math.max(throughSeq, event.data.throughSeq)
   }
-  acceptanceFolds.set(session, { scannedEvents: events.length, throughSeq })
+  acceptanceFolds.set(session, { scannedEvents: length, throughSeq })
   return throughSeq
 }
 
@@ -77,10 +80,9 @@ export function apply(ctx: Context, config: Config): void {
       if (session === undefined) return undefined
 
       const afterSeq = acceptedThrough(session)
-      const snapshot = session.events
-      const throughSeq = snapshot.length - 1
+      const throughSeq = session.seq - 1
       if (throughSeq < 0) return undefined
-      const suffix = snapshot.slice(afterSeq + 1)
+      const suffix = session.snapshotEvents(afterSeq + 1)
       const value: DeepSeekSessionLogExtension = {
         version: 1,
         session: session.header,

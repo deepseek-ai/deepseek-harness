@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-workspace",
   "description": "Workspace picker plugin: one WorkspacePicker registered into the sidebar and empty-state workspace slots",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -70,7 +66,6 @@
     "@deepseek-ai/dsh-client-ui-session": "workspace:^",
     "@deepseek-ai/dsh-client-ui-sidebar": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-schedule": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
@@ -81,7 +76,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ]

@@ -239,7 +239,7 @@ function projectSource<Value>(
 }
 
 function sourceLive(session: Session): LogicalSessionSource {
-  return { header: session.header, events: session.events }
+  return { header: session.header, events: session.snapshotEvents() }
 }
 
 function orderedResults<Value>(
@@ -292,7 +292,7 @@ async function inspectPersisted(
 function snapshotLive(session: Session): LogicalSession {
   return {
     header: structuredClone(session.header),
-    events: session.events.map(event => structuredClone(event)),
+    events: session.snapshotEvents().map(event => structuredClone(event)),
   }
 }
 

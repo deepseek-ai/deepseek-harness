@@ -34,9 +34,6 @@
       "path": "../compaction"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../compaction-tool-result-pruner"
     }
   ]

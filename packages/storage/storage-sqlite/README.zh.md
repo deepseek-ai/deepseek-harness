@@ -84,7 +84,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：后端注册、`path`／`journalMode` 配置、单元表 |
 | [`src/schema.ts`](src/schema.ts) | 打开顺序、物理布局版本、元数据表、记录表命名 |
 | [`src/unit.ts`](src/unit.ts) | 一个已打开单元：预处理语句、JSON 值解析、关闭 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式：版本是打开时检查） |
+| — | 不发布运行时不变式伴生入口；版本是打开时检查。 |
 
 </details>
 

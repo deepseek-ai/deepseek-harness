@@ -313,7 +313,7 @@ function fixtureLog(session: Session): string {
   }
   return [
     JSON.stringify(header),
-    ...session.events.map(event => JSON.stringify(event)),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
     '',
   ].join('\n')
 }

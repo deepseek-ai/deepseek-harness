@@ -33,7 +33,7 @@ async function mintAgentScope(ctx: Context, name: string): Promise<{ scope: Scop
 
 /** The lifecycle slice of one agent's log (boundary markers stripped). */
 function lifecycleOf(agent: Agent): Array<{ type: string; data: unknown }> {
-  return agent.session.events
+  return agent.session.snapshotEvents()
     .filter(event => event.type === 'command/run' || event.type === 'command/done')
     .map(event => ({ type: event.type, data: event.data }))
 }
@@ -316,7 +316,7 @@ describe('CommandRuntime', () => {
     // The execution's pairing id is the logged one (RPC-level correlation).
     expect(execution?.commandId).toBe(ids[0])
     // Direct log-only appends: no turn is opened for the pair on an idle log.
-    expect(agent.session.events.map(event => event.type)).toEqual([
+    expect(agent.session.snapshotEvents().map(event => event.type)).toEqual([
       'command/run', 'command/done',
     ])
   })
@@ -354,7 +354,7 @@ describe('CommandRuntime', () => {
     await ctx.commands.execute(agent, '/private keep this once', [], new AbortController().signal)
 
     expect(seen).toHaveBeenCalledWith(expect.objectContaining({ rawInput: ' keep this once' }))
-    const run = agent.session.events.find(event => event.type === 'command/run')
+    const run = agent.session.snapshotEvents().find(event => event.type === 'command/run')
     expect(run?.type).toBe('command/run')
     expect(run?.type === 'command/run' && Object.hasOwn(run.data, 'args')).toBe(false)
   })
@@ -428,7 +428,7 @@ describe('CommandRuntime', () => {
     const signal = new AbortController().signal
     await ctx.commands.execute(agent, 'not a command', [], signal)
     await ctx.commands.execute(agent, '/missing', [], signal)
-    expect(agent.session.events).toEqual([])
+    expect(agent.session.snapshotEvents()).toEqual([])
   })
 
   it('joins an open turn without wrapping the lifecycle pair in synthetic turns', async () => {
@@ -437,7 +437,7 @@ describe('CommandRuntime', () => {
     ctx.commands.register(command('mid'))
     agent.session.append('turn/start', { turn: 1 })
     await ctx.commands.execute(agent, '/mid', [], new AbortController().signal)
-    expect(agent.session.events.map(event => event.type)).toEqual([
+    expect(agent.session.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'command/run', 'command/done',
     ])
   })

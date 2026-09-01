@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-log-deepseek",
   "description": "Incremental lossless session-log request extension for the official DeepSeek LLM API",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

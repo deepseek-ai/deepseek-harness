@@ -111,7 +111,7 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
     })
     expect(result.isError).toBe(true)
     expect(resultText(result)).toContain('at most one task may be in_progress')
-    expect(owner.session.events.some(e => e.type === 'todo/write')).toBe(false)
+    expect(owner.session.snapshotEvents().some(e => e.type === 'todo/write')).toBe(false)
   }, 30_000)
 
   it('allowParallelInProgress: true permits a parallel write end to end', async () => {
@@ -128,7 +128,7 @@ describe('tool-todo real Loader composition through cordis.yml', () => {
       agent: owner,
     })
     expect(result.isError).toBe(false)
-    expect(owner.session.events.findLast(e => e.type === 'todo/write')?.data.todos).toEqual(PARALLEL_TODOS)
+    expect(owner.session.snapshotEvents().findLast(e => e.type === 'todo/write')?.data.todos).toEqual(PARALLEL_TODOS)
   }, 30_000)
 
   it.each([

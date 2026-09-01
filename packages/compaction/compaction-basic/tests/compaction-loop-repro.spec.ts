@@ -188,7 +188,7 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   })
 }
 
-function overflowHistorySeed(): SessionEvent[] {
+function overflowHistorySeed(): readonly SessionEvent[] {
   const session = Session.create(SessionId('overflow-history-seed'))
   for (let turn = 1; turn <= 2; turn += 1) {
     const sentinel = turn === 1 ? 'OLD HISTORY SENTINEL' : 'RECENT HISTORY'
@@ -215,7 +215,7 @@ function overflowHistorySeed(): SessionEvent[] {
     session.append('step/end', { turn, step: 1 })
     session.append('turn/end', { turn, reason: { kind: 'completed' } })
   }
-  return [...session.events]
+  return session.snapshotEvents()
 }
 
 describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', () => {
@@ -233,8 +233,8 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
       await waitForIdle(ctx, agent)
 
       expect(agent.session.requestHeader()?.config.model).toBe('mock')
-      expect(agent.session.events.some(event => event.type === 'compaction/summary')).toBe(true)
-      expect(agent.session.events.at(-1)).toMatchObject({
+      expect(agent.session.snapshotEvents().some(event => event.type === 'compaction/summary')).toBe(true)
+      expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
         type: 'turn/end',
         data: { reason: { kind: 'completed' } },
       })
@@ -250,7 +250,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do tool work' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
-      const events = [...agent.session.events]
+      const events = agent.session.snapshotEvents()
       const compactStart = events.find(event => event.type === 'compaction/start')
       expect(compactStart).toBeDefined()
       const precedingResult = events.findLast(event =>
@@ -282,7 +282,7 @@ describe('CBR-001: a real-loop checkpoint is a valid boundary on both sides', ()
       agent.followup(createUserMessage({ content: [{ type: 'text', text: 'do a long multi-step task' }], source: { kind: 'user' } }))
       await waitForIdle(ctx, agent)
 
-      const events = [...agent.session.events]
+      const events = agent.session.snapshotEvents()
       // A compaction ran: at least one checkpoint landed on the surface.
       const checkpoints = events.filter(
         (e): e is SurfaceEvent =>
@@ -356,7 +356,7 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
         expect(retry).toContain('RECOVERY CHECKPOINT')
         expect(retry).not.toContain('OLD HISTORY SENTINEL')
 
-        const events = [...agent.session.events]
+        const events = agent.session.snapshotEvents()
         const stepStart = events.find(event =>
           event.type === 'step/start' && event.data.turn === 3 && event.data.step === 1,
         )!
@@ -419,11 +419,11 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
 
       expect(adapter.conversationRequests).toHaveLength(3)
       expect(adapter.summaryRequests).toHaveLength(1)
-      expect(agent.session.events.filter(event => event.type === 'llm/retry').map(event => event.data))
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data))
         .toEqual([expect.objectContaining({ turn: 3, step: 1, retry: 1, failure: { message: 'temporary provider outage', code: 'SERVER' } })])
-      expect(agent.session.events.filter(event => event.type === 'turn/start').slice(-1).map(event => event.data.turn))
+      expect(agent.session.snapshotEvents().filter(event => event.type === 'turn/start').slice(-1).map(event => event.data.turn))
         .toEqual([3])
-      expect(agent.session.events.at(-1)).toMatchObject({
+      expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
         type: 'turn/end',
         data: { reason: { kind: 'completed' } },
       })

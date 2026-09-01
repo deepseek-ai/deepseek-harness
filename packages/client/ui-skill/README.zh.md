@@ -106,3 +106,5 @@ source 不实现任何裁决钩子，也没有引用 codec：pick 落下字面�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。slash source、locale dictionary 与 keyed toolview 都由 registry 持有，HMR 测试覆盖释放；它们不发出 Cordis 事件或持有跨插件可变状态。

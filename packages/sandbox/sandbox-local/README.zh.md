@@ -90,7 +90,7 @@ Windows 档为每个工作区保留一个确定性写入 SID 和常驻 ACE，同
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：runner 链选择、功能探测、逐调用包装、ACL 授权生命周期 |
 | [`src/profiles.ts`](src/profiles.ts) | 各平台 profile 构建器：bwrap 挂载、Landlock 授权、Seatbelt SBPL |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；故障关闭约定在包装边界强制执行） |
+| — | 不发布运行时不变式伴生入口；故障关闭约定在包装边界强制执行。 |
 
 </details>
 

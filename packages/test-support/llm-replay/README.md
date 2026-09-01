@@ -102,7 +102,7 @@ Replay is built on one idea: the projected session log is the fixture. `deriveRe
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Types, fixture derivation, override validation, placeholder resolution, session binding, `installLlmReplay`, and the plugin export |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the stream grammar is checked by the LLM companion and derivation tests) |
+| — | No runtime invariant companion is published; this test-only adapter consumes a fixed replay script; its stream grammar is checked by the LLM companion and fixture derivation tests. |
 
 ### Binding and stream flow
 

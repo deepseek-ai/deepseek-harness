@@ -133,3 +133,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个无状态 adapter 把 policy 与 filesystem 关系委托给其所属 seam。

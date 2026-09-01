@@ -377,7 +377,13 @@ describe('ApiSession create or adoption', () => {
     } as never)
     const resumed = {
       id: meta.id,
-      session: { id: meta.id, header: meta, events },
+      session: {
+        id: meta.id,
+        header: meta,
+        snapshotEvents: () => events,
+        eventAt: (seq: number) => events[seq],
+        seq: events.length,
+      },
       status: 'idle',
       ctx,
     } as unknown as Agent

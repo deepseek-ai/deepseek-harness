@@ -85,7 +85,7 @@ This section explains the design decisions behind the tool and points at the cod
 | [`src/index.ts`](src/index.ts) | Plugin entry: tool registration, prompt section, arg validation, escalation, request assembly |
 | [`src/background.ts`](src/background.ts) | Map a settled background process onto generic job outcome vocabulary |
 | [`src/render.ts`](src/render.ts) | Model-facing result text: streams, markers, truncation notices (bash twin) |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; execution relations are owned by the capability seam) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Rendering and exit markers
 

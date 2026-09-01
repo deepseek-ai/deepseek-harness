@@ -61,7 +61,7 @@ The package realizes one dispatch rule: atomic Tool views are keyed by wire Tool
 
 ### Details and cards
 
-The package fills `conversation.details.tool` with `ToolDetails`. Row and Details renderers share one pure card model for each terminal, read, diff, search, and web card. These models validate raw call arguments, result content, failure state, persisted metadata, Code Dispatch `parentCallId`, and Session path facts. Unsupported or malformed inputs use flattened Tool result text. Card-specific limits and fallback rules remain in the owning [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.md), [diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.md), [read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.md), [search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.md), [web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.md), and [question](../../../.agents/notes/implemented/feature/2026-07-29-ask-question-web-presentation.md) notes.
+The package fills `conversation.details.tool` with `ToolDetails`. Row and Details renderers share one pure card model for each terminal, read, diff, search, and web card. These models validate raw call arguments, result content, failure state, persisted metadata, Code Dispatch `parentCallId`, and Session path facts. Generic rows retain the original `argsRaw` reference and format their input body only while it is expanded; structured cards skip generic-body formatting. Unsupported or malformed inputs use flattened Tool result text. Card-specific limits and fallback rules remain in the owning [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.md), [diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.md), [read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.md), [search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.md), [web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.md), and [question](../../../.agents/notes/implemented/feature/2026-07-29-ask-question-web-presentation.md) notes.
 
 </details>
 
@@ -109,3 +109,5 @@ These limits define the dispatch depth and the view ownership; they are current 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Tool composition is browser-only and contributes no events or cross-plugin mutable state; slot ownership is checked by ui-slots.

@@ -90,3 +90,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是浏览器侧 surface 插件，node half 不拥有事件流或可变运行时数据；roster 与 settings 写入属于 Host 约定。

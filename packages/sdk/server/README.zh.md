@@ -71,7 +71,7 @@ Stdout 只承载 JSON-RPC 帧，客户端可以逐字节解析；诊断信息应
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、stdio 接线、请求分发、共享关闭/退出任务 |
 | [`src/server.ts`](src/server.ts) | `HarnessSdkJsonRpcServer`：协议方法、逐会话 agent 创建、生命周期订阅、清理 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套插件（无运行时不变式——边界与回放测试覆盖协议映射） |
+| — | 不发布运行时不变式伴生入口；边界与回放测试覆盖协议映射。 |
 
 ### 请求流程
 

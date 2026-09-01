@@ -84,3 +84,5 @@ Independent. Authentication and HTTP dispatch do not touch a model request; any 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Authentication and input validation occur at the exact HTTP operation; dsh-host-webserver owns route/disposer symmetry.

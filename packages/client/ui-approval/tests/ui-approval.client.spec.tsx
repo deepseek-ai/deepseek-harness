@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-api-session-controller/client'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -11,7 +10,6 @@ import type { ApprovalComposerProps } from '../src/client/contract/slots.ts'
 import { PendingApproval } from '../src/client/contract/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
-import * as ApprovalInvariant from '../src/invariant.ts'
 
 type ApprovalListener = (
   this: Context,
@@ -375,12 +373,8 @@ describe('ApprovalPanel', () => {
 })
 
 describe('package entries', () => {
-  it('declares its service edges, keeps the Host half inert, and registers its invariant', async () => {
+  it('declares its service edges and keeps the Host half inert', () => {
     expect(inject).toEqual(['sessions', 'remote', 'uiSession', 'slots', 'locale'])
     expect(() => { nodeApply() }).not.toThrow()
-    const ctx = new Context()
-    await ctx.plugin(InvariantRegistry, { enabled: true })
-
-    await expect(ctx.plugin(ApprovalInvariant).await()).resolves.toBeDefined()
   })
 })

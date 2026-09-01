@@ -143,7 +143,7 @@ This section explains the design decisions behind the provider and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider: layer resolution, strict document parse, reference and record write paths under the writer lock, watcher lifecycle, permissions check |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the seam companion owns the event lifecycle contract) |
+| — | No runtime invariant companion is published; the Service Definition companion (`dsh-credentials/invariant`) owns the `credentials/reference-updated` lifecycle contract; this provider's file/environment layering is asynchronous I/O pinned by its unit suite. |
 
 ### Resolution and write paths
 

@@ -142,3 +142,5 @@ These limits define when the runner needs special care. They are current package
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The definition registry is process memory with no event stream to observe, and its one owned relation (a running definition owns a settled host-half fiber and its handler table) is established and unwound inside single awaited verbs, so package tests assert it directly.

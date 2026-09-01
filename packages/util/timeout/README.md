@@ -92,7 +92,7 @@ The library is built on one boundary: share the timing and classification, keep 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `clampTimeout`, `deadline`, `idleWatchdog`, `timeoutOf`, `TimeoutReason`, `MAX_TIMER_DELAY_MS` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the timing algebra is exercised by unit tests) |
+| — | No runtime invariant companion is published; this pure utility owns no event stream or mutable runtime data; its value algebra is enforced by unit tests. |
 
 ### How a deadline fuses sources
 

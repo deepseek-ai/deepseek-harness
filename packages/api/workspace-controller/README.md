@@ -54,3 +54,5 @@ No direct effect; Workspace mutations do not alter model requests.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Workspace Registry owns persistence; every stream generation is a full projection.

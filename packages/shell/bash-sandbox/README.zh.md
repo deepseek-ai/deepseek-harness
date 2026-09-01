@@ -83,7 +83,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`SandboxBashExecutor`、按进程保留事实、run/start 包装 |
 | [`src/helpers.ts`](src/helpers.ts) | 拒绝、runner 失败与 runner spawn 失败分类 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；分类在结果中可观察） |
+| — | 不发布运行时不变式伴生入口；分类在结果中可观察。 |
 | `tests/` | 跨 bwrap、Landlock 与 Seatbelt runner 演练的行为 |
 
 ### 主要流程

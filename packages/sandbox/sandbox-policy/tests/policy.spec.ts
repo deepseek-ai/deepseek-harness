@@ -206,7 +206,7 @@ describe('sandbox:policy request context', () => {
   it('reconstructs resumed policy from the session log and omits diagnostics without an agent', async () => {
     const active = session('sess-resume', '/projects/current')
     setSandboxMode(active, 'workspace-write')
-    const resumed = Session.create(active.id, active.events, active.header)
+    const resumed = Session.create(active.id, active.snapshotEvents(), active.header)
     const ctx = await promptMounted({ mode: 'read-only' })
 
     expect(await policyContext(ctx, resumed)).toContain('workspace-write')
@@ -231,7 +231,7 @@ describe('the sandbox/mode session kit', () => {
   it('setSandboxMode appends exactly one sandbox/mode event per switch', () => {
     const session = Session.create(SessionId('sess-write'))
     setSandboxMode(session, 'danger-full-access')
-    const modeEvents = session.events.filter(e => e.type === 'sandbox/mode')
+    const modeEvents = session.snapshotEvents().filter(e => e.type === 'sandbox/mode')
     expect(modeEvents).toHaveLength(1)
     expect(modeEvents[0]?.data).toEqual({ mode: 'danger-full-access' })
   })

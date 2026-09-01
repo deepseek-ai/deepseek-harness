@@ -115,3 +115,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个薄 provider 把 request/result 校验委托给共享 title service 与 LLM helper，不保留独立可变状态。

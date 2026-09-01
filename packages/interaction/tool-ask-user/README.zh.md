@@ -74,7 +74,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 工具注册：`ask_user_question` schema、执行路径、结果渲染 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；执行关系由 seam 拥有） |
+| — | 不发布运行时不变式伴生入口；执行关系由 seam 拥有。 |
 
 ### Consumer 角色
 

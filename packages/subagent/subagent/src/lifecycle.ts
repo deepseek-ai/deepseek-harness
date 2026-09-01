@@ -193,11 +193,11 @@ export function createActivationObserver(
     : { stopReason: 'error' }
   return {
     start: (child: Agent): void => {
-      boundary = child.session.events.length
+      boundary = child.session.seq
       emit('subagent/start', identity, parent)
     },
     capture: (child: Agent): void => {
-      const own = child.session.events.slice(boundary)
+      const own = child.session.snapshotEvents(boundary)
       const output = finalAssistantOutput(own)
       captured = {
         stopReason: epochStopReason(own),

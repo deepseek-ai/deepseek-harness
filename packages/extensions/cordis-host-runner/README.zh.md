@@ -142,3 +142,5 @@ runner 建立在两个分离之上。**注册表与沙箱是同一个服务。**
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。definition registry 是无事件流的进程内存；运行 definition 与 host-half fiber/handler table 的关系在单个 awaited verb 内建立和释放。

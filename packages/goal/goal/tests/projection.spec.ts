@@ -136,7 +136,7 @@ describe('goal projection unit', () => {
     }))
 
     expect(bench.tailValues().goal).toBeNull()
-    expect(foldGoal(bench.session.events).goal).toBeUndefined()
+    expect(foldGoal(bench.session.snapshotEvents()).goal).toBeUndefined()
   })
 
   it('retains strict replay failures without throwing from the projection drive', () => {

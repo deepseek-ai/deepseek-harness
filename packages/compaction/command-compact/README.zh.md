@@ -95,7 +95,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`/compact` 注册、参数拒绝、错误码映射、生命周期排空 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；压缩 seam 与命令注册表拥有持久约定） |
+| — | 不发布运行时不变式伴生入口；压缩 seam 与命令注册表拥有持久约定。 |
 
 </details>
 

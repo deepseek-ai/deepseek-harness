@@ -1,0 +1,9 @@
+version: 1
+scenario: ptc-python-turn
+profile: headless
+composition: ptc-python
+recording: authored
+platform: posix
+header:
+  class: ptc-python
+  pin: true

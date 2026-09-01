@@ -56,8 +56,8 @@ function send(agent: Agent, text: string) {
   agent.followup(createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }))
 }
 
-function events(agent: Agent): SessionEvent[] {
-  return [...agent.session.events]
+function events(agent: Agent): readonly SessionEvent[] {
+  return agent.session.snapshotEvents()
 }
 
 describe('agent/pre-step', () => {

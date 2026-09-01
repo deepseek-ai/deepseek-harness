@@ -34,9 +34,6 @@
     },
     {
       "path": "../../shell/bash-local"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

@@ -65,10 +65,10 @@ kind: "package-reference"
 | `dsh-permission-presets`、`dsh-user-approval`、`dsh-commands` | preset 引用指向活动 preset、审批询问/决定配对、命令运行/完成配对 |
 | `dsh-jobs`、`dsh-tool-todo`、`dsh-time-context` | 任务快照字段关系、整表 todo 形状、持久时钟读数 |
 | `dsh-credentials`、`dsh-settings`、`dsh-storage-domain`、`dsh-workspace` | 提交事件对照活动服务或内存状态、实体缓存镜像 |
-| `dsh-agent-presets`、`dsh-session-title`、`dsh-plan-mode`、`dsh-schedule`、`dsh-webserver` | preset 挂载位置、标题来源引用、plan-mode 载荷、schedule 流、路由 disposer 对称性 |
+| `dsh-agent-presets`、`dsh-session-title`、`dsh-plan-mode`、`dsh-schedule` | preset 挂载位置、标题来源引用、plan-mode 载荷、schedule 流 |
 | `dsh-client-hmr`、`dsh-client-modules`、`dsh-client-runtime` | 浏览器/node 侧 stat-watcher 生命周期、启动入口图、slot 变更版本化 |
 
-其余每个工作区包都发布一个空配套入口，并以 `No runtime invariant:` 说明为何没有可检查的内容。
+其余工作区包省略伴生入口，并在各自 README 中说明包级原因。
 
 ### 向自定义组合添加配套入口
 
@@ -104,14 +104,14 @@ ctx.plugin(SessionInvariant)
 - **与产品无关的注册表。** 服务不导入任何 session、agent、scope 或 agent-loop 包，也不包含它们的检查；配套入口把检查放在其归属者旁边。
 - **真实关系，而非人为断言。** 配套入口只检查其包拥有的事件流或可变数据关系；确认方法、插件名、注入或固定纯函数结果是类型、加载或单元测试关注点，绝不是运行时不变量。
 - **注册保留归属。** 即使过滤器让 installer 保持非活动，包名也会被保留，因此两个插件永远不会静默认领同一个名字。
-- **穷尽接线，机械强制。** `pnpm run verify-package-invariants` 拒绝生成标记、未说明的空 installer、省略或忽略 reporter 的非空 installer、错误注册名，以及不完整的导出、发布、依赖或 bundle 接线（[约定笔记](../../../.agents/notes/implemented/architecture/2026-07-19-package-invariant-runtime-contracts.zh.md)）。
+- **伴生入口接线由机械规则强制。** `pnpm run verify-package-invariants` 拒绝空 installer、省略或忽略 reporter 的 installer、错误注册名、不完整的发布接线，以及省略伴生入口后残留的接线（[省略伴生入口笔记](../../../.agents/notes/implemented/simplification/2026-08-28-omit-unneeded-invariant-companions.zh.md)）。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`InvariantRegistry` 服务、选择、注册、`InvariantError` |
-| [`src/invariant.ts`](src/invariant.ts) | 本包自己的配套入口：一个空 installer，说明注册归属本身就是服务的变更边界 |
+| — | 不发布运行时不变式伴生入口；注册归属本身就是服务的变更边界。 |
 
 ### 选择与注册生命周期
 

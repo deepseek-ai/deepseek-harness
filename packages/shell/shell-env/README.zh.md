@@ -87,7 +87,7 @@ contributor 必须声明它返回的每个键；返回未声明或非字符串�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口、`ShellEnvRegistry` 服务、内置事实与持久化 contributor |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；收集可通过工具执行观察） |
+| — | 不发布运行时不变式伴生入口；收集可通过工具执行观察。 |
 
 ### 收集
 

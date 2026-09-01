@@ -89,3 +89,5 @@ These limits define the current command surface. They are current package constr
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A browser-side source over the wire command directory — it emits no cordis events and owns no cross-plugin mutable state; dispatch and cache behavior are asserted by this package's specs.

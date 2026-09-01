@@ -98,3 +98,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。浏览器插件只贡献 effect 所有的 Conversation Definition、keyed renderer 与 dictionary；Host tool 包负责持久事件不变式。

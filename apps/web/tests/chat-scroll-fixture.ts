@@ -164,7 +164,7 @@ function fixtureLog(session: Session): string {
       cwd: '{{cwd}}',
       delegationDepth: 0,
     }),
-    ...session.events.map(event => JSON.stringify(event)),
+    ...session.snapshotEvents().map(event => JSON.stringify(event)),
     '',
   ].join('\n')
 }

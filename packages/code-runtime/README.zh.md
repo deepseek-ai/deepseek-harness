@@ -28,7 +28,7 @@ kind: "package-group"
 |---|---|---|
 | [`code-runtime/`](code-runtime/README.zh.md) | 定义代码运行时做什么：针对宿主提供的绑定运行一个程序，并报告其打印和返回的内容 | `ctx.codeRuntime` |
 | [`code-runtime-worker-thread/`](code-runtime-worker-thread/README.zh.md) | 在全新的 Node Worker 线程中执行 TypeScript 程序 | 注册 `ctx.codeRuntime` |
-| [`code-runtime-python/`](code-runtime-python/README.zh.md) | 持有 Node host 与 CPython 子进程之间的 fd-3 协议格式，即 Python 后端的协议层 | — |
+| [`experimental/code-runtime-python/`](../experimental/code-runtime-python/README.zh.md) | 实验性 Python 后端：持有 Node host 与 CPython 子进程之间的 fd-3 协议格式与 CPython 运行时实现 | — |
 
 -----
 

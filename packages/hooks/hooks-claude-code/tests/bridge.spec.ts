@@ -72,8 +72,8 @@ function waitForIdle(_ctx: Context, agent: Agent): Promise<void> {
   return agent.whenIdle()
 }
 
-function events(agent: Agent): SessionEvent[] {
-  return [...agent.session.events]
+function events(agent: Agent): readonly SessionEvent[] {
+  return agent.session.snapshotEvents()
 }
 
 /**

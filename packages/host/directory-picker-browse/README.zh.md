@@ -72,7 +72,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `BrowseDirectoryPicker` 服务：列举、创建、有界窗口、错误映射 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；文件系统是权威） |
+| — | 不发布运行时不变式伴生入口；文件系统是权威。 |
 
 </details>
 

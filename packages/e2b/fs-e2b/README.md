@@ -75,7 +75,7 @@ This section explains the design decisions behind the provider and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `E2BFileSystem` provider, canonicalization, reads, atomic writes, error mapping |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; each operation returns the controller's committed result directly) |
+| — | No runtime invariant companion is published; each operation returns the E2B controller's committed result directly, with no independent event or cache to cross-check. |
 
 ### Canonical paths and transport framing
 

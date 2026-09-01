@@ -58,7 +58,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   const seed = (session: Session): number | null => {
     let openTurn: number | null = null
     dispatchRoots.set(session, new Map())
-    for (const event of session.events) {
+    for (const event of session.snapshotEvents()) {
       validateDispatch(session, event)
       commitDispatch(session, event)
       if (event.type === 'turn/start') openTurn = event.data.turn

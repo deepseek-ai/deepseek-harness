@@ -82,3 +82,5 @@ Host entry 为每条 Client stream 独立注册 allowlist listener 和队列，�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。被观察的关系由 Typert 以及 Agent、Session 注册表负责。

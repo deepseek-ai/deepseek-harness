@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-theme",
   "description": "Theme plugin: Host bootstrap for the pre-plugin palette; DOM-free ThemeRuntime for light/dark/system state; --dsw-* token styles and Appearance settings row",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -58,14 +54,12 @@
     "@deepseek-ai/dsh-client-ui-settings": "workspace:^",
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@types/react": "~18.3.1",
     "react": "^18.2.0",
     "@deepseek-ai/dsh-settings": "workspace:^"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/styles",
     "lib/types/**/*.d.ts"

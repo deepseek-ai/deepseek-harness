@@ -5,7 +5,7 @@ import type {
 import type { ChunkRowEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
-import { ConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import { ConversationNodeAssembler as RuntimeConversationNodeAssembler } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   ConversationMatch, ConversationNodeContext,
   ConversationNodeDefinition, ConversationViewDefinition, ConversationViewNode,
@@ -63,6 +63,13 @@ class TestViewDefinitions {
   }
 }
 
+class ConversationNodeAssembler extends RuntimeConversationNodeAssembler {
+  constructor(events: TestEventDefinitions, views: TestViewDefinitions) {
+    super(events, views)
+    for (const view of views.entries()) this.activateTarget(view.target)
+  }
+}
+
 function testView(
   apply = vi.fn(),
 ): ConversationViewDefinition<ConversationViewNode, TestSnapshot> {
@@ -90,6 +97,21 @@ function testView(
       }
     },
   }
+}
+
+function trackedView(target: string) {
+  const replace = vi.fn(({ nodes }: { readonly nodes: readonly ConversationViewNode[] }) => nodes)
+  const apply = vi.fn(({ upserts }: { readonly upserts: readonly ConversationViewNode[] }) => upserts)
+  const create = vi.fn(() => ({
+    empty: [] as readonly ConversationViewNode[],
+    replace,
+    apply,
+  }))
+  const definition: ConversationViewDefinition<ConversationViewNode, readonly ConversationViewNode[]> = {
+    target,
+    create,
+  }
+  return { definition, create, replace, apply }
 }
 
 function at(seq: number, type: string, data: unknown): SessionEvent {
@@ -139,6 +161,89 @@ function fallbackDefinition(start: () => string): ConversationNodeDefinition<str
 }
 
 describe('ConversationNodeAssembler', () => {
+  it('reports a replacement only when an active target has a registered builder', () => {
+    const assembler = new RuntimeConversationNodeAssembler(
+      new TestEventDefinitions([]),
+      new TestViewDefinitions([]),
+    )
+
+    expect(assembler.activateTarget('registered-later')).toBe(false)
+    assembler.replaceWindow([], false)
+
+    expect(assembler.flush()).toBe(false)
+  })
+
+  it('updates only active targets and never deactivates one after first use', () => {
+    type State = { readonly updates: number }
+    const definition = (
+      target: string,
+      buildViewNode: NonNullable<ConversationNodeDefinition<State>['buildViewNode']>,
+    ): ConversationNodeDefinition<State> => ({
+      kind: `active-${target}`,
+      target,
+      match: (event) => {
+        const type = event.type as string
+        if (type === 'active/start') return { id: 'one', role: 'start' }
+        if (type === 'active/update') return { id: 'one', role: 'update' }
+        return null
+      },
+      start: () => ({ updates: 0 }),
+      update: context => ({ updates: context.state.updates + 1 }),
+      buildViewNode,
+    })
+    const chat = trackedView('chat')
+    const trajectory = trackedView('trajectory')
+    const build = (target: string) => vi.fn((context: ConversationNodeContext<State>): ConversationViewNode => ({
+      key: context.key,
+      kind: context.kind,
+      id: context.id,
+      target,
+      data: context.state,
+    }))
+    const buildChat = build('chat')
+    const buildTrajectory = build('trajectory')
+    const assembler = new RuntimeConversationNodeAssembler(
+      new TestEventDefinitions([
+        definition('chat', buildChat),
+        definition('trajectory', buildTrajectory),
+      ]),
+      new TestViewDefinitions([chat.definition, trajectory.definition]),
+    )
+
+    assembler.replaceWindow([input(at(1, 'active/start', {}))], false)
+    expect(assembler.flush()).toBe(false)
+    expect(chat.create).not.toHaveBeenCalled()
+    expect(trajectory.create).not.toHaveBeenCalled()
+    expect(buildChat).not.toHaveBeenCalled()
+    expect(buildTrajectory).not.toHaveBeenCalled()
+
+    expect(assembler.activateTarget('chat')).toBe(true)
+    expect(chat.replace).toHaveBeenCalledOnce()
+    expect(trajectory.replace).not.toHaveBeenCalled()
+    expect(buildChat).toHaveBeenCalledOnce()
+    expect(buildTrajectory).not.toHaveBeenCalled()
+
+    assembler.append(input(at(2, 'active/update', {})))
+    expect(assembler.flush()).toBe(true)
+    expect(chat.apply).toHaveBeenCalledOnce()
+    expect(trajectory.apply).not.toHaveBeenCalled()
+    expect(buildTrajectory).not.toHaveBeenCalled()
+
+    expect(assembler.activateTarget('trajectory')).toBe(true)
+    expect(trajectory.replace).toHaveBeenCalledOnce()
+    expect((assembler.snapshot('trajectory') as readonly ConversationViewNode[])
+      .map(node => node.data)).toEqual([{ updates: 1 }])
+
+    assembler.append(input(at(3, 'active/update', {})))
+    expect(assembler.flush()).toBe(true)
+    expect(chat.apply).toHaveBeenCalledTimes(2)
+    expect(trajectory.apply).toHaveBeenCalledOnce()
+    expect(assembler.activateTarget('chat')).toBe(false)
+    expect(assembler.activateTarget('trajectory')).toBe(false)
+    expect(chat.replace).toHaveBeenCalledOnce()
+    expect(trajectory.replace).toHaveBeenCalledOnce()
+  })
+
   it('appends through an exact business-id Context without replaying unrelated Contexts', () => {
     const starts = vi.fn((
       _context: ConversationNodeContext<{ callSeq: number; results: number }>,

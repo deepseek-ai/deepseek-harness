@@ -72,7 +72,7 @@ Every filesystem await races the caller's signal (`raceAbort`), so a stalled net
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `BrowseDirectoryPicker` service: listing, creation, bounded window, error mapping |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the filesystem is authoritative) |
+| — | No runtime invariant companion is published; each list/create is one stateless filesystem round trip; the filesystem itself is the authoritative state. |
 
 </details>
 

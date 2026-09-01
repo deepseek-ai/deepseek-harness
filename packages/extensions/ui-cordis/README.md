@@ -126,3 +126,5 @@ These limits define where the surfaces need special care. They are current packa
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A single keyed toolview registration whose disposal is proven by the HMR-safety spec. The one mutable relation this package owns — the per-definition run-state observable — lives in the browser process, out of reach of the host invariant service, and the node half emits no cordis events and holds no cross-plugin state.

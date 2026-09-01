@@ -102,3 +102,5 @@ These limits define the current attachment surface. They are package constraints
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The package contributes only effect-owned slot entries; the slot registry owns their lifecycle and validates their declarations.

@@ -46,7 +46,7 @@ export const Config: z<Config> = z.object({
  * @returns the seed events, contiguous from seq 0; empty when no turn has completed.
  */
 function completedTurnPrefix(parent: Agent): SessionEvent[] {
-  const events = parent.session.events
+  const events = parent.session.snapshotEvents()
   const lastEnd = events.findLast(e => e.type === 'turn/end')
   if (lastEnd === undefined) return []
   // seq === array index (the append contract), so slice up to and including it.

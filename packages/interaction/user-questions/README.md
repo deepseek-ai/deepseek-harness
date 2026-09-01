@@ -75,3 +75,5 @@ No direct invalidation; the named consumer owns any request-prefix changes.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The single provider slot is validated at registration and asks return directly to their caller; the seam publishes no independent request/answer audit stream.

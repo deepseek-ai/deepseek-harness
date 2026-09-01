@@ -102,3 +102,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。本包只贡献 effect 所有的 slot entry；slot 注册表负责其生命周期并校验声明。

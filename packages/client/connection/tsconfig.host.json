@@ -11,13 +11,18 @@
     "src/browser-auth.ts",
     "src/http-bridge.ts",
     "src/index.ts",
-    "src/invariant.ts",
     "src/loopback-hostname.ts",
     "src/rpc-host.ts",
     "src/rpc-schema.ts",
     "src/rpc.ts"
   ],
   "references": [
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
     {
       "path": "../../attachment/attachment"
     },
@@ -29,9 +34,6 @@
     },
     {
       "path": "../../host/webserver"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     },
     {
       "path": "../../util/brand"

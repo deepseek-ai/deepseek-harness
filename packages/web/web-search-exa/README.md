@@ -84,7 +84,7 @@ The provider is a thin adapter over Exa's API with two deliberate rules:
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, environment fallback, provider registration |
 | [`src/provider.ts`](src/provider.ts) | The `ExaSearchProvider`: request dispatch, abort classification, result mapping |
 | [`src/types.ts`](src/types.ts) | Exa wire types: `ExaSearchResponse`, `ExaResult`, `ExaError` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; contracts are enforced at the service) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Request and mapping flow
 

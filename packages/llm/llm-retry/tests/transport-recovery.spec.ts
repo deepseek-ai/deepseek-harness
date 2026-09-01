@@ -103,10 +103,10 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
 
     expect(server).toBeDefined()
     expect(server?.requests).toHaveLength(1)
-    expect(agent.session.events.filter(event => event.type === 'step/start')
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'step/start')
       .map(event => [event.data.turn, event.data.step]))
       .toEqual([[1, 1]])
-    expect(agent.session.events.filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
       .toEqual(['TRANSPORT'])
     expect(finalAssistantText(agent)).toBe('connected after retry')
   })
@@ -132,16 +132,16 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
 
     expect(server.requests).toHaveLength(2)
     expect(server.requests[0]?.body).toEqual(server.requests[1]?.body)
-    const retryEvent = agent.session.events.find(event => event.type === 'llm/retry')
-    expect(agent.session.events.filter(event =>
+    const retryEvent = agent.session.snapshotEvents().find(event => event.type === 'llm/retry')
+    expect(agent.session.snapshotEvents().filter(event =>
       event.type === 'assistant/chunk'
       && retryEvent !== undefined
       && event.seq < retryEvent.seq,
     )).toHaveLength(failedChunkCount)
-    expect(agent.session.events.filter(event => event.type === 'assistant/message')
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'assistant/message')
       .map(event => [event.data.turn, event.data.step]))
       .toEqual([[1, 1]])
-    expect(agent.session.events.filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
       .toEqual(['TRANSPORT'])
     expect(finalAssistantText(agent)).toBe('recovered response')
   })
@@ -161,12 +161,12 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
 
     expect(server.requests).toHaveLength(2)
     expect(server.requests[0]?.body).toEqual(server.requests[1]?.body)
-    expect(agent.session.events.filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
       .toEqual(['EMPTY_RESPONSE'])
-    expect(agent.session.events.filter(event => event.type === 'assistant/message')
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'assistant/message')
       .map(event => [event.data.turn, event.data.step]))
       .toEqual([[1, 1]])
-    expect(agent.session.events.at(-1)).toMatchObject({
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
       type: 'turn/end',
       data: { reason: { kind: 'completed' } },
     })
@@ -188,12 +188,12 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
     await sendAndWait(context, agent)
 
     expect(server.requests).toHaveLength(1)
-    expect(agent.session.events.filter(event =>
+    expect(agent.session.snapshotEvents().filter(event =>
       event.type === 'assistant/chunk' && event.data.turn === 1,
     )).toHaveLength(3)
-    expect(agent.session.events.some(event => event.type === 'assistant/message')).toBe(false)
-    expect(agent.session.events.some(event => event.type === 'llm/retry')).toBe(false)
-    expect(agent.session.events.at(-1)).toMatchObject({
+    expect(agent.session.snapshotEvents().some(event => event.type === 'assistant/message')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'llm/retry')).toBe(false)
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
       type: 'turn/end',
       data: { reason: { kind: 'error', error: { message: 'SSE stream ended without [DONE]', code: 'STREAM_CLOSED' } } },
     })
@@ -215,7 +215,7 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
     await sendAndWait(context, agent)
 
     expect(server.requests.map(record => record.behavior)).toEqual(['stall', 'success'])
-    expect(agent.session.events.filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry').map(event => event.data.failure.code))
       .toEqual(['TIMEOUT'])
     expect(finalAssistantText(agent)).toBe('recovered after timeout')
   }, 10_000)
@@ -233,9 +233,9 @@ describe('bounded retry through the real DeepSeek HTTP/SSE adapter', () => {
     await sendAndWait(context, agent)
 
     expect(server.requests).toHaveLength(3)
-    expect(agent.session.events.filter(event => event.type === 'step/start')).toHaveLength(1)
-    expect(agent.session.events.filter(event => event.type === 'llm/retry')).toHaveLength(2)
-    const end = agent.session.events.at(-1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'step/start')).toHaveLength(1)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'llm/retry')).toHaveLength(2)
+    const end = agent.session.snapshotEvents().at(-1)
     expect(end).toMatchObject({
       type: 'turn/end',
       data: { reason: { kind: 'error', error: { code: 'TRANSPORT' } } },

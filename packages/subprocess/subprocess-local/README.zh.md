@@ -79,7 +79,7 @@ kind: "package-reference"
 | [`src/terminal.ts`](src/terminal.ts) | `node-pty` 终端句柄：前台检查、会话清理、Windows 拆卸 |
 | [`src/process-inspector.ts`](src/process-inspector.ts) | POSIX 进程树与会话检查 |
 | [`src/windows-inspector.ts`](src/windows-inspector.ts) | 经 koffi 的 Windows Toolhelp32 进程表检查 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；约定归 seam 所有） |
+| — | 不发布运行时不变式伴生入口；约定归 seam 所有。 |
 
 ### 主流程
 

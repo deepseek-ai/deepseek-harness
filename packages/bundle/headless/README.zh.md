@@ -78,13 +78,13 @@ patch 叠加在 `dsh-base` 之上：继承投影缓存，在基础 `system-promp
 | [`src/index.ts`](src/index.ts) | `headless-runner` 插件：运行流程、输出约定、退出映射 |
 | [`src/startup.ts`](src/startup.ts) | `headless-startup` 提供方：任务位置参数与 `--help` |
 | [`cordis.patch.yml`](cordis.patch.yml) | 叠加在 `dsh-base` 之上的一次性 patch |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：无运行时不变式；可观察约定是进程级的 |
+| — | 不发布运行时不变式伴生入口；可观察的行为属于进程级组合，本包只持有静态 patch 列表。 |
 | [`tests/headless.spec.ts`](tests/headless.spec.ts) | 运行流程、汇总、flush 与退出映射 |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | 在真实 Loader 树上的命令行解析 |
 
 ### 不变式归属
 
-不变式伴生插件注册一个空安装器，因为 runner 的可观察约定（stdout 的最终文本、按轮次结束原因决定的退出码）是进程级的、由启动器 e2e 负责；插件不注册任何内容，树内也没有任何可变关系可审计。
+不发布不变式伴生入口，因为 runner 的可观察约定（stdout 的最终文本、按轮次结束原因决定的退出码）是进程级的、由启动器 e2e 负责；插件不注册任何内容，树内也没有任何可变关系可审计。
 
 </details>
 

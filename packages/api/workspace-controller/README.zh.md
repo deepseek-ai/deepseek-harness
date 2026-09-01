@@ -54,3 +54,5 @@ Client 入口提供 `ClientWorkspaceModel` 和 `createWorkspaceStateStream()`。
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。Workspace Registry 负责持久化，每次流生成都是完整投影。

@@ -58,7 +58,7 @@ The primitive is one intersection type: `string & { readonly [BRAND]: B }`, wher
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Branded string type and its stateless constructor |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; erasure is enforced by the compiler) |
+| — | No runtime invariant companion is published; this pure utility owns no event stream or mutable runtime data; its value algebra is enforced by unit tests. |
 
 ### How values stay portable
 

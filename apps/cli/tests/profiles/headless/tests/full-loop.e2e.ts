@@ -34,7 +34,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('full loop: real model + real bas
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'Run `echo e2e-ok` with the bash tool and tell me its exact output.' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
-    const events = [...agent.session.events]
+    const events = agent.session.snapshotEvents()
     const calls = events.filter(event => event.type === 'tool/call')
     expect(calls.length).toBeGreaterThan(0)
     expect(calls.some(event => event.data.name === 'bash')).toBe(true)

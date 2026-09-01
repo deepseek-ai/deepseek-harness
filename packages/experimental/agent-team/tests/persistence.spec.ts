@@ -31,7 +31,7 @@ function durable(agent: Agent): {
   pendingMessages: TeamMessageSnapshot[]
 } {
   let projected = teamProjectionDefinition.init(agent.session.header)
-  for (const event of agent.session.events) projected = teamProjectionDefinition.apply(projected, event)
+  for (const event of agent.session.snapshotEvents()) projected = teamProjectionDefinition.apply(projected, event)
   if (projected.failure !== undefined) throw new Error(projected.failure)
   const state = projected
   return {

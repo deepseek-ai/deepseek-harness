@@ -77,7 +77,7 @@ agent（智能体）可以在会话期间发现并加载 skill（技能）：在
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、目录与手势 pre-step 监听器、渲染与 digest |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；这个模型侧 adapter 没有独立 lifecycle stream；执行关系由它调用的 capability seam 负责。 |
 
 ### 目录生命周期
 

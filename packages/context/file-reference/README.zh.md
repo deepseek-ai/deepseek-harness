@@ -60,7 +60,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 抽象 `FileReferenceService` 与 `FILE_REFERENCE_PROMPT` |
 | [`src/grammar.ts`](src/grammar.ts) | `activeAtToken` 识别与 `formatFileMention` 渲染 |
 | [`src/types.ts`](src/types.ts) | 仅含路径的结果类型 `FileReferenceCandidate` |
-| [`src/invariant.ts`](src/invariant.ts) | 发现约定的不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；接口不保留 candidate 或 lifecycle 状态；具体 provider 负责自己的 cache 与 invalidation 关系。 |
 
 ### 主要流程
 

@@ -93,7 +93,7 @@ This section explains the design decisions behind the contract and points at the
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SandboxProvider` service, mode/enforcement/policy types, fail-closed error |
 | [`src/escalation.ts`](src/escalation.ts) | Escalation vocabulary: wider-mode ladder, argument validation, denial and hint markers, approval choreography |
 | [`src/roots.ts`](src/roots.ts) | Writable-root derivation shared by the Seatbelt profile and the in-process fs fence |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the abstract seam registers no event or data relation) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Escalation choreography
 

@@ -68,9 +68,9 @@ describe('compaction invariants', () => {
     const source = Session.create(SessionId('stale-compaction-source'))
     source.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: null })
     const replayed = ctx.sessions.create(SessionId('stale-compaction-replay'), {
-      seed: source.events,
+      seed: source.snapshotEvents(),
     })
-    expect(replayed.events.map(event => event.type))
+    expect(replayed.snapshotEvents().map(event => event.type))
       .toEqual(['compaction/start', 'session/end-seed'])
 
     await ctx.plugin(InvariantRegistry)
@@ -89,9 +89,9 @@ describe('compaction invariants', () => {
     startTurn(source)
     source.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
     const replayed = ctx.sessions.create(SessionId('stale-numbered-compaction-replay'), {
-      seed: source.events,
+      seed: source.snapshotEvents(),
     })
-    expect(replayed.events.map(event => event.type))
+    expect(replayed.snapshotEvents().map(event => event.type))
       .toEqual(['turn/start', 'compaction/start', 'session/end-seed'])
 
     await ctx.plugin(InvariantRegistry)
@@ -111,9 +111,9 @@ describe('compaction invariants', () => {
     startTurn(source)
     source.append('turn/end', { turn: 1, reason: { kind: 'interrupted' } })
     const replayed = ctx.sessions.create(SessionId('stale-repaired-compaction-replay'), {
-      seed: source.events,
+      seed: source.snapshotEvents(),
     })
-    expect(replayed.events.map(event => event.type)).toEqual([
+    expect(replayed.snapshotEvents().map(event => event.type)).toEqual([
       'compaction/start',
       'turn/start',
       'turn/end',
@@ -138,9 +138,9 @@ describe('compaction invariants', () => {
     source.append('turn/end', { turn: 1, reason: { kind: 'interrupted' } })
     source.append('compaction/end', { compactionId: TEST_COMPACTION_ID, turn: null, error: 'failed after crossing turn' })
     const replayed = ctx.sessions.create(SessionId('closed-nested-compaction-replay'), {
-      seed: source.events,
+      seed: source.snapshotEvents(),
     })
-    expect(replayed.events.at(-1)?.type).toBe('session/end-seed')
+    expect(replayed.snapshotEvents().at(-1)?.type).toBe('session/end-seed')
 
     await ctx.plugin(InvariantRegistry)
     await expect(ctx.plugin(CompactionInvariant).then(() => undefined))

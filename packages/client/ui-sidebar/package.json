@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar",
   "description": "Sidebar plugin: session multi-level tree, search, grouping, state dots",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -63,14 +59,12 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-client-ui-session": "workspace:^",
     "@deepseek-ai/dsh-client-ui-workspace": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@types/react": "~18.3.1",
     "@deepseek-ai/cordis": "workspace:^",
     "react": "^18.2.0"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ]

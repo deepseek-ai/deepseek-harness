@@ -63,7 +63,7 @@ await ctx.plugin(AgentLoop, { agents: [] })
 
 ### 设计
 
-该辅助函数是单个函数 `mountAgentLoopTestDependencies`，按固定依赖顺序——LLM、会话、系统提示词、工具注册表、agent 注册表——挂载五个服务插件，并刻意在 `AgentLoop` 之前停下，使调用方控制 loop 加载顺序与待测拓扑。所有权留在调用方的上下文：每个已挂载服务都归上下文所有，插件加载失败会拒绝 promise，较早的服务随上下文一起解除。实现位于 [`src/index.ts`](src/index.ts)；[`src/invariant.ts`](src/invariant.ts) 配套入口声明无运行时不变式，因为本包不拥有任何生产事件流或可变数据——消费它的测试套件会检验其行为。
+**运行时不变式：** 不发布伴生入口。本包不持有生产事件流或可变数据；消费它的测试套件会直接检验 harness 行为。
 
 </details>
 

@@ -58,7 +58,7 @@ const sessionId = brandString<SessionId>('session-1')
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 品牌化字符串类型及其无状态构造函数 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；擦除由编译器保证） |
+| — | 不发布运行时不变量伴生入口；擦除由编译器保证。 |
 
 ### 值为何可移植
 

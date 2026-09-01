@@ -12,6 +12,7 @@ import type {
   ConfigurablePluginsTabFace, PluginsSettingsSectionInjected,
 } from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import { SubagentModelSelectionCardController } from '../src/client/subagent-model-selection-card-controller.ts'
+import { apply as hostApply } from '../src/index.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -64,6 +65,10 @@ function declareRoot(slots: SlotRegistry): () => void {
 }
 
 describe('ui-settings-plugins apply', () => {
+  it('keeps the host Loader entry inert', () => {
+    expect(hostApply).not.toThrow()
+  })
+
   it('declares the services it uses', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'remote', 'remote.credentials', 'remote.session', 'settingsScope',

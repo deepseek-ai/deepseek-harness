@@ -30,16 +30,16 @@ function validate(events: readonly SessionEvent[], seedLength: number, fail: Inv
 /** Install replay and pre-append validation for the owned event stream. */
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   for (const session of ctx.sessions.list()) {
-    validate(session.events, session.header.seedLength ?? 0, fail)
+    validate(session.snapshotEvents(), session.header.seedLength ?? 0, fail)
   }
   ctx.on('session/created', (session) => {
-    validate(session.events, session.header.seedLength ?? 0, fail)
+    validate(session.snapshotEvents(), session.header.seedLength ?? 0, fail)
   }, { global: true })
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
     if (event.type !== 'schedule/change') return
-    validate([...session.events, event], session.header.seedLength ?? 0, fail)
+    validate([...session.snapshotEvents(), event], session.header.seedLength ?? 0, fail)
   }, { global: true })
 }, { inject: ['sessions'] })
 /* jscpd:ignore-end */

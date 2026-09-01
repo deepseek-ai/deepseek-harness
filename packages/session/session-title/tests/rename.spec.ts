@@ -46,14 +46,14 @@ describe('SessionTitleService.rename', () => {
       messageSeqs: [],
       source: { kind: 'user' },
     })
-    const event = session.events.findLast(item => item.type === 'session/title')
+    const event = session.snapshotEvents().findLast(item => item.type === 'session/title')
     expect(event?.data).toEqual({
       title: 'Hand picked name',
       messageSeqs: [],
       source: { kind: 'user' },
     })
     // foldSessionTitle round-trips the third source kind.
-    expect(foldSessionTitle(session.events)?.source).toEqual({ kind: 'user' })
+    expect(foldSessionTitle(session.snapshotEvents())?.source).toEqual({ kind: 'user' })
   })
 
   it('rejects titles that normalize to empty and dead sessions', async () => {
@@ -164,7 +164,7 @@ describe('SessionTitleService.rename', () => {
     await settle()
     // The released provider result must not append over the user title, and
     // the swallowed abort must not surface as an unhandled rejection.
-    const latest = session.events.findLast(item => item.type === 'session/title')
+    const latest = session.snapshotEvents().findLast(item => item.type === 'session/title')
     expect(latest?.data).toMatchObject({ title: 'User wins', source: { kind: 'user' } })
   })
 

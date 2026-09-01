@@ -37,9 +37,6 @@
     },
     {
       "path": "../cordis-host-runner"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

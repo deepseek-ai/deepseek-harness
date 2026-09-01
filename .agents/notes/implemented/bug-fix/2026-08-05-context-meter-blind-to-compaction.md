@@ -27,7 +27,7 @@ This reverses the "the ring, header, and bar length stay provider-exact" half of
 
 ## Alternatives considered
 
-**Project `measure().totalTokens` instead.** The measurement service already composes exactly this (`baseline` anchor plus signed `surfaceDeltaTokens`), and it reacts correctly — measured at 4383 → 304 across the same compaction. But it is a service over private replay state, not a pure fold, and a projection cannot call it. Reproducing its anchor inside a `ProjectionDefinition` needs `_estimateProviderAssistant`'s random access to the chunk events cited by seq (`session.events[seq]`), which `apply(state, event)` does not have. Anchoring on the sampled surface total is the same idea reachable from a pure per-event fold.
+**Project `measure().totalTokens` instead.** The measurement service already composes exactly this (`baseline` anchor plus signed `surfaceDeltaTokens`), and it reacts correctly — measured at 4383 → 304 across the same compaction. But it is a service over private replay state, not a pure fold, and a projection cannot call it. Reproducing its anchor inside a `ProjectionDefinition` needs `_estimateProviderAssistant`'s random access to the chunk events cited by seq (`session.eventAt(seq)`), which `apply(state, event)` does not have. Anchoring on the sampled surface total is the same idea reachable from a pure per-event fold.
 
 **Emit a synthetic usage record at the end of compaction.** Would move `pressureTokens` itself, but the only usage compaction holds is the summarization request's own — a different prompt entirely. Recording it as the conversation's prompt size would be a lie in the durable log rather than in one display.
 

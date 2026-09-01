@@ -85,3 +85,5 @@ These limits define the current browse surface. They are current package constra
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The plugin registers one workspace directory-flow owner whose disposal the HMR-safety spec proves, and every listing it shows is re-read from the Host on demand rather than held here.

@@ -81,7 +81,7 @@ The pending call is a `generic` card titled `ralph` with the immutable objective
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: fixed script, provider routing, report validation, tool registration |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; workflow and subagent owners validate the runs and children it starts) |
+| — | No runtime invariant companion is published; this model-facing orchestration adapter owns no independent event stream; workflow and subagent owners validate the runs and child lifecycles it starts. |
 
 </details>
 

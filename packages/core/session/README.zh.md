@@ -49,6 +49,10 @@ session.deriveMessages()         // the derived model history
 
 表层事件（`user/message`、`assistant/message`、`tool/result`）必须声明如何进入有序 surface；原始分片、边界与其他仅日志事件从不产生消息。
 
+### 读取日志
+
+`session.seq` 无需物化数组即可读取当前日志长度，`session.eventAt(seq)` 按序列号读取单个已接受且深度冻结的事件。`session.snapshotEvents(fromSeq?, toSeqExclusive?)` 会物化半开区间的冻结稳定快照；当前完整快照会缓存到下一次追加。只需要长度或单个事件的调用方使用 `seq` 或 `eventAt()`。
+
 ### 派生会话的 fork
 
 `ctx.sessions.fork(source, boundary?, childSessionId?)` 选取截至 `boundary` 事件序号（含该事件）的源事件（默认：当前最后一个事件），要求所选前缀结束时没有开放轮次，再创建带谱系元数据的实时子会话。必须在轮次中途分支的工具时委派会裁剪到已完成前缀。

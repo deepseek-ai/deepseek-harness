@@ -140,3 +140,5 @@ These limits define where the browser half needs special care. They are current 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The owned relation (a live Plugin's loader entry exists exactly while one Plugin Run ID is live) is browser-only state reachable through the client half's service, which the node-plane companion cannot observe. The relation is asserted by the package's own load/teardown coverage instead.

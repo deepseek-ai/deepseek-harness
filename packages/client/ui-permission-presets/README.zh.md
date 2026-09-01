@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 选择器
 
-选中即提交 `/permission <preset>` 命令行。带参路径（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。内置标签在英文界面中是 `Read Only`、`Workspace Write` 和 `Full access`，在中文界面中是「仅可查看」「可写入工作区」和「完全权限」；`custom` 只是显示状态，绝非目标。
+选中即提交 `/permission <preset>` 命令行。带参路径（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。内置标签在英文界面中是 `Read Only`、`Workspace Write` 和 `Full access`，在中文界面中是「仅可查看」「工作区内修改」和「完全权限」；`custom` 只是显示状态，绝非目标。
 
 ### 设置行
 
@@ -89,3 +89,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。command 与 slot contribution 的生命周期由 HMR 测试覆盖；浏览器侧 Settings controller 不持有 Host 事件或跨插件可变状态。

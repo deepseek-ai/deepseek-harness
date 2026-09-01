@@ -219,7 +219,7 @@ describe('TokenMeter pricing', () => {
     const result = service.measure(session)
     expect(result.baseline.kind).toBe('estimated')
     expect(result.totalTokens).toBeGreaterThan(result.surfaceTokens)
-    expect(result.logRevision).toBe(session.events.length)
+    expect(result.logRevision).toBe(session.snapshotEvents().length)
     expectSurfaceTotal(result)
   })
 
@@ -404,7 +404,7 @@ describe('replay anchors and surface folds', () => {
       content: [{ type: 'text', text: 'new tail' }],
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    const seeded = Session.create(SessionId('surface-seeded'), original.events)
+    const seeded = Session.create(SessionId('surface-seeded'), original.snapshotEvents())
     const before = service.measure(seeded)
     expect(before.nodes).toHaveLength(2)
     expect(before.surfaceDeltaTokens).toBeGreaterThan(0)
@@ -417,15 +417,15 @@ describe('replay anchors and surface folds', () => {
     }), { surfaceOp: { op: 'replace', start: first, end: first }, sourceEventSeqs: [first] })
     const after = service.measure(seeded)
     expect(after.nodes).toHaveLength(2)
-    expect(after.nodes[0]!.seq).toBe(seeded.events.length - 1)
-    expect(after.logRevision).toBe(seeded.events.length)
+    expect(after.nodes[0]!.seq).toBe(seeded.snapshotEvents().length - 1)
+    expect(after.logRevision).toBe(seeded.snapshotEvents().length)
     expect(Object.isFrozen(after.nodes)).toBe(true)
     expect(Object.isFrozen(after.nodes[0])).toBe(true)
     expect(after.surfaceDeltaTokens).toBeLessThan(0)
     expectSurfaceTotal(after)
     expect(before.nodes).toHaveLength(2)
     // The earlier snapshot still reports the log it measured: seed + boundary.
-    expect(before.logRevision).toBe(original.events.length + 1)
+    expect(before.logRevision).toBe(original.snapshotEvents().length + 1)
     expect(before.surfaceDeltaTokens).toBeGreaterThan(0)
   })
 
@@ -437,7 +437,7 @@ describe('replay anchors and surface folds', () => {
       provenance: 'empty',
     })
     const measurement = meter().measure(session)
-    const assistant = session.events.find(event => event.type === 'assistant/message')!
+    const assistant = session.snapshotEvents().find(event => event.type === 'assistant/message')!
     expect(measurement.nodes).toEqual([{ seq: assistant.seq, tokens: 0, heuristicTokens: 0 }])
     expect(measurement.surfaceTokens).toBe(0)
     expectSurfaceTotal(measurement)
@@ -650,7 +650,7 @@ describe('malformed replay and listener lifecycle', () => {
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     appendHeader(session, header('deepseek-v4-flash'))
-    const head = session.events[0]!.seq
+    const head = session.snapshotEvents()[0]!.seq
     session.append('assistant/message', {
       turn: 1,
       step: 1,

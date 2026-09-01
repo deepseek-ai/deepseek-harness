@@ -68,3 +68,5 @@ Stable for a fixed profile, provider, model, and tool roster. Profile changes ta
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The bundle adds a process transport and startup latch; source/built stdio tests own frame purity, help exclusion, and shutdown.

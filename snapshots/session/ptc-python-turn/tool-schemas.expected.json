@@ -1,0 +1,26 @@
+{
+  "initial": [
+    {
+      "name": "run_code",
+      "description": "Execute a Python program against the available tools. Takes two required arguments: `code`, the BODY of an async function (top-level `await` and `return` work), and `description`, a short summary of what the program does. Call tools as `await tools.name(args)` per the declarations in the system prompt. Use `print(...)` and/or `return <value>` for program output — curate it. Image-bearing subtool results are attached after the run.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The program: the body of an async Python function."
+          },
+          "description": {
+            "type": "string",
+            "description": "Clear, concise description of what this program does in active voice, 5-10 words (shown in the UI). Examples: \"Count TODO markers across packages\"; \"Read failing test and its fixture\"; \"Rename config key in every cordis.yml\"."
+          }
+        },
+        "required": [
+          "code",
+          "description"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}

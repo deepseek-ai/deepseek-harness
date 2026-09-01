@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-plan-mode",
   "description": "Logged per-agent plan mode with deployment guidance, a direct slash command, and a user-reviewed exit",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },

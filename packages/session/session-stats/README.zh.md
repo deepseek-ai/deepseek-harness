@@ -130,3 +130,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。本包只有一个纯 projection fold，payload 每次都经 schema 校验；所依赖的 step、turn、chunk 与 tool event 关系由 agent-loop 和 session surface 检查。

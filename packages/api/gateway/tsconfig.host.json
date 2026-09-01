@@ -7,7 +7,6 @@
   },
   "files": [
     "src/index.ts",
-    "src/invariant.ts",
     "src/remote-error-codes.ts",
     "src/stream-protocol.ts",
     "src/stream-server.ts",
@@ -22,9 +21,6 @@
     },
     {
       "path": "../../../vendor/schemastery"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     },
     {
       "path": "../../client/connection/tsconfig.host.json"

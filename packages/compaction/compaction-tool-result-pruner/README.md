@@ -88,7 +88,7 @@ Pruning measures `text` blocks by Unicode code point (non-text blocks cost zero)
 | [`src/index.ts`](src/index.ts) | Plugin entry: `ToolResultPruner` service, `pruneSession` / `pruneContent` / `measureContent` |
 | [`src/config.ts`](src/config.ts) | `PRUNE_MARKER`, defaults, code-point counting, budget validation |
 | [`src/types.ts`](src/types.ts) | `ToolResultPruneConfig`, `ResolvedConfig`, `PrunedEntry`, `PruneResult` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; replacements are observable in the session log) |
+| — | No runtime invariant companion is published; Session validates each content-only rewrite and its companion owns cross-event enclosure. |
 
 </details>
 

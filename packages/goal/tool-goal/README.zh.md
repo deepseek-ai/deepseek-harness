@@ -80,7 +80,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、配置、系统提示词章节、结果渲染 |
 | [`src/authority.ts`](src/authority.ts) | 执行时权限检查与 Goal Round 接受 |
 | [`src/wrapup.ts`](src/wrapup.ts) | 终局自主更新的结束消息指令 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生：空（无运行时不变式——已接受的变更由 goal 领域负责） |
+| — | 不发布运行时不变式伴生入口；已接受的变更由 goal 领域负责。 |
 
 ### 工具输出
 

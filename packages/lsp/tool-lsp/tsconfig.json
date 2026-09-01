@@ -31,9 +31,6 @@
     },
     {
       "path": "../lsp"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

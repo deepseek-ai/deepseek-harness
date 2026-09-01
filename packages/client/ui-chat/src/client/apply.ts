@@ -125,6 +125,7 @@ export function apply(ctx: Context): void {
             if (!result.ok) throw new Error(`path open failed: ${result.error.message}`)
           },
           loadOlder: () => { void session.loadOlder() },
+          loadThrough: seq => session.loadThrough(seq),
           loadImage: Object.assign(
             (attachment: ImageAttachmentRef) => ctx.uiConversation.imageUrl(sessionId, attachment),
             { peek: (attachment: ImageAttachmentRef) => ctx.uiConversation.peekImageUrl(sessionId, attachment) },

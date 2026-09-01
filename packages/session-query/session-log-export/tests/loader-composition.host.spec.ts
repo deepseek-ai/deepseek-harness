@@ -65,7 +65,7 @@ describe('session-log-download real Loader composition', () => {
     })
     const execution = await context.commands.execute(agent, '/export', [], new AbortController().signal)
     expect(execution?.result).toEqual({ kind: 'success', text: 'Session log download requested.' })
-    expect(session.events.map(event => event.type)).toEqual(['command/run', 'command/done'])
+    expect(session.snapshotEvents().map(event => event.type)).toEqual(['command/run', 'command/done'])
     expect(session.deriveMessages()).toEqual([])
   })
 })

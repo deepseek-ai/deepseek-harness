@@ -81,7 +81,7 @@ Keys are stable: `<package>#<face>` for reflection, `<package>#<name>` for schem
 | [`src/service.ts`](src/service.ts) | `TypertRegistry` service, stores, validation, effect wiring |
 | [`src/types.ts`](src/types.ts) | Contribution, record, and filter types |
 | [`src/client/index.ts`](src/client/index.ts) | Client face installing the same registry |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; schema and package-reflection records mutate together inside register/dispose, with no independent event or second data source to cross-check; duplicate identities fail at the owning operation boundary. |
 
 </details>
 

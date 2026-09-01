@@ -175,3 +175,5 @@ This Dev Note is working context for maintainers: open questions and undecided d
 - **Continuable ACP children** — would require persisting the remote session id and a per-child continuation advertisement.
 
 </details>
+
+**Runtime invariant:** No companion is published. This package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam.

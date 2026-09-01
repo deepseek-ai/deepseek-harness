@@ -38,6 +38,9 @@ import { SessionQueueMirror } from './queue-mirror.ts'
 /** Messages requested per history page. */
 export const PAGE_MESSAGES = 50
 
+/** Messages requested per page while a turn jump loops backwards (fewer, larger round trips). */
+export const JUMP_PAGE_MESSAGES = 200
+
 /** Manager-owned observers of a Session object's local state edges. */
 export interface SessionOptions {
   /** Catalog-discovered address selecting non-activating subagent transport. */
@@ -78,6 +81,10 @@ export class Session implements SessionFace {
    *  passes drop all writes once the generation moves on. */
   private openGeneration = 0
   private loadingOlder = false
+  /** Shared low-water target of the running jump loop; null when no jump is paging. */
+  private jumpTargetSeq: number | null = null
+  /** The running jump loop's completion, shared by retargeting callers. */
+  private jumpPromise: Promise<void> | null = null
   /** Authoritative stream-only inbox snapshot; pending work never hits history. */
   private readonly queueMirror = new SessionQueueMirror()
   private running = false
@@ -367,6 +374,52 @@ export class Session implements SessionFace {
       this.loadingOlder = false
       this.notifier.markDirty()
     }
+  }
+
+  /** Jump loader: page backwards until the window covers seq (see ISession.loadThrough). */
+  loadThrough(seq: number): Promise<void> {
+    if (this.openState !== 'open' || !this.hasMore || this.baseSeq <= seq) return Promise.resolve()
+    if (this.jumpPromise !== null) {
+      // Retarget the running loop to the lowest requested seq.
+      this.jumpTargetSeq = Math.min(this.jumpTargetSeq ?? seq, seq)
+      return this.jumpPromise
+    }
+    // A plain single-page pull owns the busy flag; the jump does not queue
+    // behind it (the caller retries once it settles) and must leave no
+    // target behind — only the loop's finally clears that field, and no
+    // loop starts here.
+    if (this.loadingOlder) return Promise.resolve()
+    this.jumpTargetSeq = seq
+    this.loadingOlder = true
+    this.notifier.markDirty()
+    // Stale-pass guard (the doOpen pattern): a resync mid-loop replaces the
+    // stream generation; this pass then stops instead of paging the new
+    // generation toward its old target.
+    const generation = this.openGeneration
+    this.jumpPromise = (async () => {
+      try {
+        while (this.hasMore && this.jumpTargetSeq !== null && this.baseSeq > this.jumpTargetSeq) {
+          if (generation !== this.openGeneration) return
+          const events = this.events
+          if (events === undefined) return
+          const before = this.baseSeq
+          await events.prepend({ beforeSeq: this.baseSeq, maxMessages: JUMP_PAGE_MESSAGES })
+          // No-progress guard: an empty or dropped page that still claims more
+          // history must end the loop, not spin it.
+          if (this.baseSeq >= before) return
+        }
+      } catch (error) {
+        if (!isRemoteFailure(error)) {
+          console.error('[session-controller] loadThrough failed:', error)
+        }
+      } finally {
+        this.jumpTargetSeq = null
+        this.jumpPromise = null
+        this.loadingOlder = false
+        this.notifier.markDirty()
+      }
+    })()
+    return this.jumpPromise
   }
 
   /** Rebuild an opened history source after address replacement.

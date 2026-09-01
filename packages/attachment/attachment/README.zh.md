@@ -78,7 +78,7 @@ kind: "package-reference"
 | [`src/admission.ts`](src/admission.ts) | 浏览器 prompt 准入：强制规范 base64、委托 `saveImages` 并投影持久 prompt part |
 | [`src/error.ts`](src/error.ts) | `AttachmentError` 类与 `isImageAdmissionError` 运行时子集 |
 | [`src/brand.ts`](src/brand.ts) | `AttachmentId` 带类型标记的不透明标识符 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；实现负责强制不可变存储检查） |
+| — | 不发布运行时不变式伴生入口；实现负责强制不可变存储检查。 |
 
 </details>
 

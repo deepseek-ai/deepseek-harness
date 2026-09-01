@@ -61,7 +61,7 @@ Session 实例与 scope 同生命周期，存活资格 = host listed（一个判
 
 「实体化但无首条提示词」的会话经 summary 派生位 `blank` 治理（派生列而非 header 字段，SessionHeader 保持不可变）：
 
-- host 判据：`session.events.length === 0`（零日志事件 = 尚无用户消息）。live 会话 `summarize()` 内存直读；cold 会话恒 `false`——JSONL provider 的 lazy-create 约定保证 never-appended Session 不进入 `persistence.list()`，所以 blank 从不落盘。
+- host 判据：`session.seq === 0`（零日志事件 = 尚无用户消息）。live 会话 `summarize()` 内存直读；cold 会话恒 `false`——JSONL provider 的 lazy-create 约定保证 never-appended 会话不进入 `persistence.list()`，所以 blank 从不落盘。
 - wire 承载两处：`SessionSummary.blank` 必填列；`host/session-added` 帧必填 `blank` 字段（创建时恒 true，供别的 tab 按同一空会话状态入镜像）。
 - client 镜像只降不升（单调），三来源翻转，全部复用既有 wire 信号：
   - 发送方本地：首次 `prompt()` 的**成功响应**翻 false（受理即证明用户消息已入 host 日志——此点翻转是确证而非乐观；`onEngaged` 同步更新列表镜像，当前 `New Session` 行原地转为普通标题，不新增列表行）。首条提示词被拒则会话保持 blank：与 host 权威对齐、继续显示为 `New Session`、在仍为该工作区成员时保持 connectWorkspace 复用资格。

@@ -203,6 +203,7 @@ function mount(
           actions={store.actions}
           renderSlot={renderSlot as never}
           open={open}
+          selectView={(view) => { store.actions.setView(view) }}
           t={t}
         />
       )
@@ -227,6 +228,7 @@ function mount(
           actions={store.actions}
           renderSlot={renderSlot as never}
           bindDraftMirror={write => wiring.bindMirror(write)}
+          openView={(view, focus) => { store.actions.openView(view, focus) }}
         />
       )
     }
@@ -433,8 +435,7 @@ describe('ConversationRoot resident composer', () => {
         { ...workspace('second'), title: 'Selected Folder' },
       ],
     )
-    // Hero chrome present, view ring absent; scroll host already wraps the
-    // resident composer so the blank → active flip does not remount it.
+    // Hero chrome is present and the selected View slot remains absent.
     const host = b.view.container.querySelector('[data-conversation-scroll]')
     const header = b.view.container.querySelector('header')
     expect(host).not.toBeNull()

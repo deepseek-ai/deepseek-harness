@@ -53,7 +53,7 @@ describe('SessionTitleService', () => {
 
     await settleTitles()
 
-    const titleEvent = session.events.findLast(event => event.type === 'session/title')
+    const titleEvent = session.snapshotEvents().findLast(event => event.type === 'session/title')
     expect(titleEvent).toMatchObject({
       type: 'session/title',
       seq: 2,
@@ -140,7 +140,7 @@ describe('SessionTitleService', () => {
 
     expect(first?.messageSeqs).toEqual([eligible.seq])
     expect(ctx.sessionTitle.get(session)).toEqual(first)
-    expect(session.events.filter(event => event.type === 'session/title')).toHaveLength(1)
+    expect(session.snapshotEvents().filter(event => event.type === 'session/title')).toHaveLength(1)
   })
 
   it('folds the latest title event during replay', () => {
@@ -160,7 +160,7 @@ describe('SessionTitleService', () => {
       },
     })
 
-    expect(foldSessionTitle(seed.events)).toEqual({
+    expect(foldSessionTitle(seed.snapshotEvents())).toEqual({
       title: 'Later',
       messageSeqs: [1, 4],
       source: {
@@ -169,13 +169,13 @@ describe('SessionTitleService', () => {
         model: { provider: 'mock', model: 'title-model' },
       },
       eventSeq: 1,
-      updatedAt: seed.events[1]?.time,
+      updatedAt: seed.snapshotEvents()[1]?.time,
     })
   })
 
   it('folds an empty or title-less log to undefined', () => {
     expect(foldSessionTitle([])).toBeUndefined()
     const empty = Session.create(SessionId('no-title'))
-    expect(foldSessionTitle(empty.events)).toBeUndefined()
+    expect(foldSessionTitle(empty.snapshotEvents())).toBeUndefined()
   })
 })

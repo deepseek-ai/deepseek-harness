@@ -1484,7 +1484,7 @@ describe('the run_code dispatch bridge', () => {
     expect(result.isError).toBe(false)
     expect(result.isError ? undefined : result.value).toEqual({ logs: [], result: depth })
     expect({ observedDepth, observedLeaf }).toEqual({ observedDepth: depth, observedLeaf: 'leaf' })
-    const dispatch = session.events.find(event => event.type === 'tool/code-dispatch')
+    const dispatch = session.snapshotEvents().find(event => event.type === 'tool/code-dispatch')
     if (dispatch === undefined) throw new Error('expected a durable tool/code-dispatch event')
     const logged = dispatch.data.arguments as { nested: JsonValue }
     let loggedDepth = 0

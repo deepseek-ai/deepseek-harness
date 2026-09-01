@@ -81,12 +81,12 @@ patch 在自身上按平台门控两个 shell 栈：`bash-sandbox` 与 `tool-bas
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | 组合包的实体：基础插件行，附以行内注释说明各行依据 |
 | [`src/index.ts`](src/index.ts) | 包入口；不携带任何运行时 API |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：无运行时不变式；每条插入行所属的包负责自己的不变式 |
+| — | 不发布运行时不变式伴生入口；本包只持有静态 patch 列表，插入的各行分别负责自己的不变式。 |
 | [`tests/base.spec.ts`](tests/base.spec.ts) | manifest 声明与平台门控检查 |
 
 ### 不变式归属
 
-不变式伴生插件注册一个空安装器，因为本包是静态 patch 列表载体：每条插入行由所属的包携带其不变式，组合包自身没有任何可审计的可变关系。
+不发布不变式伴生入口，因为本包是静态 patch 列表载体：每条插入行由所属的包负责其不变式，组合包自身没有任何可审计的可变关系。
 
 </details>
 

@@ -43,7 +43,7 @@ A fixed Overview above the ledger projects real record start/duration timing fro
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The view is a pure projection: Trajectory-owned Definitions assemble business records from the shared Session window — including durable cancellation-finalized prefixes, chunk-only interruption fallbacks, and interrupted Tool records — so Trajectory neither reads nor changes the Chat conversation snapshot.
+The view is a pure projection: Trajectory-owned Definitions assemble business records from the shared Session window — including durable cancellation-finalized prefixes, chunk-only interruption fallbacks, and interrupted Tool records — so Trajectory neither reads nor changes the Chat conversation snapshot. Its steering classifier retains only next-step Inbox IDs through persistent splice state and shares each current claimed batch across later Contexts.
 
 ### Virtual rows
 
@@ -96,3 +96,5 @@ These limits define what the view can show while work is in flight; they are cur
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A pure-consumer plugin — it emits no cordis events and owns no mutable cross-plugin state; its view-slot registration is a plain effect whose disposal the slot ledger's own specs and this package's behavior specs observe directly.

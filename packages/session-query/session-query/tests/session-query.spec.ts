@@ -1002,7 +1002,8 @@ describe('session-query exact reads', () => {
     }).toThrow()
     Object.assign(snapshot.session, { cwd: '/mutated' })
 
-    expect(session.events[4]?.type === 'user/message' && session.events[4].data.content).toHaveLength(1)
+    const logged = session.eventAt(4)
+    expect(logged?.type === 'user/message' && logged.data.content).toHaveLength(1)
     expect(session.header.cwd).toBe('/work')
   })
 
@@ -1038,7 +1039,8 @@ describe('session-query exact reads', () => {
       (result.events[0]!.data as { content: unknown[] }).content = []
     }).toThrow()
     expect(session.header.createdAt).not.toBe(-1)
-    expect(session.events[1]?.type === 'user/message' && session.events[1].data.content).toHaveLength(1)
+    const logged = session.eventAt(1)
+    expect(logged?.type === 'user/message' && logged.data.content).toHaveLength(1)
 
     await expect(ctx.sessionQuery.readEvent({ sessionId: session.id, seq: 9 }))
       .rejects.toThrow(expectCode('SESSION_QUERY_EVENT_NOT_FOUND'))

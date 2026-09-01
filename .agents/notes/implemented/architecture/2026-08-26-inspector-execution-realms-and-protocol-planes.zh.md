@@ -16,7 +16,7 @@ Inspector 包的代码运行在三个 JavaScript 环境中：浏览器 Client、
 
 顶层源码目录标识执行归属。`client/` 只包含浏览器 Client 代码，`host/` 只包含 Host Node 主线程代码，`worker/` 只包含 Worker thread 代码，`shared/` 只包含在所有环境中都安全的代码。即使某个模块代表 Client，只要它实际在 Worker 中执行，就仍属于 `worker/`，而不是 `client/`。
 
-仓库要求的 `src/index.ts` 与 `src/invariant.ts` 发现入口是仅有的源码根目录例外。它们暴露 Host package entry 及其 service type，或注册 invariant companion，不包含 Inspector 运行时实现，并为仓库工具保留在固定路径。
+仓库要求的 `src/index.ts` 发现入口是本包唯一的源码根目录例外。它暴露 Host package entry 及其 service type，不包含 Inspector 运行时实现，并为仓库工具保留在固定路径。本包不发布 invariant companion，因为其关系会在所属 wire、generation、Worker 或 CDP 操作中失败，原因记录在 README 中。
 
 ```text
 src/

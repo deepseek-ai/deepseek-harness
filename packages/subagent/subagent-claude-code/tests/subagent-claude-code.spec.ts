@@ -23,7 +23,6 @@ import {
   vi,
 } from 'vitest'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -35,7 +34,6 @@ import type {
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import * as claudeCode from '../src/index.ts'
-import * as invariant from '../src/invariant.ts'
 import {
   claudeSpawnSpec,
   ManagedClaudeCodeProcess,
@@ -718,28 +716,12 @@ describe('task admission and package contracts', () => {
     await ctx.fiber.dispose()
   })
 
-  it('keeps the Loader namespace shape and package-owned empty invariant', async () => {
+  it('keeps the Loader namespace shape', () => {
     expect('default' in claudeCode).toBe(false)
     expect(claudeCode.name).toBe('subagent-claude-code')
     expect(claudeCode.inject).toEqual(['subagents', 'subprocess'])
     const loader = Object.create(Loader.prototype) as Loader
     expect(loader.unwrapExports(claudeCode)).toBe(claudeCode)
-
-    const dispose = vi.fn()
-    const register = vi.fn((
-      _packageName: string,
-      _installer: InvariantInstaller,
-    ) => dispose)
-    const ctx = { invariants: { register } } as unknown as Context
-    await expect(invariant.apply(ctx)).resolves.toBe(dispose)
-    expect(register).toHaveBeenCalledWith(
-      '@deepseek-ai/dsh-subagent-claude-code',
-      expect.any(Function),
-    )
-    const install = register.mock.calls[0]![1]
-    await install(new Context(), (message) => { throw new Error(message) })
-    expect(invariant.name).toBe('subagent-claude-code-invariant')
-    expect(invariant.inject).toEqual(['invariants'])
   })
 })
 

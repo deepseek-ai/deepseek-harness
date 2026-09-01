@@ -87,7 +87,7 @@ The executor is a Service Provider for the `ctx.shell` seam built on the subproc
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `LocalBashExecutor`, `Config`, settings-section wiring |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; contracts are enforced at the owning seam) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 | `tests/executor.spec.ts` | Exercised behavior: budgets, classification, background handles, ownership |
 | `tests/settings.spec.ts` | Settings layering over the composition entry |
 

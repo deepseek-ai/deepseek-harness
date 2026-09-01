@@ -85,7 +85,7 @@ agent 可以在沙箱中打开交互式终端、发送输入、读取输出，�
 | [`src/environment.ts`](src/environment.ts) | 远程环境探测、清理、序列化 |
 | [`src/output.ts`](src/output.ts) | base64 解码器与有界输出读取器 |
 | [`src/remote.ts`](src/remote.ts) | 共享控制 shell 辅助：选项构造、轮询 tick、进程组信号 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；存活远程句柄是私有的拆除所有权） |
+| — | 不发布运行时不变式伴生入口；存活远程句柄是私有的拆除所有权。 |
 
 ### 远程包装层
 

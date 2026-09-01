@@ -85,7 +85,7 @@ Web 客户端随附该命令。无头模式、ACP 自动化和 JSON-RPC 不提�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`feedback/record` 事件声明、`recordFeedback` 生产方、`/feedback` 命令注册 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；每个事件都是独立的仅追加事实） |
+| — | 不发布运行时不变式伴生入口；每个事件都是独立的仅追加事实。 |
 
 </details>
 

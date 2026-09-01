@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
 import { Context } from '@deepseek-ai/cordis'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import type { ChatSnapshot, UseChat } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import { ApprovalCommand, commandOf } from '../src/client/chat/ApprovalCommand.tsx'
 import { apply as nodeApply } from '../src/index.ts'
-import * as ChatInvariant from '../src/invariant.ts'
 
 function props(
   nodes: readonly unknown[],
@@ -61,11 +59,8 @@ describe('ApprovalCommand', () => {
 })
 
 describe('ui-chat package entries', () => {
-  it('keeps the Host half optional and registers the invariant companion', async () => {
+  it('keeps the Host half optional', () => {
     const ctx = new Context()
     expect(() => { nodeApply(ctx) }).not.toThrow()
-    await ctx.plugin(InvariantRegistry, { enabled: true })
-
-    await expect(ctx.plugin(ChatInvariant).await()).resolves.toBeDefined()
   })
 })

@@ -29,7 +29,6 @@ import {
   type DeliverablesTurnData,
 } from '../src/client/turn-deliverables.ts'
 import { apply, inject } from '../src/client/index.ts'
-import { apply as applyInvariant } from '../src/invariant.ts'
 import { en, zh } from '../src/client/locales.ts'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 
@@ -165,7 +164,7 @@ function result(seq: number, callId: string, isError = false, turn = 1): Session
 function assembler(entries: readonly SessionLiveEventEntry[], hasMore = false): ConversationNodeAssembler {
   const value = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
   value.replaceWindow(entries, hasMore)
-  value.flush()
+  value.activateTarget('test')
   return value
 }
 
@@ -554,19 +553,6 @@ describe('producedFileMentions resolver', () => {
   })
 })
 
-describe('package shells', () => {
-  it('the invariant companion registers ownership', async () => {
-    const registered: string[] = []
-    const ctx = new Context()
-    ctx.provide('invariants')
-    ctx.set('invariants', {
-      register: (pkg: string) => { registered.push(pkg); return () => {} },
-    } as never)
-    const dispose = await applyInvariant(ctx)
-    expect(registered).toEqual(['@deepseek-ai/dsh-client-ui-deliverables'])
-    expect(dispose).toBeTypeOf('function')
-  })
-})
 
 describe('plugin registration', () => {
   it('registers the tail entry and fiber disposal removes it', async () => {

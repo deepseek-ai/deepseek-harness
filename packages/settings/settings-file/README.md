@@ -90,7 +90,7 @@ This section explains the design decisions behind the provider and points at the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider: spec resolution, load/parse, read-modify-write under the writer lock, watcher lifecycle, YAML/JSON rendering |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; file round-trip, watcher timing, and atomic-write behavior are proven by package tests, and the in-process commit relation is owned by `dsh-settings`) |
+| — | No runtime invariant companion is published; this provider's contracts are file round-trip, watcher timing, and atomic-write behavior — IO effects proven by package tests; the in-process commit relation is owned by `@deepseek-ai/dsh-settings`. |
 
 ### Document lifecycle
 

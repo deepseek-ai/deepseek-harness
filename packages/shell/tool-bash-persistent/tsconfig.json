@@ -7,10 +7,10 @@
   "include": ["src"],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../../core/agent" },
     { "path": "../../core/tools" },
     { "path": "../../terminal/terminal" },
-    { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../util/timeout" }
   ]
 }

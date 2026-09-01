@@ -206,7 +206,7 @@ export class ScheduleRuntime {
   private readFolded(): FoldedSchedules | undefined {
     try {
       return foldScheduleEvents(
-        this.agent.session.events,
+        this.agent.session.snapshotEvents(),
         this.agent.session.header.seedLength ?? 0,
       )
     } catch (error: unknown) {

@@ -22,9 +22,6 @@
     },
     {
       "path": "../webserver"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

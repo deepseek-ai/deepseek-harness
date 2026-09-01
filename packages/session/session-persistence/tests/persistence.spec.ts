@@ -307,7 +307,7 @@ describe('PersistenceCoordinator seed ownership', () => {
 
     try {
       const session = ctx.sessions.create(SessionId('shared-seed'), { seed: oneTurnLog() })
-      const seed = session.events
+      const seed = session.snapshotEvents()
       await ctx.sessions.flush(session)
 
       expect(backend.lastAppendedBatch).toBe(seed)
@@ -767,7 +767,7 @@ describe('PersistenceCoordinator session preparations', () => {
       first = await coordinator.prepare(id)
 
       expect(backend.loadAttempts).toBe(1)
-      expect(first.session.events[0]).toBe(inspected.events[0])
+      expect(first.session.snapshotEvents()[0]).toBe(inspected.events[0])
 
       first[Symbol.dispose]()
       second = await coordinator.prepare(id)
@@ -829,8 +829,8 @@ describe('PersistenceCoordinator session preparations', () => {
       )
 
       preparation = await coordinator.prepare(id)
-      expect(preparation.session.events).toHaveLength(9)
-      expect(preparation.session.events[0]).not.toBe(inspected.events[0])
+      expect(preparation.session.snapshotEvents()).toHaveLength(9)
+      expect(preparation.session.snapshotEvents()[0]).not.toBe(inspected.events[0])
       expect(backend.loadAttempts).toBe(2)
     } finally {
       preparation?.[Symbol.dispose]()
@@ -989,7 +989,7 @@ describe('PersistenceCoordinator session preparations', () => {
       session.append('turn/start', { turn: 1 })
 
       const inspected = await coordinator.inspect(session.id)
-      expect(inspected.events).toBe(session.events)
+      expect(inspected.events).toBe(session.snapshotEvents())
       expect(inspected.events.map(event => event.type)).toEqual(['turn/start'])
       await expect(coordinator.load(session.id)).rejects.toThrow(/live turn is open/)
     } finally {
@@ -1071,7 +1071,7 @@ describe('PersistenceCoordinator session preparations', () => {
     try {
       preparation = await coordinator.prepare(id)
 
-      expect(preparation.session.events.map(event => event.type)).toEqual([
+      expect(preparation.session.snapshotEvents().map(event => event.type)).toEqual([
         'turn/start',
         'turn/end',
         'turn/start',
@@ -2177,7 +2177,7 @@ describe('SessionPersistence service registration', () => {
     const appendLegacy = session.append.bind(session) as (type: string, data: unknown) => SessionEvent
     expect(() => appendLegacy('request/header-delta', { config: { model: 'legacy' } }))
       .toThrow(/unsupported legacy request\/header-delta format/)
-    expect(session.events).toHaveLength(0)
+    expect(session.snapshotEvents()).toHaveLength(0)
     await fiber.dispose()
   })
 
@@ -2190,7 +2190,7 @@ describe('SessionPersistence service registration', () => {
 
     expect(() => appendLegacy('request/header', legacyFallbackHeader().data))
       .toThrow('unsupported legacy request/header reason "fallback"')
-    expect(session.events).toHaveLength(0)
+    expect(session.snapshotEvents()).toHaveLength(0)
     await fiber.dispose()
   })
 

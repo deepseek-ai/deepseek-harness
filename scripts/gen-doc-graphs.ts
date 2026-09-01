@@ -530,7 +530,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'code-runtime',
     title: 'Code-execution seam',
     mode: 'seam',
-    implementations: ['code-runtime-worker-thread'],
+    implementations: ['code-runtime-worker-thread', 'experimental-code-runtime-python'],
     consumers: ['tools'],
     note: 'Runs one model-written program against host-provided async bindings; backends differ by substrate and language (the tool registry consumes it for PTC mode).',
   },

@@ -74,3 +74,5 @@ None; package lifecycle changes do not alter the model-visible prefix.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Each request reads authoritative Loader fiber state and package manifests directly; the plugin retains no independently mutable inventory.

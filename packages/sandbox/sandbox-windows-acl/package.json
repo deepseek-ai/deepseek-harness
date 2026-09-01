@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-sandbox-windows-acl",
   "description": "Windows ACL write-restriction sandbox backend (restricted-token spawn with capability-SID write allowlist) for the DeepSeek Harness sandbox seam",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -22,23 +22,17 @@
       "types": "./lib/types/runner.d.ts",
       "default": "./lib/runner.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/runner.js",
     "lib/types-*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "dependencies": {
@@ -46,7 +40,6 @@
     "koffi": "^3.1.0"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-pwsh-local": "workspace:^",
     "@deepseek-ai/dsh-sandbox-local": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"

@@ -125,3 +125,5 @@ live 捕获通过组合方 fiber 的 effect 注册：`session/created` 收养会
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。全部输出都是权威事件流之外的同步 backend handoff，capture 端不追加 Session 事件，因此没有独立事件或数据关系。

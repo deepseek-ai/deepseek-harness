@@ -101,3 +101,5 @@ These limits define draft durability and composer ownership; they are current pa
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Tool and slot registrations are effects owned and observed by their respective registries; the host pending table is exercised through the public wire protocol.

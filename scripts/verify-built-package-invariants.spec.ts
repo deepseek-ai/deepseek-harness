@@ -13,6 +13,7 @@ afterEach(() => {
 })
 
 function fixture(options: {
+  companion?: boolean
   invariantSource?: string
   invariantExport?: string
   runtimeChunk?: string
@@ -21,20 +22,23 @@ function fixture(options: {
   roots.push(root)
   const packageDir = join(root, 'packages/core/probe')
   mkdirSync(join(packageDir, 'lib'), { recursive: true })
+  const companion = options.companion ?? true
   writeFileSync(join(packageDir, 'package.json'), `${JSON.stringify({
     name: '@deepseek-ai/dsh-probe',
     type: 'module',
-    files: ['lib/invariant.js'],
-    exports: {
+    files: companion ? ['lib/invariant.js'] : [],
+    exports: companion ? {
       './invariant': {
         default: options.invariantExport ?? './lib/invariant.js',
       },
-    },
+    } : {},
   }, null, 2)}\n`)
-  writeFileSync(
-    join(packageDir, 'lib/invariant.js'),
-    options.invariantSource ?? "export const name = 'probe-invariant'\nexport const inject = ['invariants']\nexport const apply = () => {}\n",
-  )
+  if (companion) {
+    writeFileSync(
+      join(packageDir, 'lib/invariant.js'),
+      options.invariantSource ?? "export const name = 'probe-invariant'\nexport const inject = ['invariants']\nexport const apply = () => {}\n",
+    )
+  }
   if (options.runtimeChunk !== undefined) {
     writeFileSync(join(packageDir, 'lib/chunk.js'), options.runtimeChunk)
   }
@@ -60,6 +64,13 @@ describe('built package invariant verifier', () => {
     const result = verify(root, loaderUrl)
     expect(result.status, result.stderr).toBe(0)
     expect(result.stdout).toContain('1 compiled companion(s) passed plain-Node Loader checks')
+  })
+
+  it('accepts packages that do not publish a companion', () => {
+    const { root, loaderUrl } = fixture({ companion: false })
+    const result = verify(root, loaderUrl)
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('0 compiled companion(s) passed plain-Node Loader checks')
   })
 
   it('rejects a default export and a broken invariant export map', () => {

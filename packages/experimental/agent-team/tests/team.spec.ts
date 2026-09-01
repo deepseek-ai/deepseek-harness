@@ -35,7 +35,7 @@ function durable(agent: Agent): {
   pendingMessages: TeamMessageSnapshot[]
 } {
   let projected = teamProjectionDefinition.init(agent.session.header)
-  for (const event of agent.session.events) projected = teamProjectionDefinition.apply(projected, event)
+  for (const event of agent.session.snapshotEvents()) projected = teamProjectionDefinition.apply(projected, event)
   if (projected.failure !== undefined) throw new Error(projected.failure)
   const state = projected
   return {
@@ -456,7 +456,7 @@ describe('Team identity and provisioning', () => {
     await ctx.agentTeams.createTask(lead, { subject: 'parent task', description: 'belongs to parent' })
     const handle = await ctx.agents.create({
       sessionId: SessionId('ordinary-fork'),
-      seed: lead.session.events,
+      seed: lead.session.snapshotEvents(),
       meta: { parentSession: lead.id, seedLength: lead.session.seq },
       agentOptions: { provider: 'mock', model: 'mock' },
     })
@@ -979,13 +979,13 @@ describe('Team mailbox and waiting', () => {
       'team/message/delivered',
     ])
 
-    const receiptCount = lead.session.events.filter(event => event.type === 'agent/inbox/spliced'
+    const receiptCount = lead.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced'
       && event.data.inserted.some(message => message.source.kind === 'team-message'
         && messageIds.has(message.source.messageId))).length
     await teamFiber.dispose()
     await ctx.plugin(TeamService, { maxPendingMessagesPerMember: 1 })
     await vi.waitFor(() => { expect(durable(lead).pendingMessages).toEqual([]) })
-    expect(lead.session.events.filter(event => event.type === 'agent/inbox/spliced'
+    expect(lead.session.snapshotEvents().filter(event => event.type === 'agent/inbox/spliced'
       && event.data.inserted.some(message => message.source.kind === 'team-message'
         && messageIds.has(message.source.messageId)))).toHaveLength(receiptCount)
 

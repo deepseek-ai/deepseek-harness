@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-search-deepseek",
   "description": "DeepSeek-backed search provider (native web_search via the Anthropic-compatible API) for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,16 +18,11 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
@@ -35,7 +30,6 @@
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-launch-environment": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
@@ -49,7 +43,6 @@
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-credentials-local": "workspace:^",
     "@deepseek-ai/dsh-launch-environment": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",

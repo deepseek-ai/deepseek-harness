@@ -1,0 +1,42 @@
+{
+  "name": "@deepseek-ai/dsh-experimental-code-runtime-python",
+  "description": "CPython subprocess implementation of the DeepSeek Harness code-execution seam",
+  "version": "0.1.2-alpha.3",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/experimental/code-runtime-python"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "py/**/*.py",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/dsh-code-runtime": "workspace:^",
+    "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-code-runtime": "workspace:^",
+    "@deepseek-ai/dsh-timeout": "workspace:^",
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "workspace:^"
+  },
+  "private": true
+}

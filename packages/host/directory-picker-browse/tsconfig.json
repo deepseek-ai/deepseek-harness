@@ -12,10 +12,13 @@
   ],
   "references": [
     {
-      "path": "../directory-picker"
+      "path": "../../../vendor/cordis"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../directory-picker"
     }
   ]
 }

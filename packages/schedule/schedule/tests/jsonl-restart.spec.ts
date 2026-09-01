@@ -129,7 +129,7 @@ describe('Schedule production JSONL restart', () => {
     await replayed.sessions.flush(replayHandle.agent.session)
 
     expect(replayAdapter.requests).toEqual([])
-    expect(replayHandle.agent.session.events.filter(event =>
+    expect(replayHandle.agent.session.snapshotEvents().filter(event =>
       event.type === 'schedule/change' && event.data.operation === 'dispatch')).toHaveLength(1)
     const replayedStored = await replayed.sessionPersistence.inspect(sessionId)
     expect(replayedStored.events.filter(event =>

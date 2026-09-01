@@ -84,7 +84,7 @@ This section explains how the command parses input and renders output; the obser
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: command grammar, status rendering, attachment submission |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: empty (no runtime invariant — the goal domain owns accepted mutations) |
+| — | No runtime invariant companion is published; this command adapter owns no event stream or state projection; accepted mutations are checked by the goal domain and command dispatch behavior is covered by package tests. |
 
 </details>
 

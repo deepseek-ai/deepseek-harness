@@ -77,7 +77,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config`、扫描器、manifest 校验、注册接线 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；Loader entry 生命周期直接持有每个准确的 registry disposer，integration test 会观察注册与移除。 |
 
 </details>
 

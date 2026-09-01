@@ -191,10 +191,10 @@ export class SessionController extends TypertRemoteService {
   inspect(
     sessionId: SessionId,
     signal?: AbortSignal,
-  ): Promise<{ meta: SessionHeader; events: SessionEvent[] }> {
+  ): Promise<{ meta: SessionHeader; events: readonly SessionEvent[] }> {
     const attached = this.ctx.sessions.get(sessionId)
     if (attached !== undefined) {
-      return Promise.resolve({ meta: attached.header, events: [...attached.events] })
+      return Promise.resolve({ meta: attached.header, events: attached.snapshotEvents() })
     }
     return inspectApiSession(this.ctx, sessionId, signal)
   }

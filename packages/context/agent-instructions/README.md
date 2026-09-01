@@ -93,7 +93,7 @@ The plugin is built on one principle: workspace instructions are durable convers
 | [`src/render.ts`](src/render.ts) | Instruction rendering, budget truncation, change records |
 | [`src/state.ts`](src/state.ts) | Durable message sources, version/digest cache, reconciliation |
 | [`src/digest.ts`](src/digest.ts) | SHA-1 content identity and per-directory duplicate keys |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion for the durable context contract |
+| — | No runtime invariant companion is published; replay intentionally tolerates unknown or malformed workspace sources, while focused pipeline tests own its private pending/cache state transitions. |
 
 ### Main flow
 

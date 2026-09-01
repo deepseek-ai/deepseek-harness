@@ -18,7 +18,7 @@ function preparedSource(
   const preparedSession = Session.create(meta.id, [], meta)
   return {
     source: 'prepared',
-    inspection: { meta: preparedSession.header, events: preparedSession.events },
+    inspection: { meta: preparedSession.header, events: preparedSession.snapshotEvents() },
     revision: SessionPersistenceRevision(`fixture:${meta.id}`),
     preparedSession,
     [Symbol.dispose]: dispose,

@@ -86,3 +86,5 @@ No direct effect; invoked business Services own any model-visible result.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Host calls re-read authoritative Cordis and Typert state, while Client methods, descriptors, and `$on` subscriptions mutate in one owned effect.

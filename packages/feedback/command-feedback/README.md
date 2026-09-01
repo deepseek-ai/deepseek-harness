@@ -85,7 +85,7 @@ The producer trims the text, rejects empty input, and writes one event into the 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `feedback/record` event declaration, `recordFeedback` producer, `/feedback` command registration |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; each event is an independent append-only fact) |
+| — | No runtime invariant companion is published; each `feedback/record` is an independent append-only fact with no cross-event or mutable-data relationship. |
 
 </details>
 

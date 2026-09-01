@@ -83,7 +83,7 @@ const headers = await ctx.sessionPersistence.list()        // every stored sessi
 | [`src/write-behind.ts`](src/write-behind.ts) | 每会话有界写入控制器与 flush 屏障 |
 | [`src/preparations.ts`](src/preparations.ts) | 为恢复复用而有界保留的未发布 Session 准备结果 |
 | [`src/revision.ts`](src/revision.ts) | 带品牌类型的不透明修订值 token |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；协调器断言存储/活动身份与 cwd） |
+| — | 不发布运行时不变式伴生入口；协调器断言存储/活动身份与 cwd。 |
 
 ### 写入路径概览
 

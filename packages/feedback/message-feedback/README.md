@@ -97,7 +97,7 @@ The service fails closed: disposal drains in-flight writes before closing the do
 | [`src/index.ts`](src/index.ts) | Service class: config validation, per-Session queue, durability barrier, `@Remote` methods |
 | [`src/types.ts`](src/types.ts) | Public request, value, and failure vocabulary (types only, for generated Remote clients) |
 | [`src/spec.ts`](src/spec.ts) | Storage-domain declaration: `message_feedback` domain, `sessions` table, row schemas |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the domain schema validates rows on reopen) |
+| — | No runtime invariant companion is published; the private typed writer owns current row mutations, the domain schema validates rows on reopen, and no second authority exists. |
 
 </details>
 

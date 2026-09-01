@@ -621,9 +621,11 @@ describe('dsh-subagent-dsh-sdk provider', () => {
       provider: 'p',
       model: 'm',
       env: { FAKE_REASON_KIND: reason },
-      shutdownTimeoutMs: 100,
-      disposeEofGraceMs: 200,
-      disposeGraceMs: 200,
+      // Product-default dispose budgets: two real children are reaped under
+      // runner contention, where tight windows misreport slow SIGKILL reaps.
+      shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+      disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
+      disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
     })
     const [errored, unknown] = await Promise.all([start('error'), start('unknown-reason')])
     const [errorResult, unknownResult] = await Promise.all([errored.result, unknown.result])

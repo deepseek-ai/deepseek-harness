@@ -25,9 +25,6 @@
     },
     {
       "path": "../../session/session-telemetry"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

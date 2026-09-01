@@ -101,7 +101,7 @@ The provider is built on two separations. First, catalog versus body: discovery 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry, provider, root resolution, frontmatter parsing, watch manager |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Discovery flow
 

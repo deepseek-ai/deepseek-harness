@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-sdk-minimal",
   "description": "The standalone minimal SDK profile bundle: JSON-RPC, one DeepSeek adapter, persistent shell, editor, and JSONL sessions",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,17 +18,12 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "cordis.patch.yml",
     "lib/types/**/*.d.ts"
   ],
@@ -70,11 +65,9 @@
     "@deepseek-ai/dsh-tools": "workspace:^"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   }
 }

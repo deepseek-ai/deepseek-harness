@@ -78,13 +78,13 @@ A completed final `turn/end` exits 0; any other outcome — aborted, error, or n
 | [`src/index.ts`](src/index.ts) | The `headless-runner` plugin: run flow, output contract, exit mapping |
 | [`src/startup.ts`](src/startup.ts) | The `headless-startup` provider: task positional and `--help` |
 | [`cordis.patch.yml`](cordis.patch.yml) | The one-shot patch over `dsh-base` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: no runtime invariant; the observable contract is process-level |
+| — | No runtime invariant companion is published; the runner's observable contract (provider reasoning on stderr, final text on stdout, exit code by turn-end reason) is process-level and owned by the launcher e2e; it registers nothing and holds no mutable relation to audit inside the tree. |
 | [`tests/headless.spec.ts`](tests/headless.spec.ts) | Run flow, aggregation, flush, and exit mapping |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | Command-line parsing over a real Loader tree |
 
 ### Invariant ownership
 
-The invariant companion registers an empty installer because the runner's observable contract (final text on stdout, exit code by turn-end reason) is process-level and owned by the launcher e2e; the plugin registers nothing and holds no mutable relation to audit inside the tree.
+No invariant companion is published because the runner's observable contract (final text on stdout, exit code by turn-end reason) is process-level and owned by the launcher e2e; the plugin registers nothing and holds no mutable relation to audit inside the tree.
 
 </details>
 

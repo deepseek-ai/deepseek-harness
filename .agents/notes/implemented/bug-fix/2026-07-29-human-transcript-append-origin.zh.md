@@ -8,7 +8,7 @@ Status: implemented
 
 终端与宿主历史网关都把模型可见的 surface 当作 transcript（文本记录）。一次成功的压缩（compaction）会用一个检查点节点替换一段 surface 范围，因此该替换一落地，终端就丢弃了它所遮蔽的每条消息——那些是用户已经读过的对话——并在此后任何替换到来时重新执行这次破坏性重建。同样的混淆也波及分页：`maxMessages` 统计窗口内的每个 `user/message` 和 `assistant/message`，于是仅供模型使用的替换副本占用了一个人类从未填充的页面额度，而切分点还可能落在压缩的仅日志 `compaction/summary` 事件与引用它的替换之间。
 
-日志本身没有丢失任何内容。`Session.events` 仍保存着每条原始消息和完整的工具结果；surface 只决定接下来发送给模型的内容。缺陷完全在投影层。
+日志本身没有丢失任何内容。`Session.snapshotEvents()` 仍返回每条原始消息和完整的工具结果；surface 只决定接下来发送给模型的内容。缺陷完全在投影层。
 
 ## 决策
 

@@ -68,7 +68,7 @@ function toStopReason(reason: TurnEndReason | undefined): SubagentStopReason {
 /** Extra inputs the spawn and fork providers supply to the shared driver. */
 export interface InProcessRunOptions {
   /** Completed-turn seed for fork, or undefined for a fresh spawn. */
-  readonly seed?: SessionEvent[]
+  readonly seed?: readonly SessionEvent[]
 }
 
 /** Error used when cancellation wins before the child publication boundary. */
@@ -212,7 +212,7 @@ function readResult(
   cancelled: boolean,
   structured?: { captured?: { value: unknown } | undefined },
 ): SubagentResult {
-  const own = child.session.events.slice(boundary)
+  const own = child.session.snapshotEvents(boundary)
   // `droppedUnrun` is deliberately unread: a one-shot prompt is claimed by its
   // awaited first turn almost immediately, and the owner's own teardown is the
   // `cancelled` flag below. A cancellation with no accounting turn resolves

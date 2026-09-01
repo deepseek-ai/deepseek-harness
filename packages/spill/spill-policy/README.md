@@ -92,7 +92,7 @@ A `tools/post-execute` waterfall listener (registered with `prepend`, delegating
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` validation, the two waterfall listeners, the shared replacement helper |
 | [`src/types.ts`](src/types.ts) | `SpillPolicyExec`: the minimal structural view of a tool execution the policy reads for the owning session id |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; contracts are enforced at the seam) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Failure modes
 

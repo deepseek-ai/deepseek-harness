@@ -97,7 +97,7 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 | [`src/remote.ts`](src/remote.ts) | 用于 host RPC 的 `TestRemote` 替身、`RemoteError` 值转出 |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | 翻译与固定浏览器语言测试辅助 |
 | [`src/settings-scope.ts`](src/settings-scope.ts) | 带测试驱动发布与写入 spy 的 `stubSettingsScope` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；所挂载的生产包拥有各自的不变式） |
+| — | 不发布运行时不变式伴生入口；所挂载的生产包拥有各自的不变式。 |
 
 ### 生命周期
 

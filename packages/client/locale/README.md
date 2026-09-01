@@ -138,3 +138,5 @@ These limits define where localization is incomplete or frozen at registration t
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The locale catalog and dictionaries have no independent runtime source to compare against; registration disposal, preference resolution, and fallback lookup are asserted by behavior specs.

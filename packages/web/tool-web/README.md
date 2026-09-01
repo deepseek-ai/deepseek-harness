@@ -103,7 +103,7 @@ The package is built on one separation and one registration rule:
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, enablement, timeout budgets, tool registration |
 | [`src/search.ts`](src/search.ts) | The `web_search` tool: argument validation, query fan-out, merge, formatting, presentation meta |
 | [`src/fetch.ts`](src/fetch.ts) | The `web_fetch` tool: HTML→markdown conversion, output caps, formatting, presentation meta |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; contracts are enforced at the tools) |
+| — | No runtime invariant companion is published; this model-facing adapter has no independent lifecycle stream; execution relations are owned by the capability seam it calls. |
 
 ### Search flow
 

@@ -197,8 +197,8 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         scopedResult: scopedResult.value,
         rootGoal: host.goals.get(rootAgent)?.objective,
         scopedGoal: host.goals.get(scopedAgent)?.objective,
-        rootEvents: rootAgent.session.events.length,
-        scopedEvents: scopedAgent.session.events.length,
+        rootEvents: rootAgent.session.snapshotEvents().length,
+        scopedEvents: scopedAgent.session.snapshotEvents().length,
       }
 
       await client.fiber.dispose()

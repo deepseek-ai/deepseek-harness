@@ -7,7 +7,6 @@
   },
   "files": [
     "src/index.ts",
-    "src/invariant.ts",
     "src/remote-events.ts",
     "src/types.ts"
   ],
@@ -53,9 +52,6 @@
     },
     {
       "path": "../../interaction/user-questions"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     },
     {
       "path": "../session-controller/tsconfig.host.json"

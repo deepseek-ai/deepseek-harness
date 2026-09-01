@@ -1,13 +1,13 @@
 /**
  * SessionProjectionRegistry unit drive: eager apply on committed events with
  * lazy cell build (registration after events, session after registration),
- * the Object.is no-change gate (same reference ⇒ zero change-feed work),
- * snapshot consistency (asOfSeq = last event seq; values from the watermark
- * cache), duplicate-key rejection, stateVersion validation, and effect-tied
- * removal of registrations and change listeners (HMR safety).
+ * the Object.is no-change gates (same state or raw view reference ⇒ zero
+ * change-feed work), snapshot consistency (asOfSeq = last event seq; values
+ * from the watermark cache), duplicate-key rejection, stateVersion validation,
+ * and effect-tied removal of registrations and change listeners (HMR safety).
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
@@ -19,10 +19,12 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
     'test/marks': MarksState
     'test/count': number
+    'test/stable-view': StableViewState
   }
 
   interface SessionProjectionMap {
     'test/marks': { marks: string[] }
+    'test/stable-view': { marks: string[] }
   }
 }
 
@@ -32,7 +34,15 @@ declare module '@deepseek-ai/dsh-session/types' {
   }
 }
 
-type MarksState = { marks: string[] } | null
+interface MarksView {
+  marks: string[]
+}
+type MarksState = MarksView | null
+interface StableViewState {
+  revision: number
+  value: MarksView
+}
+const marksViewSchema: z.ZodType<MarksView> = z.object({ marks: z.array(z.string()) })
 const RESTORE_HEADER: SessionHeader = {
   version: 0,
   id: SessionId('projection-restore'),
@@ -42,11 +52,11 @@ const RESTORE_HEADER: SessionHeader = {
 const marksUnit = (): Omit<ProjectionDefinition<'test/marks', MarksState>, 'wire'>
   & { wire: NonNullable<ProjectionDefinition<'test/marks', MarksState>['wire']> } => ({
   key: 'test/marks',
-  stateSchema: z.object({ marks: z.array(z.string()) }).nullable(),
+  stateSchema: marksViewSchema.nullable(),
   init: () => null,
   apply: (state, event) => (event.type === 'test/mark' ? (event).data : state),
   wire: {
-    viewSchema: z.object({ marks: z.array(z.string()) }),
+    viewSchema: marksViewSchema,
     view: state => state ?? { marks: [] },
   },
   stateVersion: 1,
@@ -61,6 +71,27 @@ const countUnit = (): ProjectionDefinition<'test/count', number> => ({
   stateVersion: 1,
 })
 
+const stableViewUnit = (
+  view: (state: StableViewState) => StableViewState['value'],
+) => ({
+  key: 'test/stable-view',
+  stateSchema: z.object({
+    revision: z.number().int().nonnegative(),
+    value: marksViewSchema,
+  }),
+  init: () => ({ revision: 0, value: { marks: [] } }),
+  apply: (state, event) => {
+    if (event.type === 'turn/start') return { ...state, revision: state.revision + 1 }
+    if (event.type === 'test/mark') return { revision: state.revision + 1, value: event.data }
+    return state
+  },
+  wire: {
+    viewSchema: marksViewSchema,
+    view,
+  },
+  stateVersion: 1,
+}) satisfies ProjectionDefinition<'test/stable-view', StableViewState>
+
 async function harness(): Promise<{ ctx: Context; session: Session }> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
@@ -70,6 +101,47 @@ async function harness(): Promise<{ ctx: Context; session: Session }> {
 
 const mark = (session: Session, marks: string[]): SessionEvent =>
   session.append('test/mark', { marks })
+
+const STATE_SEQUENCES = [
+  [0, 0, 0, 0],
+  [0, 0, 0, 1],
+  [0, 0, 1, 0],
+  [0, 0, 1, 1],
+  [0, 0, 1, 2],
+  [0, 1, 0, 0],
+  [0, 1, 0, 1],
+  [0, 1, 0, 2],
+  [0, 1, 1, 0],
+  [0, 1, 1, 1],
+  [0, 1, 1, 2],
+  [0, 1, 2, 0],
+  [0, 1, 2, 1],
+  [0, 1, 2, 2],
+  [0, 1, 2, 3],
+] as const
+
+function identitySequences(length: number): number[][] {
+  const sequences: number[][] = []
+  const visit = (sequence: number[], highest: number): void => {
+    if (sequence.length === length) {
+      sequences.push(sequence)
+      return
+    }
+    for (let value = 0; value <= highest + 1; value++) {
+      visit([...sequence, value], Math.max(highest, value))
+    }
+  }
+  visit([0], 0)
+  return sequences
+}
+
+function sameIdentities(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]))
+}
+
+function sequenceName(sequence: readonly number[], prefix: string): string {
+  return sequence.map(value => `${prefix}${String(value + 1)}`).join(',')
+}
 
 describe('SessionProjectionRegistry drive', () => {
   it('drives a registered unit over committed events and snapshots the current value', async () => {
@@ -111,6 +183,193 @@ describe('SessionProjectionRegistry drive', () => {
     // Non-matching event: apply returns the same reference — no notification.
     session.append('turn/start', { turn: 1 })
     expect(seen).toEqual([{ key: 'test/marks', value: { marks: ['a'] }, seq: event.seq, sessionId: String(session.id) }])
+  })
+
+  it('does not compute a view while no change listener exists', async () => {
+    const { ctx, session } = await harness()
+    const view = vi.fn((state: StableViewState) => state.value)
+    ctx.sessionProjections.register(stableViewUnit(view))
+
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/start', { turn: 2 })
+
+    expect(ctx.sessionProjections.stateOf(session, 'test/stable-view')?.revision).toBe(2)
+    expect(view).not.toHaveBeenCalled()
+  })
+
+  it('publishes the first observed view and suppresses later same-reference views', async () => {
+    const { ctx, session } = await harness()
+    const view = vi.fn((state: StableViewState) => state.value)
+    ctx.sessionProjections.register(stableViewUnit(view))
+
+    const seen: unknown[] = []
+    ctx.sessionProjections.onChanged((_session, key, value) => {
+      if (key === 'test/stable-view') seen.push(value)
+    })
+
+    session.append('turn/start', { turn: 1 })
+    session.append('turn/start', { turn: 2 })
+
+    expect(seen).toEqual([{ marks: [] }])
+    expect(view).toHaveBeenCalledTimes(2)
+
+    mark(session, ['changed'])
+    expect(seen).toEqual([{ marks: [] }, { marks: ['changed'] }])
+    expect(view).toHaveBeenCalledTimes(3)
+  })
+
+  it('publishes the first view after an unobserved state change', async () => {
+    const { ctx, session } = await harness()
+    const view = vi.fn((state: StableViewState) => state.value)
+    ctx.sessionProjections.register(stableViewUnit(view))
+    const first: unknown[] = []
+    const stop = ctx.sessionProjections.onChanged((_session, key, value) => {
+      if (key === 'test/stable-view') first.push(value)
+    })
+
+    session.append('turn/start', { turn: 1 })
+    stop()
+    session.append('turn/start', { turn: 2 })
+    expect(view).toHaveBeenCalledTimes(1)
+
+    const resumed: unknown[] = []
+    ctx.sessionProjections.onChanged((_session, key, value) => {
+      if (key === 'test/stable-view') resumed.push(value)
+    })
+    session.append('turn/start', { turn: 3 })
+
+    expect(first).toEqual([{ marks: [] }])
+    expect(resumed).toEqual([{ marks: [] }])
+    expect(view).toHaveBeenCalledTimes(2)
+  })
+
+  it('matches every four-state identity sequence across listener gaps and raw-view identities', async () => {
+    const { ctx } = await harness()
+    const initialState: MarksState = { marks: ['initial'] }
+    const stateByEvent = new Map<string, MarksState>()
+    const viewByState = new Map<MarksState, MarksView>()
+    const computedViews: MarksView[] = []
+    ctx.sessionProjections.register({
+      key: 'test/marks',
+      stateSchema: marksViewSchema.nullable(),
+      init: () => initialState,
+      apply: (state, event) => {
+        if (event.type !== 'test/mark') return state
+        const token = event.data.marks[0]
+        if (token === undefined || !stateByEvent.has(token)) return state
+        return stateByEvent.get(token) as MarksState
+      },
+      wire: {
+        viewSchema: marksViewSchema,
+        view: (state) => {
+          const value = viewByState.get(state)
+          if (value === undefined) throw new Error('test state lacks a raw view')
+          computedViews.push(value)
+          return value
+        },
+      },
+      stateVersion: 1,
+    })
+
+    const failures = new Map<string, unknown>()
+    let mismatchCount = 0
+    let checked = 0
+    for (const stateSequence of STATE_SEQUENCES) {
+      const stateCount = Math.max(...stateSequence) + 1
+      for (const viewSequence of identitySequences(stateCount)) {
+        for (const baselineKnown of [false, true]) {
+          for (let listenerMask = 0; listenerMask < 8; listenerMask++) {
+            const scenario = String(checked++)
+            const states = Array.from(
+              { length: stateCount },
+              (_, index): MarksState => ({ marks: [`state-${scenario}-${String(index)}`] }),
+            )
+            const views = Array.from(
+              { length: Math.max(...viewSequence) + 1 },
+              (): MarksView => ({ marks: [] }),
+            )
+            for (let index = 0; index < stateCount; index++) {
+              viewByState.set(states[index] as MarksState, views[viewSequence[index] as number] as MarksView)
+            }
+            for (let index = 0; index < stateSequence.length; index++) {
+              stateByEvent.set(`${scenario}:${String(index)}`, states[stateSequence[index] as number] as MarksState)
+            }
+
+            const session = ctx.sessions.create()
+            const notifications: number[] = []
+            let stop: (() => void) | undefined
+            const setListening = (listening: boolean): void => {
+              if (listening && stop === undefined) {
+                stop = ctx.sessionProjections.onChanged((changedSession, key, _value, seq) => {
+                  if (changedSession === session && key === 'test/marks') notifications.push(seq)
+                })
+              } else if (!listening && stop !== undefined) {
+                stop()
+                stop = undefined
+              }
+            }
+
+            setListening(baselineKnown)
+            mark(session, [`${scenario}:0`])
+            computedViews.length = 0
+            notifications.length = 0
+
+            const expectedViews: MarksView[] = []
+            const expectedNotifications: number[] = []
+            let comparable = baselineKnown
+              ? views[viewSequence[stateSequence[0] as number] as number] as MarksView
+              : undefined
+            for (let index = 1; index < stateSequence.length; index++) {
+              const listening = (listenerMask & (1 << (index - 1))) !== 0
+              setListening(listening)
+              const changed = stateSequence[index] !== stateSequence[index - 1]
+              if (changed) {
+                if (listening) {
+                  const current = views[viewSequence[stateSequence[index] as number] as number] as MarksView
+                  expectedViews.push(current)
+                  if (comparable === undefined || !Object.is(comparable, current)) {
+                    expectedNotifications.push(index)
+                  }
+                  comparable = current
+                } else {
+                  comparable = undefined
+                }
+              }
+              mark(session, [`${scenario}:${String(index)}`])
+            }
+            setListening(false)
+
+            if (!sameIdentities(computedViews, expectedViews)
+              || notifications.length !== expectedNotifications.length
+              || notifications.some((seq, index) => seq !== expectedNotifications[index])) {
+              mismatchCount += 1
+              const stateName = sequenceName(stateSequence, 'v')
+              if (!failures.has(stateName) || (baselineKnown && listenerMask === 7)) {
+                failures.set(stateName, {
+                  state: stateName,
+                  view: stateSequence.map(value => `r${String((viewSequence[value] as number) + 1)}`).join(','),
+                  baseline: baselineKnown ? 'known' : 'unknown',
+                  listeners: [0, 1, 2]
+                    .map(index => (listenerMask & (1 << index)) === 0 ? 'off' : 'on')
+                    .join(','),
+                  expectedViewCalls: expectedViews.length,
+                  actualViewCalls: computedViews.length,
+                  expectedNotifications,
+                  actualNotifications: [...notifications],
+                })
+              }
+            }
+            computedViews.length = 0
+          }
+        }
+      }
+    }
+
+    expect({ checked, mismatchCount, failures: [...failures.values()] }).toEqual({
+      checked: 960,
+      mismatchCount: 0,
+      failures: [],
+    })
   })
 
   it('drives independently per session (cells are per-session watermarks)', async () => {

@@ -72,6 +72,11 @@
     - id: session-stats
       name: '@deepseek-ai/dsh-session-stats'
 
+    # Whole-log turn outline for the chat turn rail (the turnOutline
+    # projection key): every turn stays navigable before its events page in.
+    - id: session-turn-outline
+      name: '@deepseek-ai/dsh-session-turn-outline'
+
     # Resolve bind host, SSH launch, and display once at boot, then mount the
     # matching dual-face directory picker. Mount -native or -browse directly in
     # an overlay to pin the interaction.

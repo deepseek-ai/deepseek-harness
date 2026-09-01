@@ -54,7 +54,7 @@ The package's runtime content is [`cordis.patch.yml`](cordis.patch.yml). Applied
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | Ordered patch over `dsh-base` |
 | [`src/index.ts`](src/index.ts) | Empty module entry; the patch is the runtime content |
-| [`src/invariant.ts`](src/invariant.ts) | Empty invariant companion for the static bundle |
+| — | No runtime invariant companion is published; the package carries only a static profile patch. The Team domain and tool packages own the mutable relationships it activates. |
 
 </details>
 

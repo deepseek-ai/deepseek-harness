@@ -85,7 +85,7 @@ One worker thread per run keeps a misbehaving script from stalling the host and 
 | [`src/protocol.ts`](src/protocol.ts) | Typed host/worker message protocol |
 | [`src/meta.ts`](src/meta.ts) | `meta` shape validation and normalization |
 | [`src/session.ts`](src/session.ts) | Child run projection and snapshotting before crossing to the worker |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; worker tests cover the boundary) |
+| — | No runtime invariant companion is published; this process-boundary implementation exposes no same-process event relation; worker protocol and built-worker tests cover it. |
 
 ### Run sequence
 

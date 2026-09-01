@@ -25,6 +25,7 @@ const loaderUrl = options['loader-url']
   ?? pathToFileURL(resolve(repositoryRoot, 'vendor/loader/lib/index.js')).href
 const failures = []
 const manifests = globSync('packages/*/*/package.json', { cwd: packagesRoot }).sort()
+let companionCount = 0
 const { default: Loader } = await import(loaderUrl)
 const loader = Object.create(Loader.prototype)
 
@@ -37,7 +38,10 @@ for (const manifestPath of manifests) {
     continue
   }
   const invariantExport = manifest.exports?.['./invariant']
+  if (invariantExport === undefined) continue
+  companionCount += 1
   if (typeof invariantExport !== 'object'
+    || invariantExport === null
     || invariantExport.default !== './lib/invariant.js'
     || !manifest.files?.includes('lib/invariant.js')) {
     failures.push(`${packageName}: manifest does not publish ./lib/invariant.js as ./invariant`)
@@ -79,7 +83,7 @@ if (failures.length > 0) {
   process.exit(1)
 }
 
-console.log(`verify-built-package-invariants: ${manifests.length} compiled companion(s) passed plain-Node Loader checks.`)
+console.log(`verify-built-package-invariants: ${companionCount} compiled companion(s) passed plain-Node Loader checks.`)
 
 function copyDeclaredLibFiles(packageDir, stagedPackageDir, files) {
   for (const pattern of files) {

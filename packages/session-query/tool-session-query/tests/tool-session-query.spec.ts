@@ -8,6 +8,7 @@ import SessionStore, {
   SESSION_FORMAT_VERSION,
   SessionId,
   type Session,
+  type SessionEvent,
   type SessionHeader,
   type SessionId as SessionIdValue,
 } from '@deepseek-ai/dsh-session'
@@ -1213,7 +1214,7 @@ describe('workspace authority and lineage redaction', () => {
     const appendLegacy = mounted.caller.append.bind(mounted.caller) as unknown as (
       type: string,
       data: unknown,
-    ) => Session['events'][number]
+    ) => SessionEvent
     const secret = appendLegacy(
       'context/message',
       {
@@ -2008,7 +2009,7 @@ describe('trace and exact read rendering', () => {
     expect(text(result)).toContain('Replacement chain: 1')
     expect(text(result)).toContain('Events cited directly as sources: none')
     expect(text(result)).toContain('Direct derived events: 1')
-    expect(text(result)).toContain(new Date(session.events[0]?.time ?? 0).toISOString())
+    expect(text(result)).toContain(new Date(session.snapshotEvents()[0]?.time ?? 0).toISOString())
   })
 
   it('renders unabridged fenced target JSON and readable semantic or log-only neighbor summaries', async () => {
@@ -2040,7 +2041,7 @@ describe('trace and exact read rendering', () => {
     const appendLegacy = session.append.bind(session) as unknown as (
       type: string,
       data: unknown,
-    ) => Session['events'][number]
+    ) => SessionEvent
     appendLegacy(
       'context/message',
       { content: [{ type: 'text', text: 'after semantic text' }], source: { kind: 'plugin', plugin: 'test' } },

@@ -70,7 +70,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`apply` 安装三个检查点监听器 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；顺序由被拦截的 seam 强制） |
+| — | 不发布运行时不变式伴生入口；顺序由被拦截的 seam 强制。 |
 
 </details>
 

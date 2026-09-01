@@ -95,7 +95,7 @@ kind: "package-reference"
 | [`src/documents.ts`](src/documents.ts) | 表层感知的语义文档投影 |
 | [`src/tracing.ts`](src/tracing.ts) | 一次性会话血缘与事件关系追踪 |
 | [`src/sources.ts`](src/sources.ts) | 不可变 header 兼容性检查 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；结果均为按调用投影） |
+| — | 不发布运行时不变式伴生入口；结果均为按调用投影。 |
 
 ### 语料库解析
 

@@ -72,3 +72,5 @@ API Gateway Client 把内部 `$events` logical stream 注册为唯一 generation
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。授权请求会异步读取 credential 权威记录，commit-event 生命周期由 credentials 伴生入口负责；流、重连、rpcId 与路由释放关系由行为测试及 webserver 不变式覆盖。

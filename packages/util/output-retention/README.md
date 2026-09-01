@@ -105,7 +105,7 @@ The library is built on one separation: it owns the mechanical question of what 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `ItemRetainer`, `TextRetainer`, `describeOmitted`, and `formatRetentionNotice` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the retention algebra is exercised by unit tests) |
+| — | No runtime invariant companion is published; this pure utility owns no event stream or mutable runtime data; its value algebra is enforced by unit tests. |
 
 ### Two retainers, two resource models
 

@@ -7,6 +7,7 @@ import { apply, inject } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { WorkspacePicker } from '../src/client/WorkspacePicker.tsx'
+import { apply as hostApply } from '../src/index.ts'
 
 async function bench() {
   const ctx = new Context()
@@ -83,6 +84,10 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 }
 
 describe('ui-workspace apply', () => {
+  it('keeps the host Loader entry inert', () => {
+    expect(hostApply).not.toThrow()
+  })
+
   it('declares the services it drives', () => {
     expect(inject).toEqual([
       'slots', 'sessions', 'workspaces', 'locale', 'remote', 'remote.directoryPicker',

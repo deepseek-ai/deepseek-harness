@@ -139,7 +139,7 @@ function wideTableFixture(): string {
   return [
     JSON.stringify(header),
     // Spaced event times, as the sibling markdown fixtures pin them.
-    ...session.events.map(event => JSON.stringify({
+    ...session.snapshotEvents().map(event => JSON.stringify({
       ...event,
       time: eventTimeOrigin + event.seq * 1_000,
     })),

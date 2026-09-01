@@ -184,3 +184,5 @@ This Dev Note is working context for maintainers: open design questions and dire
 Exact-string `cwd` equality is deliberately conservative; symlink-aware or canonical-path workspace identity would change which sessions share authority and is undecided.
 
 </details>
+
+**Runtime invariant:** No companion is published. This read-only model adapter owns no event or mutable data relationship beyond the registries that already validate registration.

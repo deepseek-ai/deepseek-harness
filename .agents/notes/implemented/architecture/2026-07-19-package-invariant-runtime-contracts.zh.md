@@ -14,20 +14,20 @@ Status: implemented
 
 ## 决策
 
-### 注册必须全覆盖；断言必须有意义
+### 已发布的断言必须有意义
 
-每个 workspace 包都发布单独构建的 `./invariant` companion，并用完整 npm 包名注册。companion 只能采用以下两种形式之一：
+只有拥有可独立观察的运行时关系时，workspace 包才发布单独构建的 `./invariant` companion。已发布 companion 必须：
 
-- 安装包自有的事件流或相关可变数据结构检查，并通过绑定的 `fail(message)` 报告器报告违规；或
-- 使用空安装器，并在其声明前写一条该包专属的 `No runtime invariant:` 注释，说明为什么该包没有合理的运行时关系可供观测。
+- 安装包自有的事件流或相关可变数据结构检查，并通过绑定的 `fail(message)` 报告器报告违规；并且
+- 用该包的准确 npm 包名注册，同时保持诊断逻辑不进入根入口。
 
-空形式是明确的架构结论，不是生成占位符。如果后续包变更引入可变状态或事件协议，就必须用相应检查替换该说明。
+没有合理关系时，包会省略 companion 与发布接线，并在 README 中记录该包的具体原因。如果后续变更引入可独立观察的关系，就必须用相应检查替换该说明。省略机制与当前审计由[省略不必要 companion 的决策](../simplification/2026-08-28-omit-unneeded-invariant-companions.zh.md)负责。
 
 中央 `dsh-invariants` 服务只负责配置、注册唯一性、子 fiber 生命周期、回滚、dispose（资源释放）和归属到包的失败。它不暴露通用插件形状、服务形状或启动断言 helper，也不导入产品包。
 
-### 已实施的检查
+### 已实施检查示例
 
-当前 103 个包的 workspace 包含 21 个可执行 companion 和 82 个有理由的空 companion。
+已发布 companion 由 `verify-package-invariants` 机械枚举；当前审计数量记录在[省略不必要 companion 的决策](../simplification/2026-08-28-omit-unneeded-invariant-companions.zh.md)中。下表仅展示有代表性的运行时关系，不会逐项列出所有 companion。
 
 | 所有者 | 运行时关系 |
 |---|---|
@@ -57,13 +57,13 @@ Status: implemented
 
 ### 仓库门禁与测试
 
-`verify-package-invariants` 发现每个 workspace 包，并强制 companion 源文件、完整名称注册、仅含具名 export 的 Loader 形状、`./invariant` export、发布文件、依赖、TypeScript reference 和 bundle entry 完整。其 AST 规则拒绝生成标记、默认导出和没有解释的空安装器。非空安装器必须接收并使用失败报告器，注册时还必须传入该经检查的本地 `install` 函数。门禁不会通过方法名或 helper 调用推断语义质量。
+`verify-package-invariants` 发现每个 workspace 包。它接受完整省略，拒绝陈旧或不完整的 companion 接线，并对已发布 companion 强制完整名称注册、仅含具名 export 的 Loader 形状、`./invariant` export、发布文件、依赖、TypeScript reference 和 bundle entry 完整。其 AST 规则拒绝生成标记、默认导出和空 installer。每个 installer 都必须接收并使用失败报告器，注册时还必须传入该经检查的本地 `install` 函数。门禁不会通过方法名或 helper 调用推断语义质量。
 
-Vitest 为每个包测试拓扑使用 `{ enabled: true }` 挂载 `InvariantRegistry`，并加载所有者 companion。不变量 subpath 的 path mapping 会解析源 companion，而不是陈旧的构建输出。聚焦 suite 覆盖每个可执行 companion 的有效和无效观测；穷举拓扑通过真实 Loader 命名空间归一化运行每个源 companion。结构门禁验证每个包的发布映射后，产物门禁会暂存其 manifest（元数据清单）声明的 `lib/` 文件，在 plain Node 下导入已编译的 `./invariant` 自引用，并重复执行该 Loader 形状检查；这样，若 companion 导入未声明的运行时分片，门禁就会在发布前失败。合成事件流的测试必须构造有效的外围生命周期，除非测试本身就是在断言违规。
+Vitest 为每个包测试拓扑使用 `{ enabled: true }` 挂载 `InvariantRegistry`，并在所有者发布 companion 时加载它。不变量 subpath 的 path mapping 会解析源 companion，而不是陈旧的构建输出。聚焦 suite 覆盖每个已发布 companion 的有效和无效观测；穷举拓扑通过真实 Loader 命名空间归一化运行每个源 companion。结构门禁验证每个包的发布映射后，产物门禁会暂存其 manifest（元数据清单）声明的 `lib/` 文件，在 plain Node 下导入已编译的 `./invariant` 自引用，并重复执行该 Loader 形状检查；这样，若 companion 导入未声明的运行时分片，门禁就会在发布前失败。合成事件流的测试必须构造有效的外围生命周期，除非测试本身就是在断言违规。
 
 ## 考虑过的替代方案
 
-- **保留生成的空 companion。** 拒绝，因为包获得有意义的运行时关系后，没有解释的占位符仍可能继续存在。
+- **保留带说明的空 companion。** 拒绝，因为只为表达 README 可以直接记录的否定结论而保留源码、发布、依赖与测试接线，成本过高。
 - **要求每个包都执行断言。** 拒绝，因为方法存在性、插件形状和固定示例断言会重复更强的类型、加载和单元测试约定，却没有检查运行时一致性。
 - **在服务中保留通用形状 helper。** 拒绝，因为这会混淆编译期 API 验证和运行时不变量，并鼓励在中央定义产品假设。
 - **把产品检查移入服务。** 拒绝，因为产品词汇、依赖、测试和变更所有权应归属于产生这些数据的包。
@@ -71,8 +71,8 @@ Vitest 为每个包测试拓扑使用 `{ enabled: true }` 挂载 `InvariantRegis
 
 ## 后果
 
-- 每个包都有可见的所有权与发布 wiring，但只有具备合理运行时关系的包才会增加 listener 或 trace 状态。
-- 空 companion 是带包专属说明、可评审的决策；删除说明后门禁会失败。
+- 拥有合理运行时关系的包具有可见的所有权与发布 wiring；没有该关系的包会在 README 中记录省略原因。
+- 空 companion 会让门禁失败，不完整的省略接线也会在构建或发布前失败。
 - 类型声明、Cordis 可加载性、插件 metadata、服务方法 API 和纯代数继续由所属的编译、加载、单元或集成门禁覆盖。
 - 运行时失败会标明所属 npm 包，并指出不一致的观测，而不是复述必要的 API 形状。
 - 原有 selection、blocklist 优先级、重复所有权、回滚、dispose 和 HMR（热模块替换）服务约定保持不变。

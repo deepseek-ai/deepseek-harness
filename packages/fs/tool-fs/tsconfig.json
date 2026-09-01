@@ -31,9 +31,6 @@
       "path": "../fs-observation-policy"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../sandbox/sandbox"
     },
     {

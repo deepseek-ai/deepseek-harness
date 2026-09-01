@@ -86,3 +86,5 @@ Host 组合可通过 `registerRemoteEvents()` 注册唯一的应用事件 source
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。Host 调用会重新读取权威的 Cordis 与 Typert 状态，Client 方法、描述与 `$on` 订阅则在同一个 effect 中完成变更。

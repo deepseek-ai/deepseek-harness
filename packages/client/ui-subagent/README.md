@@ -114,3 +114,5 @@ These limits define what the catalog can show and what `@` references mean; they
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A single slash-source registration whose disposal is proven by the HMR-safety spec — it emits no cordis events and owns no cross-plugin mutable state.

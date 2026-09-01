@@ -93,7 +93,7 @@ The executor is the PowerShell Service Provider for the `ctx.shell` seam built o
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `PwshLocalExecutor`, `Config`, settings wiring, argv seam |
 | [`src/resolve.ts`](src/resolve.ts) | Pure `resolvePwshPath`/`candidatePwshPaths` executable resolution |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; contracts are enforced at the owning seam) |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 | `tests/` | Exercised behavior: budgets, classification, resolution, background handles |
 
 ### Main flow

@@ -374,7 +374,7 @@ export class TeamRoster {
       try {
         signal.throwIfAborted()
         await this.ctx.sessions.flush(session)
-        const suffix = session.events.slice(session.header.seedLength ?? 0)
+        const suffix = session.snapshotEvents(session.header.seedLength ?? 0)
         if (messageAccepted(suffix, message => message.id === messageId)) return
         if (this.ctx.sessions.get(childId) !== session) continue
         await progress.promise
@@ -481,6 +481,6 @@ export class TeamRoster {
 
   /** Whether a Session's own suffix identifies a provider-owned subagent child. */
   private subagentDescriptor(agent: Agent): boolean {
-    return foldSubagentDescriptor(agent.session.events.slice(agent.session.header.seedLength ?? 0)) !== undefined
+    return foldSubagentDescriptor(agent.session.snapshotEvents(agent.session.header.seedLength ?? 0)) !== undefined
   }
 }

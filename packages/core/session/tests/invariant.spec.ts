@@ -79,7 +79,7 @@ describe('session-log invariants', () => {
     expect(() => session.append('turn/start', {
       turn: 1,
     })).toThrow('later dispatch veto')
-    expect(session.events).toEqual([])
+    expect(session.snapshotEvents()).toEqual([])
     expect(() => {
       session.append('turn/start', { turn: 1 })
       session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
@@ -413,7 +413,7 @@ describe('session-log invariants', () => {
     const open = ctx.sessions.create(SessionId('inherited-inside-open-turn'), { seed: [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
     ] })
-    expect(open.events.map(event => event.type)).toEqual(['turn/start', 'session/end-seed'])
+    expect(open.snapshotEvents().map(event => event.type)).toEqual(['turn/start', 'session/end-seed'])
     // Still open afterwards: the boundary moves no cursor.
     expect(() => open.append('turn/start', { turn: 2 }))
       .toThrow(/turn 1 is still open/)

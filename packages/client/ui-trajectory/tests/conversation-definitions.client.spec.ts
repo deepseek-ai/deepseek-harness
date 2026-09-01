@@ -97,7 +97,7 @@ function assembler(events: readonly SessionEventLikeEntry[]): ConversationNodeAs
     new TestViewDefinitions(),
   )
   value.replaceWindow(events, false)
-  value.flush()
+  value.activateTarget('trajectory')
   return value
 }
 
@@ -507,5 +507,71 @@ describe('Trajectory conversation Definitions', () => {
     expect(current.requests.map(request => request.purpose === 'assistant'
       ? request.promptChange?.kind
       : undefined)).toEqual(['initial', undefined])
+  })
+
+  it('replays pending splice chains and scopes steering to the current claim', () => {
+    const message = (id: string, text: string) => ({
+      id,
+      role: 'user',
+      content: [{ type: 'text', text }],
+      source: { kind: 'user' },
+    })
+    const first = message('claim-first', 'first')
+    const second = message('claim-second', 'second')
+    const canceled = message('claim-canceled', 'canceled')
+    const requeued = message('claim-requeued', 'requeued')
+    const later = message('claim-later', 'later')
+    const current = snapshot(assembler([
+      at(1, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, inserted: [first],
+      }),
+      at(2, 'agent/inbox/spliced', {
+        target: 'next-step', start: 1, inserted: [canceled],
+      }),
+      at(3, 'agent/inbox/spliced', {
+        target: 'next-step', start: 1, inserted: [second],
+      }),
+      at(4, 'agent/inbox/spliced', {
+        target: 'next-step', start: 2, removedCount: 1, inserted: [], outcome: 'canceled',
+      }),
+      at(5, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, removedCount: 2, inserted: [],
+      }),
+      at(6, 'user/message', first),
+      at(7, 'user/message', second),
+      at(8, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, inserted: [requeued],
+      }),
+      at(9, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, removedCount: 1, inserted: [],
+      }),
+      at(10, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, inserted: [requeued],
+      }),
+      at(11, 'user/message', requeued),
+      at(12, 'user/message', canceled),
+      at(13, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, removedCount: 1, inserted: [], outcome: 'canceled',
+      }),
+      at(14, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, inserted: [later],
+      }),
+      at(15, 'agent/inbox/spliced', {
+        target: 'next-step', start: 0, removedCount: 1, inserted: [],
+      }),
+      at(16, 'user/message', later),
+    ]))
+
+    expect(current.eventNodes.filter(node =>
+      node.kind === 'user' || node.kind === 'steering').map(node => ({
+      kind: node.kind,
+      seq: node.seq,
+    }))).toEqual([
+      { kind: 'steering', seq: 6 },
+      { kind: 'steering', seq: 7 },
+      { kind: 'user', seq: 11 },
+      { kind: 'user', seq: 12 },
+      { kind: 'steering', seq: 16 },
+    ])
   })
 })

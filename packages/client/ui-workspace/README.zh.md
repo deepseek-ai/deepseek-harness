@@ -117,3 +117,5 @@ Workspace 与 Session 悬浮卡片会复制对应行被截断的值：激活 Wor
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是纯消费插件，只注册展示组件和 locale dictionary；inject face 是无状态 RPC wrapper 加 create-and-open 调用，不发出事件或持有跨插件可变状态。

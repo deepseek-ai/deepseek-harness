@@ -51,7 +51,7 @@ const definition = {
 }
 ```
 
-`apply` must be synchronous and must return the same state reference for events that do not concern the unit — an unchanged reference means zero downstream work. A state-carrying log event must carry the complete post-change state, never a bare delta.
+`apply` must be synchronous and must return the same state reference for events that do not concern the unit — an unchanged reference means zero downstream work. The registry compares consecutive raw `wire.view` results with `Object.is`; an object or array view must reuse its reference to suppress publication across internal-only state changes, while a structurally equal new object is still a change. A state-carrying log event must carry the complete post-change state, never a bare delta.
 
 ### Register and read
 
@@ -78,7 +78,7 @@ This section explains the drive machinery and the unit contract; the observable 
 
 ### Design concept
 
-The package is the Service Definition and drive role of a capability seam: the framework drives, the domain computes. The registry subscribes to `session/event` once; every committed event passes every registered unit's `apply` eagerly (cells build lazily on first touch). The change feed is gated on `Object.is` — a unit that returns the same state reference costs one call and nothing downstream. Carriers read `snapshot()` in the same tick as their page slice, which is what makes `asOfSeq` one consistent cut; an accidentally async view returns a Promise and fails `wire.viewSchema.parse`.
+The package is the Service Definition and drive role of a capability seam: the framework drives, the domain computes. The registry subscribes to `session/event` once; every committed event passes every registered unit's `apply` eagerly (cells build lazily on first touch). The first `Object.is` gate skips view work when the state reference is unchanged; a two-slot live-drive cache reuses the previous raw view and a second `Object.is` gate suppresses publication while the raw view reference is unchanged. Carriers read `snapshot()` in the same tick as their page slice, which is what makes `asOfSeq` one consistent cut; an accidentally async view returns a Promise and fails `wire.viewSchema.parse`.
 
 ### Source map
 
@@ -86,11 +86,11 @@ The package is the Service Definition and drive role of a capability seam: the f
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `SessionProjectionRegistry` service, `ProjectionDefinition`, snapshot and checkpoint machinery |
 | [`src/types.ts`](src/types.ts) | The merge-extensible `SessionProjectionMap` and `SessionProjectionStateMap` type tables |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; synchronous discipline is enforced by schema parse) |
+| — | No runtime invariant companion is published; the registry's own contracts (duplicate-key and stateVersion rejection, effect-tied removal, the Object.is change gate) are enforced synchronously inside the service and proven by its spec, the drive relation (every committed `session/event` passes every unit) would require re-running the drive to check — duplicating the implementation rather than detecting drift — and the served-value relation (every served key has a live registration) lives on each carrier's wire path, which emits no cordis event this companion could observe; carrier specs assert it. Synchronous-unit discipline is enforced as far as practical by the boundary `schema.parse` (a Promise-returning view fails loudly). |
 
 ### Drive and checkpoint flow
 
-One committed event drives every registered unit in registration order; a changed client-visible unit notifies the change feed with its schema-validated view and the causing seq. `checkpoint(session)` returns one detached `(key → {ver, seq, val})` row per unit for the persisted cache; `restoreFloor` anchors a tail read one event below the lowest usable watermark so a shrunk log is detected, and `restore` refolds persisted rows over a stored suffix, discarding any row whose `ver` does not match or that claims events past the stored end.
+One committed event drives every registered unit in registration order; a client-visible unit whose raw view changes by `Object.is` notifies the change feed with its schema-validated view and the causing seq. The live drive retains its previous and current raw views; snapshots and cold reads remain complete independent reads. `checkpoint(session)` returns one detached `(key → {ver, seq, val})` row per unit for the persisted cache; `restoreFloor` anchors a tail read one event below the lowest usable watermark so a shrunk log is detected, and `restore` refolds persisted rows over a stored suffix, discarding any row whose `ver` does not match or that claims events past the stored end.
 
 </details>
 
@@ -127,7 +127,7 @@ These limits define where the projection registry needs care at scale. They are 
 
 - **Every tail page carries every client-visible key** — there is no per-key opt-out or lazy-key request shape yet; acceptable while values are UI-scale whole states, revisit if a domain's value grows large.
 - **The unit table is process-wide, so key presence is not a per-session capability signal** — a key registered by any agent preset appears in every session's snapshot; a client must read the value rather than treat an absent key as absence of the feature.
-- **Eager drive touches every unit per event** — cheap by construction (whole-value rule, same-reference gate), but a hot path would justify per-unit event-type prefilters.
+- **Eager drive touches every unit per event** — cheap by construction (whole-value rule and state/view reference gates), but a hot path would justify per-unit event-type prefilters.
 - **Registry cells live in memory only** — a restart rebuilds by folding the log on first touch; compositions that mount `dsh-session-projection-cache` seed that fold from persisted rows instead.
 - **Synchronous unit discipline is only partially mechanical** — `wire.viewSchema.parse` rejects a Promise-returning view, but an `apply` that blocks or reads torn non-session state is a review concern.
 

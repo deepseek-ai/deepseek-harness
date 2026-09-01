@@ -82,7 +82,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：shell 注册表、prompt 设置、命令包装、scrollback 轮询、提取与渲染 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；shell 复用可通过工具执行观察） |
+| — | 不发布运行时不变式伴生入口；shell 复用可通过工具执行观察。 |
 
 ### 命令流程
 

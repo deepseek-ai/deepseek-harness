@@ -75,7 +75,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：config schema、工具注册、系统提示词区段、执行 |
 | [`src/render.ts`](src/render.ts) | 纯格式化、坐标转换、URI 解析、结果上限、UI 呈现 |
 | [`src/session-cwd.ts`](src/session-cwd.ts) | 从会话 `header.cwd` 取得工作区根目录 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；无状态适配器） |
+| — | 不发布运行时不变式伴生入口；无状态适配器。 |
 
 </details>
 

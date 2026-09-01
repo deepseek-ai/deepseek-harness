@@ -92,7 +92,7 @@ describe('sessions.fork', () => {
     expect(response.ok).toBe(true)
     if (!response.ok) return
     const child = ctx.sessions.get(response.value.sessionId)
-    expect(child?.events.map(event => event.type)).toEqual([
+    expect(child?.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'user/message', 'turn/end', 'session/end-seed',
     ])
     expect(child?.header.parentSession).toBe(source.id)
@@ -198,13 +198,13 @@ describe('sessions.fork', () => {
     const omitted = await proxy.fork(request({ sessionId: source.id }))
     expect(omitted.ok).toBe(true)
     if (omitted.ok) {
-      expect(ctx.sessions.get(omitted.value.sessionId)?.events.map(event => event.type))
+      expect(ctx.sessions.get(omitted.value.sessionId)?.snapshotEvents().map(event => event.type))
         .toEqual(expectedTypes)
     }
     const pastEnd = await proxy.fork(request({ sessionId: source.id, atSeq: 999 }))
     expect(pastEnd.ok).toBe(true)
     if (pastEnd.ok) {
-      expect(ctx.sessions.get(pastEnd.value.sessionId)?.events.map(event => event.type))
+      expect(ctx.sessions.get(pastEnd.value.sessionId)?.snapshotEvents().map(event => event.type))
         .toEqual(expectedTypes)
     }
     await ctx.fiber.dispose()
@@ -227,11 +227,11 @@ describe('sessions.fork', () => {
     const source = liveAgent(ctx, 'session-aborted', 1, 'aborted')
     // What a stopped message's fork button anchors on: the frozen node sits
     // one event before its turn/end, floored client-side to that event's seq.
-    const anchor = (source.events.at(-1)?.seq ?? 0) - 1
+    const anchor = (source.snapshotEvents().at(-1)?.seq ?? 0) - 1
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response.ok).toBe(true)
     if (!response.ok) return
-    expect(ctx.sessions.get(response.value.sessionId)?.events.map(event => event.type)).toEqual([
+    expect(ctx.sessions.get(response.value.sessionId)?.snapshotEvents().map(event => event.type)).toEqual([
       'turn/start', 'user/message', 'turn/end',
       'turn/start', 'user/message', 'turn/end',
       'session/end-seed',
@@ -242,7 +242,7 @@ describe('sessions.fork', () => {
   it('rejects an in-log anchor whose turn is still open', async () => {
     const ctx = await composed()
     const source = liveAgent(ctx, 'session-open', 1, 'open')
-    const anchor = source.events.at(-1)?.seq ?? 0
+    const anchor = source.snapshotEvents().at(-1)?.seq ?? 0
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response).toMatchObject({
       ok: false,

@@ -96,7 +96,7 @@ A `per-record` table document at `<root>/<unit>/<table>/<key>.json` has the form
 | [`src/per-record-unit.ts`](src/per-record-unit.ts) | One `per-record` unit: tree reads, path-safe records, and one-document writes |
 | [`src/format.ts`](src/format.ts) | Whole-unit and record serialization with version validation |
 | [`src/atomic.ts`](src/atomic.ts) | Atomic file replacement: temp write, fsync, rename, directory fsync |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant: correctness is round-trip durability) |
+| — | No runtime invariant companion is published; correctness here is write-durability and publish-then-reparse equivalence, which require medium round-trip tests (the shared backend conformance suite); the backend exposes no continuously observable in-process relation. |
 
 </details>
 

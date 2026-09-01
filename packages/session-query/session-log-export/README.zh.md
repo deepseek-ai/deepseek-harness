@@ -138,3 +138,5 @@ Host 路由是业务拥有的精确 Fetch contribution。Connection 应用 Host/
 下载刻意限定在浏览器范围；Host 路径或原生文件夹导出需要新的端点约定，并决定 ZIP 的落盘位置。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。Connection 与 command registry 持有两个注册，每次 export 直接读取权威 Session service。

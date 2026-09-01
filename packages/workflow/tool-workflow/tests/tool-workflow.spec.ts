@@ -146,7 +146,7 @@ describe('dsh-tool-workflow', () => {
     engine.settleRun(runId, { value: 1, stopReason: 'completed', agentsStarted: 1 })
     expect((await pending).isError).toBe(false)
     expect(engine.disposed).toBe(1)
-    expect(session.events.map(event => [event.type, event.data])).toEqual([
+    expect(session.snapshotEvents().map(event => [event.type, event.data])).toEqual([
       ['tool-workflow/run-start', { runId: 'run-1', name: 'audit' }],
       ['tool-workflow/agent-start', {
         runId: 'run-1', seq: 1, label: '', phase: '', childId: 'child-1',
@@ -166,10 +166,10 @@ describe('dsh-tool-workflow', () => {
       value: null, stopReason: 'completed', agentsStarted: 0,
     })
     await vi.waitFor(() => { expect(engine.disposed).toBe(1) })
-    expect(session.events.map(event => event.type)).toEqual(['tool-workflow/run-start'])
+    expect(session.snapshotEvents().map(event => event.type)).toEqual(['tool-workflow/run-start'])
     barrier.resolve(undefined)
     expect((await pending).isError).toBe(false)
-    expect(session.events.map(event => event.type)).toEqual([
+    expect(session.snapshotEvents().map(event => event.type)).toEqual([
       'tool-workflow/run-start', 'tool-workflow/run-end',
     ])
   })
@@ -190,9 +190,9 @@ describe('dsh-tool-workflow', () => {
     engine.settleRun(secondId, { value: null, stopReason: 'error', error: 'child failed', agentsStarted: 1 })
     expect((await first).isError).toBe(false)
     expect((await second).isError).toBe(true)
-    expect(session.events.filter(event => event.type === 'tool-workflow/agent-start'))
+    expect(session.snapshotEvents().filter(event => event.type === 'tool-workflow/agent-start'))
       .toHaveLength(1)
-    expect(session.events.filter(event => event.type === 'tool-workflow/run-end').map(event => event.data))
+    expect(session.snapshotEvents().filter(event => event.type === 'tool-workflow/run-end').map(event => event.data))
       .toEqual([
         { runId: 'run-1', stopReason: 'completed' },
         { runId: 'run-2', stopReason: 'error' },
@@ -208,7 +208,7 @@ describe('dsh-tool-workflow', () => {
     await vi.waitFor(() => { expect(engine.requests).toHaveLength(1) })
     engine.settleRun(WorkflowRunId('run-1'), { value: null, stopReason: 'completed', agentsStarted: 0 })
     expect((await pending).isError).toBe(false)
-    expect(session.events).toEqual([])
+    expect(session.snapshotEvents()).toEqual([])
   })
 
   it.each([
@@ -240,7 +240,7 @@ describe('dsh-tool-workflow', () => {
     expect(engine.disposed).toBe(1)
     expect(warnings).toHaveLength(1)
     expect(warnings[0]).toContain(failedType)
-    const types = session.events.map(event => event.type)
+    const types = session.snapshotEvents().map(event => event.type)
     const expectedPrefixes = {
       'tool-workflow/run-start': [],
       'tool-workflow/agent-start': ['tool-workflow/run-start'],

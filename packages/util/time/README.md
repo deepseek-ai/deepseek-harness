@@ -26,6 +26,8 @@ Zero-dependency zone vocabulary for the wire boundaries that accept a caller's t
 
 It is a **library, not a service or plugin**: no `ctx`, registers nothing, holds no state.
 
+No runtime invariant companion is published because this pure utility owns no event stream or mutable runtime data; unit tests verify zone canonicalization.
+
 Call it at the boundary that receives the zone, before the value reaches anything durable. An unusable name answers `undefined`, and the caller raises its own refusal — `session/invalid-time-zone` for the Session prompt, `subagent/invalid-time-zone` for a subagent continuation.
 
 -----

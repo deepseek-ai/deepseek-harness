@@ -88,3 +88,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。插件只注册一个 GoalBar dock，HMR 测试覆盖释放；状态来自 goal projection，本包不持有 store 或跨插件可变状态。

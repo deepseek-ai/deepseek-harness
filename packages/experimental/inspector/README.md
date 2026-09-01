@@ -152,3 +152,5 @@ None; this package neither assembles nor sends a provider request.
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Wire parsing, generations, Worker lifecycle, and CDP sessions reject invalid relationships in their owning operations.

@@ -806,12 +806,18 @@ describe('sandbox escalation API (write/edit)', () => {
 
   /** A fake agent whose session records appends (the approval audit trail), mid-turn, carrying the given events for the fold. */
   function escalationAgent(events: Array<{ type: string; data?: Record<string, unknown> }> = []): object {
+    const log = [
+      { type: 'turn/start', data: { turn: 1 }, seq: 0 },
+      ...events.map((event, index) => ({ ...event, seq: index + 1 })),
+    ]
     return {
       id: 'agent-fs-esc',
       session: {
         header: { version: 0, id: 'sess-fs-esc', createdAt: 0, cwd: '/session-project' },
-        events: [{ type: 'turn/start', data: { turn: 1 } }, ...events],
-        append: (type: string, data: Record<string, unknown>) => { events.push({ type, data }) },
+        get seq() { return log.length },
+        eventAt: (seq: number) => log[seq],
+        snapshotEvents: () => log,
+        append: (type: string, data: Record<string, unknown>) => { log.push({ type, data, seq: log.length }) },
       },
     }
   }

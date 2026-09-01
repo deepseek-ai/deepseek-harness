@@ -805,7 +805,7 @@ describe('session reference discovery and preparation', () => {
     expect(JSON.stringify(before)).toContain('durable referenced fact')
     expect(JSON.stringify(before)).toContain('use @source')
     expect(JSON.stringify(before)).not.toContain('later source mutation')
-    expect(Session.create(SessionId('replayed-target'), target.events).deriveMessages()).toEqual(before)
+    expect(Session.create(SessionId('replayed-target'), target.snapshotEvents()).deriveMessages()).toEqual(before)
   })
 
   it('rejects direct invalid configuration before service publication', async () => {

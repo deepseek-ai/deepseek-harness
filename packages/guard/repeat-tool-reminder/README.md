@@ -95,7 +95,7 @@ Reminders ride the post-execute decision's `additionalContexts` (source `{kind: 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, fail-loud validation, chain listeners |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant: the chain is private to one post-execute listener) |
+| — | No runtime invariant companion is published; the repeat chain is private to one post-execute listener and exposes no package-owned event or snapshot that an independent companion can observe. |
 
 </details>
 

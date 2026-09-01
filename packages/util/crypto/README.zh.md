@@ -67,3 +67,5 @@ import { bytesToBase64, randomUUID, type Uuid } from '@deepseek-ai/dsh-util-cryp
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这个纯工具不持有事件流或可变运行时数据；其值运算由单元测试覆盖。

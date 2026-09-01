@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-11-trajectory-conversation-context-assembly.md
-2026-08-11-trajectory-conversation-context-assembly.md: 7d0aea2fc09f0f04bd5de923bee15c42a773489a
-2026-08-11-trajectory-conversation-context-assembly.zh.md: 1909243da02093de1a5f1d0857a11d3742258492
+2026-08-11-trajectory-conversation-context-assembly.md: c041d7a8ba9f39f74cf55f8a35513724eaeb4f54
+2026-08-11-trajectory-conversation-context-assembly.zh.md: 06e7b801b67b789ddffe991916aceee86cc903f8

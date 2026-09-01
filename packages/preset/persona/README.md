@@ -72,7 +72,7 @@ Use this row when a preset must change an agent's identity and not only its tool
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, persona section registration, runtime-context suppression |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the prompt registry owns identity, complete-prompt enforcement, and disposal) |
+| — | No runtime invariant companion is published; this row owns no event stream or mutable runtime data — it registers one prompt section and the prompt registry owns identity, complete-prompt enforcement, shadowing, and disposal. |
 
 </details>
 

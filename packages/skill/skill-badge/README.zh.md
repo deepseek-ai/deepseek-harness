@@ -69,7 +69,7 @@ agent（智能体）可以通过该内置提供方加载官方「powered by dsh�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口与不可变提供方：一个候选项、资源基底、正文加载 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
+| — | 不发布运行时不变式伴生入口；本包只持有一个不可变 provider 注册，注册唯一性与生命周期由 skill registry 负责。 |
 | [`assets/`](assets/) | 随包分发的 skill 正文（`dsh-badge.md`）与 PNG 资源（`dsh-badge.png`） |
 
 </details>

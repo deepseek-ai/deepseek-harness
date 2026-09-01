@@ -75,7 +75,7 @@ The package is built on one separation: the atomic commit owns the swap, and the
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `writeFileAtomic` and `withFileLock`, the package's whole surface |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the replacement contract is exercised by unit tests) |
+| — | No runtime invariant companion is published; this pure filesystem primitive owns no event stream or mutable runtime data; its replacement contract is enforced by unit tests. |
 
 ### Write path
 

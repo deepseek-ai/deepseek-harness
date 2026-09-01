@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-projection",
   "description": "Session-projection seam: the merge-extensible projection type table, the provider contract, and the ctx.sessionProjections registry serving whole current values of log-derived per-session state",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -18,10 +18,6 @@
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
-    },
     "./types": {
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
@@ -31,7 +27,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
@@ -40,12 +35,10 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   }

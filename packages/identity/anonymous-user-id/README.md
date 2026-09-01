@@ -66,16 +66,15 @@ This section explains the design decisions behind the package and points at the 
 - **Random, never derived.** The id comes from `crypto.randomUUID()`; it is never derived from the hostname, network address, git remote, or any other identifying source, so anonymity is a property of the mint.
 - **Synchronous and memoized.** One process touches the disk once: reads and writes are synchronous, and the result is memoized per resolved file path.
 - **Best-effort persistence.** A write failure still returns a usable id for the run, so telemetry and feedback never block on an unwritable home.
-- **Library, not plugin.** There is no Cordis plugin entry or config; the invariant companion installs an empty installer because the package owns no event stream or public mutable relation to compare without creating the id as a side effect.
+- **Library, not plugin.** There is no Cordis plugin entry or config. No invariant companion is published because the package owns no event stream or public mutable relation to compare without creating the id as a side effect.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Library entry: `getOrCreateAnonymousUserId`, file persistence, per-path memoization |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion with an empty installer (no runtime invariant; the only relation is private and side-effecting) |
+| — | No runtime invariant companion is published; the API owns one private memo and one best-effort file, with no independent event stream or public mutable relation for a companion to compare without creating the identity as a side effect. |
 | [`tests/anonymous-user-id.spec.ts`](tests/anonymous-user-id.spec.ts) | Exercised behavior: mint, persistence, corruption, concurrency, memoization |
-| [`tests/invariant.spec.ts`](tests/invariant.spec.ts) | Companion registration through the invariants service |
 
 ### The API
 
@@ -137,8 +136,8 @@ This Dev Note is working context for maintainers: open questions and directions 
 
 The persistence contract is a bare UUID line with no version marker. Adding a second value beside the id, or wrapping the line in a container, has no migration story for existing files; a versioned line format is one way to make such a change safe.
 
-#### Open: invariant coverage
+#### Open: invariant observation point
 
-The invariant companion registers an empty installer because no relation can be checked without creating the id as a side effect. A future invariant could compare a re-read of the persisted file against the memoized id at a safe observation point.
+No invariant companion is published because no relation can be checked without creating the id as a side effect. A future observation point could support comparing a re-read of the persisted file against the memoized id.
 
 </details>

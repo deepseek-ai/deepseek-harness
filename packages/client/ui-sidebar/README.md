@@ -99,3 +99,5 @@ These limits define what the shell owns versus what its occupants own; they are 
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A pure-consumer plugin deriving its rows in-component from the standard useSessions delivery — it emits no cordis events and owns no cross-plugin mutable state; derivation and interaction behavior are asserted directly by this package's tree/component specs.

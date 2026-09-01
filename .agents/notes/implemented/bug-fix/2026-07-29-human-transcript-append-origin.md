@@ -8,7 +8,7 @@ English | [中文](2026-07-29-human-transcript-append-origin.zh.md)
 
 The terminal and the host history gateway both treated the model-visible surface as the human transcript. A successful compaction replaces a surface range with one checkpoint node, so the moment that replacement landed the terminal dropped every message it shadowed — conversation the user had already read — and re-ran that destructive rebuild on any later replacement. The same confusion reached pagination: `maxMessages` counted every `user/message` and `assistant/message` in the window, so a model-only replacement copy consumed a page slot the human never filled, and the cut could land between a compaction's log-only `compaction/summary` event and the replacement that cites it.
 
-Nothing was lost from the log. `Session.events` still held every original message and full tool result; the surface only decides what the model is sent next. The defect was entirely in the projection.
+Nothing was lost from the log. `Session.snapshotEvents()` still returned every original message and full tool result; the surface only decides what the model is sent next. The defect was entirely in the projection.
 
 ## Decision
 

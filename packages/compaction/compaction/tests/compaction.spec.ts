@@ -130,7 +130,7 @@ describe('CompactionEngine seam', () => {
 
     const result = await svc.compactRegion(original.seq, original.seq, stubAgent(session, 'm'))
 
-    const startEvent = session.events.find(e => e.type === 'compaction/start')
+    const startEvent = session.snapshotEvents().find(e => e.type === 'compaction/start')
     expect(startEvent).toBeDefined()
     // Log-only: the compiler rejects surfaceOp on compaction/* (not a SurfaceEventType);
     // verify the runtime value is absent.
@@ -141,13 +141,13 @@ describe('CompactionEngine seam', () => {
     expect(result.endSeq).toBeGreaterThan(result.summarySeq)
     expect(result.shadowedRange).toEqual({ start: original.seq, end: original.seq })
     expect(result.shadowedSeqs).toEqual([original.seq])
-    const checkpoint = session.events.find(event => event.type === 'user/message'
+    const checkpoint = session.snapshotEvents().find(event => event.type === 'user/message'
       && isCompactCheckpointSource(event.data.source))
     expect(checkpoint?.type === 'user/message' && checkpoint.data.source)
       .toEqual(compactCheckpointSource(result.compactionId))
     expect(isCompactCheckpointSource({ kind: 'plugin', plugin: 'other' })).toBe(false)
     expect(isCompactCheckpointSource({ kind: 'user' })).toBe(false)
-    expect(session.events.filter(e => e.type.startsWith('compaction/')).map(e => e.type))
+    expect(session.snapshotEvents().filter(e => e.type.startsWith('compaction/')).map(e => e.type))
       .toEqual(['compaction/start', 'compaction/summary', 'compaction/end'])
   })
 

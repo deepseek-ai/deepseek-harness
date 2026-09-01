@@ -11,8 +11,6 @@ import {
 import type E2BRuntime from '@deepseek-ai/dsh-e2b'
 import { FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import E2BFileSystem from '@deepseek-ai/dsh-fs-e2b'
-import * as E2BFsInvariant from '../src/invariant.ts'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { describe, expect, it, vi } from 'vitest'
 
 interface RemoteNode {
@@ -796,12 +794,5 @@ describe('E2B filesystem adapter integration edges', () => {
     })
     expect(remote.commands.slice(commandsBefore)).toHaveLength(2)
     expect(getInfo).toHaveBeenCalledTimes(3)
-  })
-
-  it('registers the package-owned empty invariant installer', async () => {
-    const ctx = new Context()
-    await ctx.plugin(InvariantRegistry, { enabled: true })
-    const fiber = await ctx.plugin(E2BFsInvariant).await()
-    await fiber.dispose()
   })
 })

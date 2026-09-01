@@ -60,13 +60,13 @@ function waitForIdle(ctx: Context, agent: Agent): Promise<void> {
   })
 }
 
-function events(agent: Agent): SessionEvent[] {
-  return [...agent.session.events]
+function events(agent: Agent): readonly SessionEvent[] {
+  return agent.session.snapshotEvents()
 }
 
 /** Find a session event by type, narrowed; throws when absent. */
 function findEvent<T extends SessionEvent['type']>(
-  log: SessionEvent[],
+  log: readonly SessionEvent[],
   type: T,
   position: 'first' | 'last' = 'first',
 ): Extract<SessionEvent, { type: T }> {

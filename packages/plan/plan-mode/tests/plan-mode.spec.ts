@@ -142,7 +142,7 @@ function header(session: Session): void {
 }
 
 function noticeTexts(session: Session): string[] {
-  return session.events
+  return session.snapshotEvents()
     .filter(event => event.type === 'user/message' && event.data.source.kind === 'plugin')
     .map(event => (event.data as { content: { type: string; text?: string }[] }).content.map(block => block.text ?? '').join(''))
 }
@@ -205,19 +205,19 @@ describe('resolveConfig', () => {
 describe('foldPlanMode', () => {
   it('folds an empty log to inactive and takes the last plan/mode otherwise', () => {
     const session = Session.create(SessionId('fold'))
-    expect(foldPlanMode(session.events)).toBe(false)
+    expect(foldPlanMode(session.snapshotEvents())).toBe(false)
     session.append('plan/mode', { active: true })
     session.append('plan/mode', { active: false })
     session.append('plan/mode', { active: true })
-    expect(foldPlanMode(session.events)).toBe(true)
+    expect(foldPlanMode(session.snapshotEvents())).toBe(true)
   })
 
   it('folds a prefix when `end` is given', () => {
     const session = Session.create(SessionId('fold-prefix'))
     session.append('plan/mode', { active: true })
     session.append('plan/mode', { active: false })
-    expect(foldPlanMode(session.events, 1)).toBe(true)
-    expect(foldPlanMode(session.events, 0)).toBe(false)
+    expect(foldPlanMode(session.snapshotEvents(), 1)).toBe(true)
+    expect(foldPlanMode(session.snapshotEvents(), 0)).toBe(false)
   })
 })
 
@@ -281,14 +281,14 @@ describe('ctx.planMode: get/set', () => {
     const ctx = await setup()
     const agent = await agentWithSession(ctx, 'agent-idle')
     expect(ctx.planMode.set(agent, true)).toBe('committed')
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect(ctx.planMode.get(agent)).toEqual({ active: true })
     // Immediately reversible, still without a boundary.
     expect(ctx.planMode.set(agent, false)).toBe('committed')
-    expect(foldPlanMode(agent.session.events)).toBe(false)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
     // A later boundary finds nothing pending — no double append.
     await boundary(ctx, agent, 'step-start')
-    expect(agent.session.events.filter(event => event.type === 'plan/mode')).toHaveLength(2)
+    expect(agent.session.snapshotEvents().filter(event => event.type === 'plan/mode')).toHaveLength(2)
   })
 
   it('a between-turns reversal of a mid-turn pending intent cancels without logging', async () => {
@@ -299,7 +299,7 @@ describe('ctx.planMode: get/set', () => {
     closeTurn(agent.session)
     // Back to the logged state: the pending intent clears, nothing lands.
     expect(ctx.planMode.set(agent, false)).toBe('cancelled')
-    expect(agent.session.events.some(event => event.type === 'plan/mode')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
     expect(ctx.planMode.get(agent)).toEqual({ active: false })
   })
 
@@ -319,7 +319,7 @@ describe('the boundary flush', () => {
     const service = ctx.planMode as unknown as { onBoundary(session: Session): void }
 
     expect(() => { service.onBoundary(agent.session) }).not.toThrow()
-    expect(agent.session.events.some(event => event.type === 'plan/mode')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
   })
 
   it('flushes from pre-step before the following step/start', async () => {
@@ -328,7 +328,7 @@ describe('the boundary flush', () => {
     openTurn(agent.session)
     ctx.planMode.set(agent, true)
     await boundary(ctx, agent, 'pre-step')
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect(ctx.planMode.get(agent)).toEqual({ active: true })
   })
 
@@ -343,7 +343,7 @@ describe('the boundary flush', () => {
     ctx.planMode.set(agent, true)
     await fiber.dispose()
     await boundary(ctx, agent, 'pre-step')
-    expect(agent.session.events.some(event => event.type === 'plan/mode')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
   })
 
   it('flushes at the between-step seam too', async () => {
@@ -351,7 +351,7 @@ describe('the boundary flush', () => {
     const agent = await agentWithSession(ctx)
     ctx.planMode.set(agent, true)
     await boundary(ctx, agent, 'step-start')
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
 
@@ -362,7 +362,7 @@ describe('the boundary flush', () => {
     ctx.planMode.set(agent, true)
     ctx.planMode.set(agent, false)
     await boundary(ctx, agent, 'pre-step')
-    expect(agent.session.events.some(event => event.type === 'plan/mode')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
     expect(noticeTexts(agent.session)).toEqual([])
   })
 
@@ -403,7 +403,7 @@ describe('the boundary flush', () => {
     agent.session.append('plan/mode', { active: false })
     ctx.planMode.set(agent, true)
     await boundary(ctx, agent, 'step-start')
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect(noticeTexts(agent.session)).toEqual([])
   })
 
@@ -430,7 +430,7 @@ describe('the boundary flush', () => {
     expect(ctx.planMode.get(agent)).toEqual({ active: false, pending: true })
     agent.session.append = original
     await boundary(ctx, agent, 'step-start')
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect(ctx.planMode.get(agent).pending).toBeUndefined()
   })
 
@@ -674,7 +674,7 @@ describe('/plan', () => {
     expect(enteringSteer).not.toHaveBeenCalled()
     await boundary(ctx, entering, 'step-start')
     expect(ctx.planMode.get(entering)).toEqual({ active: false })
-    expect(entering.session.events.some(event => event.type === 'plan/mode')).toBe(false)
+    expect(entering.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
 
     const active = await agentWithSession(ctx, 'active-plan-command', { active: true })
     openTurn(active.session)
@@ -698,10 +698,10 @@ describe('/plan', () => {
     const agent = await agentWithSession(ctx, 'idle-plan-command')
     expect((await ctx.commands.execute(agent, '/plan', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode on. Use /plan off to leave.' })
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect((await ctx.commands.execute(agent, '/plan off', [], signal))?.result)
       .toEqual({ kind: 'success', text: 'Plan mode off.' })
-    expect(foldPlanMode(agent.session.events)).toBe(false)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
   })
 
   it('steers image attachments with or without text and refuses them on /plan off', async () => {
@@ -848,7 +848,7 @@ describe('exit_plan_mode', () => {
       expect(result.content).toEqual([{ type: 'text', text: 'Error: exit_plan_mode requires a non-empty markdown plan starting with a # heading' }])
     }
     expect(asked).toHaveLength(0)
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('degrades to the manual exit when no user-questions seam is composed', async () => {
@@ -857,7 +857,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: no user-questions channel is available to review the plan; ask the user to switch the session mode instead' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('degrades the same way when the seam has no provider (NO_PROVIDER)', async () => {
@@ -865,7 +865,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: no user-questions answerer accepted the request' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('rejects review from a runtime-owned agent with consumer-neutral guidance', async () => {
@@ -885,7 +885,7 @@ describe('exit_plan_mode', () => {
       text: "Error: human interaction is unavailable while the calling agent is owned by another live agent; include the unresolved question or decision in the child agent's final result",
     }])
     expect(ask).not.toHaveBeenCalled()
-    expect(foldPlanMode(child.session.events)).toBe(true)
+    expect(foldPlanMode(child.session.snapshotEvents())).toBe(true)
   })
 
   it('approve: records the boundary-applied switch and confirms (the fold flips at the flush)', async () => {
@@ -897,10 +897,10 @@ describe('exit_plan_mode', () => {
     expect(result.content).toEqual([{ type: 'text', text: 'Plan approved — plan mode exited; carry out the plan starting with your next step.' }])
     // Boundary-applied, not a direct append: the fold stays plan until the
     // step's end, so the plan policy covers any remaining call of the SAME batch.
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     expect(ctx.planMode.get(agent)).toEqual({ active: true, pending: false })
     await boundary(ctx, agent, 'step-start')
-    expect(foldPlanMode(agent.session.events)).toBe(false)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
     expect(asked).toHaveLength(1)
     expect(asked[0]?.agent).toBe(agent)
     expect(asked[0]?.questions[0]?.detail).toBe('# The plan\n\ndo things')
@@ -950,7 +950,7 @@ describe('exit_plan_mode', () => {
       question: 'Approve this plan and leave plan mode?',
       detail: plan,
     })
-    expect(agent.session.events.find(event => event.type === 'tool/code-dispatch')?.data).toMatchObject({
+    expect(agent.session.snapshotEvents().find(event => event.type === 'tool/code-dispatch')?.data).toMatchObject({
       name: EXIT_PLAN_MODE,
       arguments: { plan },
       isError: false,
@@ -965,12 +965,12 @@ describe('exit_plan_mode', () => {
     // Calls of the SAME assistant response were requested under the existing
     // plan-shaped header. Pending state shapes only the proposed next
     // assembly; the accepted boundary then commits the matching durable fold.
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
     const assembly = await ctx.systemPrompt.assemble({ agent })
     expect(assembly.tools.some(tool => tool.name === EXIT_PLAN_MODE)).toBe(true)
     expect(assembly.sections.find(section => section.name === 'plan:policy')?.text).toBe('')
     await boundary(ctx, agent, 'step-start')
-    expect(foldPlanMode(agent.session.events)).toBe(false)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
     const afterExit = await ctx.systemPrompt.assemble({ agent })
     expect(afterExit.tools).toEqual(assembly.tools)
     expect(afterExit.sections.find(section => section.name === 'plan:policy')?.text).toBe('')
@@ -981,7 +981,7 @@ describe('exit_plan_mode', () => {
     header(agent.session)
     await callExit(ctx, agent)
     await boundary(ctx, agent, 'step-start')
-    expect(foldPlanMode(agent.session.events)).toBe(false)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
     expect(noticeTexts(agent.session)).toEqual([])
   })
 
@@ -990,7 +990,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: consider the resume path' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('keep planning without feedback returns the generic corrective error', async () => {
@@ -1005,7 +1005,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: add tests first' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('requires exactly the single Approve selection', async () => {
@@ -1013,7 +1013,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('treats custom text alongside Approve as feedback, not consent', async () => {
@@ -1021,7 +1021,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; their feedback: change the tests' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('treats duplicate review answer items as non-consent', async () => {
@@ -1035,7 +1035,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user chose to keep planning; revise the plan and present it again.' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('a missing answer item reads as keep-planning', async () => {
@@ -1067,7 +1067,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message.' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('leaves every other review failure its own message', async () => {
@@ -1079,7 +1079,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: ask_user_question was aborted before the user answered' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('forwards the execution abort signal to the review question', async () => {
@@ -1119,7 +1119,7 @@ describe('exit_plan_mode', () => {
     const result = await pending
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: the plan-mode service was reloaded while the plan was under review; present the plan again' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('a throwing provider surfaces as the corrective isError and the mode stays plan', async () => {
@@ -1128,7 +1128,7 @@ describe('exit_plan_mode', () => {
     const result = await callExit(ctx, agent)
     expect(result.isError).toBe(true)
     expect(result.content).toEqual([{ type: 'text', text: 'Error: review aborted' }])
-    expect(foldPlanMode(agent.session.events)).toBe(true)
+    expect(foldPlanMode(agent.session.snapshotEvents())).toBe(true)
   })
 
   it('presents the call as a generic card titled by the plan first heading', async () => {
@@ -1179,6 +1179,6 @@ describe('HMR disposal', () => {
     expect(ctx.tools.get(EXIT_PLAN_MODE)).toBeUndefined()
     expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)).not.toContain('plan:policy')
     await boundary(ctx, agent, 'step-start')
-    expect(agent.session.events.some(event => event.type === 'plan/mode')).toBe(false)
+    expect(agent.session.snapshotEvents().some(event => event.type === 'plan/mode')).toBe(false)
   })
 })

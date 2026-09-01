@@ -3,14 +3,13 @@
  *
  * Plugin composition account: the dispatch family reaches the runner with its
  * envelope rpcId, the service face is provided for UI surfaces, a load failure
- * always reaches the console, and the fiber owns the runner's teardown. Plus the two plane-level companions: the
- * node half's empty apply and the invariant registration.
+ * always reaches the console, the fiber owns the runner's teardown, and the
+ * node half remains inert.
  */
 /* oxlint-disable typescript/no-unsafe-assignment -- Vitest asymmetric matchers are typed as any. */
 
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import InvariantService from '@deepseek-ai/dsh-invariants'
 import type {
   ApprovalRequestId, CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId,
   DynamicCordisInvokeResult, SessionId,
@@ -19,7 +18,6 @@ import type {
 import type {} from '@deepseek-ai/dsh-api-gateway/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import * as NodeHalf from '../src/index.ts'
-import * as Invariant from '../src/invariant.ts'
 import * as ClientHalf from '../src/client/index.ts'
 
 const PLUGIN = 'dyn-1' as CordisDynamicPluginId
@@ -435,21 +433,5 @@ describe('node half', () => {
   it('contributes nothing host-side', () => {
     NodeHalf.apply()
     expect(typeof NodeHalf.apply).toBe('function')
-  })
-})
-
-describe('invariant companion', () => {
-  it('reserves package ownership with an explained empty installer', async () => {
-    const ctx = new Context()
-    await ctx.plugin(InvariantService, { enabled: true })
-    const fiber = ctx.plugin(Invariant)
-    await fiber
-    expect(Invariant.name).toBe('cordis-client-runner-invariant')
-    // No relation to audit here: the owned one is browser-local runner state.
-    // An event this plugin declares nothing about: the bridge must not route it here.
-    expect(() => {
-      Reflect.apply(ctx.emit.bind(ctx), undefined, ['unrelated/event'])
-    }).not.toThrow()
-    await fiber.dispose()
   })
 })

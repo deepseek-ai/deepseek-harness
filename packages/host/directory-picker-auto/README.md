@@ -118,3 +118,5 @@ These limits define when the boot-time sample can misjudge the host. They are cu
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The sole effect is one boot-time Loader-entry mount owned by the plugin fiber; the store is authoritative.

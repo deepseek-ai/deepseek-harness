@@ -15,9 +15,6 @@
       "path": "../loader-smoke"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../core/session"
     }
   ]

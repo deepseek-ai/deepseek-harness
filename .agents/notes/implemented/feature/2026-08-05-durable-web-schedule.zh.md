@@ -60,7 +60,7 @@ dispatch 记录的是队列准入，而不是模型完成或用户收到提醒�
 
 ### 只读 Web 目录
 
-Schedule overlay 会把默认禁用的 [`dsh-client-ui-schedule`](../../../../packages/client/ui-schedule/README.zh.md) client 与 Host 服务一同启用。完整活动 projection 也会交给 [`dsh-client-ui-workspace`](../../../../packages/client/ui-workspace/README.zh.md)。本 Note 拥有这条 opt-in 只读呈现边界：该 projection 表示当前活动状态，而非 dispatch 或交付回执，因此普通 Assistant 轮次仍是交付呈现。
+Schedule overlay 会把默认禁用的 [`dsh-client-ui-schedule`](../../../../packages/client/ui-schedule/README.zh.md) client 与 Host 服务一同启用。完整活动 projection 也会交给 [`dsh-client-ui-workspace`](../../../../packages/client/ui-workspace/README.zh.md)。本 Note 拥有这条 opt-in 只读呈现边界：该 projection 表示当前活动状态，而非 dispatch 或交付回执，因此普通 Assistant 轮次仍是交付呈现。目录是挂到 `document.body` 的 fixed portal；空间足够时左边缘跟随触发按钮，靠近视口右侧时向左避让并保留 16px 边距。`useAnchoredPosition` 拥有测量以及 resize、捕获阶段 scroll、面板 resize 与清理行为；Schedule 提供触发器与 portal ref、bottom 放置、5px 间距和既有内外 dismissal 边界，不增加通用 popover 抽象。
 
 ## 已考虑的替代方案
 
@@ -80,7 +80,7 @@ Schedule overlay 会把默认禁用的 [`dsh-client-ui-schedule`](../../../../pa
 
 ## 验证
 
-包测试以逐文件 100% coverage 固定严格回放、一次性与 Every 状态转换、创建锚点运算、只追赶最新一次、多记录批处理、fork 后缀、id 复用、偏移量与本地日历 profile、IANA 校验、夏令时缺口与重叠、时间边界、timer 分段、墙钟变化、overdue 准入、固定 framing、入队与 append 失败、barrier 恢复、projection 注册与恢复、注册 rollback 和完全停稳的 dispose。属性测试会在不同间隔与跳过跨度下比较 Every 计算与回放。production JSONL restart 测试证明一条 overdue 提醒会经过真实 Agent 生命周期 dispatch，并且再次 restart 后不会重复 dispatch。聚焦 client suite 拥有目录与侧边栏行为。无密钥组装 Web 场景保留普通 After／At／Every 交付证据，再由一个 Schedule 目录 smoke 覆盖 overlay 可达性、当前 header 目录、普通／搜索闹钟、窄屏暗色布局与一次 live empty 更新。
+包测试以逐文件 100% coverage 固定严格回放、一次性与 Every 状态转换、创建锚点运算、只追赶最新一次、多记录批处理、fork 后缀、id 复用、偏移量与本地日历 profile、IANA 校验、夏令时缺口与重叠、时间边界、timer 分段、墙钟变化、overdue 准入、固定 framing、入队与 append 失败、barrier 恢复、projection 注册与恢复、注册 rollback 和完全停稳的 dispose。属性测试会在不同间隔与跳过跨度下比较 Every 计算与回放。production JSONL restart 测试证明一条 overdue 提醒会经过真实 Agent 生命周期 dispatch，并且再次 restart 后不会重复 dispatch。聚焦 client suite 拥有目录与侧边栏行为，包括 body portal、空间充足时的左对齐、portal 内指针处理、外部 dismissal、Escape、live empty 与 timer 清理。共享 primitive suite 拥有定位 hook 的 resize、捕获阶段 scroll、面板 resize 与清理生命周期。无密钥组装 Web 场景保留普通 After／At／Every 交付证据，再由一个 900×900 Schedule 目录 smoke 覆盖 overlay 可达性、fixed portal 定位、右侧钳制、宽度与 overflow、普通／搜索闹钟、窄屏暗色布局、浅色主题浏览器截图与一次 live empty 更新。
 
 ## 后果
 

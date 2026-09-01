@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh",
   "description": "dsh CLI: profile boot, plugin management, and the browser UI alias",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -109,6 +109,7 @@
     "@deepseek-ai/dsh-deepseek-llm-api-extensions": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-team": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:^",
+    "@deepseek-ai/dsh-experimental-code-runtime-python": "workspace:^",
     "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:^",
     "@deepseek-ai/dsh-fs-observation-policy": "workspace:^",
     "@deepseek-ai/dsh-fs-sandbox": "workspace:^",

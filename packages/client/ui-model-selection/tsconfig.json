@@ -45,9 +45,6 @@
       "path": "../ui-slots"
     },
     {
-      "path": "../../runtime-diagnostics/invariants"
-    },
-    {
       "path": "../../core/session"
     },
     {

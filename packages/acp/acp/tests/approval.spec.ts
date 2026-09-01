@@ -68,10 +68,13 @@ describe('ACP machine permission policy', () => {
   it('delegates a same-id foreign agent', async () => {
     harness = await makeBridgeHarness()
     const request = await ownedRequest()
+    const events = [{ type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } }]
     const foreign = {
       session: {
         id: request.agent.session.id,
-        events: [{ type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } }],
+        seq: events.length,
+        eventAt: (seq: number) => events[seq],
+        snapshotEvents: () => events,
         append: () => ({}),
       },
     } as unknown as Agent

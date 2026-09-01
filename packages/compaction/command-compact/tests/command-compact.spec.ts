@@ -121,7 +121,7 @@ function expectLastLifecycle(
   args: string,
   outcome: CommandResult,
 ): string {
-  const lifecycle = test.agent.session.events
+  const lifecycle = test.agent.session.snapshotEvents()
     .filter(event => event.type === 'command/run' || event.type === 'command/done')
     .slice(-2)
   const runEvent = lifecycle[0]

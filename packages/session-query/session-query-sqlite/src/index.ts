@@ -854,7 +854,7 @@ function selectedDocumentsParams(query: string, persistenceVisible: boolean): Ar
 }
 
 function observeLive(session: Session): ObservedSession {
-  return observeSession(session.header, session.events)
+  return observeSession(session.header, session.snapshotEvents())
 }
 
 function observeSession(header: SessionHeader, events: readonly SessionEvent[]): ObservedSession {

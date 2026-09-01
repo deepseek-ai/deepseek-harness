@@ -83,7 +83,7 @@ The package is the Service Definition of a capability seam with two halves. The 
 | [`src/write-behind.ts`](src/write-behind.ts) | The per-session bounded write controller and flush barrier |
 | [`src/preparations.ts`](src/preparations.ts) | Bounded retention of unpublished Session preparations for resume reuse |
 | [`src/revision.ts`](src/revision.ts) | The branded opaque revision token |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; the coordinator asserts stored/live identity and cwd) |
+| — | No runtime invariant companion is published; persistence correctness requires backend round-trip and crash-tail tests; this package exposes no continuously observable in-process relation. |
 
 ### The write path at a glance
 

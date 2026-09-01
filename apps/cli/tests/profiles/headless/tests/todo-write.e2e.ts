@@ -37,7 +37,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('todo_write: real model records a
       + 'Send all three in one todo_write call, then reply with the single word DONE.' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
-    const events = [...agent.session.events]
+    const events = agent.session.snapshotEvents()
 
     // The model actually called the tool.
     const calls = events.filter(event => event.type === 'tool/call')

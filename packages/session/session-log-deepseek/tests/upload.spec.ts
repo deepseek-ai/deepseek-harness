@@ -76,7 +76,7 @@ describe('incremental DeepSeek session-log upload', () => {
     first.session.append('turn/start', { turn: 1 })
     const prepared = await first.ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: first.session.id })
     await prepared.accept()
-    const seed = first.session.events
+    const seed = first.session.snapshotEvents()
 
     const resumed = await harness('parent', seed)
     expect(SessionLogDeepSeek.acceptedThrough(resumed.session)).toBe(0)
@@ -110,13 +110,14 @@ describe('incremental DeepSeek session-log upload', () => {
       { type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2, data: { sessionId: id, throughSeq: 0 } },
     ]
     let reads = 0
-    const observed = new Proxy(events, {
-      get(target, property, receiver) {
-        if (typeof property === 'string' && /^\d+$/.test(property)) reads++
-        return Reflect.get(target, property, receiver) as unknown
+    const session = {
+      id,
+      get seq() { return events.length },
+      eventAt(seq: number) {
+        reads++
+        return events[seq]
       },
-    })
-    const session = { id, get events() { return observed } } as unknown as Session
+    } as unknown as Session
 
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(0)
     expect(reads).toBe(2)
@@ -130,6 +131,17 @@ describe('incremental DeepSeek session-log upload', () => {
     )
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(2)
     expect(reads).toBe(2)
+  })
+
+  it('rejects a missing event below the captured Session length', () => {
+    const session = {
+      id: SessionId('missing-event'),
+      seq: 1,
+      eventAt: () => undefined,
+    } as unknown as Session
+
+    expect(() => SessionLogDeepSeek.acceptedThrough(session))
+      .toThrow('session-log-deepseek: missing event 0 below captured length 1')
   })
 
   it('omits the field for direct or stale requests and uploads the prior acceptance marker next', async () => {
@@ -155,7 +167,7 @@ describe('incremental DeepSeek session-log upload', () => {
     const { ctx, session } = await harness('direct-events')
     session.append('turn/start', { turn: 1 })
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: {}, signal: SIGNAL, sessionId: session.id })
-    expect(prepared.fields.dsh_session_log?.events).toEqual(session.events)
+    expect(prepared.fields.dsh_session_log?.events).toEqual(session.snapshotEvents())
   })
 
   it('fails closed on a malformed persisted acceptance watermark', async () => {

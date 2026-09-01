@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-attachment",
   "description": "Dynamic attachment presentation plugin for conversation input, message-image, and trajectory image slots",
-  "version": "0.1.2-alpha.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -17,10 +17,6 @@
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
-    },
-    "./invariant": {
-      "types": "./lib/types/invariant.d.ts",
-      "default": "./lib/invariant.js"
     },
     "./client": {
       "types": "./lib/types/client/index.d.ts",
@@ -50,7 +46,6 @@
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-invariants": "workspace:^",
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
     "@deepseek-ai/dsh-client-ui-chat": "workspace:^",
@@ -65,7 +60,6 @@
   },
   "files": [
     "lib/index.js",
-    "lib/invariant.js",
     "lib/client.js",
     "lib/types/**/*.d.ts"
   ],

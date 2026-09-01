@@ -89,7 +89,7 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、提示词区段、参数校验、升权、请求组装 |
 | [`src/background.ts`](src/background.ts) | 把已结算的后台进程映射为通用任务结果词汇 |
 | [`src/render.ts`](src/render.ts) | 模型侧结果文本：流、标记、截断通知 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；执行关系归能力 seam 所有） |
+| — | 不发布运行时不变式伴生入口；执行关系归能力 seam 所有。 |
 
 ### 请求解析
 

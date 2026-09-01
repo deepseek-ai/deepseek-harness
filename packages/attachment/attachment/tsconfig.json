@@ -5,7 +5,6 @@
   "references": [
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
-    { "path": "../../util/brand" },
-    { "path": "../../runtime-diagnostics/invariants" }
+    { "path": "../../util/brand" }
   ]
 }

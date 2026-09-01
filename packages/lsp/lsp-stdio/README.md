@@ -106,7 +106,7 @@ This section explains the design decisions behind the provider and where the cod
 | [`src/protocol.ts`](src/protocol.ts) | Wire-type subset: capabilities, locations, hover, text-document synchronization |
 | [`src/translate.ts`](src/translate.ts) | Capability checks, UTF-16 negotiation, `Location`/`LocationLink`/hover normalization |
 | [`src/abort.ts`](src/abort.ts) | Cancellation helpers fusing caller and disposal signals |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; pools and queues are private state) |
+| — | No runtime invariant companion is published; process pools and per-workspace queues are private implementation state, and this provider publishes no independent lifecycle event stream or enumerable snapshot. |
 
 ### Protocol behavior
 

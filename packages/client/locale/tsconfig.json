@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../store"
     },
     {
@@ -25,9 +28,6 @@
     },
     {
       "path": "../../settings/settings"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     },
     {
       "path": "../ui-settings"

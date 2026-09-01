@@ -63,3 +63,5 @@ VFS 镜像打包器：把一份合成 profile 变成浏览器 worker 挂载为�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是没有生产事件流或可变数据的构建时 pass；无法解析的 own request 与全有或全无 wrapper 约定会直接让 pack 失败。

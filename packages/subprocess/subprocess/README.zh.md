@@ -96,7 +96,7 @@ const output = handle.collected.stdout?.readFrom(0)
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：抽象 `SubprocessRuntime`、`ctx.subprocess` 注册、共享的 `scrubbedParentEnv` 清除 |
 | [`src/types.ts`](src/types.ts) | 词汇：spawn spec、stdio 模式、句柄、读取器、结果、`DSH_*` 命名空间 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；观察由提供方负责） |
+| — | 不发布运行时不变式伴生入口；观察由提供方负责。 |
 
 ### 数据模型与流程
 

@@ -29,7 +29,7 @@ Mount this plugin alongside the settings and commands packages; the permission r
 
 ### The picker
 
-A pick submits the `/permission <preset>` command line. The argued path (`/permission <preset>` typed directly) still switches directly; the decoration replaces only the bare invocation. The built-in labels are `Read Only`, `Workspace Write`, and `Full access` in English and `仅可查看`, `可写入工作区`, and `完全权限` in Chinese; `custom` is display state, never a target.
+A pick submits the `/permission <preset>` command line. The argued path (`/permission <preset>` typed directly) still switches directly; the decoration replaces only the bare invocation. The built-in labels are `Read Only`, `Workspace Write`, and `Full access` in English and `仅可查看`, `工作区内修改`, and `完全权限` in Chinese; `custom` is display state, never a target.
 
 ### The Settings row
 
@@ -89,3 +89,5 @@ These limits define the current permission surfaces. They are current package co
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. The command and slot contribution lifecycles are proven by the HMR-safety spec, while the browser-only Settings controller owns no host events or cross-plugin mutable state.

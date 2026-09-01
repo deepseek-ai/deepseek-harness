@@ -72,7 +72,7 @@ The package is built on one separation: a single newline-delimited transport cla
 | [`src/transport.ts`](src/transport.ts) | `JsonRpcLineTransport`: line framing, request/response/notification dispatch, error mapping, pending-request bookkeeping |
 | [`src/types.ts`](src/types.ts) | Named request/result and notification payload types, indexed by method |
 | [`src/index.ts`](src/index.ts) | Consumer interface: the transport and the named wire types |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant — a pure wire library owns no event stream) |
+| — | No runtime invariant companion is published; a pure wire library (transport class + type declarations) with no event stream or mutable data relation of its own; both wire ends own their protocol behavior. |
 
 ### Frame dispatch
 

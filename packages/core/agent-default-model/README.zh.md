@@ -75,7 +75,7 @@ await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'h
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`AgentDefaultModelConfig` 服务、设置分节安装、`currentSelection`/`saveSelection` |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式配套 |
+| — | 不发布运行时不变式伴生入口；唯一的可变值关系由 settings 校验负责。 |
 
 ### 行为说明
 

@@ -30,7 +30,7 @@ function openTurnEvents(
   ctx: Context,
   agent: Agent,
 ): Pick<GoalToolExecution, 'events' | 'openTurnStartSeq'> {
-  const events = agent.session.events
+  const events = agent.session.snapshotEvents()
   const boundary = ctx.sessionProjections.stateOf(agent.session, 'turnBoundary')
   if (boundary === undefined || boundary.openTurnStartSeq === null) {
     reject('goal tools require an open model turn', 'GOAL_TOOL_DRIVER_REQUIRED')

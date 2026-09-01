@@ -110,7 +110,7 @@ async function proposeStep(
 }
 
 function catalogMessages(session: Session): Extract<SessionEvent, { type: 'user/message' }>[] {
-  return session.events.filter((event): event is Extract<SessionEvent, { type: 'user/message' }> => event.type === 'user/message'
+  return session.snapshotEvents().filter((event): event is Extract<SessionEvent, { type: 'user/message' }> => event.type === 'user/message'
     && event.data.source.kind === 'skill-catalog')
 }
 
@@ -544,7 +544,7 @@ describe('dsh-tool-skill', () => {
   })
 
   it('treats a malformed durable catalog as unrecognizable instead of failing the step', async () => {
-    // Seeds reach `agent.session.events` from persistence on resume or fork,
+    // Seeds reach `agent.session.snapshotEvents()` from persistence on resume or fork,
     // and seed validation only guarantees a source object with a non-empty
     // `kind`. A catalog whose entries are missing or wrongly shaped must be
     // skipped like any foreign record; throwing here would fail every later
@@ -583,6 +583,18 @@ describe('dsh-tool-skill', () => {
     expect(published[0]?.data.source).toMatchObject({ kind: 'skill-catalog', form: 'catalog' })
     expect(published[0]?.data.source).not.toHaveProperty('update')
     expect(JSON.stringify(published[0]?.data.content)).toContain('live-skill')
+  })
+
+  it('rejects a missing event below the current Session length', async () => {
+    const home = await tempDir('tool-catalog-missing-event')
+    const ctx = await setup(home)
+    const session = Session.create(SessionId('catalog-missing-event'))
+    const agent = sessionAgent(session)
+    openMessageTurn(session)
+    Object.defineProperty(session, 'eventAt', { value: () => undefined })
+
+    await expect(fireStep(ctx, agent, 1, 1))
+      .rejects.toThrow('skill catalog cannot read seq 1 below the current Session length')
   })
 
   it('re-establishes the current catalog after compaction hides its durable message', async () => {

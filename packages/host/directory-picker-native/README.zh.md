@@ -108,3 +108,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。每次 pick 都是一次无状态 subprocess 往返，chooser outcome 只存在于返回路径。

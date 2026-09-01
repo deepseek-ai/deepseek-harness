@@ -1,5 +1,4 @@
 import { Context } from '@deepseek-ai/cordis'
-import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import type {
   AgentContext,
   ISessions,
@@ -19,7 +18,6 @@ import {
   UiSession,
 } from '../src/client/index.ts'
 import { apply as nodeApply } from '../src/index.ts'
-import * as SessionInvariant from '../src/invariant.ts'
 
 interface SessionsBench {
   readonly sessions: ISessions
@@ -548,11 +546,7 @@ describe('ui-session apply', () => {
     expect(slots.installScope).toHaveBeenCalledWith('session', ctx.uiSession.adapter)
   })
 
-  it('keeps the Host loader half inert and registers the invariant companion', async () => {
+  it('keeps the Host loader half inert', () => {
     expect(() => { nodeApply() }).not.toThrow()
-    const ctx = new Context()
-    await ctx.plugin(InvariantRegistry, { enabled: true })
-
-    await expect(ctx.plugin(SessionInvariant).await()).resolves.toBeDefined()
   })
 })

@@ -63,6 +63,6 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('resume: continue a persisted ses
     await waitForIdle(ctx, resumed)
 
     // The model recalls it — only possible from the resumed history.
-    expect(finalText([...resumed.session.events])).toContain(SECRET)
+    expect(finalText(resumed.session.snapshotEvents())).toContain(SECRET)
   }, 180_000)
 })

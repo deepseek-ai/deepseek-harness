@@ -545,18 +545,32 @@ export class Session {
     }
   }
 
-  /** Cached immutable public snapshot of the private append-only log. */
+  /** Cached immutable full snapshot of the private append-only log. */
   private eventsSnapshot: readonly SessionEvent[] | undefined
 
   /**
-   * An immutable snapshot of the append-only event log. The snapshot is reused
-   * until the next append; a previously returned array does not grow later.
-   * Events and their nested data are deep-frozen at acceptance, so neither a
-   * cast nor ordinary JavaScript can rewrite durable history.
+   * Return the immutable event stored at one exact sequence number.
+   * @param seq - event sequence number.
+   * @returns the accepted event, or undefined when the log does not contain it.
    */
-  get events(): readonly SessionEvent[] {
-    this.eventsSnapshot ??= Object.freeze([...this.log])
-    return this.eventsSnapshot
+  eventAt(seq: number): SessionEvent | undefined {
+    return this.log[seq]
+  }
+
+  /**
+   * Materialize an immutable snapshot of a half-open event sequence range.
+   * A full current snapshot is reused until the next append; every previously
+   * returned snapshot remains stable after later appends.
+   * @param fromSeq - non-negative inclusive sequence number; defaults to the log start.
+   * @param toSeqExclusive - non-negative exclusive sequence number; defaults to the current end.
+   * @returns a frozen array of the selected deeply frozen events.
+   */
+  snapshotEvents(fromSeq: number = 0, toSeqExclusive: number = this.log.length): readonly SessionEvent[] {
+    if (fromSeq === 0 && toSeqExclusive === this.log.length) {
+      this.eventsSnapshot ??= Object.freeze([...this.log])
+      return this.eventsSnapshot
+    }
+    return Object.freeze(this.log.slice(fromSeq, toSeqExclusive))
   }
 
   /** The next event's sequence number — always the log length (the `seq = log.length` contiguity contract). */
@@ -661,7 +675,7 @@ export class Session {
    * The {@link EpochHeader} in force after the log's last header event — the
    * header the NEXT request will be compared against — or undefined before
    * the first `request/header` snapshot. The live, incrementally-maintained
-   * form of `foldRequestHeader(session.events)`: each header event is folded
+   * form of `foldRequestHeader(session.snapshotEvents())`: each header event is folded
    * once, when first seen, so a per-step read costs O(new events).
    * @returns the folded header, or undefined when no header event exists yet.
    */
@@ -1092,9 +1106,8 @@ export class SessionStore extends Service {
     })
   }
 
-  private _forkSeed(session: Session, requestedBoundary: number | undefined): SessionEvent[] {
-    const events = session.events
-    const lastEvent = events.at(-1)
+  private _forkSeed(session: Session, requestedBoundary: number | undefined): readonly SessionEvent[] {
+    const lastEvent = session.eventAt(session.seq - 1)
     let boundary: number
     if (requestedBoundary !== undefined) {
       boundary = requestedBoundary
@@ -1108,22 +1121,23 @@ export class SessionStore extends Service {
         'INVALID_BOUNDARY',
       )
     }
-    if (boundary >= events.length) {
-      const lastSeq = events.at(-1)?.seq
+    if (boundary >= session.seq) {
+      const lastSeq = lastEvent?.seq
       throw new SessionForkError(
         `fork boundary ${boundary} does not exist in session "${session.id}" (last seq: ${lastSeq ?? 'none'})`,
         'INVALID_BOUNDARY',
       )
     }
 
-    const boundaryEvent = events[boundary]
+    const boundaryEvent = session.eventAt(boundary)
     if (boundaryEvent === undefined || boundaryEvent.seq !== boundary) {
       throw new SessionForkError(
         `fork boundary ${boundary} does not match a contiguous event seq in session "${session.id}"`,
         'INVALID_BOUNDARY',
       )
     }
-    const lastTurnBoundary = events.slice(0, boundary + 1)
+    const events = session.snapshotEvents(0, boundary + 1)
+    const lastTurnBoundary = events
       .findLast(event => event.type === 'turn/start' || event.type === 'turn/end')
     if (lastTurnBoundary?.type === 'turn/start') {
       throw new SessionForkError(
@@ -1132,7 +1146,7 @@ export class SessionStore extends Service {
       )
     }
 
-    return events.slice(0, boundary + 1)
+    return events
   }
 
   private _resolveForkSource(source: SessionForkSource): Session {

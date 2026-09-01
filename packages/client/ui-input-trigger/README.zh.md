@@ -86,3 +86,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。trigger pipeline 是浏览器侧纯逻辑加一个 registry，HMR 测试覆盖释放；它不发出 Cordis 事件，也不持有跨插件可变状态。

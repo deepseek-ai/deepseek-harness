@@ -128,7 +128,7 @@ describe('ui-permission browser plugin', () => {
     })
     b.locale.setLocale('zh')
     const localized = await c.ui.options(proj, new AbortController().signal)
-    expect(localized.map(option => option.label)).toEqual(['仅可查看', '可写入工作区', '完全权限'])
+    expect(localized.map(option => option.label)).toEqual(['仅可查看', '工作区内修改', '完全权限'])
     expect(localized.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({
       title: '确认启用完全权限？',
       description: accessZh['confirm.description'],

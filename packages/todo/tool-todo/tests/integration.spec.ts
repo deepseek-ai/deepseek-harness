@@ -65,7 +65,7 @@ describe('todo_write tool through the agent loop', () => {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'plan a two-step task' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
-    const log = agent.session.events
+    const log = agent.session.snapshotEvents()
     expect(findEvent(log, 'tool/call').data.name).toBe('todo_write')
     expect(findEvent(log, 'tool/result').data.message.content[0].isError).toBe(false)
 
@@ -93,9 +93,9 @@ describe('todo_write tool through the agent loop', () => {
     agent.followup(createUserMessage({ content: [{ type: 'text', text: 'plan then update' }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
-    const todoEvents = agent.session.events.filter(e => e.type === 'todo/write')
+    const todoEvents = agent.session.snapshotEvents().filter(e => e.type === 'todo/write')
     expect(todoEvents).toHaveLength(2)
-    expect(findEvent(agent.session.events, 'todo/write', 'last').data.todos).toEqual([
+    expect(findEvent(agent.session.snapshotEvents(), 'todo/write', 'last').data.todos).toEqual([
       { content: 'step one', status: 'completed' },
       { content: 'step two', status: 'in_progress' },
     ])

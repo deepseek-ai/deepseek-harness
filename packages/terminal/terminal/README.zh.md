@@ -75,7 +75,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`：后端注册表、spawn/send/read/signal/kill/list、所有者清理与 dispose |
 | [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合、错误码 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；注册表是私有可变状态） |
+| — | 不发布运行时不变式伴生入口；注册表是私有可变状态。 |
 
 ### 数据模型与生命周期
 

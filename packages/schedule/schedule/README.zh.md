@@ -98,7 +98,7 @@ Session projection 是可选能力。`ctx.sessionProjections` 存在时，插件
 
 ### 持久状态与回放
 
-普通会话折叠完整事件流。fork 只折叠 `session.events.slice(session.header.seedLength ?? 0)`，因此子会话永远不会继承父会话的提醒。Schedule projection 从传给 `init(header)` 的不可变 `SessionHeader` 派生该边界，并对同一自有后缀应用同一个 transition 函数。每条 create 记录都携带稳定的会话本地 `ScheduleId`、已 trim 的提示词与四位年份 RFC 3339 UTC `scheduledAt`；`after` 记录还存储 `afterSeconds`，`at` 记录不保留所提交的偏移量或本地字段，`every` 记录存储 `everySeconds`，并把 `scheduledAt` 视为尚未 dispatch 的最早创建锚点对齐发生时点。delete 与一次性 dispatch 只携带 id；`every` dispatch 会附加 `acceptedAt`，回放直接推进到该决策时点之后的第一个锚点对齐目标。
+普通会话折叠完整事件流。fork 只折叠 `session.snapshotEvents(session.header.seedLength ?? 0)`，因此子会话永远不会继承父会话的提醒。Schedule projection 从传给 `init(header)` 的不可变 `SessionHeader` 派生该边界，并对同一自有后缀应用同一个 transition 函数。每条 create 记录都携带稳定的会话本地 `ScheduleId`、已 trim 的提示词与四位年份 RFC 3339 UTC `scheduledAt`；`after` 记录还存储 `afterSeconds`，`at` 记录不保留所提交的偏移量或本地字段，`every` 记录存储 `everySeconds`，并把 `scheduledAt` 视为尚未 dispatch 的最早创建锚点对齐发生时点。delete 与一次性 dispatch 只携带 id；`every` dispatch 会附加 `acceptedAt`，回放直接推进到该决策时点之后的第一个锚点对齐目标。
 
 ### 客户端 projection
 

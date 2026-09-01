@@ -83,7 +83,7 @@ This section explains the design decisions behind the owner and points at the co
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `E2BRuntime` service, `Config` schema, validation, sandbox open and teardown |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; sandbox creation and teardown have one SDK promise and no independent event or mutable-data relationship) |
+| — | No runtime invariant companion is published; sandbox creation and teardown have one SDK promise and no independent event or mutable-data relationship to cross-check. |
 
 ### Lifecycle
 

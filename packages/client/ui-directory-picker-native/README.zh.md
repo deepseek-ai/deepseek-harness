@@ -85,3 +85,5 @@ kind: "package-reference"
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。插件用一个事务性 effect 把无渲染 flow occupant 注册到两个 workspace hole，HMR 测试覆盖释放，pick 之间不保留状态。

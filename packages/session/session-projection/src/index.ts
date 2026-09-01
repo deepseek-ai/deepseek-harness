@@ -67,7 +67,10 @@ export interface ProjectionDefinition<
     /** Validates the wire payload before it leaves the host. */
     viewSchema: ZodType<SessionProjectionMap[K]>
     /**
-     * State → wire payload (the read-side projection).
+     * State → wire payload (the read-side projection). The live drive keeps
+     * the two latest raw results and compares them with `Object.is`; an
+     * object-valued view must reuse its reference to suppress publication
+     * across internal-only state changes.
      * @param state - the current state.
      * @returns the whole current value for this unit's key.
      */
@@ -83,9 +86,9 @@ export interface ProjectionDefinition<
 }
 
 /**
- * Change-feed listener: one unit's value changed for one session. `value` is
- * the schema-validated `view` output; `seq` is the unit's watermark at
- * emission (the seq of the event that caused the change).
+ * Change-feed listener: one unit's raw `view` result changed by `Object.is`
+ * for one session. `value` is the schema-validated output; `seq` is the
+ * unit's watermark at emission (the seq of the event that caused the change).
  */
 export type ProjectionChangeListener = (
   session: Session,
@@ -136,11 +139,13 @@ interface ErasedDefinition {
   stateVersion: number
 }
 
-/** Per-session per-unit watermark cache row. */
+/** Per-session per-unit watermark and fixed live-drive view buffer. */
 interface UnitCell {
   state: unknown
   /** Seq of the last event passed through `apply` (regardless of change). */
   observedSeq: number
+  /** `[previousView, currentView]`; undefined slots mean no cached comparison. */
+  readonly views: [unknown, unknown]
 }
 
 /**
@@ -164,9 +169,9 @@ interface Registration {
 /**
  * `ctx.sessionProjections`: the projection unit table and its drive. The
  * service subscribes to `session/event` once; every committed event passes
- * every registered unit's `apply` (eager drive), and a changed state
- * reference in a client-visible unit notifies the change feed with the
- * schema-validated view.
+ * every registered unit's `apply` (eager drive). A changed state reference
+ * computes the next client view; the change feed is notified only when its
+ * raw result changes by `Object.is`.
  * Cells build lazily — a unit registered after events flowed, or a session
  * older than the registry, folds `init` over the in-memory log on first
  * touch (event or read). Registration is an effect (disposer rides the
@@ -196,6 +201,7 @@ export class SessionProjectionRegistry extends Service {
         registration.cells.set(session, {
           state: registration.def.init(session.header),
           observedSeq: -1,
+          views: [undefined, undefined],
         })
       }
     })
@@ -277,7 +283,7 @@ export class SessionProjectionRegistry extends Service {
   /**
    * Subscribe to the change feed. The registration is an effect on the
    * calling context's fiber.
-   * @param listener - called once per client-visible unit whose state reference changed, per committed event.
+   * @param listener - called once per client-visible unit whose raw view changed by `Object.is`, per committed event.
    * @returns the exact disposer that unsubscribes.
    */
   onChanged(listener: ProjectionChangeListener): () => void {
@@ -559,6 +565,7 @@ export class SessionProjectionRegistry extends Service {
       registration.cells.set(session, {
         state: row.val,
         observedSeq: row.seq,
+        views: [undefined, undefined],
       })
     }
     return restored.snapshot
@@ -577,17 +584,17 @@ export class SessionProjectionRegistry extends Service {
   ): UnitCell {
     let state = def.init(header)
     for (const event of events) state = def.apply(state, event)
-    return { state, observedSeq: (events.at(-1)?.seq ?? -1) }
+    return { state, observedSeq: (events.at(-1)?.seq ?? -1), views: [undefined, undefined] }
   }
 
   /** Read (or lazily build, folding the full in-memory log) one unit's cell. */
   private cellFor(registration: Registration, session: Session): UnitCell {
     let cell = registration.cells.get(session)
     if (cell === undefined) {
-      cell = this.buildCell(registration.def, session.header, session.events)
+      cell = this.buildCell(registration.def, session.header, session.snapshotEvents())
       registration.cells.set(session, cell)
     } else {
-      this.advanceCell(registration.def, cell, session.events, session.seq - 1)
+      this.advanceCell(registration.def, cell, session, session.seq - 1)
     }
     return cell
   }
@@ -596,22 +603,26 @@ export class SessionProjectionRegistry extends Service {
   private advanceCell(
     def: ErasedDefinition,
     cell: UnitCell,
-    events: readonly SessionEvent[],
+    session: Session,
     throughSeq: number,
   ): void {
     if (cell.observedSeq >= throughSeq) return
     for (let seq = cell.observedSeq + 1; seq <= throughSeq; seq++) {
-      const event = events[seq]
+      const event = session.eventAt(seq)
       if (event === undefined || event.seq !== seq) {
         throw new Error(`session projection ${JSON.stringify(def.key)} cannot advance across missing seq ${String(seq)}`)
       }
       const next = def.apply(cell.state, event)
+      if (!Object.is(next, cell.state)) {
+        cell.views[0] = cell.views[1]
+        cell.views[1] = undefined
+      }
       cell.state = next
       cell.observedSeq = seq
     }
   }
 
-  /** Eager drive: pass one committed event through every registered unit; notify on changed references. */
+  /** Eager drive: pass one committed event through every unit; notify on changed raw view references. */
   private drive(session: Session, event: SessionEvent): void {
     for (const registration of this.registrations.values()) {
       let cell = registration.cells.get(session)
@@ -619,21 +630,34 @@ export class SessionProjectionRegistry extends Service {
       if (cell === undefined) {
         // Late build mid-stream: fold history before this event (seq = log
         // index, so the prefix slice is exact), then take the normal gate.
-        cell = this.buildCell(registration.def, session.header, session.events.slice(0, event.seq))
+        cell = this.buildCell(registration.def, session.header, session.snapshotEvents(0, event.seq))
         registration.cells.set(session, cell)
       } else {
-        this.advanceCell(registration.def, cell, session.events, event.seq - 1)
+        this.advanceCell(registration.def, cell, session, event.seq - 1)
       }
-      const next = registration.def.apply(cell.state, event)
-      const changed = !Object.is(next, cell.state)
+      const previousState = cell.state
+      const next = registration.def.apply(previousState, event)
+      const changed = !Object.is(next, previousState)
       cell.state = next
       cell.observedSeq = event.seq
-      if (changed && registration.def.wire !== undefined && this.listeners.size > 0) {
-        const value = this.viewCell(registration, cell)
-        for (const listener of this.listeners) {
-          listener(session, registration.def.key as Extract<keyof SessionProjectionMap, string>, value, event.seq)
+      const wire = registration.def.wire
+      if (changed && wire !== undefined) {
+        const views = cell.views
+        views[0] = views[1]
+        if (this.listeners.size > 0) {
+          views[1] = wire.view(next)
+          if (!Object.is(views[0], views[1])) {
+            const value = wire.viewSchema.parse(views[1])
+            for (const listener of this.listeners) {
+              listener(session, registration.def.key as Extract<keyof SessionProjectionMap, string>, value, event.seq)
+            }
+          }
+        } else {
+          views[1] = undefined
         }
       }
+      // An unchanged state keeps its current view as the valid comparison
+      // value for the next state change.
     }
   }
 

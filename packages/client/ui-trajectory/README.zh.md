@@ -43,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-视图是纯投影：Trajectory 自有的 Definition 从共享 Session 窗口组装业务记录——包括持久化的取消定稿前缀、只能从分片恢复的打断前缀与被打断的工具记录——因此 Trajectory 既不读取也不改变 Chat 会话快照。
+视图是纯投影：Trajectory 自有的 Definition 从共享 Session 窗口组装业务记录——包括持久化的取消定稿前缀、只能从分片恢复的打断前缀与被打断的工具记录——因此 Trajectory 既不读取也不改变 Chat 会话快照。其 steering 分类器通过持久 splice state 只保留 next-step Inbox ID，并让后续 Context 共享当前 claimed batch。
 
 ### 虚拟行
 
@@ -96,3 +96,5 @@ Trajectory 要求会话壳把 composer 作为浮层置于全高记录表上方�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是纯消费插件，不发出 Cordis 事件，也不持有跨插件可变状态；view-slot effect 的释放由 slot ledger 与包测试观察。

@@ -62,7 +62,7 @@ while (frames.size > 0) {
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 环形双端队列操作与后备存储生命周期 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；顺序和存储生命周期由单元测试覆盖） |
+| — | 不发布运行时不变量伴生入口；这个集合不拥有事件流或共享可变状态，其顺序与存储生命周期由单元测试覆盖。 |
 | [`tests/deque.spec.ts`](tests/deque.spec.ts) | FIFO、前插、环绕、扩容、压缩、清空和复用覆盖 |
 | [`benchmarks/drain.ts`](benchmarks/drain.ts) | 随队列规模增长的可复现 backlog 排空计时 |
 

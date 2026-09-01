@@ -209,6 +209,14 @@ describe('CI workflow', () => {
     expect(serialInstall!.run.split('\n').map(line => line.trim())).toContain('} else {')
     expect(serialInstall!.run.split('\n').map(line => line.trim())).toContain('pnpm install --frozen-lockfile')
     expect(serialInstall!.run).not.toContain('$cloneFlag')
+    // The unsharded reference runs the whole coverage inventory at the same
+    // per-test budget the PR coverage lane grants; the default 5000ms times
+    // out load-sensitive store scans (e.g. gen-third-party-notices).
+    const serialGate = serialSteps.find((step): step is Record<string, unknown> & { env?: Record<string, unknown> } => (
+      isRecord(step) && step.name === 'Run complete unsharded Windows gate inventory serially'
+    ))
+    expect(serialGate).toBeDefined()
+    expect(serialGate!.env).toMatchObject({ DSH_COVERAGE_TEST_TIMEOUT_MS: '90000' })
 
     // Aggregate: Wine and the required split native jobs are needed;
     // windows-coverage is temporarily non-blocking while Windows ACP
@@ -660,6 +668,7 @@ describe('Issue lifecycle workflow', () => {
     // review events.
     const lifecyclePullRequest = workflowEvent(lifecycle, 'pull_request')
     const lifecycleReview = workflowEvent(lifecycle, 'pull_request_review')
+    expect(lifecyclePullRequest.types).toContain('opened')
     expect(lifecyclePullRequest.types).not.toContain('ready_for_review')
     expect(lifecyclePullRequest.types).toContain('review_requested')
     expect(lifecycleReview.types).toEqual(['submitted'])

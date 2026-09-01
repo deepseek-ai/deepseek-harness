@@ -57,3 +57,5 @@ None; registry fields are model-hidden provider metadata and do not alter the se
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. Duplicate ownership, detached output, and one acceptance settlement are enforced inside the registry operation that owns each decision.

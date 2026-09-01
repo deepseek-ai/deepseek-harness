@@ -89,3 +89,5 @@ composer 携带图片附件提交时，只有声明了 `input.images` 的宿主�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是基于 wire command directory 的浏览器侧 source，不发出 Cordis 事件，也不持有跨插件可变状态；dispatch 与 cache 行为由包测试覆盖。

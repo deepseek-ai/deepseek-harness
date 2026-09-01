@@ -74,7 +74,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   const seed = (session: Session): HookTrace => {
     const trace: HookTrace = { openTurn: null, pending: new Map() }
     traces.set(session, trace)
-    for (const event of session.events) {
+    for (const event of session.snapshotEvents()) {
       if (event.type === 'turn/start') trace.openTurn = event.data.turn
       else if (event.type === 'turn/end') trace.openTurn = null
       const transition = validateHookEvent(trace, event, fail)

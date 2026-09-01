@@ -113,7 +113,7 @@ export class SessionHistoryController {
       // Constructor seed events have no session/event notification. Normally
       // only the end-seed suffix is new; if persistence advanced after the
       // opening observation, replay everything beyond that snapshot cursor.
-      const suffix = session.events.slice(snapshotCursor === undefined
+      const suffix = session.snapshotEvents(snapshotCursor === undefined
         ? session.firstLiveSeq
         : snapshotCursor + 1)
       for (let index = suffix.length - 1; index >= 0; index -= 1) {

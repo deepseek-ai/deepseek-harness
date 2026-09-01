@@ -290,7 +290,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     const child = scaffold.ctx.agents.get(childId)
     expect(child).toBeDefined()
     expect(child!.inbox.nextTurn).toHaveLength(2)
-    expect(child!.session.events.filter(event => event.type === 'turn/start')).toHaveLength(2)
+    expect(child!.session.snapshotEvents().filter(event => event.type === 'turn/start')).toHaveLength(2)
     await page.getByRole('button', { name: 'Send message' }).waitFor({ timeout: 15_000 })
 
     // Only the waking send resumes the parked queue, FIFO, to settlement.

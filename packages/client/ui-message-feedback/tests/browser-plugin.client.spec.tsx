@@ -5,8 +5,7 @@
  * conversation.chat.assistant-actions, one controller per Session backs every
  * message in that Session, a reconnect refreshes only Sessions that were
  * already read, and registration plus controller disposal ride the plugin
- * fiber (HMR safety). The node half and the invariant companion are exercised
- * over the same Context.
+ * fiber (HMR safety). The node half stays inert.
  */
 import { Context, Service } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -208,8 +207,6 @@ describe('ui-message-feedback browser plugin', () => {
   })
 
   it('the node half applies without host-side behavior', () => {
-    // The invariant companion is mounted by the vitest-wide invariant host on
-    // every Context this suite creates; its registration is covered there.
     expect(() => { nodeApply() }).not.toThrow()
   })
 })

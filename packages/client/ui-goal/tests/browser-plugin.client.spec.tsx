@@ -7,8 +7,7 @@
  * Remote method's compare-and-set is the guard), a missing projection short-circuits
  * to the no-current-goal error without touching the wire, and a Remote failure
  * reaches the strip verbatim. Registration disposal rides the
- * plugin fiber (HMR safety). The node half and the invariant companion are
- * exercised over the same Context.
+ * plugin fiber (HMR safety), and the node half stays inert.
  */
 import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
@@ -240,8 +239,6 @@ describe('GoalDock adapter', () => {
 })
 
 describe('ui-goal node half', () => {
-  // The invariant companion is mounted by the vitest-wide invariant host on
-  // every Context this suite creates; its registration is covered there.
   it('the node apply is an inert loader seat', () => {
     expect(() => { nodeApply() }).not.toThrow()
   })

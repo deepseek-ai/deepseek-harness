@@ -432,6 +432,7 @@ describe('fixture session face', () => {
     expect(() => bare.cancel()).toThrow(/cancel is not stubbed/)
     expect(() => bare.command()).toThrow(/command is not stubbed/)
     expect(() => bare.loadOlder()).toThrow(/loadOlder is not stubbed/)
+    expect(() => bare.loadThrough()).toThrow(/loadThrough is not stubbed/)
     expect(() => bare.rename()).toThrow(/rename is not stubbed/)
     const submission = bare.beginSubmission()
     expect(submission.requestId).toBe('test-submission-1')

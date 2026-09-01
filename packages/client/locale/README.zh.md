@@ -138,3 +138,5 @@ Host 通过 settings 服务为 loopback 页面持久化偏好。Client 会刻意
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。locale catalog 与字典没有可供交叉核对的独立运行时来源；注册释放、偏好解析和 fallback 查找由行为测试覆盖。

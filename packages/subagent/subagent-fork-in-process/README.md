@@ -76,7 +76,7 @@ One difference from spawn, expressed as data: the backend computes the balanced 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Provider registration: prefix computation, `Config` schema, capability declaration |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
 ### Run flow
 

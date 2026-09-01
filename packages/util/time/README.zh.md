@@ -26,6 +26,8 @@ kind: "package-library"
 
 它是**库，不是服务也不是插件**：无 `ctx`、不注册任何东西、不持有状态。
 
+不发布运行时不变量伴生入口；这个纯工具不拥有事件流或可变运行时数据，时区规范化由单元测试验证。
+
 在接收时区的那个边界上调用它，让值在进入任何持久物之前先过一遍。不可用的名称回答 `undefined`，由调用方抛出自己的拒绝——Session prompt 用 `session/invalid-time-zone`，subagent 续话用 `subagent/invalid-time-zone`。
 
 -----

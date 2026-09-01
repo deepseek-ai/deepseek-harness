@@ -100,7 +100,7 @@ Every namespace, method, lookup, and Context segment must satisfy `isTypertRemot
 | [`src/index.ts`](src/index.ts) | Decorators, Gateway bindings, `remoteMethods`, segment validation |
 | [`src/remote-error.ts`](src/remote-error.ts) | `RemoteError` and the structural `remoteErrorOf` recognizer |
 | [`src/types.ts`](src/types.ts) | Protocol maps, `RemoteErrorDetailsMap`, `RemoteResult`, `InvocationDescriptor`, codecs, provider contracts, registry interfaces, `TypertClientRemote` |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
+| — | No runtime invariant companion is published; decorators retain private immutable declarations and bindings are frozen values with no independent event stream to cross-check. |
 
 </details>
 

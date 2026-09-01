@@ -15,6 +15,9 @@
       "path": "../../../vendor/cordis"
     },
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../llm/llm"
     },
     {
@@ -25,9 +28,6 @@
     },
     {
       "path": "../subagent"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

@@ -39,9 +39,7 @@
 }
 
 .menu {
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
+  position: fixed;
   z-index: 100;
   box-sizing: border-box;
   display: flex;

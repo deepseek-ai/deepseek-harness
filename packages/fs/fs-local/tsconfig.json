@@ -20,9 +20,6 @@
     },
     {
       "path": "../fs"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ]
 }

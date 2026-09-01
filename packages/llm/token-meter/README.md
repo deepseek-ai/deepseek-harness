@@ -148,3 +148,5 @@ This Dev Note is non-authoritative working context: notes for maintainers and op
 - A per-provider exact tokenizer is not decided; keeping one deterministic heuristic is what makes every consumer's measurement agree and replay-stable.
 
 </details>
+
+**Runtime invariant:** No companion is published. Token estimates are per-call outputs and the private session cache is invalidated at its event mutation boundary. The package's three projections do expose observation streams, but their schemas fix the JSON payloads; the usage folds replace same-attempt samples, so totals need not be monotone when a final sample corrects an earlier chunk, and the composition fold prices through the same `estimate.ts` heuristic as the measurement service and subtracts producer-logged shadow prices derived from that service's own fixed-heuristic node prices, which makes its message figure equal the sum of `measure().nodes[].heuristicTokens` by construction rather than by a relation worth observing at runtime; the route-priced `surfaceTokens` deliberately diverges by the routed model's image repricing.

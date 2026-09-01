@@ -102,7 +102,7 @@ fixture 是运行一次真实 agent 所产生的持久化会话日志（`<scenar
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 类型、fixture 派生、override 校验、占位符解析、会话绑定、`installLlmReplay` 与插件导出 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；流语法由 LLM 伴生插件与派生测试检验） |
+| — | 不发布运行时不变式伴生入口；流语法由 LLM 伴生插件与派生测试检验。 |
 
 ### 绑定与流式流程
 

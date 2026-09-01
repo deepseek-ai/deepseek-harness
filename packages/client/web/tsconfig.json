@@ -28,9 +28,6 @@
     },
     {
       "path": "../ui-renderer"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     }
   ],
   "exclude": [

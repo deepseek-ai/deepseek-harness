@@ -222,6 +222,9 @@ function makeHarness(
   const openDetails = vi.fn<(t: SelectionTarget) => void>()
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
   const loadOlder = vi.fn()
+  const loadThrough = vi.fn<(seq: number) => Promise<void>>().mockResolvedValue(undefined)
+  // Mutable outline holder: tests swap the value and drive a re-render via set().
+  let outlineValue: unknown
   const openView = vi.fn<(view: string, focus: string) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
   let savedScroll: ReturnType<ChatViewSlotProps['chatScroll']['read']> = null
@@ -348,7 +351,7 @@ function makeHarness(
       createSnapshotStore<SessionPendingInteractionSnapshot>(new Map()),
     ),
     useWorkspaces: emptyWorkspaces(),
-    useProjection: (() => undefined),
+    useProjection: () => outlineValue,
     useInput: (() => { throw new Error('unused') }),
     inputActions: {
       setDraft: () => {},
@@ -368,6 +371,7 @@ function makeHarness(
     openDetails,
     openFile,
     loadOlder,
+    loadThrough,
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     chatScroll,
     forkAt,
@@ -396,7 +400,8 @@ function makeHarness(
   const setSelection = (next: SelectionTarget | null): void => { chat.actions.select(next) }
   return {
     set, setSession: session.set, setChat: chatSource.set, ChatView, props,
-    openDetails, openFile, loadOlder, openView,
+    openDetails, openFile, loadOlder, loadThrough, openView,
+    setOutline: (value: unknown) => { outlineValue = value },
     chatScroll, forkAt, setSelection, toolOwners,
     setTranscriptView: (mode: TranscriptViewMode) => { transcriptView.set(mode) },
     setNodeRenderer: (renderer: React.ComponentProps<typeof ChatNodeSeat>['renderSlot']) => {
@@ -573,7 +578,7 @@ describe('ChatView', () => {
     const view = render(<h.ChatView {...h.props} />)
     const second = view.getByRole('button', { name: '跳转到第 2 轮' })
     const secondPosition = second.parentElement as HTMLElement
-    expect(secondPosition.style.getPropertyValue('--turn-position')).toBe('0%')
+    expect(secondPosition.style.getPropertyValue('--turn-natural-position')).toBe('0px')
 
     const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
     const metrics = installScrollMetrics(scroller, 1_000, 300)
@@ -593,8 +598,156 @@ describe('ChatView', () => {
     })
     const movedSecond = view.getByRole('button', { name: '跳转到第 2 轮' })
     expect(movedSecond.parentElement).toBe(secondPosition)
+    // Fixed pitch: the mark moves one slot down and never compresses.
     expect(secondPosition.style.getPropertyValue('--turn-natural-position')).toBe('10px')
-    expect(secondPosition.style.getPropertyValue('--turn-position')).toBe('50%')
+  })
+
+  it('extends the rail with unloaded outline turns, pages on click, and falls back when nothing lands', async () => {
+    const later = [userInTurn(8, 'third prompt', 3), assistant(9, 'third response', 3)]
+    const h = makeHarness({ nodes: later }, { hasMore: true })
+    h.setOutline([
+      { turn: 1, seq: 0, prompt: 'first prompt from outline', response: 'first answer from outline' },
+      { turn: 2, seq: 4, prompt: 'second prompt from outline', response: '' },
+      { turn: 3, seq: 8, prompt: 'third prompt', response: 'third response' },
+    ])
+    const view = render(<h.ChatView {...h.props} />)
+    const first = view.getByRole('button', { name: '加载并跳转到第 1 轮' })
+    view.getByRole('button', { name: '加载并跳转到第 2 轮' })
+    const third = view.getByRole('button', { name: '跳转到第 3 轮' })
+    expect(third.getAttribute('aria-current')).toBe('true')
+    fireEvent.focus(first)
+    // An unloaded turn previews both sides from the outline.
+    expect(view.getByRole('tooltip').textContent).toContain('first prompt from outline')
+    expect(view.getByRole('tooltip').textContent).toContain('first answer from outline')
+
+    fireEvent.click(first)
+    expect(h.loadThrough).toHaveBeenCalledWith(0)
+    expect(first.getAttribute('aria-busy')).toBe('true')
+
+    // The fake loader never delivers rows: settlement repages once for the
+    // unmoved head, then lands on the nearest rendered turn and un-busies.
+    await act(async () => {})
+    expect(h.loadThrough.mock.calls).toEqual([[0], [0]])
+    expect(first.getAttribute('aria-busy')).toBeNull()
+    expect(view.getByRole('button', { name: '跳转到第 3 轮' }).getAttribute('aria-current')).toBe('true')
+  })
+
+  it('a jump from the pinned tail releases bottom ownership so the follow snap cannot cancel it', async () => {
+    const later = [userInTurn(8, 'third prompt', 3), assistant(9, 'third response', 3)]
+    const h = makeHarness({ nodes: later }, { hasMore: true })
+    h.setOutline([
+      { turn: 1, seq: 0, prompt: 'first prompt', response: '' },
+      { turn: 3, seq: 8, prompt: 'third prompt', response: '' },
+    ])
+    let releaseJump: (() => void) | undefined
+    h.loadThrough.mockImplementation(() => new Promise<void>((resolve) => { releaseJump = resolve }))
+    const view = render(<h.ChatView {...h.props} />)
+    // Pinned to the tail on open: the back-to-bottom control is absent.
+    expect(view.queryByRole('button', { name: '回到底部' })).toBeNull()
+
+    const first = view.getByRole('button', { name: '加载并跳转到第 1 轮' })
+    fireEvent.click(first)
+    // The click itself leaves the tail...
+    expect(view.getByRole('button', { name: '回到底部' })).toBeTruthy()
+    // ...so a non-reader scroll delivery at the floor (the first prepend's
+    // compensation fires one) no longer snaps to the tail and cancel the jump.
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLElement
+    fireEvent.scroll(scroller)
+    expect(first.getAttribute('aria-busy')).toBe('true')
+    await act(async () => { releaseJump?.() })
+  })
+
+  it('holds a jump issued while a plain pull owns the pager and resumes it when the pull settles', async () => {
+    const later = [userInTurn(8, 'third prompt', 3), assistant(9, 'third response', 3)]
+    const h = makeHarness({ nodes: later }, { hasMore: true, loadingOlder: true })
+    h.setOutline([
+      { turn: 1, seq: 0, prompt: 'first prompt', response: '' },
+      { turn: 3, seq: 8, prompt: 'third prompt', response: '' },
+    ])
+    const view = render(<h.ChatView {...h.props} />)
+    const first = view.getByRole('button', { name: '加载并跳转到第 1 轮' })
+    fireEvent.click(first)
+    // The session-side guard refuses the busy-pager jump instantly, yet the
+    // mark stays busy instead of degrading to the nearest loaded turn.
+    await act(async () => {})
+    expect(h.loadThrough.mock.calls).toEqual([[0]])
+    expect(first.getAttribute('aria-busy')).toBe('true')
+
+    // The plain pull settles: the flip re-settles the jump, which repages.
+    act(() => { h.setSession({ loadingOlder: false }) })
+    await act(async () => {})
+    expect(h.loadThrough.mock.calls).toEqual([[0], [0]])
+    expect(first.getAttribute('aria-busy')).toBeNull()
+  })
+
+  it('scrolls the fixed-pitch rail inside its frame with gradient fades at the scrollable ends', () => {
+    const h = makeHarness(
+      { nodes: [userInTurn(8, 'latest prompt', 60), assistant(9, 'latest response', 60)] },
+      { hasMore: true },
+    )
+    h.setOutline(Array.from({ length: 60 }, (_, index) => ({
+      turn: index + 1,
+      seq: index * 4,
+      prompt: `p${String(index + 1)}`,
+      response: '',
+    })))
+    const view = render(<h.ChatView {...h.props} />)
+    const nav = view.getByRole('navigation', { name: '轮次导航' })
+    // 60 marks at the fixed 10px pitch: the ladder keeps its natural height.
+    expect(nav.style.getPropertyValue('--turn-natural-height')).toBe('602px')
+    const scroller = nav.querySelector('[class*="scroller"]') as HTMLElement
+    Object.defineProperty(scroller, 'scrollHeight', { value: 602, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 300, configurable: true })
+    scroller.scrollTop = 0
+    fireEvent.scroll(scroller)
+    expect(scroller.className).toContain('fadeBottom')
+    expect(scroller.className).not.toContain('fadeTop')
+
+    scroller.scrollTop = 150
+    fireEvent.scroll(scroller)
+    expect(scroller.className).toContain('fadeTop')
+    expect(scroller.className).toContain('fadeBottom')
+    expect(nav.style.getPropertyValue('--turn-scroll-top')).toBe('150px')
+
+    // Pointer mapping subtracts the rail scroll: y=94 with scrollTop 150 is
+    // natural offset 238px → the 25th mark.
+    vi.spyOn(nav, 'getBoundingClientRect').mockReturnValue({ top: 0 } as DOMRect)
+    fireEvent.pointerMove(nav, { clientY: 94 })
+    expect(view.getByRole('tooltip').textContent).toContain('p25')
+  })
+
+  it('lands a jump on its turn once the paged rows commit', async () => {
+    const later = [userInTurn(8, 'third prompt', 3), assistant(9, 'third response', 3)]
+    const h = makeHarness({ nodes: later }, { hasMore: true })
+    h.setOutline([
+      { turn: 1, seq: 0, prompt: 'first prompt', response: '' },
+      { turn: 3, seq: 8, prompt: 'third prompt', response: '' },
+    ])
+    let releaseJump: (() => void) | undefined
+    h.loadThrough.mockImplementation(() => new Promise<void>((resolve) => { releaseJump = resolve }))
+    const view = render(<h.ChatView {...h.props} />)
+
+    fireEvent.click(view.getByRole('button', { name: '加载并跳转到第 1 轮' }))
+    expect(h.loadThrough).toHaveBeenCalledWith(0)
+
+    // The paged window commits: turn 1's rows and rail item enter the snapshot.
+    act(() => {
+      h.setChat({
+        nodes: [userInTurn(0, 'first prompt', 1), assistant(1, 'first response', 1), ...later],
+        turnTimings: new Map([[1, { startTime: 1_000 }], [3, { startTime: 8_000 }]]),
+      })
+    })
+    const first = view.getByRole('button', { name: '跳转到第 1 轮' })
+    expect(first.getAttribute('aria-current')).toBe('true')
+    // The mark stays busy until the jump settles: the loader's completion
+    // runs the final landing correction after the load-earlier button leaves.
+    expect(first.getAttribute('aria-busy')).toBe('true')
+    await act(async () => { releaseJump?.() })
+    // Only the busy lifecycle is asserted after settlement: jsdom's zero
+    // geometry makes the rAF active-turn resync read "at bottom" and hand the
+    // mark to the last turn, so aria-current here is timing-dependent under
+    // instrumentation; the landing position contract lives in the browser e2e.
+    expect(first.getAttribute('aria-busy')).toBeNull()
   })
 
   it('hands a windowless tool result to the Tool seat with an empty tool name', () => {
@@ -2177,6 +2330,58 @@ describe('ChatView', () => {
     act(() => { notify?.() })
     expect(scroller.scrollTop).toBe(200)
     expect(observe).toHaveBeenCalledTimes(1)
+  })
+
+  it('pinned dynamic-height updates select the latest Turn without reading row geometry', () => {
+    let notify: (() => void) | undefined
+    let nextFrame = 0
+    const frames = new Map<number, FrameRequestCallback>()
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      nextFrame += 1
+      frames.set(nextFrame, callback)
+      return nextFrame
+    })
+    vi.stubGlobal('cancelAnimationFrame', (id: number) => { frames.delete(id) })
+    class ResizeObserverStub {
+      constructor(callback: ResizeObserverCallback) {
+        notify = () => { callback([], this as unknown as ResizeObserver) }
+      }
+
+      observe = vi.fn()
+      disconnect = vi.fn()
+    }
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub)
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ top: 0, bottom: 40 } as DOMRect)
+    const h = makeHarness({
+      nodes: [
+        userInTurn(1, 'first', 1), assistant(2, 'first answer', 1),
+        userInTurn(4, 'second', 2), assistant(5, 'second answer', 2),
+      ],
+      turnEnds: new Map([[1, 3], [2, 6]]),
+    })
+    const view = render(<h.ChatView {...h.props} />)
+    const scroller = view.container.querySelector('[class*="scroll"]') as HTMLDivElement
+    const metrics = installScrollMetrics(scroller, 1_000, 300)
+    scroller.scrollTop = 700
+    act(() => {
+      const pending = [...frames.values()]
+      frames.clear()
+      for (const callback of pending) callback(0)
+    })
+    rect.mockClear()
+
+    metrics.setHeight(1_200)
+    act(() => { notify?.() })
+    act(() => {
+      const pending = [...frames.values()]
+      frames.clear()
+      for (const callback of pending) callback(0)
+    })
+
+    expect(scroller.scrollTop).toBe(900)
+    expect(view.getByRole('button', { name: '跳转到第 2 轮' }).getAttribute('aria-current')).toBe('true')
+    expect(rect).not.toHaveBeenCalled()
   })
 
   it('entering the at-bottom threshold does not snap the remaining scroll distance', () => {

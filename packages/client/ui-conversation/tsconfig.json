@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../../vendor/schemastery"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {
@@ -76,9 +79,6 @@
     },
     {
       "path": "../../settings/settings"
-    },
-    {
-      "path": "../../runtime-diagnostics/invariants"
     },
     {
       "path": "../../interaction/permission-presets"

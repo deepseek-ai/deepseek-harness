@@ -40,6 +40,7 @@ The group splits into four families: durable storage (persistence seam, backends
 | [`session-projection/`](session-projection/README.md) | Defines and drives projection units that fold committed events into whole current values | `ctx.sessionProjections` |
 | [`session-projection-cache/`](session-projection-cache/README.md) | Persists projection checkpoints so cold reads skip full log loads | `ctx.sessionProjectionCache` |
 | [`session-stats/`](session-stats/README.md) | Serves whole-log conversation counts and wall times through the `sessionStats` unit | registers on `ctx.sessionProjections` |
+| [`session-turn-outline/`](session-turn-outline/README.md) | Serves the whole-log turn outline (turn, `turn/start` seq, prompt preview) through the `turnOutline` unit | registers on `ctx.sessionProjections` |
 
 ### Titles
 

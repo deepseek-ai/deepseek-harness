@@ -76,7 +76,7 @@ The client is two layers over one wire: `DeepSeekHarness` (owned runs) over `Har
 | [`src/dispose.ts`](src/dispose.ts) | Private teardown ladder: stdin EOF → SIGTERM → SIGKILL to actual exit |
 | [`src/types.ts`](src/types.ts) | Launch and timeout options, notification shapes, `RunResult` |
 | [`src/index.ts`](src/index.ts) | Consumer interface: the two client layers and caller-facing types |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant — the peer is a separate runtime process) |
+| — | No runtime invariant companion is published; this client library runs outside any harness context (its peer is a separate runtime process); the runtime's own packages own the event-stream relations. |
 
 ### Owned activity flow
 

@@ -137,3 +137,5 @@ Host 与 Client 是两个独立的 TypeScript 程序。直接项目引用确定�
 无。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。这是运行于 Cordis 之外的源码分析器与构建时 emitter；model snapshot、可执行 artifact 与消费包 typecheck 强制其输出约定。

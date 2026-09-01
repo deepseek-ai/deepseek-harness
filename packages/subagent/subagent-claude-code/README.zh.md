@@ -193,3 +193,5 @@ Claude Code 子级会在一个全新的 SDK query 中接收独立文本任务。
 - **版本锁定的协议**——运行时依赖锁定为 Agent SDK 0.3.241；升级会锁定新的 SDK 版本，并需要重新运行无密钥真实产品与 loader 组合证据。
 
 </details>
+
+**运行时不变式：** 不发布伴生入口。生命周期配对属于共享 subagent service，process-tree 所有权属于 subprocess service。

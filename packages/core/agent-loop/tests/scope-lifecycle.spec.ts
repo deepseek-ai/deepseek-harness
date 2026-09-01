@@ -781,7 +781,7 @@ describe('agent scope lifecycle', () => {
     expect(statuses).toEqual([])
     expect(observerSawLive).toBe(true)
     expect(scopeDisposed).toBe(true)
-    expect(announced.session.events).toEqual([])
+    expect(announced.session.snapshotEvents()).toEqual([])
     expect(ctx.agents.get(SessionId('session-start-dispose-s'))).toBeUndefined()
     expect(ctx.sessions.get(SessionId('session-start-dispose-s'))).toBeUndefined()
     await ctx.fiber.dispose()
@@ -1086,9 +1086,9 @@ describe('agent scope lifecycle', () => {
     // are empty and nothing still drives the detached session.
     expect(ctx.agents.get(agent.id)).toBeUndefined()
     expect(ctx.sessions.get(agent.id)).toBeUndefined()
-    const eventsAfter = agent.session.events.length
+    const eventsAfter = agent.session.snapshotEvents().length
     await new Promise(resolve => setTimeout(resolve, 30))
-    expect(agent.session.events.length).toBe(eventsAfter)
+    expect(agent.session.snapshotEvents().length).toBe(eventsAfter)
     await ctx.fiber.dispose()
   })
 

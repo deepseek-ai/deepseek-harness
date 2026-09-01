@@ -90,3 +90,5 @@ These limits define the current model surface. They are current package constrai
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. A single command contribution registration whose disposal is proven by the HMR-safety spec — it emits no cordis events and owns no cross-plugin mutable state.

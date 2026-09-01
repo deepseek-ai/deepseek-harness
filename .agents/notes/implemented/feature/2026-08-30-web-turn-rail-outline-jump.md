@@ -1,0 +1,35 @@
+# Agent Note: Full-session turn rail with outline projection and jump paging
+
+Status: implemented
+
+English | [中文](2026-08-30-web-turn-rail-outline-jump.zh.md)
+
+## Problem
+
+The web chat's turn rail derived its marks from the loaded event window, and the window is a paged suffix of the log (50-message tail, `Load earlier` per page). In a long session the rail therefore named only the most recent turns: history that had not been paged in was invisible to navigation, unreachable except by clicking `Load earlier` repeatedly, and the rail squeezed whatever it did show into a fixed frame by compressing mark spacing to percentages, so a many-turn session degenerated into an unreadable dense strip.
+
+## Decision
+
+Three cooperating pieces, each useful alone.
+
+**Data: the `turnOutline` session projection.** `packages/session/session-turn-outline` registers one pure fold on `ctx.sessionProjections`: every `turn/start` appends an entry (skipping boundaries that do not advance the turn number, keeping the outline strictly increasing), the turn's first human `user/message` fills the prompt preview, and the newest text-bearing `assistant/message` buffers a response draft that `turn/end` commits (`turn/end` itself carries no text). Preview budgets mirror the rail card's clamps — one prompt line at 50 characters, up to three response lines at 120, an ellipsis marking a clip — and match the loaded-turn previews so a turn shows the same words before and after its events load. The wire value is the bare entry array so draft-only state changes keep its identity, and the feed's identity gate (below) then holds pushes to three per turn: boundary, prompt, settled response. The value rides the existing projection carriers — tail-page seed, `session/projection` control frames, projcache — and the web-app bundle mounts the plugin. `seq` is the `turn/start` event seq: the loop logs it before the turn's prompt and steps, so paging a window back through that seq loads the whole turn.
+
+**Change-feed identity gate (session-projection).** Each live unit cell keeps `[previousView, currentView]` raw outputs. When a state reference changes, the drive shifts current to previous; while a change listener exists it computes `view(nextState)` once, stores current, and emits only when the two outputs differ by `Object.is`. Without listeners, current becomes `undefined` without evaluating `view`, so the first later computed value publishes conservatively; catch-up folding invalidates current in the same way. This lets a unit buffer working fields (the response draft) in state behind an identity-stable projection instead of pushing its whole value per streamed assistant message; units whose views build fresh objects per call are unaffected. The alternative — value-equality dedup in the carrier by serialized comparison — is rejected because every quiet change would pay for full serialization.
+
+**Paging: `Session.loadThrough(seq)`.** The session-controller client gains a jump loader beside `loadOlder()`: it loops the existing prepend pager in 200-message pages (`JUMP_PAGE_MESSAGES`) until `baseSeq <= seq`, lowers a shared low-water target when called again mid-jump, stops on a page that leaves `baseSeq` unmoved (the no-progress guard against an empty page still claiming history), and reports busy through the existing `loadingOlder` snapshot bit. No wire change: seqs are dense, so the client computes everything from `beforeSeq` arithmetic.
+
+**View: merge, jump, and the fixed-pitch rail.** `mergeTurnRailItems` (ui-chat, view layer — the conversation snapshot still never carries projection values) unions the outline with the loaded rail items into `TurnRailItem`s discriminated by `anchor: loaded(key) | unloaded(seq)`; loaded wins per turn, and the outline prompt fills a mid-turn window head's empty preview. Activating an unloaded mark releases bottom ownership on the click itself (jumping into history is leaving the live tail; otherwise the pinned-scroll snap racing the first prepend's compensation would call `toBottom` and cancel the jump), holds the reader's place with the existing paging anchor, calls `loadThrough`, and lands after React commits — no height estimation: a mid-paging landing pins the target row as the paging anchor so later chunks and the `Load earlier` button's unmount cannot drift it, and the loader's completion runs one final correction unless the reader already scrolled off the target (settlement otherwise repages once per head movement, then falls back to the nearest rendered turn). The rail itself keeps a fixed 10px pitch: the ladder scrolls inside the old frame geometry behind a hidden scrollbar, gradient fades mark each still-scrollable end, the hover preview compensates the rail scroll, and the active mark keeps itself centred while the pointer is off the rail. Unloaded marks render short and dimmed with a `Load and jump to turn N` label and pulse while their jump pages.
+
+## Alternatives considered
+
+**Sparse or segmented windows** (load only the target turn's neighbourhood): rejected — window contiguity is the foundation the transport validation, assembler, timeline, and scroll anchoring all share; a discontiguous window is a different architecture, deferred until sessions outgrow full paging.
+
+**A `minSeq` page bound on the wire** (one targeted request instead of the client loop): rejected for v1 — the loop needs no protocol change, yields natural per-chunk progress, and Codex's TUI uses the same recursive page-pull shape for its jump-to-start; the single unbounded frame can be revisited if round trips ever dominate.
+
+**A dedicated outline RPC**: rejected — the projection seam already provides the consistency cut with the tail page, live push, persistence, and capability-absence fallback that a bespoke endpoint would have to rebuild.
+
+**Estimated row heights for jump positioning**: rejected — transcript rows vary wildly (tool cards, images, code), so estimation jitters; landing after commit is exact and matches Codex's deferred `pending_scroll_chunk` realization.
+
+## Consequences
+
+The rail is now session-scoped rather than window-scoped, at the cost of a whole-value projection that grows with the session (up to ~600 bytes per turn at full CJK preview budgets, pushed at most three times per turn); splitting previews into an on-demand read is deferred until multi-thousand-turn sessions need it. A deep jump still loads every intervening page — the contiguous-window contract — so jumping to turn 1 of a huge session materializes the whole transcript, as manual paging always did. Assemblies without the projection plugin keep the old loaded-only rail. Coverage: projection unit + Loader-composition + HMR specs in the new package, `loadThrough` loop specs in session-controller, merge and jump specs in ui-chat (including the settle correction and busy lifecycle), and a browser contract in the chat-scroll e2e that drives a keyboard jump from an 88-turn fixture's tail to its unloaded first turn and asserts the landing geometry and rail fades.

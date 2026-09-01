@@ -134,7 +134,7 @@ kind: "package-reference"
 | [`src/summarizer.ts`](src/summarizer.ts) | 默认 `ctx.llm.stream()` 摘要、检查点框定、安全摘要投影 |
 | [`src/config.ts`](src/config.ts) | 加载时验证与路由模型策略解析 |
 | [`src/types.ts`](src/types.ts) | `BasicCompactionConfig` 与已解析策略词汇 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；持久标记对可在会话日志中观察） |
+| — | 不发布运行时不变式伴生入口；持久标记对可在会话日志中观察。 |
 
 </details>
 
