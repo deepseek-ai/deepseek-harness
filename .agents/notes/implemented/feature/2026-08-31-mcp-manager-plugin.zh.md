@@ -14,7 +14,7 @@ Status: implemented
 
 **配置即设置命名空间，CRUD 不需要新 API。** 管理器经 `installSection` 注册 `mcp`：自身组合条目是基层（可被用户文档覆盖、停用，但不可删除），用户层添加与覆盖条目，管理界面的每次写入都是带 revision 围栏的普通设置变更。外部 `settings.yaml` 编辑与 Remote 写入走同一条提交后 watch 的路径。
 
-**扁平条目 schema，跨字段校验。** 条目是带 `transport` 判别字段的扁平结构，`validateServers` 在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下，且拒绝会点名出错字段，union 的形状错误做不到。
+**扁平条目 schema，跨字段校验。** 条目是带 `transport` 判别字段的扁平结构，写入期校验在写入处强制逐传输要求与拒绝（缺 `command`/`url`、跨传输字段、模板写错）——schema 合法但不可执行的条目永远不会被存下，且拒绝会点名出错字段，union 的形状错误做不到。
 
 **子实例是插件实例，不是库调用。** 每个启用条目经 `ctx.plugin()` 在管理器 fiber 下挂载 `dsh-mcp-client`。这复用了经过测试的激活/销毁语义，让 `serverName` 预留与静态组合实例正确冲突（以带可操作消息的 `failed`/`load` 状态浮出），并让管理器销毁经普通 fiber 收卷解除每个实例及其工具。
 

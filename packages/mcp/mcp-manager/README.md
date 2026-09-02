@@ -97,7 +97,7 @@ This section explains the design decisions and points at the code; the observabl
 - **Configuration is the only truth.** The manager never stores server state of its own: the resolved settings value (schema defaults → composition base → user layer) is read fresh for every decision, so external file edits and management-surface writes take the same path.
 - **One serialized operation tail.** Reconciles, restarts, and credential rebuilds queue on one chain, so two lifecycle operations can never interleave one instance's unmount/mount, and disposal drains the tail before unwinding.
 - **Whole-entry identity.** Any field change except `enabled` rebuilds the instance — instance config is captured at mcp-client load, so an in-place update cannot exist. `enabled` alone toggles mounting.
-- **A flat entry schema, validated cross-field.** `validateServers` enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not.
+- **A flat entry schema, validated cross-field.** Write-time validation enforces the per-transport rules a union would have expressed and rejects them at the write, naming the offending field where a union's shape error would not.
 - **Connection handling stays in mcp-client.** Children are ordinary plugin instances mounted under the manager's fiber: `serverName` reservations collide correctly with statically composed instances, teardown unwinds tools, and the manager reads each instance's status through `connectionStatusOf` rather than duplicating supervision.
 
 ### Source map

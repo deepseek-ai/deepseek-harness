@@ -125,7 +125,7 @@ function templatedStrings(name: string, entry: McpManagedServerEntry): Array<[va
  * silently disabling its server.
  * @param config - the resolved manager configuration.
  */
-export function validateServers(config: Config): void {
+function validateServers(config: Config): void {
   for (const [name, entry] of Object.entries(config.servers)) {
     const path = `${MCP_SETTINGS_NAMESPACE}.servers.${name}`
     if (!SERVER_NAME_PATTERN.test(name)) {
@@ -200,6 +200,7 @@ declare module '@deepseek-ai/cordis' {
  * interleave one instance's unmount/mount.
  */
 export default class McpServerManager extends Service {
+  /** Schema for {@link Config}; doubles as the `mcp` settings-section schema. */
   static Config = z.object({
     servers: z.dict(ServerEntrySchema).default({}),
   }) as unknown as z<ConfigInput, Config>
@@ -256,7 +257,7 @@ export default class McpServerManager extends Service {
       }
     })
     this.ctx.inject(['settings'], (settingsCtx) => {
-      settingsCtx.settings.installSection(this.ctx, MCP_SETTINGS_NAMESPACE, ConfigSchema, this.config, {
+      settingsCtx.settings.installSection(this.ctx, MCP_SETTINGS_NAMESPACE, McpServerManager.Config, this.config, {
         setSource: (current) => {
           this.currentConfig = current
         },
@@ -567,6 +568,3 @@ export default class McpServerManager extends Service {
     })
   }
 }
-
-/** Schema for {@link Config}; doubles as the `mcp` settings-section schema. */
-export const ConfigSchema: z<ConfigInput, Config> = McpServerManager.Config

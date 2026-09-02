@@ -53,7 +53,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 }))
 
 import { apply as applyMcpClient } from '@deepseek-ai/dsh-mcp-client'
-import McpServerManager, { ConfigSchema, validateServers } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
+import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import type { Config, McpManagedServerStatus } from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 import { MemorySettings } from './memory-settings.ts'
 
@@ -529,23 +529,23 @@ describe('entry schema bounds', () => {
     [{ healthCheckIntervalMs: 500 }],
   ])('refuses %j at the write instead of at mount', (patch) => {
     expect(() => {
-      ConfigSchema({ servers: { a: { transport: 'stdio', command: 'echo', ...patch } } })
+      McpServerManager.Config({ servers: { a: { transport: 'stdio', command: 'echo', ...patch } } })
     }).toThrow()
   })
 
   it('accepts in-bounds overrides', () => {
     expect(() => {
-      ConfigSchema({ servers: { a: { transport: 'stdio', command: 'echo', startupTimeoutMs: 5_000, healthCheckIntervalMs: 15_000 } } })
+      McpServerManager.Config({ servers: { a: { transport: 'stdio', command: 'echo', startupTimeoutMs: 5_000, healthCheckIntervalMs: 15_000 } } })
     }).not.toThrow()
   })
 })
 
-describe('validateServers', () => {
+describe('entry validation at construction', () => {
   const base = (servers: Record<string, unknown>): Config => ({ servers }) as Config
 
   it('accepts a well-formed stdio and streamable-http pair', () => {
     expect(() => {
-      validateServers(base({
+      new McpServerManager(new Context(), base({
         local: { transport: 'stdio', command: 'echo', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true },
         remote: { transport: 'streamable-http', url: 'http://localhost:1', command: '', args: [], env: {}, cwd: '', headers: {}, enabled: true },
       }))
@@ -569,7 +569,7 @@ describe('validateServers', () => {
     [{ a: { transport: 'stdio', command: 'x', url: '', args: [], env: {}, cwd: '', headers: {}, enabled: true, reconnect: { enabled: true, initialDelayMs: 5_000, maxDelayMs: 100, maxAttempts: 3 } } }, /initialDelayMs must be less than or equal to maxDelayMs/],
   ])('rejects %j', (servers, expected) => {
     expect(() => {
-      validateServers(base(servers))
+      new McpServerManager(new Context(), base(servers))
     }).toThrow(expected)
   })
 })
