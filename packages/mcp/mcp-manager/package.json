@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-mcp-manager",
   "description": "MCP server manager: a settings-driven fleet of mcp-client instances with runtime status, restart, and probe",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },
