@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web",
   "description": "Abstract web access capability seam (ctx.web) for the DeepSeek Harness — search/fetch provider registry, registration-order-independent selection, request/result vocabulary, and the WebError taxonomy",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },

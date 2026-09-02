@@ -49,7 +49,7 @@ async function setup(script: Script) {
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(fork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent }
 }
 
@@ -86,7 +86,8 @@ describe('dsh-subagent-fork-in-process', () => {
     const child = ctx.agents.get(run.id)!
     // Only the child's own turn — no seeded parent turns.
     expect(child.session.snapshotEvents().filter(e => e.type === 'turn/end')).toHaveLength(1)
-    expect(child.session.header.seedLength).toBeUndefined()
+    expect(child.session.header.isSeeded).toBe(false)
+    expect(child.session.inheritedEventCount).toBe(0)
     await run.dispose()
   })
 
@@ -101,7 +102,8 @@ describe('dsh-subagent-fork-in-process', () => {
     const run = await start(ctx, 'fork', { prompt: [{ type: 'text', text: 'child q' }], parent })
     await run.result
     const child = ctx.agents.get(run.id)!
-    expect(child.session.header.seedLength).toBe(parentPrefixLen)
+    expect(child.session.header.isSeeded).toBe(true)
+    expect(child.session.inheritedEventCount).toBe(parentPrefixLen)
     expect(child.session.snapshotEvents().slice(0, parentPrefixLen).at(-1)?.type).toBe('turn/end')
     expect(child.session.snapshotEvents().slice(0, parentPrefixLen).filter(e => e.type === 'turn/end')).toHaveLength(2)
     await run.dispose()
@@ -126,10 +128,10 @@ describe('dsh-subagent-fork-in-process', () => {
     expect(seededUser).toBeDefined()
     // Lineage stamped.
     expect(child.session.header.parentSession).toBe(parent.session.header.id)
-    // The seed boundary is recorded on the header (= the seeded prefix length),
-    // so a reload / replay harness can tell the inherited prefix from the
-    // child's own events.
-    expect(child.session.header.seedLength).toBe(parentPrefixLen)
+    // Logical metadata records lineage while Session state retains the exact
+    // inherited cut for reload and replay.
+    expect(child.session.header.isSeeded).toBe(true)
+    expect(child.session.inheritedEventCount).toBe(parentPrefixLen)
     await run.dispose()
   })
 

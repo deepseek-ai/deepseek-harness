@@ -1,6 +1,7 @@
 /** Package-owned invariants for DeepSeek session-log acceptance watermarks. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type {} from './types.ts'
@@ -16,12 +17,17 @@ export const inject = ['invariants']
 function validateDeliveryAccepted(session: Session, event: SessionEvent<'session-log-deepseek/delivery-accepted'>, fail: InvariantFailure): void {
   const { sessionId, throughSeq } = event.data
   const inherited = session.header.parentSession !== undefined
-    && session.header.seedLength !== undefined
-    && event.seq < session.header.seedLength
+    && !session.isOwnSeq(event.seq)
   if (sessionId !== session.id && !inherited) {
     fail('a non-inherited session-log-deepseek/delivery-accepted event must name its containing session')
   }
-  if (!Number.isSafeInteger(throughSeq) || throughSeq < 0 || throughSeq >= event.seq) {
+  let acceptedSeq: ReturnType<typeof SessionSeq>
+  try {
+    acceptedSeq = SessionSeq(throughSeq)
+  } catch {
+    fail(`session-log-deepseek/delivery-accepted throughSeq must identify an earlier event, got ${throughSeq} at seq ${event.seq}`)
+  }
+  if (acceptedSeq >= event.seq) {
     fail(`session-log-deepseek/delivery-accepted throughSeq must identify an earlier event, got ${throughSeq} at seq ${event.seq}`)
   }
 }

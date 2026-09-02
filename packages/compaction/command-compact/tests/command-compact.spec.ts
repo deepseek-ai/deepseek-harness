@@ -12,19 +12,19 @@ import {
   type CompactionTrigger,
   type ManualCompactAgentContext,
 } from '@deepseek-ai/dsh-compaction'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import * as commandCompact from '@deepseek-ai/dsh-command-compact'
 
 const COMPACTION_ID = CompactionId('command-compact-test')
 
 const RESULT: CompactionResult = {
   compactionId: COMPACTION_ID,
-  startSeq: 1,
-  summarySeq: 2,
-  endSeq: 3,
+  startSeq: SessionSeq(1),
+  summarySeq: SessionSeq(2),
+  endSeq: SessionSeq(3),
   summary: [{ type: 'text', text: 'summary' }],
-  shadowedRange: { start: 1, end: 7 },
-  shadowedSeqs: [1, 3, 7],
+  shadowedRange: { start: SessionSeq(1), end: SessionSeq(7) },
+  shadowedSeqs: [SessionSeq(1), SessionSeq(3), SessionSeq(7)],
   shadowedTokenCount: 42,
 }
 

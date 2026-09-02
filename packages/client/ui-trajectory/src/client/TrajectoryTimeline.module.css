@@ -3,7 +3,7 @@
   z-index: 1;
   isolation: isolate;
   flex: none;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   user-select: none;
 }
 
@@ -21,7 +21,7 @@
 
 .labels {
   position: relative;
-  border-right: 1px solid var(--dsw-alias-border-l1);
+  border-right: 0.5px solid var(--dsw-alias-border-l1);
   color: var(--dsw-alias-label-caption);
   font: var(--dsw-font-xs-13);
   font-size: 10px;
@@ -146,7 +146,7 @@
   top: 0;
   bottom: 0;
   left: var(--trajectory-turn-left);
-  width: 1px;
+  width: 0.5px;
   background: var(--dsw-alias-border-l2);
 }
 

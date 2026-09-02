@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings",
   "description": "Settings domain base plugin: the settings-namespace scope service and the canonical settings slot-type contract",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },

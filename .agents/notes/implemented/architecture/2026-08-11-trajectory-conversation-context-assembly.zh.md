@@ -74,7 +74,7 @@ Context 迁移与下列表现层优化解决的是不同成本。这些优化保
 | 后继 Assistant 查找 | 一次反向遍历为每个输入位置记录后续 Assistant | 原先重复向前查找的最坏复杂度从 `O(C²)` 降为 `O(C)` |
 | Group duration | 以固定十进制分组替代固定英文数字形态下的 `toLocaleString('en-US')` | 复杂度仍与 Group 数线性相关，但重复 render 路径不再调用 Intl formatter |
 
-展示 memo 与搜索索引彼此独立。搜索必须覆盖屏幕外 record，并允许实时变化延迟一个 throttle 周期；Table 必须立即更新发生变化的可见 record，不能继承索引的提交节奏。
+展示 memo 与搜索索引彼此独立。搜索覆盖当前 React 可见历史窗口中的屏幕外 record，并允许实时变化延迟一个 throttle 周期；Table 必须立即更新发生变化的可见 record，不能继承索引的提交节奏。
 
 ## 考虑过的替代方案
 
@@ -88,7 +88,7 @@ Context 迁移与下列表现层优化解决的是不同成本。这些优化保
 
 **用通用 Conversation Node 替换 Trajectory stage。** 不予采纳：stage 为单一视图组织 Request、计时、schema 和表格 layout。把它变成引擎约定会限制未来的朴素 Session-log 视图，并把视图专属组合重新放回 Client Runtime。
 
-**在展示与搜索之间共享一套 Markdown cache。** 不予采纳：展示要求立即更新且受 viewport 约束，搜索则覆盖全部已加载 record，并有意批量提交更新。共享 cache 会把两个无关消费方的正确性与调度节奏耦合起来。
+**在展示与搜索之间共享一套 Markdown cache。** 不予采纳：展示要求立即更新且受 viewport 约束，搜索则覆盖全部 React 可见 record，并有意批量提交更新。共享 cache 会把两个无关消费方的正确性与调度节奏耦合起来。
 
 ## 验证
 
@@ -100,7 +100,7 @@ Trajectory Definition 与 Builder 测试固定 Assistant streaming 与 interrupt
 
 Trajectory 业务组装的成本随变化页面或 keyed Context 增长，不再从完整原始 Event 窗口重新开始。target 自有 Definition 可以独立于 Chat 演进，同时继续共享一份 Session 窗口和一套生命周期规则。steering 会在实际所属 Step 位置成为一等 Trajectory record，不需要向 Session 增加 steering 专属状态。
 
-首次激活后，保留的 stage-oriented Builder 仍会执行与已物化 Trajectory contribution 数量成正比的工作，并可能在发布时排序。激活前，target 保留 Context State 和一个 target 索引，但不保留 Builder、已物化 Node 或 snapshot。输入 layout 变化时，搜索索引仍会执行一次轻量线性签名检查。
+首次激活后，保留的 stage-oriented Builder 仍会执行与已物化 Trajectory contribution 数量成正比的工作，并可能在发布时排序。激活前，target 保留 Context State 和一个 target 索引，但不保留 Builder、已物化 Node 或 snapshot。每次挂载 Trajectory 视图时，React layout、timeline 与搜索数据都锚定在当前尾部的 50 个 target Node；实时 append 会扩展该窗口，现有更早历史操作则先扩展其前缀，再请求下一个 Session 页面。如果 replacement window 不再包含先前的尾锚，同一次 render 会以替换窗口的最新 Node 为边界，并把该节点采纳为后续 append 的新锚。请求编号与累计用量仍从完整的驻留 snapshot 派生。输入 layout 变化时，搜索索引仍会执行一次轻量线性签名检查。
 
 Definition 作者必须提供稳定的协议标识。缺少必要 ID 的旧 Event 可能不会出现在受影响的 Trajectory 业务视图中；与合并无关记录或让历史加载失败相比，这是更安全的退化方式。要求完整展示的生产方必须记录该标识。
 

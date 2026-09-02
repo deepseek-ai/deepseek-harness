@@ -14,6 +14,7 @@
   padding: 2px 8px;
   border: none;
   border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-alias-state-warn-tertiary);
   color: var(--dsw-alias-state-warn-label);
   font-size: 13px;

@@ -7,6 +7,8 @@ import SessionStore, {
   Session,
   SessionEvent,
   SessionId,
+  SessionLogOffset,
+  SessionSeq,
   snapshotSessionEvent,
 } from '@deepseek-ai/dsh-session'
 import type { CreateSessionOptions, SessionEventType, SessionHeader, SessionSurface } from '@deepseek-ai/dsh-session'
@@ -305,20 +307,20 @@ describe('Session', () => {
   it('snapshots message events without validating plugin-owned block details', () => {
     const boundary = snapshotSessionEvent({
       type: 'turn/start',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: { turn: 1 },
     })
     expect(boundary).toEqual({
       type: 'turn/start',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: { turn: 1 },
     })
 
     const extended = snapshotSessionEvent({
       type: 'user/message',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       surfaceOp: 'append',
       data: {
@@ -374,7 +376,7 @@ describe('Session', () => {
   it('round-trips a non-empty reasoning effort and rejects invalid durable values', () => {
     const valid = {
       type: 'request/header',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: {
         header: {
@@ -403,7 +405,7 @@ describe('Session', () => {
   it('round-trips adapter-default markers and rejects invalid durable values', () => {
     const valid = {
       type: 'request/header',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: {
         header: {
@@ -639,7 +641,7 @@ describe('Session', () => {
   it('rejects an exotic seed event shell before spreading erases its prototype', () => {
     class SeedEvent {
       readonly type = 'turn/start' as const
-      readonly seq = 0
+      readonly seq = SessionSeq(0)
       readonly time = 1
       readonly data = { turn: 1 }
     }
@@ -810,8 +812,8 @@ describe('Session', () => {
   it('rejects exotic surface metadata before cloning can erase its prototype', () => {
     class ReplaceOp {
       readonly op = 'replace' as const
-      readonly start = 0
-      readonly end = 0
+      readonly start = SessionSeq(0)
+      readonly end = SessionSeq(0)
     }
     const session = Session.create(SessionId('append-exotic-metadata'))
 
@@ -892,7 +894,7 @@ describe('Session', () => {
     )).toThrow(/not surface-eligible and cannot carry surfaceOp/)
     expect(() => Session.create(SessionId('non-surface-metadata-seed'), [{
       type: 'turn/start',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: { turn: 1 },
       surfaceOp: 'append',
@@ -903,7 +905,7 @@ describe('Session', () => {
   it('deep-freezes seeded and appended event snapshots', () => {
     const seeded = Session.create(SessionId('seed-frozen'), [{
       type: 'turn/start',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1,
       data: { turn: 1 },
     }])
@@ -941,7 +943,8 @@ describe('Session', () => {
       version: SESSION_FORMAT_VERSION,
       id: SessionId('deep-restore'),
       createdAt: 1,
-    })).not.toThrow()
+      isSeeded: false,
+    }, SessionLogOffset(0))).not.toThrow()
 
     let current: unknown = event
     let frozenNodes = 0
@@ -979,11 +982,11 @@ describe('Session', () => {
     const start = session.append('turn/start', { turn: 1 })
     const end = session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
 
-    expect(session.eventAt(0)).toBe(start)
-    expect(session.eventAt(1)).toBe(end)
-    expect(session.eventAt(2)).toBeUndefined()
+    expect(session.eventAt(SessionSeq(0))).toBe(start)
+    expect(session.eventAt(SessionSeq(1))).toBe(end)
+    expect(session.eventAt(SessionSeq(2))).toBeUndefined()
 
-    const range = session.snapshotEvents(1, 2)
+    const range = session.snapshotEvents(SessionLogOffset(1), SessionLogOffset(2))
     expect(range).toEqual([end])
     expect(Object.isFrozen(range)).toBe(true)
 
@@ -998,10 +1001,10 @@ describe('Session', () => {
       createdAt: 123,
       cwd: '/accepted',
       parentSession: SessionId('parent'),
-      seedLength: 2,
+      isSeeded: true,
     }
 
-    const session = Session.create(SessionId('header-owned'), undefined, input)
+    const session = Session.create(SessionId('header-owned'), [], input, SessionLogOffset(0))
     input.cwd = '/caller-mutated'
 
     expect(session.header).toEqual({
@@ -1010,7 +1013,7 @@ describe('Session', () => {
       createdAt: 123,
       cwd: '/accepted',
       parentSession: 'parent',
-      seedLength: 2,
+      isSeeded: true,
     })
     expect(session.header).not.toBe(input)
     expect(Object.isFrozen(session.header)).toBe(true)
@@ -1024,29 +1027,33 @@ describe('Session', () => {
       readonly version = SESSION_FORMAT_VERSION
       readonly id = SessionId('header-invalid')
       readonly createdAt = 123
+      readonly isSeeded = false
     }
 
     expect(() => Session.create(SessionId('header-invalid'), undefined, new ExoticHeader()))
       .toThrow(/not losslessly JSON-serializable/)
-    expect(() => Session.fromRestore(SessionId('header-invalid'), [], new ExoticHeader()))
+    expect(() => Session.fromRestore(SessionId('header-invalid'), [], new ExoticHeader(), SessionLogOffset(0)))
       .toThrow(/not a plain JSON record/)
     for (const header of [null, 1, []]) {
       expect(() => Session.fromRestore(
         SessionId('header-invalid'),
         [],
         header as unknown as SessionHeader,
+        SessionLogOffset(0),
       )).toThrow(/not a plain JSON record/)
     }
     expect(() => Session.create(SessionId('header-invalid'), undefined, {
       version: SESSION_FORMAT_VERSION,
       id: SessionId('header-invalid'),
       createdAt: 123,
+      isSeeded: false,
       parentSession: 1n,
     } as unknown as SessionHeader)).toThrow(/not losslessly JSON-serializable/)
     expect(() => Session.create(SessionId('header-invalid'), undefined, {
       version: SESSION_FORMAT_VERSION,
       id: SessionId('other'),
       createdAt: 123,
+      isSeeded: false,
     })).toThrow(/does not match session id/)
   })
 
@@ -1055,6 +1062,7 @@ describe('Session', () => {
       version: SESSION_FORMAT_VERSION,
       id: SessionId('header-shape'),
       createdAt: 123,
+      isSeeded: false,
     }
     const cases: Array<{ header: unknown; error: RegExp }> = [
       { header: 1, error: /not a plain JSON record/ },
@@ -1064,14 +1072,27 @@ describe('Session', () => {
       { header: { ...base, cwd: 1 }, error: /header cwd must be a string/ },
       { header: { ...base, cwd: 'relative' }, error: /header cwd must be an absolute path/ },
       { header: { ...base, parentSession: 1 }, error: /header parentSession must be a string/ },
-      { header: { ...base, seedLength: '1' }, error: /seedLength must be a non-negative safe integer/ },
-      { header: { ...base, seedLength: 0.5 }, error: /seedLength must be a non-negative safe integer/ },
-      { header: { ...base, seedLength: -1 }, error: /seedLength must be a non-negative safe integer/ },
+      { header: { ...base, isSeeded: 'yes' }, error: /isSeeded must be a boolean/ },
+      { header: { ...base, seedLength: 1 }, error: /invalid field "seedLength"/ },
     ]
 
     for (const { header, error } of cases) {
       expect(() => Session.create(SessionId('header-shape'), undefined, header as SessionHeader)).toThrow(error)
     }
+  })
+
+  it('retains opaque logical header metadata except the physical v0 seed field', () => {
+    const id = SessionId('header-extension')
+    const session = Session.create(id, undefined, {
+      version: SESSION_FORMAT_VERSION,
+      id,
+      createdAt: 123,
+      isSeeded: false,
+      extension: { value: 'kept' },
+    } as SessionHeader)
+
+    expect((session.header as SessionHeader & { extension: { value: string } }).extension)
+      .toEqual({ value: 'kept' })
   })
 
   it('rejects seed records with invalid fixed-envelope fields', () => {
@@ -1275,7 +1296,7 @@ describe('SessionStore', () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
     const session = ctx.sessions.create(SessionId('plain'))
-    expect(session.header).toMatchObject({ version: SESSION_FORMAT_VERSION, id: 'plain' })
+    expect(session.header).toMatchObject({ version: SESSION_FORMAT_VERSION, id: 'plain', isSeeded: false })
     expect(Number.isSafeInteger(session.header.createdAt)).toBe(true)
     expect(session.header.cwd).toBeUndefined()
     expect(session.header.parentSession).toBeUndefined()
@@ -1292,6 +1313,7 @@ describe('SessionStore', () => {
       id: 'child',
       cwd: '/work/project',
       parentSession: 'parent',
+      isSeeded: false,
     })
   })
 
@@ -1320,9 +1342,7 @@ describe('SessionStore', () => {
       { meta: { createdAt: 1.5 }, error: /header createdAt must be a non-negative safe integer/ },
       { meta: { createdAt: -1 }, error: /header createdAt must be a non-negative safe integer/ },
       { meta: { createdAt: Number.MAX_SAFE_INTEGER + 1 }, error: /header createdAt must be a non-negative safe integer/ },
-      { meta: { seedLength: '1' }, error: /seedLength must be a non-negative safe integer/ },
-      { meta: { seedLength: 0.5 }, error: /seedLength must be a non-negative safe integer/ },
-      { meta: { seedLength: -1 }, error: /seedLength must be a non-negative safe integer/ },
+      { meta: { isSeeded: 'yes' }, error: /isSeeded must be a boolean/ },
       { meta: { origin: 'fork' }, error: /origin must be "subagent"/ },
       { meta: { delegationDepth: '1' }, error: /delegationDepth must be a non-negative safe integer/ },
       { meta: { delegationDepth: 0.5 }, error: /delegationDepth must be a non-negative safe integer/ },
@@ -1348,7 +1368,7 @@ describe('SessionStore', () => {
 
   it('a bare Session() constructed without the store still exposes a current-version header', () => {
     const session = Session.create(SessionId('bare'))
-    expect(session.header).toMatchObject({ version: SESSION_FORMAT_VERSION, id: 'bare' })
+    expect(session.header).toMatchObject({ version: SESSION_FORMAT_VERSION, id: 'bare', isSeeded: false })
     expect(typeof session.header.createdAt).toBe('number')
   })
 
@@ -1507,8 +1527,8 @@ describe('SessionStore', () => {
         },
       }),
     }, {
-      surfaceOp: { op: 'replace', start: 2, end: 2 },
-      sourceEventSeqs: [2],
+      surfaceOp: { op: 'replace', start: SessionSeq(2), end: SessionSeq(2) },
+      sourceEventSeqs: [SessionSeq(2)],
     })).toThrow('reject surface candidate')
 
     expect(session.snapshotEvents()).toHaveLength(3)

@@ -1,7 +1,7 @@
 {
   "unit": {
     "name": "session_projcache",
-    "version": 3
+    "version": 5
   },
   "global": null,
   "tables": {
@@ -9,7 +9,9 @@
       "preview-showcase": {
         "identity": {
           "createdAt": 1787472000000,
-          "cwd": "/dsh/workspace"
+          "cwd": "/dsh/workspace",
+          "isSeeded": false,
+          "inheritedEventCount": 0
         },
         "rows": {
           "title": {

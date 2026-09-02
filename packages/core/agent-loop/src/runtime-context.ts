@@ -6,7 +6,7 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContextSnapshotSection } from '@deepseek-ai/dsh-llm'
 import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
-import { isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session'
+import { isReplacementSurfaceEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
 
 const SOURCE = '@deepseek-ai/dsh-system-prompt'
@@ -24,7 +24,7 @@ function textOf(message: UserMessage): string | undefined {
 /** Tracks the last retained runtime-context snapshot without owning its commit. */
 export class RuntimeContextProjection {
   /** `undefined` means no snapshot ever existed; `null` means none is retained. */
-  private retained: { seq: number; text: string | undefined } | null | undefined
+  private retained: { seq: SessionSeq; text: string | undefined } | null | undefined
 
   /**
    * Restore projection state once, then follow authoritative session events.
@@ -34,7 +34,7 @@ export class RuntimeContextProjection {
   constructor(ctx: Context, session: Session) {
     const surface = new Set(session.surface.nodes)
     for (let index = session.seq - 1; index >= 0; index -= 1) {
-      const event = session.eventAt(index)
+      const event = session.eventAt(SessionSeq(index))
       if (event?.type !== 'user/message' || !isOwned(event.data)) continue
       this.retained ??= null
       if (surface.has(event.seq)) {

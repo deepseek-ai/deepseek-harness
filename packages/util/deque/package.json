@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-deque",
   "description": "Zero-dependency circular deque with amortized constant-time end operations and bounded vacant storage",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },

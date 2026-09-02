@@ -1,7 +1,7 @@
 /** Session object lifecycle, event-window transport, commands, and resync behavior. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
@@ -56,7 +56,7 @@ describe('Session open', () => {
 
   it('installs the tail page: cold → loading → open with window and nodes in place', async () => {
     const { api, session } = makeSession()
-    const page = plainTurn(10, 3, '问', '答')
+    const page = plainTurn(SessionSeq(10), 3, '问', '答')
     api.onHistory = () => histResponse(page, true)
     expect(session.getSnapshot().openState).toBe('cold')
     const opening = session.open()
@@ -101,7 +101,7 @@ describe('Session open', () => {
 
   it('lands a packed live record in openState=error instead of crashing the stream loop', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     await session.open()
     expect(session.getSnapshot().openState).toBe('open')
 
@@ -136,10 +136,10 @@ describe('Session open', () => {
     api.onHistory = () => gate.promise
     const opening = session.open()
     // Three live frames land while the opening snapshot is pending; seq 15 overlaps its tail.
-    const page = plainTurn(10, 0, '早', '安')
+    const page = plainTurn(SessionSeq(10), 0, '早', '安')
     const deliveries = [
-      follow(api, ev.turnStart(15, 1)),
-      follow(api, ev.user(16, '插进来的')),
+      follow(api, ev.turnStart(SessionSeq(15), 1)),
+      follow(api, ev.user(SessionSeq(16), '插进来的')),
     ]
     gate.resolve(ok({
       records: entries(page) as never[],
@@ -155,7 +155,7 @@ describe('Session open', () => {
 
 
 describe('live event path', () => {
-  async function opened(events: SessionEvent[] = plainTurn(0, 0, 'a', 'b')) {
+  async function opened(events: SessionEvent[] = plainTurn(SessionSeq(0), 0, 'a', 'b')) {
     const { api, session } = makeSession()
     api.onHistory = () => histResponse(events)
     await session.open()
@@ -165,7 +165,7 @@ describe('live event path', () => {
   it('drops replayed frames at or below the window tail', async () => {
     const { api, session } = await opened()
     const before = session.eventSource.getSnapshot()
-    await follow(api, ev.user(3, '重放'))
+    await follow(api, ev.user(SessionSeq(3), '重放'))
     expect(session.eventSource.getSnapshot()).toBe(before)
   })
 
@@ -173,8 +173,8 @@ describe('live event path', () => {
     const { api, session } = await opened([])
     session.handleBlank(true)
     await Promise.all([
-      follow(api, ev.commandRun(0, 'cmd-perm', 'permission', ' danger-full-access')),
-      follow(api, ev.commandDone(1, 'cmd-perm', 'success', 'preset danger-full-access')),
+      follow(api, ev.commandRun(SessionSeq(0), 'cmd-perm', 'permission', ' danger-full-access')),
+      follow(api, ev.commandDone(SessionSeq(1), 'cmd-perm', 'success', 'preset danger-full-access')),
     ])
     const snapshot = session.getSnapshot()
     expect(eventSeqs(session)).toEqual([0, 1])
@@ -182,11 +182,11 @@ describe('live event path', () => {
   })
 
   it('repairs a seq gap by repulling the tail page instead of appending a hole', async () => {
-    const { api, session } = await opened(plainTurn(0, 0, 'a', 'b')) // tail seq = 5
-    const repaired = [...plainTurn(0, 0, 'a', 'b'), ...plainTurn(6, 1, 'c', 'd')]
+    const { api, session } = await opened(plainTurn(SessionSeq(0), 0, 'a', 'b')) // tail seq = 5
+    const repaired = [...plainTurn(SessionSeq(0), 0, 'a', 'b'), ...plainTurn(SessionSeq(6), 1, 'c', 'd')]
     api.onHistory = () => histResponse(repaired)
     // seq 9 with tail 5 → gap; the event detours to the buffer and one history refetch fires.
-    await follow(api, ev.assistant(9, 1, 'd'))
+    await follow(api, ev.assistant(SessionSeq(9), 1, 'd'))
     await vi.waitFor(() => {
       expect(api.callsOf('session.history')).toHaveLength(1)
     })
@@ -200,8 +200,8 @@ describe('live event path', () => {
 
 describe('paging', () => {
   it('prepends an older page and keeps seq continuity', async () => {
-    const older = plainTurn(0, 0, '旧问', '旧答')
-    const newer = plainTurn(6, 1, '新问', '新答')
+    const older = plainTurn(SessionSeq(0), 0, '旧问', '旧答')
+    const newer = plainTurn(SessionSeq(6), 1, '新问', '新答')
     const { api, session } = makeSession()
     api.onHistory = payload => payload.beforeSeq === undefined
       ? histResponse(newer, true)
@@ -220,9 +220,9 @@ describe('paging', () => {
   it('installs a page without interpreting business replacement metadata', async () => {
     const { api, session } = makeSession()
     api.onHistory = () => histResponse([
-      ev.compactSummary(80, '窗外范围的摘要', 3, 40),
-      ev.compactCheckpoint(81, 80, 3, 40),
-      ev.user(82, '压缩后的新问题'),
+      ev.compactSummary(SessionSeq(80), '窗外范围的摘要', SessionSeq(3), SessionSeq(40)),
+      ev.compactCheckpoint(SessionSeq(81), SessionSeq(80), SessionSeq(3), SessionSeq(40)),
+      ev.user(SessionSeq(82), '压缩后的新问题'),
     ], true)
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
@@ -239,8 +239,8 @@ describe('paging', () => {
   it('drops a discontinuous older page fail-soft (window unchanged, hasMore cleared)', async () => {
     const { api, session } = makeSession()
     api.onHistory = payload => payload.beforeSeq === undefined
-      ? histResponse(plainTurn(10, 1, '新', '页'), true)
-      : histResponse(plainTurn(0, 0, '断', '层'), true) // tail seq 5, but baseSeq is 10 → hole
+      ? histResponse(plainTurn(SessionSeq(10), 1, '新', '页'), true)
+      : histResponse(plainTurn(SessionSeq(0), 0, '断', '层'), true) // tail seq 5, but baseSeq is 10 → hole
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
       await session.open()
@@ -255,9 +255,9 @@ describe('paging', () => {
   })
 
   it('loadThrough pages repeatedly until the window covers the target seq', async () => {
-    const oldest = plainTurn(0, 0, '最旧问', '最旧答')
-    const middle = plainTurn(6, 1, '中问', '中答')
-    const newest = plainTurn(12, 2, '新问', '新答')
+    const oldest = plainTurn(SessionSeq(0), 0, '最旧问', '最旧答')
+    const middle = plainTurn(SessionSeq(6), 1, '中问', '中答')
+    const newest = plainTurn(SessionSeq(12), 2, '新问', '新答')
     const { api, session } = makeSession()
     api.onHistory = (payload) => {
       if (payload.beforeSeq === undefined) return histResponse(newest, true)
@@ -271,7 +271,7 @@ describe('paging', () => {
       void payload
       return gate.promise
     }
-    const jump = session.loadThrough(0)
+    const jump = session.loadThrough(SessionSeq(0))
     expect(session.getSnapshot().loadingOlder).toBe(true)
     gate.resolve(ok(historyValue(middle, true)))
     await jump
@@ -286,21 +286,21 @@ describe('paging', () => {
 
   it('loadThrough is a no-op when the window already covers the target or the session is not open', async () => {
     const { api, session } = makeSession()
-    await session.loadThrough(0) // cold: no-op
+    await session.loadThrough(SessionSeq(0)) // cold: no-op
     expect(api.calls).toEqual([])
-    api.onHistory = () => histResponse(plainTurn(6, 1, 'x', 'y'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)
     await session.open()
     const calls = api.calls.length
-    await session.loadThrough(6) // baseSeq is already 6
-    await session.loadThrough(9) // inside the window
+    await session.loadThrough(SessionSeq(6)) // baseSeq is already 6
+    await session.loadThrough(SessionSeq(9)) // inside the window
     expect(api.calls.length).toBe(calls)
   })
 
   it('loadThrough retargets a running jump to the lowest requested seq and shares its completion', async () => {
-    const oldest = plainTurn(0, 0, 'a', 'b')
-    const middle = plainTurn(6, 1, 'c', 'd')
+    const oldest = plainTurn(SessionSeq(0), 0, 'a', 'b')
+    const middle = plainTurn(SessionSeq(6), 1, 'c', 'd')
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(12, 2, 'e', 'f'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(12), 2, 'e', 'f'), true)
     await session.open()
 
     const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
@@ -308,25 +308,28 @@ describe('paging', () => {
       api.onHistory = () => histResponse(oldest, false)
       return gate.promise
     }
-    const first = session.loadThrough(6)
-    const second = session.loadThrough(0)
+    const first = session.loadThrough(SessionSeq(6))
+    const second = session.loadThrough(SessionSeq(0))
     gate.resolve(ok(historyValue(middle, true)))
     await Promise.all([first, second])
-    expect(eventSeqs(session)).toEqual([...oldest, ...middle].map(event => event.seq).concat([12, 13, 14, 15, 16, 17]))
+    expect(eventSeqs(session)).toEqual([
+      ...[...oldest, ...middle].map(event => event.seq),
+      12, 13, 14, 15, 16, 17,
+    ])
     expect(api.callsOf('session.history')).toHaveLength(2)
   })
 
   it('loadThrough refused by a busy pager leaves no target behind for later jumps', async () => {
-    const middle = plainTurn(6, 1, 'c', 'd')
+    const middle = plainTurn(SessionSeq(6), 1, 'c', 'd')
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(12, 2, 'e', 'f'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(12), 2, 'e', 'f'), true)
     await session.open()
 
     // A plain single-page pull holds the busy flag while the jump is refused.
     const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => gate.promise
     const older = session.loadOlder()
-    await session.loadThrough(0) // refused: must not park seq 0 anywhere
+    await session.loadThrough(SessionSeq(0)) // refused: must not park seq 0 anywhere
     gate.resolve(ok(historyValue(middle, true)))
     await older
 
@@ -335,11 +338,11 @@ describe('paging', () => {
     api.onHistory = (payload) => {
       const start = ((payload as { beforeSeq?: number }).beforeSeq ?? 0) - 3
       return histResponse(
-        [ev.user(start, `u${String(start)}`), ev.user(start + 1, `u${String(start + 1)}`), ev.user(start + 2, `u${String(start + 2)}`)],
+        [ev.user(SessionSeq(start), `u${String(start)}`), ev.user(SessionSeq(start + 1), `u${String(start + 1)}`), ev.user(SessionSeq(start + 2), `u${String(start + 2)}`)],
         start > 0,
       )
     }
-    await session.loadThrough(4)
+    await session.loadThrough(SessionSeq(4))
     // Covered at seq 3 (≤ 4) after one page; a leaked 0 target would add a
     // third call at beforeSeq 3 and pull the head to 0.
     expect(api.callsOf('session.history').map(call => (call as { beforeSeq?: number }).beforeSeq))
@@ -349,16 +352,16 @@ describe('paging', () => {
 
   it('loadThrough stops paging when the event stream generation moves mid-loop', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(12, 2, 'x', 'y'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(12), 2, 'x', 'y'), true)
     await session.open()
 
     const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => gate.promise
-    const jump = session.loadThrough(0)
+    const jump = session.loadThrough(SessionSeq(0))
     // The address is rebuilt while the first page is in flight.
-    api.onHistory = () => histResponse(plainTurn(12, 2, 'x', 'y'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(12), 2, 'x', 'y'), true)
     const rebuilt = session.resync()
-    gate.resolve(ok(historyValue(plainTurn(6, 1, 'c', 'd'), true)))
+    gate.resolve(ok(historyValue(plainTurn(SessionSeq(6), 1, 'c', 'd'), true)))
     await jump
     await rebuilt
     // The stale loop must not page the new generation toward its old target:
@@ -370,22 +373,22 @@ describe('paging', () => {
   it('loadThrough stops on a page that makes no progress instead of looping', async () => {
     const { api, session } = makeSession()
     api.onHistory = payload => payload.beforeSeq === undefined
-      ? histResponse(plainTurn(12, 2, 'x', 'y'), true)
+      ? histResponse(plainTurn(SessionSeq(12), 2, 'x', 'y'), true)
       : histResponse([], true) // empty page still claiming more history
     await session.open()
-    await session.loadThrough(0)
+    await session.loadThrough(SessionSeq(0))
     expect(session.getSnapshot().loadingOlder).toBe(false)
     expect(api.callsOf('session.history')).toHaveLength(1)
   })
 
   it('loadThrough fails soft on a thrown page and clears its busy state', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(12, 2, 'x', 'y'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(12), 2, 'x', 'y'), true)
     await session.open()
     api.onHistory = () => Promise.reject(new Error('page wire down'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
-      await session.loadThrough(0)
+      await session.loadThrough(SessionSeq(0))
       expect(errorSpy).toHaveBeenCalled()
       expect(session.getSnapshot().loadingOlder).toBe(false)
     } finally {
@@ -395,14 +398,14 @@ describe('paging', () => {
 
   it('ignores loadOlder while one is in flight (single request)', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(6, 1, 'x', 'y'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)
     await session.open()
     const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => gate.promise
     const first = session.loadOlder()
     const second = session.loadOlder()
     gate.resolve(ok({
-      records: entries(plainTurn(0, 0, 'a', 'b')) as never[],
+      records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
       hasMore: false,
       modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }))
@@ -618,7 +621,7 @@ describe('rename', () => {
     expect(session.projections.faceOf('title').getSnapshot()).toBe('正名')
     // A stale lower-seq apply (the push-frame path routes into this same
     // store) must not roll the settled value back.
-    session.projections.apply('title', '旧名', 3)
+    session.projections.apply('title', '旧名', SessionSeq(3))
     expect(session.projections.faceOf('title').getSnapshot()).toBe('正名')
   })
 
@@ -652,7 +655,7 @@ describe('remaining branches', () => {
     const { api, session } = makeSession()
     await session.loadOlder() // cold: no-op, zero calls
     expect(api.calls).toEqual([])
-    api.onHistory = () => histResponse(plainTurn(6, 1, 'x', 'y'), true)
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)
     await session.open()
     // err result: window unchanged
     api.onHistory = () => Promise.resolve(err(new RemoteError('gateway/internal', 'x', {})))
@@ -671,7 +674,7 @@ describe('remaining branches', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     try {
       await session.resync()
-      api.onHistory = () => histResponse(plainTurn(6, 1, 'x', 'y'), true)
+      api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'x', 'y'), true)
       await session.resync()
       api.onHistory = () => Promise.reject(new Error('page wire down'))
       await session.loadOlder()
@@ -684,7 +687,7 @@ describe('remaining branches', () => {
 
   it('subscribe delivers snapshot-change notifications and unsubscribes', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     let notified = 0
     const unsubscribe = session.subscribe(() => { notified++ })
     await session.open()
@@ -702,7 +705,7 @@ describe('remaining branches', () => {
     let call = 0
     api.onHistory = () => {
       call++
-      return histResponse(plainTurn(0, 0, 'a', 'b'))
+      return histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     }
     api.followCursor = 11
     await session.open()
@@ -726,17 +729,17 @@ describe('remaining branches', () => {
 
   it('drops live events while cold/error (no window upkeep)', async () => {
     const { api, session } = makeSession()
-    await follow(api, ev.user(0, '冷态帧'))
+    await follow(api, ev.user(SessionSeq(0), '冷态帧'))
     expect(eventSeqs(session)).toEqual([])
     api.onHistory = () => Promise.resolve(err(new RemoteError('gateway/internal', 'x', {})))
     await session.open()
-    await follow(api, ev.user(0, '错态帧'))
+    await follow(api, ev.user(SessionSeq(0), '错态帧'))
     expect(eventSeqs(session)).toEqual([])
   })
 
   it('preserves a Host-reported failure that terminates the live source', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     await session.open()
     const failure = new RemoteError('session/not-found', 'session disappeared', { sessionId: SID })
 
@@ -750,7 +753,7 @@ describe('remaining branches', () => {
 
   it('coalesces queued gap frames behind one repair and exposes a failed repair', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     await session.open()
     const gate = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     let repairs = 0
@@ -759,8 +762,8 @@ describe('remaining branches', () => {
       return gate.promise
     }
     const deliveries = Promise.all([
-      follow(api, ev.user(9, '洞一')),
-      follow(api, ev.user(10, '洞二')),
+      follow(api, ev.user(SessionSeq(9), '洞一')),
+      follow(api, ev.user(SessionSeq(10), '洞二')),
     ])
     await vi.waitFor(() => { expect(repairs).toBe(1) })
     gate.reject(new RemoteError('gateway/internal', 'repair wire down', {}))
@@ -775,7 +778,7 @@ describe('remaining branches', () => {
     const stale = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => stale.promise
     const opening = session.open()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     const resynced = session.resync()
     stale.reject(new Error('stale wire'))
     await Promise.all([opening, resynced])
@@ -787,39 +790,39 @@ describe('remaining branches', () => {
     const stale = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => stale.promise
     const opening = session.open()
-    api.onHistory = () => histResponse(plainTurn(6, 1, '新', '代'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, '新', '代'))
     const resynced = session.resync()
     stale.resolve(ok({
-      records: entries(plainTurn(0, 0, '旧', '代')) as never[],
+      records: entries(plainTurn(SessionSeq(0), 0, '旧', '代')) as never[],
       hasMore: false,
       modelSelection: { provider: 'deepseek-official', model: 'stale' },
     })) // success, but its generation is gone
     await Promise.all([opening, resynced])
-    expect(eventSeqs(session)).toEqual(plainTurn(6, 1, '新', '代').map(event => event.seq))
+    expect(eventSeqs(session)).toEqual(plainTurn(SessionSeq(6), 1, '新', '代').map(event => event.seq))
   })
 
   it('drops a gap repair superseded by a full resync while its pull was in flight', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     await session.open()
     const repairPull = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => repairPull.promise
-    const delivery = follow(api, ev.user(9, '洞'))
+    const delivery = follow(api, ev.user(SessionSeq(9), '洞'))
     await vi.waitFor(() => { expect(api.callsOf('session.history')).toHaveLength(1) })
-    api.onHistory = () => histResponse(plainTurn(6, 1, 'c', 'd'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, 'c', 'd'))
     const resynced = session.resync() // bumps the generation
     repairPull.resolve(ok({
-      records: entries(plainTurn(0, 0, '旧', '页')) as never[],
+      records: entries(plainTurn(SessionSeq(0), 0, '旧', '页')) as never[],
       hasMore: false,
       modelSelection: { provider: 'deepseek-official', model: 'stale' },
     })) // repair result: stale, dropped
     await Promise.all([delivery, resynced])
-    expect(eventSeqs(session)).toEqual(plainTurn(6, 1, 'c', 'd').map(event => event.seq))
+    expect(eventSeqs(session)).toEqual(plainTurn(SessionSeq(6), 1, 'c', 'd').map(event => event.seq))
   })
 
   it('successful cancel leaves no promptError', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     await session.open()
     const result = await session.cancel()
     expect(result.ok).toBe(true)
@@ -833,11 +836,11 @@ describe('remaining branches', () => {
 
   it('carries raw history and follow events through the event feed', async () => {
     const { api, session } = makeSession()
-    const historyCall = ev.toolCall(6, 1, 'h1', 'bash', '{"cmd":"pwd"}')
-    const historyResult = ev.toolResult(7, 1, 'h1', 'done')
+    const historyCall = ev.toolCall(SessionSeq(6), 1, 'h1', 'bash', '{"cmd":"pwd"}')
+    const historyResult = ev.toolResult(SessionSeq(7), 1, 'h1', 'done')
     api.onHistory = () => Promise.resolve(ok({
       records: [
-        ...entries(plainTurn(0, 0, 'a', 'b')),
+        ...entries(plainTurn(SessionSeq(0), 0, 'a', 'b')),
         { type: 'event', event: historyCall },
         { type: 'event', event: historyResult },
       ] as never[],
@@ -849,10 +852,10 @@ describe('remaining branches', () => {
       { type: 'event', event: historyCall },
       { type: 'event', event: historyResult },
     ])
-    const liveCall = ev.toolCall(8, 2, 'l1', 'write', '{"file_path":"a.ts"}')
+    const liveCall = ev.toolCall(SessionSeq(8), 2, 'l1', 'write', '{"file_path":"a.ts"}')
     await follow(api, liveCall)
     expect(windowEntries(session).at(-1)).toEqual({ type: 'event', event: liveCall })
-    const liveResult = ev.toolResult(9, 2, 'l1', 'ok')
+    const liveResult = ev.toolResult(SessionSeq(9), 2, 'l1', 'ok')
     await follow(api, liveResult)
     expect(windowEntries(session).at(-1)).toEqual({ type: 'event', event: liveResult })
   })
@@ -861,7 +864,7 @@ describe('remaining branches', () => {
 describe('resync', () => {
   it('keeps the old feed until the reconnect snapshot, then repairs queued live gaps', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, '旧', '窗'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, '旧', '窗'))
     await session.open()
     const oldWindow = session.eventSource.getSnapshot()
     const replacement = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
@@ -878,17 +881,17 @@ describe('resync', () => {
     expect(publications).toEqual([])
 
     api.onHistory = () => histResponse([
-      ...plainTurn(10, 2, '终', '页'),
-      ev.user(16, '后到低位'),
-      ev.user(17, '后到高位'),
+      ...plainTurn(SessionSeq(10), 2, '终', '页'),
+      ev.user(SessionSeq(16), '后到低位'),
+      ev.user(SessionSeq(17), '后到高位'),
     ])
     const liveDeliveries = Promise.all([
-      follow(api, ev.user(17, '后到高位')),
-      follow(api, ev.user(16, '后到低位')),
+      follow(api, ev.user(SessionSeq(17), '后到高位')),
+      follow(api, ev.user(SessionSeq(16), '后到低位')),
     ])
     expect(session.eventSource.getSnapshot()).toBe(oldWindow)
     replacement.resolve(ok({
-      records: entries(plainTurn(10, 2, '终', '页')) as never[],
+      records: entries(plainTurn(SessionSeq(10), 2, '终', '页')) as never[],
       hasMore: false,
       modelSelection: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
     }))
@@ -906,11 +909,11 @@ describe('resync', () => {
 
   it('rebuilds the window without clearing control state; cold instances no-op', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, 'a', 'b'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, 'a', 'b'))
     await session.open()
     session.handleRunning(true)
     session.handleAgentError('still visible')
-    api.onHistory = () => histResponse([...plainTurn(0, 0, 'a', 'b'), ...plainTurn(6, 1, 'c', 'd')])
+    api.onHistory = () => histResponse([...plainTurn(SessionSeq(0), 0, 'a', 'b'), ...plainTurn(SessionSeq(6), 1, 'c', 'd')])
     await session.resync()
     const snapshot = session.getSnapshot()
     expect(snapshot.openState).toBe('open')
@@ -928,14 +931,14 @@ describe('resync', () => {
     const stale = deferred<Awaited<ReturnType<FakeApiClient['onHistory']>>>()
     api.onHistory = () => stale.promise
     const firstOpen = session.open()
-    api.onHistory = () => histResponse(plainTurn(6, 1, '新', '代'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(6), 1, '新', '代'))
     const resynced = session.resync()
     stale.reject(new Error('dead connection')) // the doomed pre-disconnect request fails late
     await firstOpen
     await resynced
     const snapshot = session.getSnapshot()
     expect(snapshot.openState).toBe('open') // stale failure did not settle the fresh generation into error
-    expect(eventSeqs(session)).toEqual(plainTurn(6, 1, '新', '代').map(event => event.seq))
+    expect(eventSeqs(session)).toEqual(plainTurn(SessionSeq(6), 1, '新', '代').map(event => event.seq))
   })
 
 })
@@ -943,12 +946,12 @@ describe('resync', () => {
 describe('snapshot ownership', () => {
   it('publishes event-window appends without changing an unrelated Session snapshot', async () => {
     const { api, session } = makeSession()
-    api.onHistory = () => histResponse(plainTurn(0, 0, '稳', '定'))
+    api.onHistory = () => histResponse(plainTurn(SessionSeq(0), 0, '稳', '定'))
     await session.open()
     const sessionBefore = session.getSnapshot()
     const windowBefore = session.eventSource.getSnapshot()
     const firstEntry = windowBefore.entries[0]
-    await follow(api, ev.user(6, '追加'))
+    await follow(api, ev.user(SessionSeq(6), '追加'))
     const windowAfter = session.eventSource.getSnapshot()
     expect(session.getSnapshot()).toBe(sessionBefore)
     expect(windowAfter).not.toBe(windowBefore)

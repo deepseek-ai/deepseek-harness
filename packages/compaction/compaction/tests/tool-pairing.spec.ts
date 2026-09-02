@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { createUserMessage, ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import { toolPairingBalancedAfter, toolPairingBalancedBefore } from '@deepseek-ai/dsh-compaction'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionSeq as SessionSeqType } from '@deepseek-ai/dsh-session'
 
 const SURFACE = { surfaceOp: 'append' as const }
 
-function seqOf(session: Session, type: SessionEvent['type'], nth = 0): number {
+function seqOf(session: Session, type: SessionEvent['type'], nth = 0): SessionSeqType {
   return session.snapshotEvents().filter(event => event.type === type)[nth]!.seq
 }
 
-function surfaceSeq(session: Session, seq: number): number {
+function surfaceSeq(session: Session, seq: SessionSeqType): SessionSeqType {
   const current = session.surface.nodes.find(candidate => candidate === seq)
   if (current === undefined) throw new Error(`seq ${seq} is not on the surface`)
   return current
@@ -188,7 +188,7 @@ describe('tool-pairing surface identity', () => {
 
   it('rejects missing seqs before and after, including an empty surface', () => {
     const session = Session.create(SessionId('missing-membership'))
-    const missing = 999
+    const missing = SessionSeq(999)
     expect(() => toolPairingBalancedBefore(session, missing)).toThrow(/surface seq 999 not found/)
     expect(() => toolPairingBalancedAfter(session, missing)).toThrow(/surface seq 999 not found/)
 
@@ -204,14 +204,14 @@ describe('tool-pairing cache refresh', () => {
   it('does no event reads for unchanged or log-only growth, folds only appended nodes, and rebuilds on replace', () => {
     const events: SessionEvent[] = [
       {
-        type: 'user/message', seq: 0, time: 0,
+        type: 'user/message', seq: SessionSeq(0), time: 0,
         data: createUserMessage({
           content: [{ type: 'text', text: 'user' }], source: { kind: 'user' },
         }),
         surfaceOp: 'append',
       },
       {
-        type: 'assistant/message', seq: 1, time: 1,
+        type: 'assistant/message', seq: SessionSeq(1), time: 1,
         data: {
           turn: 1,
           step: 1,
@@ -227,7 +227,7 @@ describe('tool-pairing cache refresh', () => {
         surfaceOp: 'append',
       },
       {
-        type: 'tool/result', seq: 2, time: 2,
+        type: 'tool/result', seq: SessionSeq(2), time: 2,
         data: {
           turn: 1, step: 1,
           message: createToolResultMessage({
@@ -239,7 +239,7 @@ describe('tool-pairing cache refresh', () => {
         surfaceOp: 'append',
       },
     ]
-    const nodes: number[] = [0, 1, 2]
+    const nodes: SessionSeqType[] = [SessionSeq(0), SessionSeq(1), SessionSeq(2)]
     let generation = 0
     let eventReads = 0
     const surface = {
@@ -262,25 +262,25 @@ describe('tool-pairing cache refresh', () => {
     expect(eventReads).toBe(3)
 
     events.push({
-      type: 'turn/end', seq: 3, time: 3, data: { turn: 1, reason: { kind: 'completed' } },
+      type: 'turn/end', seq: SessionSeq(3), time: 3, data: { turn: 1, reason: { kind: 'completed' } },
     })
     expect(toolPairingBalancedAfter(session, nodes[2]!)).toBe(true)
     expect(eventReads).toBe(3)
 
     events.push({
-      type: 'user/message', seq: 4, time: 4,
+      type: 'user/message', seq: SessionSeq(4), time: 4,
       data: createUserMessage({
         content: [{ type: 'text', text: 'tail' }], source: { kind: 'user' },
       }),
       surfaceOp: 'append',
     })
-    nodes.push(4)
+    nodes.push(SessionSeq(4))
     expect(toolPairingBalancedAfter(session, nodes[3]!)).toBe(true)
     expect(eventReads).toBe(4)
 
     events.push(
       {
-        type: 'assistant/message', seq: 5, time: 5,
+        type: 'assistant/message', seq: SessionSeq(5), time: 5,
         data: {
           turn: 2,
           step: 1,
@@ -296,7 +296,7 @@ describe('tool-pairing cache refresh', () => {
         surfaceOp: 'append',
       },
       {
-        type: 'tool/result', seq: 6, time: 6,
+        type: 'tool/result', seq: SessionSeq(6), time: 6,
         data: {
           turn: 2, step: 1,
           message: createToolResultMessage({
@@ -308,18 +308,18 @@ describe('tool-pairing cache refresh', () => {
         surfaceOp: 'append',
       },
     )
-    nodes.push(5, 6)
+    nodes.push(SessionSeq(5), SessionSeq(6))
     expect(toolPairingBalancedAfter(session, nodes[5]!)).toBe(true)
     expect(eventReads).toBe(6)
 
     events.push({
-      type: 'user/message', seq: 7, time: 7,
+      type: 'user/message', seq: SessionSeq(7), time: 7,
       data: createUserMessage({
         content: [{ type: 'text', text: 'replacement' }], source: { kind: 'user' },
       }),
-      surfaceOp: { op: 'replace', start: 0, end: 6 },
+      surfaceOp: { op: 'replace', start: SessionSeq(0), end: SessionSeq(6) },
     })
-    nodes.splice(0, nodes.length, 7)
+    nodes.splice(0, nodes.length, SessionSeq(7))
     generation += 1
     expect(toolPairingBalancedAfter(session, nodes[0]!)).toBe(true)
     expect(eventReads).toBe(7)
@@ -328,19 +328,19 @@ describe('tool-pairing cache refresh', () => {
   it('rebuilds defensively when a same-generation surface entry count regresses', () => {
     const events: SessionEvent[] = [
       {
-        type: 'user/message', seq: 0, time: 0,
+        type: 'user/message', seq: SessionSeq(0), time: 0,
         data: createUserMessage({
           content: [], source: { kind: 'user' },
         }), surfaceOp: 'append',
       },
       {
-        type: 'user/message', seq: 1, time: 1,
+        type: 'user/message', seq: SessionSeq(1), time: 1,
         data: createUserMessage({
           content: [], source: { kind: 'user' },
         }), surfaceOp: 'append',
       },
     ]
-    const nodes: number[] = [0, 1]
+    const nodes: SessionSeqType[] = [SessionSeq(0), SessionSeq(1)]
     const session = {
       eventAt: (seq: number) => events[seq],
       surface: { nodes, replaceGeneration: 0 },
@@ -384,10 +384,10 @@ describe('tool-pairing corrupt surfaces', () => {
   })
 
   it('throws when a current surface seq has no matching event or indexes the wrong event', () => {
-    const missingSeq = 1
+    const missingSeq = SessionSeq(1)
     const missing = {
       eventAt: (seq: number) => [{
-        type: 'user/message', seq: 0, time: 0,
+        type: 'user/message', seq: SessionSeq(0), time: 0,
         data: createUserMessage({
           content: [], source: { kind: 'user' },
         }), surfaceOp: 'append',
@@ -396,10 +396,10 @@ describe('tool-pairing corrupt surfaces', () => {
     } as unknown as Session
     expect(() => toolPairingBalancedBefore(missing, missingSeq)).toThrow(/no matching session event/)
 
-    const mismatchedSeq = 0
+    const mismatchedSeq = SessionSeq(0)
     const mismatched = {
       eventAt: (seq: number) => [{
-        type: 'user/message', seq: 99, time: 0,
+        type: 'user/message', seq: SessionSeq(99), time: 0,
         data: createUserMessage({
           content: [], source: { kind: 'user' },
         }), surfaceOp: 'append',

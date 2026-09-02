@@ -19,7 +19,13 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { ZodType } from 'zod'
-import type { Session, SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import type {
+  Session,
+  SessionEvent,
+  SessionHeader,
+  SessionSeqCursor,
+} from '@deepseek-ai/dsh-session'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -50,9 +56,10 @@ export interface ProjectionDefinition<
   /**
    * State for the empty log and its immutable Session metadata.
    * @param header - immutable metadata for the Session being projected.
+   * @param inheritedEventCount - exact fork-inherited prefix length.
    * @returns the initial state.
    */
-  init(header: SessionHeader): NoInfer<S>
+  init(header: SessionHeader, inheritedEventCount: SessionLogOffset): NoInfer<S>
   /**
    * Pure transition: previous state + one committed event → next state. A
    * unit uninterested in an event MUST return the same state reference — an
@@ -94,7 +101,7 @@ export type ProjectionChangeListener = (
   session: Session,
   key: Extract<keyof SessionProjectionMap, string>,
   value: unknown,
-  seq: number,
+  seq: SessionSeq,
 ) => void
 
 /**
@@ -104,7 +111,7 @@ export type ProjectionChangeListener = (
  */
 export interface ProjectionSnapshot {
   /** Seq of the last event the values reflect; -1 for an empty log. */
-  asOfSeq: number
+  asOfSeq: SessionSeqCursor
   /** Whole current client value per registered key. */
   values: Partial<SessionProjectionMap>
 }
@@ -121,7 +128,7 @@ export interface ProjectionCheckpointRow {
   /** The registering unit's `stateVersion` at fold time. */
   ver: number
   /** Seq of the last event folded into `val`; -1 for the empty log. */
-  seq: number
+  seq: SessionSeqCursor
   /** The unit's internal state — plain JSON per the unit contract. */
   val: unknown
 }
@@ -133,7 +140,7 @@ export type ProjectionCheckpoint = Record<string, ProjectionCheckpointRow>
 interface ErasedDefinition {
   key: string
   stateSchema: { parse(value: unknown): unknown }
-  init(header: SessionHeader): unknown
+  init(header: SessionHeader, inheritedEventCount: SessionLogOffset): unknown
   apply(state: unknown, event: SessionEvent): unknown
   wire: { viewSchema: { parse(value: unknown): unknown }; view(state: unknown): unknown } | undefined
   stateVersion: number
@@ -143,7 +150,7 @@ interface ErasedDefinition {
 interface UnitCell {
   state: unknown
   /** Seq of the last event passed through `apply` (regardless of change). */
-  observedSeq: number
+  observedSeq: SessionSeqCursor
   /** `[previousView, currentView]`; undefined slots mean no cached comparison. */
   readonly views: [unknown, unknown]
 }
@@ -164,6 +171,11 @@ interface Registration {
   readonly cells: WeakMap<Session, UnitCell>
   /** Live registrants sharing this unit; the last one out removes the key. */
   refs: number
+}
+
+/** Convert a log offset to the inclusive cursor immediately before it. */
+function cursorBefore(offset: SessionLogOffset): SessionSeqCursor {
+  return offset === 0 ? -1 : SessionSeq(offset - 1)
 }
 
 /**
@@ -199,7 +211,7 @@ export class SessionProjectionRegistry extends Service {
       for (const registration of this.registrations.values()) {
         if (registration.cells.has(session)) continue
         registration.cells.set(session, {
-          state: registration.def.init(session.header),
+          state: registration.def.init(session.header, session.inheritedEventCount),
           observedSeq: -1,
           views: [undefined, undefined],
         })
@@ -248,7 +260,7 @@ export class SessionProjectionRegistry extends Service {
     const erased: ErasedDefinition = {
       key: definition.key,
       stateSchema: definition.stateSchema,
-      init: header => definition.init(header),
+      init: (header, inheritedEventCount) => definition.init(header, inheritedEventCount),
       apply: (state, event) => definition.apply(state as S, event),
       wire: wire === undefined
         ? undefined
@@ -336,7 +348,7 @@ export class SessionProjectionRegistry extends Service {
       const cell = this.cellFor(registration, session)
       values[registration.def.key] = this.viewCell(registration, cell)
     }
-    return { asOfSeq: session.seq - 1, values }
+    return { asOfSeq: cursorBefore(session.seq), values }
   }
 
   /**
@@ -352,7 +364,7 @@ export class SessionProjectionRegistry extends Service {
     keys?: readonly Extract<keyof SessionProjectionMap, string>[],
   ): ProjectionSnapshot | undefined {
     const values: Record<string, unknown> = {}
-    let asOfSeq: number | undefined
+    let asOfSeq: SessionSeqCursor | undefined
     const selected = keys === undefined ? undefined : new Set<string>(keys)
     for (const registration of this.registrations.values()) {
       if (registration.def.wire === undefined) continue
@@ -360,9 +372,9 @@ export class SessionProjectionRegistry extends Service {
       const cell = registration.cells.get(session)
       if (cell === undefined) continue
       values[registration.def.key] = this.viewCell(registration, cell)
-      asOfSeq = asOfSeq === undefined
-        ? cell.observedSeq
-        : Math.min(asOfSeq, cell.observedSeq)
+      if (asOfSeq === undefined || cell.observedSeq < asOfSeq) {
+        asOfSeq = cell.observedSeq
+      }
     }
     return asOfSeq === undefined ? undefined : { asOfSeq, values }
   }
@@ -406,11 +418,11 @@ export class SessionProjectionRegistry extends Service {
    * yields an end below every watermark and the restore rejects for a full
    * re-read.
    * @param checkpoint - persisted rows for one session (possibly stale or empty).
-   * @returns the seq to hand the persistence `readFrom`, or `undefined`
-   *   when no unit is registered (no read needed — {@link restore} would
-   *   serve empty values regardless).
+   * @returns the offset for the stored-log suffix read (`SessionHandle.read`),
+   *   or `undefined` when no unit is registered (no read needed —
+   *   {@link restore} would serve empty values regardless).
    */
-  restoreFloor(checkpoint: ProjectionCheckpoint): number | undefined {
+  restoreFloor(checkpoint: ProjectionCheckpoint): SessionLogOffset | undefined {
     let floor: number | undefined
     for (const registration of this.registrations.values()) {
       const row = checkpoint[registration.def.key]
@@ -419,7 +431,7 @@ export class SessionProjectionRegistry extends Service {
         : 0
       floor = floor === undefined ? need : Math.min(floor, need)
     }
-    return floor === undefined ? undefined : Math.max(floor - 1, 0)
+    return floor === undefined ? undefined : SessionLogOffset(Math.max(floor - 1, 0))
   }
 
   /**
@@ -460,8 +472,8 @@ export class SessionProjectionRegistry extends Service {
    * Cold read: fold every persisted unit over a stored log suffix, seeding
    * each from its checkpoint row when usable — the one read recipe (cached
    * state + forward tail replay + `view`) applied without a live `Session`.
-   * Call with the events returned by a persistence
-   * `readFrom(id, restoreFloor(checkpoint))` and that same floor as
+   * Call with the stored events at or past `restoreFloor(checkpoint)` (a
+   * `SessionHandle.read` slice) and that same floor as
    * `baseSeq`; the floor's one-below anchor makes the supplied end honest,
    * so a shrunk log is detected here. A row is usable iff its
    * `ver` matches the live unit's `stateVersion`, it does not predate `baseSeq`
@@ -475,6 +487,7 @@ export class SessionProjectionRegistry extends Service {
    * @param events - the stored events with `seq >= baseSeq`, in seq order.
    * @param baseSeq - the seq `events` starts at (its first event's seq when non-empty).
    * @param header - immutable metadata for the Session being restored.
+   * @param inheritedEventCount - exact fork-inherited prefix length supplied to unit initialization.
    * @returns the snapshot cut at the supplied log end (`asOfSeq` is the last
    *   supplied event's seq, `baseSeq - 1` for an empty tail) plus the
    *   refreshed checkpoint rows at that cut, ready for a durable write-back.
@@ -482,11 +495,13 @@ export class SessionProjectionRegistry extends Service {
   restore(
     checkpoint: ProjectionCheckpoint,
     events: readonly SessionEvent[],
-    baseSeq: number,
+    baseSeq: SessionLogOffset,
     header: SessionHeader,
+    inheritedEventCount: SessionLogOffset,
   ):
   { snapshot: ProjectionSnapshot; checkpoint: ProjectionCheckpoint } {
-    const endSeq = events.at(-1)?.seq ?? baseSeq - 1
+    const endSeq: SessionSeqCursor = events.at(-1)?.seq ?? cursorBefore(baseSeq)
+    const beforeBase = cursorBefore(baseSeq)
     const values: Record<string, unknown> = {}
     const refreshed: ProjectionCheckpoint = {}
     for (const registration of this.registrations.values()) {
@@ -494,7 +509,7 @@ export class SessionProjectionRegistry extends Service {
       const row = checkpoint[def.key]
       const usable = row !== undefined
         && row.ver === def.stateVersion
-        && row.seq >= baseSeq - 1
+        && row.seq >= beforeBase
         && row.seq <= endSeq
       if (!usable && baseSeq > 0) {
         throw new Error(
@@ -502,12 +517,14 @@ export class SessionProjectionRegistry extends Service {
           + 'its checkpoint row is missing, version-mismatched, or beyond the supplied log end; re-read from seq 0',
         )
       }
-      let state = usable ? def.stateSchema.parse(row.val) : def.init(header)
-      const from = usable ? row.seq : baseSeq - 1
+      let state = usable
+        ? def.stateSchema.parse(row.val)
+        : def.init(header, inheritedEventCount)
+      const from = usable ? row.seq : beforeBase
       const startIndex = from - baseSeq + 1
       for (let index = startIndex; index < events.length; index++) {
         const event = events[index]
-        const expectedSeq = baseSeq + index
+        const expectedSeq = SessionSeq(baseSeq + index)
         if (event === undefined || event.seq !== expectedSeq) {
           throw new Error(`session projection ${JSON.stringify(def.key)} cannot restore across missing seq ${String(expectedSeq)}`)
         }
@@ -536,9 +553,9 @@ export class SessionProjectionRegistry extends Service {
     session: Session,
     checkpoint: ProjectionCheckpoint,
     events: readonly SessionEvent[],
-    baseSeq: number,
+    baseSeq: SessionLogOffset,
   ): ProjectionSnapshot {
-    const endSeq = events.at(-1)?.seq ?? baseSeq - 1
+    const endSeq: SessionSeqCursor = events.at(-1)?.seq ?? cursorBefore(baseSeq)
     let complete = true
     for (const registration of this.registrations.values()) {
       const current = registration.cells.get(session)
@@ -556,7 +573,13 @@ export class SessionProjectionRegistry extends Service {
       }
       return { asOfSeq: endSeq, values }
     }
-    const restored = this.restore(checkpoint, events, baseSeq, session.header)
+    const restored = this.restore(
+      checkpoint,
+      events,
+      baseSeq,
+      session.header,
+      session.inheritedEventCount,
+    )
     for (const registration of this.registrations.values()) {
       const row = restored.checkpoint[registration.def.key]
       if (row === undefined) continue
@@ -580,9 +603,10 @@ export class SessionProjectionRegistry extends Service {
   private buildCell(
     def: ErasedDefinition,
     header: SessionHeader,
+    inheritedEventCount: SessionLogOffset,
     events: readonly SessionEvent[],
   ): UnitCell {
-    let state = def.init(header)
+    let state = def.init(header, inheritedEventCount)
     for (const event of events) state = def.apply(state, event)
     return { state, observedSeq: (events.at(-1)?.seq ?? -1), views: [undefined, undefined] }
   }
@@ -591,10 +615,15 @@ export class SessionProjectionRegistry extends Service {
   private cellFor(registration: Registration, session: Session): UnitCell {
     let cell = registration.cells.get(session)
     if (cell === undefined) {
-      cell = this.buildCell(registration.def, session.header, session.snapshotEvents())
+      cell = this.buildCell(
+        registration.def,
+        session.header,
+        session.inheritedEventCount,
+        session.snapshotEvents(),
+      )
       registration.cells.set(session, cell)
     } else {
-      this.advanceCell(registration.def, cell, session, session.seq - 1)
+      this.advanceCell(registration.def, cell, session, cursorBefore(session.seq))
     }
     return cell
   }
@@ -604,11 +633,11 @@ export class SessionProjectionRegistry extends Service {
     def: ErasedDefinition,
     cell: UnitCell,
     session: Session,
-    throughSeq: number,
+    throughSeq: SessionSeqCursor,
   ): void {
     if (cell.observedSeq >= throughSeq) return
     for (let seq = cell.observedSeq + 1; seq <= throughSeq; seq++) {
-      const event = session.eventAt(seq)
+      const event = session.eventAt(SessionSeq(seq))
       if (event === undefined || event.seq !== seq) {
         throw new Error(`session projection ${JSON.stringify(def.key)} cannot advance across missing seq ${String(seq)}`)
       }
@@ -618,7 +647,7 @@ export class SessionProjectionRegistry extends Service {
         cell.views[1] = undefined
       }
       cell.state = next
-      cell.observedSeq = seq
+      cell.observedSeq = SessionSeq(seq)
     }
   }
 
@@ -630,10 +659,20 @@ export class SessionProjectionRegistry extends Service {
       if (cell === undefined) {
         // Late build mid-stream: fold history before this event (seq = log
         // index, so the prefix slice is exact), then take the normal gate.
-        cell = this.buildCell(registration.def, session.header, session.snapshotEvents(0, event.seq))
+        cell = this.buildCell(
+          registration.def,
+          session.header,
+          session.inheritedEventCount,
+          session.snapshotEvents(SessionLogOffset(0), SessionLogOffset(event.seq)),
+        )
         registration.cells.set(session, cell)
       } else {
-        this.advanceCell(registration.def, cell, session, event.seq - 1)
+        this.advanceCell(
+          registration.def,
+          cell,
+          session,
+          event.seq === 0 ? -1 : SessionSeq(event.seq - 1),
+        )
       }
       const previousState = cell.state
       const next = registration.def.apply(previousState, event)

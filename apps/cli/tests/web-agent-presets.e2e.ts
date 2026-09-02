@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import { boot, healProfilesModuleFallback, loadOverlayPatches, loadProfile } from '@deepseek-ai/dsh-app-boot'
 import { provideCmdline } from '@deepseek-ai/dsh-cmdline'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -655,9 +655,11 @@ describe('a forked session', () => {
     const inherited = ctx.sessionProjections.stateOf(parent.agent.session, 'agentPreset') ?? undefined
     const child = await ctx.agents.create({
       sessionId: SessionId('preset-fork-child'),
+      seed: [],
+      inheritedEventCount: SessionLogOffset(0),
       meta: {
         parentSession: SessionId('preset-fork-parent'),
-        seedLength: 0,
+        isSeeded: true,
         ...inherited === undefined ? {} : { agentPreset: inherited },
       },
       setup: agentCtx => ctx.agentPresets.mount(agentCtx, inherited).then(() => undefined),
@@ -685,7 +687,7 @@ describe('a delegated child', () => {
     // Exactly what an in-process subagent driver's creation window does.
     const child = await parent.agent.ctx.agents.create({
       sessionId: SessionId('preset-child'),
-      meta: childSessionMeta(parent.agent, 1, 0),
+      meta: childSessionMeta(parent.agent, 1, false),
       setup: (agentCtx) => {
         applyChildComposition(agentCtx, parent.agent, {})
       },
@@ -711,7 +713,7 @@ describe('a delegated child', () => {
     await ctx.agentPresets.recompose(parent.agent.ctx, 'minimal')
     const child = await parent.agent.ctx.agents.create({
       sessionId: SessionId('preset-child-switch'),
-      meta: childSessionMeta(parent.agent, 1, 0),
+      meta: childSessionMeta(parent.agent, 1, false),
       setup: (agentCtx) => {
         applyChildComposition(agentCtx, parent.agent, {})
       },

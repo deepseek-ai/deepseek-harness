@@ -21,7 +21,7 @@
 
 import { z } from 'zod'
 import type { ZodType } from 'zod'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type { TurnOutlineEntry, TurnOutlineState } from './types.ts'
 
@@ -60,7 +60,7 @@ function preview(content: MessageContent, limit: number): string {
 
 const turnOutlineEntriesSchema: ZodType<readonly TurnOutlineEntry[]> = z.array(z.object({
   turn: z.number().int().nonnegative(),
-  seq: z.number().int().nonnegative(),
+  seq: z.number().int().nonnegative().transform(SessionSeq),
   prompt: z.string().max(PROMPT_PREVIEW_LIMIT),
   response: z.string().max(RESPONSE_PREVIEW_LIMIT),
 }).strict()).superRefine((turns, context) => {

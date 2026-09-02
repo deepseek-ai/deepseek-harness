@@ -89,7 +89,7 @@ dsh web --help
 
 ## 共享部署行为
 
-基础组合包挂载原生 DeepSeek 适配器、settings 与凭据提供方、稳定的 `web_search`、仅限公网的 HTTP fetch 提供方，以及按反馈门控的会话遥测。提供方凭据依次从继承环境、`$DSH_HOME/.credentials.yaml`、调用目录的 `.env` 和 `$DSH_HOME/.env` 解析；受管文档从不物化进 `process.env`，而两个 `.env` 文件都是普通启动环境层。搜索使用 `DEEPSEEK_API_KEY` 并接受 `DEEPSEEK_SEARCH_BASE_URL`。Web app 的 `cordis`、`ptc` 与 `standard` agent preset 会在所有 sandbox 和审批模式下暴露 `web_fetch`，无需逐次确认；提供方仍会在连接前拒绝非公开目的地址。
+基础组合包挂载原生 DeepSeek 适配器、settings 与凭据提供方、稳定的 `web_search` 和 `web_fetch`、仅限公网的 HTTP fetch 提供方，以及按反馈门控的会话遥测。提供方凭据依次从继承环境、`$DSH_HOME/.credentials.yaml`、调用目录的 `.env` 和 `$DSH_HOME/.env` 解析；受管文档从不物化进 `process.env`，而两个 `.env` 文件都是普通启动环境层。搜索使用 `DEEPSEEK_API_KEY` 并接受 `DEEPSEEK_SEARCH_BASE_URL`。已启用的抓取调用会在所有 sandbox 与审批模式下执行，无需逐次确认；提供方会在连接前拒绝非公开目的地址。Web app 会禁用 base 工具配置项，再通过 `cordis`、`ptc` 与 `standard` agent preset 暴露相同工具。
 
 会话遥测默认按反馈门控共享：在用户记录 `/feedback` 之前不上传任何数据，每条已记录的反馈通过该事件上传尚未共享的会话记录；恢复的会话只共享当前生命周期。`DSH_TELEMETRY_MODE=FULL` 改为将每条已投影会话事件作为 OTLP/HTTP 日志流式发送，`DSH_TELEMETRY_MODE=DISABLED` 让全部数据留在本地，任何非空的 `DSH_TELEMETRY_DISABLED` 仍是具有最终效力的遥测强制关闭开关。`DSH_TELEMETRY_OTLP_URL` 选择其他 collector。随附基础配置没有遥测脱敏规则，因此释放的导出可能包含消息文本、工具参数和结果，以及 workspace 路径；相关部署决策见[反馈门控默认值 Agent Note](../../../.agents/notes/implemented/feature/2026-08-25-feedback-gated-telemetry-default.zh.md)。
 

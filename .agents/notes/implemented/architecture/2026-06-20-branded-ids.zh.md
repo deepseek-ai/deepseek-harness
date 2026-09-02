@@ -51,7 +51,7 @@ const owner = brandString<OwnerToken>('session-1')
 - **`ModelId`**（`GenerateOptions.model`，`LlmRuntime` 适配器注册表的键）：一个真正的跨包查找键（config → agent → llm → 适配器）；合理的下一个 brand，仅为控制本决策的影响范围而暂不纳入。
 - **`ToolName`**（`ToolRuntime` 的键）：由作者定义、人类可读，且很少与其他 id 混淆；最弱的候选，可能不值得加 brand。
 - **`ErrorCode`**（`HarnessError.code`）：一个封闭词汇（`ABORTED`、`NO_ADAPTER`……），不是逐实例的 id；如果要做，string 字面量联合类型比 brand 更合适。
-- **数值序号**：轮次号、步骤号和事件 `seq` 是 `number` 而非 `string`，`Branded<string>` 不适用；可以用并行的 `number & { readonly [BRAND]: B }` 变体来 brand 它们，但它们是位置序号、很少跨边界传递，收益较低。
+- **其他数值序号**：[Session 序列号与日志偏移决策](2026-08-31-session-sequence-and-log-offset-brands.zh.md)会为事件身份与日志间隙加 brand，因为它们跨越 persistence 与引用 seam。turn 与 step number 保持普通 number：它们是 payload-local ordinal，不会与 Session 事件位置互换。
 - **带校验的构造**：`brandString<T>()` 不执行运行时检查，且每个边界（ACP `sessionId`、提供方签发的 `call.id`、`dsh-llm-deepseek` 中的空字符串回退）都信任裸 string。一个在边界处对格式错误的输入抛异常的 `SessionId.parse()` / `isValid()` 配套工具确实是缺口，但它属于运行时行为变更，有自己的设计问题（什么算「格式错误」？失败时会怎样？），应在独立决策中处理。
 
 ## 验证

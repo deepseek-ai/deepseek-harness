@@ -40,7 +40,7 @@ Status: implemented
 
 **在 loop 启动时追加边界。** loop 调用 `resumeWith`，因此覆盖恢复路径，但完全漏掉 `fork()` 与 `adopt()`，而且事件不得不在 `'startup'` 上触发——那是 fork 子会话发布的来源——于是 `SessionStartSource` 将不再具有区分力。它还会在追加标记之前就发布会话，因此 `session/created` 监听方可能观察到一份没有边界的带种子日志。
 
-**复用 `header.seedLength`。** 它是持久的 *fork 血缘*边界，并且刻意在恢复时保留原始 fork 取值——而恢复时构造种子是整份存储日志。这两个事实并不相同，混同会同时失去两者。
+**复用 `Session.inheritedEventCount`。** 它是持久的 *fork 血缘* cut，并且刻意在恢复时保留原始 fork 取值——而恢复时构造种子是整份存储日志。这两个事实并不相同，混同会同时失去两者。
 
 **让崩溃修复连同轮次边界一起关闭 `compaction/*`。** 否决：这会把每个插件的括号语义搬进核心的修复流程，而核心无法知道关闭另一个包的括号应该记录什么。
 

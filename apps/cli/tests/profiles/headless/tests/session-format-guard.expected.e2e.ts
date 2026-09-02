@@ -10,13 +10,15 @@ import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
-import SessionStore, {
+import {
   SESSION_FORMAT_VERSION,
   SessionId,
+  SessionSeq,
   type SessionEvent,
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { logPath } from '../../../../../../packages/session/session-persistence-jsonl/src/format.ts'
 import { describe, expect, it } from 'vitest'
 
 const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), 'expected/workspace-context-resume/offline-edit')
@@ -30,15 +32,13 @@ const sessionId = SessionId('workspace-context-resume')
 /** Persist one session with the given header version and events, returning its log path. */
 async function seedSession(root: string, cwd: string, version: number, events: SessionEvent[]): Promise<string> {
   const ctx = new Context()
-  await ctx.plugin(SessionStore)
   await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
-  const meta: SessionHeader = { version, id: sessionId, createdAt: 1, cwd }
+  const meta: SessionHeader = { version, id: sessionId, createdAt: 1, cwd, isSeeded: false }
   try {
-    await ctx.sessionPersistence.create(meta)
-    await ctx.sessionPersistence.append(sessionId, events)
-    const location = ctx.sessionPersistence.locate(meta)
-    if (location === undefined) throw new Error('JSONL backend did not locate the seeded session')
-    return location.path
+    const handle = await ctx.sessionPersistence.create(meta)
+    await handle.append(events)
+    await handle.close()
+    return logPath(root, meta.cwd, meta.id, 'none')
   } finally {
     await ctx.fiber.dispose()
   }
@@ -46,8 +46,8 @@ async function seedSession(root: string, cwd: string, version: number, events: S
 
 function closedTurn(): SessionEvent[] {
   return [
-    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-    { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
+    { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+    { type: 'turn/end', seq: SessionSeq(1), time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
   ]
 }
 
@@ -92,7 +92,7 @@ describe('session format guard through the assembled app', () => {
       prepare: async (runCwd) => {
         sessionPath = await seedSession(join(runCwd, '.sessions'), runCwd, SESSION_FORMAT_VERSION, [
           ...closedTurn(),
-          { type: 'future/event', seq: 2, time: 3, data: { payload: 1 } } as unknown as SessionEvent,
+          { type: 'future/event', seq: SessionSeq(2), time: 3, data: { payload: 1 } } as unknown as SessionEvent,
         ])
       },
     })

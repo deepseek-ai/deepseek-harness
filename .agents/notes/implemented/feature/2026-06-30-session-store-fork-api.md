@@ -20,11 +20,11 @@ The store exposes one operation:
 type SessionForkSource = Session | SessionId
 
 class SessionStore extends Service {
-  fork(source: SessionForkSource, boundary?: number, childSessionId?: SessionId): Session
+  fork(source: SessionForkSource, boundary?: SessionSeq, childSessionId?: SessionId): Session
 }
 ```
 
-`boundary` is the inclusive source event `seq` to copy through. When omitted, it defaults to the source session's current last event; on an empty source, omitted `boundary` creates an empty child. Fork-specific validation checks that the requested boundary exists and that the selected prefix's latest turn boundary is not an unmatched `turn/start`. The selected prefix may therefore end at `turn/end` or at a later standalone event, then is deep-cloned into the child seed. The child inherits the source session's `cwd`, stamps `parentSession` to the source id, and sets `seedLength` to the copied prefix length. When `childSessionId` is omitted, `SessionStore` generates one using its existing id policy.
+`boundary` is the branded inclusive source event `seq` to copy through. When omitted, it defaults to the source session's current last event; on an empty source, omitted `boundary` creates an empty child. Fork-specific validation checks that the requested boundary exists and that the selected prefix's latest turn boundary is not an unmatched `turn/start`. The selected prefix may therefore end at `turn/end` or at a later standalone event, then is deep-cloned into the child seed. The child inherits the source session's `cwd`, stamps `parentSession` to the source id, sets logical `isSeeded: true`, and supplies the copied prefix length separately as `inheritedEventCount`. When `childSessionId` is omitted, `SessionStore` generates one using its existing id policy.
 
 An empty prefix is forkable; any non-empty boundary must be a safe existing sequence outside an open turn. Typed errors distinguish missing sources, stale objects, duplicate child ids, invalid boundaries, and prefixes ending during execution. Broader log validation and crash repair remain with their existing owners.
 
@@ -44,6 +44,6 @@ The Host creates the child through the agent registry with the selected seed and
 
 ## Consequences
 
-The public API stays small and discoverable: live session branching is part of `ctx.sessions`, next to `create({ seed })`, rather than a standalone service or a two-step helper pair. Persistence continues to work through existing `session/created` and `session/flush` behavior: a forked child starts life with seeded events, so existing backends persist that seed once and preserve `parentSession` / `seedLength` in the header.
+The public API stays small and discoverable: live session branching is part of `ctx.sessions`, next to `create({ seed })`, rather than a standalone service or a two-step helper pair. Persistence continues to work through existing `session/created` and `session/flush` behavior: a forked child starts life with seeded events, so the JSONL backend persists that seed once and preserves logical `parentSession` / `isSeeded` plus the separate exact cut (encoded as v0 physical `seedLength`).
 
 This decision excludes ACP `session/fork`, unloaded persisted-session forking, model-facing tools, and subagent refactors. If a future ACP method is added, it should advertise the capability only after it has protocol and snapshot coverage; this Agent Note adds no ACP wire behavior, so no ACP snapshot is required. Fork-child replay remains covered by the existing [seed-boundary testing Agent Note](../testing/2026-06-22-fork-child-replay-seed-boundary.md); focused store, Host, carrier, and client tests pin the boundary and reconciliation contracts, while the real Chromium scenario pins the assembled message action and lineage tree.

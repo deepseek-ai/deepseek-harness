@@ -364,6 +364,13 @@ function projectAssistant(context: ConversationNodeContext<AssistantState>): Ass
   }
 }
 
+function publishedAssistantData(
+  context: ConversationNodeContext<AssistantState>,
+): Readonly<AssistantChatData> | undefined {
+  const location = context.start?.location ?? context.matches.at(-1)?.location
+  return location?.kind === 'step' ? location.step.data.get('assistant-step') : undefined
+}
+
 /** Per-step Assistant streaming/final/interruption Definition. */
 export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
   kind: 'assistant-step',
@@ -427,16 +434,19 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
     }
   },
   buildViewNode: (context) => {
-    const projected = projectAssistant(context)
-    if (projected === undefined) return null
-    if (projected.settled === undefined && !projected.visible) {
-      const state = context.state ?? fallbackState(context)
-      if (state === undefined) return null
+    const state = context.state ?? fallbackState(context)
+    if (state === undefined) return null
+    const data = publishedAssistantData(context)
+    if (data === undefined) return null
+    const settled = data.finalNode
+    const visible = settled === undefined ? state.visibleBlocks > 0 : hasVisibleContent(data.blocks)
+    if (settled === undefined && !visible) {
       const current = context.current.get('chat')
       if (!state.hidden || current === undefined || current === null) return null
     }
-    return chatNode(context, 'assistant-step', projected.anchorSeq, projected.data, {
-      visibility: projected.settled?.interrupted === true || projected.visible ? 'visible' : 'hidden',
+    const anchorSeq = settled?.seq ?? state.firstVisibleSeq ?? context.matches[0]?.event.seq ?? 0
+    return chatNode(context, 'assistant-step', anchorSeq, data, {
+      visibility: settled?.interrupted === true || visible ? 'visible' : 'hidden',
     })
   },
 }

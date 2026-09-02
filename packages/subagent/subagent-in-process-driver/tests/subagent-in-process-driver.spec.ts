@@ -33,7 +33,7 @@ async function setup(script: Script, parentOptions: Partial<AgentOptions> = {}) 
   await ctx.plugin(SubagentRuntime)
   const adapter = new MockAdapter(script)
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock', ...parentOptions })
+  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock', ...parentOptions })
   return { ctx, parent, adapter }
 }
 
@@ -71,7 +71,7 @@ describe('startInProcessRun', () => {
 
   it('uses explicit child model selectors when the parent has none and preserves its cwd', async () => {
     const { ctx } = await setup([textResponse('driver answer')])
-    const parent = ctx.agentLoop.create(SessionId('bare-parent'), {}, { cwd: '/workspace' })
+    const parent = await ctx.agentLoop.create(SessionId('bare-parent'), {}, { cwd: '/workspace' })
     const run = await startInProcessRun({
       ...request(parent),
       agentOptions: { provider: 'mock', model: 'mock' },
@@ -206,7 +206,8 @@ describe('startInProcessRun', () => {
     const result = await run.result
     expect(text(result.output)).toBe('child answer')
     const child = ctx.agents.get(run.id)!
-    expect(child.session.header.seedLength).toBe(seed.length)
+    expect(child.session.header.isSeeded).toBe(true)
+    expect(child.session.inheritedEventCount).toBe(seed.length)
     expect(child.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
     await run.dispose()
   })
@@ -306,7 +307,7 @@ describe('startInProcessRun', () => {
     // no provider/model is fabricated, so the child's turn errors for want of a
     // route rather than silently adopting one.
     const { ctx } = await setup([])
-    const parent = ctx.agentLoop.create(SessionId('routeless-parent'), {})
+    const parent = await ctx.agentLoop.create(SessionId('routeless-parent'), {})
     const run = await startInProcessRun(request(parent), {})
     const child = ctx.agents.get(run.id)!
     expect(child.options).toEqual({ subagentDepth: 1 })

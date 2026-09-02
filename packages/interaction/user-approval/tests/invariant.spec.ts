@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { ApprovalRequestId } from '@deepseek-ai/dsh-user-approval'
 import * as ApprovalInvariant from '@deepseek-ai/dsh-user-approval/invariant'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
@@ -46,14 +46,14 @@ describe('approval invariants', () => {
     const session = Session.create(SessionId('bare-approval-session'))
     const id = ApprovalRequestId('bare-ask')
     const asked = {
-      type: 'approval/asked', seq: 0, time: 0, data: { id, toolName: 'bash' },
+      type: 'approval/asked', seq: SessionSeq(0), time: 0, data: { id, toolName: 'bash' },
     } as const
     const decided = {
-      type: 'approval/decided', seq: 1, time: 1, data: { id, outcome: 'rejected' as const },
+      type: 'approval/decided', seq: SessionSeq(1), time: 1, data: { id, outcome: 'rejected' as const },
     } as const
     expect(() => {
       ctx.emit('session/event', session, {
-        type: 'turn/start', seq: 0, time: 0,
+        type: 'turn/start', seq: SessionSeq(0), time: 0,
         data: { turn: 1 },
       })
       ctx.emit('session/event', session, asked)

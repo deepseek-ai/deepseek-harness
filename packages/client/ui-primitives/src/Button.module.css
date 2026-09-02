@@ -54,7 +54,7 @@
 
 /* Dialog Cancel (figma 451:18655): bordered capsule on transparent fill. */
 .outline {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l3);
   background: transparent;
 }
 

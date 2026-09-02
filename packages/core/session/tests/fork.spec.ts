@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId , createMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionForkError, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionForkError, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -46,18 +46,15 @@ function firstUserMessage(events: readonly SessionEvent[]): SessionEvent<'user/m
   return event
 }
 
-function lastSeq(session: Session): number {
+function lastSeq(session: Session): SessionSeq {
   const event = session.snapshotEvents().at(-1)
   if (event === undefined) throw new Error('missing last event')
   return event.seq
 }
 
-/** A seeded child's constructor seed: its log minus the end-seed marker. */
+/** A seeded child's fork-inherited prefix. */
 function inherited(session: Session): readonly SessionEvent[] {
-  const events = session.snapshotEvents()
-  const last = events.at(-1)
-  if (last?.type !== 'session/end-seed') throw new Error('seeded child is missing its end-seed marker')
-  return events.slice(0, -1)
+  return session.snapshotEvents(SessionLogOffset(0), session.inheritedEventCount)
 }
 
 describe('SessionStore.fork', () => {
@@ -72,8 +69,9 @@ describe('SessionStore.fork', () => {
       id: SessionId('empty-child'),
       cwd: '/workspace',
       parentSession: SessionId('empty-parent'),
-      seedLength: 0,
+      isSeeded: true,
     })
+    expect(child.inheritedEventCount).toBe(0)
   })
 
   it('forks the latest completed boundary by default into detached frozen seed events', async () => {
@@ -95,8 +93,9 @@ describe('SessionStore.fork', () => {
       id: SessionId('child'),
       cwd: '/workspace',
       parentSession: SessionId('parent'),
-      seedLength: source.snapshotEvents().length,
+      isSeeded: true,
     })
+    expect(child.inheritedEventCount).toBe(source.seq)
   })
 
   it('includes stable log-only events appended after a closed turn', async () => {
@@ -125,7 +124,7 @@ describe('SessionStore.fork', () => {
     const child = sessions.fork(source, firstBoundary, SessionId('child-from-first'))
 
     expect(inherited(child)).toEqual(source.snapshotEvents().slice(0, firstBoundary + 1))
-    expect(child.header.seedLength).toBe(firstBoundary + 1)
+    expect(child.inheritedEventCount).toBe(firstBoundary + 1)
     expect(child.deriveMessages()).toEqual([{
       id: expect.any(String) as unknown,
       role: 'user',
@@ -152,7 +151,7 @@ describe('SessionStore.fork', () => {
       const child = sessions.fork(source, lastSeq(source), SessionId(`child-${index}`))
 
       expect(inherited(child).at(-1)?.type).toBe('turn/end')
-      expect(child.header.seedLength).toBe(source.snapshotEvents().length)
+      expect(child.inheritedEventCount).toBe(source.seq)
     }
   })
 
@@ -180,19 +179,19 @@ describe('SessionStore.fork', () => {
   it('rejects invalid boundaries before creating a child', async () => {
     const { ctx, sessions } = await setup()
     const empty = ctx.sessions.create(SessionId('empty'))
-    expect(() => sessions.fork(empty, 0, SessionId('empty-child')))
+    expect(() => sessions.fork(empty, SessionSeq(0), SessionId('empty-child')))
       .toThrow(new SessionForkError('fork boundary 0 does not exist in session "empty" (last seq: none)', 'INVALID_BOUNDARY'))
     expect(ctx.sessions.get(SessionId('empty-child'))).toBeUndefined()
 
     const source = ctx.sessions.create(SessionId('parent'))
     appendClosedTurn(source, 1)
-    expect(() => sessions.fork(source, -1, SessionId('negative')))
+    expect(() => sessions.fork(source, -1 as never, SessionId('negative')))
       .toThrow(/non-negative safe integer/)
-    expect(() => sessions.fork(source, 0.5, SessionId('fraction')))
+    expect(() => sessions.fork(source, 0.5 as never, SessionId('fraction')))
       .toThrow(/non-negative safe integer/)
-    expect(() => sessions.fork(source, Number.MAX_SAFE_INTEGER + 1, SessionId('unsafe')))
+    expect(() => sessions.fork(source, (Number.MAX_SAFE_INTEGER + 1) as never, SessionId('unsafe')))
       .toThrow(/non-negative safe integer/)
-    expect(() => sessions.fork(source, source.seq, SessionId('past-end')))
+    expect(() => sessions.fork(source, SessionSeq(source.seq), SessionId('past-end')))
       .toThrow(new SessionForkError(`fork boundary ${source.seq} does not exist in session "parent" (last seq: ${source.seq - 1})`, 'INVALID_BOUNDARY'))
   })
 
@@ -201,9 +200,9 @@ describe('SessionStore.fork', () => {
     const source = ctx.sessions.create(SessionId('corrupt-parent'))
     appendClosedTurn(source, 1)
     const mutableLog = (source as unknown as { log: SessionEvent[] }).log
-    mutableLog[2] = { ...mutableLog[2]!, seq: 99 }
+    mutableLog[2] = { ...mutableLog[2]!, seq: SessionSeq(99) }
 
-    expect(() => sessions.fork(source, 2, SessionId('corrupt-child')))
+    expect(() => sessions.fork(source, SessionSeq(2), SessionId('corrupt-child')))
       .toThrow(new SessionForkError('fork boundary 2 does not match a contiguous event seq in session "corrupt-parent"', 'INVALID_BOUNDARY'))
     expect(ctx.sessions.get(SessionId('corrupt-child'))).toBeUndefined()
   })
@@ -292,7 +291,7 @@ describe('SessionStore.fork', () => {
       const source = ctx.sessions.create(SessionId(`open-${lastType}`))
       const boundary = build(source)
 
-      expect(() => sessions.fork(source, boundary))
+      expect(() => sessions.fork(source, SessionSeq(boundary)))
         .toThrow(new SessionForkError(`fork boundary ${boundary} in session "open-${lastType}" ends inside open turn 1`, 'OPEN_TURN'))
     }
   })

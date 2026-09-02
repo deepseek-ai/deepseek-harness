@@ -11,6 +11,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, type ToolCallId } from '@deepseek-ai/dsh-llm'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Session } from '@deepseek-ai/dsh-session'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 
 declare module '@deepseek-ai/cordis' {
@@ -75,7 +76,7 @@ const ASK_SENTENCE = 'Approval policy: ask. Operations that require approval may
  */
 function hasOpenTurn(session: Session): boolean {
   for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
-    const type = session.eventAt(seq)?.type
+    const type = session.eventAt(SessionSeq(seq))?.type
     if (type === 'turn/start') return true
     if (type === 'turn/end') return false
   }
@@ -242,7 +243,7 @@ export class ApprovalService extends Service {
    */
   overrideOf(session: Session): ApprovalPolicy | undefined {
     for (let seq = session.seq - 1; seq >= 0; seq -= 1) {
-      const event = session.eventAt(seq)
+      const event = session.eventAt(SessionSeq(seq))
       if (event?.type === 'approval/policy') return event.data.policy
     }
     return undefined

@@ -66,7 +66,6 @@ describe('message feedback through a real Loader composition', () => {
       '  config:',
       `    root: ${JSON.stringify(join(root, 'sessions'))}`,
       '    compression: none',
-      '    writeBatchMaxDelayMs: 1',
       "- name: '@deepseek-ai/dsh-storage'",
       "- name: '@deepseek-ai/dsh-storage-json'",
       '  config:',
@@ -88,6 +87,9 @@ describe('message feedback through a real Loader composition', () => {
     const session = first.sessions.create(SessionId('loader-feedback'), {
       meta: { cwd: root },
     })
+    // The mounted backend routes this published session's `session/event`
+    // batches and `session/flush` barriers into its active write handle.
+    const writeHandle = await first.sessionPersistence.create(session.header)
     const fixture = appendMessageFixture(session)
     const put = await first.messageFeedback.put({
       sessionId: session.id,
@@ -97,11 +99,14 @@ describe('message feedback through a real Loader composition', () => {
       ifVersion: null,
     })
     if (!put.ok) throw new Error(`expected put success, got ${put.error.code}`)
-    const durable = await first.sessionPersistence.readFrom(session.id, 0)
-    expect(durable.events.some(event =>
+    const readHandle = await first.sessionPersistence.open(session.id, 'read')
+    const durableEvents = await readHandle.read()
+    await readHandle.close()
+    expect(durableEvents.some(event =>
       event.type === 'assistant/message'
       && event.data.message.id === fixture.assistantMessageIds[0])).toBe(true)
 
+    await writeHandle.close()
     await first.fiber.dispose()
     contexts.splice(contexts.indexOf(first), 1)
 

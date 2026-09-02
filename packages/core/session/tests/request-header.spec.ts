@@ -1,7 +1,7 @@
 /** Request-header canonicalization, equality, snapshot folding, and format rejection. */
 
 import { describe, expect, it } from 'vitest'
-import { Session, SessionId, canonicalHeader, foldRequestHeader, headerEquals } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionSeq, canonicalHeader, foldRequestHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import type { EpochHeader, SessionEvent } from '@deepseek-ai/dsh-session'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
@@ -68,7 +68,7 @@ describe('foldRequestHeader', () => {
   it('returns the supplied baseline when no snapshot follows', () => {
     const from: EpochHeader = { config: CONFIG, system: 'baseline' }
     const unrelated: SessionEvent[] = [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     ]
     expect(foldRequestHeader(unrelated)).toBeUndefined()
     expect(foldRequestHeader(unrelated, from)).toBe(from)
@@ -121,10 +121,10 @@ describe('Session.requestContext', () => {
   /** A turn-enclosed capacity record; the invariant rejects one outside a turn. */
   function seedWith(...records: { provider: string; model: string; contextWindow?: number }[]): SessionEvent[] {
     const events: SessionEvent[] = [{
-      type: 'turn/start', seq: 0, time: 1, data: { turn: 1 },
+      type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 },
     }]
     for (const data of records) {
-      events.push({ type: 'request/context', seq: events.length, time: 1, data })
+      events.push({ type: 'request/context', seq: SessionSeq(events.length), time: 1, data })
     }
     return events
   }

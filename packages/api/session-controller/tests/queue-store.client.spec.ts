@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, UserMessage } from '@deepseek-ai/dsh-llm/types'
-import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { MessageId, RpcId, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionControlFrame } from '@deepseek-ai/dsh-api-session-controller/types'
 import { Session } from '../src/client/sessions/session.ts'
@@ -160,12 +160,12 @@ describe('Session queue snapshot intake', () => {
       { id: 's-second', body: '', placement: 'steering', message },
     ]))
     const durable = {
-      seq: 0,
+      seq: SessionSeq(0),
       time: 1_700_000_000_000,
       type: 'user/message',
       surfaceOp: 'append',
       data: message,
-    } as SessionEvent
+    } satisfies SessionEvent
 
     await api.pushFollow(SID, { type: 'event', event: durable as never })
     await vi.waitFor(() => {

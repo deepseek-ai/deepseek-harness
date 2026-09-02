@@ -86,10 +86,7 @@ class BoundConversation implements ConversationBinding {
   rebuild(): void { this.publish(this.assembler.rebuildRegistry()) }
 
   dispose(): void {
-    if (this.frame !== undefined && typeof cancelAnimationFrame === 'function') {
-      cancelAnimationFrame(this.frame)
-    }
-    this.frame = undefined
+    this.cancelFrame()
     this.disposeFeed()
   }
 
@@ -124,13 +121,26 @@ class BoundConversation implements ConversationBinding {
     if (publication === 'none') return
     if (publication === 'animation-frame' && typeof requestAnimationFrame === 'function') {
       if (this.frame !== undefined) return
+      // Cross three paint opportunities before publishing high-frequency stream updates.
       this.frame = requestAnimationFrame(() => {
-        this.frame = undefined
-        this.flush()
+        this.frame = requestAnimationFrame(() => {
+          this.frame = requestAnimationFrame(() => {
+            this.frame = undefined
+            this.flush()
+          })
+        })
       })
       return
     }
+    this.cancelFrame()
     this.flush()
+  }
+
+  private cancelFrame(): void {
+    if (this.frame !== undefined && typeof cancelAnimationFrame === 'function') {
+      cancelAnimationFrame(this.frame)
+    }
+    this.frame = undefined
   }
 
   private flush(): void {

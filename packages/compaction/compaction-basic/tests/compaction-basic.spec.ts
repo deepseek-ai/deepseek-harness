@@ -23,7 +23,7 @@ import type {
   StreamChunk,
   TokenUsage,
 } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import { agentEvents, type Agent, type RequestErrorAction } from '@deepseek-ai/dsh-agent'
@@ -911,8 +911,8 @@ describe('compaction region transaction', () => {
     const session = conversation(2)
     const nodes = session.surface.nodes
     await expect(compact.compactRegion(
-      startOverride ?? nodes[0]!,
-      endOverride ?? nodes[1]!,
+      startOverride === undefined ? nodes[0]! : SessionSeq(startOverride),
+      endOverride === undefined ? nodes[1]! : SessionSeq(endOverride),
       agent(session, MODEL),
     )).rejects.toThrow(pattern)
   })
@@ -1686,12 +1686,12 @@ describe('automatic listener and loader composition', () => {
     const session = conversation(2)
     const fakeResult: CompactionResult = {
       compactionId: CompactionId('fake-compaction'),
-      startSeq: 1,
-      summarySeq: 2,
-      endSeq: 3,
+      startSeq: SessionSeq(1),
+      summarySeq: SessionSeq(2),
+      endSeq: SessionSeq(3),
       summary: [{ type: 'text', text: 'fake' }],
-      shadowedRange: { start: 1, end: 2 },
-      shadowedSeqs: [1, 2],
+      shadowedRange: { start: SessionSeq(1), end: SessionSeq(2) },
+      shadowedSeqs: [SessionSeq(1), SessionSeq(2)],
       shadowedTokenCount: 10,
     }
     vi.spyOn(compact, 'compactIfNeeded').mockResolvedValue(fakeResult)

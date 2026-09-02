@@ -311,7 +311,7 @@ describe('web e2e: long Chat interaction contract', () => {
     const child = scaffold.ctx.agents.list()
       .find(agent => agent.session.header.parentSession === SessionId(SESSION_ID))
     if (child === undefined) throw new Error('message branch did not create a child session')
-    expect(child.session.header.seedLength).toBe(boundary.seq + 1)
+    expect(child.session.inheritedEventCount).toBe(boundary.seq + 1)
     expect(child.session.snapshotEvents().some(event => carries(event, branchAssistantMarker))).toBe(true)
     expect(child.session.snapshotEvents().some(event => carries(event, FIXTURE.markers.user(BRANCH_TURN + 1)))).toBe(false)
     expect(child.session.snapshotEvents().some(event => carries(event, FIXTURE.markers.user(FIXTURE.turns)))).toBe(false)

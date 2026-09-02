@@ -1,9 +1,9 @@
 # The `ptc` agent preset: the standard coding agent, presented as PTC mode.
 #
-# Everything in `standard` is here unchanged. What is added is the `tool-presentation`
-# row: instead of one tool call per action, the model writes a TypeScript
-# program against a generated SDK and `run_code` executes it, so a sequence
-# that would be five round trips becomes one.
+# Most of `standard` is here unchanged. The deliberate exception is the
+# general-purpose `workflow` tool: PTC mode uses `run_code` as its model-authored
+# composition surface. The `tool-presentation` row turns the remaining registry
+# into a generated SDK, so a sequence that would be five round trips becomes one.
 #
 # The registry itself stays on the host plane — the agent loop's scheduler and
 # the API proxy's presenters are its consumers — so what this preset owns is
@@ -232,6 +232,9 @@
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
+      # Keep the engine above for `ralph`, but do not publish a second
+      # model-authored orchestration surface beside `run_code` in PTC mode.
+      disabled: true
 
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'

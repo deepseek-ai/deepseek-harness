@@ -9,8 +9,21 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import type { Session, SessionId } from '@deepseek-ai/dsh-session'
-import type { DeepSeekSessionLogExtension } from './types.ts'
+import { isSurfaceEvent, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import type {
+  Session,
+  SessionEvent,
+  SessionId,
+  SessionLogOffset as SessionLogOffsetType,
+  SessionSeq as SessionSeqType,
+  SessionSeqCursor,
+} from '@deepseek-ai/dsh-session'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type {
+  DeepSeekSessionLogExtension,
+  DeepSeekSessionLogWireEvent,
+  DeepSeekSessionLogWireHeader,
+} from './types.ts'
 
 export type * from './types.ts'
 
@@ -31,35 +44,77 @@ export const Config: z<Config> = z.object({
 })
 
 interface AcceptanceFold {
-  readonly scannedEvents: number
-  readonly throughSeq: number
+  readonly scannedEvents: SessionLogOffsetType
+  readonly throughSeq: SessionSeqCursor
 }
 
 const acceptanceFolds = new WeakMap<Session, AcceptanceFold>()
+
+/** Translate logical Session metadata back to the stable version-0 wire header. */
+function wireHeader(session: Session): DeepSeekSessionLogWireHeader {
+  const header = session.header
+  return {
+    version: header.version,
+    id: String(header.id),
+    createdAt: header.createdAt,
+    ...header.cwd === undefined ? {} : { cwd: header.cwd },
+    ...header.parentSession === undefined ? {} : { parentSession: String(header.parentSession) },
+    ...header.isSeeded ? { seedLength: Number(session.inheritedEventCount) } : {},
+    ...header.origin === undefined ? {} : { origin: header.origin },
+    ...header.delegationDepth === undefined ? {} : { delegationDepth: header.delegationDepth },
+    ...header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset },
+  }
+}
+
+/** Translate compile-time sequence brands to raw numeric request fields. */
+function wireEvent(event: SessionEvent): DeepSeekSessionLogWireEvent {
+  const surfaceEvent = isSurfaceEvent(event) ? event : undefined
+  const surfaceOp = surfaceEvent?.surfaceOp
+  return {
+    type: event.type,
+    seq: Number(event.seq),
+    time: event.time,
+    data: event.data as JsonValue,
+    ...event.ignorable === undefined ? {} : { ignorable: event.ignorable },
+    ...surfaceEvent?.sourceEventSeqs === undefined
+      ? {}
+      : { sourceEventSeqs: surfaceEvent.sourceEventSeqs.map(Number) },
+    ...surfaceOp === undefined
+      ? {}
+      : surfaceOp === 'append'
+        ? { surfaceOp }
+        : { surfaceOp: { op: 'replace' as const, start: Number(surfaceOp.start), end: Number(surfaceOp.end) } },
+  }
+}
 
 /**
  * Highest confirmed sequence for this exact session identity.
  * @param session - canonical log whose matching acceptance events are folded.
  * @returns greatest accepted sequence, or `-1` before any accepted request.
  */
-export function acceptedThrough(session: Session): number {
+export function acceptedThrough(session: Session): SessionSeqCursor {
   const previous = acceptanceFolds.get(session)
   let throughSeq = previous?.throughSeq ?? -1
   const length = session.seq
-  const start = previous?.scannedEvents ?? 0
+  const start = previous?.scannedEvents ?? SessionLogOffset(0)
   for (let index = start; index < length; index++) {
-    const event = session.eventAt(index)
+    const event = session.eventAt(SessionSeq(index))
     if (event === undefined) {
       throw new Error(`session-log-deepseek: missing event ${String(index)} below captured length ${String(length)}`)
     }
     if (event.type !== 'session-log-deepseek/delivery-accepted') continue
+    let acceptedSeq: SessionSeqType
+    try {
+      acceptedSeq = SessionSeq(event.data.throughSeq)
+    } catch {
+      throw new Error(`session-log-deepseek: malformed acceptance watermark at seq ${event.seq}`)
+    }
     if (typeof event.data.sessionId !== 'string' || event.data.sessionId.length === 0
-      || !Number.isSafeInteger(event.data.throughSeq) || event.data.throughSeq < 0
-      || event.data.throughSeq >= event.seq) {
+      || acceptedSeq >= event.seq) {
       throw new Error(`session-log-deepseek: malformed acceptance watermark at seq ${event.seq}`)
     }
     if (event.data.sessionId !== session.id) continue
-    throughSeq = Math.max(throughSeq, event.data.throughSeq)
+    if (acceptedSeq > throughSeq) throughSeq = acceptedSeq
   }
   acceptanceFolds.set(session, { scannedEvents: length, throughSeq })
   return throughSeq
@@ -80,15 +135,16 @@ export function apply(ctx: Context, config: Config): void {
       if (session === undefined) return undefined
 
       const afterSeq = acceptedThrough(session)
-      const throughSeq = session.seq - 1
-      if (throughSeq < 0) return undefined
-      const suffix = session.snapshotEvents(afterSeq + 1)
+      const snapshot = session.snapshotEvents()
+      const throughSeq = snapshot.at(-1)?.seq
+      if (throughSeq === undefined) return undefined
+      const suffix = session.snapshotEvents(SessionLogOffset(afterSeq + 1))
       const value: DeepSeekSessionLogExtension = {
         version: 1,
-        session: session.header,
-        afterSeq,
-        throughSeq,
-        events: suffix,
+        session: wireHeader(session),
+        afterSeq: Number(afterSeq),
+        throughSeq: Number(throughSeq),
+        events: suffix.map(wireEvent),
       }
       return {
         value,

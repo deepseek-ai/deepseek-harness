@@ -7,7 +7,7 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
-import type { SessionHeader, SessionId, SurfaceOp } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
@@ -384,6 +384,25 @@ export interface SessionEventEntry {
   readonly event: SessionWireEvent
 }
 
+/** v0-compatible Session metadata carried on the browser wire. */
+export interface SessionWireHeader {
+  readonly version: number
+  readonly id: SessionId
+  readonly createdAt: number
+  readonly cwd?: string
+  readonly parentSession?: SessionId
+  /** Exact inherited prefix length; absent for an unseeded Session. */
+  readonly seedLength?: number
+  readonly origin?: 'subagent'
+  readonly delegationDepth?: number
+  readonly agentPreset?: string
+}
+
+/** Browser wire form of one Session surface operation. */
+export type SessionWireSurfaceOp =
+  | 'append'
+  | { readonly op: 'replace'; readonly start: number; readonly end: number }
+
 /** Event-shaped wire representation of one packed chunk row. */
 export type ChunkRowEvent = {
   [Kind in ChunkRow['type']]: {
@@ -411,7 +430,7 @@ export interface SessionWireEvent {
   readonly data: JsonValue
   readonly ignorable?: true
   readonly sourceEventSeqs?: number[]
-  readonly surfaceOp?: SurfaceOp
+  readonly surfaceOp?: SessionWireSurfaceOp
 }
 
 /** One message-aligned backwards-history request. */
@@ -439,7 +458,7 @@ export interface SessionPage {
 export type SessionFollowFrame =
   | {
     readonly type: 'snapshot'
-    readonly header: SessionHeader
+    readonly header: SessionWireHeader
     readonly cursor: number
     readonly records: readonly SessionHistoryRecord[]
     readonly hasMore: boolean

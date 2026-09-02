@@ -298,7 +298,7 @@ Draft 与输入状态属于 Conversation UI，不进入 Session snapshot。Queue
 
 `client/ui-chat` 注册 target id `chat`，并拥有 Chat snapshot builder、Conversation Node definitions、keyed node renderers、selection、details、stats、locale 和 tool inspection 协作。
 
-它通过 `ctx.uiSession.provide()` 注册 `chat` target source。`ChatNodeSeat` 和 Chat 内部消费者使用 `useChat`，不再传递 `useConversation(snapshot => snapshot.views.get('chat'))`。
+它通过 `ctx.uiSession.provide()` 注册 `chat` target source。`ChatView` 使用 `useChat` 读取聚合 order、navigation 与 timeline；每个 `ChatNodeSeat` 从该 snapshot 接收身份稳定的 Node 与 Turn-process source，不订阅聚合 source。
 
 Chat activity 只由可见且非 command 的 Chat Node 激活。普通 command-only history 保持 Hero，`/goal` 的 `command-input` Node 激活 fresh Conversation。
 

@@ -50,7 +50,7 @@
   margin-top: 2px;
   margin-left: -3px;
   padding: 1px 7px 0;
-  border: 1px solid var(--dsw-alias-interactive-bg-hover);
+  border: 0.5px solid var(--dsw-alias-interactive-bg-hover);
   border-radius: 24px;
   background: var(--dsw-alias-state-business-tertiary);
   color: var(--dsw-alias-label-primary-bluish);
@@ -185,7 +185,7 @@
   width: 100%;
   height: 44px;
   padding: 7px 14px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 22px;
   outline: none;
   background: transparent;

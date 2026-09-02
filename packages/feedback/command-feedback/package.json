@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-command-feedback",
   "description": "Log-only session feedback producer and human-facing slash command",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },

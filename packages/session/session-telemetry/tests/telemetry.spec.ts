@@ -328,7 +328,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
     expect(ofResumed()).toEqual([2, 4])
   })
 
-  it('stamps session.seed_length from the header so receivers can stitch fork streams', async () => {
+  it('stamps session.seed_length from the exact Session cut so receivers can stitch fork streams', async () => {
     const backend = new FakeBackend()
     const ctx = new Context()
     await ctx.plugin(SessionStore)
@@ -336,7 +336,8 @@ describe('SessionTelemetryCoordinator adoption', () => {
     appendTurn(parent)
     const child = ctx.sessions.create(SessionId('stitch-child'), {
       seed: parent.snapshotEvents(),
-      meta: { parentSession: SessionId('stitch-parent'), seedLength: 2 },
+      inheritedEventCount: parent.seq,
+      meta: { parentSession: SessionId('stitch-parent'), isSeeded: true },
     })
     await ctx.plugin({
       name: 'fake-telemetry',

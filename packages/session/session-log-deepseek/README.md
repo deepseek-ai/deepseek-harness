@@ -34,7 +34,7 @@ Shipped profiles mount the plugin so an overlay can enable it, but the default c
 <a id="request-field"></a>
 ## Request field
 
-For a request carrying a live `sessionId`, the plugin folds the greatest accepted watermark for that exact Session identity, snapshots `Session.events`, and sends the contiguous suffix after the watermark. A process-local fold scans each event once and consumes later appends incrementally; restart and HMR rebuild it from the durable log. The version-1 field contains the immutable `SessionHeader`, `afterSeq`, `throughSeq`, and every complete canonical `SessionEvent` in that range as a direct array element. Forked sessions ignore inherited parent watermarks because each watermark records the Session id sent on the accepted request.
+For a request carrying a live `sessionId`, the plugin folds the greatest accepted watermark for that exact Session identity, snapshots `Session.events`, and sends the contiguous suffix after the watermark. A process-local fold scans each event once and consumes later appends incrementally; restart and HMR rebuild it from the durable log. The version-1 field contains a v0-compatible raw session header (`seedLength` is present only for a seeded Session), numeric `afterSeq` and `throughSeq`, and every complete canonical event translated to raw-number envelope fields. Forked sessions ignore inherited parent watermarks because each watermark records the Session id sent on the accepted request.
 
 <a id="acceptance-and-retry"></a>
 ## Acceptance and retry

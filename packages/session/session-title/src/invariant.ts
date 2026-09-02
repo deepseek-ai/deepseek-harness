@@ -6,7 +6,8 @@
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-session-title'
 
@@ -23,18 +24,49 @@ export const inject = ['invariants']
  * relationship every appended `session/title` event must keep, whichever
  * writer produced it.
  */
+function validate(
+  session: Session,
+  event: SessionEvent<'session/title'>,
+  fail: InvariantFailure,
+): void {
+  const { source, messageSeqs } = event.data
+  if ((messageSeqs.length === 0) !== (source.kind === 'user')) {
+    const requirement = source.kind === 'user' ? 'cite no message seqs' : 'cite at least one message seq'
+    fail(`session/title event ${String(event.seq)} with source "${source.kind}" must ${requirement}; got ${String(messageSeqs.length)}`)
+  }
+  const seen = new Set<ReturnType<typeof SessionSeq>>()
+  for (const seq of messageSeqs) {
+    let checked: ReturnType<typeof SessionSeq>
+    try {
+      checked = SessionSeq(seq)
+    } catch {
+      fail(`session/title event ${String(event.seq)} has an invalid message seq ${String(seq)}`)
+    }
+    if (seen.has(checked)) {
+      fail(`session/title event ${String(event.seq)} repeats message seq ${checked}`)
+    }
+    seen.add(checked)
+    const cited = checked < event.seq ? session.eventAt(checked) : undefined
+    if (cited?.type !== 'user/message' || cited.data.source.kind !== 'user') {
+      fail(`session/title event ${String(event.seq)} message seq ${checked} must name an earlier human user/message`)
+    }
+  }
+}
+
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
+  const validateExisting = (session: Session): void => {
+    for (const event of session.snapshotEvents()) {
+      if (event.type === 'session/title') validate(session, event, fail)
+    }
+  }
+  ctx.sessions.list().forEach(validateExisting)
+  ctx.on('session/created', validateExisting, { global: true })
   // internal/dispatch interception rejects the append before publication
   // (the session/event listener would only observe the already-committed log).
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
-    const [, event] = args as [unknown, SessionEvent]
-    if (event.type !== 'session/title') return
-    const { source, messageSeqs } = event.data
-    if ((messageSeqs.length === 0) !== (source.kind === 'user')) {
-      const requirement = source.kind === 'user' ? 'cite no message seqs' : 'cite at least one message seq'
-      fail(`session/title event ${String(event.seq)} with source "${source.kind}" must ${requirement}; got ${String(messageSeqs.length)}`)
-    }
+    const [session, event] = args as [Session, SessionEvent]
+    if (event.type === 'session/title') validate(session, event, fail)
   }, { global: true })
 }, { inject: ['sessions'] })
 

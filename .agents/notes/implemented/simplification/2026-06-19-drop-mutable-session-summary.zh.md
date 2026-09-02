@@ -22,7 +22,7 @@ Status: implemented
 
 摘要原本要提供的一切，在消费方真正需要时都**可从仅追加日志中派生**（`firstPrompt` = 第一条 `user/message`；近期度 = 最后一个事件的 `time` 或文件 mtime），或者已经存在于不可变 header 中（`createdAt`、`cwd`）。唯一*不可*派生的是用户*手动编辑*的标题，但它从未实现，纯属 YAGNI；如果未来真有功能需要，它可以作为独立的日志事件或 header 字段回归。
 
-这次移除收窄公开服务约定与 JSONL 磁盘格式；摘要是有意为未来设计的结果，而非意外；原 Agent Note 描述 `SessionMeta` 之处由 `SessionHeader` 承担，这就是摘要消失的原因。它还简化了[共享持久化写入协调器](../architecture/2026-06-18-shared-persistence-write-coordinator.zh.md)：没有可变摘要后，协调器不需要 `updateSummary` 钩子，仓库外 provider 可复用相同的无摘要编排。
+这次移除收窄公开服务约定与 JSONL 磁盘格式；摘要是有意为未来设计的结果，而非意外；原 Agent Note 描述 `SessionMeta` 之处由 `SessionHeader` 承担，这就是摘要消失的原因。它也简化了当时的[共享持久化写入协调器](../../archived/architecture/2026-06-18-shared-persistence-write-coordinator.md)：没有可变摘要后，那套编排不需要 `updateSummary` 钩子。
 
 ## 无需迁移
 

@@ -14,22 +14,22 @@ Status: implemented
 
 持久化是一个具有抽象 Service Definition 的**能力 seam**（[能力 seam](2026-06-13-capability-seams.zh.md)，`dsh-shell` 模板），而非循环或核心逻辑：
 
-1. **接口**（`dsh-session-persistence`，`ctx.sessionPersistence`）：一个抽象的 `SessionPersistence` 服务，提供 `locate`/`create`/`append`/`prepare`/`load`/`inspect`/`readFrom`/`list`/`listSnapshots`。其持久化单元就是现有的 `SessionEvent`（`{ type, seq, time, data }`），原样复用，无转换类型。
+1. **接口**（`dsh-session-persistence`，`ctx.sessionPersistence`）：一个抽象的 `SessionPersistence` 服务，提供 `create`/`open`/`stat`/`list`/`export`，其中 `create`/`open` 返回逐会话的 `SessionHandle`，句柄承载 `read`/`append`/`flush`/`close`（[基于句柄的 seam](2026-08-27-handle-based-session-persistence.zh.md)）。其持久化单元就是现有的 `SessionEvent`（`{ type, seq, time, data }`），原样复用，无转换类型。
 2. **实现**（`dsh-session-persistence-jsonl`）：每个会话一个仅追加的逻辑 JSONL 日志：先是一行 `SessionHeader`，随后是无损表示连续 `SessionEvent` 流的存储记录。符合条件的 `assistant/chunk` 增量连续段默认使用打包行；[带校验和的 Zstandard 帧](2026-07-19-zstandard-jsonl-session-logs.zh.md)是默认物理编码，也可通过配置使用原始行。
 
 长期有效、存在争议的关键选择：
 
 - **规范的持久日志无损保留每个 `SessionEvent`，包括 `assistant/chunk`。** JSONL 存储可以将一段连续的增量事件编码为一条打包行，但逻辑读取方会重建精确的事件边界、序号与时间戳。`deriveMessages()` 跳过分片，而过滤分片的方案（Codex 的 `policy.rs`）很有吸引力，但 `seq = log.length` 以及 `events[i].seq === i` 验证要求*连续*的逻辑日志；过滤掉分片会留下空洞，同时破坏约定和恢复功能。基于分片过滤的投影可以作为派生视图在后续实现（带有自己的重新编号），但它不是规范日志。
-- **仅追加；崩溃的轮次被关闭，而非截断。** 已刷写的事件永不被重写。[语义检查点策略](../bug-fix/2026-07-21-semantic-session-checkpoints.zh.md)会在调用模型前排空请求、在调用工具前排空已记录的顶层调用，并在步骤结束后排空完整的响应/结果批次；循环则排空最终轮次边界。由于一个被中断的轮次可能包含大量有效工作，冷检查会保留其连续、可解析的事件，并在内存逻辑视图中为未应答的 assistant 调用添加按风险分类的错误结果、补一个缺失的 `step/end`，以及带 `{ kind: 'interrupted' }` 的 `turn/end`。`prepare` 或 `load` 在返回可恢复视图前提交这些收尾事件；合成结果保证恢复后的提供方 transcript（文本记录）仍然有效。只有不完整的最后一条记录会在提交修复时被丢弃；在最后一个真实 `turn/end` 处或之前出现解析错误或序号间隙，属于数据损坏，会使该会话不可加载。
-- **文件后端为规范实现，服务保持可扩展。** `dsh-session-persistence-jsonl` 是唯一 first-party provider，并通过 `runPersistenceContract`；抽象服务与 coordinator 继续供仓库外 provider 使用。[JSONL-only 持久化决策](../simplification/2026-08-30-jsonl-only-session-persistence.zh.md)负责 first-party 数据库 provider 的删除及其明确 compatibility cut。
+- **仅追加；崩溃的轮次被关闭，而非截断。** 已刷写的事件永不被重写。[语义检查点策略](../bug-fix/2026-07-21-semantic-session-checkpoints.zh.md)会在调用模型前排空请求、在调用工具前排空已记录的顶层调用，并在步骤结束后排空完整的响应/结果批次；循环则排空最终轮次边界。由于一个被中断的轮次可能包含大量有效工作，持久化会原样返回其连续、可解析的事件；配平是读方的职责——resume 会为未应答的 assistant 调用计算按风险分类的错误结果、补一个缺失的 `step/end`，以及带 `{ kind: 'interrupted' }` 的 `turn/end`（`interruptedTurnClosers`），并通过其写句柄追加它们，而只读观察方仅在内存中添加同样的收尾事件。合成结果保证恢复后的提供方 transcript（文本记录）仍然有效。只有撕裂的最终 append 中不完整的碎片会被丢弃——从中恢复的完整记录由写路径在第一次新 append 之前持久重写；已提交前缀中的解析错误或序号间隙，属于数据损坏，会使该会话不可加载。
+- **文件后端为规范实现，服务保持可扩展。** `dsh-session-persistence-jsonl` 是唯一 first-party provider，并通过 `runPersistenceContract`；抽象服务继续供仓库外 provider 使用。[JSONL-only 持久化决策](../simplification/2026-08-30-jsonl-only-session-persistence.zh.md)负责 first-party 数据库 provider 的删除及其明确 compatibility cut。
 - **元数据在日志之外。** 格式版本、cwd 和谱系是存储关注点，不是可回放的对话状态，因此它们存放在 `dsh-session` 拥有的 `SessionHeader` 中，并通过新的只读属性 `session.header` 附加到 `Session` 上——永远不进入 `SessionEventMap`，永远不到达 `deriveMessages()`。`createdAt` 是以 Unix epoch 毫秒表示的非负安全整数：运行时创建和持久化注册会拒绝小数值，JSONL 会验证解码后的 header。替代方案（一个可合并扩展的 `session/meta` 事件作为日志第 0 行）被否决：日志内事件会自然随 seed/fork 的会话携带，但元数据不是可回放状态，因此显式的日志外 header 边界是更清晰的取舍。（header 最初被拆分为不可变的 `SessionHeader` 加可变的 `SessionSummary`，二者的联合类型为 `SessionMeta`；可变 summary 后来因属于死状态而被移除——见 [移除可变会话摘要](../simplification/2026-06-19-drop-mutable-session-summary.zh.md)。）
-- **`ctx.agents.create()` 和 `ctx.agents.resume()` 是异步工厂；恢复还跨越持久化边界。** `ctx.agents.resume({ resumeSessionId })` 通过 `ctx.sessionPersistence.prepare()` 取得精确的未发布 Session，以持久化 id 发布它，并继续其投影。[Session 准备阶段决策](2026-08-05-session-preparation.zh.md)定义历史检查与恢复之间的复用。agent loop（智能体循环）不会硬注入 `sessionPersistence`（那样会让非持久化的演示永远挂起）；当它不存在时，`resume` 会以明确的错误拒绝。
+- **`ctx.agents.create()` 和 `ctx.agents.resume()` 是异步工厂；恢复还跨越持久化边界。** `ctx.agents.resume({ resumeSessionId })` 打开该会话的写句柄，读取已存储的日志，并以持久化 id 发布准备好的 Session，继续其投影。[Session 准备阶段决策](2026-08-05-session-preparation.zh.md)定义未发布 Session 的所有权窗口。agent loop（智能体循环）不会硬注入 `sessionPersistence`（那样会让非持久化的演示永远挂起）；当它不存在时，`resume` 会以明确的错误拒绝。
 
 ## 曾考虑的替代方案
 
 上述每个关键选择都在陈述处记录了被否决的替代方案：**过滤分片的规范日志**（Codex 的 `policy.rs` 形式）破坏连续 seq 约定；**截断崩溃的轮次**会静默销毁长时间自主运行中的真实工作；**日志内 `session/meta` 事件作为第 0 行**——元数据不是可回放状态；**有限的非整数 `createdAt` 值**没有生产方，且与整数 Unix 毫秒存储不一致；**将 `sessionPersistence` 硬注入循环**会让非持久化的演示永远挂起。
 
-格式版本控制：header 携带一个 `version`；冷读取拒绝任何非当前版本。预发布阶段的会话格式仍固定为 `SESSION_FORMAT_VERSION = 0`，不承诺广泛兼容；当持久化用户数据确有需要时，协调器可以负责显式且范围受限的导入升级（[消息标识机制引入前的消息恢复](../bug-fix/2026-07-28-load-pre-identity-session-messages.zh.md)）。仅追加 + 刷写能承受冷准备时可容忍的尾部不完整写入；未来 provider 或 write-ahead log 需要自有的断电与恢复约定。
+格式版本控制：header 携带一个 `version`；冷读取拒绝任何非当前版本。预发布阶段的会话格式仍固定为 `SESSION_FORMAT_VERSION = 0`，不作兼容承诺：读取只校验当前 v0 记录，已废弃的同版本形态会以 fail-closed 方式拒绝（[导出与预发布精简](../simplification/2026-08-27-persistence-export-and-pre-release-trims.zh.md)）。仅追加 + 刷写对尾部的不完整写入具有健壮性（冷准备时可容忍），但无法抵御未使用 fsync 时在行写入中途断电；数据库/WAL 后端是该场景下更强的选项。
 
 ## 后果
 

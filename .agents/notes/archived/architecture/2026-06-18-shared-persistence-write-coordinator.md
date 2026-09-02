@@ -1,6 +1,7 @@
 # Agent Note: Shared persistence write coordinator
 
 Status: implemented
+Archived: 2026-08-31
 
 English | [中文](2026-06-18-shared-persistence-write-coordinator.zh.md)
 

@@ -8,7 +8,7 @@
  * Timeline projection and inclusive focus edge cases ride along.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { createElement, type ComponentProps, type FC, type ReactNode } from 'react'
 import { bindSnapshotSelector, SlotTestRuntime, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
@@ -66,6 +66,8 @@ const runtimes: SlotTestRuntime[] = []
 
 afterEach(async () => {
   cleanup()
+  vi.restoreAllMocks()
+  Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo')
   for (const runtime of runtimes.splice(0)) await runtime.dispose()
 })
 // The Conversation store persists under its declared key; clear so one case's active
@@ -1264,6 +1266,180 @@ describe('timeline projection', () => {
 })
 
 describe('TrajectoryView state', () => {
+  it('reveals resident history one bounded page at a time', async () => {
+    const nodes: LegacyConversationSlice['nodes'] = Array.from({ length: 5_000 }, (_, index) => ({
+      kind: 'user' as const,
+      seq: index + 1,
+      time: index + 1,
+      content: [{ type: 'text' as const, text: `prompt ${String(index + 1)}` }],
+      source: null,
+    }))
+    const trajectory = createSnapshotStore(historySnapshot([]))
+    const loadOlder = vi.fn(() => Promise.resolve(false))
+    render(
+      <TrajectoryView
+        {...standaloneProps([])}
+        {...standaloneHistory(historySnapshot(nodes))}
+        {...standaloneDuration()}
+        useTrajectory={bindSnapshotSelector(trajectory)}
+        loadOlder={loadOlder}
+      />,
+    )
+
+    act(() => { trajectory.set(historySnapshot(nodes)) })
+    expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('51')
+    fireEvent.click(screen.getAllByRole('button', { name: '加载更早的历史' }).at(-1)!)
+    expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('101')
+    expect(loadOlder).not.toHaveBeenCalled()
+
+    act(() => { trajectory.set(historySnapshot([...nodes, {
+      kind: 'user', seq: 5_001, time: 5_001,
+      content: [{ type: 'text', text: 'appended prompt' }], source: null,
+    }])) })
+    expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('102')
+  })
+
+  it('keeps a replacement window bounded when its predecessor tail is absent', () => {
+    const nodes = (start: number): LegacyConversationSlice['nodes'] => Array.from(
+      { length: 100 },
+      (_, index) => ({
+        kind: 'user' as const,
+        seq: start + index,
+        time: start + index,
+        content: [],
+        source: null,
+      }),
+    )
+    const trajectory = createSnapshotStore(historySnapshot(nodes(1)))
+    render(
+      <TrajectoryView
+        {...standaloneProps([])}
+        {...standaloneHistory(historySnapshot([]))}
+        {...standaloneDuration()}
+        useTrajectory={bindSnapshotSelector(trajectory)}
+      />,
+    )
+    expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('51')
+
+    act(() => { trajectory.set(historySnapshot(nodes(201))) })
+    expect(screen.getByRole('table').getAttribute('aria-rowcount')).toBe('51')
+  })
+
+  it('keeps resident request numbering and cumulative usage outside the layout page', async () => {
+    vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(600)
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      value: vi.fn(),
+    })
+    const visibleNodes: LegacyConversationSlice['nodes'] = Array.from(
+      { length: 10 },
+      (_, index) => ({
+        kind: 'assistant' as const,
+        seq: index * 2 + 44,
+        time: index * 2 + 44,
+        turn: index + 2,
+        step: 1,
+        blocks: [{ kind: 'text' as const, text: `visible response ${String(index + 1)}` }],
+      }),
+    )
+    const nodes: LegacyConversationSlice['nodes'] = [{
+      kind: 'assistant', seq: 2, time: 2, turn: 1, step: 1,
+      blocks: [{ kind: 'tool-call', callId: 'boundary-call', name: 'bash', argsRaw: '{}' }],
+    }, {
+      kind: 'tool-result', seq: 3, time: 3, callId: 'boundary-call',
+      call: { name: 'bash', argsRaw: '{}' }, callTime: 2,
+      content: [], isError: false, subCalls: [],
+    }, ...Array.from({ length: 39 }, (_, index) => ({
+      kind: 'compaction' as const,
+      seq: index + 4,
+      time: index + 4,
+      summary: null,
+      summaryEventSeq: null,
+      shadowedItemCount: null,
+      shadowedTokenCount: null,
+    })), ...visibleNodes]
+    const requests: readonly RequestView[] = [{
+      purpose: 'assistant', startSeq: 1, resultSeq: 2, startedAt: 1, completedAt: 2,
+      status: 'complete', turn: 1, step: 1, usage: { inputTokens: 1 },
+    }, ...visibleNodes.map((node, index) => ({
+      purpose: 'assistant' as const,
+      startSeq: node.seq - 1,
+      resultSeq: node.seq,
+      startedAt: node.seq - 1,
+      completedAt: node.seq,
+      status: 'complete' as const,
+      turn: index + 2,
+      step: 1,
+      usage: { inputTokens: 1 },
+    }))]
+    render(
+      <TrajectoryView
+        {...standaloneProps([])}
+        {...standaloneHistory(historySnapshot(nodes, { requests }))}
+        {...standaloneDuration()}
+      />,
+    )
+
+    await waitFor(() => { expect(screen.getByRole('button', { name: '请求 #1' })).toBeTruthy() })
+    await waitFor(() => { expect(screen.getByRole('button', { name: '请求 #11' })).toBeTruthy() })
+    fireEvent.click(screen.getByRole('button', { name: '请求 #11' }))
+    fireEvent.click(screen.getByRole('tab', { name: '用量' }))
+    expect(screen.getByText('会话累计').closest('section')?.textContent).toContain('11 tok')
+  })
+
+  it.each([
+    ['root', {
+      kind: 'assistant' as const,
+      seq: 3,
+      time: 3,
+      turn: 1,
+      step: 1,
+      blocks: [{ kind: 'tool-call' as const, callId: 'hidden-root', name: 'bash', argsRaw: '{}' }],
+    }, 'hidden-root'],
+    ['nested', {
+      kind: 'tool-result' as const,
+      seq: 3,
+      time: 3,
+      callId: 'hidden-root',
+      call: { name: 'run_code', argsRaw: '{}' },
+      callTime: 2,
+      content: [],
+      isError: false,
+      subCalls: [{
+        callId: 'hidden-child', parentCallId: 'hidden-root', name: 'bash', argsRaw: '{}',
+        turn: 1, step: 1, time: 3, subCalls: [],
+      }],
+    }, 'hidden-child'],
+  ])('reveals a hidden resident %s call for cross-view inspection', (_kind, target, focus) => {
+    const nodes: LegacyConversationSlice['nodes'] = [
+      { kind: 'user', seq: 1, time: 1, content: [], source: null },
+      {
+        kind: 'tool-result', seq: 2, time: 2, callId: 'unrelated', call: null, callTime: null,
+        content: [], isError: false, subCalls: [],
+      },
+      target,
+      ...Array.from({ length: 50 }, (_, index) => ({
+        kind: 'user' as const,
+        seq: index + 4,
+        time: index + 4,
+        content: [{ type: 'text' as const, text: `later ${String(index + 1)}` }],
+        source: null,
+      })),
+    ]
+    const completeViewRequest = vi.fn()
+    render(
+      <TrajectoryView
+        {...standaloneProps([])}
+        {...standaloneHistory(historySnapshot(nodes))}
+        {...standaloneDuration()}
+        viewRequest={{ view: 'trajectory', focus }}
+        completeViewRequest={completeViewRequest}
+      />,
+    )
+
+    expect(completeViewRequest).toHaveBeenCalledOnce()
+  })
+
   it('persists the duration preference through the runtime snapshot-store seam', () => {
     const firstDuration = createTrajectoryDurationStore()
     const commonProps = {

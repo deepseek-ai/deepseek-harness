@@ -9,6 +9,7 @@ import {
 } from '@deepseek-ai/dsh-compaction'
 import type { CompactionResult, CompactionTrigger } from '@deepseek-ai/dsh-compaction'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { CompactionAgentContext } from '@deepseek-ai/dsh-compaction'
 import type { ManualCompactAgentContext } from '@deepseek-ai/dsh-compaction'
 
@@ -40,8 +41,8 @@ class StubCompactionEngine extends CompactionEngine {
   }
 
   override async compactRegion(
-    start: number,
-    end: number,
+    start: SessionSeq,
+    end: SessionSeq,
     agent: CompactionAgentContext,
     signal?: AbortSignal,
   ): Promise<CompactionResult> {

@@ -6,7 +6,7 @@
   margin: 0 24px 20px;
   min-height: 54px;
   padding: 10px 16px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 14px;
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-tertiary);

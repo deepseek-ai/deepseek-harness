@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { Session, SessionSeq as SessionSeqType } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
 
@@ -16,8 +16,16 @@ async function harness(withTitleService: boolean): Promise<{ ctx: Context; sessi
   return { ctx, session: ctx.sessions.create(SessionId('titled')) }
 }
 
-function appendTitle(session: Session, title: string): number {
-  return session.append('session/title', { title, messageSeqs: [1], source: { kind: 'fallback' } }).seq
+function appendTitle(session: Session, title: string): SessionSeqType {
+  const messageSeq = session.snapshotEvents().find(event =>
+    event.type === 'user/message' && event.data.source.kind === 'user')?.seq
+    ?? session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'Title source' }],
+      source: { kind: 'user' },
+    }), { surfaceOp: 'append' }).seq
+  return session.append('session/title', {
+    title, messageSeqs: [messageSeq], source: { kind: 'fallback' },
+  }).seq
 }
 
 describe('title projection unit', () => {
@@ -30,7 +38,7 @@ describe('title projection unit', () => {
 
   it('serves the latest title last-wins and notifies the change feed with the causing seq', async () => {
     const { ctx, session } = await harness(true)
-    const changes: { key: string; value: unknown; seq: number }[] = []
+    const changes: { key: string; value: unknown; seq: SessionSeqType }[] = []
     ctx.sessionProjections.onChanged((_session, key, value, seq) => {
       changes.push({ key, value, seq })
     })
@@ -50,7 +58,7 @@ describe('title projection unit', () => {
     const { ctx } = await harness(true)
 
     expect(ctx.sessionProjections.viewCheckpoint({
-      title: { ver: 1, seq: 8, val: 'Cached title' },
+      title: { ver: 1, seq: SessionSeq(8), val: 'Cached title' },
     })).toEqual({ title: 'Cached title' })
   })
 
@@ -105,7 +113,9 @@ describe('title projection unit', () => {
         ...checkpoint,
         titleInput: { ...row!, val: state },
       }
-      expect(() => ctx.sessionProjections.restore(malformed, [], 0, session.header))
+      expect(() => ctx.sessionProjections.restore(
+        malformed, [], SessionLogOffset(0), session.header, session.inheritedEventCount,
+      ))
         .toThrow(/title input state must pair its count with first and last message seqs/)
     }
 
@@ -115,6 +125,6 @@ describe('title projection unit', () => {
         ...row!,
         val: { first: { seq: 1, text: 'first' }, count: 1, lastSeq: 1 },
       },
-    }, [], 0, session.header)).not.toThrow()
+    }, [], SessionLogOffset(0), session.header, session.inheritedEventCount)).not.toThrow()
   })
 })

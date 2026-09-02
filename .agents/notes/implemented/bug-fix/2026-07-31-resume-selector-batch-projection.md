@@ -26,7 +26,7 @@ No session-query or session-persistence surface changed. The shipped TUI composi
 
 **Fix only the O(N²) listing inside `SessionCorpus.load()`.** Rejected as the primary fix: the per-candidate full decompress, replay validation, and triple clone dominated on large logs. The redundant pre-listing in `load()` remains a candidate cleanup with error-semantics implications.
 
-**Surface a last-modified time through `listSnapshots`/`SessionRecord`.** Cleanest seam-wise, but touches the persistence contract, provider, and query record type for what the TUI can already derive from `locate()` plus one stat. Reintroduce if a second consumer needs metadata activity times.
+**Surface a last-modified time through `list()`/`SessionRecord`.** Cleanest seam-wise, but touches the persistence contract, provider, and query record type for what the TUI can already derive from the stored log's file metadata. Reintroduce if a second consumer needs metadata activity times.
 
 **A bespoke persisted title index or TUI-local title cache.** Rejected: the session-projection cache already is the owned durable checkpoint system with an invalidation contract (`stateVersion`, identity binding, shrunk-log anchoring); mounting it beats adding a parallel cache.
 

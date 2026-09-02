@@ -1,16 +1,18 @@
 /**
  * Host-side session-log download: streams one ZIP archive whose files are the
- * sessions' stored artifact text verbatim plus every referenced media object.
- * The root artifact sits under its original base name (`session.jsonl`); each
- * subagent descendant under `subagents/<id>/<filename>`; each image referenced
- * by any included log under `media/<attachmentId>.<ext>` (content-addressed,
- * so one archive never duplicates a shared image). No manifest is written —
- * every file is byte-identical to the backend's durable artifact or attachment
- * store and self-describing through its own header line or media type. Before
- * each live session's artifact read, the SessionStore flush barrier makes the
- * current in-memory log durable; cold sessions need no barrier. Request abort
- * and response-consumer cancellation share one producer signal and terminate
- * the active compressor.
+ * sessions' logical session logs plus every referenced media object. Each log
+ * is read through a persistence read handle and serialized here as canonical
+ * JSONL — one header line, then one line per validated event — so every
+ * backend (JSONL, SQLite, future) exports identically. The root log sits at
+ * `session.jsonl`; each subagent descendant under
+ * `subagents/<id>/session.jsonl`; each image referenced by any included log
+ * under `media/<attachmentId>.<ext>` (content-addressed, so one archive never
+ * duplicates a shared image). No manifest is written — every file is
+ * self-describing through its own header line or media type. Before each live
+ * session's log read, the SessionStore flush barrier makes the current
+ * in-memory log durable; cold sessions need no barrier. Request abort and
+ * response-consumer cancellation share one producer signal and terminate the
+ * active compressor.
  * Compression runs on the host with fflate's streaming Zip API, so the archive
  * bytes are produced incrementally and the host never holds the whole archive
  * in one buffer; production waits for consumer pull whenever the response queue
@@ -23,8 +25,9 @@ import { Zip, ZipDeflate } from 'fflate'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionLineageNode, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
-import type { SessionId, SessionStore } from '@deepseek-ai/dsh-session'
-import type { SessionPersistence, SessionRawArtifact } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionEvent, SessionHeader, SessionId, SessionStore } from '@deepseek-ai/dsh-session'
+import type { SessionHandle, SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
+import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
 
 /** Valid fflate DEFLATE levels accepted by session-log export. */
 export type SessionLogCompressionLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
@@ -84,10 +87,85 @@ export async function flushLiveSessionLog(
   signal?.throwIfAborted()
 }
 
-/** One exported file: a stored artifact text or one referenced media object. */
+/** One exported file: a serialized session log or one referenced media object. */
 export type SessionLogZipEntry =
   | { readonly path: string; readonly content: string }
   | { readonly path: string; readonly data: Uint8Array }
+
+/** The zip base filename for every exported session log. */
+export const SESSION_LOG_FILENAME = 'session.jsonl'
+
+/**
+ * Serialize one session's logical log as canonical JSONL text: the header
+ * line, then one line per event, with a trailing newline.
+ * @param header - the session's immutable header.
+ * @param inheritedEventCount - the exact fork-inherited prefix length stored
+ *   beside the header (`0` when `header.isSeeded` is false).
+ * @param events - the validated committed events in seq order.
+ * @returns the JSONL text.
+ */
+export function serializeSessionLog(
+  header: SessionHeader,
+  inheritedEventCount: number,
+  events: readonly SessionEvent[],
+): string {
+  // Match the JSONL backend's canonical header line: lineage is the physical
+  // `seedLength`, and `delegationDepth` is required-on-read there, so an
+  // omitted top-level depth serializes as 0 and the exported log parses as a
+  // valid log.
+  /* jscpd:ignore-start -- deliberately mirrors the JSONL backend's
+     `toHeaderLine`: the exported text is the canonical v0 physical header
+     line, and this backend-agnostic package must not depend on one backend
+     implementation. */
+  const lines = [JSON.stringify({
+    type: 'session',
+    version: header.version,
+    id: header.id,
+    createdAt: header.createdAt,
+    ...header.cwd !== undefined ? { cwd: header.cwd } : {},
+    ...header.parentSession !== undefined ? { parentSession: header.parentSession } : {},
+    ...header.isSeeded ? { seedLength: inheritedEventCount } : {},
+    ...header.origin !== undefined ? { origin: header.origin } : {},
+    delegationDepth: header.delegationDepth ?? 0,
+    ...header.agentPreset !== undefined ? { agentPreset: header.agentPreset } : {},
+  })]
+  /* jscpd:ignore-end */
+  for (const event of events) lines.push(JSON.stringify(event))
+  return `${lines.join('\n')}\n`
+}
+
+/**
+ * Read one session's complete logical log through a read handle and serialize
+ * it. The read observes the committed log only — persistence never returns a
+ * torn tail — and a handle read after a resolved flush observes at least the
+ * flushed prefix.
+ * @param persistence - the mounted persistence backend.
+ * @param id - the session to read.
+ * @param signal - optional cancellation forwarded to the open and read.
+ * @returns the serialized JSONL text, or `undefined` when the session does not exist.
+ */
+export async function readSessionLogText(
+  persistence: SessionPersistence,
+  id: SessionId,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
+  const options = signal === undefined ? {} : { signal }
+  let handle: SessionHandle
+  try {
+    handle = await persistence.open(id, 'read', options)
+  } catch (error) {
+    // Absence is `open`'s decision; every other failure (corruption,
+    // unsupported format, I/O, cancellation) stays fail-loud.
+    if (error instanceof SessionPersistenceNotFoundError) return undefined
+    throw error
+  }
+  try {
+    const events = await handle.read(0, undefined, options)
+    return serializeSessionLog(handle.header, Number(handle.inheritedEventCount), events)
+  } finally {
+    await handle.close()
+  }
+}
 
 /** Zip extension for each accepted raster media type. */
 const MEDIA_TYPE_EXTENSIONS: Record<ImageAttachmentRef['mediaType'], string> = {
@@ -201,16 +279,16 @@ export function sessionLogZipFilename(sessionId: string): string {
 }
 
 /**
- * Yield the export entries in zip order: the preloaded root artifact first,
- * then every subagent descendant in lineage order (each flushed when live,
- * read from the persistence backend right before it is yielded, and dropped
+ * Yield the export entries in zip order: the preloaded root log first, then
+ * every subagent descendant in lineage order (each flushed when live, read
+ * through a persistence read handle right before it is yielded, and dropped
  * after the consumer moves on), then every distinct media object referenced by any of
  * the included logs (read and verified from the attachment store, one archive
- * entry per attachment id). The host holds at most one descendant's artifact
- * text and one media object at a time beyond the root.
+ * entry per attachment id). The host holds at most one descendant's log text
+ * and one media object at a time beyond the root.
  * @param deps - the mounted export services (the caller answered 500 before this runs).
- * @param root - the already-read root artifact (read by the caller so the
- * missing-session path can answer cleanly before streaming starts).
+ * @param rootContent - the already-serialized root log (read by the caller so
+ * the missing-session path can answer cleanly before streaming starts).
  * @param sessionId - the root session id.
  * @param includeDescendants - whether to include every subagent descendant.
  * @param signal - optional cancellation forwarded to lineage, persistence, and attachment reads.
@@ -218,7 +296,7 @@ export function sessionLogZipFilename(sessionId: string): string {
  */
 export async function* sessionLogZipEntries(
   deps: SessionLogExportReady,
-  root: SessionRawArtifact,
+  rootContent: string,
   sessionId: SessionId,
   includeDescendants: boolean,
   signal?: AbortSignal,
@@ -227,8 +305,8 @@ export async function* sessionLogZipEntries(
   const rememberMedia = (content: string): void => {
     for (const [id, ref] of imageRefsInArtifact(content)) media.set(id, ref)
   }
-  rememberMedia(root.content)
-  yield { path: root.filename, content: root.content }
+  rememberMedia(rootContent)
+  yield { path: SESSION_LOG_FILENAME, content: rootContent }
   if (includeDescendants) {
     const seen = new Set<SessionId>([sessionId])
     const collect = async function* (
@@ -240,15 +318,15 @@ export async function* sessionLogZipEntries(
         if (seen.has(id)) continue
         seen.add(id)
         await flushLiveSessionLog(deps, id, signal)
-        const raw = await deps.sessionPersistence.readRaw(id, signal)
+        const content = await readSessionLogText(deps.sessionPersistence, id, signal)
         signal?.throwIfAborted()
-        if (raw === undefined) {
-          throw new Error(`subagent "${id}" has no stored log artifact`)
+        if (content === undefined) {
+          throw new Error(`subagent "${id}" has no stored log`)
         }
-        rememberMedia(raw.content)
+        rememberMedia(content)
         yield {
-          path: `subagents/${safeSessionIdSegment(id)}/${raw.filename}`,
-          content: raw.content,
+          path: `subagents/${safeSessionIdSegment(id)}/${SESSION_LOG_FILENAME}`,
+          content,
         }
         yield* collect(node.descendants)
       }
@@ -371,14 +449,14 @@ async function pushArtifactChunks(
 }
 
 /**
- * Stream one session-log ZIP as a WHATWG ReadableStream. The root artifact is
- * read and validated by the caller before this is called (missing root or
+ * Stream one session-log ZIP as a WHATWG ReadableStream. The root log is read
+ * and serialized by the caller before this is called (a missing root or
  * missing services answer cleanly before any byte is produced); each entry is
  * then encoded and deflated in bounded chunks as it is produced, so the
  * archive bytes arrive incrementally. A descendant that fails to read errors
  * the stream (fail-loud, never silent under-export).
  * @param deps - the mounted export services (the caller answered 500 before this runs).
- * @param root - the already-read root artifact (first zip entry).
+ * @param rootContent - the already-serialized root log (first zip entry).
  * @param sessionId - the root session id.
  * @param includeDescendants - whether to include every subagent descendant.
  * @param compressionLevel - validated fflate DEFLATE level for every ZIP entry.
@@ -387,7 +465,7 @@ async function pushArtifactChunks(
  */
 export function streamSessionLogZip(
   deps: SessionLogExportReady,
-  root: SessionRawArtifact,
+  rootContent: string,
   sessionId: SessionId,
   includeDescendants: boolean,
   compressionLevel: SessionLogCompressionLevel,
@@ -422,7 +500,7 @@ export function streamSessionLogZip(
       zip = archive
       void (async () => {
         try {
-          for await (const entry of sessionLogZipEntries(deps, root, sessionId, includeDescendants, producerSignal)) {
+          for await (const entry of sessionLogZipEntries(deps, rootContent, sessionId, includeDescendants, producerSignal)) {
             const deflate = new ZipDeflate(entry.path, { level: compressionLevel })
             archive.add(deflate)
             if ('content' in entry) {

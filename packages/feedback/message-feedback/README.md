@@ -84,7 +84,7 @@ Mutations are optimistic and per message: a caller sends the version it last obs
 
 ### Durability and target validation
 
-A write is staged, verified, then committed: the target message is flushed through the canonical checkpoint, the physical log prefix is re-read, and only then is the sidecar row written — feedback can never reference a message that is not durable. Cold sessions are inspected without resuming an agent, absence is decided from the persistence catalog rather than guessed, and only a real, sent assistant message is a valid target. The flush and inspect path lives in [`src/index.ts`](src/index.ts).
+A write is staged, verified, then committed: the target message is flushed through the canonical checkpoint, the physical log prefix is re-read, and only then is the sidecar row written — feedback can never reference a message that is not durable. Cold sessions are read without resuming an agent, absence is decided by the persistence store's `stat` rather than guessed, and only a real, sent assistant message is a valid target. The flush and read path lives in [`src/index.ts`](src/index.ts).
 
 ### Failure modes
 
@@ -110,7 +110,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Feedback subsystem](../../../docs/subsystems/feedback.md) — the public types, Remote contract, and Web consumer details.
 - [Message-feedback sidecar decision](../../../.agents/notes/implemented/architecture/2026-08-10-message-feedback-sidecar.md) — the design boundary that keeps this sidecar out of Session-log content.
-- [Session persistence subsystem](../../../docs/subsystems/persistence.md) — `inspect`, `readFrom`, and `flush` semantics behind the durability barrier.
+- [Session persistence subsystem](../../../docs/subsystems/persistence.md) — the handle `read`, `stat`, and `flush` semantics behind the durability barrier.
 - [dsh-client-ui-message-feedback](../../client/ui-message-feedback/README.md) — the browser consumer that drives the Host Remote contract.
 - [Feedback package map](../README.md) — where per-message feedback sits next to the log-only capture command.
 
@@ -142,10 +142,9 @@ These limits define when the service is a poor fit or needs special operational 
 
 - **Compare-and-set is single-process** — the per-Session queue serializes one service instance only; storage-domain has no cross-process conditional write, so multiple Host processes writing one storage root can still lose updates.
 - **No durable Session deletion cascade** — Session persistence has no deletion API, and `session/disposed`/`api-session/removed` mean detach rather than durable deletion. The service therefore retains empty rows and may leave orphan rows after out-of-band log removal instead of deleting valid feedback on detach.
-- **Detach/catalog retirement window** — a request in the narrow interval after live detach but before the persistence catalog materializes the header can receive `session-not-found`; callers retry after retirement materialization.
 - **Header identity is not a content fingerprint** — `{createdAt, cwd}` detects reuse only when those fields differ; a cloned log retaining the same header identity is indistinguishable.
 - **Trusted caller boundary** — `list`/`put`/`delete` carry no authenticated actor or audit identity. A deployment must expose the Host gateway only through its trusted or separately authenticated boundary until authorization and attribution are added.
-- **Catalog and row bounds** — a cold request scans the complete Session snapshot catalog because persistence has no lookup-by-id metadata operation. `maxNoteBytes` bounds one note, but the item count and aggregate retained bytes of one Session row are not capped; an indexed metadata read and deployment-owned row bound remain deferred until a concrete consumer defines their policy.
+- **Row bounds** — `maxNoteBytes` bounds one note, but the item count and aggregate retained bytes of one Session row are not capped; a deployment-owned row bound remains deferred until a concrete consumer defines its policy.
 
 <a id="dev-note"></a>
 ### Dev Note

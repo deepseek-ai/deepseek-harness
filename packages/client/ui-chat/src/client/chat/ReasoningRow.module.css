@@ -3,6 +3,11 @@
   flex-direction: column;
 }
 
+.root:not([data-expanded]) {
+  contain: size layout;
+  height: calc(24px + var(--dsh-content-font-delta, 0px));
+}
+
 .row {
   position: relative;
   overflow: hidden;
@@ -60,11 +65,26 @@
   color: var(--dsw-alias-label-tertiary);
   font-size: var(--dsh-content-font-size-secondary, 13px);
   line-height: calc(20px + var(--dsh-content-font-delta-secondary, 0px));
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.summaryText {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .summary[data-follow-end] {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.summary[data-follow-end] .summaryText {
+  flex: 0 0 auto;
+  width: max-content;
+  min-width: 100%;
+  overflow: visible;
+  text-align: start;
   text-overflow: clip;
 }
 

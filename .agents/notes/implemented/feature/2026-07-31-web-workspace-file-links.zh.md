@@ -14,7 +14,7 @@ Status: implemented
 
 ## 决策
 
-**完成的一轮以它产出的文件收尾。** 该行是独立插件 `@deepseek-ai/dsh-client-ui-deliverables`，注册进 chat 视图在收尾消息正文与其 IconActions 之间渲染的 `conversation.chat.turnTail` 空位——ui-conversation 拥有空位与 owner 通货（节点、收尾 seq、`openFile`），插件拥有全部策略。`producedForClosing` 从改写工具自身的跟随文件 `locations` 中读出路径——diff 卡片，或 `kind` 为 `edit` 的 generic 卡片（即 `str_replace_editor` 的 insert 所呈现的形状）——因此无论收尾消息是否点名，这一轮的产出都会被列出；新的改写工具靠声明自己做了什么加入，而不是靠被加进某张名单。read、删除与失败的调用不贡献任何条目；同一路径在一轮内按首见顺序只出现一次；累积在 turn 边界重置，因此一轮若先改写文件、随后没有正文内容就结束，不会溢进下一轮的行里。单行 lane 会测量 chip 和本地化剩余计数，再显示能放下的最大前缀（至多六个）及 `+ N 个文件`。cordis.yml 中的一行即可把该交互面组合进来或去掉；未注册的空位什么也不渲染。
+**完成的一轮以它产出的文件收尾。** 该行是独立插件 `@deepseek-ai/dsh-client-ui-deliverables`，注册进 chat 视图在收尾消息正文与其 IconActions 之间渲染的 `conversation.chat.turnTail` 空位——ui-conversation 拥有空位与 owner 通货（节点、收尾 seq、`openFile`），插件拥有全部策略。`producedForClosing` 从改写工具自身的跟随文件 `locations` 中读出路径——diff 卡片，或 `kind` 为 `edit` 的 generic 卡片（即 `str_replace_editor` 的 insert 所呈现的形状）——因此无论收尾消息是否点名，这一轮的产出都会被列出；新的改写工具靠声明自己做了什么加入，而不是靠被加进某张名单。read、删除与失败的调用不贡献任何条目；同一路径在一轮内按首见顺序只出现一次；累积在 turn 边界重置，因此一轮若先改写文件、随后没有正文内容就结束，不会溢进下一轮的行里。CSS 容器宽度档位会选择前六条路径中的一个前缀及其匹配的 `+ N 个文件` 标签，flexbox 则收缩可见的 basename 并用 ellipsis 省略；组件不执行 JavaScript 布局观察（[决策](../simplification/2026-09-01-css-produced-file-layout.zh.md)）。cordis.yml 中的一行即可把该交互面组合进来或去掉；未注册的空位什么也不渲染。
 
 **路径链接读得出是链接。** 静止状态下就带下划线，而不只在悬停时。这是本次改动中更小的那一半，却是修复中更大的那一半。
 
@@ -28,9 +28,9 @@ Status: implemented
 - **同源 HTTP 提供且不加隔离**——经实测不安全，记录在此以免有人重试：与 `/api` 并排提供的文档把 `settings.describe` 打到 `200` 并拿到完整数据，把 `session.list` 打到包含所有会话 transcript 的 35 KB，而这个页面根本不必由 agent 撰写（一条 read 行就让 clone 下来的仓库里任何文件变得可打开）。
 - **在那套同源提供之上加 `Content-Security-Policy: sandbox`**——它以剥夺文档的源来堵住这个洞，而这经实测会破坏本功能存在的意义所在的那类页面：所报告的产物在加载时抛 `SecurityError`，又因为未捕获异常会中止其 `<script>` 的其余部分，该行之后声明的所有监听器——主题切换、移动端菜单、模型 tabs——统统不会绑定。报告者工作区里四份产物有两份在它之下是死页面，而且它们渲染得完美无缺，所以这种破坏是看不见的。
 - **把路径在助手的收尾消息里链接化**——这是用户开口要的形状（「在结尾附上链接」），但它让渲染取决于模型是否把路径拼写得可识别。工具调用已经把 `locations` 作为结构化事实携带，产出文件行消费的正是它。
-- **让文件 chip 横向滚动**——这样会把每个文件都留在 DOM 中，却使隐藏的尾部难以发现，在 transcript 内增加一层横向手势，也无法精确说明视口外还有什么。经过测量的一行和稳定的剩余计数既保留回答的纵向节奏，也明确呈现省略量。
+- **让文件 chip 横向滚动**——这样会把每个文件都留在 DOM 中，却使隐藏的尾部难以发现，在 transcript 内增加一层横向手势，也无法精确说明视口外还有什么。不滚动的 CSS 单行与按宽度选择的可见前缀既保留回答的纵向节奏，也明确呈现省略量。
 - **桌面端外壳中的内嵌 WebView**——可得到的最强隔离，因为那时预览跑在产品自己拥有的容器里，而不是用户的浏览器里。它属于桌面端外壳自身的设计，而非本交互面，记录在此作为未来预览能力应走的方向。
 
 ## 后果
 
-现有的每一处文件交互都同时改变了：write、edit、read 与通用单文件卡片都汇到 `openFile`，因此链接修复与浏览器优先策略无需逐行改动。组装层 Web 测试覆盖溢出几何和单次点击的 Host 交接，且不会启动原生应用。产出的 `file://` 文档无法 `fetch` 同级文件（但 `<script src>`、`<img>` 和 CSS `@import` 可用），这是 HTTP 提供曾有、而此处没有的能力。远程客户端保留 chip，但省略文件夹操作；每个 chip 的 `title` 仍保留完整路径。Markdown 仍由平台的 `.md` 应用打开；产品内渲染属于另一项工作。
+现有的每一处文件交互都同时改变了：write、edit、read 与通用单文件卡片都汇到 `openFile`，因此链接修复与浏览器优先策略无需逐行改动。组装层 Web 测试覆盖单行 CSS 溢出和单次点击的 Host 交接，且不会启动原生应用。产出的 `file://` 文档无法 `fetch` 同级文件（但 `<script src>`、`<img>` 和 CSS `@import` 可用），这是 HTTP 提供曾有、而此处没有的能力。远程客户端保留 chip，但省略文件夹操作；每个 chip 的 `title` 仍保留完整路径。Markdown 仍由平台的 `.md` 应用打开；产品内渲染属于另一项工作。

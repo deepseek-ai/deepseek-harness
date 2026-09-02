@@ -26,7 +26,7 @@ session-query 与 session-persistence 的任何接口都未改变。随附的 TU
 
 **只修复 `SessionCorpus.load()` 内部的 O(N²) 列表查询。** 作为主要修复被否决：在大日志上，按候选行执行的完整解压、回放验证和三重克隆才是主要开销。`load()` 中的冗余预列表查询仍是一个候选清理项，但涉及错误语义。
 
-**通过 `listSnapshots`/`SessionRecord` 暴露最后修改时间。** 从 seam 角度最干净，但要触碰持久化约定、provider 和查询记录类型，而 TUI 已能用 `locate()` 加一次 stat 得到同样的信息。若出现第二个需要元数据活动时间的消费方再引入。
+**通过 `list()`/`SessionRecord` 暴露最后修改时间。** 从 seam 角度最干净，但要触碰持久化约定、provider 和查询记录类型，而 TUI 已能从已存日志的文件元数据得到同样的信息。若出现第二个需要元数据活动时间的消费方再引入。
 
 **专门的持久化标题索引或 TUI 本地标题缓存。** 否决：session-projection 缓存本身就是自有的持久 checkpoint 系统，并已带失效约定（`stateVersion`、身份绑定、日志收缩锚定）；挂载它优于再造一套并行缓存。
 

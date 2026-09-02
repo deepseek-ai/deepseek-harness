@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { type SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import {
   canonicalSessionFixture,
@@ -14,7 +14,7 @@ const root = resolve(import.meta.dirname, '..')
 function chunkRun(): SessionEvent[] {
   return Array.from({ length: 4 }, (_, index) => ({
     type: 'assistant/chunk',
-    seq: index,
+    seq: SessionSeq(index),
     time: 10 + index,
     data: {
       turn: 1,

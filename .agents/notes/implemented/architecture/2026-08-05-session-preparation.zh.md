@@ -6,63 +6,40 @@ Status: implemented
 
 ## 问题
 
-冷历史检查和 agent（智能体）恢复会分别实体化同一份持久会话日志。对于大型压缩日志，每次操作都会重新完整读取、解压、解析、验证、冻结并构造 Session。因此，历史分页可能反复承担冷读成本；如果改为由历史查询激活 agent，读取生命周期又会与缺少自然退出时机的实时 agent 耦合。
+新建和持久化恢复通过不同构造流程抵达相同的发布边界。这使一项关键不变量不够清楚：设置必须基于一个未发布的 Session 完成，之后系统才能同时公开这个精确 Session 及其 agent。
 
-新建和持久化恢复也通过不同构造流程抵达相同的发布边界。这使一项关键不变量不够清楚：设置必须基于一个未发布的 Session 完成，之后系统才能同时公开这个精确 Session 及其 agent。
+冷历史检查和 agent（智能体）恢复也曾分别实体化同一份持久会话日志，本 Note 最初以持久化侧的已准备 Session 缓存回答了这一半问题；那一半已在下文中被取代。
 
 ## 决策
 
-`SessionPreparation` 持有一个精确的未发布 `Session`，直至发布或回滚。它属于 Session 生命周期，不属于 agent 生命周期或激活机制。新建流程包装 `SessionStore.prepare()` 的结果；持久化恢复则从 `SessionPersistence.prepare()` 取得准备对象。
+`SessionPreparation` 持有一个精确的未发布 `Session`，直至发布或回滚。它属于 Session 生命周期，不属于 agent 生命周期或激活机制。新建流程包装 `SessionStore.prepare()` 的结果；持久化恢复通过该会话的写句柄读取已存储的日志、追加 `interruptedTurnClosers`，再包装 `SessionStore.prepare(id, { seed, meta, seedSource: 'persistence' })`——即就地验证并冻结转移对象图的恢复分支。
 
 agent loop（智能体循环）通过同一条设置与发布流水线消费这两种形式：先取得准备对象，围绕 `preparation.session` 构建私有 agent 上下文，等待可选设置完成，再发布该精确 Session 和 agent，并在所有退出路径上对准备对象执行 dispose（资源释放）。发布后，实时生命周期由现有 Session 与 agent 存储接管；`SessionPreparation` 本身不负责任何 agent 行为。
 
 该机制细化了 [agent 生命周期与所有权决策](2026-06-18-agent-lifecycle-and-ownership-contracts.zh.md)中的发布边界，但不替换其所有权模型。
 
-## 持久化准备生命周期
+## 已被取代：持久化侧的准备生命周期
 
-使用协调器的持久化实现会将一个冷源加载为准备完成的 Session。后端转移新鲜、彼此无别名的元数据和事件，以及标识这些精确值的来源限定 revision；Session 恢复路径直接验证并冻结这些对象图，不再复制。协调器计算中断轮次的 closer，并且只构造一次精确的未发布 Session。其不可变 header 与已配平的逻辑事件日志构成读取方借用的 `SessionInspection`，revision 则保留在持久化内部。
-
-`inspect(id, signal?)` 不修改存储。合成 closer 只存在于准备完成的内存视图中，撕裂的物理尾部保持不变。同 id 调用方共享进行中的冷读。准备完成后，该对象可以进入每个协调器自己的 LRU；第一方后端可配置容量，默认保留五个。协调器复用保留源之前会读取该 id 的当前 revision；如果不匹配，就淘汰处于就绪阶段的源并重新完成冷实体化。已经进入提交或为恢复而预留的源仍由其所有者独占，因此并发检查会借用该不可变视图，直至发布或释放。
-
-`prepare(id, signal?)` 独占预留准备完成的 Session。它先确认保留的 revision，再提交撕裂尾部和中断轮次修复、建立持久游标，最后返回可 dispose 的准备对象。陈旧源会被丢弃并重新读取，不会参与修复或发布。修复成功后也会丢弃修复前的源，并在预留前重新实体化已提交日志，以免把较新的 revision 关联到较旧的事件对象图。同 id 的另一个准备请求会等待当前预留发布或释放。发布只接受精确的预留 Session，并直接附接已提交游标，无需重建历史。设置失败或取消时，未发生变化的未发布 Session 会返回 LRU；发生变更或完成附接后，系统会消费该预留。
-
-存量 `load(id)` API 使用相同的准备和修复机制，随后丢弃其预留并返回不可变逻辑视图。它保留为兼容 API，不承担历史到恢复的复用路径。该生命周期扩展了[共享持久化协调器](2026-06-18-shared-persistence-write-coordinator.zh.md)，同时继续遵循[会话持久化决策](2026-06-14-session-persistence.zh.md)所规定的存储与恢复规则。
-
-## 历史与恢复复用
-
-历史读取使用 `inspect()`，因此重复分页可以借用同一份不可变准备状态，而不会激活 agent。后续恢复调用 `prepare()`，直接取得检查阶段保留的精确 Session；系统不会再次完整读取、解压、解析、复制、验证或冻结日志。
-
-如果持久日志在检查后发生变化，其 revision 也会变化。下一次历史读取或恢复会丢弃保留且处于就绪阶段的 Session，并实体化新日志，因此旧事件对象图不会被关联到较新的快照 revision。已经由进行中恢复操作取得的源不会被淘汰：其独占所有者会持有它直至发布或释放，并发历史读取可以借用同一个不可变视图。
-
-冷 continuable subagent 访问沿用同一路径。系统先检查子会话并完成 descriptor 授权，再由 `ctx.agents.resume()` 预留并发布保留的 Session。这样既遵循 [continuable subagent 会话决策](../feature/2026-07-28-continuable-subagent-conversations.zh.md)中的生命周期与授权规则，也消除了重复冷读。
+本 Note 最初还赋予持久化一个 `prepare(id)`/`inspect(id)` 生命周期：由协调器支撑的、装有冷未发布 Session 的有界 LRU，带独占预留、按 revision 校验的复用，以及在 `prepare`/`load` 内部提交的修复，使历史分页与后续恢复共享一次冷实体化。[基于句柄的持久化 seam](2026-08-27-handle-based-session-persistence.zh.md) 删除了这一切：持久化只暴露句柄，恢复通过其写句柄读取日志并自行负责修复，只读观察方（session-query）拥有自己的冷 Session 缓存，以 `stat().revision` 变更令牌为键。读取复用的目标在该缓存中得以延续；独占预留机制则没有延续，因为写句柄的单写者所有权正是恢复真正需要的排他手段。在已准备缓存有时能提供温 Session 的场景下，恢复要为通过句柄的一次全日志读取付出代价——这是句柄 Note 中记录的、已被接受的成本。
 
 ## 边界
 
-- `readFrom()` 仍是脱离的物理后缀 API。它不会创建或消费准备对象，不会合成逻辑 closer，也不会进入 LRU。
-- HMR（热模块替换）接管继续以实时 Session 为权威，并直接读取已存储前缀。它可以截断撕裂的物理碎片，但绝不把实时开放轮次关闭为中断状态。
-- 缓存属于单个持久化协调器，而不是进程全局 Session map。实时 Session 由现有存储持有，绝不占用准备容量。
-- 新建流程绝不认领相同 id 的冷持久化准备对象。持久化冲突仍会被拒绝。
-- 第三方持久化实现继续获得通过 `load()` 实现的抽象 `prepare()` 回退。它们使用相同发布接口，但只有覆盖准备流程后才能复用精确对象。
-- Revision 校验在复用点和修复提交点建立新鲜度，但不会为后端增加跨进程 writer 排他。持久日志在一次读取与复核往返内保持不变后，重试才能收敛，因此持续的外部写入可能延迟准备。
+- 准备对象是一个可 dispose 的所有权窗口，而不是缓存：dispose 同步且幂等，发布只接受精确的已准备 Session。
+- 新建流程绝不隐式认领持久化身份。持久化冲突仍会被拒绝（`SessionAlreadyExistsError`、`SessionAlreadyOwnedError`）。
+- 实时 Session 由现有存储持有；准备对象只持有未发布的 Session。
 
 ## 验证
 
-共享持久化约定规定冷检查不得修改存储且须保持配平，并覆盖后续修复。`persistence.spec.ts` 与 `preparations.spec.ts` 覆盖同 id 进行中读取共享、检查与准备之间的精确 Session 复用、在历史读取与恢复前由 revision 触发刷新、修复只提交一次、独占预留、设置失败后释放、就绪项 LRU 淘汰、预留期间拒绝 append，以及只允许发布预留 Session。后端测试覆盖完整读取与轻量读取使用同一 revision 身份。agent loop 与 continuable subagent 测试覆盖统一发布流水线，以及取消和清理期间从检查到恢复的路径。
+agent loop 测试覆盖 create、`createAgent` 与 resume 之间的统一发布流水线，包括设置失败时的回滚、取消与清理，以及 dispose 会释放写句柄（重新以写模式打开可以成功）。Session store 测试覆盖恢复分支的就地验证并冻结的所有权转移。
 
 ## 考虑过的替代方案
 
-**由历史读取激活 agent。** 不采用，因为分页会使仅用于查询的 agent 长期保持实时状态，并把缓存退出问题转移到 agent 生命周期。
+**由历史读取激活 agent。** 不采用，因为分页会使仅用于查询的 agent 长期保持实时状态，并把缓存退出问题转移到 agent 生命周期。该理由仍然守护着 session-query 冷缓存：观察绝不创建 agent。
 
-**只缓存 `{ meta, events }`。** 不采用，因为恢复仍需从缓存值重新构造、验证、冻结并复制 Session。真正可复用的单元是精确的未发布 Session。
+**只缓存 `{ meta, events }`。** 当时不采用，因为恢复仍需从缓存值重新构造 Session。在句柄 seam 下，这恰好是读取侧的做法——session-query 按 revision 为只读用途缓存一个冷 Session——而恢复则从句柄读取重建，以温 Session 复用换取唯一的写所有权之门。
 
-**维护进程全局 Session map。** 不采用，因为它会跨越后端和运行时所有权边界，无界保留身份，并与实时 Session 存储重复。
-
-**在 agent loop 中增加恢复事务或协调器。** 不采用，因为冷读、修复、预留和游标附接都属于持久化与 Session 职责。agent loop 只需要统一的 `SessionPreparation` 所有权边界。
-
-**把 `readFrom()` 改成逻辑准备流程。** 不采用，因为水位消费方需要脱离的物理后缀；对于可寻址后端，还需要限制实际读取范围。恢复平衡与完整 Session 复用具有不同语义。
+**在 agent loop 中增加恢复事务或协调器。** 不采用，因为冷读与 Session 构造属于持久化与 Session 职责。agent loop 只需要统一的 `SessionPreparation` 所有权边界；句柄 seam 保留了这一分工，同时把修复移入循环的恢复路径。
 
 ## 后果
 
-一次冷实体化可以同时服务历史分页、subagent descriptor 检查和后续恢复。所有权转移去除了恢复阶段的冗余复制；每个协调器的有界 LRU 限制内存占用，也避免查询创建实时 agent。新建和恢复共享同一发布协议，同时保持 agent 与 Session 职责分离。
-
-首次冷检查需要承担完整验证与 Session 构造成本，并可能保留该未发布 Session 直至淘汰。持久化层必须协调预留、append、修复和发布；调用方必须把检查结果视为借用的不可变状态。依赖默认 `prepare()` 的后端仍然正确，但无法获得复用优化。
+新建和恢复共享同一发布协议，同时保持 agent 与 Session 职责分离，且每条退出路径恰好 dispose 一个准备对象。本 Note 最初记录的持久化侧复用后果（共享冷实体化、LRU 上限、预留协调）如今归属于[句柄 Note](2026-08-27-handle-based-session-persistence.zh.md) 以及取代它们的 session-query 缓存。

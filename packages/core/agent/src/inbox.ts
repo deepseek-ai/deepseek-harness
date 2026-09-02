@@ -29,7 +29,7 @@ export class Inbox {
     private readonly session: Session,
     private readonly notifications: InboxNotifications,
   ) {
-    for (const event of session.snapshotEvents(session.header.seedLength ?? 0)) {
+    for (const event of session.ownEvents()) {
       if (event.type !== 'agent/inbox/spliced') continue
       try {
         this.apply(event.data)

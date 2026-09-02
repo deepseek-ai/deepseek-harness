@@ -1,0 +1,42 @@
+# Agent Note: Handle-based session persistence
+
+Status: implemented
+
+English | [中文](2026-08-27-handle-based-session-persistence.zh.md)
+
+## Problem
+
+The previous persistence seam owned far more than storage. A shared coordinator subscribed to `session/created`/`session/event`/`session/flush`/`session/disposed` and adopted any published session (ownerless claims, HMR re-seeding, stored-prefix adoption); a bounded prepared-Session LRU with exclusive reservations served resume and read-only observation from one cache; committing crash repair lived inside `load`/`prepare`; and optimistic revision read/check/read loops stood in for ownership, so a continuous external writer could livelock a read and nothing excluded a second writer. The service surface (twelve methods) mixed storage with Session construction and lifecycle. Cross-process write ownership — the next step — has no honest home in that shape: ownership belongs to an explicit per-session channel with an owner, not to a global listener.
+
+## Decision
+
+**The seam is five service methods returning or serving per-session handles.** `create(header)` stores a new session and returns its owned write handle; `open(id, 'read' | 'write')` opens an existing one; `stat(id)`/`list()` observe snapshots (`header`, opaque `revision`, optional `eventCount`/`sizeBytes` hints — the JSONL backend supplies `sizeBytes`) without reading logs; service-level `flush()` is one backend-wide durability barrier that drains and flushes every active write handle, aggregating per-session failures without abandoning the sweep. The seam carries no raw-artifact export: the WebUI ZIP download serializes the logical log (header line + events) from a read handle in `dsh-session-log-export`, so every backend exports identically and the JSONL-only 501 path is gone. A `SessionHandle` carries `read(offset?, length?)` (validated contiguous prefix slices, never a torn tail, monotonic per handle), `append` (contiguous; persistence is best-effort on resolution, and the shipped JSONL backend happens to persist each batch immediately), `flush` (the durability barrier, which also materializes an empty session), and idempotent uncancellable `close`. One handle type serves both accesses — a mutation on a read handle is a runtime `SessionReadOnlyError`, the deliberate convention of this codebase's other seams rather than a typed split. Single-writer ownership is enforced in-process by a registry (`SessionAlreadyOwnedError`); the durable cross-process lease is the planned next layer on the same shape.
+
+**The agent lifecycle owns handle acquisition; the backend owns the event-driven flow.** agent-loop — the sole production publication point for sessions — acquires the handle before publication (`create` for fresh sessions, appending any constructor seed through it; `open(id, 'write')` for resume) and closes it in the same memoized teardown that drains the loop. Because persistence already enforces one active write handle per session id, the backend installs the session listeners once and routes by id: `session/event` into the owning handle's bounded write-behind window (an internal scheduling policy, not configuration), `session/flush` as the durability and error-observation barrier, `session/disposed` as final drain and close. Nothing about the write path crosses the package boundary — no writer component, no batching configuration, no drain registry. Root-fiber disposal runs every fiber's disposers concurrently, so `close()` itself drains the routed buffer through the still-open storage; backend teardown's close sweep keeps application shutdown lossless regardless of which fiber unwinds first. The drain guarantees only buffered already-emitted events; a root dispose mid-turn still loses the turn's unemitted remainder by design — the next resume's `interruptedTurnClosers` repairs that tail durably. Sessions published outside the lifecycle no longer persist implicitly; nothing in production does that.
+
+**Semantic crash repair moved out of persistence.** Resume reads the physically valid log through its write handle, computes `interruptedTurnClosers`, and appends them (plus the constructor's `session/end-seed` marker) through the same handle as ordinary batches — repair is not a special storage entry point. Read-only observers (session-query) balance an interrupted cold log in memory only, and own their cold-Session cache keyed by `stat().revision`; the persistence-side prepared cache and revision convergence loops are deleted.
+
+**Visibility and freshness are explicit.** A created session is observable in-process from `create`; physical materialization may be deferred (a pure optimization) until the first append or flush, other processes see only materialized sessions, and a crash before materialization means the session never existed. Once an append or flush resolves, reads started afterwards on the same backend instance observe at least that prefix — the guarantee `message-feedback`'s durable-target check rides on.
+
+**Revision simplifies to a per-instance change token.** Equal tokens may be treated as an unchanged log; ownership churn never changes one. JSONL derives a best-effort token and `sizeBytes` from one `fs.stat`; a backend whose medium can count events cheaply may supply the `eventCount` hint instead. The session-list cold blank probe returns on this metadata (`coldBlankProbeMaxEvents`/`coldBlankProbeMaxBytes`), restoring the capability removed with the path query.
+
+## Alternatives considered
+
+**Typed read/write handle classes (or overloads).** Rejected as the seam style: this codebase's seams prefer one access-tagged type with runtime refusal, and the split would double every consumer-facing type for one compile-time check.
+
+**Keeping the coordinator's adoption/HMR write path beside handles.** Rejected: adoption exists to guess ownership after the fact; with the lifecycle handing the handle over explicitly, a reloaded backend that cannot serve old handles fails the writer loudly instead of silently re-claiming logs, and a session with no handle is a composition bug surfaced by absent persistence rather than masked by adoption.
+
+**A service-level `append(id, events)` beside handles.** Rejected: an id-addressed write path bypasses ownership; every write flows through the owning handle so the future lease check has exactly one door.
+
+**Persistence-owned batching configuration.** Rejected: the batching window is internal write-path scheduling, not a deployment-varying choice, so it is a provider constant and no configuration knob exists anywhere.
+
+## Consequences
+
+Resume, fork, subagent, ACP, webhook, and SDK sessions all persist through one explicit acquisition point, and dispose provably releases write ownership (reopening for write succeeds after teardown). The costs: a backend plugin reload under live sessions invalidates their handles — writes fail loudly until the sessions restart, where adoption previously re-attached silently; `ctx.sessions.create` + `flush` in a test persists nothing without a handle (tests seed through `create`/`append`/`close`); resume re-reads a cold log only when no immediately preceding observation parsed the same artifact — a bounded provider-local memo (session id + stat revision, invalidated by every local mutation) serves the observe-then-promote and authorize-then-resume handoffs without restoring the deleted borrow/reservation lifecycle, and the session-query reader's own prepared cache remains the pin-capable layer above it (a later consolidation may fold one into the other); and an empty created session is invisible to other processes until an explicit flush (ACP forces one for its resumable-empty-session promise). `SESSION_FORMAT_VERSION` stays 0.
+
+## Related
+
+- [Session persistence as an abstract service](2026-06-14-session-persistence.md) — the seam this reshapes; its interface list reflects the handle API.
+- [Persistence export() and pre-release trims](../simplification/2026-08-27-persistence-export-and-pre-release-trims.md) — the preparatory removals, including the blank probe this note's metadata restores.
+- [Retain ignorable external session events](2026-08-30-retain-ignorable-external-session-events.md) — the read-side refusal contract, now shared through `storage-contract` helpers.
+- [Bounded session-persistence write batching](2026-08-08-bounded-session-persistence-write-batching.md) — the batching semantics the routed write path preserves as internal scheduling policy.

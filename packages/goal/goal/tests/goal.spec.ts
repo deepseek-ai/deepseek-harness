@@ -199,7 +199,8 @@ describe('GoalService creation and replay', () => {
       activation: 'disarmed',
     })
     expect(child.session.header.parentSession).toBe(parent.session.id)
-    expect(child.session.header.seedLength).toBe(parent.session.seq)
+    expect(child.session.header.isSeeded).toBe(true)
+    expect(child.session.inheritedEventCount).toBe(parent.session.seq)
   })
 
   it('disarms live activation on every session-start edge', async () => {

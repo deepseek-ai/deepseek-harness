@@ -9,8 +9,14 @@ import z from '@deepseek-ai/schemastery'
 import { BlockAssembler } from '@deepseek-ai/dsh-llm'
 import type { LlmImageRequestPricing, Message, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import type { EpochHeader, Session, SessionEvent } from '@deepseek-ai/dsh-session'
-import { canonicalHeader, headerEquals, isSurfaceEvent } from '@deepseek-ai/dsh-session'
+import type {
+  EpochHeader,
+  Session,
+  SessionEvent,
+  SessionLogOffset as SessionLogOffsetType,
+  SessionSeq as SessionSeqType,
+} from '@deepseek-ai/dsh-session'
+import { canonicalHeader, headerEquals, isSurfaceEvent, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 // Type-only: activates the `ctx.sessionProjections` Context declaration.
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {
@@ -48,7 +54,7 @@ interface MeasurementAnchor {
 }
 
 interface ReplayState {
-  consumedEvents: number
+  consumedEvents: SessionLogOffsetType
   header: EpochHeader | undefined
   surface: MeterSurfaceNode[]
   stepStart: { turn: number; step: number; nodes: readonly MeterSurfaceNode[] } | undefined
@@ -198,7 +204,7 @@ export class TokenMeter extends Service {
     let state = this.states.get(session)
     if (state === undefined) {
       state = {
-        consumedEvents: 0,
+        consumedEvents: SessionLogOffset(0),
         header: undefined,
         surface: [],
         stepStart: undefined,
@@ -209,9 +215,9 @@ export class TokenMeter extends Service {
 
     while (state.consumedEvents < session.seq) {
       // oxlint-disable-next-line typescript/no-non-null-assertion -- contiguous session seqs index the durable log
-      const event = session.eventAt(state.consumedEvents)!
+      const event = session.eventAt(SessionSeq(state.consumedEvents))!
       this._foldEvent(session, state, event)
-      state.consumedEvents += 1
+      state.consumedEvents = SessionLogOffset(state.consumedEvents + 1)
     }
     return state
   }
@@ -304,7 +310,7 @@ export class TokenMeter extends Service {
     if (sourceSeqs === undefined) return durableEventTokens
 
     const assembler = new BlockAssembler()
-    const seen = new Set<number>()
+    const seen = new Set<SessionSeqType>()
     for (const seq of sourceSeqs) {
       if (seq >= event.seq) {
         throw new Error(`token meter: assistant/message at seq ${event.seq} source seq ${seq} is not earlier`)

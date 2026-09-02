@@ -1,5 +1,5 @@
 /* Icon-row Turn-usage pill (data icon + turn total) plus its click-open
-   Turn-details dialog (menu surface: r12, inverted hairline, shadow-lv3 —
+   Turn-details dialog (menu surface: r12, elevation-prominent —
    ContextMeter's panel skin). */
 
 .root {
@@ -90,10 +90,11 @@
   min-width: min(300px, calc(100vw - 24px));
   max-width: min(440px, calc(100vw - 24px));
   padding: 16px;
-  border: 1px solid var(--dsw-alias-border-inverted);
+  border: 0;
   border-radius: 12px;
   background: var(--dsw-specific-menu);
-  box-shadow: var(--dsw-shadow-lv3);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-label-secondary);
@@ -114,7 +115,7 @@
 /* Rule under each section heading, above its rows. */
 .titleRule {
   margin-bottom: 10px;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .titleValue {

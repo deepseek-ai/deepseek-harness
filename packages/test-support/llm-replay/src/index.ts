@@ -12,7 +12,8 @@ import { delimiter as pathDelimiter } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import { decodeSeqRanges, decodeStorageRecord, type SessionEvent } from '@deepseek-ai/dsh-session'
+import { decodeSeqRanges, decodeStorageRecord, SessionLogOffset, type SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -180,7 +181,7 @@ export interface SessionScript {
  */
 export function parseSessionLog(text: string): SessionEvent[] {
   const events: SessionEvent[] = []
-  let nextSeq = 0
+  let nextSeq: SessionLogOffsetType = SessionLogOffset(0)
   let headerSkipped = false
   // The JSONL backend guarantees line 0 is the session header. Projected
   // fixtures omit event envelopes; synthesize them while decoding so callers
@@ -218,7 +219,7 @@ export function parseSessionLog(text: string): SessionEvent[] {
       throw new Error(`session snapshot line ${index + 1}: ${detail}`, { cause: error })
     }
     events.push(...decoded)
-    nextSeq += decoded.length
+    nextSeq = SessionLogOffset(nextSeq + decoded.length)
   }
   return events
 }
@@ -227,15 +228,19 @@ export function parseSessionLog(text: string): SessionEvent[] {
  * Read replay identity, ordering, and fork-seed facts from the JSONL header.
  *
  * @param text - the raw `.jsonl` file contents (only the header line is read).
- * @returns the header's `id`, `createdAt`, and `seedLength`, defaulted when absent.
+ * @returns the header's `id`, `createdAt`, and inherited-event count, defaulted when absent.
  */
-export function parseSessionHeader(text: string): { id: string; createdAt: number; seedLength: number } {
+export function parseSessionHeader(text: string): {
+  id: string
+  createdAt: number
+  inheritedEventCount: SessionLogOffsetType
+} {
   const firstLine = text.split('\n').find(line => line.trim().length > 0) ?? '{}'
   const parsed = JSON.parse(firstLine) as { id?: unknown; createdAt?: unknown; seedLength?: unknown }
   return {
     id: typeof parsed.id === 'string' ? parsed.id : '',
     createdAt: typeof parsed.createdAt === 'number' ? parsed.createdAt : 0,
-    seedLength: typeof parsed.seedLength === 'number' ? parsed.seedLength : 0,
+    inheritedEventCount: SessionLogOffset(typeof parsed.seedLength === 'number' ? parsed.seedLength : 0),
   }
 }
 
@@ -606,7 +611,7 @@ function deriveScriptFromFile(file: string): ReplayEntry[] {
 
 /**
  * Load the primary and child scripts in bind order. Child derivation begins at
- * `seedLength` so inherited parent chunks are never replayed as child calls.
+ * the v0 header's inherited-event cut so parent chunks are never replayed as child calls.
  *
  * @param config - the fixture paths: the primary log plus any recorded child logs.
  * @returns the primary script first, then the child scripts in bind order.
@@ -631,7 +636,7 @@ export function loadSessionScripts(config: ReplayConfig): SessionScript[] {
     const header = parseSessionHeader(text)
     // Derive the child's script from its own events only — events AT OR after the seed
     // boundary.
-    const ownEvents = parseSessionLog(text).slice(header.seedLength)
+    const ownEvents = parseSessionLog(text).slice(header.inheritedEventCount)
     children.push({
       recordedId: header.id,
       createdAt: header.createdAt,

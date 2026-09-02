@@ -1,7 +1,7 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionTitleService, {
   SessionTitleProviderId,
@@ -72,7 +72,7 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
     const withProvider = await setup()
     const generate = vi.fn(async (): Promise<SessionTitleProviderResult> => ({
       title: 'unused',
-      messageSeqs: [0],
+      messageSeqs: [SessionSeq(0)],
     }))
     withProvider.sessionTitle.register({
       id: SessionTitleProviderId('empty-provider'),
@@ -362,7 +362,9 @@ describe('SessionTitleService configuration and refresh boundaries', () => {
 describe('SessionTitleService Provider validation and stale scheduling', () => {
   it('rejects malformed provider registrations before publishing them', async () => {
     const ctx = await setup()
-    const generate = async (): Promise<SessionTitleProviderResult> => ({ title: 'title', messageSeqs: [0] })
+    const generate = async (): Promise<SessionTitleProviderResult> => ({
+      title: 'title', messageSeqs: [SessionSeq(0)],
+    })
     expect(() => ctx.sessionTitle.register(null as never)).toThrow(/must be an object/)
     expect(() => ctx.sessionTitle.register('provider' as never)).toThrow(/must be an object/)
     expect(() => ctx.sessionTitle.register({

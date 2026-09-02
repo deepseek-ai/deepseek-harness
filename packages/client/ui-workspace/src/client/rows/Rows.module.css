@@ -181,7 +181,7 @@
   font-size: 14px;
   line-height: 20px;
   padding: 0 2px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 4px;
   background: var(--dsw-alias-button-elevated-fill);
   color: inherit;

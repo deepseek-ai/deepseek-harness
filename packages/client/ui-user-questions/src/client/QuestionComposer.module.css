@@ -19,10 +19,11 @@
      so header and footer actions stay reachable on long batches. */
   max-height: min(60vh, 520px);
   padding: 0 0 10px;
-  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border: 0;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 20px;
   background: var(--dsw-specific-input-major);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-elevation-panel);
   color: var(--dsw-alias-label-primary);
   overflow: hidden;
   /* Elevated surface in dark, same as the menus: the body inside scrolls
@@ -128,6 +129,7 @@
   padding: 0;
   border: none;
   border-radius: 999px;
+  corner-shape: round;
   background: transparent;
   color: var(--dsw-alias-label-tertiary);
   cursor: pointer;
@@ -236,7 +238,7 @@
   grid-area: 1 / 1;
   width: 14px;
   height: 14px;
-  border: 1px solid var(--dsw-alias-border-l4);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 4px;
   transition: background-color 120ms ease, border-color 120ms ease;
 }
@@ -388,7 +390,7 @@
   min-height: 64px;
   flex-shrink: 0;
   margin: 0 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 10px;
   background: var(--dsw-alias-bg-module-platform);
   --dsh-answer-field-padding: 8px 12px;

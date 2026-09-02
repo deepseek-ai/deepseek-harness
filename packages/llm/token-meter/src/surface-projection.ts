@@ -17,7 +17,7 @@
  * @module @deepseek-ai/dsh-token-meter/surface-projection
  */
 
-import { deriveEventMessage, isSurfaceEvent } from '@deepseek-ai/dsh-session'
+import { deriveEventMessage, isSurfaceEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 // Type-only: the `compaction/*` SessionEventMap merges (shadow-price events).
 import type {} from '@deepseek-ai/dsh-compaction'
@@ -30,9 +30,9 @@ import { estimateMessage } from './estimate.ts'
  */
 export interface ShadowPriceClaim {
   /** Declared inclusive first surface-node seq of the priced range. */
-  start: number
+  start: SessionSeq
   /** Declared inclusive last surface-node seq of the priced range. */
-  end: number
+  end: SessionSeq
   /** Heuristic tokens of the priced range under the fixed estimator. */
   tokens: number
 }
@@ -71,7 +71,11 @@ export function foldSurfaceProjection(
     const { shadowedRange, shadowedTokenCount } = event.data
     return {
       deltaTokens: 0,
-      claim: { start: shadowedRange.start, end: shadowedRange.end, tokens: shadowedTokenCount },
+      claim: {
+        start: SessionSeq(shadowedRange.start),
+        end: SessionSeq(shadowedRange.end),
+        tokens: shadowedTokenCount,
+      },
     }
   }
   if (!isSurfaceEvent(event)) return { deltaTokens: 0, claim: undefined }

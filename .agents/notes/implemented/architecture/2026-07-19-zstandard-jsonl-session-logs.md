@@ -32,7 +32,7 @@ A frame-boundary scanner reads the standard magic, variable header fields, block
 
 Listing reads in bounded chunks only until the first complete frame is available, validates and decompresses that header frame, and never reads an event frame. The dedicated header frame therefore preserves metadata-only listing even for very large session logs.
 
-EOF inside the final frame is a recoverable torn tail. After the scanner establishes that boundary, a dedicated prefix decoder uses `finishFlush: ZSTD_e_flush` so Node emits available plaintext without requiring frame or checksum completion; every complete newline-terminated event it emits is retained. Repair truncates from that frame's starting byte and appends one new checksummed frame containing the recovered complete events followed by the coordinator's synthetic tool, step, and turn closers. If the tear occurs before any complete event is decodable, repair drops the partial frame and retains all prior complete frames.
+EOF inside the final frame is a torn tail. The frame belongs to an append that never resolved, so none of its records were acknowledged durable: repair truncates from that frame's starting byte, retains all prior complete frames, and appends the coordinator's synthetic tool, step, and turn closers as one new checksummed frame ([export and pre-release trims](../simplification/2026-08-27-persistence-export-and-pre-release-trims.md) owns dropping the earlier partial-plaintext salvage).
 
 ### Consumers and verification
 

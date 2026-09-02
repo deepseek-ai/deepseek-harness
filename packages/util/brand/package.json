@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-brand",
-  "description": "Stateless branded-string primitives for the DeepSeek Harness",
-  "version": "0.1.2-alpha.3",
+  "description": "Stateless branded primitive types for the DeepSeek Harness",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },

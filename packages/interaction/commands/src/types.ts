@@ -7,6 +7,7 @@
  * @module @deepseek-ai/dsh-commands/types
  */
 
+import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { CommandId } from './brand.ts'
 
 /** Immutable metadata for a command's optional unstructured input. */
@@ -29,7 +30,7 @@ export type CommandResult =
     readonly kind: 'success'
     readonly text?: string
     /** Earlier authoritative domain event that owns a richer presentation. */
-    readonly sourceEventSeq?: number
+    readonly sourceEventSeq?: SessionSeq
   }
   | { readonly kind: 'error'; readonly text: string }
 
@@ -104,7 +105,7 @@ declare module '@deepseek-ai/dsh-session/types' {
       commandId: CommandId
       kind: 'success' | 'error'
       text?: string
-      sourceEventSeq?: number
+      sourceEventSeq?: import('@deepseek-ai/dsh-session/types').SessionSeq
     }
   }
 }

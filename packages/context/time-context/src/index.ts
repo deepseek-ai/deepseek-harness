@@ -11,6 +11,7 @@ import { z as zod } from 'zod'
 import type { Agent, PreStepDecision } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import {
   deriveBrowserTimeZoneContext,
@@ -79,7 +80,7 @@ function formatDuration(elapsedMs: number): string {
 function requestMessages(agent: Agent, turn: number, proposed: readonly UserMessage[]): UserMessage[] {
   const entered: UserMessage[] = []
   for (let seq = agent.session.seq - 1; seq >= 0; seq -= 1) {
-    const event = agent.session.eventAt(seq)
+    const event = agent.session.eventAt(SessionSeq(seq))
     if (event?.type === 'turn/start' && event.data.turn === turn) {
       return [...entered.reverse(), ...proposed]
     }

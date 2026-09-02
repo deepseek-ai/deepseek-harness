@@ -15,6 +15,7 @@ import type {
   Session,
   SessionEvent,
 } from '@deepseek-ai/dsh-session'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-agent'
@@ -107,7 +108,7 @@ export interface SessionTitleProviderResult {
   /** Proposed title text. */
   readonly title: string
   /** Exact seqs from `request.messages` used by this result. */
-  readonly messageSeqs: readonly number[]
+  readonly messageSeqs: readonly SessionSeq[]
   /** Auxiliary LLM route, when generation used a model. */
   readonly model?: SessionTitleModelProvenance
 }
@@ -170,7 +171,7 @@ interface ProviderRegistration {
 interface PendingAutomaticWork {
   readonly registration: ProviderRegistration
   readonly revision: number
-  readonly throughSeq: number
+  readonly throughSeq: SessionSeq
 }
 
 /** Provider call currently allowed to commit for one session. */
@@ -212,14 +213,14 @@ function titleSnapshotFromState(state: TitleProjection): SessionTitleSnapshot {
 const EMPTY_TITLE_INPUT: TitleInputState = { first: null, count: 0, lastSeq: null }
 
 const sessionTitleUserMessageSchema: ZodType<SessionTitleUserMessage> = zod.object({
-  seq: zod.number().int().nonnegative(),
+  seq: zod.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq),
   text: zod.string(),
 }).strict()
 
 const titleInputStateSchema: ZodType<TitleInputState> = zod.object({
   first: sessionTitleUserMessageSchema.nullable(),
   count: zod.number().int().nonnegative(),
-  lastSeq: zod.number().int().nonnegative().nullable(),
+  lastSeq: zod.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionSeq).nullable(),
 }).strict().superRefine((state, context) => {
   const empty = state.first === null && state.lastSeq === null && state.count === 0
   const populated = state.first !== null
@@ -245,7 +246,7 @@ const titleInputStateSchema: ZodType<TitleInputState> = zod.object({
  */
 function collectSessionTitleMessages(
   events: readonly SessionEvent[],
-  throughSeq?: number,
+  throughSeq?: SessionSeq,
 ): SessionTitleUserMessage[] {
   const messages: SessionTitleUserMessage[] = []
   for (const event of events) {
@@ -632,18 +633,19 @@ export class SessionTitleService extends Service {
     if (!Array.isArray(candidate.messageSeqs) || candidate.messageSeqs.length === 0) {
       throw new Error('session-title provider must identify at least one source message seq')
     }
-    const messageSeqs: number[] = []
+    const messageSeqs: SessionSeq[] = []
     const order = new Map(messages.map((message, index) => [message.seq, index]))
     let previous = -1
     for (const seq of candidate.messageSeqs as unknown[]) {
-      if (typeof seq !== 'number') {
+      if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 0) {
         throw new Error('session-title provider messageSeqs must be unique, ordered seqs from the request')
       }
-      const index = order.get(seq)
-      if (!Number.isSafeInteger(seq) || seq < 0 || index === undefined || index <= previous) {
+      const sessionSeq = SessionSeq(seq)
+      const index = order.get(sessionSeq)
+      if (index === undefined || index <= previous) {
         throw new Error('session-title provider messageSeqs must be unique, ordered seqs from the request')
       }
-      messageSeqs.push(seq)
+      messageSeqs.push(sessionSeq)
       previous = index
     }
     const modelCandidate = candidate.model

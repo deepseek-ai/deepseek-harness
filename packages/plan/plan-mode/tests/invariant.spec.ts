@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as PlanModeInvariant from '@deepseek-ai/dsh-plan-mode/invariant'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 
@@ -13,12 +13,12 @@ async function setup(): Promise<Context> {
 }
 
 function event(active: unknown): SessionEvent {
-  return { type: 'plan/mode', seq: 0, time: 0, data: { active } } as SessionEvent
+  return { type: 'plan/mode', seq: SessionSeq(0), time: 0, data: { active } } as SessionEvent
 }
 
 function emitTurnStart(ctx: Context, session: Session): void {
   ctx.emit('session/event', session, {
-    type: 'turn/start', seq: 0, time: 0,
+    type: 'turn/start', seq: SessionSeq(0), time: 0,
     data: { turn: 1 },
   })
 }
@@ -31,7 +31,7 @@ describe('plan-mode stream invariants', () => {
     expect(() => { ctx.emit('session/event', session, event(true)) }).not.toThrow()
     expect(() => { ctx.emit('session/event', session, event(false)) }).not.toThrow()
     ctx.emit('session/event', session, {
-      type: 'turn/end', seq: 3, time: 3, data: { turn: 1, reason: { kind: 'completed' } },
+      type: 'turn/end', seq: SessionSeq(3), time: 3, data: { turn: 1, reason: { kind: 'completed' } },
     })
   })
 
@@ -55,7 +55,7 @@ describe('plan-mode stream invariants', () => {
     expect(() => {
       ctx.emit('tools/change')
       ctx.emit('session/event', session, {
-        type: 'turn/start', seq: 0, time: 0, data: { turn: 1 },
+        type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 },
       })
     }).not.toThrow()
   })

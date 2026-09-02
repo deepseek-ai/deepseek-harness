@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-team",
   "description": "Implicit-root Agent Teams roster, durable peer mailbox, and shared task DAG",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "private": true,
   "repository": {
     "type": "git",

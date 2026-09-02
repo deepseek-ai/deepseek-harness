@@ -3,7 +3,7 @@
 // List data never enters zustand; React connects via subscribe/getListSnapshot.
 
 import type { SubagentAddress, SubagentCatalog } from '@deepseek-ai/dsh-subagent/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionId, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type {
   SessionControlBaseline,
@@ -25,6 +25,10 @@ import { Notifier } from './notifier.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import { Session } from './session.ts'
 import type { SessionRemotes } from './remotes.ts'
+
+function sessionSeqCursor(value: number): SessionSeqCursor {
+  return value === -1 ? -1 : SessionSeq(value)
+}
 
 /**
  * List arrival lifecycle, orthogonal to the pull-activity `state` axis:
@@ -498,7 +502,7 @@ export class SessionManager {
             if (block === undefined) continue
             const store = this.projectionStore(s.sessionId)
             const values = block.values as Record<string, unknown>
-            for (const key of Object.keys(values)) store.apply(key, values[key], block.asOfSeq)
+            for (const key of Object.keys(values)) store.apply(key, values[key], sessionSeqCursor(block.asOfSeq))
           }
         } else {
           this.listState = 'error'
@@ -590,7 +594,7 @@ export class SessionManager {
    * @returns the fork result (the child session id).
    */
   async fork(
-    opts: { sessionId: SessionId; atSeq?: number },
+    opts: { sessionId: SessionId; atSeq?: SessionSeq },
   ): Promise<RemoteResult<{ sessionId: SessionId }>> {
     const source = this.summaries.find(s => s.sessionId === opts.sessionId)
     const result = await this.remote.session.fork({
@@ -661,7 +665,7 @@ export class SessionManager {
       return
     }
     if (frame.type === 'projection') {
-      this.projectionStore(frame.sessionId).apply(frame.key, frame.value, frame.seq)
+      this.projectionStore(frame.sessionId).apply(frame.key, frame.value, SessionSeq(frame.seq))
       this.notifier.markDirty()
       return
     }
@@ -688,8 +692,9 @@ export class SessionManager {
 
     for (const [sessionId, block] of Object.entries(baseline.projections)) {
       const store = this.projectionStore(sessionId as SessionId)
-      store.truncate(block.asOfSeq)
-      store.seed(block)
+      const asOfSeq = sessionSeqCursor(block.asOfSeq)
+      store.truncate(asOfSeq)
+      store.seed({ ...block, asOfSeq })
     }
     for (const [sessionId, session] of this.sessions) {
       session.replaceControl(this.queues.get(sessionId) ?? [])
@@ -708,7 +713,7 @@ export class SessionManager {
     if (projections !== undefined) {
       const store = this.projectionStore(summary.sessionId)
       for (const [key, value] of Object.entries(projections.values)) {
-        store.apply(key, value, projections.asOfSeq)
+        store.apply(key, value, sessionSeqCursor(projections.asOfSeq))
       }
     }
     if (summary.origin === 'subagent' && summary.parentSessionId !== undefined) {

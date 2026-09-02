@@ -34,7 +34,7 @@ kind: "package-reference"
 <a id="request-field"></a>
 ## 请求字段
 
-对于携带存活 `sessionId` 的请求，插件会折叠该确切会话身份的最大已接受水位，对 `Session.events` 取快照，并发送水位之后的连续后缀。进程内 fold 会让每条事件只被扫描一次并增量消费后续追加；重启与 HMR 会从持久日志重建它。版本 1 字段包含不可变的 `SessionHeader`、`afterSeq`、`throughSeq`，以及作为数组直接元素的该范围内每个完整权威 `SessionEvent`。每个水位都会记录已接受请求发送的会话 id，因此 fork 会话会忽略从父会话继承的水位。
+对于携带存活 `sessionId` 的请求，插件会折叠该确切会话身份的最大已接受水位，对 `Session.events` 取快照，并发送水位之后的连续后缀。进程内 fold 会让每条事件只被扫描一次并增量消费后续追加；重启与 HMR 会从持久日志重建它。版本 1 字段包含兼容 v0 的原始会话 header（仅 seeded Session 携带 `seedLength`）、数值型 `afterSeq` 与 `throughSeq`，以及把完整权威事件翻译为原始数值 envelope 字段后的数组元素。每个水位都会记录已接受请求发送的会话 id，因此 fork 会话会忽略从父会话继承的水位。
 
 <a id="acceptance-and-retry"></a>
 ## 接受与重试

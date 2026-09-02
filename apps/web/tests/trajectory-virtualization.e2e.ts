@@ -255,6 +255,11 @@ describe('web e2e: Trajectory virtualization over tail-paged history', () => {
       await compareOrRefreshGolden(LOAD_MORE_EXPECTED, loadMoreSnapshot, MODE)
       // Avoid Playwright scrolling the offscreen first row into the automatic-load threshold.
       await loadMore.evaluate((button: HTMLButtonElement) => { button.click() })
+      await expect.poll(() => logicalRows(page), { timeout: 15_000 }).toBeGreaterThan(initialRows)
+      const residentRows = await logicalRows(page)
+      expect(held).toBe(false)
+      await expect.poll(() => loadMore.isDisabled(), { timeout: 15_000 }).toBe(false)
+      await loadMore.evaluate((button: HTMLButtonElement) => { button.click() })
       await expect.poll(() => held, { timeout: 15_000 }).toBe(true)
       await expect.poll(async () => ({
         disabled: await loadMore.isDisabled(),
@@ -274,7 +279,7 @@ describe('web e2e: Trajectory virtualization over tail-paged history', () => {
         .toBe('true')
 
       releaseHistory()
-      await expect.poll(() => logicalRows(page), { timeout: 60_000 }).toBeGreaterThan(initialRows)
+      await expect.poll(() => logicalRows(page), { timeout: 60_000 }).toBeGreaterThan(residentRows)
       await nextPaint(page)
       await expect.poll(async () => {
         const top = await rowTop(page, anchor.key)

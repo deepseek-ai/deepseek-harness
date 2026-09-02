@@ -1,13 +1,10 @@
-/* Turn-tail produced-files summary: one measured chip lane plus an optional
-   native-folder action below it. */
+/* Turn-tail produced-files summary with an optional native-folder action. */
 
 .root {
-  position: relative;
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   column-gap: 8px;
-  row-gap: 6px;
   margin-top: 16px;
   font-size: 13px;
   line-height: 22px;
@@ -19,22 +16,33 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.row {
+.lane {
+  --produced-file-chip-max: 96px;
+  --produced-file-gap: 8px;
+
   grid-column: 2;
   grid-row: 1;
+  display: grid;
+  row-gap: 6px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.row {
   display: flex;
   flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--produced-file-gap);
   min-width: 0;
   overflow: hidden;
 }
 
-/* One produced file. A link by behavior (it opens the file), a chip by shape:
-   full paths are long, while the measured lane stays on one row. */
+/* File names yield space to one another while the remainder stays readable. */
 .file {
-  flex: 0 0 auto;
-  max-width: 320px;
+  box-sizing: border-box;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: var(--produced-file-chip-max);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -62,13 +70,120 @@
 /* Overflow count: the row never silently drops files it did not show. */
 .more {
   flex: 0 0 auto;
+  display: none;
   white-space: nowrap;
   color: var(--dsw-alias-label-tertiary);
 }
 
+.more[data-shown='6'] {
+  display: inline;
+}
+
 .showFolder {
-  grid-column: 2;
-  grid-row: 2;
+  display: none;
+}
+
+.lane:has(.more[data-shown='6']) > .showFolder {
+  display: block;
+}
+
+/* Each band budgets 96px per chip, 8px gaps, and 64px for the remainder. */
+@container (max-width: 687px) {
+  .file:nth-of-type(6),
+  .more[data-shown='6'] {
+    display: none;
+  }
+
+  .more[data-shown='5'] {
+    display: inline;
+  }
+
+  .showFolder {
+    display: none;
+  }
+
+  .lane:has(.more[data-shown='5']) > .showFolder {
+    display: block;
+  }
+}
+
+@container (max-width: 583px) {
+  .file:nth-of-type(5),
+  .more[data-shown='5'] {
+    display: none;
+  }
+
+  .more[data-shown='4'] {
+    display: inline;
+  }
+
+  .showFolder {
+    display: none;
+  }
+
+  .lane:has(.more[data-shown='4']) > .showFolder {
+    display: block;
+  }
+}
+
+@container (max-width: 479px) {
+  .file:nth-of-type(4),
+  .more[data-shown='4'] {
+    display: none;
+  }
+
+  .more[data-shown='3'] {
+    display: inline;
+  }
+
+  .showFolder {
+    display: none;
+  }
+
+  .lane:has(.more[data-shown='3']) > .showFolder {
+    display: block;
+  }
+}
+
+@container (max-width: 375px) {
+  .file:nth-of-type(3),
+  .more[data-shown='3'] {
+    display: none;
+  }
+
+  .more[data-shown='2'] {
+    display: inline;
+  }
+
+  .showFolder {
+    display: none;
+  }
+
+  .lane:has(.more[data-shown='2']) > .showFolder {
+    display: block;
+  }
+}
+
+@container (max-width: 271px) {
+  .file:nth-of-type(2),
+  .more[data-shown='2'] {
+    display: none;
+  }
+
+  .more[data-shown='1'] {
+    display: inline;
+  }
+
+  .showFolder {
+    display: none;
+  }
+
+  .lane:has(.more[data-shown='1']) > .showFolder {
+    display: block;
+  }
+}
+
+.showFolder {
   justify-self: start;
   margin: 0;
   padding: 0 2px;
@@ -84,22 +199,4 @@
 .showFolder:hover {
   color: var(--dsw-alias-label-secondary);
   text-decoration: underline;
-}
-
-/* Exact browser-native probes for every candidate shown count. They share the
-   visible styles but never affect layout, accessibility, or scroll width. */
-.measure {
-  position: absolute;
-  width: 0;
-  height: 0;
-  overflow: hidden;
-  visibility: hidden;
-  pointer-events: none;
-  contain: strict;
-}
-
-.probe {
-  position: absolute;
-  inset: 0 auto auto 0;
-  width: max-content;
 }

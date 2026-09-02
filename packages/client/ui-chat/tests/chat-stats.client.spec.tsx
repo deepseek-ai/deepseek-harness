@@ -162,6 +162,25 @@ describe('StatsLine', () => {
     return { uncachedInputTokens, outputTokens: 1, cacheReadTokens, cacheWriteTokens: 0 }
   }
 
+  it('mounts one size observer only while a non-empty line exists', () => {
+    let observers = 0
+    class CountingResizeObserver {
+      constructor(_callback: ResizeObserverCallback) { observers++ }
+      observe(): void {}
+      disconnect(): void {}
+    }
+    vi.stubGlobal('ResizeObserver', CountingResizeObserver)
+    const { set, source } = makeSource()
+    render(<StatsLine {...props(source, {})} />)
+    expect(observers).toBe(0)
+
+    act(() => { set({ nodes: [assistant(1, 1)] }) })
+    expect(observers).toBe(1)
+
+    act(() => { set({ nodes: [assistant(1, 1), assistant(2, 1)] }) })
+    expect(observers).toBe(1)
+  })
+
   it('renders the grouped stats row and hides a brand-new empty session', () => {
     const { source } = makeSource({ nodes: [assistant(1, 1)] })
     const view = render(<StatsLine {...props(source)} />)

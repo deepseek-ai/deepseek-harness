@@ -33,6 +33,7 @@ function agent(ctx: Context, cwd: string | undefined): Agent {
     version: 0,
     id,
     createdAt: 0,
+    isSeeded: false,
     ...cwd === undefined ? {} : { cwd },
   })
   const value: Agent = {

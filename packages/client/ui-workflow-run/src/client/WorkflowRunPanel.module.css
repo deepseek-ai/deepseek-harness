@@ -138,6 +138,7 @@
   width: 2px;
   height: 2px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-label-tertiary);
 }
 

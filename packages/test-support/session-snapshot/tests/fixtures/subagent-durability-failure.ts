@@ -13,7 +13,7 @@ export const inject = ['agents', 'sessionPersistence', 'subagents']
  *  - `PLACEHOLDER_CHILD_ID` in a scripted `send_message` is remapped to the real
  *    child so both follow-ups queue onto the same live inbox in FIFO order.
  *  - The unknown-id `send_message` (`UNKNOWN_CHILD_ID`) resolves through a
- *    persistence load fenced behind both accepted follow-ups, so the transcript
+ *    persistence stat fenced behind both accepted follow-ups, so the transcript
  *    records the same order on every runner.
  *  - The child's final continuation turn fails its durability checkpoint with a
  *    fixed message, so the scenario proves child-first disposal survives a failed
@@ -35,7 +35,7 @@ export function apply(ctx: Context): void {
   let parentClosed = false
   const publishedFailure = process.env.DSH_SUBAGENT_PUBLISHED_FAILURE === '1'
   const persistence = ctx.sessionPersistence
-  const load = persistence.load.bind(persistence)
+  const stat = persistence.stat.bind(persistence)
   const agents = ctx.agents
   const create = agents.create.bind(agents)
 
@@ -56,13 +56,13 @@ export function apply(ctx: Context): void {
 
   // The unavailable-child lookup is real asynchronous I/O. Fence it behind both
   // authored follow-ups so runner speed cannot reorder the exact log.
-  persistence.load = async (id) => {
+  persistence.stat = async (id, options) => {
     if (id === UNKNOWN_CHILD_ID) await followupsAccepted.promise
-    return load.call(persistence, id)
+    return stat(id, options)
   }
   ctx.effect(() => () => {
     agents.create = create
-    persistence.load = load
+    persistence.stat = stat
     followupsAccepted.resolve(undefined)
     parentTurnClosed.resolve(undefined)
   }, 'subagent snapshot ordering')

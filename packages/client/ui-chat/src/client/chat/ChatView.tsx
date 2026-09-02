@@ -1,10 +1,11 @@
 // An enclosing `[data-conversation-scroll]` owns scrolling when present;
 // otherwise this view owns it. Each row subscribes to one stable node key.
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import type {
   ConversationTimelineSnapshot, RenderMessageImages,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
@@ -16,6 +17,7 @@ import { formatRunDuration } from './message-chrome.ts'
 import css from './ChatView.module.css'
 
 const FOLLOW_THRESHOLD = 24
+const SCROLL_SAMPLE_INTERVAL_MS = 500
 
 /** Active column host when present; otherwise the view-local scroller. */
 function scrollerOf(from: HTMLElement): HTMLElement {
@@ -198,13 +200,24 @@ function TurnStatus({ startTime, t }: {
   )
 }
 
+type ChatNodeListProps = Omit<ComponentProps<typeof ChatNodeSeat>, 'nodeKey'> & {
+  readonly order: readonly string[]
+}
+
+const ChatNodeList = memo(function ChatNodeList({ order, ...seatProps }: ChatNodeListProps) {
+  return order.map(nodeKey => (
+    <ChatNodeSeat key={nodeKey} nodeKey={nodeKey} {...seatProps} />
+  ))
+})
+
 /**
  * The chat view slot entry: pure component over the composed props; each
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useChat, useSessions, useStore, actions, renderSlot, sessionId, openFile, loadOlder, loadThrough,
-  loadImage, openView, chatScroll, forkAt, fileMentions, useTranscriptView, useProjection, t,
+  useSession, useChat, useChatNode, useChatNodeProcess, useSessions, useStore, actions, renderSlot,
+  sessionId, openFile, loadOlder, loadThrough, loadImage, openView, chatScroll, forkAt, fileMentions,
+  useTranscriptView, useProjection, t,
 }: ChatViewSlotProps) {
   const order = useChat(s => s.order)
   const nodeStore = useChat(s => s.nodes)
@@ -295,6 +308,8 @@ export function ChatView({
   // restores it and normalizes a floor-clamped position back to following.
   const [atBottom, setAtBottom] = useState(() => chatScroll.read() === null)
   const atBottomRef = useRef(atBottom)
+  const scrollSamplePendingRef = useRef(false)
+  const [, setScrollSampleTick] = useState(0)
   const [activeTurn, setActiveTurn] = useState<number | null>(
     () => turnNavigationItems.at(-1)?.turn ?? null,
   )
@@ -304,7 +319,7 @@ export function ChatView({
    * while the request is pending and restored after the prepend lands. */
   const anchorRef = useRef<PagingAnchor | null>(null)
   /** Unloaded-turn jump in flight: target turn plus its load-through seq. */
-  const pendingJumpRef = useRef<{ turn: number; seq: number } | null>(null)
+  const pendingJumpRef = useRef<{ turn: number; seq: SessionSeq } | null>(null)
   /** Whether the in-flight jump already landed mid-paging (settle then only corrects an untouched landing). */
   const jumpLandedRef = useRef(false)
   const [busyJumpTurn, setBusyJumpTurn] = useState<number | null>(null)
@@ -331,6 +346,7 @@ export function ChatView({
   const followSig = `${openState}:${firstSeq}:${lastKey}:${order.length}:${running ? 1 : 0}:${lastSteeringId ?? ''}:${lastSubmissionId ?? ''}`
 
   const syncActiveTurn = useCallback((): void => {
+    if (scrollSamplePendingRef.current) return
     const local = listRef.current
     const first = turnNavigationItems[0]
     if (local === null || first === undefined) {
@@ -449,6 +465,7 @@ export function ChatView({
   }
 
   useLayoutEffect(() => {
+    if (scrollSamplePendingRef.current) return
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: React attaches the ref before layout effects run. */
     if (local === null) return
@@ -562,18 +579,33 @@ export function ChatView({
     scheduleActiveTurn()
   }
 
-  // Bind the scroll listener on the resolved scrollport once per mount;
-  // reader-input attribution rides the observed-top ledger, not per-device
-  // input listeners.
+  // Raw scroll events only schedule work. Geometry is sampled at most once
+  // per interval, with scrollend providing the final sample for a short burst.
   useEffect(() => {
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: effect runs after the list node commits. */
     if (local === null) return
     const el = scrollerOf(local)
-    const onScroll = (): void => { onScrollRef.current() }
+    let sampleTimer: number | undefined
+    const sample = (): void => {
+      if (!scrollSamplePendingRef.current) return
+      scrollSamplePendingRef.current = false
+      if (sampleTimer !== undefined) window.clearTimeout(sampleTimer)
+      sampleTimer = undefined
+      onScrollRef.current()
+      setScrollSampleTick(tick => tick + 1)
+    }
+    const onScroll = (): void => {
+      scrollSamplePendingRef.current = true
+      sampleTimer ??= window.setTimeout(sample, SCROLL_SAMPLE_INTERVAL_MS)
+    }
     el.addEventListener('scroll', onScroll, { passive: true })
+    el.addEventListener('scrollend', sample, { passive: true })
     return () => {
       el.removeEventListener('scroll', onScroll)
+      el.removeEventListener('scrollend', sample)
+      if (sampleTimer !== undefined) window.clearTimeout(sampleTimer)
+      scrollSamplePendingRef.current = false
     }
   }, [])
 
@@ -581,6 +613,7 @@ export function ChatView({
   // initializer a function initial value would need never exists.
   const followRef = useRef<(() => void) | null>(null)
   followRef.current = () => {
+    if (scrollSamplePendingRef.current) return
     const local = listRef.current
     if (local !== null && atBottomRef.current) {
       const el = scrollerOf(local)
@@ -741,26 +774,24 @@ export function ChatView({
               </button>
             </div>
           )}
-          {order.map(nodeKey => (
-            <ChatNodeSeat
-              key={nodeKey}
-              nodeKey={nodeKey}
-              historyIncomplete={hasMore}
-              compactTranscript={compactTranscript}
-              useChat={useChat}
-              useStore={useStore}
-              actions={actions}
-              selectedCallId={selectedCallId}
-              cwd={cwd}
-              openFile={requestOpenFile}
-              inspectCall={inspectCall}
-              forkAt={forkAt}
-              renderMessageImages={renderMessageImages}
-              fileMentions={fileMentions}
-              renderSlot={renderSlot}
-              t={t}
-            />
-          ))}
+          <ChatNodeList
+            order={order}
+            useChatNode={useChatNode}
+            useChatNodeProcess={useChatNodeProcess}
+            historyIncomplete={hasMore}
+            compactTranscript={compactTranscript}
+            useStore={useStore}
+            actions={actions}
+            selectedCallId={selectedCallId}
+            cwd={cwd}
+            openFile={requestOpenFile}
+            inspectCall={inspectCall}
+            forkAt={forkAt}
+            renderMessageImages={renderMessageImages}
+            fileMentions={fileMentions}
+            renderSlot={renderSlot}
+            t={t}
+          />
           {/* No pending placeholders: questions (ui-user-questions) and approvals
               (ApprovalPanel) both take over the composer, so a flow card would
               double-render the same wait. */}

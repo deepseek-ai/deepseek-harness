@@ -38,8 +38,21 @@ function assistantText(event: Extract<SessionEvent, { type: 'assistant/message' 
   return blocks.length === 0 ? undefined : blocks.map(block => block.text).join('')
 }
 
-function onlyRootAgent(ctx: Context): Agent {
-  const agents = ctx.get('agents')?.roots() ?? []
+async function onlyRootAgent(ctx: Context): Promise<Agent> {
+  const registry = ctx.get('agents')
+  if (registry === undefined) throw new Error('fixture turn requires exactly one top-level agent, found 0')
+  // Configured agents publish asynchronously (persistence create/resume runs
+  // before publication), so a settled Loader does not imply a registered
+  // agent yet; wait for the first publication instead of requiring it.
+  if (registry.roots().length === 0) {
+    await new Promise<void>((resolve) => {
+      const dispose = ctx.on('agent/created', () => {
+        dispose()
+        resolve()
+      })
+    })
+  }
+  const agents = registry.roots()
   const [agent] = agents
   if (agent === undefined || agents.length !== 1) {
     throw new Error(`fixture turn requires exactly one top-level agent, found ${agents.length}`)
@@ -54,7 +67,7 @@ function onlyRootAgent(ctx: Context): Agent {
  * @returns the final assistant text and accumulated model usage.
  */
 export async function runFixtureTurn(ctx: Context, options: FixtureTurnOptions): Promise<FixtureTurnResult> {
-  const agent = onlyRootAgent(ctx)
+  const agent = await onlyRootAgent(ctx)
   await agent.whenIdle()
 
   const message = createUserMessage({

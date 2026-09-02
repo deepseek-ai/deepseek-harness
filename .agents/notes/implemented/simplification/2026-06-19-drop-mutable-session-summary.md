@@ -22,7 +22,7 @@ Delete the mutable session summary entirely. `SessionSummary` and the `SessionMe
 
 Anything the summary was meant to provide is **derivable from the append-only log** when a consumer actually needs it (`firstPrompt` = first `user/message`; recency = the last event's `time` or the file mtime) or already lives in the immutable header (`createdAt`, `cwd`). The one thing *not* derivable — a user-*edited* title — had no implementation and is pure YAGNI; it can return as its own log event or header field if a real feature ever needs it.
 
-The removal narrows the public service contract and JSONL on-disk format; the summary was a deliberate forward-looking design, not an accident; and `SessionHeader` stands where the original Agent Note described `SessionMeta`, which is why the summary vanished. It also simplifies the [shared persistence write coordinator](../architecture/2026-06-18-shared-persistence-write-coordinator.md): with no mutable summary, the coordinator needs no `updateSummary` hook, and an out-of-tree provider can reuse the same summary-free orchestration.
+The removal narrows the public service contract and JSONL on-disk format; the summary was a deliberate forward-looking design, not an accident; and `SessionHeader` stands where the original Agent Note described `SessionMeta`, which is why the summary vanished. It also simplified the then-current [shared persistence write coordinator](../../archived/architecture/2026-06-18-shared-persistence-write-coordinator.md): with no mutable summary, that orchestration needed no `updateSummary` hook.
 
 ## No migration
 

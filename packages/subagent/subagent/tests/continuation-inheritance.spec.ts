@@ -27,6 +27,7 @@ import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import SubagentRuntime from '../src/index.ts'
 import { TestSessionQuery } from './test-session-query.ts'
+import { loadStoredSession } from './persistence-helpers.ts'
 
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
@@ -54,7 +55,7 @@ async function setup(script: Script) {
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   return { ctx, parent }
 }
 
@@ -105,7 +106,7 @@ describe('continuable policy inheritance', () => {
     expect(ctx.approval.overrideOf(child.session)).toBe('never')
 
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(policyEvents(loaded.events)).toMatchObject([
       { type: 'sandbox/mode', data: { mode: 'danger-full-access', source: 'delegation' } },
       { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
@@ -136,7 +137,7 @@ describe('continuable policy inheritance', () => {
     const started = await starting
 
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(ctx.sandboxPolicy.overrideOf(parent.session)).toBe('danger-full-access')
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('read-only')
   })
@@ -147,7 +148,7 @@ describe('continuable policy inheritance', () => {
     const started = await ctx.subagents.startContinuable(startSpec(parent))
     await waitNoActivation(ctx, started.childId)
 
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(policyEvents(loaded.events)).toMatchObject([
       { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
     ])
@@ -165,8 +166,8 @@ describe('continuable policy inheritance', () => {
     const started = await ctx.subagents.startContinuable(startSpec(parent, 'fork'))
     await waitNoActivation(ctx, started.childId)
 
-    const loaded = await ctx.sessionPersistence.load(started.childId)
-    expect(loaded.meta.seedLength).toBeGreaterThan(0)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.inheritedEventCount).toBeGreaterThan(0)
     expect(policyEvents(loaded.events)).toMatchObject([
       { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
     ])
@@ -189,7 +190,7 @@ describe('continuable policy inheritance', () => {
     expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
 
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(foldedSandboxMode(ctx, started.childId, loaded.events)).toBe('read-only')
   })
 
@@ -212,7 +213,7 @@ describe('continuable policy inheritance', () => {
     )
     await waitNoActivation(ctx, started.childId)
 
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     expect(loaded.events.filter(event => event.type === 'sandbox/mode')).toMatchObject([
       { data: { mode: 'read-only', source: 'delegation' } },
     ])
@@ -237,8 +238,8 @@ describe('continuable policy inheritance', () => {
     const started = await ctx.subagents.startContinuable(startSpec(parent, 'fork'))
     await waitNoActivation(ctx, started.childId)
 
-    const loaded = await ctx.sessionPersistence.load(started.childId)
-    expect(loaded.meta.seedLength).toBeGreaterThan(0)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.inheritedEventCount).toBeGreaterThan(0)
     expect(loaded.events.filter(event => event.type === 'sandbox/mode')).toMatchObject([
       { data: { mode: 'workspace-write' } },
       { data: { mode: 'read-only', source: 'delegation' } },

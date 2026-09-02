@@ -1,7 +1,7 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionTitleService, {
   SessionTitleProviderId,
@@ -147,12 +147,12 @@ describe('SessionTitleService', () => {
     const seed = Session.create(SessionId('source'))
     seed.append('session/title', {
       title: 'Earlier',
-      messageSeqs: [1],
+      messageSeqs: [SessionSeq(1)],
       source: { kind: 'fallback' },
     })
     seed.append('session/title', {
       title: 'Later',
-      messageSeqs: [1, 4],
+      messageSeqs: [SessionSeq(1), SessionSeq(4)],
       source: {
         kind: 'provider',
         provider: SessionTitleProviderId('test-provider'),

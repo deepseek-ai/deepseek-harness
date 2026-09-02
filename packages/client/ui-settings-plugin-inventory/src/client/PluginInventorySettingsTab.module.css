@@ -28,7 +28,7 @@
 }
 
 .failure button {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 6px;
   padding: 4px 10px;
   background: transparent;
@@ -60,8 +60,8 @@
 .search input {
   width: 100%;
   height: 36px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 8px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 10px;
   padding: 0 34px 0 36px;
   outline: none;
   background: var(--dsw-alias-bg-layer-1);
@@ -112,14 +112,15 @@
 .card {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
+  border: 0;
+  box-shadow: var(--dsw-elevation-stroke);
+  border-radius: 14px;
   background: var(--dsw-alias-bg-layer-3);
 }
 
 .card[data-open='true'] {
-  border-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-shadow-lv1);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-panel);
 }
 
 .cardContent {
@@ -173,6 +174,7 @@
   height: 7px;
   flex: none;
   border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-alias-label-tertiary);
 }
 
@@ -235,7 +237,7 @@
 }
 
 .group + .group {
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
   padding-top: 14px;
 }
 
@@ -393,7 +395,7 @@
 }
 
 .cardDetails {
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
   padding: 10px 14px 12px;
   background: var(--dsw-alias-bg-module-platform);
 }

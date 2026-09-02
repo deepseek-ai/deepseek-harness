@@ -28,6 +28,7 @@ function session(id: string, cwd?: string): Session {
     version: 0,
     id: sessionId,
     createdAt: 0,
+    isSeeded: false,
     ...cwd === undefined ? {} : { cwd },
   })
 }

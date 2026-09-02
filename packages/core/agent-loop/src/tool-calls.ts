@@ -13,7 +13,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import { createToolResultMessage, type ToolCallBlock } from '@deepseek-ai/dsh-llm'
-import type { Session, UserMessage } from '@deepseek-ai/dsh-session'
+import type { Session, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 import { TOOL_ABORTED_BEFORE_DISPATCH, TOOL_RUNTIME_SCHEDULER, type ToolExecutionInput, type ToolExecutionMode, type ToolExecutionResult, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
 
@@ -132,7 +132,7 @@ async function runGroup(
   const { maxParallelToolCalls } = ctx.agentLoop.config
   const slots: (Slot | undefined)[] = group.map(() => undefined)
   // Started slots retain their `tool/call` seq so the result can cite it.
-  const callSeqs: number[] = group.map(() => -1)
+  const callSeqs: Array<SessionSeq | undefined> = group.map(() => undefined)
   let nextToStart = 0
   let committed = 0
   let started = 0
@@ -260,7 +260,7 @@ function appendSkippedToolCall(session: Session, turn: number, step: number, blo
 }
 
 /** Append a started call and return the event seq that its result must cite. */
-function appendToolCall(session: Session, turn: number, step: number, block: ToolCallBlock): number {
+function appendToolCall(session: Session, turn: number, step: number, block: ToolCallBlock): SessionSeq {
   const event = session.append('tool/call', { turn, step, callId: block.id, name: block.name, arguments: block.arguments })
   return event.seq
 }
@@ -272,7 +272,7 @@ function appendToolResult(
   step: number,
   block: ToolCallBlock,
   result: ToolExecutionResult,
-  callSeq: number,
+  callSeq: SessionSeq,
 ): void {
   const message = createToolResultMessage({
     callId: block.id,

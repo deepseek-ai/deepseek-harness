@@ -11,7 +11,8 @@
  */
 
 import { z } from 'zod'
-import type { SessionId } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import type { SessionId, SessionSeqCursor } from '@deepseek-ai/dsh-session'
 import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
 
 /**
@@ -24,7 +25,8 @@ import { defineDomain, domainTable } from '@deepseek-ai/dsh-storage-domain'
  */
 export const checkpointRow = z.object({
   ver: z.number().int().nonnegative(),
-  seq: z.number().int().gte(-1),
+  seq: z.number().int().gte(-1).transform((value): SessionSeqCursor =>
+    value === -1 ? -1 : SessionSeq(value)),
   val: z.json(),
 })
 
@@ -40,6 +42,8 @@ export const checkpointRow = z.object({
 export const checkpointIdentity = z.object({
   createdAt: z.number().int().nonnegative(),
   cwd: z.string().optional(),
+  isSeeded: z.boolean(),
+  inheritedEventCount: z.number().int().nonnegative().transform(SessionLogOffset),
 })
 
 /** The identity fields a record is bound to, inferred from {@link checkpointIdentity}. */
@@ -68,7 +72,7 @@ export type CheckpointRecord = z.infer<typeof checkpointRecord>
  */
 export const projectionCacheDomainSpec = defineDomain({
   name: 'session_projcache',
-  version: 4,
+  version: 5,
   layout: 'per-record',
   tables: { sessions: domainTable<SessionId, CheckpointRecord>(checkpointRecord) },
 })

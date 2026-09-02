@@ -5,7 +5,7 @@
   box-sizing: border-box;
   width: 100%;
   height: var(--dsh-trajectory-toolbar-height);
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
 }
 
@@ -122,6 +122,7 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-bg-layer-1);
   transition: transform 120ms var(--ds-ease-in-out);
 }
@@ -173,7 +174,7 @@
   margin-left: auto;
   padding: 0 6px;
   gap: 4px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0.5px solid var(--dsw-alias-border-l4);
   border-radius: 4px;
   color: var(--dsw-alias-label-caption);
   background: var(--dsw-alias-bg-layer-2);

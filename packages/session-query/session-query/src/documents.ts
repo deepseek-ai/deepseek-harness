@@ -1,7 +1,7 @@
 /** Shared event metadata and semantic-document projection. */
 
 import { foldSurface } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEventRecord, SessionEventSearchDocument, SessionEventSurface } from './types.ts'
 import { SessionQueryError } from './config.ts'
 import { extractSessionEventText } from './extraction.ts'
@@ -53,7 +53,7 @@ export function buildSessionEventSearchDocuments(
   return documents
 }
 
-function classifySurface(events: readonly SessionEvent[]): Map<number, SessionEventSurface> {
+function classifySurface(events: readonly SessionEvent[]): Map<SessionSeq, SessionEventSurface> {
   let folded: ReturnType<typeof foldSurface>
   try {
     folded = foldSurface(events)
@@ -65,7 +65,7 @@ function classifySurface(events: readonly SessionEvent[]): Map<number, SessionEv
       { cause: error },
     )
   }
-  const result = new Map<number, SessionEventSurface>()
+  const result = new Map<SessionSeq, SessionEventSurface>()
   for (const seq of folded.nodes) result.set(seq, 'current')
   for (const replacement of folded.replacements) {
     for (const seq of replacement.shadowedSeqs) result.set(seq, 'shadowed')

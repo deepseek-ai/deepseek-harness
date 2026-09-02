@@ -3,7 +3,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import SessionStore from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionSeq } from '@deepseek-ai/dsh-session'
 import { decodeStorageRecord, type ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
 import { ToolCallId, createMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
@@ -93,11 +93,11 @@ function pageEvents(page: SessionPage): SessionWireEvent[] {
 function chunkRow(event: ChunkRowEvent): ChunkRow {
   switch (event.type) {
     case 'chunkrow/text-chunks':
-      return { type: 'text-chunks', seq0: event.seq, time0: event.time, data: event.data }
+      return { type: 'text-chunks', seq0: SessionSeq(event.seq), time0: event.time, data: event.data }
     case 'chunkrow/reasoning-chunks':
-      return { type: 'reasoning-chunks', seq0: event.seq, time0: event.time, data: event.data }
+      return { type: 'reasoning-chunks', seq0: SessionSeq(event.seq), time0: event.time, data: event.data }
     case 'chunkrow/tool-call-chunks':
-      return { type: 'tool-call-chunks', seq0: event.seq, time0: event.time, data: event.data }
+      return { type: 'tool-call-chunks', seq0: SessionSeq(event.seq), time0: event.time, data: event.data }
   }
 }
 
@@ -210,6 +210,11 @@ describe('Session history raw journal', () => {
     const third = appendUserText(session, 'second prompt')
     appendAssistantText(session, 'second reply', 2)
     const shadowed = [...session.surface.nodes]
+    const shadowedStart = shadowed[0]
+    const shadowedEnd = shadowed.at(-1)
+    if (shadowedStart === undefined || shadowedEnd === undefined) {
+      throw new Error('expected a non-empty surface')
+    }
     // A compaction transaction: a log-only summary record immediately followed by the
     // replacement that shadows the range.
     const summary = appendExtension(session, 'compaction/summary', {
@@ -224,7 +229,7 @@ describe('Session history raw journal', () => {
       content: [{ type: 'text', text: '<context_checkpoint>summary</context_checkpoint>' }],
       source: { kind: 'plugin', plugin: 'compact' },
     }), {
-      surfaceOp: { op: 'replace', start: shadowed[0] as number, end: shadowed.at(-1) as number },
+      surfaceOp: { op: 'replace', start: shadowedStart, end: shadowedEnd },
       sourceEventSeqs: [...shadowed, summary.seq],
     })
 

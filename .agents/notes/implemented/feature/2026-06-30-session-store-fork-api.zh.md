@@ -20,11 +20,11 @@ store 暴露一个操作：
 type SessionForkSource = Session | SessionId
 
 class SessionStore extends Service {
-  fork(source: SessionForkSource, boundary?: number, childSessionId?: SessionId): Session
+  fork(source: SessionForkSource, boundary?: SessionSeq, childSessionId?: SessionId): Session
 }
 ```
 
-`boundary` 是要复制到的源事件 `seq`（含该序号）。省略时默认为源会话当前的最后一个事件；对空源会话省略 `boundary` 则创建一个空的子会话。fork 特有的校验会检查请求的边界存在，并确认所选前缀最近的轮次边界不是未匹配的 `turn/start`。因此，所选前缀可以结束于 `turn/end` 或更晚的独立事件，随后被深拷贝到子会话的种子中。子会话继承源会话的 `cwd`，将 `parentSession` 设为源会话 id，并将 `seedLength` 设为已复制前缀的长度。省略 `childSessionId` 时，`SessionStore` 使用其现有的 id 策略生成一个。
+`boundary` 是要复制到的品牌化源事件 `seq`（含该序号）。省略时默认为源会话当前的最后一个事件；对空源会话省略 `boundary` 则创建一个空的子会话。fork 特有的校验会检查请求的边界存在，并确认所选前缀最近的轮次边界不是未匹配的 `turn/start`。因此，所选前缀可以结束于 `turn/end` 或更晚的独立事件，随后被深拷贝到子会话的种子中。子会话继承源会话的 `cwd`，将 `parentSession` 设为源会话 id，设置 logical `isSeeded: true`，并把复制前缀的长度单独作为 `inheritedEventCount` 传入。省略 `childSessionId` 时，`SessionStore` 使用其现有的 id 策略生成一个。
 
 空前缀可以被 fork；任何非空边界都必须是位于开放轮次之外且安全、已存在的序号。类型化的错误区分源缺失、对象陈旧、子 id 重复、边界无效和前缀结束于执行过程中等情况。更广泛的日志校验与崩溃恢复仍由其现有的负责方处理。
 
@@ -44,6 +44,6 @@ Host 通过 agent（智能体）注册表，以选定的种子和谱系创建子
 
 ## 后果
 
-公开 API 保持精简且易于发现：活跃会话分支是 `ctx.sessions` 的一部分，紧邻 `create({ seed })`，而非一个独立服务或一对两步辅助函数。持久化继续通过现有的 `session/created` 和 `session/flush` 行为运作：fork 出的子会话创建时便带有种子事件，因此现有后端只需持久化该种子一次，并在 header 中保存 `parentSession`／`seedLength`。
+公开 API 保持精简且易于发现：活跃会话分支是 `ctx.sessions` 的一部分，紧邻 `create({ seed })`，而非一个独立服务或一对两步辅助函数。持久化继续通过现有的 `session/created` 和 `session/flush` 行为运作：fork 出的子会话创建时便带有种子事件，因此 JSONL 后端只需持久化该种子一次，并保留 logical `parentSession`／`isSeeded` 与单独的精确 cut（编码为 v0 物理 `seedLength`）。
 
 本决策排除 ACP（Agent Client Protocol）`session/fork`、对未加载的已持久化会话执行 fork、面向模型的工具，以及 subagent 重构。如果未来添加 ACP 方法，应在具备协议与快照覆盖后才声明支持该能力；本 Agent Note 不添加任何 ACP 协议行为，因此不需要 ACP 快照。fork 子会话的回放仍由现有的[种子边界测试 Agent Note](../testing/2026-06-22-fork-child-replay-seed-boundary.zh.md)覆盖；store、Host、载体与客户端的专项测试固定边界和对账约定，真实 Chromium 场景则固定组装后的消息操作与谱系树。

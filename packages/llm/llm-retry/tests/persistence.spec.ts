@@ -28,6 +28,7 @@ describe('JSONL retry-event persistence', () => {
     const ctx = await backend()
     try {
       const session = ctx.sessions.create(SessionId('retry-jsonl'))
+      const handle = await ctx.sessionPersistence.create(session.header)
       session.append('turn/start', { turn: 1 })
       session.append('step/start', { turn: 1, step: 1 })
       session.append('request/header', {
@@ -52,9 +53,14 @@ describe('JSONL retry-event persistence', () => {
 
       expect(session.deriveMessages()).toEqual([])
       await ctx.sessions.flush(session)
-      const loaded = await ctx.sessionPersistence.load(session.id)
-
-      expect(loaded.events.find(item => item.type === 'llm/retry')).toEqual(event)
+      await handle.close()
+      const reader = await ctx.sessionPersistence.open(session.id, 'read')
+      try {
+        const loaded = await reader.read()
+        expect(loaded.find(item => item.type === 'llm/retry')).toEqual(event)
+      } finally {
+        await reader.close()
+      }
     } finally {
       await ctx.fiber.dispose()
     }

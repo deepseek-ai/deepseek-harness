@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import LlmRuntime, { createUserMessage, markAgentLoopRequest } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import SessionTitleService, {
@@ -256,7 +256,7 @@ describe('SessionTitleService Provider lifecycle', () => {
     expect(() => ctx.sessionTitle.register({
       id: SessionTitleProviderId('duplicate'),
       automatic: 'first-prompt',
-      generate: async () => ({ title: 'duplicate', messageSeqs: [0] }),
+      generate: async () => ({ title: 'duplicate', messageSeqs: [SessionSeq(0)] }),
     })).toThrow(/already registered/)
 
     const session = ctx.sessions.create(SessionId('dispose-provider'))

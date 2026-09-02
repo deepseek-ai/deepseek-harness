@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context, Service } from '@deepseek-ai/cordis'
-import SessionStore, { type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionSeq, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as PermissionInvariant from '@deepseek-ai/dsh-permission-presets/invariant'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 
@@ -22,7 +22,7 @@ async function setup(): Promise<Context> {
 }
 
 function presetEvent(preset: string): SessionEvent {
-  return { type: 'permission/preset', seq: 0, time: 0, data: { preset } }
+  return { type: 'permission/preset', seq: SessionSeq(0), time: 0, data: { preset } }
 }
 
 describe('permission invariants', () => {
@@ -30,7 +30,7 @@ describe('permission invariants', () => {
     const ctx = await setup()
     expect(() => { ctx.emit('session/event', {} as Session, presetEvent('safe')) }).not.toThrow()
     expect(() => { ctx.emit('session/event', {} as Session, {
-      type: 'turn/end', seq: 0, time: 0, data: {},
+      type: 'turn/end', seq: SessionSeq(0), time: 0, data: {},
     } as SessionEvent) }).not.toThrow()
     expect(() => { ctx.emit('tools/change') }).not.toThrow()
   })

@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { TokenUsage } from '@deepseek-ai/dsh-llm'
 import SessionStore from '@deepseek-ai/dsh-session'
-import type { Session } from '@deepseek-ai/dsh-session'
+import type { Session, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import type { ContextPressureProjection, TokenUsageProjection } from '@deepseek-ai/dsh-token-meter/client'
@@ -38,7 +38,7 @@ function usageChunk(
   usage: TokenUsage,
   turn: number,
   step: number,
-): number {
+): SessionSeq {
   return session.append('assistant/chunk', {
     turn,
     step,
@@ -51,7 +51,7 @@ function finalUsage(
   usage: TokenUsage,
   turn: number,
   step: number,
-  sourceSeqs: number[],
+  sourceSeqs: SessionSeq[],
 ): void {
   session.append('assistant/message', {
     turn,
@@ -77,7 +77,7 @@ const projected = (ctx: Context, session: Session): TokenUsageProjection => {
  * replaced span from the measurement service's own nodes and log the
  * shadow-price event directly before the replace.
  */
-function appendSummaryMeter(ctx: Context, session: Session, start: number, end: number): void {
+function appendSummaryMeter(ctx: Context, session: Session, start: SessionSeq, end: SessionSeq): void {
   const nodes = ctx.tokenMeter.measure(session).nodes
   const startIdx = nodes.findIndex(node => node.seq === start)
   const endIdx = nodes.findIndex(node => node.seq === end)
@@ -319,7 +319,7 @@ function recordContext(session: Session, model: string, contextWindow?: number):
 }
 
 /** Append one model-visible user turn and return its surface seq. */
-function appendUser(session: Session, text: string): number {
+function appendUser(session: Session, text: string): SessionSeq {
   return session.append('user/message', createUserMessage({
     content: [{ type: 'text', text }],
     source: { kind: 'user' },
@@ -333,7 +333,7 @@ function appendAssistant(
   usage: TokenUsage,
   turn: number,
   step: number,
-): number {
+): SessionSeq {
   return session.append('assistant/message', {
     turn,
     step,

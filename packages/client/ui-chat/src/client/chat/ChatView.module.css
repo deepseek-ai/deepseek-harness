@@ -202,11 +202,13 @@
   height: 34px;
   margin-top: -34px;
   padding: 0;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0;
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l3);
   border-radius: 100px;
+  corner-shape: round;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-button-floating-fill);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-elevation-panel);
   cursor: pointer;
   pointer-events: auto;
 }

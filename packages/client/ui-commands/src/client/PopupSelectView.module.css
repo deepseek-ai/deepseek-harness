@@ -1,6 +1,6 @@
 /* Official popupSelect shell card: menu-surface tokens (same family as
  * ui-primitives Menu.module.css — figma MenuDropdown r12 / hairline /
- * shadow-lv3), anchored by the conversation.input.overlay slot. */
+ * elevation-prominent), anchored by the conversation.input.overlay slot. */
 
 .card {
   /* The overlay anchor is a zero-height strip on the composer card's top
@@ -24,10 +24,11 @@
      (see ui-theme styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  border: 1px solid var(--dsw-alias-border-inverted);
-  border-radius: 12px;
+  border: 0;
+  border-radius: 20px;
   background: var(--dsw-specific-menu);
-  box-shadow: var(--dsw-shadow-lv3);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
   outline: none;
 }
 
@@ -84,7 +85,7 @@
 .search {
   margin: 2px 2px 4px;
   padding: 6px 8px;
-  border: 1px solid var(--dsw-alias-border-inverted);
+  border: 0.5px solid var(--dsw-alias-border-inverted);
   border-radius: 8px;
   background: transparent;
   font-size: 13px;
@@ -109,7 +110,7 @@
 
 .retry {
   padding: 2px 8px;
-  border: 1px solid var(--dsw-alias-border-inverted);
+  border: 0.5px solid var(--dsw-alias-border-inverted);
   border-radius: 6px;
   background: transparent;
   font-size: 12px;

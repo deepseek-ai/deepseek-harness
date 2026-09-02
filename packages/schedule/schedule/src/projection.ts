@@ -4,14 +4,16 @@
  */
 
 import { z } from 'zod'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 import { applyScheduleChanges, decodeScheduleChange } from './domain.ts'
 import type { FoldedSchedules } from './domain.ts'
 import type { ScheduleChange, ScheduleId, ScheduleRecord } from './types.ts'
 
-/** Persisted projection state: the immutable fork boundary plus the complete Schedule fold. */
+/** Persisted projection state: the immutable inherited cut plus the complete Schedule fold. */
 export interface ScheduleProjectionState extends FoldedSchedules {
-  readonly seedLength: number
+  readonly inheritedEventCount: SessionLogOffsetType
 }
 
 const scheduleId = z.unknown().transform((value, context): ScheduleId => {
@@ -43,7 +45,7 @@ const scheduleRecord = z.unknown().transform((value, context): ScheduleRecord =>
 const scheduleRecords = z.array(scheduleRecord) as unknown as z.ZodType<readonly ScheduleRecord[]>
 
 const scheduleProjectionStateSchema = z.object({
-  seedLength: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  inheritedEventCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).transform(SessionLogOffset),
   active: scheduleRecords,
   seenIds: z.array(scheduleId),
 }).strict().superRefine((state, context) => {
@@ -67,11 +69,11 @@ const scheduleProjectionStateSchema = z.object({
 export const scheduleProjectionDefinition = {
   key: 'schedule',
   stateSchema: scheduleProjectionStateSchema,
-  init: header => ({ seedLength: header.seedLength ?? 0, active: [], seenIds: [] }),
+  init: (_header, inheritedEventCount) => ({ inheritedEventCount, active: [], seenIds: [] }),
   apply: (state, event) => {
-    if (event.seq < state.seedLength || event.type !== 'schedule/change') return state
+    if (event.seq < state.inheritedEventCount || event.type !== 'schedule/change') return state
     return {
-      seedLength: state.seedLength,
+      inheritedEventCount: state.inheritedEventCount,
       ...applyScheduleChanges(state, [decodeScheduleChange(event.data)]),
     }
   },
@@ -79,7 +81,7 @@ export const scheduleProjectionDefinition = {
     viewSchema: scheduleRecords,
     view: state => state.active,
   },
-  stateVersion: 1,
+  stateVersion: 2,
 } satisfies ProjectionDefinition<'schedule', ScheduleProjectionState>
 
 declare module '@deepseek-ai/dsh-session-projection/types' {

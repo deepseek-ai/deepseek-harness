@@ -101,7 +101,8 @@ describe('dsh-tool-ralph over the real spawn and worker-thread stack', () => {
     for (const child of children) {
       expect(child.session.header.cwd).toBe('/tmp/ralph-shared-workspace')
       expect(child.session.header.parentSession).toBe(parent.session.header.id)
-      expect(child.session.header.seedLength).toBeUndefined()
+      expect(child.session.header.isSeeded).toBe(false)
+      expect(child.session.inheritedEventCount).toBe(0)
       expect(ctx.agents.get(child.id)).toBeUndefined()
     }
 

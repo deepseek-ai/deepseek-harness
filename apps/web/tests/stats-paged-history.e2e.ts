@@ -45,7 +45,12 @@ function buildSeed(turns: number): string {
     at({ type: 'turn/start', data: { turn } })
     at({
       type: 'user/message',
-      data: { content: [{ type: 'text', text: `m${turn}` }], source: { kind: 'user' } },
+      data: {
+        id: `00000000-0000-4000-9000-${String(turn).padStart(12, '0')}`,
+        role: 'user',
+        content: [{ type: 'text', text: `m${turn}` }],
+        source: { kind: 'user' },
+      },
       surfaceOp: 'append',
     })
     at({ type: 'step/start', data: { turn, step: 1 } })

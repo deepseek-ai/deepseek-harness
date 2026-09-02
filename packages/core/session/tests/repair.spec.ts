@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import { interruptedTurnClosers, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '../src/index.ts'
-import type { SessionEvent, SurfaceEvent } from '../src/index.ts'
+import { interruptedTurnClosers as repairInterruptedTurn, SessionSeq, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from '../src/index.ts'
+import type { SessionEvent as LogicalSessionEvent, SurfaceEvent } from '../src/index.ts'
+
+interface SessionEvent {
+  type: string
+  seq: number
+  time: number
+  data: unknown
+  [key: string]: unknown
+}
+
+function interruptedTurnClosers(events: readonly SessionEvent[]): LogicalSessionEvent[] {
+  for (const event of events) SessionSeq(event.seq)
+  return repairInterruptedTurn(events as unknown as readonly LogicalSessionEvent[])
+}
 
 /**
  * Unit coverage for the crash-recovery closer synthesis. The persistence

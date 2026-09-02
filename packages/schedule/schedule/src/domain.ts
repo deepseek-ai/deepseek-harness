@@ -3,7 +3,8 @@
  * @module @deepseek-ai/dsh-schedule
  */
 
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import type {
   AfterScheduleRecord,
   AtInput,
@@ -622,22 +623,24 @@ export function applyScheduleChanges(
 /**
  * Fold the package-owned stream after the durable fork seed boundary.
  * @param events - Complete ordered session log or candidate-extended log.
- * @param seedLength - Inherited prefix length excluded from child ownership.
+ * @param inheritedEventCount - Inherited prefix length excluded from child ownership.
  * @returns Active records and all previously used ids.
  */
 export function foldScheduleEvents(
   events: readonly SessionEvent[],
-  seedLength = 0,
+  inheritedEventCount: SessionLogOffsetType = SessionLogOffset(0),
 ): FoldedSchedules {
-  if (!Number.isSafeInteger(seedLength) || seedLength < 0 || seedLength > events.length) {
-    throw new ScheduleLogError('schedule seedLength must be within the supplied event log')
+  if (!Number.isSafeInteger(inheritedEventCount)
+    || inheritedEventCount < 0
+    || inheritedEventCount > events.length) {
+    throw new ScheduleLogError('schedule inheritedEventCount must be within the supplied event log')
   }
   const initial: FoldedSchedules = Object.freeze({
     active: Object.freeze([]),
     seenIds: Object.freeze([]),
   })
   const changes = function* (): Generator<ScheduleChange> {
-    for (const event of events.slice(seedLength)) {
+    for (const event of events.slice(inheritedEventCount)) {
       if (event.type === 'schedule/change') yield decodeScheduleChange(event.data)
     }
   }

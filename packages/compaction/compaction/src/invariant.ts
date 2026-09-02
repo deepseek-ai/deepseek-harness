@@ -1,8 +1,9 @@
 /** Package-owned compaction log-stream invariants. @module @deepseek-ai/dsh-compaction/invariant */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { isReplacementSurfaceEvent } from '@deepseek-ai/dsh-session'
+import { isReplacementSurfaceEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import { SurfaceManager } from '@deepseek-ai/dsh-session/surface'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 import type { CompactionId } from './brand.ts'
 import { isCompactCheckpointSource } from './checkpoint.ts'
@@ -19,7 +20,7 @@ export const inject = ['invariants']
 interface CompactionTrace {
   compactionId: CompactionId
   sourceCommandId: string | undefined
-  startSeq: number
+  startSeq: SessionSeq
   turn: number | null
   summarized: boolean
 }
@@ -27,17 +28,57 @@ interface CompactionTrace {
 interface SessionTrace {
   openTurn: number | null
   compaction: CompactionTrace | undefined
+  surfaceEvents: SessionEvent[]
+  surface: SurfaceManager
 }
 
 type CompactionTransition =
-  | { kind: 'start'; compactionId: CompactionId; sourceCommandId: string | undefined; startSeq: number; turn: number | null }
-  | { kind: 'summary'; compactionId: CompactionId; sourceCommandId: string | undefined; startSeq: number; turn: number | null }
+  | { kind: 'start'; compactionId: CompactionId; sourceCommandId: string | undefined; startSeq: SessionSeq; turn: number | null }
+  | { kind: 'summary'; compactionId: CompactionId; sourceCommandId: string | undefined; startSeq: SessionSeq; turn: number | null }
   | { kind: 'end' }
   | { kind: 'end-seed' }
 
 /** Require a durable opaque identity to be a non-empty string. */
 function validateId(value: unknown, label: string, fail: InvariantFailure): asserts value is string {
   if (typeof value !== 'string' || value.length === 0) fail(`${label} must be a non-empty string`)
+}
+
+/** Validate a durable event-sequence identity at this package's event boundary. */
+function validateSeq(value: unknown, label: string, fail: InvariantFailure): SessionSeq {
+  if (typeof value !== 'number') return fail(`${label} must be a non-negative safe integer event seq`)
+  try {
+    return SessionSeq(value)
+  } catch {
+    return fail(`${label} must be a non-negative safe integer event seq`)
+  }
+}
+
+/** Validate one shadowed surface span and its complete ordered identity list. */
+function validateShadowedSeqs(
+  trace: SessionTrace,
+  event: SessionEvent<'compaction/summary' | 'compaction/prune'>,
+  fail: InvariantFailure,
+): void {
+  const eventType = event.type
+  const { data } = event
+  const start = validateSeq(data.shadowedRange.start, `${eventType} shadowedRange.start`, fail)
+  const end = validateSeq(data.shadowedRange.end, `${eventType} shadowedRange.end`, fail)
+  const seqs = data.shadowedSeqs.map((seq, index) => validateSeq(seq, `${eventType} shadowedSeqs[${index}]`, fail))
+  if (seqs.length === 0) fail(`${eventType} shadowedSeqs must be non-empty`)
+  if (seqs[0] !== start || seqs.at(-1) !== end) {
+    fail(`${eventType} shadowedRange must match the first and last shadowedSeqs`)
+  }
+  const surface = trace.surface.nodes
+  const startIndex = surface.indexOf(start)
+  const endIndex = surface.indexOf(end)
+  if (startIndex < 0 || endIndex < startIndex) {
+    fail(`${eventType} shadowed seqs must name an earlier current surface span`)
+  }
+  const expected = surface.slice(startIndex, endIndex + 1)
+  if (expected.length !== seqs.length
+    || expected.some((seq, index) => seq !== seqs[index])) {
+    fail(`${eventType} shadowedSeqs must list every node in the current surface span`)
+  }
 }
 
 /** Keep the optional initiating command identity stable across one transaction. */
@@ -75,9 +116,9 @@ function validateCheckpoint(
 /** Compaction starts still unmatched when a later seed boundary made them stale. */
 function inheritedOrphanStartSeqs(
   events: readonly SessionEvent[],
-): ReadonlySet<number> {
-  const stale = new Set<number>()
-  let openStartSeq: number | undefined
+): ReadonlySet<SessionSeq> {
+  const stale = new Set<SessionSeq>()
+  let openStartSeq: SessionSeq | undefined
   for (const event of events) {
     if (event.type === 'compaction/start') {
       openStartSeq = event.seq
@@ -142,6 +183,10 @@ function validateCompactionEvent(
   fail: InvariantFailure,
 ): CompactionTransition | undefined {
   if (event.type === 'session/end-seed') return { kind: 'end-seed' }
+  if (event.type === 'compaction/prune') {
+    validateShadowedSeqs(trace, event, fail)
+    return undefined
+  }
   if (event.type === 'user/message'
     && isReplacementSurfaceEvent(event)
     && isCompactCheckpointSource(event.data.source)) {
@@ -182,11 +227,7 @@ function validateCompactionEvent(
     validateSourceCommandId('compaction/summary', event.data.sourceCommandId, open.sourceCommandId, fail)
     validateOwner(open.turn, trace.openTurn, event.type, fail)
     if (open.summarized) fail('compaction/summary repeated within one compaction')
-    const seqs = event.data.shadowedSeqs
-    if (seqs.length === 0) fail('compaction/summary shadowedSeqs must be non-empty')
-    if (seqs[0] !== event.data.shadowedRange.start || seqs.at(-1) !== event.data.shadowedRange.end) {
-      fail('compaction/summary shadowedRange must match the first and last shadowedSeqs')
-    }
+    validateShadowedSeqs(trace, event, fail)
     if (!Number.isSafeInteger(event.data.shadowedTokenCount) || event.data.shadowedTokenCount < 0) {
       fail('compaction/summary shadowedTokenCount must be a non-negative safe integer')
     }
@@ -249,7 +290,13 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   const traces = new WeakMap<Session, SessionTrace>()
   const staged = new WeakMap<SessionEvent, { session: Session; transition: CompactionTransition }>()
   const seed = (session: Session): SessionTrace => {
-    const trace: SessionTrace = { openTurn: null, compaction: undefined }
+    const surfaceEvents: SessionEvent[] = []
+    const trace: SessionTrace = {
+      openTurn: null,
+      compaction: undefined,
+      surfaceEvents,
+      surface: new SurfaceManager(surfaceEvents),
+    }
     traces.set(session, trace)
     const events = session.snapshotEvents()
     const staleOrphanStartSeqs = inheritedOrphanStartSeqs(events)
@@ -266,6 +313,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
       const transition = validateCompactionEvent(trace, event, fail)
       if (transition !== undefined) trace.compaction = applyCompactionTransition(transition)
       applyTurnBoundary(trace, event)
+      trace.surfaceEvents.push(event)
     }
     return trace
   }
@@ -276,16 +324,22 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   ctx.on('session/event', (session, event) => {
     const trace = traceFor(session)
     validateTurnBoundary(trace, event, fail)
-    if (applyTurnBoundary(trace, event)) return
-    if (event.type !== 'session/end-seed'
+    const changedTurn = applyTurnBoundary(trace, event)
+    if (!changedTurn && event.type !== 'session/end-seed'
       && event.type !== 'compaction/start'
       && event.type !== 'compaction/summary'
-      && event.type !== 'compaction/end') return
-    const candidate = staged.get(event)
-    /* v8 ignore next -- internal/dispatch stages every compaction event */
-    if (candidate === undefined || candidate.session !== session) return fail('compaction event published without pre-commit validation')
-    staged.delete(event)
-    trace.compaction = applyCompactionTransition(candidate.transition)
+      && event.type !== 'compaction/end') {
+      trace.surfaceEvents.push(event)
+      return
+    }
+    if (!changedTurn) {
+      const candidate = staged.get(event)
+      /* v8 ignore next -- internal/dispatch stages every compaction event */
+      if (candidate === undefined || candidate.session !== session) return fail('compaction event published without pre-commit validation')
+      staged.delete(event)
+      trace.compaction = applyCompactionTransition(candidate.transition)
+    }
+    trace.surfaceEvents.push(event)
   }, { global: true })
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return

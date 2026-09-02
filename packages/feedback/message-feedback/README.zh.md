@@ -84,7 +84,7 @@ kind: "package-reference"
 
 ### 持久性与目标校验
 
-写入按「暂存—校验—提交」进行：目标消息先通过权威 checkpoint flush，再物理重读日志前缀，之后才写入伴随记录行——反馈绝不会引用尚未持久的消息。冷会话在不恢复 agent 的情况下被检查，缺失依据持久化目录判定而非猜测，只有真实发送过的 assistant 消息才是有效目标。flush 与检查路径见 [`src/index.ts`](src/index.ts)。
+写入按「暂存—校验—提交」进行：目标消息先通过权威 checkpoint flush，再物理重读日志前缀，之后才写入伴随记录行——反馈绝不会引用尚未持久的消息。冷会话在不恢复 agent 的情况下被读取，缺失由持久化存储的 `stat` 判定而非猜测，只有真实发送过的 assistant 消息才是有效目标。flush 与读取路径见 [`src/index.ts`](src/index.ts)。
 
 ### 故障模式
 
@@ -110,7 +110,7 @@ kind: "package-reference"
 
 - [反馈子系统](../../../docs/subsystems/feedback.zh.md)——公开类型、Remote 契约与 Web 消费方细节。
 - [消息反馈伴随记录决策](../../../.agents/notes/implemented/architecture/2026-08-10-message-feedback-sidecar.zh.md)——让此伴随记录不进入会话日志内容的设计边界。
-- [会话持久化子系统](../../../docs/subsystems/persistence.zh.md)——持久性屏障背后的 `inspect`、`readFrom` 与 `flush` 语义。
+- [会话持久化子系统](../../../docs/subsystems/persistence.zh.md)——持久性屏障背后的 handle `read`、`stat` 与 `flush` 语义。
 - [dsh-client-ui-message-feedback](../../client/ui-message-feedback/README.zh.md)——驱动 Host Remote 契约的浏览器消费方。
 - [反馈包映射](../README.zh.md)——逐消息反馈与仅写入日志的采集命令并存的组。
 
@@ -142,10 +142,9 @@ kind: "package-reference"
 
 - **Compare-and-set 仅限单进程**——按 Session 划分的队列只串行化一个服务实例；storage-domain 不提供跨进程条件写，因此多个 Host 进程写入同一存储根目录时仍可能丢失更新。
 - **没有持久 Session 删除级联**——Session persistence 没有删除接口，且 `session/disposed`/`api-session/removed` 表示 detach 而非持久删除。因此服务会保留空行，并可能在带外移除日志后留下遗留行，而不会在 detach 时删除仍有效的反馈。
-- **Detach/catalog retirement 窗口**——请求若恰好落在 live detach 之后、persistence catalog 物化 header 之前的极短窗口，可能收到 `session-not-found`；调用方应在 retirement materialization 后重试。
 - **Header 身份不是内容指纹**——只有 `{createdAt, cwd}` 不同时才能识别复用；本契约无法区分保留相同 header 身份的克隆日志。
 - **调用方边界受信任**——`list`/`put`/`delete` 不携带已认证的 actor 或审计身份。在加入授权与归属信息前，部署方必须只通过受信任或另行认证的边界暴露 Host gateway。
-- **目录与行边界**——由于 persistence 没有按 id 读取元数据的操作，cold 请求会扫描完整的 Session snapshot 目录。`maxNoteBytes` 只限制单条备注，单个 Session 行的条目数和聚合保留字节尚无上限；按索引读取元数据和由部署决定的行边界，延后到具体消费方明确策略时处理。
+- **行边界**——`maxNoteBytes` 只限制单条备注，单个 Session 行的条目数和聚合保留字节尚无上限；由部署决定的行边界，延后到具体消费方明确策略时处理。
 
 <a id="dev-note"></a>
 ### 开发备注

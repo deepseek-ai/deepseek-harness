@@ -3,7 +3,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import { createUserMessage, ToolCallId , createMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
 import SessionTitleService from '@deepseek-ai/dsh-session-title'
@@ -55,7 +55,7 @@ async function harness(config: Config = {}): Promise<Context> {
 function withProjectionCache(ctx: Context, rows: Record<string, string | null>): void {
   ctx.provide('sessionProjectionCache', {
     cachedSnapshot: (meta: { id: SessionId }) => (
-      meta.id in rows ? { asOfSeq: 0, values: { title: rows[meta.id] } } : undefined
+      meta.id in rows ? { asOfSeq: SessionSeq(0), values: { title: rows[meta.id] } } : undefined
     ),
   })
 }
@@ -343,9 +343,15 @@ describe('session reference discovery and preparation', () => {
   it('labels a session no projection answers for by its id, still without a log read', async () => {
     const ctx = await harness()
     const target = ctx.sessions.create(SessionId('target'), { meta: { cwd: '/same' } })
-    const seeded = { id: SessionId('seeded'), createdAt: 10, cwd: '/same' }
+    const seeded = {
+      version: 0,
+      id: SessionId('seeded'),
+      createdAt: 10,
+      cwd: '/same',
+      isSeeded: true,
+    }
     // Persisted before the cache was composed: the title lives only in its log.
-    withProjectionCache(ctx, {})
+    withProjectionCache(ctx, { seeded: 'Unsafe body-free title' })
     vi.spyOn(ctx.sessionQuery, 'listSessions').mockResolvedValue([
       { header: seeded, live: false, persisted: true },
     ] as never)

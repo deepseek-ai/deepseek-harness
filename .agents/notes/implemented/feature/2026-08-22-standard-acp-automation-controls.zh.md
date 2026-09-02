@@ -32,7 +32,7 @@
 
 持久化有意把 `create(meta)` 视为 live registration：交付的 JSONL provider 在首次追加事件前不创建 artifact。该默认行为会移除被放弃的空会话，但 ACP 不能继承它，因为 `session/new` 会在任何提示词出现前公布会话身份，而进程可能在返回成功响应后、收到 `session/close` 前停止。桥接层只在 Agent 和 MCP 组合成功后、返回 `session/new` 前执行实体化；组合失败仍不留下残留物，每个已返回 id 则都能在重启后继续存在。
 
-`ensureMaterialized(session)` 接收确切 live Session，使 coordinator 先 flush 该会话，再通过现有 per-session 写入链，使用已注册的不可变 header 串行执行仅 header 实体化。JSONL 写入一个 header frame；仓库外 provider 必须原子实体化等价 header 状态，否则拒绝该操作。重复调用幂等。让 `create` 全面 eager 会改变所有前端放弃会话的行为；追加 synthetic event 会仅为触发存储而虚构 sequence 与 replay 事实；等到关闭时再写入则会让持久性与进程丢失竞争。
+bridge 经由普通的持久性屏障实体化：`ctx.sessions.flush(session)` 抵达该会话的写句柄，其 `flush` 在尚无任何追加时写入仅 header 实体化。JSONL 写入一个 header frame；仓库外 provider 必须原子实体化等价 header 状态，否则拒绝该操作。重复调用幂等。让 `create` 全面 eager 会改变所有前端放弃会话的行为；追加 synthetic event 会仅为触发存储而虚构 sequence 与 replay 事实；等到关闭时再写入则会让持久性与进程丢失竞争。
 
 ## 标准配置选项
 

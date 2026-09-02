@@ -74,7 +74,7 @@ The Context migration and the following presentation optimizations solve differe
 | Following Assistant lookup | One reverse pass records the next Assistant for every input position | The former repeated forward lookup falls from worst-case `O(C²)` to `O(C)` |
 | Group duration | Fixed decimal grouping replaces `toLocaleString('en-US')` for the invariant English numeric shape | Complexity remains linear in Groups, but the Intl formatter leaves the repeated render path |
 
-Display memoization and search indexing stay separate. Search must include off-screen records and may lag live changes by the throttle interval; Table rendering must update the visible changed record immediately and must not inherit the index's commit cadence.
+Display memoization and search indexing stay separate. Search includes off-screen records in the current React-visible history window and may lag live changes by the throttle interval; Table rendering must update the visible changed record immediately and must not inherit the index's commit cadence.
 
 ## Alternatives considered
 
@@ -88,7 +88,7 @@ Display memoization and search indexing stay separate. Search must include off-s
 
 **Replace the Trajectory stages with generic Conversation Nodes.** Rejected: stages organize requests, timing, schemas, and table layout for one view. Making them engine contracts would constrain a future plain Session-log view and return view-specific composition to Client Runtime.
 
-**Share one Markdown cache between display and search.** Rejected: display is immediate and viewport-bound, while search covers the complete loaded record set and intentionally batches updates. A shared cache would couple correctness and scheduling across unrelated consumers.
+**Share one Markdown cache between display and search.** Rejected: display is immediate and viewport-bound, while search covers the complete React-visible record set and intentionally batches updates. A shared cache would couple correctness and scheduling across unrelated consumers.
 
 ## Verification
 
@@ -100,7 +100,7 @@ Trajectory Definition and Builder tests pin Assistant streaming and interruption
 
 Trajectory business assembly now scales with the changed page or keyed Context instead of restarting from the complete raw Event window. Target-owned Definitions can evolve independently from Chat while retaining one Session window and one set of lifecycle rules. Steering becomes a first-class Trajectory record at its actual Step position without adding steering-specific state to Session.
 
-After first activation, the retained stage-oriented Builder still performs work proportional to materialized Trajectory contributions and may sort on publication. Before activation, the target retains Context State and one target index but no Builder, materialized Node, or snapshot. The search index still performs a light linear signature pass when its input layout changes.
+After first activation, the retained stage-oriented Builder still performs work proportional to materialized Trajectory contributions and may sort on publication. Before activation, the target retains Context State and one target index but no Builder, materialized Node, or snapshot. Each Trajectory view mount anchors React layout, timeline, and search data to 50 target Nodes at the current tail; live appends extend that window, and the existing earlier-history action extends its prefix before it requests another Session page. If a replacement window no longer contains the previous tail anchor, the same render uses the replacement's latest Node as its bound and adopts that anchor for subsequent appends. Request numbering and cumulative usage remain derived from the complete resident snapshot. The search index still performs a light linear signature pass when its input layout changes.
 
 Definition authors must provide stable protocol identities. Old Events without a required ID can disappear from the affected Trajectory business view, which is preferable to joining unrelated records or failing history load; producers that require faithful display must log the identity.
 

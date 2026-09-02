@@ -1,16 +1,19 @@
 /** Live/persisted logical-corpus resolution for session-query. */
 
 import type { Context, Fiber } from '@deepseek-ai/cordis'
-import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId , SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import type { SessionRecord } from './types.ts'
 import { SessionQueryError } from './config.ts'
+import { readColdSessionLog, type ColdSessionLog } from './cold-read.ts'
 import { assertSessionHeadersCompatible } from './sources.ts'
 
 /** Detached source selected for one exact read. */
 export interface LogicalSession {
   /** Cloned source header. */
   header: SessionHeader
+  /** Exact fork-inherited event count paired with {@link header}. */
+  inheritedEventCount: SessionLogOffset
   /** Cloned raw event log. */
   events: SessionEvent[]
 }
@@ -35,7 +38,7 @@ export class SessionCorpus {
 
   constructor(
     private readonly _ctx: Context,
-    private readonly _persistedInspectConcurrency: number,
+    private readonly _persistedReadConcurrency: number,
   ) {
     this._optionalPersistenceFiber = _ctx.inject(['sessionPersistence'], (childCtx: Context) => {
       const service = childCtx.sessionPersistence
@@ -106,9 +109,10 @@ export class SessionCorpus {
       signal?.throwIfAborted()
       return snapshot
     }
-    assertSessionHeadersCompatible(loaded.meta, listed)
+    assertSessionHeadersCompatible(loaded.header, listed)
     const snapshot = {
-      header: structuredClone(loaded.meta),
+      header: structuredClone(loaded.header),
+      inheritedEventCount: loaded.inheritedEventCount,
       events: loaded.events.map(event => structuredClone(event)),
     }
     signal?.throwIfAborted()
@@ -182,9 +186,9 @@ export class SessionCorpus {
           resolved.set(sessionId, projectSource(sessionId, sourceLive(attached), project, signal))
           return
         }
-        assertSessionHeadersCompatible(loaded.meta, listed)
+        assertSessionHeadersCompatible(loaded.header, listed)
         resolved.set(sessionId, projectSource(sessionId, {
-          header: loaded.meta,
+          header: loaded.header,
           events: loaded.events,
         }, project, signal))
       } catch (error: unknown) {
@@ -202,7 +206,7 @@ export class SessionCorpus {
         await resolvePersisted(unresolved[index] as SessionId)
       }
     }
-    const workerCount = Math.min(this._persistedInspectConcurrency, unresolved.length)
+    const workerCount = Math.min(this._persistedReadConcurrency, unresolved.length)
     const settlements = await Promise.allSettled(
       Array.from({ length: workerCount }, () => worker()),
     )
@@ -254,7 +258,8 @@ async function listPersisted(
   signal?: AbortSignal,
 ): Promise<SessionHeader[]> {
   try {
-    return await persistence.list(signal)
+    const snapshots = await persistence.list(signal === undefined ? undefined : { signal })
+    return snapshots.map(snapshot => snapshot.header)
   } catch (error: unknown) {
     if (signal?.aborted) signal.throwIfAborted()
     throw new SessionQueryError(
@@ -269,9 +274,9 @@ async function inspectPersisted(
   persistence: SessionPersistence,
   sessionId: SessionId,
   signal?: AbortSignal,
-): Promise<Awaited<ReturnType<SessionPersistence['inspect']>>> {
+): Promise<ColdSessionLog> {
   try {
-    return await persistence.inspect(sessionId, signal)
+    return await readColdSessionLog(persistence, sessionId, signal)
   } catch (error: unknown) {
     if (signal?.aborted) signal.throwIfAborted()
     if (error instanceof Error && error.name === 'SessionPersistenceCorruptionError') {
@@ -282,7 +287,7 @@ async function inspectPersisted(
       )
     }
     throw new SessionQueryError(
-      `failed to inspect session "${sessionId}": ${errorMessage(error)}`,
+      `failed to read stored session "${sessionId}": ${errorMessage(error)}`,
       'SESSION_QUERY_PERSISTENCE_FAILED',
       { cause: error },
     )
@@ -292,6 +297,7 @@ async function inspectPersisted(
 function snapshotLive(session: Session): LogicalSession {
   return {
     header: structuredClone(session.header),
+    inheritedEventCount: session.inheritedEventCount,
     events: session.snapshotEvents().map(event => structuredClone(event)),
   }
 }

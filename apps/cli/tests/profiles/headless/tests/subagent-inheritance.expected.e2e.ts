@@ -10,7 +10,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { normalizeSessionSnapshot, type NormalizeContext } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
+import { SessionSeq, SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { describe, expect, it } from 'vitest'
 
@@ -29,22 +29,22 @@ const task = 'Delegate the write probe to a subagent.'
 /** Seed a completed parent turn with its read-only policy and current LLM selection. */
 async function seedReadOnlyParent(root: string, cwd: string): Promise<void> {
   const ctx = new Context()
-  await ctx.plugin(SessionStore)
   await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   const meta: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
     id: sessionId,
     createdAt: 1,
+    isSeeded: false,
     cwd,
     delegationDepth: 0,
   }
   const events: SessionEvent[] = [
-    { type: 'turn/start', seq: 0, time: 10, data: { turn: 1 } },
-    { type: 'user/message', seq: 1, time: 11, data: createUserMessage({ content: [{ type: 'text', text: 'Tighten this session to read-only.' }], source: { kind: 'user' } }), surfaceOp: 'append' },
-    { type: 'sandbox/mode', seq: 2, time: 12, data: { mode: 'read-only' } },
+    { type: 'turn/start', seq: SessionSeq(0), time: 10, data: { turn: 1 } },
+    { type: 'user/message', seq: SessionSeq(1), time: 11, data: createUserMessage({ content: [{ type: 'text', text: 'Tighten this session to read-only.' }], source: { kind: 'user' } }), surfaceOp: 'append' },
+    { type: 'sandbox/mode', seq: SessionSeq(2), time: 12, data: { mode: 'read-only' } },
     {
       type: 'request/header',
-      seq: 3,
+      seq: SessionSeq(3),
       time: 13,
       data: {
         header: {
@@ -57,11 +57,12 @@ async function seedReadOnlyParent(root: string, cwd: string): Promise<void> {
         reason: 'initial',
       },
     },
-    { type: 'turn/end', seq: 4, time: 14, data: { turn: 1, reason: { kind: 'completed' } } },
+    { type: 'turn/end', seq: SessionSeq(4), time: 14, data: { turn: 1, reason: { kind: 'completed' } } },
   ]
   try {
-    await ctx.sessionPersistence.create(meta)
-    await ctx.sessionPersistence.append(sessionId, events)
+    const handle = await ctx.sessionPersistence.create(meta)
+    await handle.append(events)
+    await handle.close()
   } finally {
     await ctx.fiber.dispose()
   }
@@ -109,7 +110,7 @@ describe('parent-only override inheritance snapshot', () => {
         )
         expect(childRecords[1]).toMatchObject({
           type: 'sandbox/mode',
-          seq: 0,
+          seq: SessionSeq(0),
           data: { mode: 'read-only', source: 'delegation' },
         })
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { apply as applySchedule } from '../src/index.ts'
@@ -13,6 +13,7 @@ const RESTORE_HEADER: SessionHeader = {
   version: 0,
   id: SessionId('schedule-projection'),
   createdAt: 0,
+  isSeeded: false,
 }
 
 afterEach(async () => {
@@ -48,32 +49,32 @@ function everyRecord(id: string): ScheduleRecord {
   }
 }
 
-function change(data: unknown, seq: number): SessionEvent {
+function change(data: unknown, seq: SessionSeq): SessionEvent {
   return { type: 'schedule/change', seq, time: seq, data } as SessionEvent
 }
 
-function created(record: ScheduleRecord, seq: number): SessionEvent {
+function created(record: ScheduleRecord, seq: SessionSeq): SessionEvent {
   return change({ version: 1, operation: 'create', schedule: record }, seq)
 }
 
 describe('Schedule Session projection', () => {
   it('matches an empty replay, preserves creation order, and applies every terminal transition', () => {
-    let projected: ScheduleProjectionState = scheduleProjectionDefinition.init(RESTORE_HEADER)
-    expect(projected).toEqual({ seedLength: 0, active: [], seenIds: [] })
+    let projected: ScheduleProjectionState = scheduleProjectionDefinition.init(RESTORE_HEADER, SessionLogOffset(0))
+    expect(projected).toEqual({ inheritedEventCount: 0, active: [], seenIds: [] })
     expect(scheduleProjectionDefinition.wire.view(projected)).toEqual(foldScheduleEvents([]).active)
 
     const events: SessionEvent[] = [
-      created(afterRecord('after'), 0),
-      created(atRecord('at'), 1),
-      created(everyRecord('every'), 2),
-      change({ version: 1, operation: 'delete', id: 'at' }, 3),
-      change({ version: 1, operation: 'dispatch', id: 'after' }, 4),
+      created(afterRecord('after'), SessionSeq(0)),
+      created(atRecord('at'), SessionSeq(1)),
+      created(everyRecord('every'), SessionSeq(2)),
+      change({ version: 1, operation: 'delete', id: 'at' }, SessionSeq(3)),
+      change({ version: 1, operation: 'dispatch', id: 'after' }, SessionSeq(4)),
       change({
         version: 1,
         operation: 'dispatch',
         id: 'every',
         acceptedAt: '2026-08-25T14:02:00.000Z',
-      }, 5),
+      }, SessionSeq(5)),
     ]
     for (const event of events.slice(0, 3)) {
       projected = scheduleProjectionDefinition.apply(projected, event)
@@ -83,33 +84,36 @@ describe('Schedule Session projection', () => {
       projected = scheduleProjectionDefinition.apply(projected, event)
     }
 
-    expect(projected).toEqual({ seedLength: 0, ...foldScheduleEvents(events) })
+    expect(projected).toEqual({ inheritedEventCount: 0, ...foldScheduleEvents(events) })
     expect(projected.active).toEqual([{ ...everyRecord('every'), scheduledAt: '2026-08-25T14:05:00.000Z' }])
   })
 
   it('shares strict transitions with full replay and excludes the inherited fork prefix', () => {
     const events: SessionEvent[] = [
-      created(afterRecord('parent'), 0),
-      created(atRecord('child-at'), 1),
-      created(everyRecord('child-every'), 2),
+      created(afterRecord('parent'), SessionSeq(0)),
+      created(atRecord('child-at'), SessionSeq(1)),
+      created(everyRecord('child-every'), SessionSeq(2)),
       change({
         version: 1,
         operation: 'dispatch',
         id: 'child-every',
         acceptedAt: '2026-08-25T14:02:00.000Z',
-      }, 3),
+      }, SessionSeq(3)),
     ]
-    let projected: ScheduleProjectionState = scheduleProjectionDefinition.init({
-      ...RESTORE_HEADER,
-      seedLength: 1,
-    })
+    let projected: ScheduleProjectionState = scheduleProjectionDefinition.init(
+      { ...RESTORE_HEADER, isSeeded: true },
+      SessionLogOffset(1),
+    )
     for (const event of events) projected = scheduleProjectionDefinition.apply(projected, event)
     const beforeUnrelated = projected
-    const unrelated = { type: 'turn/start', seq: 4, time: 4, data: { turn: 1 } } as SessionEvent
+    const unrelated = { type: 'turn/start', seq: SessionSeq(4), time: 4, data: { turn: 1 } } as SessionEvent
     projected = scheduleProjectionDefinition.apply(projected, unrelated)
 
     expect(projected).toBe(beforeUnrelated)
-    expect(projected).toEqual({ seedLength: 1, ...foldScheduleEvents([...events, unrelated], 1) })
+    expect(projected).toEqual({
+      inheritedEventCount: 1,
+      ...foldScheduleEvents([...events, unrelated], SessionLogOffset(1)),
+    })
     expect(scheduleProjectionDefinition.wire.view(projected)).toEqual(projected.active)
     expect(projected.active.map(record => record.id)).toEqual(['child-at', 'child-every'])
   })
@@ -120,26 +124,30 @@ describe('Schedule Session projection', () => {
     await ctx.plugin(SessionProjectionRegistry)
     ctx.sessionProjections.register(scheduleProjectionDefinition)
 
-    const first = created(afterRecord('one'), 0)
-    const second = created(atRecord('two'), 1)
-    const initial = ctx.sessionProjections.restore({}, [first, second], 0, RESTORE_HEADER)
+    const first = created(afterRecord('one'), SessionSeq(0))
+    const second = created(atRecord('two'), SessionSeq(1))
+    const initial = ctx.sessionProjections.restore(
+      {}, [first, second], SessionLogOffset(0), RESTORE_HEADER, SessionLogOffset(0),
+    )
     expect(initial.snapshot.values.schedule?.map(record => record.id)).toEqual(['one', 'two'])
 
-    const removed = change({ version: 1, operation: 'delete', id: 'one' }, 2)
+    const removed = change({ version: 1, operation: 'delete', id: 'one' }, SessionSeq(2))
     const resumed = ctx.sessionProjections.restore(
       initial.checkpoint,
       [second, removed],
-      1,
+      SessionLogOffset(1),
       RESTORE_HEADER,
+      SessionLogOffset(0),
     )
     expect(resumed.snapshot.values.schedule?.map(record => record.id)).toEqual(['two'])
-    expect(resumed.checkpoint.schedule).toMatchObject({ ver: 1, seq: 2 })
+    expect(resumed.checkpoint.schedule).toMatchObject({ ver: 2, seq: 2 })
 
     expect(() => ctx.sessionProjections.restore(
       {},
-      [change({ version: 1, operation: 'delete', id: 'missing' }, 0)],
-      0,
+      [change({ version: 1, operation: 'delete', id: 'missing' }, SessionSeq(0))],
+      SessionLogOffset(0),
       RESTORE_HEADER,
+      SessionLogOffset(0),
     )).toThrow(ScheduleLogError)
   })
 
@@ -148,25 +156,25 @@ describe('Schedule Session projection', () => {
     contexts.push(ctx)
     await ctx.plugin(SessionProjectionRegistry)
     ctx.sessionProjections.register(scheduleProjectionDefinition)
-    const row = (val: unknown) => ({ schedule: { ver: 1, seq: 0, val } })
+    const row = (val: unknown) => ({ schedule: { ver: 2, seq: SessionSeq(0), val } })
 
     expect(ctx.sessionProjections.viewCheckpoint(row({
-      seedLength: 0,
+      inheritedEventCount: 0,
       active: [{ ...afterRecord('bad-time'), scheduledAt: 'not-an-instant' }],
       seenIds: ['bad-time'],
     }))).toEqual({})
     expect(ctx.sessionProjections.viewCheckpoint(row({
-      seedLength: 0,
+      inheritedEventCount: 0,
       active: [afterRecord('missing')],
       seenIds: [],
     }))).toEqual({})
     expect(ctx.sessionProjections.viewCheckpoint(row({
-      seedLength: 0,
+      inheritedEventCount: 0,
       active: [afterRecord('duplicate'), afterRecord('duplicate')],
       seenIds: ['duplicate', 'duplicate'],
     }))).toEqual({})
     expect(ctx.sessionProjections.viewCheckpoint(row({
-      seedLength: 0,
+      inheritedEventCount: 0,
       active: [],
       seenIds: [' bad-id'],
     }))).toEqual({})

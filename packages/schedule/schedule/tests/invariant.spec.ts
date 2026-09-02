@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import InvariantRegistry, { InvariantError } from '@deepseek-ai/dsh-invariants'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import * as scheduleInvariant from '../src/invariant.ts'
 import { ScheduleId } from '../src/domain.ts'
 import type { ScheduleChange } from '../src/types.ts'
 
-function event(data: unknown, seq: number): SessionEvent {
+function event(data: unknown, seq: SessionSeq): SessionEvent {
   return { type: 'schedule/change', seq, time: 1, data } as SessionEvent
 }
 
@@ -91,7 +91,7 @@ describe('Schedule package invariant', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(InvariantRegistry)
     ctx.sessions.create(SessionId('schedule-invalid-seed'), {
-      seed: [event({ version: 9, operation: 'delete', id: 'schedule-1' }, 0)],
+      seed: [event({ version: 9, operation: 'delete', id: 'schedule-1' }, SessionSeq(0))],
     })
     await expect(ctx.plugin(scheduleInvariant).then(() => undefined)).rejects.toThrow(InvariantError)
     await ctx.fiber.dispose()
@@ -101,7 +101,7 @@ describe('Schedule package invariant', () => {
     const { ctx } = await harness()
     const id = SessionId('schedule-invalid-future-seed')
     expect(() => ctx.sessions.create(id, {
-      seed: [event({ version: 9, operation: 'delete', id: 'schedule-1' }, 0)],
+      seed: [event({ version: 9, operation: 'delete', id: 'schedule-1' }, SessionSeq(0))],
     })).toThrow(InvariantError)
     expect(ctx.sessions.get(id)).toBeUndefined()
     await ctx.fiber.dispose()
@@ -112,8 +112,9 @@ describe('Schedule package invariant', () => {
     await ctx.plugin(SessionStore)
     await ctx.plugin(InvariantRegistry)
     const child = ctx.sessions.create(SessionId('schedule-fork'), {
-      seed: [event({ version: 9, operation: 'delete', id: 'parent' }, 0)],
-      meta: { parentSession: SessionId('parent'), seedLength: 1 },
+      seed: [event({ version: 9, operation: 'delete', id: 'parent' }, SessionSeq(0))],
+      inheritedEventCount: SessionLogOffset(1),
+      meta: { parentSession: SessionId('parent'), isSeeded: true },
     })
     const fiber = await ctx.plugin(scheduleInvariant)
     child.append('schedule/change', create('child'))

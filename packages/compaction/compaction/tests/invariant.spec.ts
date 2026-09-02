@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import * as CompactionInvariant from '@deepseek-ai/dsh-compaction/invariant'
@@ -20,16 +20,27 @@ const NEXT_COMPACTION_ID = CompactionId('next-test-compaction')
 const TEST_COMMAND_ID = CommandId('test-command')
 const NEXT_COMMAND_ID = CommandId('next-test-command')
 
-const summary = (overrides: Record<string, unknown> = {}) => ({
-  compactionId: TEST_COMPACTION_ID,
-  summary: [{ type: 'text' as const, text: 'short' }],
-  shadowedRange: { start: 2, end: 4 },
-  shadowedSeqs: [2, 3, 4],
-  shadowedTokenCount: 12,
-  provider: 'mock',
-  model: 'mock',
-  ...overrides,
-})
+const summary = (session: Session, overrides: Record<string, unknown> = {}) => {
+  const appendMessage = (text: string) => session.append(
+    'user/message',
+    createUserMessage({ content: [{ type: 'text', text }], source: { kind: 'user' } }),
+    { surfaceOp: 'append' },
+  )
+  const first = appendMessage('first')
+  const second = appendMessage('second')
+  const third = appendMessage('third')
+  const shadowedSeqs: [SessionSeq, SessionSeq, SessionSeq] = [first.seq, second.seq, third.seq]
+  return {
+    compactionId: TEST_COMPACTION_ID,
+    summary: [{ type: 'text' as const, text: 'short' }],
+    shadowedRange: { start: first.seq, end: third.seq },
+    shadowedSeqs,
+    shadowedTokenCount: 12,
+    provider: 'mock',
+    model: 'mock',
+    ...overrides,
+  }
+}
 
 function startTurn(session: ReturnType<Context['sessions']['create']>, turn = 1): void {
   session.append('turn/start', { turn })
@@ -41,7 +52,15 @@ describe('compaction invariants', () => {
     const success = ctx.sessions.create()
     startTurn(success)
     success.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-    success.append('compaction/summary', summary())
+    const summaryData = summary(success)
+    success.append('compaction/summary', summaryData)
+    success.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'checkpoint' }],
+      source: compactCheckpointSource(TEST_COMPACTION_ID),
+    }), {
+      surfaceOp: { op: 'replace', ...summaryData.shadowedRange },
+      sourceEventSeqs: summaryData.shadowedSeqs,
+    })
     success.append('compaction/end', { compactionId: TEST_COMPACTION_ID, turn: 1 })
 
     const failed = ctx.sessions.create()
@@ -50,11 +69,54 @@ describe('compaction invariants', () => {
     failed.append('compaction/end', { compactionId: TEST_COMPACTION_ID, turn: 2, error: 'provider failed' })
   })
 
+  it('rejects shadow identities outside the exact earlier surface span', async () => {
+    const ctx = await setup()
+    const session = ctx.sessions.create()
+    const turn = session.append('turn/start', { turn: 1 })
+    session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
+    const valid = summary(session)
+    const current = SessionSeq(session.seq)
+    expect(() => session.append('compaction/summary', {
+      ...valid,
+      shadowedRange: { start: current, end: current },
+      shadowedSeqs: [current],
+    })).toThrow(/must name an earlier current surface span/)
+    expect(() => session.append('compaction/summary', {
+      ...valid,
+      shadowedRange: { start: turn.seq, end: turn.seq },
+      shadowedSeqs: [turn.seq],
+    })).toThrow(/must name an earlier current surface span/)
+    expect(() => session.append('compaction/summary', {
+      ...valid,
+      shadowedSeqs: [valid.shadowedSeqs[0], valid.shadowedSeqs[2]],
+    })).toThrow(/must list every node in the current surface span/)
+    expect(() => session.append('compaction/summary', {
+      ...valid,
+      shadowedRange: { start: valid.shadowedSeqs[2], end: valid.shadowedSeqs[0] },
+      shadowedSeqs: [valid.shadowedSeqs[2], valid.shadowedSeqs[0]],
+    })).toThrow(/must name an earlier current surface span/)
+    expect(() => session.append('compaction/summary', {
+      ...valid,
+      shadowedSeqs: [valid.shadowedSeqs[0], valid.shadowedSeqs[2], valid.shadowedSeqs[2]],
+    })).toThrow(/must list every node in the current surface span/)
+  })
+
+  it('validates a model-free prune against the current surface', async () => {
+    const ctx = await setup()
+    const session = ctx.sessions.create()
+    const shadow = summary(session)
+    expect(() => session.append('compaction/prune', {
+      shadowedRange: shadow.shadowedRange,
+      shadowedSeqs: shadow.shadowedSeqs,
+      shadowedTokenCount: shadow.shadowedTokenCount,
+    })).not.toThrow()
+  })
+
   it('accepts standalone successful and failed compaction lifecycles between turns', async () => {
     const ctx = await setup()
     const success = ctx.sessions.create()
     success.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: null })
-    success.append('compaction/summary', summary())
+    success.append('compaction/summary', summary(success))
     success.append('compaction/end', { compactionId: TEST_COMPACTION_ID, turn: null })
 
     const failed = ctx.sessions.create()
@@ -168,14 +230,14 @@ describe('compaction invariants', () => {
     const session = Session.create(SessionId('bare-compaction-session'))
     expect(() => {
       ctx.emit('session/event', session, {
-        type: 'turn/start', seq: 0, time: 0,
+        type: 'turn/start', seq: SessionSeq(0), time: 0,
         data: { turn: 1 },
       })
       ctx.emit('session/event', session, {
-        type: 'step/start', seq: 1, time: 1, data: { turn: 1, step: 1 },
+        type: 'step/start', seq: SessionSeq(1), time: 1, data: { turn: 1, step: 1 },
       })
       ctx.emit('session/event', session, {
-        type: 'compaction/start', seq: 2, time: 2,
+        type: 'compaction/start', seq: SessionSeq(2), time: 2,
         data: { compactionId: TEST_COMPACTION_ID, turn: 1 },
       })
     }).not.toThrow()
@@ -257,7 +319,7 @@ describe('compaction invariants', () => {
     }), { surfaceOp: 'append' })
     startTurn(session)
     session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-    session.append('compaction/summary', summary())
+    session.append('compaction/summary', summary(session))
 
     expect(() => session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'checkpoint' }],
@@ -311,7 +373,7 @@ describe('compaction invariants', () => {
       })
     }, /compaction\/start sourceCommandId must be a non-empty string/],
     ['summary without start', (session: ReturnType<Context['sessions']['create']>) => {
-      session.append('compaction/summary', summary())
+      session.append('compaction/summary', summary(session))
     }, /no matching compaction\/start/],
     ['nested start', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
@@ -319,12 +381,12 @@ describe('compaction invariants', () => {
     }, /still compacting/],
     ['repeated summary', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-      session.append('compaction/summary', summary())
-      session.append('compaction/summary', summary())
+      session.append('compaction/summary', summary(session))
+      session.append('compaction/summary', summary(session))
     }, /repeated within one compaction/],
     ['summary for another compaction', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-      session.append('compaction/summary', summary({ compactionId: NEXT_COMPACTION_ID }))
+      session.append('compaction/summary', summary(session, { compactionId: NEXT_COMPACTION_ID }))
     }, /compaction\/summary id .* does not match compaction\/start id/],
     ['summary for another source command', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', {
@@ -332,19 +394,31 @@ describe('compaction invariants', () => {
         sourceCommandId: TEST_COMMAND_ID,
         turn: 1,
       })
-      session.append('compaction/summary', summary({ sourceCommandId: NEXT_COMMAND_ID }))
+      session.append('compaction/summary', summary(session, { sourceCommandId: NEXT_COMMAND_ID }))
     }, /compaction\/summary sourceCommandId .* does not match compaction\/start sourceCommandId/],
     ['empty shadow set', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-      session.append('compaction/summary', summary({ shadowedSeqs: [] }))
+      session.append('compaction/summary', summary(session, { shadowedSeqs: [] }))
     }, /shadowedSeqs must be non-empty/],
     ['wrong endpoints', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-      session.append('compaction/summary', summary({ shadowedRange: { start: 1, end: 4 } }))
+      session.append('compaction/summary', summary(session, { shadowedRange: { start: 1, end: 4 } }))
     }, /shadowedRange must match/],
+    ['non-numeric shadow seq', (session: ReturnType<Context['sessions']['create']>) => {
+      session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
+      session.append('compaction/summary', summary(session, {
+        shadowedRange: { start: 'bad', end: 'bad' }, shadowedSeqs: ['bad'],
+      }))
+    }, /non-negative safe integer event seq/],
+    ['negative shadow seq', (session: ReturnType<Context['sessions']['create']>) => {
+      session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
+      session.append('compaction/summary', summary(session, {
+        shadowedRange: { start: -1, end: -1 }, shadowedSeqs: [-1],
+      }))
+    }, /non-negative safe integer event seq/],
     ['invalid token count', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/start', { compactionId: TEST_COMPACTION_ID, turn: 1 })
-      session.append('compaction/summary', summary({ shadowedTokenCount: -1 }))
+      session.append('compaction/summary', summary(session, { shadowedTokenCount: -1 }))
     }, /non-negative safe integer/],
     ['end without start', (session: ReturnType<Context['sessions']['create']>) => {
       session.append('compaction/end', { compactionId: TEST_COMPACTION_ID, turn: 1, error: 'failed' })

@@ -48,8 +48,8 @@
   bottom: 1px;
   left: 0;
   z-index: 0;
-  height: 1px;
-  background: var(--dsw-alias-border-l2);
+  height: 0.5px;
+  background: var(--dsw-alias-border-l3);
   pointer-events: none;
 }
 

@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { ProjectionValueStore } from '../src/client/sessions/projection-store.ts'
 import { Session } from '../src/client/sessions/session.ts'
 import { SessionManager } from '../src/client/sessions/manager.ts'
@@ -34,35 +35,35 @@ describe('Session projection value semantics', () => {
 
   it('applies frames last-wins by seq: replayed and stale frames drop', () => {
     const store = new ProjectionValueStore()
-    store.apply('test/marks', { marks: ['a'] }, 5)
-    store.apply('test/marks', { marks: ['a', 'b'] }, 9)
+    store.apply('test/marks', { marks: ['a'] }, SessionSeq(5))
+    store.apply('test/marks', { marks: ['a', 'b'] }, SessionSeq(9))
     expect(store.get('test/marks')).toEqual({ marks: ['a', 'b'] })
-    store.apply('test/marks', { marks: ['stale'] }, 5)
-    store.apply('test/marks', { marks: ['equal'] }, 9)
+    store.apply('test/marks', { marks: ['stale'] }, SessionSeq(5))
+    store.apply('test/marks', { marks: ['equal'] }, SessionSeq(9))
     expect(store.get('test/marks')).toEqual({ marks: ['a', 'b'] })
   })
 
   it('a stale baseline can neither overwrite nor clear a newer frame; a fresh one reseeds and clears', () => {
     const store = new ProjectionValueStore()
-    store.apply('test/marks', { marks: ['frame-20'] }, 20)
+    store.apply('test/marks', { marks: ['frame-20'] }, SessionSeq(20))
     // Stale cut: carried key loses to the newer frame; omitted key survives.
-    store.seed({ asOfSeq: 10, values: { 'test/marks': { marks: ['baseline-10'] } } })
+    store.seed({ asOfSeq: SessionSeq(10), values: { 'test/marks': { marks: ['baseline-10'] } } })
     expect(store.get('test/marks')).toEqual({ marks: ['frame-20'] })
-    store.seed({ asOfSeq: 15, values: {} })
+    store.seed({ asOfSeq: SessionSeq(15), values: {} })
     expect(store.get('test/marks')).toEqual({ marks: ['frame-20'] })
     // Fresh cut: carried key reseeds…
-    store.seed({ asOfSeq: 30, values: { 'test/marks': { marks: ['baseline-30'] } } })
+    store.seed({ asOfSeq: SessionSeq(30), values: { 'test/marks': { marks: ['baseline-30'] } } })
     expect(store.get('test/marks')).toEqual({ marks: ['baseline-30'] })
     // …and an omitting fresh cut clears (capability absent as of the cut).
-    store.seed({ asOfSeq: 40, values: {} })
+    store.seed({ asOfSeq: SessionSeq(40), values: {} })
     expect(store.get('test/marks')).toBeUndefined()
   })
 
   it('truncate drops rows past the durable baseline and keeps the rest', () => {
     const store = new ProjectionValueStore()
-    store.apply('test/marks', { marks: ['durable'] }, 5)
-    store.apply('other', 'phantom', 50)
-    store.truncate(10)
+    store.apply('test/marks', { marks: ['durable'] }, SessionSeq(5))
+    store.apply('other', 'phantom', SessionSeq(50))
+    store.truncate(SessionSeq(10))
     expect(store.get('test/marks')).toEqual({ marks: ['durable'] })
     expect(store.get('other')).toBeUndefined()
   })
@@ -73,11 +74,11 @@ describe('Session projection value semantics', () => {
     let anyTicks = 0
     store.faceOf('test/marks').subscribe(() => { keyTicks += 1 })
     store.subscribeAny(() => { anyTicks += 1 })
-    store.apply('test/marks', { marks: ['a'] }, 5)
+    store.apply('test/marks', { marks: ['a'] }, SessionSeq(5))
     await Promise.resolve()
     expect(keyTicks).toBe(1)
     expect(anyTicks).toBe(1)
-    store.apply('test/marks', { marks: ['replay'] }, 3)
+    store.apply('test/marks', { marks: ['replay'] }, SessionSeq(3))
     await Promise.resolve()
     expect(keyTicks).toBe(1)
     expect(anyTicks).toBe(1)
@@ -92,7 +93,7 @@ describe('Session projection value semantics', () => {
     const store = new ProjectionValueStore()
     const empty = store.values()
     expect(store.values()).toBe(empty)
-    store.apply('test/marks', { marks: ['a'] }, 1)
+    store.apply('test/marks', { marks: ['a'] }, SessionSeq(1))
     const populated = store.values()
     expect(populated).toEqual({ 'test/marks': { marks: ['a'] } })
     expect(populated).not.toBe(empty)
@@ -105,7 +106,7 @@ describe('Session tail-page seeding', () => {
     const api = new FakeApiClient()
     const session = new Session(SID, fakeRemote(api))
     api.onHistory = () => Promise.resolve(ok({
-      records: entries(plainTurn(0, 0, '问', '答')) as never[], hasMore: false,
+      records: entries(plainTurn(SessionSeq(0), 0, '问', '答')) as never[], hasMore: false,
       projections: { asOfSeq: 5, values: { 'test/marks': { marks: ['from-baseline'] } } },
     } as never))
     await session.open()
@@ -116,11 +117,11 @@ describe('Session tail-page seeding', () => {
     const api = new FakeApiClient()
     const session = new Session(SID, fakeRemote(api))
     api.onHistory = () => Promise.resolve(ok({
-      records: entries(plainTurn(0, 0, 'a', 'b')) as never[], hasMore: false,
+      records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[], hasMore: false,
       projections: { asOfSeq: 5, values: { 'test/marks': { marks: ['baseline'] } } },
     } as never))
     await session.open()
-    session.projections.apply('test/marks', { marks: ['pushed-9'] }, 9)
+    session.projections.apply('test/marks', { marks: ['pushed-9'] }, SessionSeq(9))
     await session.resync()
     expect(session.projections.get('test/marks')).toEqual({ marks: ['pushed-9'] })
   })
@@ -128,9 +129,9 @@ describe('Session tail-page seeding', () => {
   it('treats a blockless response as no reset: pushed values survive', async () => {
     const api = new FakeApiClient()
     const session = new Session(SID, fakeRemote(api))
-    api.onHistory = () => Promise.resolve(ok({ records: entries(plainTurn(0, 0, 'a', 'b')) as never[], hasMore: false }))
+    api.onHistory = () => Promise.resolve(ok({ records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[], hasMore: false }))
     await session.open()
-    session.projections.apply('test/marks', { marks: ['pushed'] }, 9)
+    session.projections.apply('test/marks', { marks: ['pushed'] }, SessionSeq(9))
     await session.resync()
     expect(session.projections.get('test/marks')).toEqual({ marks: ['pushed'] })
   })

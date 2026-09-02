@@ -8,8 +8,9 @@ import { randomUUID } from 'node:crypto'
 import { Context, Service } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
 import { deriveEventMessage, isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
-import type { SessionHeader, SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SessionInspection } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session/types'
+import type {} from '@deepseek-ai/dsh-session'
+import type {} from '@deepseek-ai/dsh-session-persistence'
 import type { KvTable } from '@deepseek-ai/dsh-storage-domain'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import { messageFeedbackDomainSpec } from './spec.ts'
@@ -133,9 +134,15 @@ function nextVersion(): MessageFeedbackVersion {
   return randomUUID() as MessageFeedbackVersion
 }
 
-/** Session inspection result that keeps absence inside the business union. */
+/** Observed session view: header identity plus the logged events. */
+interface SessionObservation {
+  readonly meta: SessionHeader
+  readonly events: readonly SessionEvent[]
+}
+
+/** Session observation result that keeps absence inside the business union. */
 type KnownSession =
-  | MessageFeedbackSuccess<SessionInspection>
+  | MessageFeedbackSuccess<SessionObservation>
   | MessageFeedbackRejected<MessageFeedbackSessionNotFound>
 
 /** Validated note or one explicit request failure. */
@@ -295,25 +302,41 @@ export class MessageFeedbackService extends TypertRemoteService {
   }
 
   /**
-   * Resolve a live owner directly; otherwise use the storage catalog as the
-   * existence authority before inspecting the log. Inspection failures for a
-   * catalogued Session remain infrastructure failures rather than being
-   * guessed into the business `session-not-found` branch.
+   * Resolve a live owner directly; otherwise use `stat` as the existence
+   * authority before reading the log. Read failures for a Session that `stat`
+   * confirmed remain infrastructure failures rather than being guessed into
+   * the business `session-not-found` branch.
    */
   private async inspectSession(sessionId: SessionId): Promise<KnownSession> {
     if (this.ctx.sessions.get(sessionId) === undefined) {
-      const snapshots = await this.ctx.sessionPersistence.listSnapshots()
-      if (!snapshots.some(snapshot => snapshot.header.id === sessionId)
+      if (await this.ctx.sessionPersistence.stat(sessionId) === undefined
         && this.ctx.sessions.get(sessionId) === undefined) {
         return rejected({ code: 'session-not-found', sessionId })
       }
     }
-    return success(await this.ctx.sessionPersistence.inspect(sessionId))
+    return success(await this.observeSession(sessionId))
+  }
+
+  /** Observe a live owner's in-memory log when one exists, else the durable log. */
+  private async observeSession(sessionId: SessionId): Promise<SessionObservation> {
+    const live = this.ctx.sessions.get(sessionId)
+    if (live !== undefined) return { meta: live.header, events: live.snapshotEvents() }
+    return await this.readDurable(sessionId)
+  }
+
+  /** Read the complete durable log prefix through a fresh read handle. */
+  private async readDurable(sessionId: SessionId): Promise<SessionObservation> {
+    const handle = await this.ctx.sessionPersistence.open(sessionId, 'read')
+    try {
+      return { meta: handle.header, events: await handle.read() }
+    } finally {
+      await handle.close()
+    }
   }
 
   /** Require the exact finalized append-origin assistant message projection. */
-  private hasFeedbackTarget(inspection: SessionInspection, messageId: MessageFeedbackItem['messageId']): boolean {
-    return inspection.events.some((event) => {
+  private hasFeedbackTarget(observation: SessionObservation, messageId: MessageFeedbackItem['messageId']): boolean {
+    return observation.events.some((event) => {
       if (event.type !== 'assistant/message' || !isAppendSurfaceEvent(event)) return false
       const message = deriveEventMessage(event)
       return message?.role === 'assistant' && message.id === messageId
@@ -322,20 +345,20 @@ export class MessageFeedbackService extends TypertRemoteService {
 
   /**
    * Put the target log prefix behind a durability barrier before its sidecar.
-   * A live owner flushes through the SessionStore's canonical checkpoint; a
-   * cold owner is re-read from the physical durable prefix.
+   * A live owner flushes through the SessionStore's canonical checkpoint; the
+   * physical durable prefix is then re-read, which observes at least the
+   * flushed prefix by the `SessionPersistence` freshness guarantee.
    */
-  private async ensureTargetDurable(inspection: SessionInspection): Promise<SessionInspection> {
-    const live = this.ctx.sessions.get(inspection.meta.id)
-    if (live !== undefined && sameHeaderIdentity(live.header, inspection.meta)) {
+  private async ensureTargetDurable(observation: SessionObservation): Promise<SessionObservation> {
+    const live = this.ctx.sessions.get(observation.meta.id)
+    if (live !== undefined && sameHeaderIdentity(live.header, observation.meta)) {
       if (!(await this.ctx.sessions.flush(live))) {
         throw new Error(
-          `message-feedback: no durability listener participated for live session '${inspection.meta.id}'`,
+          `message-feedback: no durability listener participated for live session '${observation.meta.id}'`,
         )
       }
-      return await this.ctx.sessionPersistence.readFrom(inspection.meta.id, 0)
     }
-    return await this.ctx.sessionPersistence.readFrom(inspection.meta.id, 0)
+    return await this.readDurable(observation.meta.id)
   }
 
   /** Validate optional-note semantics and the configured complete UTF-8 byte bound. */

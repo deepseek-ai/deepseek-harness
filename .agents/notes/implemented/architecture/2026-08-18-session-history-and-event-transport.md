@@ -163,7 +163,7 @@ Each method explicitly selects a cold inspection, live-only lookup, or resume-ca
 
 Reading titles, lists, and projections does not require an Agent. An observation operation cannot inherit resume authority merely because another Remote endpoint uses Agent lookup.
 
-`SessionQuery.observeSession()` chooses an attached Session or borrows one prepared source from `SessionPersistence.borrowSession()`. The persistence preparation cache shares concurrent cold reads and pins the exact unpublished Session until every observation lease is released. An observation computes either all registered projections or none; callers may expose a subset, but no caller creates a partial projection state.
+`SessionQuery.observeSession()` chooses an attached Session or serves a cold one from the reader's own prepared cache, filled through a persistence read handle. The cache shares concurrent cold reads and pins an entry until every observation lease is released. An observation computes either all registered projections or none; callers may expose a subset, but no caller creates a partial projection state.
 
 `session.list` never performs an unbounded cold-log scan. It uses cached projection hints when available and may fully observe only an individually stored artifact within the configured small-log byte limit to distinguish an abandoned blank Session. Missing or unreadable hints keep the row visible with unknown metadata.
 

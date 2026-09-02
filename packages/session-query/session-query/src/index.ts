@@ -5,7 +5,13 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import { Session, snapshotSessionEvent, type SessionId } from '@deepseek-ai/dsh-session'
+import {
+  Session,
+  SessionSeq,
+  snapshotSessionEvent,
+  type SessionId,
+  type SessionSeq as SessionSeqType,
+} from '@deepseek-ai/dsh-session'
 import { foldSessionTitle } from '@deepseek-ai/dsh-session-title'
 import type { SessionTitleSnapshot } from '@deepseek-ai/dsh-session-title'
 import type {
@@ -32,6 +38,7 @@ import type {
 } from './types.ts'
 import {
   SESSION_QUERY_DEFAULT_PERSISTED_INSPECT_CONCURRENCY,
+  SESSION_QUERY_DEFAULT_PREPARED_SESSION_CACHE_SIZE,
   SESSION_QUERY_READ_WINDOW_MAX,
   SessionQueryError,
   type Config,
@@ -56,9 +63,12 @@ export { SessionSearchCursor } from './cursor.ts'
 export type { Config, SessionQueryErrorCode } from './config.ts'
 export {
   SESSION_QUERY_DEFAULT_PERSISTED_INSPECT_CONCURRENCY,
+  SESSION_QUERY_DEFAULT_PREPARED_SESSION_CACHE_SIZE,
   SESSION_QUERY_READ_WINDOW_MAX,
   SessionQueryError,
 } from './config.ts'
+export { readColdSessionLog } from './cold-read.ts'
+export type { ColdSessionLog } from './cold-read.ts'
 export { extractSessionEventText } from './extraction.ts'
 export { buildSessionEventRecords, buildSessionEventSearchDocuments } from './documents.ts'
 export {
@@ -100,16 +110,24 @@ export abstract class SessionQueryEngine extends Service {
         'SESSION_QUERY_INVALID_CONFIG',
       )
     }
-    const persistedInspectConcurrency = config.persistedInspectConcurrency
+    const persistedReadConcurrency = config.persistedReadConcurrency
       ?? SESSION_QUERY_DEFAULT_PERSISTED_INSPECT_CONCURRENCY
-    if (!Number.isSafeInteger(persistedInspectConcurrency) || persistedInspectConcurrency < 1) {
+    if (!Number.isSafeInteger(persistedReadConcurrency) || persistedReadConcurrency < 1) {
       throw new SessionQueryError(
-        'session-query: persistedInspectConcurrency must be a positive safe integer',
+        'session-query: persistedReadConcurrency must be a positive safe integer',
         'SESSION_QUERY_INVALID_CONFIG',
       )
     }
-    this._corpus = new SessionCorpus(ctx, persistedInspectConcurrency)
-    this._observations = new SessionObservationReader(ctx)
+    const preparedSessionCacheSize = config.preparedSessionCacheSize
+      ?? SESSION_QUERY_DEFAULT_PREPARED_SESSION_CACHE_SIZE
+    if (!Number.isSafeInteger(preparedSessionCacheSize) || preparedSessionCacheSize < 1) {
+      throw new SessionQueryError(
+        'session-query: preparedSessionCacheSize must be a positive safe integer',
+        'SESSION_QUERY_INVALID_CONFIG',
+      )
+    }
+    this._corpus = new SessionCorpus(ctx, persistedReadConcurrency)
+    this._observations = new SessionObservationReader(ctx, preparedSessionCacheSize)
   }
 
   /**
@@ -164,9 +182,15 @@ export abstract class SessionQueryEngine extends Service {
    */
   async readSession(sessionId: SessionId): Promise<SessionLogSnapshot> {
     const loaded = await this._corpus.load(sessionId)
-    Session.create(sessionId, loaded.events, loaded.header)
+    Session.create(
+      sessionId,
+      loaded.events,
+      loaded.header,
+      loaded.inheritedEventCount,
+    )
     return {
       session: structuredClone(loaded.header),
+      inheritedEventCount: loaded.inheritedEventCount,
       events: loaded.events.map(snapshotSessionEvent),
     }
   }
@@ -285,6 +309,7 @@ export abstract class SessionQueryEngine extends Service {
     const loaded = await this._corpus.load(sessionId)
     return {
       session: structuredClone(loaded.header),
+      inheritedEventCount: loaded.inheritedEventCount,
       capturedThroughSeq: loaded.events.at(-1)?.seq ?? null,
       events: tracing.currentSurfaceEvents(sessionId, loaded.events),
     }
@@ -335,7 +360,7 @@ export abstract class SessionQueryEngine extends Service {
 
   private async _readEvent(
     sessionId: SessionId,
-    seq: number,
+    seq: SessionSeqType,
     before: number,
     after: number,
     signal?: AbortSignal,
@@ -349,8 +374,8 @@ export abstract class SessionQueryEngine extends Service {
         'SESSION_QUERY_EVENT_NOT_FOUND',
       )
     }
-    const startSeq = Math.max(0, seq - before)
-    const endSeq = Math.min(loaded.events.length - 1, seq + after)
+    const startSeq = SessionSeq(Math.max(0, seq - before))
+    const endSeq = SessionSeq(Math.min(loaded.events.length - 1, seq + after))
     const targetSnapshot = snapshotSessionEvent(target)
     const events = loaded.events.slice(startSeq, endSeq + 1)
       .map(event => event === target
@@ -358,6 +383,7 @@ export abstract class SessionQueryEngine extends Service {
         : snapshotSessionEvent(event))
     return {
       session: structuredClone(loaded.header),
+      inheritedEventCount: loaded.inheritedEventCount,
       target: targetSnapshot,
       events,
       startSeq,

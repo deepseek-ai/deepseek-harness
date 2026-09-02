@@ -48,6 +48,7 @@
   gap: 0;
   padding: 0;
   border-radius: 50%;
+  corner-shape: round;
 }
 
 .triggerLabel {
@@ -73,8 +74,8 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-/* Panel (figma Settings 501:29947): r24, white, lv3 shadow (figma effects
-   match --dsw-shadow-lv3 exactly); figma's 1080x700 is shrunk to 800 wide.
+/* Panel (figma Settings 501:29947): r24, white; the figma lv3 effects are
+   superseded by the shared elevation treatment; figma's 1080x700 is shrunk to 800 wide.
    One height for every section, taken from the viewport rather than the
    content: sections differ by hundreds of pixels (a settings list against the
    composition editor), and a content-sized panel would resize under the
@@ -86,10 +87,10 @@
   width: 800px;
   height: min(800px, calc(100vh - 48px));
   max-width: calc(100vw - 48px);
-  border-radius: 24px;
+  border-radius: 32px;
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
-  box-shadow: var(--dsw-shadow-lv3);
+  box-shadow: var(--dsw-elevation-prominent);
   /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens.
      Declared on the panel rather than the scrolling `.options` child so the
      elevation choice sits with the surface; the custom properties inherit

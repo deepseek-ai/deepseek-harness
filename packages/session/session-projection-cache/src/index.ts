@@ -19,7 +19,14 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
-import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type {
+  Session,
+  SessionEvent,
+  SessionHeader,
+  SessionId,
+  SessionSeqCursor,
+} from '@deepseek-ai/dsh-session'
 import type {
   ProjectionCheckpoint,
   ProjectionSnapshot,
@@ -121,15 +128,18 @@ export class SessionProjectionCache extends Service {
    * paths (the history tail baseline) supersede these values whenever a
    * session is actually opened.
    * @param meta - the listed session's header (identity witness; no log read).
+   * @param inheritedEventCount - exact inherited prefix length that completes
+   * the checkpoint identity.
    * @param keys - optional projection keys required by the caller's audience.
    * @returns the cut (`asOfSeq` = lowest served-row watermark), or
    *   `undefined` when no usable row exists for this lifecycle.
    */
   cachedSnapshot(
     meta: SessionHeader,
+    inheritedEventCount: SessionLogOffset,
     keys?: readonly Extract<keyof SessionProjectionMap, string>[],
   ): ProjectionSnapshot | undefined {
-    const record = this.recordFor(meta.id, identityOf(meta))
+    const record = this.recordFor(meta.id, identityOf(meta, inheritedEventCount))
     if (record === undefined) return undefined
     const values = this.ctx.sessionProjections.viewCheckpoint(record.rows, keys)
     const servedKeys = Object.keys(values)
@@ -137,7 +147,15 @@ export class SessionProjectionCache extends Service {
     // The block carries ONE cut: the lowest served watermark is the seq every
     // value is at least current as of (under-claiming is safe under
     // higher-seq-wins; over-claiming would let a stale value outrank pushes).
-    const asOfSeq = Math.min(...servedKeys.map(key => (record.rows[key] as { seq: number }).seq))
+    let asOfSeq: SessionSeqCursor | undefined
+    for (const key of servedKeys) {
+      const row = record.rows[key]
+      if (row !== undefined && (asOfSeq === undefined || row.seq < asOfSeq)) {
+        asOfSeq = row.seq
+      }
+    }
+    /* v8 ignore next -- A nonempty checkpoint view contains a stored row for every returned key. */
+    if (asOfSeq === undefined) return undefined
     return { asOfSeq, values }
   }
 
@@ -147,25 +165,31 @@ export class SessionProjectionCache extends Service {
    * advances every unit to the observation cut. No checkpoint is written
    * because the logical observation may contain recovery events not yet durable.
    * @param session - exact unpublished Session retained by persistence.
-   * @param meta - observed lifecycle header.
    * @param events - exact logical event prefix represented by the observation.
    * @returns all projection values at the event cut.
    */
   hydratePrepared(
     session: Session,
-    meta: SessionHeader,
     events: readonly SessionEvent[],
   ): ProjectionSnapshot {
-    const record = this.recordFor(meta.id, identityOf(meta))
+    const record = this.recordFor(
+      session.id,
+      identityOf(session.header, session.inheritedEventCount),
+    )
     if (record === undefined) {
-      return this.ctx.sessionProjections.hydrate(session, {}, events, 0)
+      return this.ctx.sessionProjections.hydrate(session, {}, events, SessionLogOffset(0))
     }
     try {
-      return this.ctx.sessionProjections.hydrate(session, record.rows, events, 0)
+      return this.ctx.sessionProjections.hydrate(
+        session,
+        record.rows,
+        events,
+        SessionLogOffset(0),
+      )
     } catch {
       // Cached rows are disposable derived data. Retry from the exact log so a
       // stale schema cannot make a valid Session unreadable.
-      return this.ctx.sessionProjections.hydrate(session, {}, events, 0)
+      return this.ctx.sessionProjections.hydrate(session, {}, events, SessionLogOffset(0))
     }
   }
 
@@ -189,7 +213,11 @@ export class SessionProjectionCache extends Service {
     // already gone; persistence's own retirement drain covers that path and
     // any residual overreach is caught by the cold read's anchored floor.
     if (this.ctx.sessions.get(session.id) === session) await this.ctx.sessions.flush(session)
-    await this.put(session.id, identityOf(session.header), rows)
+    await this.put(
+      session.id,
+      identityOf(session.header, session.inheritedEventCount),
+      rows,
+    )
   }
 
   /**
@@ -201,14 +229,26 @@ export class SessionProjectionCache extends Service {
    * The caller supplies the complete log in seq order: this service never
    * consults the persistence layer.
    * @param meta - the stored session header (identity witness).
+   * @param inheritedEventCount - exact inherited prefix length for projection initialization and identity.
    * @param events - the session's complete log, in seq order.
    * @returns the projection cut at the log end.
    */
-  coldSnapshot(meta: SessionHeader, events: readonly SessionEvent[]): ProjectionSnapshot {
-    const restored = this.ctx.sessionProjections.restore(this.recordFor(meta.id, identityOf(meta))?.rows ?? {}, events, 0, meta)
+  coldSnapshot(
+    meta: SessionHeader,
+    inheritedEventCount: SessionLogOffset,
+    events: readonly SessionEvent[],
+  ): ProjectionSnapshot {
+    const identity = identityOf(meta, inheritedEventCount)
+    const restored = this.ctx.sessionProjections.restore(
+      this.recordFor(meta.id, identity)?.rows ?? {},
+      events,
+      SessionLogOffset(0),
+      meta,
+      inheritedEventCount,
+    )
     // Refresh the row so the next cold read seeds from it; fail-soft and
     // fire-and-forget — a failed write-back only costs a longer tail replay.
-    void this.put(meta.id, identityOf(meta), restored.checkpoint).catch((error: unknown) => {
+    void this.put(meta.id, identity, restored.checkpoint).catch((error: unknown) => {
       this.ctx.logger.warn(`session projection cache: cold-read write-back for "${meta.id}" failed (cache stays stale): ${String(error)}`)
     })
     return restored.snapshot
@@ -311,13 +351,28 @@ export class SessionProjectionCache extends Service {
 }
 
 /** Project a header onto the identity fields a record is bound to. */
-function identityOf(header: SessionHeader): CheckpointIdentity {
-  return { createdAt: header.createdAt, ...header.cwd === undefined ? {} : { cwd: header.cwd } }
+function identityOf(
+  header: SessionHeader,
+  inheritedEventCount: SessionLogOffset,
+): CheckpointIdentity {
+  const cut = SessionLogOffset(inheritedEventCount)
+  if (!header.isSeeded && cut !== 0) {
+    throw new Error('unseeded projection-cache identity inherited event count must be 0')
+  }
+  return {
+    createdAt: header.createdAt,
+    ...header.cwd === undefined ? {} : { cwd: header.cwd },
+    isSeeded: header.isSeeded,
+    inheritedEventCount: cut,
+  }
 }
 
 /** Whether a stored record's bound identity names the caller's lifecycle. */
 function identityMatches(stored: CheckpointIdentity, expected: CheckpointIdentity): boolean {
-  return stored.createdAt === expected.createdAt && stored.cwd === expected.cwd
+  return stored.createdAt === expected.createdAt
+    && stored.cwd === expected.cwd
+    && stored.isSeeded === expected.isSeeded
+    && stored.inheritedEventCount === expected.inheritedEventCount
 }
 
 export default SessionProjectionCache

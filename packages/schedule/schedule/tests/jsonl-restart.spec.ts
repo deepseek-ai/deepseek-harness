@@ -82,6 +82,16 @@ async function settleCurrentTasks(): Promise<void> {
   await new Promise<void>(resolve => setImmediate(resolve))
 }
 
+/** Read one stored session's header and full event log through a read handle. */
+async function readStored(ctx: Context, id: SessionId) {
+  const handle = await ctx.sessionPersistence.open(id, 'read')
+  try {
+    return { header: handle.header, inheritedEventCount: handle.inheritedEventCount, events: await handle.read() }
+  } finally {
+    await handle.close()
+  }
+}
+
 describe('Schedule production JSONL restart', () => {
   it('resumes one overdue reminder exactly once across fresh runtime mounts', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-schedule-jsonl-'))
@@ -94,7 +104,9 @@ describe('Schedule production JSONL restart', () => {
       ScheduleId('schedule-1'), 'restart reminder', 1, Date.now() - 60_000,
     )
     pending.append('schedule/change', { version: 1, operation: 'create', schedule: pendingRecord })
-    await expect(first.sessions.flush(pending)).resolves.toBe(true)
+    const seed = await first.sessionPersistence.create(pending.header)
+    await seed.append(pending.snapshotEvents())
+    await seed.close()
     await disposeContext(first)
 
     const dispatchingAdapter = new RecordingAdapter()
@@ -107,8 +119,8 @@ describe('Schedule production JSONL restart', () => {
     await dispatched
     await handle.agent.whenIdle()
     await expect(restarted.sessions.flush(handle.agent.session)).resolves.toBe(true)
-    const dispatchedStored = await restarted.sessionPersistence.inspect(sessionId)
-    expect(foldScheduleEvents(dispatchedStored.events, dispatchedStored.meta.seedLength ?? 0).active)
+    const dispatchedStored = await readStored(restarted, sessionId)
+    expect(foldScheduleEvents(dispatchedStored.events, dispatchedStored.inheritedEventCount).active)
       .toEqual([])
     const dispatches = dispatchedStored.events.filter(event =>
       event.type === 'schedule/change' && event.data.operation === 'dispatch')
@@ -131,7 +143,7 @@ describe('Schedule production JSONL restart', () => {
     expect(replayAdapter.requests).toEqual([])
     expect(replayHandle.agent.session.snapshotEvents().filter(event =>
       event.type === 'schedule/change' && event.data.operation === 'dispatch')).toHaveLength(1)
-    const replayedStored = await replayed.sessionPersistence.inspect(sessionId)
+    const replayedStored = await readStored(replayed, sessionId)
     expect(replayedStored.events.filter(event =>
       event.type === 'schedule/change' && event.data.operation === 'dispatch')).toHaveLength(1)
     await replayHandle.dispose()

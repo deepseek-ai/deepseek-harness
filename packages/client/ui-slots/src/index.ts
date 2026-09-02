@@ -17,7 +17,7 @@ import type { ReactNode } from 'react'
 import type {
   BoundActions, HandleOf, PropsStore, SnapshotSelectorHook, StoreDecl,
 } from '@deepseek-ai/dsh-client-store'
-import type { HostObservable } from './renderer.ts'
+import type { HostObservable, KeyedStandardSource } from './renderer.ts'
 
 export * from './store.ts'
 export * from './renderer.ts'
@@ -375,6 +375,26 @@ export type SlotComponent<P> = (props: P) => ReactNode
  */
 export type HooksSources = Record<string, HostObservable<unknown>>
 
+/** Registrant keyed-hooks compartment: stable key-to-observable resolvers. */
+export type KeyedHooksSources = Record<string, KeyedStandardSource>
+
+/** Selector Hook over an open family of keyed observable sources. */
+export type KeyedSnapshotSelectorHook<Snapshot> = {
+  /** @param key - source key. @returns the current value, or absence when the source is unavailable. */
+  (key: string): Snapshot | undefined
+  /**
+   * @param key - source key.
+   * @param selector - projection over the current keyed value.
+   * @param equal - optional selected-value equality.
+   * @returns the selected value.
+   */
+  <Selected>(
+    key: string,
+    selector: (value: Snapshot | undefined) => Selected,
+    equal?: (left: Selected, right: Selected) => boolean,
+  ): Selected
+}
+
 /** Framework-owned props visible while a slot-level contextual Hook is bound. */
 export type StandardPropsOf<K extends keyof SlotMap & string> =
   (ScopeOf<K> extends 'session' ? SessionStandardProps
@@ -421,13 +441,26 @@ export type PropsHooks<HS extends HooksSources> = {
   SnapshotSelectorHook<HS[N] extends HostObservable<infer T> ? T : never>
 }
 
+/** Selector-hook share synthesized from an entry inject keyed-hooks compartment. */
+export type PropsKeyedHooks<HS extends KeyedHooksSources> = {
+  [N in keyof HS & string as `use${Capitalize<N>}`]: KeyedSnapshotSelectorHook<
+    HS[N] extends (key: string) => HostObservable<infer T> | undefined ? T : never
+  >
+}
+
 /**
  * The component-side view of an inject face: the reserved `hooks`
  * compartment (when declared) arrives as bound `use<Name>` selector hooks;
  * every other member passes through verbatim.
  */
 export type InjectFace<I extends object> =
-  I extends { hooks: infer HS extends HooksSources } ? Omit<I, 'hooks'> & PropsHooks<HS> : I
+  I extends { hooks: infer HS extends HooksSources }
+    ? I extends { keyedHooks: infer KS extends KeyedHooksSources }
+      ? Omit<I, 'hooks' | 'keyedHooks'> & PropsHooks<HS> & PropsKeyedHooks<KS>
+      : Omit<I, 'hooks'> & PropsHooks<HS>
+    : I extends { keyedHooks: infer KS extends KeyedHooksSources }
+      ? Omit<I, 'keyedHooks'> & PropsKeyedHooks<KS>
+      : I
 
 /**
  * The composed component props intersection: runtime share (SlotMap) +

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-25-session-observations-and-projection-owned-client-state.md
-2026-08-25-session-observations-and-projection-owned-client-state.md: 492640385215b059761b17a057328cc5c6d24bff
-2026-08-25-session-observations-and-projection-owned-client-state.zh.md: 0b892a9cae2c999b4472dd46f19068e2b4139e60
+2026-08-25-session-observations-and-projection-owned-client-state.md: 554d003da1e1767b8955be7a067cbea716f130ef
+2026-08-25-session-observations-and-projection-owned-client-state.zh.md: a63b0414f8b0250e4cea95ac39a39aa2c62cd958

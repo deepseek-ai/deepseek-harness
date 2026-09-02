@@ -49,6 +49,7 @@
   width: 20px;
   height: 20px;
   border-radius: 50%;
+  corner-shape: round;
   border: 2px solid var(--dsw-alias-border-l2, var(--dsh-boot-border));
   animation: spin 0.8s linear infinite;
 }

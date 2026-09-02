@@ -137,12 +137,20 @@ describe('chat flow font-size axis', () => {
     // no-hover devices keep the row visible. 'always' has no rule at all —
     // absence, not an override, keeps the latest turn's row shown.
     const css = read('MessageIconActions.module.css')
-    expect(declarationsFrom(css, "[data-actions-reveal='hover'] .actions"))
-      .toEqual(expect.arrayContaining(['opacity: 0']))
-    expect(css).toMatch(
-      /\[data-actions-reveal='hover'\]:hover \.actions,\s*\[data-actions-reveal='hover'\]:focus-within \.actions \{\s*opacity: 1/,
-    )
+    expect(css).toContain("[data-actions-reveal='hover'] .actions,")
+    expect(css).toMatch(/\) \.actions \{\s*opacity: 0/)
+    expect(css).toContain("[data-actions-reveal='hover']:hover .actions,")
+    expect(css).toContain("[data-actions-reveal='hover']:focus-within .actions,")
+    expect(css).toMatch(/\):focus-within \.actions \{\s*opacity: 1/)
     expect(css).not.toContain("[data-actions-reveal='always']")
+  })
+
+  it('uses flow sibling selectors to reveal only the latest user-authored row', () => {
+    const css = read('MessageIconActions.module.css')
+    const userKinds = ":is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])"
+    expect(css).toContain(`${userKinds}:has(\n    ~ ${userKinds}\n  ) .actions`)
+    expect(css).toContain('):hover .actions')
+    expect(css).toContain('):focus-within .actions')
   })
 
   it('the interrupted-turn tag stays fixed like the dense token variants', () => {

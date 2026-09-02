@@ -10,7 +10,7 @@ Status: proposed
 
 网关以前会在可用时采用 JSONL 产物的 mtime。mtime 回答的是另一件事：这份产物上次是什么时候被写入。每一次持久写入都会刷新它，包括对撕裂尾部的截断修复、平衡中断轮次的合成 closer，以及拾起时追加的 [`session/end-seed` 边界](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.zh.md)。这套近似会让 Session 仅仅因为被打开就提升排序。[有界冷空白验证](../../implemented/bug-fix/2026-08-13-bounded-cold-blank-verification.zh.md)移除了 mtime 排序，并把 cache 保守的「过旧」错误方向作为现阶段取舍。
 
-已附加摘要可以折叠实时事件日志并选择最新的真人 `user/message`，但冷路径有意不读取大日志。为计算 `updatedAt` 而读取每一份日志，会让 `list()` 的开销随对话总字节数而非 Session 数量增长。用于 metadata 验证的 1 KiB 冷读取可以让符合条件的小产物得到精确的最近时间，但不能让大日志的排序精确。
+已附加摘要可以折叠实时事件日志并选择最新的真人 `user/message`，但冷路径有意不读取任何日志：冷摘要只来自 projection cache，因此冷最近时间的新旧只取决于 cache。
 
 让冷排序变得精确仍是一项持久格式决策，因此其范围留在本文，而不是网关 workaround 中。
 
@@ -58,7 +58,7 @@ Status: proposed
 
 ## 相关
 
-- [有界冷空白验证](../../implemented/bug-fix/2026-08-13-bounded-cold-blank-verification.zh.md)——移除 mtime 排序，定义 projection cache 的过渡回退，并把直接冷读取限制为小产物 metadata 验证。
+- [有界冷空白验证](../../implemented/bug-fix/2026-08-13-bounded-cold-blank-verification.zh.md)——移除 mtime 排序，并定义了本提案将使之精确的、仅依赖 cache 的过渡冷摘要。
 - [种子结束日志边界](../../implemented/architecture/2026-07-30-session-end-seed-log-boundary.zh.md)——让 mtime 不适用的非 prompt 写入之一。
 - [会话持久化](../../implemented/architecture/2026-06-14-session-persistence.zh.md)——仅追加与绝不重写这两条不变式，正是它们排除了可变的 JSONL header 字段。
-- [共享持久化写入协调器](../../implemented/architecture/2026-06-18-shared-persistence-write-coordinator.zh.md)——一个已存储字段将挂入的那条追加路径。
+- [基于句柄的会话持久化](../../implemented/architecture/2026-08-27-handle-based-session-persistence.zh.md)——一个已存储字段将挂入的那条写句柄追加路径。

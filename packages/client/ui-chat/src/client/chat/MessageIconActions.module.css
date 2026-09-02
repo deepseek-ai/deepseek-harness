@@ -30,19 +30,26 @@
   white-space: nowrap;
 }
 
-/* Row containers (user rows and turn tails) opt in with
-   data-actions-reveal='hover': every row but the latest of its kind reveals
-   the entire actions row (icons and text) on hover or focus-within, while the
-   latest ('always') keeps its row visible — no rule matches it. Opacity keeps
-   the layout stable, and devices without hover keep the row visible. */
+/* Earlier user-authored flow rows and opted-in turn tails reveal the complete
+   actions row on hover or focus-within. Opacity keeps layout stable, and
+   devices without hover keep every row visible. */
 @media (hover: hover) {
-  [data-actions-reveal='hover'] .actions {
+  [data-actions-reveal='hover'] .actions,
+  :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering']):has(
+    ~ :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])
+  ) .actions {
     opacity: 0;
     transition: opacity 80ms ease;
   }
 
   [data-actions-reveal='hover']:hover .actions,
-  [data-actions-reveal='hover']:focus-within .actions {
+  [data-actions-reveal='hover']:focus-within .actions,
+  :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering']):has(
+    ~ :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])
+  ):hover .actions,
+  :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering']):has(
+    ~ :is([data-chat-flow-kind='user'], [data-chat-flow-kind='steering'])
+  ):focus-within .actions {
     opacity: 1;
   }
 }

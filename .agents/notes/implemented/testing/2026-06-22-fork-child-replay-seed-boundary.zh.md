@@ -18,19 +18,19 @@ subagent 脚本由 [`deriveReplayScript`](../../../../packages/test-support/llm-
 
 记录会话**继承**前缀的结束位置，将其持久化，并让回放 harness 仅从子会话**自身**的事件推导脚本。
 
-### 1. 会话头部的 `seedLength`
+### 1. 谱系 metadata 与正文拥有的精确 cut
 
-`SessionHeader` 新增可选字段 `seedLength: number`——表示有多少前导事件是通过 seed 继承而来、而非本会话产生的。fork 后端在创建子会话时设置它（= 播种前缀的长度）；全新的 spawn 子会话不设置（等同于 0）。它通过 `CreateSessionOptions.meta`（及 `CreateAgentOptions.meta`）传递，在 `SessionStore.prepare` 中设置。
+`SessionHeader.isSeeded` 记录 Session 是否具有继承谱系，而不向仅 header 的 reader 暴露正文坐标。精确的前导事件数量是单独品牌化为 `SessionLogOffset` 的 `inheritedEventCount`；fork 同时提供 `isSeeded: true` 与复制前缀的长度，全新的 spawn 则提供 unseeded header 与零 cut。该 cut 经 `CreateSessionOptions`、`CreateAgentOptions`、持久化 inspection 与恢复后的 Session 状态传递。
 
-`seedLength` 是**显式**的，绝不从 `seed.length` 推断。恢复/加载时用会话的完整已存储日志作为 seed，此时 `seed.length` 是全长而非原始边界——恢复路径改为从加载的 header 中取回持久化的 `seedLength`。（做法与 `createdAt` 相同：恢复时显式保留，而非重新默认为当前时间。）
+`inheritedEventCount` 是**显式**的，绝不从 `seed.length` 推断。恢复／加载时用会话的完整已存储日志作为 seed，此时 `seed.length` 是全长而非原始边界——恢复路径改为在 logical header 之外传递解码后的 cut。
 
 ### 2. JSONL 完整往返
 
-JSONL 把 `seedLength` 存在 header 行（`toHeaderLine`/`fromHeaderLine`），并通过共享持久化约定返回它。
+v0 JSONL header 为保持字节兼容而继续携带可选数值 `seedLength`。`toHeaderLine`／`fromHeaderLine` 在它与 logical `isSeeded` 加精确 `inheritedEventCount` 之间转换，共享的含正文持久化值再单独返回该 cut。
 
 ### 3. 回放从边界之后推导子会话脚本
 
-`dsh-llm-replay` 的 `parseSessionHeader` 现在也读取 `seedLength`（缺失则为 0），`loadSessionScripts` 从 `parseSessionLog(text).slice(seedLength)` 推导子会话条目——即边界及之后的事件，也就是子会话自身的模型调用。对 spawn 子会话而言 `seedLength` 为 0，此操作是空操作，spawn 场景逐字节不变。
+`dsh-llm-replay` 的私有 v0 parser 把物理 `seedLength` 读入 `inheritedEventCount`（缺失则为 0），`loadSessionScripts` 从 `parseSessionLog(text).slice(inheritedEventCount)` 推导子会话条目——即边界及之后的事件，也就是子会话自身的模型调用。对 spawn 子会话而言 cut 为 0，此操作是空操作，spawn 场景逐字节不变。
 
 这弥补了路由正确性的缺口，两个已录制的 fork 场景对其进行端到端验证——见[记录 fork 与混合 spawn+fork 快照场景](../../archived/testing/2026-06-22-fork-snapshot-scenarios.md)。
 
@@ -40,5 +40,5 @@ JSONL 把 `seedLength` 存在 header 行（`toHeaderLine`/`fromHeaderLine`），
 
 ## 后果
 
-- core 与 JSONL provider 新增一个持久化 header 字段；子系统目录（`persistence.md`）在同一变更中更新（其 `SessionHeader` / `CreateSessionOptions` 的 `type-equiv` 块）。
-- spawn 回放不变（`seedLength` 为 0）。fork 回放现在将子会话路由到自身的脚本；由 `llm-replay` 测试中的一个回归用例覆盖（一个子会话 fixture，其播种前缀包含父会话的分片——推导出的子会话脚本必须排除它，不做 slice 时该用例会失败），以及通过共享 coordinator 约定执行的 JSONL 持久化往返测试。
+- 谱系 bit 横跨 logical Session metadata，精确 cut 则只横跨含正文的 core、持久化、query 与 replay 值；v0 物理 header 保持不变。
+- spawn 回放不变（cut 为 0）。fork 回放将子会话路由到自身的脚本；由 `llm-replay` 测试中的一个回归用例覆盖（一个子会话 fixture，其播种前缀包含父会话的分片——推导出的子会话脚本必须排除它，不做 slice 时该用例会失败），以及通过共享 coordinator 约定执行的 JSONL 持久化往返测试。

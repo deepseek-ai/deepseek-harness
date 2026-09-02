@@ -24,26 +24,26 @@ describe('createChatStore', () => {
     expect(second.store.getSnapshot().selection).toBeNull()
   })
 
-  it('stores only manually expanded Turn-process generations', () => {
+  it('stores only manually expanded Turn-process answers', () => {
     const store = createChatStore().create()
-    store.actions.setTurnProcessOpen(2, '2|3', true)
-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, generation: '2|3' }])
+    store.actions.setTurnProcessOpen(2, 3, true)
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 3 }])
 
-    store.actions.setTurnProcessOpen(2, '2|4', true)
-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, generation: '2|4' }])
+    store.actions.setTurnProcessOpen(2, 4, true)
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 2, answerStep: 4 }])
 
-    store.actions.setTurnProcessOpen(2, '2|4', false)
+    store.actions.setTurnProcessOpen(2, 4, false)
     expect(store.store.getSnapshot().turnProcesses).toEqual([])
   })
 
   it('closes only the requested Turn-process entry', () => {
     const store = createChatStore().create()
-    store.actions.setTurnProcessOpen(2, '2|3', true)
-    store.actions.setTurnProcessOpen(3, '3|4', true)
+    store.actions.setTurnProcessOpen(2, 3, true)
+    store.actions.setTurnProcessOpen(3, 4, true)
 
-    store.actions.setTurnProcessOpen(2, '2|3', false)
-    store.actions.setTurnProcessOpen(9, '9|10', false)
+    store.actions.setTurnProcessOpen(2, 3, false)
+    store.actions.setTurnProcessOpen(9, 10, false)
 
-    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 3, generation: '3|4' }])
+    expect(store.store.getSnapshot().turnProcesses).toEqual([{ turn: 3, answerStep: 4 }])
   })
 })

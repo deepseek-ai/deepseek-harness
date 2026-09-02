@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { SessionId as sessionId, type SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
-import { launchWebScaffold, webSnapshotMode, type WebScaffold } from './scaffold.ts'
+import { launchWebScaffold, readPersistedEvents, webSnapshotMode, type WebScaffold } from './scaffold.ts'
 
 const MODE = webSnapshotMode()
 const INITIAL = 'Explain event sourcing in one sentence.'
@@ -176,17 +176,19 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
     expect(waking).toMatchObject({ ok: true })
     await expect.poll(() => scaffold.ctx.agents.get(childId), { timeout: 60_000 }).toBeUndefined()
 
-    const loaded = await scaffold.ctx.sessionPersistence.load(childId)
+    // The settled child's loop appended every turn's closing events durably,
+    // so the physical log carries the complete record asserted here.
+    const events = await readPersistedEvents(scaffold, childId)
     // Human-origin messages only: the real composition also injects
     // runtime-context snapshots as non-user-source messages.
-    const userTexts = loaded.events.flatMap(event => event.type === 'user/message'
+    const userTexts = events.flatMap(event => event.type === 'user/message'
       && event.data.source.kind === 'user'
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])
     expect(userTexts[0]).toBe(INITIAL)
     expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
     expect(userTexts.slice(2)).toEqual([FOLLOWUP, WAKING])
-    const turnEndKinds = loaded.events
+    const turnEndKinds = events
       .filter(event => event.type === 'turn/end')
       .map(event => (event).data.reason.kind)
     expect(turnEndKinds).toEqual(['aborted', 'completed', 'completed'])

@@ -4,7 +4,7 @@
 }
 
 /* Dropdown card (figma MenuDropdown 122:9481 / 419:16920): menu surface,
- * r12, inverted hairline border, shadow-lv3, 4px inset padding. */
+ * r12, elevation-prominent (hairline stroke in shadow), 4px inset padding. */
 .list,
 .submenu {
   /* min-widths below are the design's outer card widths — include the pad. */
@@ -13,10 +13,11 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border: 1px solid var(--dsw-alias-border-inverted);
-  border-radius: 12px;
+  border: 0;
+  border-radius: 20px;
   background: var(--dsw-specific-menu);
-  box-shadow: var(--dsw-shadow-lv3);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
   /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens. The
      declaration sits on the card rather than on `.scrollable .viewport`
      because the elevation is a property of this surface, and the custom
@@ -85,7 +86,7 @@
   flex-direction: column;
   margin-top: 4px;
   padding-top: 4px;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .itemWrap {
@@ -212,7 +213,7 @@
 
 /* Separator cell (figma 122:9481): py 4 / px 2 around the hairline. */
 .separator {
-  height: 1px;
+  height: 0.5px;
   margin: 4px 2px;
   background: var(--dsw-alias-border-l1);
 }

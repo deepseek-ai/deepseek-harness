@@ -39,12 +39,18 @@ function completedTailFixture(raw: string): string {
   const decoded = parseSeedFixture(raw)
   const kept = decoded.events.filter(event => event.seq < 101).map((event) => {
     if (event.type === 'assistant/message' && event.seq === 64) {
-      const data = event.data as unknown as { content?: unknown[] }
-      const content = data.content
-      if (!Array.isArray(content)) throw new Error('borrowed step-one assistant message has no content')
+      const data = event.data as unknown as { message?: { content?: unknown[] } }
+      const message = data.message
+      const content = message?.content
+      if (message === undefined || !Array.isArray(content)) {
+        throw new Error('borrowed step-one assistant message has no content')
+      }
       return {
         ...event,
-        data: { ...data, content: [...content.slice(0, 1), { type: 'text', text: MID_TURN_TEXT }, ...content.slice(1)] },
+        data: {
+          ...data,
+          message: { ...message, content: [...content.slice(0, 1), { type: 'text', text: MID_TURN_TEXT }, ...content.slice(1)] },
+        },
       }
     }
     return event
@@ -59,10 +65,10 @@ function completedTailFixture(raw: string): string {
   const tail = [
     at({ type: 'step/end', data: { turn: 1, step: 2 } }),
     at({ type: 'turn/end', data: { turn: 1, reason: { kind: 'aborted' } } }),
-    at({ type: 'turn/start', data: { turn: 2, trigger: { kind: 'message', source: { kind: 'user', rpcId: '{{rpcId}}' } } } }),
-    at({ type: 'user/message', data: { content: [{ type: 'text', text: SECOND_PROMPT }], source: { kind: 'user', rpcId: '{{rpcId}}' } }, surfaceOp: 'append' }),
+    at({ type: 'turn/start', data: { turn: 2 } }),
+    at({ type: 'user/message', data: { id: '00000000-0000-4000-9000-000000000201', role: 'user', content: [{ type: 'text', text: SECOND_PROMPT }], source: { kind: 'user', rpcId: '{{rpcId}}' } }, surfaceOp: 'append' }),
     at({ type: 'step/start', data: { turn: 2, step: 1 } }),
-    at({ type: 'assistant/message', data: { turn: 2, step: 1, content: [{ type: 'text', text: 'DONE' }], provenance: { provider: 'deepseek-official', model: 'deepseek-v4-flash' } }, sourceEventSeqs: [], surfaceOp: 'append' }),
+    at({ type: 'assistant/message', data: { turn: 2, step: 1, message: { id: '00000000-0000-4000-9000-000000000202', role: 'assistant', content: [{ type: 'text', text: 'DONE' }], source: { kind: 'model', provider: 'deepseek-official', model: 'deepseek-v4-flash' } } }, sourceEventSeqs: [], surfaceOp: 'append' }),
     at({ type: 'step/end', data: { turn: 2, step: 1 } }),
     at({ type: 'turn/end', data: { turn: 2, reason: { kind: 'completed' } } }),
   ]

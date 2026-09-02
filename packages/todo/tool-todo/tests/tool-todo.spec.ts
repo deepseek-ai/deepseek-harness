@@ -5,7 +5,7 @@ import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo'
 import { type Agent } from '@deepseek-ai/dsh-agent'
 
@@ -297,7 +297,7 @@ describe('todo/write event', () => {
 
     expect(replayed.snapshotEvents().findLast(e => e.type === 'todo/write')!.data.todos)
       .toEqual([{ content: 'only', status: 'completed' }])
-    expect(replayed.snapshotEvents(0, original.seq)).toEqual(original.snapshotEvents())
+    expect(replayed.snapshotEvents(SessionLogOffset(0), original.seq)).toEqual(original.snapshotEvents())
     expect(replayed.firstLiveSeq).toBe(original.seq)
   })
 })

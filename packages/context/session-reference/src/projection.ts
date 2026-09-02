@@ -4,6 +4,8 @@ import { isCompactCheckpointSource } from '@deepseek-ai/dsh-compaction'
 import type { SessionSurfaceSnapshot } from '@deepseek-ai/dsh-session-query'
 import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { OptionalSessionSeq } from '@deepseek-ai/dsh-session'
 import { stringifyTagSafeJson } from './serialization.ts'
 import type { ReferencedConversationItem } from './types.ts'
 
@@ -18,7 +20,7 @@ export interface ReferencedSessionData {
   sessionId: string
   label: string
   cwd: string | null
-  capturedThroughSeq: number | null
+  capturedThroughSeq: OptionalSessionSeq
   conversation: ReferencedConversationItem[]
 }
 
@@ -79,7 +81,9 @@ export function retainReferencedSession(
     sessionId: snapshot.session.id,
     label,
     cwd: snapshot.session.cwd ?? null,
-    capturedThroughSeq: snapshot.capturedThroughSeq,
+    capturedThroughSeq: snapshot.capturedThroughSeq === null
+      ? null
+      : SessionSeq(snapshot.capturedThroughSeq),
     conversation: retained.map(({ role, text }) => ({ role, text })),
   })
   const size = (): number => Buffer.byteLength(stringifyTagSafeJson(data()), 'utf8')

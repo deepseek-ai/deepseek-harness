@@ -18,7 +18,7 @@ Status: implemented
 
 **操作条。** 点赞/点踩按钮与备注触发按钮保持原样留在行内。触发按钮是普通 `button`（`aria-haspopup="dialog"`，打开时 `aria-expanded`），在没有备注时显示「补充说明」，已有备注时显示备注文本。
 
-**浮层。** 打开时，面板内含 textarea、Save 与 Cancel，以及任何备注保存失败提示，作为 `role="dialog"`，其标题与 textarea 自身的标签不同，以便两者都能按名称寻址。它在触发按钮下方打开（4px 间距），钳制到距视口边缘 12px，自动聚焦 textarea，并在 Escape 或外部 pointer-down 时关闭。关闭时仅当面板确实曾经打开才把焦点还给触发按钮，绝不会在初始挂载时（新渲染出的一条已评分消息不得把焦点拉进其操作条）。编辑器打开时进行评分操作会关闭面板。四个未定义 token 换成主题确实定义的那些，与 primitives 的既有做法一致：输入框用 `border-l2` 与 `bg-layer-1`，Save 用 `button-primary-fill` 配 `label-primary-foreground` 并加 `button-primary-hover` 状态；面板表面复用 Menu 卡片的配方（`--dsw-specific-menu`、`--dsw-shadow-lv3`、反色发丝线 `--dsw-alias-border-inverted`、`border-radius: 12px`）。
+**浮层。** 打开时，面板内含 textarea、Save 与 Cancel，以及任何备注保存失败提示，作为 `role="dialog"`，其标题与 textarea 自身的标签不同，以便两者都能按名称寻址。它在触发按钮下方打开（4px 间距），钳制到距视口边缘 12px，自动聚焦 textarea，并在 Escape 或外部 pointer-down 时关闭。关闭时仅当面板确实曾经打开才把焦点还给触发按钮，绝不会在初始挂载时（新渲染出的一条已评分消息不得把焦点拉进其操作条）。编辑器打开时进行评分操作会关闭面板。四个未定义 token 换成主题确实定义的那些，与 primitives 的既有做法一致：输入框用 `border-l2` 与 `bg-layer-1`，Save 用 `button-primary-fill` 配 `label-primary-foreground` 并加 `button-primary-hover` 状态；面板表面复用 Menu 卡片的表面配方（`--dsw-specific-menu`、`--dsw-elevation-prominent` 投影配 `--dsw-alias-border-l1` 描边重绑与 `border: 0`），圆角取 `border-radius: 12px`。
 
 **失败提示按人的视线所落之处拆分。** 评分或列表加载失败显示在按钮旁的图标行里，无论浮层是否打开都清晰可读。备注保存失败显示在浮层内、Save/Cancel 旁，且面板保持打开，以便草稿留存待修正。
 

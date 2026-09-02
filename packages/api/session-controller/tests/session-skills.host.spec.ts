@@ -1,7 +1,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import type {} from '@deepseek-ai/dsh-skill'
 import { describe, expect, it, vi } from 'vitest'
@@ -18,9 +18,11 @@ function observation(
       version: 0,
       id: sessionId,
       createdAt: 1,
+      isSeeded: false,
       ...options.cwd === undefined ? {} : { cwd: options.cwd },
     },
     events,
+    inheritedEventCount: SessionLogOffset(0),
     cursor: -1,
     projections: {
       asOfSeq: -1,

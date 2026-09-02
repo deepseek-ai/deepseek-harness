@@ -1,7 +1,15 @@
 /** Deterministic source for the filesystem tree bundled into the WebWorker preview. */
 
 import { fileURLToPath } from 'node:url'
-import { SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
+import {
+  SessionId,
+  SessionLogOffset,
+  SessionSeq,
+  type SessionEvent,
+  type SessionHeader,
+  type SessionLogOffset as SessionLogOffsetType,
+  type SessionSeq as SessionSeqType,
+} from '@deepseek-ai/dsh-session'
 import {
   eventLines, projectKey, toHeaderLine,
 } from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
@@ -71,7 +79,7 @@ interface EventDraft {
   readonly type: string
   readonly data: unknown
   readonly surfaceOp?: 'append'
-  readonly sourceEventSeqs?: number[]
+  readonly sourceEventSeqs?: SessionSeqType[]
   readonly ignorable?: true
 }
 
@@ -84,8 +92,8 @@ class EventLog {
     this.nextTime = Math.max(time, (this.events.at(-1)?.time ?? time - 1) + 1)
   }
 
-  add(draft: EventDraft): number {
-    const seq = this.events.length
+  add(draft: EventDraft): SessionSeqType {
+    const seq = SessionSeq(this.events.length)
     this.events.push({ ...draft, seq, time: this.nextTime++ } as unknown as SessionEvent)
     return seq
   }
@@ -265,10 +273,13 @@ function addClosedTextTurn(log: EventLog, turn: number): void {
   log.add({ type: 'turn/end', data: { turn, reason: { kind: 'completed' } } })
 }
 
-function mainLog(): { readonly events: SessionEvent[]; readonly forkSeedLength: number } {
+function mainLog(): {
+  readonly events: SessionEvent[]
+  readonly forkSeedLength: SessionLogOffsetType
+} {
   const log = new EventLog(CREATED_AT)
   for (let turn = 1; turn <= HISTORICAL_TURNS; turn++) addClosedTextTurn(log, turn)
-  const forkSeedLength = log.events.length
+  const forkSeedLength = SessionLogOffset(log.events.length)
   const turn = HISTORICAL_TURNS + 1
   const calls = galleryCalls()
 
@@ -363,25 +374,36 @@ function continuableLog(): SessionEvent[] {
 function header(
   id: SessionHeader['id'],
   createdAt: number,
-  child?: { readonly parentSession: SessionHeader['id']; readonly mode: 'one-shot' | 'continuable'; readonly seedLength?: number },
-): SessionHeader {
+  child?: {
+    readonly parentSession: SessionHeader['id']
+    readonly mode: 'one-shot' | 'continuable'
+    readonly seedLength?: SessionLogOffsetType
+  },
+): { readonly meta: SessionHeader; readonly inheritedEventCount: SessionLogOffsetType } {
+  const inheritedEventCount = child?.seedLength ?? SessionLogOffset(0)
   return {
-    version: 0,
-    id,
-    createdAt,
-    cwd: WORKSPACE,
-    delegationDepth: child === undefined ? 0 : 1,
-    agentPreset: 'standard',
-    ...child === undefined ? {} : {
-      parentSession: child.parentSession,
-      origin: 'subagent' as const,
-      ...child.seedLength === undefined ? {} : { seedLength: child.seedLength },
+    meta: {
+      version: 0,
+      id,
+      createdAt,
+      cwd: WORKSPACE,
+      isSeeded: child?.seedLength !== undefined,
+      delegationDepth: child === undefined ? 0 : 1,
+      agentPreset: 'standard',
+      ...child === undefined ? {} : {
+        parentSession: child.parentSession,
+        origin: 'subagent' as const,
+      },
     },
+    inheritedEventCount,
   }
 }
 
-function renderLog(meta: SessionHeader, events: readonly SessionEvent[]): string {
-  return `${JSON.stringify(toHeaderLine(meta))}\n${eventLines(events, true)}\n`
+function renderLog(
+  storage: { readonly meta: SessionHeader; readonly inheritedEventCount: SessionLogOffsetType },
+  events: readonly SessionEvent[],
+): string {
+  return `${JSON.stringify(toHeaderLine(storage.meta, storage.inheritedEventCount))}\n${eventLines(events, true)}\n`
 }
 
 /** Build every committed fixture file as repository-relative UTF-8 text. */
@@ -390,12 +412,17 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
   const project = projectKey(WORKSPACE)
   const sessionPath = (id: string): string => `home/sessions/${project}/${id}/session.jsonl`
   const projectionCache = `${JSON.stringify({
-    unit: { name: 'session_projcache', version: 3 },
+    unit: { name: 'session_projcache', version: 5 },
     global: null,
     tables: {
       sessions: {
         [VFS_EXAMPLE_SESSION_IDS.main]: {
-          identity: { createdAt: CREATED_AT, cwd: WORKSPACE },
+          identity: {
+            createdAt: CREATED_AT,
+            cwd: WORKSPACE,
+            isSeeded: false,
+            inheritedEventCount: 0,
+          },
           rows: {
             title: { ver: 1, seq: main.events.at(-1)?.seq ?? -1, val: VFS_EXAMPLE_TITLE },
           },

@@ -6,7 +6,7 @@
   flex-direction: column;
   gap: 8px;
   padding: 16px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .title {
@@ -35,8 +35,8 @@
   justify-content: center;
   gap: 4px;
   padding: 20px 32px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 16px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 20px;
   background: transparent;
   font: inherit;
   font-size: 14px;

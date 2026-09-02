@@ -40,7 +40,7 @@ The predicate holds for a bracket *this* session inherited, not as a liveness si
 
 **A boundary appended at loop start.** The loop calls `resumeWith`, so it covers the resume paths, but it misses `fork()` and `adopt()` entirely, and the event would have to fire on `'startup'` — the source a fork child publishes — so `SessionStartSource` would stop discriminating. It also publishes the session before the marker is appended, so a `session/created` listener could observe a seeded log with no boundary.
 
-**Reusing `header.seedLength`.** It is the durable *fork-lineage* boundary and deliberately keeps the original fork value across a resume, where the constructor seed is the whole stored log. The two facts differ and conflating them would lose both.
+**Reusing `Session.inheritedEventCount`.** It is the durable *fork-lineage* cut and deliberately keeps the original fork value across a resume, where the constructor seed is the whole stored log. The two facts differ and conflating them would lose both.
 
 **Crash repair closing `compaction/*` alongside turn boundaries.** Rejected: it moves every plugin's bracket semantics into core's repair pass, and core cannot know what closing another package's bracket should record.
 

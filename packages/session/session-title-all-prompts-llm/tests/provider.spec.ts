@@ -54,7 +54,8 @@ describe('all-messages LLM title provider', () => {
     await ctx.plugin(providerPlugin, LLM_CONFIG)
     const session = ctx.sessions.create(SessionId('all-plugin'), {
       seed: seeded.snapshotEvents(),
-      meta: { parentSession: seeded.id, seedLength: seeded.seq },
+      inheritedEventCount: seeded.seq,
+      meta: { parentSession: seeded.id, isSeeded: true },
     })
     session.append('turn/start', { turn: 2 })
     const latest = session.append('user/message', createUserMessage({

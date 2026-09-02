@@ -39,7 +39,7 @@
   justify-content: center;
   gap: 6px;
   box-sizing: border-box;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-secondary);
   font: var(--dsw-font-xxs-12);
@@ -52,6 +52,7 @@
   border: 1.5px solid var(--dsw-alias-border-l2);
   border-top-color: var(--dsw-alias-state-business-primary);
   border-radius: 50%;
+  corner-shape: round;
   animation: history-loading-spin 700ms linear infinite;
 }
 
@@ -148,7 +149,7 @@
   height: 30px;
   padding: 0 8px;
   overflow: hidden;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   color: var(--dsw-alias-label-tertiary);
   background: var(--dsw-specific-sidebar-fill);
   font: var(--dsw-font-xxs-12);
@@ -169,7 +170,7 @@
   height: 30px;
   padding: 0 8px;
   overflow: hidden;
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -251,6 +252,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-label-caption);
   box-shadow:
     0 0 0 2px var(--dsw-alias-bg-layer-1),
@@ -267,7 +269,7 @@
   left: 17px;
   width: max-content;
   padding: 0 4px;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 2px;
   color: var(--dsw-alias-label-secondary);
   background: var(--dsw-alias-bg-layer-1);
@@ -447,9 +449,9 @@
 }
 
 .kindSlot :global([role='tooltip']) {
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0;
   background: var(--dsw-alias-bg-layer-2);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-elevation-panel);
   color: var(--dsw-alias-label-primary);
 }
 
@@ -870,7 +872,7 @@
   max-width: calc(100% - 280px);
   min-width: 0;
   min-height: 0;
-  border-left: 1px solid var(--dsw-alias-border-l2);
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
   background: var(--dsw-alias-bg-layer-1);
 }
 
@@ -901,7 +903,7 @@
   box-sizing: border-box;
   height: 42px;
   padding: 0 8px 0 12px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .detailsTitle {
@@ -917,6 +919,7 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
+  corner-shape: round;
   background: var(--dsw-alias-label-secondary);
 }
 
@@ -968,7 +971,7 @@
   overflow-x: auto;
   overflow-y: hidden;
   gap: 1px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   overscroll-behavior-x: contain;
   scrollbar-width: none;
   white-space: nowrap;
@@ -1644,7 +1647,7 @@
 }
 
 .toolCatalogItem {
-  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
 }
 
 .toolCatalogSummary {

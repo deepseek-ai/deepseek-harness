@@ -328,6 +328,25 @@ describe('Hero chrome', () => {
 })
 
 describe('ConversationRoot resident composer', () => {
+  it('does not redispatch composer child slots for an unrelated Session publication', () => {
+    const b = mount(sessionSnapshotOf())
+    const childKeys = new Set([
+      'conversation.input.overlay',
+      'conversation.input.left',
+      'conversation.input.right',
+      'conversation.composer.dock',
+    ])
+    const dispatchCount = () => b.slotCalls.filter(key => childKeys.has(key)).length
+    const before = dispatchCount()
+
+    act(() => {
+      const current = b.session.getSnapshot()
+      b.session.set({ ...current, hasMore: !current.hasMore })
+    })
+
+    expect(dispatchCount()).toBe(before)
+  })
+
   it('renders the composer inert with the blocker\u2019s own reason', () => {
     const b = mount(sessionSnapshotOf(), undefined, undefined, {
       composerBlock: { reason: 'select a model first' },

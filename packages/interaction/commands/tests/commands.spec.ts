@@ -448,6 +448,7 @@ describe('CommandRuntime', () => {
     [{}, /CommandResult/],
     [{ kind: 'success', text: 1 }, /success text/],
     [{ kind: 'success', sourceEventSeq: -1 }, /sourceEventSeq/],
+    [{ kind: 'success', sourceEventSeq: -0 }, /sourceEventSeq/],
     [{ kind: 'success', sourceEventSeq: 1.5 }, /sourceEventSeq/],
     [{ kind: 'success', sourceEventSeq: '1' }, /sourceEventSeq/],
     [{ kind: 'error', text: '' }, /error text/],

@@ -16,7 +16,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { getOrCreateAnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { recordFeedback } from '@deepseek-ai/dsh-command-feedback'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import OpenTelemetrySessionBackend, { Config, DEFAULT_TELEMETRY_MODE, SessionTelemetryMode } from '../src/index.ts'
 
 interface Capture {
@@ -325,7 +325,7 @@ describe('OpenTelemetrySessionBackend wire', () => {
     })
     ctx.emit('session/event', session, {
       type: 'feedback/record',
-      seq: session.snapshotEvents().length,
+      seq: SessionSeq(session.seq),
       time: Date.now(),
       data: { text: 'not committed' },
     })

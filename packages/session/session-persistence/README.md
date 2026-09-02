@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-persistence` stores a session's event log durably, reloads it on resume, and lists stored sessions through the backend-neutral `ctx.sessionPersistence` service. The persisted unit is the existing `SessionEvent` log — there is no parallel stored message type — and non-replayable metadata (format version, working directory, lineage, seed boundary) travels separately as `SessionHeader`. A backend owns its storage, while the service owns append-only logs, contiguous sequence numbers, crash recovery that preserves an interrupted turn instead of truncating it, and durable writes that resolve only after the batch is safe. The shipped JSONL provider implements this service with one artifact per Session; third-party providers may implement the same contract without changing the loop or model.
+`dsh-session-persistence` stores a session's event log durably and addresses each stored session through one per-session handle: the backend-neutral service (`ctx.sessionPersistence`) exposes `create`/`open`/`stat`/`list`, and `create`/`open` return a `SessionHandle` that carries every log read and write plus single-writer ownership. The persisted unit is the existing `SessionEvent` log — there is no parallel stored message type — and non-replayable metadata (format version, working directory, lineage, seed boundary) travels separately as `SessionHeader`. Backends own their storage, the seam owns the semantics: append-only contiguous logs, best-effort appends behind an explicit `flush` durability barrier, a torn physical tail that never reaches a reader, fail-closed validation of stored records, and in-process exclusion of a second writer. Mount the shipped [JSONL backend](../session-persistence-jsonl/README.md) (one artifact per session) and agent-loop persists and resumes sessions without the loop or the model knowing which backend is underneath.
 
 ## Table of Contents
 
@@ -25,33 +25,44 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount one persistence backend to make sessions durable. The backend registers itself as `ctx.sessionPersistence`; nothing else in the composition changes — the loop, resume, and replay all call the same service.
+Mount one persistence backend to make sessions durable. The backend registers itself as `ctx.sessionPersistence` and routes every published session's live events into that session's active write handle; agent-loop — the production publication point for sessions — acquires each session's write handle before publication, so nothing else in the composition changes.
 
 ### Choosing a backend
 
-The seam ships the [JSONL](../session-persistence-jsonl/README.md) backend. It stores one append-only `.jsonl.zstd` artifact per Session and returns its absolute path from `locate(meta)`. A third-party backend may implement the service directly; the [backend contract](#understand-the-implementation) below is what it must honor.
+The seam ships the [JSONL](../session-persistence-jsonl/README.md) backend: one append-only `.jsonl.zstd` log per session. A third-party backend may implement the service directly; the [backend contract](#understand-the-implementation) below is what it must honor.
 
 ### What the service provides
 
-With a backend mounted, you can store a session's events durably, reload the stored log, and list what is stored:
+With a backend mounted, five service methods address stored sessions:
 
 ```text
-await ctx.sessionPersistence.create(meta)                  // register a session
-await ctx.sessionPersistence.ensureMaterialized(session)   // persist an empty resumable session
-await ctx.sessionPersistence.append(id, events)            // durably persist a batch
-const { meta, events } = await ctx.sessionPersistence.load(id)   // reload on resume
-const headers = await ctx.sessionPersistence.list()        // every stored session
+const handle = await ctx.sessionPersistence.create(header)     // store a new session, take write ownership
+const handle = await ctx.sessionPersistence.open(id, 'write')  // claim single-writer ownership of an existing session
+const reader = await ctx.sessionPersistence.open(id, 'read')   // observe without ownership
+const snap = await ctx.sessionPersistence.stat(id)             // header + revision (+ eventCount / sizeBytes) without a log read
+const all = await ctx.sessionPersistence.list()                // one snapshot per visible stored session
+await ctx.sessionPersistence.flush()                           // backend-wide durability barrier over every active write handle
 ```
 
-`append` resolves only after the batch is durable, so a resolved write survives an OS crash or power loss. Ordinary `create` remains lazy; a lifecycle frontend calls `ensureMaterialized` only when an empty session must itself appear in durable listing without inventing an event. `load` returns an immutable balanced log and commits any needed crash recovery; `inspect` reads the same view without committing recovery. Consumers that resume from a watermark can read only the events at or past a sequence number, and a session's artifact location (`locate`) resolves without filesystem I/O.
+Service-level `flush()` drains every active write handle's routed events and materializes its session, exactly as each handle's own `flush` would; failures aggregate per session as an `AggregateError` without abandoning the sweep, and a handle closed mid-sweep counts as flushed because close itself drains durably.
+
+Every log read and write flows through the returned `SessionHandle`; there are no id-addressed append or load methods. `handle.read(offset?, length?)` returns validated contiguous prefix slices — never a torn tail, and repeated reads on one handle never observe an older state than a prior read; a write handle reads its own successful appends. `handle.append(events)` appends a contiguous batch whose first `seq` equals the stored next-seq; persistence is best-effort on resolution — the batch is accepted, ordered, and visible to reads on this backend instance, and only a resolved `flush` promises it survives a crash (the shipped JSONL backend happens to persist each batch immediately). `handle.flush()` is the durability barrier and also materializes an empty created session so it becomes durably listable. `handle.close()` is idempotent and uncancellable: a read handle frees local resources, a write handle completes pending durability and releases write ownership. Once an `append` or `flush` resolves, reads started afterwards on the same backend instance — on any handle, or through `stat`/`list` — observe at least that prefix.
+
+### Ownership and visibility
+
+`create` and `open(id, 'write')` take in-process single-writer ownership: a second write open while an owner is active rejects with `SessionAlreadyOwnedError`, `create` on an occupied id rejects with `SessionAlreadyExistsError`, and a mutation on a `read` handle rejects with `SessionReadOnlyError` — one handle type, runtime refusal. Any operation on a closed handle rejects with `SessionHandleClosedError`, and `SessionOwnershipLostError` marks a write handle whose ownership is permanently gone (close it and reopen). A created session is observable in this process from the moment `create` resolves, while the backend may defer physical materialization until the first `append` or `flush`; other processes see only materialized sessions, and a session that never materialized before a crash never existed.
+
+### The live write path and shutdown drain
+
+The backend owns the live write path: it installs the session listeners once and routes every published session's events by id to that session's active write handle — `session/event` copies into a bounded internal batching window, `session/flush` is the immediate durability and error-observation barrier, and `session/disposed` runs the final drain and closes the handle. A published session without an active write handle persists nothing. A background write failure retains its events in order, pauses the automatic path, and is logged; the next explicit flush retries and rejects loudly. `close()` itself drains the routed buffer through the still-open storage before releasing ownership, so backend teardown's close sweep keeps application shutdown lossless even though root-fiber disposal runs fibers' disposers concurrently.
 
 ### Resuming and crash recovery
 
-Resume is `load` plus session preparation: the stored log comes back with its header lineage intact, so a resumed agent sees the same history and composition. A session that crashed mid-turn reloads with its interrupted final turn preserved and balanced: `load` appends synthetic `tool/result` and `turn/end {interrupted}` closers for unanswered calls instead of dropping the events — a single turn can be large, and those events were durably written before the crash. Only a never-fully-written torn tail fragment is discarded.
+Persistence returns the physically valid log; semantic repair belongs to the reader. A session that crashed mid-turn keeps its open final turn — a single turn can be large, and those events were durably appended before the crash; only the incomplete fragment of a never-acknowledged torn tail is discarded — complete records recovered from it are durably rewritten by the write path before the handle's first new append. Resume (agent-loop) reads the stored log through its write handle, computes `interruptedTurnClosers` — synthetic `tool/result` errors, any open `step/end`, and `turn/end {interrupted}` — and appends them through the same handle as an ordinary batch. Read-only observers (session-query) balance an interrupted cold log with the same closers in memory only.
 
 ### Failures and recovery
 
-A stored log the current build cannot faithfully interpret is refused with a direction-aware error, never misread. `SESSION_FORMAT_VERSION` remains v0 and this build provides no format-migration path; a newer version instructs the operator to upgrade the harness. The decoder accepts only the bounded same-version record variants named below. An event type unknown to this build refuses unless its envelope marks it `ignorable`, and committed-prefix corruption rejects as `SessionPersistenceCorruptionError`. A `load` on an id still bound to a live session first flushes its snapshot and rejects while its turn is open; a cold load applies recovery.
+A stored log the current build cannot faithfully interpret is refused with a direction-aware error, never misread. `SESSION_FORMAT_VERSION` remains v0 and this build provides no format-migration path; a newer version instructs the operator to upgrade the harness. The decoder accepts only the bounded same-version record variants named below. An event type unknown to this build refuses unless its envelope marks it `ignorable`, and committed-prefix corruption rejects as `SessionPersistenceCorruptionError`.
 
 -----
 
@@ -65,33 +76,35 @@ This section explains how the seam realizes durable storage and how backends plu
 
 ### Design concept
 
-The package is the Service Definition of a capability seam with two halves. The abstract `SessionPersistence` service is the public contract; a `PersistenceCoordinator` provides backend-neutral orchestration for buffering, serialization, materialization, repair, adoption, and quiescent disposal. The JSONL provider implements the small durable primitives for stored reads, append, repair, and listing; a third-party provider may reuse the same coordinator or implement the service directly.
+The package is a seam, not a backend framework: it exports the abstract `SessionPersistence` service, the `SessionHandle` contract, the stable error classes consumers catch, the pure stored-record validation helpers (`storage-contract`), and the branded revision — nothing else. Each provider owns its complete storage runtime (handle class, mutation ordering, single-writer bookkeeping, live-event routing, teardown), and two shared test suites — `runPersistenceContract` and `runLiveWritePathContract` under `tests/` — pin the observable behavior every provider must agree on. Deliberate consequence: providers may resemble each other where their storage happens to be similar, but no implementation machinery crosses the package boundary.
 
 ### The invariants every backend honors
 
-- **Append-only; a crashed turn is closed, not truncated.** Flushed events are never rewritten; `load` preserves an interrupted final turn and durably appends synthetic closers.
-- **Contiguous `seq`.** A gap in the middle of the log rejects; `append`'s first `seq` must equal the stored next-seq.
-- **Lossless JSON data.** Batches pass the shared one-pass lossless-JSON boundary; non-serializable payloads reject at the append site.
-- **Durability.** `append` resolves only once the batch is durable.
+- **Append-only, contiguous `seq`.** Committed events are never rewritten; `append`'s first `seq` must equal the stored next-seq, and a gap rejects.
+- **A torn physical tail never reaches a reader.** It belongs to an append that never resolved; the write path truncates it durably before its first new append.
+- **Lossless JSON data.** Batches and headers pass the shared one-pass validate-and-snapshot boundary (`materializeAppendBatch`/`materializeCreateHeader`); non-serializable payloads reject at the call site.
+- **Durability.** `append` persists best-effort; `flush` — per handle or service-wide — is the barrier that promises storage and also materializes an empty session.
+- **Fail-closed reads.** `validateStoredEvents` refuses unknown event vocabulary and retired pre-release shapes; `assertVersion` refuses foreign format versions.
+- **Single writer per backend instance.** The provider's in-process claim is taken at `create`/`open('write')` and released at handle close.
 
 ### Source map
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Plugin entry: the abstract `SessionPersistence` service and re-exported metadata types |
-| [`src/coordinator.ts`](src/coordinator.ts) | Shared write orchestration: batching, serialization, repair, adoption, disposal, format refusal |
-| [`src/write-behind.ts`](src/write-behind.ts) | The per-session bounded write controller and flush barrier |
-| [`src/preparations.ts`](src/preparations.ts) | Bounded retention of unpublished Session preparations for resume reuse |
+| [`src/index.ts`](src/index.ts) | Plugin entry: the abstract `SessionPersistence` service and re-exported seam vocabulary |
+| [`src/handle.ts`](src/handle.ts) | The `SessionHandle` contract: read/append/flush/close semantics and freshness rules |
+| [`src/storage-contract.ts`](src/storage-contract.ts) | Shared validation: version gate, fail-closed vocabulary, batch materialization, contiguity |
+| [`src/errors.ts`](src/errors.ts) | Stable handle/ownership failures and format refusals |
 | [`src/revision.ts`](src/revision.ts) | The branded opaque revision token |
 | — | No runtime invariant companion is published; persistence correctness requires backend round-trip and crash-tail tests; this package exposes no continuously observable in-process relation. |
 
 ### The write path at a glance
 
-Each `session/event` copies the event into its session's controller. The first pending event starts a fixed batching window; later events join without resetting its deadline. Expiry starts one durable append; events admitted during that write form a separately bounded follow-up batch. `session/flush` cancels the wait and drains through quiescence, so the loop uses it as the ordering and error-observation checkpoint before the next turn. A rejected background write retains its events and pauses automatic retry; a new event starts a fresh window, while explicit flush or backend teardown retries immediately.
+Each `session/event` for the writer's session copies into that handle's internal buffer. The first pending event starts a fixed batching window; later events join without resetting its deadline. Expiry drains the pending prefix through the handle's mutation chain; events admitted during a drain coalesce into the next chained batch, in order. `session/flush` cancels the wait and drains through quiescence, then runs `handle.flush()`, so the loop uses it as the ordering and error-observation checkpoint before the next turn. A rejected background drain retains its events and pauses the automatic timer; explicit flush, writer close, or backend teardown retries immediately and rejects loudly. Constructor seed events never emit `session/event`, so a seed appended through the handle before publication is never re-enqueued.
 
-### Stored-record compatibility
+### Stored-record validation
 
-Backend reads normalize only the explicitly supported v0 record variants before validating current records. The coordinator uses the same normalized view for `load`, `inspect`, `readFrom`, ownerless-state claims, and HMR adoption. Reads do not rewrite stored records, and later appends use current v0. The [pre-identity message](../../../.agents/notes/implemented/bug-fix/2026-07-28-load-pre-identity-session-messages.md) and [pre-react-loop session](../../../.agents/notes/implemented/bug-fix/2026-08-04-load-pre-react-loop-sessions.md) notes own these bounded exceptions; they are not a general format-migration promise.
+Backend reads validate current v0 records only and never rewrite them; appends write current v0 ([rationale](../../../.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md)). Every backend runs the same `storage-contract` helpers on every read path — handle reads and write-open priming — refusing an unknown event type as `SessionFormatUnsupportedError` and a retired payload variant of a current type as `SessionPersistenceCorruptionError`, with the raw-log `SessionLocation` attached when the backend keeps one artifact per session.
 
 </details>
 -----
@@ -101,9 +114,10 @@ Backend reads normalize only the explicitly supported v0 record variants before 
 
 Read these pages when the package-level contract is not enough. They move from the shared durability model to the shipped backends and the decision evidence.
 
-- [Session persistence subsystem](../../../docs/subsystems/persistence.md) — the full service contract, flush checkpoint, crash recovery, and generated Cordis API.
+- [Session persistence subsystem](../../../docs/subsystems/persistence.md) — the full service contract, handle semantics, flush checkpoint, crash recovery, and generated Cordis API.
+- [Handle-based persistence Agent Note](../../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.md) — the seam design and its ownership model.
 - [JSONL persistence backend](../session-persistence-jsonl/README.md) — the shipped per-session-file backend.
-- [Session checkpoint policy](../session-checkpoint-policy/README.md) — the plugin that flushes through this service at semantic boundaries.
+- [Session checkpoint policy](../session-checkpoint-policy/README.md) — the plugin that flushes through `session/flush` at semantic boundaries.
 - [Session package map](../README.md) — adjacent persistence, projection, title, and telemetry packages.
 
 -----
@@ -132,9 +146,12 @@ Persistence does not mutate live request prefixes. A resumed loop can reuse prov
 
 These limits define where the seam's guarantees stop. They are current package constraints, not a task backlog.
 
+- **Write ownership is in-process only** — the provider's writer table excludes a second writer inside one backend instance; the durable cross-process lease is the planned next layer on the same handle shape, and until it lands another process must not write the same session.
+- **A backend plugin reload under live sessions fails their writers loudly** — a reloaded backend cannot serve handles the old instance issued; writes fail until the sessions restart, and nothing silently re-adopts the logs.
+- **Only handle-acquired sessions persist** — `ctx.sessions.create` + `session/flush` alone stores nothing; agent-loop is the production acquisition point, and tests seed storage through `create`/`append`/`close`.
 - **No deletion or retention API** — pruning stored sessions is out-of-band backend maintenance.
-- **`list()` is unpaginated and unfiltered** — it returns every stored session's header; fine for local stores, unindexed at scale.
-- **Synthetic closers are the only crash story** — a backend must synthesize `tool/result`/`step/end`/`turn/end` closers on load; there is no partial-turn resume that continues an interrupted turn instead of closing it.
+- **`list()` is unpaginated and unfiltered** — it returns every stored session's snapshot; fine for local stores, unindexed at scale.
+- **Synthetic closers are the only crash story** — resume appends `interruptedTurnClosers` through the write handle; there is no partial-turn resume that continues an interrupted turn instead of closing it.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -57,11 +57,21 @@ describe('WebWorker preview VFS example', () => {
       'utf8',
     )) as {
       unit: { name: string; version: number }
-      tables: { sessions: Record<string, { identity: { createdAt: number; cwd: string }; rows: { title: unknown } }> }
+      tables: {
+        sessions: Record<string, {
+          identity: { createdAt: number; cwd: string; isSeeded: boolean; inheritedEventCount: number }
+          rows: { title: unknown }
+        }>
+      }
     }
-    expect(cache.unit).toEqual({ name: 'session_projcache', version: 3 })
+    expect(cache.unit).toEqual({ name: 'session_projcache', version: 5 })
     expect(cache.tables.sessions[VFS_EXAMPLE_SESSION_IDS.main]).toMatchObject({
-      identity: { createdAt: 1_787_472_000_000, cwd: '/dsh/workspace' },
+      identity: {
+        createdAt: 1_787_472_000_000,
+        cwd: '/dsh/workspace',
+        isSeeded: false,
+        inheritedEventCount: 0,
+      },
       rows: {
         title: {
           ver: 1,
@@ -72,7 +82,7 @@ describe('WebWorker preview VFS example', () => {
   })
 
   it('restores the main production log with paging and tool coverage', () => {
-    const { meta, events } = readSession(VFS_EXAMPLE_SESSION_IDS.main)
+    const { meta, inheritedEventCount, events } = readSession(VFS_EXAMPLE_SESSION_IDS.main)
     expect(meta).toMatchObject({
       id: VFS_EXAMPLE_SESSION_IDS.main,
       cwd: '/dsh/workspace',
@@ -81,7 +91,12 @@ describe('WebWorker preview VFS example', () => {
     })
     expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
     expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
-    expect(() => Session.fromRestore(SessionId(meta.id), events, meta)).not.toThrow()
+    expect(() => Session.fromRestore(
+      SessionId(meta.id),
+      events,
+      meta,
+      inheritedEventCount,
+    )).not.toThrow()
 
     const messages = events.filter(event =>
       (event.type === 'user/message' || event.type === 'assistant/message') && event.surfaceOp === 'append')
@@ -105,7 +120,7 @@ describe('WebWorker preview VFS example', () => {
       [VFS_EXAMPLE_SESSION_IDS.continuable, 'continuable'],
     ] as const
     for (const [id, mode] of expected) {
-      const { meta, events } = readSession(id)
+      const { meta, inheritedEventCount, events } = readSession(id)
       expect(meta).toMatchObject({
         id,
         cwd: '/dsh/workspace',
@@ -116,8 +131,13 @@ describe('WebWorker preview VFS example', () => {
       })
       expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
       expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
-      expect(foldSubagentDescriptor(events.slice(meta.seedLength ?? 0))).toMatchObject({ mode })
-      expect(() => Session.fromRestore(SessionId(meta.id), events, meta)).not.toThrow()
+      expect(foldSubagentDescriptor(events.slice(inheritedEventCount))).toMatchObject({ mode })
+      expect(() => Session.fromRestore(
+        SessionId(meta.id),
+        events,
+        meta,
+        inheritedEventCount,
+      )).not.toThrow()
     }
   })
 })

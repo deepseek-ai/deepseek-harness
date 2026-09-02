@@ -126,7 +126,7 @@
 .markdown hr {
   display: block;
   border: none;
-  height: 1px;
+  height: 0.5px;
   margin: 32px 0;
   background: var(--dsw-alias-border-l2);
 }
@@ -225,7 +225,7 @@
 .tableScroll th {
   text-align: start;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--dsw-alias-border-l3);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
   border-top: none;
   font: var(--dsw-font-markdown-table-head);
   max-width: 320px;
@@ -235,7 +235,7 @@
 
 .tableScroll td {
   padding: 10px 16px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   font: var(--dsw-font-markdown-table);
   max-width: 320px;
   max-width: min(30vw, 320px);

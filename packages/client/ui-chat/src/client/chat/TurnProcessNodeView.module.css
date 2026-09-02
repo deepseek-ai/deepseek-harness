@@ -7,7 +7,7 @@
   height: 33px;
   padding: 0 0 8px;
   border: none;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   background: none;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;

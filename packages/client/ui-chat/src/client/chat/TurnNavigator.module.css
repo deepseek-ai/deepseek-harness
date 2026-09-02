@@ -3,7 +3,9 @@
 .slot {
   position: sticky;
   top: 0;
-  z-index: 6;
+  /* Above transcript CodeBlock banners (z-index 6). The rail band excludes
+     the composer, so its preview never needs to cross the footer. */
+  z-index: 7;
   height: 0;
   pointer-events: none;
 }
@@ -167,11 +169,11 @@
   max-height: var(--turn-preview-height);
   overflow: hidden;
   padding: 10px 12px;
-  border: 1px solid var(--dsw-alias-border-l2);
+  border: 0;
   border-radius: 10px;
   color: var(--dsw-alias-label-primary);
   background: var(--dsw-alias-bg-layer-1);
-  box-shadow: var(--dsw-shadow-lv2);
+  box-shadow: var(--dsw-elevation-panel);
   pointer-events: none;
   animation: dsh-turn-preview-enter 120ms ease-out;
   transition: top 140ms cubic-bezier(0.2, 0.8, 0.2, 1);

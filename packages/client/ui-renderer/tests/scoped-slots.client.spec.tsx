@@ -930,6 +930,41 @@ describe('inject: execution point, parameter derivation, cache granularity', () 
     expect(seen.at(-1)!['read']).toBe('hot')
   })
 
+  it('binds the inject keyedHooks compartment without exposing source resolvers', () => {
+    const h = makeHost()
+    h.declare('k.single', SINGLE_ROOT)
+    const badges = new Map([
+      ['first', observable('cold')],
+      ['second', observable('idle')],
+    ])
+    const seen: Record<string, unknown>[] = []
+    h.add('k.single', {
+      component: (props: {
+        useBadge?: (key: string) => string | undefined
+        keyedHooks?: unknown
+        plain?: string
+      }) => {
+        seen.push({
+          keyedHooks: props.keyedHooks,
+          plain: props.plain,
+          read: props.useBadge!('first'),
+        })
+        return null
+      },
+      inject: () => ({
+        plain: 'kept',
+        keyedHooks: { badge: (key: string) => badges.get(key) },
+      }),
+    })
+    mountRoot(h, { 'k.single': SINGLE_ROOT }, renderSlot => renderSlot('k.single', {}))
+
+    expect(seen.at(-1)).toEqual({ keyedHooks: undefined, plain: 'kept', read: 'cold' })
+    act(() => { badges.get('second')!.set('ignored') })
+    expect(seen).toHaveLength(1)
+    act(() => { badges.get('first')!.set('hot') })
+    expect(seen.at(-1)!['read']).toBe('hot')
+  })
+
   it('session inject receives sessionId and caches per (entry x session): switch-back reuses', () => {
     const h = makeHost()
     h.declare('k.session', SINGLE_SESSION)

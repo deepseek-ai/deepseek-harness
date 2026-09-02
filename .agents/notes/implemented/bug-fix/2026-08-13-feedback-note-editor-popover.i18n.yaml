@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-13-feedback-note-editor-popover.md
-2026-08-13-feedback-note-editor-popover.md: 42c08e39cfb054db689503e23306c5049a97b6cb
-2026-08-13-feedback-note-editor-popover.zh.md: 553029f8a42dae42a38e909d716b41e2c6dd252e
+2026-08-13-feedback-note-editor-popover.md: 8f51f090cc24292ad02d96fefb1f45bc05df08c9
+2026-08-13-feedback-note-editor-popover.zh.md: e64e95ac6599be2d7c343b4432415f0e99c6ef9b

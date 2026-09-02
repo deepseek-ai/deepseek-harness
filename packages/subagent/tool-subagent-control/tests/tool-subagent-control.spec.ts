@@ -19,6 +19,7 @@ import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-a
 import * as tool from '../src/index.ts'
 import { parkParent } from './park-parent.ts'
 import { TestSessionQuery } from './test-session-query.ts'
+import { loadStoredSession } from '../../subagent/tests/persistence-helpers.ts'
 
 /** One scripted response that may wait on a caller-released gate before streaming. */
 interface GatedEntry {
@@ -67,7 +68,7 @@ async function setupWith(adapter: MockAdapter | GatedAdapter, park = true) {
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
   await ctx.plugin(tool)
   ctx.llm.registerAdapter(['mock'], adapter)
-  const parent = ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
+  const parent = await ctx.agentLoop.create(SessionId('parent'), { provider: 'mock', model: 'mock' })
   if (park) parkParent(ctx, parent)
   return { ctx, parent, adapter }
 }
@@ -151,12 +152,11 @@ describe('dsh-tool-subagent-control', () => {
 
     release.resolve(undefined)
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const promptIndex = loaded.events.findIndex(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'text' && block.text === 'fork task'))
-    const seedLength = loaded.meta.seedLength
-    if (seedLength === undefined) throw new Error('expected a forked Session seed')
-    expect(promptIndex).toBeGreaterThanOrEqual(seedLength)
+    expect(loaded.meta.isSeeded).toBe(true)
+    expect(promptIndex).toBeGreaterThanOrEqual(loaded.inheritedEventCount)
     const prompt = loaded.events[promptIndex]
     if (prompt?.type !== 'user/message') throw new Error('expected the initial fork task')
     const texts = prompt.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
@@ -168,7 +168,7 @@ describe('dsh-tool-subagent-control', () => {
 
   it('JSON-encodes a caller-supplied parent id in the initial return instruction', async () => {
     const { ctx } = await setup([textResponse('child done')])
-    const parent = ctx.agentLoop.create(SessionId('parent"\nagent'), { provider: 'mock', model: 'mock' })
+    const parent = await ctx.agentLoop.create(SessionId('parent"\nagent'), { provider: 'mock', model: 'mock' })
     parkParent(ctx, parent)
     const started = await ctx.subagents.startContinuable({
       provider: 'spawn',
@@ -177,7 +177,7 @@ describe('dsh-tool-subagent-control', () => {
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompt = loaded.events.find(event => event.type === 'user/message'
       && event.data.content.some(block => block.type === 'text' && block.text === 'encoded task'))
     if (prompt?.type !== 'user/message') throw new Error('expected the encoded initial task')
@@ -248,7 +248,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(text(result)).toBe(`message delivered to agent ${started.childId}`)
     await waitNoActivation(ctx, started.childId)
 
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const followUp = loaded.events.findLast(event => event.type === 'user/message')
     // The durable message source records the calling agent without granting authority.
     expect(followUp?.type === 'user/message' && followUp.data.source).toEqual({
@@ -279,7 +279,7 @@ describe('dsh-tool-subagent-control', () => {
     expect(result.isError).toBe(false)
 
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
       ? event.data.content.flatMap(block => block.type === 'text'
         && !block.text.startsWith('Your parent agent id is ')
@@ -312,7 +312,7 @@ describe('dsh-tool-subagent-control', () => {
       signal: testToolSignal,
     })
     await waitNoActivation(ctx, started.childId)
-    const stranger = ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
+    const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
 
     const result = await callTool(ctx, 'send_message', {
       agent_id: started.childId,
@@ -402,7 +402,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     }, parent)
     expect(waking.isError).toBe(false)
     await waitNoActivation(ctx, started.childId)
-    const loaded = await ctx.sessionPersistence.load(started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
     const prompts = loaded.events.flatMap(event => event.type === 'user/message' && event.data.source.kind !== 'plugin'
       ? event.data.content.flatMap(block => block.type === 'text'
         && !block.text.startsWith('Your parent agent id is ')
@@ -478,7 +478,7 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
     await vi.waitFor(() => { expect(adapter.requests).toHaveLength(2) })
     const targetAgent = ctx.agents.get(target.childId)!
     const siblingAgent = ctx.agents.get(sibling.childId)!
-    const stranger = ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
+    const stranger = await ctx.agentLoop.create(SessionId('stranger'), { provider: 'mock', model: 'mock' })
     const cancelSpy = vi.spyOn(targetAgent, 'cancel')
 
     const self = await callTool(ctx, 'interrupt_agent', { agent_id: target.childId }, targetAgent)

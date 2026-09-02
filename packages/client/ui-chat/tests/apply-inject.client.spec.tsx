@@ -15,7 +15,7 @@ import {
 import {
   apply as applyChat, inject as injectChat, type ChatViewInjected, type DetailsInjected,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
 import { createChatStore } from '../src/client/stores.ts'
 
 usePinnedBrowserLanguages('zh-CN')
@@ -93,7 +93,7 @@ describe('Chat inject API', () => {
     injected.loadOlder()
     expect(b.session.loadOlder).toHaveBeenCalledOnce()
 
-    void injected.loadThrough(42)
+    void injected.loadThrough(SessionSeq(42))
     expect(b.session.loadThrough).toHaveBeenCalledWith(42)
 
     injected.forkAt(17)

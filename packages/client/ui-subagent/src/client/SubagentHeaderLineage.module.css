@@ -103,11 +103,12 @@
   max-height: min(560px, calc(100vh - 140px));
   padding: 4px;
   overflow: auto;
-  border-radius: 12px;
+  border-radius: 20px;
   background: var(--dsw-specific-menu);
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
-  box-shadow: var(--dsw-shadow-lv3);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 .node {
@@ -260,7 +261,7 @@
   content: '';
   position: absolute;
   left: 0;
-  border-left: 1px solid var(--dsw-alias-border-l2);
+  border-left: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .children::before {
@@ -289,7 +290,7 @@
   top: 16px;
   left: -4px;
   width: 14px;
-  border-top: 1px solid var(--dsw-alias-border-l2);
+  border-top: 0.5px solid var(--dsw-alias-border-l2);
 }
 
 .notice,

@@ -46,7 +46,7 @@ interface SessionTitleEventData {
   /** Normalized non-empty title text. */
   readonly title: string
   /** Exact human `user/message` seqs used to derive this title; empty for an explicit user rename. */
-  readonly messageSeqs: number[]
+  readonly messageSeqs: SessionSeq[]
   /** Whether the built-in fallback, a registered provider, or the user supplied the title. */
   readonly source: SessionTitleSource
 }
@@ -56,7 +56,7 @@ interface SessionTitleEventData {
 /** Latest folded title plus the title event's durable envelope facts. */
 interface SessionTitleSnapshot extends SessionTitleEventData {
   /** Seq of the latest `session/title` event. */
-  readonly eventSeq: number
+  readonly eventSeq: SessionSeq
   /** Timestamp of the latest `session/title` event. */
   readonly updatedAt: number
 }
@@ -72,7 +72,7 @@ interface SessionTitleLlmRequestEventData {
   /** Registered title-provider identity responsible for the request. */
   readonly titleProvider: SessionTitleProviderId
   /** Exact human `user/message` seqs represented in `messages`. */
-  readonly messageSeqs: number[]
+  readonly messageSeqs: SessionSeq[]
   /** Exact auxiliary LLM route. */
   readonly route: SessionTitleModelProvenance
   /** Exact auxiliary system prompt. */
@@ -92,7 +92,7 @@ The service snapshots eligible messages through one revision. A provider returns
 /** One eligible human text message exposed to title providers. */
 interface SessionTitleUserMessage {
   /** Source `user/message` event seq. */
-  readonly seq: number
+  readonly seq: SessionSeq
   /** Exact concatenated text-block content. */
   readonly text: string
 }
@@ -123,7 +123,7 @@ interface SessionTitleProviderResult {
   /** Proposed title text. */
   readonly title: string
   /** Exact seqs from `request.messages` used by this result. */
-  readonly messageSeqs: readonly number[]
+  readonly messageSeqs: readonly SessionSeq[]
   /** Auxiliary LLM route, when generation used a model. */
   readonly model?: SessionTitleModelProvenance
 }

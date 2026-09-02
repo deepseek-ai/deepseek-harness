@@ -23,7 +23,7 @@
   max-height: 200px;
   overflow: auto;
   background: var(--dsw-alias-markdown-code-block);
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 6px;
   font-family: var(--ds-font-family-code);
   font-size: 11px;

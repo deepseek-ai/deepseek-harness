@@ -71,7 +71,7 @@
   margin: 4px 0 4px 4px;
   padding: 12px 16px;
   overflow: auto;
-  border: 1px solid var(--dsw-alias-border-l1);
+  border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 12px;
   background: var(--dsw-alias-markdown-code-block);
   color: var(--dsw-alias-label-primary);

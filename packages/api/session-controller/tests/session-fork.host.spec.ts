@@ -6,7 +6,7 @@ import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
-import SessionStore from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
@@ -32,6 +32,9 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
       const session = ctx.sessions.create(options.sessionId, {
         ...options.seed === undefined ? {} : { seed: [...options.seed] },
         ...options.meta === undefined ? {} : { meta: options.meta },
+        ...options.inheritedEventCount === undefined
+          ? {}
+          : { inheritedEventCount: options.inheritedEventCount },
       })
       const agent = {} as Agent
       const agentCtx = ownerCtx.extend({ agent })
@@ -89,7 +92,7 @@ describe('sessions.fork', () => {
     const ctx = await composed()
     const source = liveAgent(ctx, 'session-source', 2)
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: 1 }))
-    expect(response.ok).toBe(true)
+    expect(response.ok ? null : response.error).toBeNull()
     if (!response.ok) return
     const child = ctx.sessions.get(response.value.sessionId)
     expect(child?.snapshotEvents().map(event => event.type)).toEqual([
@@ -153,22 +156,35 @@ describe('sessions.fork', () => {
       createdAt: 1,
       cwd: '/proj',
       parentSession: parentId,
+      isSeeded: false,
       origin: 'subagent',
     }
     const events = [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1, trigger: { kind: 'message', source: { kind: 'user' } } } },
+      {
+        type: 'turn/start',
+        seq: SessionSeq(0),
+        time: 1,
+        data: {
+          turn: 1,
+          trigger: { kind: 'message', source: { kind: 'user' } },
+        } as SessionEvent<'turn/start'>['data'],
+      },
       {
         type: 'user/message',
-        seq: 1,
+        seq: SessionSeq(1),
         time: 2,
         data: createUserMessage({ content: [{ type: 'text', text: 'work' }], source: { kind: 'user' } }),
         surfaceOp: 'append',
       },
-      { type: 'turn/end', seq: 2, time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
-    ] as SessionEvent[]
+      { type: 'turn/end', seq: SessionSeq(2), time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
+    ] satisfies SessionEvent[]
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: () => Promise.resolve([header]),
-      inspect: () => Promise.resolve({ meta: header, events }),
+      inspect: () => Promise.resolve({
+        meta: header,
+        inheritedEventCount: SessionLogOffset(0),
+        events,
+      }),
     }) as never)
     const resume = vi.spyOn(ctx.agents, 'resume')
 

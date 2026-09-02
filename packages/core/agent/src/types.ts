@@ -5,7 +5,7 @@
  */
 
 import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { OptionalSessionSeq, SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TypertContext, TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
 
 /** Public live-agent handle; the runtime face augments its live capabilities. */
@@ -39,11 +39,11 @@ export type InboxTarget = 'next-turn' | 'next-step'
  */
 export interface TurnBoundaryProjection {
   /** Seq of the open turn's `turn/start`, or null between turns. */
-  readonly openTurnStartSeq: number | null
+  readonly openTurnStartSeq: OptionalSessionSeq
   /** Seq of the latest `step/start` event, or null before the first step. */
-  readonly lastStepStartSeq: number | null
+  readonly lastStepStartSeq: OptionalSessionSeq
   /** The latest step boundary (`step/start` or `step/end`) and its seq, or null before the first step boundary. */
-  readonly lastStepBoundary: { readonly kind: 'start' | 'end'; readonly seq: number } | null
+  readonly lastStepBoundary: { readonly kind: 'start' | 'end'; readonly seq: SessionSeq } | null
   /** Turn number of the latest `turn/start`; 0 before the first turn. */
   readonly lastTurn: number
 }

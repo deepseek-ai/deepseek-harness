@@ -32,8 +32,8 @@ flowchart LR
   Cache -->|"small miss"| Observe
   Observe --> Source{"live or cold"}
   Source --> Live["attached Session cut"]
-  Source --> Borrow["borrowSession"]
-  Borrow --> Prepared["SessionPreparations.borrow"]
+  Source --> Borrow["persistence read handle"]
+  Borrow --> Prepared["reader's prepared cache"]
   Live --> Mode{"all or none"}
   Prepared --> Mode
   Mode --> Snapshot["SessionObservation"]
@@ -45,7 +45,7 @@ flowchart LR
 
 ### Observation is the point-read unit
 
-`SessionQueryEngine.observeSession(sessionId, options)` returns a disposable `SessionObservation` containing one source kind, header, contiguous event prefix, cursor, optional projection snapshot, and the durable revision for a prepared source. An attached Session wins. Otherwise `SessionPersistence.borrowSession()` and `SessionPreparations.borrow()` share and pin one prepared Session, including an in-flight cold load.
+`SessionQueryEngine.observeSession(sessionId, options)` returns a disposable `SessionObservation` containing one source kind, header, contiguous event prefix, cursor, optional projection snapshot, and the durable revision for a prepared source. An attached Session wins. Otherwise the reader's own prepared cache — keyed by `stat().revision` and pinned by observation leases — serves the cold Session, sharing one persistence read (`open(id, 'read')` + `read`) across concurrent observations, including an in-flight cold load.
 
 Every owner disposes its observation. `retain()` creates another lease over the same cut, which lets `session.follow` publish a snapshot and then transfer that exact prepared source to background Agent promotion without rereading the log. A live Session that appears during cold resolution wins before publication; a disappeared live source is retried as cold.
 

@@ -58,11 +58,11 @@ Three mandatory points always write: session creation persists the seed-derived 
 
 ### Reading cached values
 
-`cachedSnapshot(meta)` synchronously serves client values from the storage domain's in-memory tables with zero I/O. It accepts only an identity-matching record and version- and schema-matching keys, then returns a `{ asOfSeq, values }` cut at the lowest served-row watermark. It returns `undefined` for an unknown id, unrelated lifecycle, absent or foreign record document, or no usable rows. `coldSnapshot(meta, events)` accepts a complete ordered log, skips the checkpointed prefix while folding, and refreshes the record without reading the persistence layer itself.
+`cachedSnapshot(meta, inheritedEventCount)` synchronously serves client values from the storage domain's in-memory tables with zero I/O. It accepts only an identity-matching record and version- and schema-matching keys, then returns a `{ asOfSeq, values }` cut at the lowest served-row watermark. An unseeded listing knows that its cut is zero; a seeded header-only listing does not know the numeric cut and must skip this fast path until an authoritative body read supplies it. `coldSnapshot(meta, inheritedEventCount, events)` accepts the exact cut with a complete ordered log, skips the checkpointed prefix while folding, and refreshes the record without reading persistence itself.
 
 ### What the cache guarantees
 
-The log leads and the cache follows: a live checkpoint flushes the session's buffered events durably before the cache row lands, so a crash can leave the cache behind the log but never ahead of it. Reads and writes share the storage domain's coherent in-memory state; the per-unit write chain mutates memory only after durability. Each version-stamped record must match the live unit schema and session header identity (`createdAt`, `cwd`), so malformed, stale, or unrelated records read as absent. The JSON backend stores each record at `<root>/session_projcache/sessions/<id>.json` in an owner-only directory tree.
+The log leads and the cache follows: a live checkpoint flushes the session's buffered events durably before the cache row lands, so a crash can leave the cache behind the log but never ahead of it. Reads and writes share the storage domain's coherent in-memory state; the per-unit write chain mutates memory only after durability. Each version-stamped record must match the live unit schema and complete lifecycle identity (`createdAt`, `cwd`, `isSeeded`, and `inheritedEventCount`), so a row initialized under one fork cut cannot seed another. The JSON backend stores each record at `<root>/session_projcache/sessions/<id>.json` in an owner-only directory tree.
 
 -----
 

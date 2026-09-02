@@ -1,14 +1,17 @@
 /** Shared live/prepared observations for Session page and lifecycle consumers. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionHeader, SessionId , SessionLogOffset as SessionLogOffsetType , SessionSeqCursor } from '@deepseek-ai/dsh-session'
+import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
 import type {
-  BorrowedSessionSource,
   SessionPersistenceRevision,
+  SessionPersistenceSnapshot,
 } from '@deepseek-ai/dsh-session-persistence'
 import type { ProjectionSnapshot } from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-session-projection-cache'
-import { SessionQueryError } from './config.ts'
+import { SESSION_QUERY_DEFAULT_PREPARED_SESSION_CACHE_SIZE, SessionQueryError } from './config.ts'
+import { readColdSessionLog, type ColdSessionLog } from './cold-read.ts'
 
 /** One exact immutable Session cut retained for the caller's read lifetime. */
 export interface SessionObservation extends Disposable {
@@ -16,10 +19,12 @@ export interface SessionObservation extends Disposable {
   readonly source: 'live' | 'prepared'
   /** Immutable Session identity metadata. */
   readonly header: SessionHeader
+  /** Exact fork-inherited event count paired with {@link header}. */
+  readonly inheritedEventCount: SessionLogOffsetType
   /** Immutable contiguous events at {@link cursor}. */
   readonly events: readonly SessionEvent[]
   /** Last observed event seq, or -1 for an empty log. */
-  readonly cursor: number
+  readonly cursor: SessionSeqCursor
   /** Durable source revision for a cold prepared observation. */
   readonly revision?: SessionPersistenceRevision
   /** Exact projection baseline at {@link cursor}, when the registry is mounted. */
@@ -39,10 +44,45 @@ export interface SessionObservationOptions {
   readonly projectionMode?: 'all' | 'none'
 }
 
-/** Builds point observations without a corpus listing preflight. */
+/**
+ * One reusable cold observation: an unpublished restored Session plus the
+ * exact balanced log it represents, valid while the producing persistence
+ * instance still reports the same revision.
+ */
+interface PreparedEntry {
+  /** The persistence instance whose `stat` produced {@link revision}; revisions from another instance are incomparable. */
+  readonly persistence: SessionPersistence
+  /** Durable revision observed by `stat` immediately before the log read. */
+  readonly revision: SessionPersistenceRevision
+  /** Unpublished Session restored from the balanced log; never entered into the store. */
+  readonly session: Session
+  /** Immutable balanced log (stored events plus in-memory interrupted-turn closers). */
+  readonly events: readonly SessionEvent[]
+  /** Active observation leases; a pinned entry (`refs > 0`) is never evicted. */
+  refs: number
+}
+
+/**
+ * Builds point observations without a corpus listing preflight.
+ *
+ * Cold reads are cached per session id, keyed by the persistence instance and
+ * the `stat` revision observed before the log read: an unchanged revision
+ * reuses the restored Session without re-reading the log. The cache is bounded
+ * (least-recently-used unpinned entries are evicted past the capacity), and
+ * entries pinned by active leases survive eviction and replacement — a lease's
+ * cut stays valid for the lease lifetime even after a newer revision lands.
+ */
 export class SessionObservationReader {
-  /** @param ctx - context carrying Session and optional persistence/projection services. */
-  constructor(private readonly ctx: Context) {}
+  private readonly cache = new Map<SessionId, PreparedEntry>()
+
+  /**
+   * @param ctx - context carrying Session and optional persistence/projection services.
+   * @param cacheCapacity - maximum unpinned cold observations retained for reuse.
+   */
+  constructor(
+    private readonly ctx: Context,
+    private readonly cacheCapacity: number = SESSION_QUERY_DEFAULT_PREPARED_SESSION_CACHE_SIZE,
+  ) {}
 
   /**
    * Observe one live-preferred Session and retain a cold preparation until disposal.
@@ -62,89 +102,169 @@ export class SessionObservationReader {
       const persistence = this.ctx.get('sessionPersistence')
       if (persistence === undefined) throw notFound(sessionId)
 
-      let borrowed: BorrowedSessionSource
-      try {
-        borrowed = await persistence.borrowSession(sessionId, signal)
-      } catch (error: unknown) {
+      const snapshot = await this.statSource(persistence, sessionId, signal)
+      const attachedDuringStat = this.ctx.sessions.get(sessionId)
+      if (attachedDuringStat !== undefined) return this.live(attachedDuringStat, projectionMode)
+      let entry = this.cachedEntry(persistence, sessionId, snapshot.revision)
+      if (entry === undefined) {
+        const loaded = await this.loadSource(persistence, sessionId, signal)
         throwIfObservationAborted(signal)
-        if (hasErrorName(error, 'SessionPersistenceNotFoundError')) throw notFound(sessionId, error)
-        if (hasErrorName(error, 'SessionPersistenceCorruptionError')) {
+        const attached = this.ctx.sessions.get(sessionId)
+        if (attached !== undefined) return this.live(attached, projectionMode)
+        // Ownership transfer into `prepare` freezes the seed in place, so the
+        // entry keeps its own detached copies of the just-read events.
+        const seed = loaded.events.map(event => structuredClone(event))
+        let session: Session
+        try {
+          session = this.ctx.sessions.prepare(sessionId, {
+            seed,
+            meta: structuredClone(loaded.header),
+            inheritedEventCount: loaded.inheritedEventCount,
+            seedSource: 'persistence',
+          })
+        } catch (error: unknown) {
+          // The store rejects an id with a live owner: that owner is the
+          // fresher source, so retry the live path. Any other rejection means
+          // the stored log failed restore validation.
+          if (this.ctx.sessions.get(sessionId) !== undefined) continue
           throw new SessionQueryError(
-            `stored session "${sessionId}" is corrupt: ${error.message}`,
+            `stored session "${sessionId}" is corrupt: ${errorMessage(error)}`,
             'SESSION_QUERY_CORRUPT_SESSION',
             { cause: error },
           )
         }
+        entry = {
+          persistence,
+          revision: snapshot.revision,
+          session,
+          events: Object.freeze(seed),
+          refs: 0,
+        }
+        this.store(sessionId, entry)
+      }
+
+      let projections: ProjectionSnapshot | undefined
+      try {
+        projections = projectionMode === 'none' ? undefined : this.preparedProjections(entry)
+      } catch (error: unknown) {
         throw new SessionQueryError(
-          `failed to observe session "${sessionId}": ${errorMessage(error)}`,
-          'SESSION_QUERY_PERSISTENCE_FAILED',
+          `failed to project session "${sessionId}": ${errorMessage(error)}`,
+          'SESSION_QUERY_CORRUPT_SESSION',
           { cause: error },
         )
       }
+      return this.preparedLease(sessionId, entry, projections)
+    }
+  }
 
-      try {
-        throwIfObservationAborted(signal)
-        if (borrowed.inspection.meta.id !== sessionId) {
-          throw new SessionQueryError(
-            `session persistence returned "${borrowed.inspection.meta.id}" for "${sessionId}"`,
-            'SESSION_QUERY_SOURCE_CONFLICT',
-          )
-        }
-        const attached = this.ctx.sessions.get(sessionId)
-        if (attached !== undefined) {
-          const liveObservation = this.live(attached, projectionMode)
-          borrowed[Symbol.dispose]()
-          return liveObservation
-        }
-        if (borrowed.source === 'live') {
-          // The live Session disappeared between persistence's race check and
-          // this read. Retry against its now-cold durable identity.
-          borrowed[Symbol.dispose]()
-          continue
-        }
-        const prepared = borrowed
-        const events = prepared.inspection.events
-        let projections: ProjectionSnapshot | undefined
-        try {
-          projections = projectionMode === 'none'
-            ? undefined
-            : this.preparedProjections(prepared, events)
-        } catch (error: unknown) {
-          throw new SessionQueryError(
-            `failed to project session "${sessionId}": ${errorMessage(error)}`,
-            'SESSION_QUERY_CORRUPT_SESSION',
-            { cause: error },
-          )
-        }
-        let references = 1
-        const lease = (): SessionObservation => {
-          let disposed = false
-          return {
-            source: 'prepared',
-            header: prepared.inspection.meta,
-            events,
-            cursor: events.at(-1)?.seq ?? -1,
-            revision: prepared.revision,
-            ...projections === undefined ? {} : { projections },
-            retain: () => {
-              if (disposed || references === 0) throw new Error(`session observation "${sessionId}" is disposed`)
-              references += 1
-              return lease()
-            },
-            [Symbol.dispose]: () => {
-              if (disposed) return
-              disposed = true
-              references -= 1
-              if (references === 0) prepared[Symbol.dispose]()
-            },
-          }
-        }
-        return lease()
-      } catch (error: unknown) {
-        borrowed[Symbol.dispose]()
-        throw error
+  /** Observe the stored snapshot, mapping absence and backend failures to the query taxonomy. */
+  private async statSource(
+    persistence: SessionPersistence,
+    sessionId: SessionId,
+    signal: AbortSignal | undefined,
+  ): Promise<SessionPersistenceSnapshot> {
+    let snapshot: SessionPersistenceSnapshot | undefined
+    try {
+      snapshot = await persistence.stat(sessionId, signal === undefined ? undefined : { signal })
+    } catch (error: unknown) {
+      throwIfObservationAborted(signal)
+      throw mapPersistenceFailure(sessionId, error)
+    }
+    throwIfObservationAborted(signal)
+    if (snapshot === undefined) throw notFound(sessionId)
+    if (snapshot.header.id !== sessionId) {
+      throw new SessionQueryError(
+        `session persistence returned "${snapshot.header.id}" for "${sessionId}"`,
+        'SESSION_QUERY_SOURCE_CONFLICT',
+      )
+    }
+    return snapshot
+  }
+
+  /** Read the complete balanced cold log, mapping backend failures to the query taxonomy. */
+  private async loadSource(
+    persistence: SessionPersistence,
+    sessionId: SessionId,
+    signal: AbortSignal | undefined,
+  ): Promise<ColdSessionLog> {
+    try {
+      return await readColdSessionLog(persistence, sessionId, signal)
+    } catch (error: unknown) {
+      throwIfObservationAborted(signal)
+      throw mapPersistenceFailure(sessionId, error)
+    }
+  }
+
+  /** Return a still-valid cached entry and mark it most recently used. */
+  private cachedEntry(
+    persistence: SessionPersistence,
+    sessionId: SessionId,
+    revision: SessionPersistenceRevision,
+  ): PreparedEntry | undefined {
+    const cached = this.cache.get(sessionId)
+    if (cached === undefined || cached.persistence !== persistence || cached.revision !== revision) {
+      return undefined
+    }
+    this.cache.delete(sessionId)
+    this.cache.set(sessionId, cached)
+    return cached
+  }
+
+  /** Insert or replace the entry for one id, then evict past the capacity. */
+  private store(sessionId: SessionId, entry: PreparedEntry): void {
+    // Replacing a stale revision only drops the map's reference; live leases
+    // keep the old entry alive through their own references.
+    this.cache.delete(sessionId)
+    this.cache.set(sessionId, entry)
+    this.evictPastCapacity(entry)
+  }
+
+  /**
+   * Evict oldest unpinned entries until the cache fits its capacity again.
+   * Runs on store and whenever a lease release unpins an entry, so leases
+   * that pinned every candidate cannot leave the cache over budget for good.
+   * @param keep - the entry being stored, about to be leased; never evicted.
+   */
+  private evictPastCapacity(keep?: PreparedEntry): void {
+    if (this.cache.size <= this.cacheCapacity) return
+    for (const [id, candidate] of this.cache) {
+      if (candidate === keep || candidate.refs > 0) continue
+      this.cache.delete(id)
+      if (this.cache.size <= this.cacheCapacity) return
+    }
+  }
+
+  /** Build one disposable lease over a cached entry, pinning it until every lease releases. */
+  private preparedLease(
+    sessionId: SessionId,
+    entry: PreparedEntry,
+    projections: ProjectionSnapshot | undefined,
+  ): SessionObservation {
+    entry.refs += 1
+    const lease = (): SessionObservation => {
+      let disposed = false
+      return {
+        source: 'prepared',
+        header: entry.session.header,
+        inheritedEventCount: entry.session.inheritedEventCount,
+        events: entry.events,
+        cursor: entry.events.at(-1)?.seq ?? -1,
+        revision: entry.revision,
+        ...projections === undefined ? {} : { projections },
+        retain: () => {
+          if (disposed) throw new Error(`session observation "${sessionId}" is disposed`)
+          entry.refs += 1
+          return lease()
+        },
+        [Symbol.dispose]: () => {
+          if (disposed) return
+          disposed = true
+          entry.refs -= 1
+          if (entry.refs === 0) this.evictPastCapacity()
+        },
       }
     }
+    return lease()
   }
 
   private live(
@@ -160,6 +280,7 @@ export class SessionObservationReader {
       return {
         source: 'live',
         header: session.header,
+        inheritedEventCount: session.inheritedEventCount,
         events,
         cursor: events.at(-1)?.seq ?? -1,
         ...projections === undefined ? {} : { projections },
@@ -173,17 +294,13 @@ export class SessionObservationReader {
     return lease()
   }
 
-  private preparedProjections(
-    observation: Extract<BorrowedSessionSource, { readonly source: 'prepared' }>,
-    events: readonly SessionEvent[],
-  ): ProjectionSnapshot | undefined {
+  private preparedProjections(entry: PreparedEntry): ProjectionSnapshot | undefined {
     const registry = this.ctx.get('sessionProjections')
     if (registry === undefined) return undefined
-    const prepared = observation.preparedSession
     const cache = this.ctx.get('sessionProjectionCache')
     return cache === undefined
-      ? registry.hydrate(prepared, {}, events, 0)
-      : cache.hydratePrepared(prepared, observation.inspection.meta, events)
+      ? registry.hydrate(entry.session, {}, entry.events, SessionLogOffset(0))
+      : cache.hydratePrepared(entry.session, entry.events)
   }
 }
 
@@ -193,6 +310,22 @@ function throwIfObservationAborted(signal: AbortSignal | undefined): void {
     'session observation was aborted',
     'SESSION_QUERY_ABORTED',
     { cause: signal.reason },
+  )
+}
+
+function mapPersistenceFailure(sessionId: SessionId, error: unknown): SessionQueryError {
+  if (hasErrorName(error, 'SessionPersistenceNotFoundError')) return notFound(sessionId, error)
+  if (hasErrorName(error, 'SessionPersistenceCorruptionError')) {
+    return new SessionQueryError(
+      `stored session "${sessionId}" is corrupt: ${error.message}`,
+      'SESSION_QUERY_CORRUPT_SESSION',
+      { cause: error },
+    )
+  }
+  return new SessionQueryError(
+    `failed to observe session "${sessionId}": ${errorMessage(error)}`,
+    'SESSION_QUERY_PERSISTENCE_FAILED',
+    { cause: error },
   )
 }
 

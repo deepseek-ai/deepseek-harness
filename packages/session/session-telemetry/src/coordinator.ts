@@ -15,7 +15,8 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionSeq as SessionSeqType, SessionSeqCursor } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionTelemetrySink, SessionTelemetryRecord, SessionTelemetrySeverity } from './index.ts'
 
@@ -26,7 +27,7 @@ export type SessionTelemetryCapture = 'live' | 'on-demand'
 interface ProjectedRecord {
   readonly record: SessionTelemetryRecord
   /** Ledger cursor advanced only after the backend accepts this record. */
-  readonly seq?: number
+  readonly seq?: SessionSeqType
 }
 
 /**
@@ -40,15 +41,15 @@ interface ProjectedRecord {
  * "re-hand everything". Advanced only at emit time — the cursor marks
  * handed-off, not delivered.
  */
-const handoffCursor = new WeakMap<Session, number>()
+const handoffCursor = new WeakMap<Session, SessionSeqCursor>()
 
 /**
  * Install the telemetry capture side onto a context for one backend.
  *
- * Live capture registers the persistence-coordinator listener set plus the
- * `agent/error` relay, all through `ctx.effect()`/`ctx.on()` on the composing
- * fiber, and sweeps already-live sessions (a hot reload does not replay
- * `session/created`). A `session/disposed` captures the session's `shutdown`
+ * Live capture registers its own `session/created` / `session/event` /
+ * `session/disposed` listener set plus the `agent/error` relay, all through
+ * `ctx.effect()`/`ctx.on()` on the composing fiber, and sweeps already-live
+ * sessions (a hot reload does not replay `session/created`). A `session/disposed` captures the session's `shutdown`
  * operational record at its own termination edge and retires it from the
  * adopted set. On-demand capture registers none of those continuous listeners;
  * {@link captureSession} reads the canonical log explicitly and never creates
@@ -135,8 +136,9 @@ export class SessionTelemetryCoordinator {
    * @param session - session whose current canonical-log prefix may be handed over.
    * @param throughSeq - optional last sequence included in this capture.
    */
-  captureSession(session: Session, throughSeq?: number): void {
-    const cursor = handoffCursor.get(session) ?? session.firstLiveSeq - 1
+  captureSession(session: Session, throughSeq?: SessionSeqType): void {
+    const cursor = handoffCursor.get(session)
+      ?? (session.firstLiveSeq === 0 ? -1 : SessionSeq(session.firstLiveSeq - 1))
     // Containment is PER EVENT: one rejected record is withheld fail-closed
     // while the rest of the historical replay proceeds.
     for (const event of session.snapshotEvents()) {
@@ -309,11 +311,11 @@ function identityOf(session: Session, event: SessionEvent): Record<string, strin
     'event.type': event.type,
     'event.seq': event.seq,
   }
-  const { cwd, parentSession, seedLength } = session.header
+  const { cwd, parentSession, isSeeded } = session.header
   if (cwd !== undefined) attributes['session.cwd'] = cwd
   if (parentSession !== undefined) attributes['session.parent_id'] = String(parentSession)
   // The durable fork boundary: a forked stream starts here, and its prefix
   // lives in the parent's stream — receivers stitch on (parent_id, seed_length).
-  if (seedLength !== undefined) attributes['session.seed_length'] = seedLength
+  if (isSeeded) attributes['session.seed_length'] = session.inheritedEventCount
   return attributes
 }

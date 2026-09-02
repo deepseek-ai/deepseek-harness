@@ -22,7 +22,7 @@ The implementing PR should update the [capability seams](../../implemented/archi
 - `dsh-session` exports the persistence service type, coordinator, and contract helpers.
 - JSONL and SQLite backend packages depend on `dsh-session` directly.
 - `agent-loop` resume uses the session-owned service key.
-- [Session persistence](../../implemented/architecture/2026-06-14-session-persistence.md), [shared persistence write coordinator](../../implemented/architecture/2026-06-18-shared-persistence-write-coordinator.md), and [package docs](../../../../packages/session/session-persistence/README.md) explain why backend implementations remain separate.
+- [Session persistence](../../implemented/architecture/2026-06-14-session-persistence.md), [handle-based session persistence](../../implemented/architecture/2026-08-27-handle-based-session-persistence.md), and [package docs](../../../../packages/session/session-persistence/README.md) explain why backend implementations remain separate.
 
 ## What we give up
 

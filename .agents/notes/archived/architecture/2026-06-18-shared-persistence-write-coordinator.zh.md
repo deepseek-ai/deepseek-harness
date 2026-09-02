@@ -1,6 +1,7 @@
 # Agent Note: 共享持久化写入协调器
 
 Status: implemented
+Archived: 2026-08-31
 
 [English](2026-06-18-shared-persistence-write-coordinator.md) | 中文
 

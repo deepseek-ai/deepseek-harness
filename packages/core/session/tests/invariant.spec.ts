@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createScope, scopeTarget } from '@deepseek-ai/dsh-scope'
 import { createUserMessage, ToolCallId, createMessage, createToolResultMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, TOOL_NOT_STARTED } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionSeq, TOOL_NOT_STARTED } from '@deepseek-ai/dsh-session'
 import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import InvariantRegistry, { InvariantError } from '@deepseek-ai/dsh-invariants'
 
@@ -374,8 +374,8 @@ describe('session-log invariants', () => {
   it('replays seeded sessions and tracks each session independently', async () => {
     const { ctx } = await setup()
     const badSeed = [
-      { type: 'turn/start' as const, seq: 0, time: 0, data: { turn: 1 } },
-      { type: 'turn/start' as const, seq: 1, time: 0, data: { turn: 2 } },
+      { type: 'turn/start' as const, seq: SessionSeq(0), time: 0, data: { turn: 1 } },
+      { type: 'turn/start' as const, seq: SessionSeq(1), time: 0, data: { turn: 2 } },
     ]
     expect(() => ctx.sessions.create(undefined, { seed: badSeed })).toThrow(InvariantError)
 
@@ -406,12 +406,12 @@ describe('session-log invariants', () => {
     const { ctx } = await setup()
     // Balanced seed: between turns.
     expect(() => ctx.sessions.create(SessionId('inherited-between-turns'), { seed: [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
-      { type: 'turn/end', seq: 1, time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+      { type: 'turn/end', seq: SessionSeq(1), time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
     ] })).not.toThrow()
     // Unbalanced seed: inside the open turn, which the relation permits.
     const open = ctx.sessions.create(SessionId('inherited-inside-open-turn'), { seed: [
-      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     ] })
     expect(open.snapshotEvents().map(event => event.type)).toEqual(['turn/start', 'session/end-seed'])
     // Still open afterwards: the boundary moves no cursor.

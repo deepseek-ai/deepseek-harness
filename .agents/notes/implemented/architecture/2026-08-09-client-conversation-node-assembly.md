@@ -125,16 +125,16 @@ The Assembler does not use State reference equality to decide publication or pro
 | Return value | Behavior |
 |---|---|
 | `immediate` | Request a notification and flush in the current microtask |
-| `animation-frame` | Coalesce high-frequency updates into materialization on the next frame |
+| `animation-frame` | Coalesce high-frequency updates into materialization after three browser animation frames |
 | `none` | Do not schedule a flush for this Match; retain its State and dirty marker |
 
 Omitting `publication()` means `immediate`. Assistant token deltas and packed runs use `animation-frame`, invisible Inbox Contexts use `none`, and finals, dependency replays, and Location boundaries publish the latest result through an immediate path.
 
-Every live delta within a frame still executes `update()`, while one historical packed run executes one batch `update()`. Only `buildViewNode()`, View Builder work, and React snapshot notification are coalesced; no fragments are lost.
+Every live delta during the three-frame interval still executes `update()`, while one historical packed run executes one batch `update()`. Location-data publication, `buildViewNode()`, View Builder work, and React snapshot notification are coalesced; no fragments are lost. An immediate publication cancels a pending frame interval and flushes the latest State without delay.
 
 #### `buildLocationData(context, scope)`
 
-`buildLocationData()` lets a Definition publish a read-only value derived from its State onto an engine-owned Step or Turn without exposing another business's mutable State. The Assembler always materializes `step` before `turn`, so Turn-level aggregation can read Step data updated in the same flush; it calls `buildViewNode()` only after all Location data is ready.
+`buildLocationData()` lets a Definition publish a read-only value derived from its State onto an engine-owned Step or Turn without exposing another business's mutable State. The Assembler passes the preceding publication back to its owner, which returns that exact value when its business data is unchanged. The Assembler always materializes `step` before `turn`, so Turn-level aggregation can read Step data updated in the same flush; it calls `buildViewNode()` only after all Location data is ready.
 
 A Definition receives the `step` and `turn` scopes separately and may return one value or `null` in either phase. A value must identify the exact turn/step coordinates and use the Definition's `kind` as its key. The Assembler owns replacement and removal and rejects another Context that claims the same Location key.
 
@@ -315,21 +315,21 @@ The shell synchronously resolves the persisted selection when a Session binding 
 
 Ordinary prepend and append flushes call `apply({ upserts, timeline })` only for active targets. Complete window replacement and Registry rebuild call `replace()` only for active targets. Unsubscription does not remove a target, so returning to an opened View does not rebuild it.
 
-[`ChatSnapshotBuilder`](../../../../packages/client/ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts) maintains `order`, a keyed `nodes` store, the turn/step `locations` index, `timeline`, and the `legacy` slice used by StatsLine and mirrored into top-level public compatibility fields.
+[`ChatSnapshotBuilder`](../../../../packages/client/ui-chat/src/client/conversation-nodes/chat-snapshot-builder.ts) maintains `order`, a keyed `nodes` store with identity-stable Node and Turn-process sources, the turn/step `locations` index, `timeline`, and the `legacy` slice used by StatsLine and mirrored into top-level public compatibility fields.
 
-Only a new key or a change to `anchorSeq`, visibility, or Location identity makes a Chat update structural. An ordinary content change does not rebuild `order`; the keyed Node store replaces only that key's value.
+Only a new key or a change to `anchorSeq`, visibility, or Location identity makes a Chat update structural. An ordinary content change does not rebuild `order`; the keyed Node store replaces that key's value and publishes only its source. The Turn-process projector recalculates cross-Node presentation only for a Turn whose structure, specification, or status changed, then publishes only that Turn's process sources.
 
 For a structural change, the Builder computes visible order from current store values and reuses unchanged index arrays by reference. Prepend may add earlier history keys, append may add a key at the tail or its business anchor, and ordering never renames existing keys.
 
-[`ChatView`](../../../../packages/client/ui-chat/src/client/chat/ChatView.tsx) only traverses `order`. Each [`ChatNodeSeat`](../../../../packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx) remains in the same parent list under its Context key and dispatches the `'conversation.chat.node'` keyed slot by `node.kind`.
+[`ChatView`](../../../../packages/client/ui-chat/src/client/chat/ChatView.tsx) only traverses `order` and resolves the two stable sources for each key. Each [`ChatNodeSeat`](../../../../packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx) remains in the same parent list under its Context key, subscribes only to its Node and Turn-process sources, and dispatches the `'conversation.chat.node'` keyed slot by `node.kind`.
 
 [`ChatNodeDataMap`](../../../../packages/client/ui-chat/src/client/contract/chat-nodes.ts) is a declaration-merged renderer payload registry. Each business module registers its own Definition and keyed renderer; `registerConversationNodes()` and `registerChatNodeRenderers()` only assemble those independent contributions and do not interpret business through a closed union or central switch. Built-ins live in `ui-chat`, and this type and registration boundary allows a business to move into an independent package without changing the Chat dispatcher.
 
-The Chat entry in `conversation.view` registers `ChatNodeTurnDataInjected` once when it declares the `conversation.chat.node` child slot. `ChatNodeSeat` passes only the stable Node key as `hookContext`; the Slot renderer combines that key with `useSession` from the official standard props to construct `useTurnData(businessKey)`. Every keyed Chat renderer therefore reads strongly typed, read-only data from its own Node's Turn, and the Assistant renderer has no special injection authority.
+The Chat entry in `conversation.view` registers `ChatNodeTurnDataInjected` once when it declares the `conversation.chat.node` child slot. `ChatNodeSeat` passes the Node's stable Turn data store as `hookContext`; the Slot renderer binds `useTurnData(businessKey)` directly to that store. Every keyed Chat renderer therefore reads strongly typed, read-only data from its own Node's Turn, and the Assistant renderer has no special injection authority.
 
-Slot-level contextual Hooks and entry-owned `inject.hooks` remain independent paths. The latter continues to bind only registration-owned Observables. The former caches definitions by stable slot-inject-face identity and binds its factory and Hook per stable render occurrence. The selector inside `useTurnData()` returns only the current Node's `turn.data.get(key)`, so selector equality filters unrelated Session publications.
+Slot-level contextual Hooks and entry-owned `inject.hooks` remain independent paths. The latter continues to bind only registration-owned Observables. The former caches definitions by stable slot-inject-face identity and binds its factory and Hook per stable render occurrence. `useTurnData()` subscribes to `turn.data.source(key)`, so another Location-data key or Session snapshot publication does not notify it.
 
-The standard `useSession` remains available to every session-scoped slot renderer. `useTurnData()` narrows the common read path rather than acting as a permission sandbox. Whole-window statistics or arbitrary object indexes may still read the Session snapshot explicitly, but they are not modeled as current-Node Turn data.
+The standard `useSession` remains available to every session-scoped slot renderer, although `ChatNodeSeat` needs neither it nor aggregate `useChat`. `useTurnData()` narrows the common read path rather than acting as a permission sandbox. Whole-window statistics or arbitrary object indexes may still read the Session snapshot explicitly, but they are not modeled as current-Node Turn data.
 
 Assistant streaming to final and Tool running to settled stay in one Seat while updating its data and necessary ordering properties. Settlement therefore does not reset component-local State through a parent move.
 
@@ -390,6 +390,8 @@ History-path tests cover complete replace, non-overlapping prepend, complete-ran
 
 **Let a Location-data consumer read the provider's Context State directly.** Rejected: the consumer would depend on another business's mutable internal shape and could not express which Turn/Step owns the value. Declaration-merged data maps expose only the provider-selected read-only value and engine-owned coordinates.
 
+**Cache every Definition's Location data by State identity.** Rejected because a Definition may mutate and return the same State object, and its Location data may also depend on Match Locations or values published by another Definition. Each Definition instead decides whether its business value changed and returns the preceding publication unchanged when it did not.
+
 **Add generic `end()`, prepared, or window-reset lifecycles.** Rejected: businesses have different completion conditions, and a pagination gap is not a business lifecycle. Business Events update State, Location close triggers replay/build, and Reader dependencies own pagination invalidation.
 
 **Reuse one Event Definition across Chat and Trajectory by branching in `buildViewNode(target)`.** Rejected: the views require different business State and intermediate records, so a shared Definition would make each package carry the other's conditions and payloads. Separate target-owned Definitions keep those choices local while sharing the Assembler's ingestion and lifecycle contracts.
@@ -412,11 +414,11 @@ Initial tail, older prepend, and live append share one set of Context invariants
 
 Append does not scan historical Contexts; prepend replays only Contexts whose Matches, Locations, or Reader answers actually changed. A structural Chat change may still recompute visible order and indexes, but does not rerun unrelated business folds or replace unchanged Node identity.
 
-Separating State updates from publication cadence folds every live Assistant delta and each historical packed run while materializing at most once per animation frame. Step or Turn close and final Events can immediately publish the latest State.
+Separating State updates from publication cadence folds every live Assistant delta and each historical packed run while materializing at most once per three animation frames. The Assistant view reads the same projection that the preceding Step Location phase installed. Turn Process returns its existing open data and Node for continuing Assistant chunks without deriving or encoding them again, and Turn Tail defers its complete-Match scan until `turn/end`. Step or Turn close and final Events immediately publish the latest State.
 
 An inactive target retains Definition State and a target Context index but no builder, materialized Nodes, or snapshot. The mounted built-in or third-party View activates its own target through normal subscription; previously opened targets continue receiving incremental updates.
 
-Steps and Turns are stable homes for cross-business aggregates. Turn Tail and Deliverables derive their values without renderer scans of global Nodes; slot-level `useTurnData()` narrows common reads to the current Node's Turn and uses selector equality to isolate unrelated updates.
+Steps and Turns are stable homes for cross-business aggregates. Turn Tail and Deliverables derive their values without renderer scans of global Nodes; slot-level `useTurnData()` narrows common reads to the current Node's Turn, and keyed Location sources isolate unrelated updates.
 
 Inbox Context retention grows with splice count and claimed message count rather than their cumulative prefixes. This removes duplicate state growth but does not deduplicate message content in durable Session events or bound the loaded event window.
 

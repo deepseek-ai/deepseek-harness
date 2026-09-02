@@ -17,18 +17,18 @@ import {
   type ManualCompactAgentContext,
 } from '@deepseek-ai/dsh-compaction'
 import * as commandCompact from '@deepseek-ai/dsh-command-compact'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 
 const COMPACTION_ID = CompactionId('loader-command-compact-test')
 
 const RESULT: CompactionResult = {
   compactionId: COMPACTION_ID,
-  startSeq: 1,
-  summarySeq: 2,
-  endSeq: 3,
+  startSeq: SessionSeq(1),
+  summarySeq: SessionSeq(2),
+  endSeq: SessionSeq(3),
   summary: [{ type: 'text', text: 'loader summary' }],
-  shadowedRange: { start: 3, end: 8 },
-  shadowedSeqs: [3, 5, 8],
+  shadowedRange: { start: SessionSeq(3), end: SessionSeq(8) },
+  shadowedSeqs: [SessionSeq(3), SessionSeq(5), SessionSeq(8)],
   shadowedTokenCount: 99,
 }
 

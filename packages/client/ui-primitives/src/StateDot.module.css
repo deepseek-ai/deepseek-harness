@@ -18,6 +18,7 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  corner-shape: round;
   background: currentColor;
   opacity: 0.1;
 }
@@ -27,6 +28,7 @@
   position: absolute;
   inset: 20%;
   border-radius: 50%;
+  corner-shape: round;
   background: currentColor;
 }
 

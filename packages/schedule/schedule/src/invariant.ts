@@ -16,9 +16,9 @@ export const name = 'tool-schedule-invariant'
 export const inject = ['invariants']
 
 /** Validate a complete exact-session stream under its fork suffix policy. */
-function validate(events: readonly SessionEvent[], seedLength: number, fail: InvariantFailure): void {
+function validate(events: readonly SessionEvent[], fail: InvariantFailure): void {
   try {
-    foldScheduleEvents(events, seedLength)
+    foldScheduleEvents(events)
   } catch (error: unknown) {
     /* v8 ignore next -- foldScheduleEvents normalizes every rejected stream to ScheduleLogError. */
     if (!(error instanceof ScheduleLogError)) throw error
@@ -30,16 +30,16 @@ function validate(events: readonly SessionEvent[], seedLength: number, fail: Inv
 /** Install replay and pre-append validation for the owned event stream. */
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   for (const session of ctx.sessions.list()) {
-    validate(session.snapshotEvents(), session.header.seedLength ?? 0, fail)
+    validate(session.ownEvents(), fail)
   }
   ctx.on('session/created', (session) => {
-    validate(session.snapshotEvents(), session.header.seedLength ?? 0, fail)
+    validate(session.ownEvents(), fail)
   }, { global: true })
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
     if (event.type !== 'schedule/change') return
-    validate([...session.snapshotEvents(), event], session.header.seedLength ?? 0, fail)
+    validate([...session.ownEvents(), event], fail)
   }, { global: true })
 }, { inject: ['sessions'] })
 /* jscpd:ignore-end */

@@ -591,6 +591,18 @@ describe('web e2e: long Chat scroll contract', () => {
       await expect.poll(() => tooltip.count(), { timeout: 15_000 }).toBe(1)
       expect(await tooltip.textContent()).toContain(HISTORY_FIXTURE.markers.user(1))
       expect(await tooltip.textContent()).toContain(HISTORY_FIXTURE.markers.assistant(1))
+      const transcriptLayers = await tooltip.evaluate((preview) => {
+        const railSlot = preview.closest('nav')?.parentElement
+        const codeBanner = document.querySelector<HTMLElement>('.md-code-block > :first-child')
+        if (!(railSlot instanceof HTMLElement) || codeBanner === null) {
+          throw new Error('turn preview or code-block banner stacking context is unavailable')
+        }
+        return {
+          codeBanner: Number(getComputedStyle(codeBanner).zIndex),
+          rail: Number(getComputedStyle(railSlot).zIndex),
+        }
+      })
+      expect(transcriptLayers.rail).toBeGreaterThan(transcriptLayers.codeBanner)
       await world.page.keyboard.press('Enter')
 
       // The jump pages history in and lands on turn 1: its mark flips to the

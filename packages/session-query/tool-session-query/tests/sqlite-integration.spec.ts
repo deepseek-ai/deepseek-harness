@@ -8,6 +8,7 @@ import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
 import SessionStore, {
   SESSION_FORMAT_VERSION,
   SessionId,
+  SessionSeq,
   type Session,
 } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -52,15 +53,16 @@ describe('tool-session-query with the real SQLite provider', () => {
     await ctx.plugin(ToolSessionQuery)
 
     const persisted = SessionId('persisted')
-    await ctx.sessionPersistence.create({
+    const writer = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION,
       id: persisted,
       createdAt: 1,
       cwd: '/work',
+      isSeeded: false,
     })
-    await ctx.sessionPersistence.append(persisted, [{
+    await writer.append([{
       type: 'user/message',
-      seq: 0,
+      seq: SessionSeq(0),
       time: 2,
       data: createUserMessage({
         content: [{ type: 'text', text: 'persisted integration needle' }],
@@ -68,6 +70,7 @@ describe('tool-session-query with the real SQLite provider', () => {
       }),
       surfaceOp: 'append',
     }])
+    await writer.close()
 
     const caller = ctx.sessions.create(SessionId('caller'), {
       meta: { createdAt: 10, cwd: '/work' },
@@ -124,16 +127,17 @@ describe('tool-session-query with the real SQLite provider', () => {
 
     const base = Date.parse('2026-07-24T00:00:00.000Z')
     const persisted = SessionId('fractional-persisted')
-    await ctx.sessionPersistence.create({
+    const writer = await ctx.sessionPersistence.create({
       version: SESSION_FORMAT_VERSION,
       id: persisted,
       createdAt: base,
       cwd: '/work',
+      isSeeded: false,
     })
-    await ctx.sessionPersistence.append(persisted, [
+    await writer.append([
       {
         type: 'user/message',
-        seq: 0,
+        seq: SessionSeq(0),
         time: base + 123,
         data: createUserMessage({
           content: [{ type: 'text', text: 'fractional integration needle' }],
@@ -143,7 +147,7 @@ describe('tool-session-query with the real SQLite provider', () => {
       },
       {
         type: 'user/message',
-        seq: 1,
+        seq: SessionSeq(1),
         time: base + 124,
         data: createUserMessage({
           content: [{ type: 'text', text: 'fractional integration needle' }],
@@ -153,7 +157,7 @@ describe('tool-session-query with the real SQLite provider', () => {
       },
       {
         type: 'user/message',
-        seq: 2,
+        seq: SessionSeq(2),
         time: -124,
         data: createUserMessage({
           content: [{ type: 'text', text: 'pre-epoch fractional needle' }],
@@ -163,7 +167,7 @@ describe('tool-session-query with the real SQLite provider', () => {
       },
       {
         type: 'user/message',
-        seq: 3,
+        seq: SessionSeq(3),
         time: -123,
         data: createUserMessage({
           content: [{ type: 'text', text: 'pre-epoch fractional needle' }],
@@ -172,6 +176,7 @@ describe('tool-session-query with the real SQLite provider', () => {
         surfaceOp: 'append',
       },
     ])
+    await writer.close()
 
     const caller = ctx.sessions.create(SessionId('fractional-caller'), {
       meta: { createdAt: base + 1_000, cwd: '/work' },

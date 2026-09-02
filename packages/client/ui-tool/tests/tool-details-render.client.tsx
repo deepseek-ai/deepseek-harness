@@ -1,5 +1,6 @@
 /** Test adapter for the production conversation.details.tool registration. */
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { isJsonValue, type JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
   ChatConversationViewNode, ChatSnapshot, ConversationNode, DetailsSlotProps,
@@ -49,6 +50,8 @@ export function toolChatSnapshot(
     order: nodes.map(node => node.key),
     nodes: {
       get: key => byKey.get(key),
+      source: key => ({ getSnapshot: () => byKey.get(key), subscribe: () => () => {} }),
+      processSource: () => ({ getSnapshot: () => undefined, subscribe: () => () => {} }),
       values: () => nodes,
     },
     locations: {
@@ -74,7 +77,7 @@ export function toolSessionEvents(nodes: readonly ToolResultNode[]): readonly Se
     {
       type: 'event',
       event: {
-        seq: 1,
+        seq: SessionSeq(1),
         time: firstTime - 2,
         type: 'turn/start',
         data: { turn: 1 },
@@ -83,7 +86,7 @@ export function toolSessionEvents(nodes: readonly ToolResultNode[]): readonly Se
     {
       type: 'event',
       event: {
-        seq: 2,
+        seq: SessionSeq(2),
         time: firstTime - 1,
         type: 'step/start',
         data: { turn: 1, step: 1 },
@@ -96,7 +99,7 @@ export function toolSessionEvents(nodes: readonly ToolResultNode[]): readonly Se
     const callEntry: SessionLiveEventEntry = {
       type: 'event',
       event: {
-        seq: callSeq,
+        seq: SessionSeq(callSeq),
         time: node.callTime ?? node.time - 1,
         type: 'tool/call',
         data: {
@@ -112,7 +115,7 @@ export function toolSessionEvents(nodes: readonly ToolResultNode[]): readonly Se
     const resultEntry: SessionLiveEventEntry = {
       type: 'event',
       event: {
-        seq: callSeq + 1,
+        seq: SessionSeq(callSeq + 1),
         time: node.time,
         type: 'tool/result',
         data: jsonFixture({

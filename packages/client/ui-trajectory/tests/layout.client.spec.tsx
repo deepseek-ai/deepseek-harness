@@ -31,6 +31,9 @@ interface LegacyConversationSlice {
   readonly nodes: readonly ConversationNode[]
 }
 
+const EMPTY_LOCATION_DATA_SOURCE = { getSnapshot: () => undefined, subscribe: () => () => {} }
+const EMPTY_LOCATION_DATA = { get: () => undefined, source: () => EMPTY_LOCATION_DATA_SOURCE }
+
 afterEach(cleanup)
 
 describe('TrajectoryTurnHeader', () => {
@@ -271,7 +274,7 @@ describe('deriveTrajectoryLayout', () => {
         blocks: [{ kind: 'text', text: 'second step' }],
       },
     ] as unknown as LegacyConversationSlice['nodes']
-    const data = { get: () => undefined }
+    const data = EMPTY_LOCATION_DATA
     const step = { turn: 1, step: 2, start: undefined, end: undefined, status: 'open' as const, data }
     const turn = {
       turn: 1, start: undefined, end: undefined, status: 'open' as const, steps: [step], data,
@@ -303,7 +306,7 @@ describe('deriveTrajectoryLayout', () => {
       kind: 'steering', messageId: 'steer-1', seq: 3, time: 3_000,
       content: [{ type: 'text', text: 'change direction' }], source: null,
     }] as unknown as LegacyConversationSlice['nodes']
-    const data = { get: () => undefined }
+    const data = EMPTY_LOCATION_DATA
     const step = { turn: 1, step: 2, start: undefined, end: undefined, status: 'open' as const, data }
     const turn = {
       turn: 1, start: undefined, end: undefined, status: 'open' as const, steps: [step], data,

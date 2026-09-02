@@ -225,7 +225,8 @@ export function apply(ctx: Context, config: AcpConfig): void {
       try {
         const configOptions = await record.configOptions(signal)
         assertOpen()
-        await persistence.ensureMaterialized(record.agent.session)
+        // The attached log writer's flush materializes an empty session durably.
+        await ctx.sessions.flush(record.agent.session)
         assertOpen()
         return { sessionId, configOptions }
       } catch (error: unknown) {
@@ -244,7 +245,7 @@ export function apply(ctx: Context, config: AcpConfig): void {
       }
       activating.add(sessionId)
       return (async (): Promise<ResumeSessionResponse> => {
-        const persisted = (await persistence.list(signal)).find(header => header.id === sessionId)
+        const persisted = (await persistence.stat(sessionId, { signal }))?.header
         if (persisted === undefined || persisted.origin === 'subagent' || persisted.parentSession !== undefined) {
           throw invalidParams(`session is not resumable: ${sessionId}`)
         }
@@ -299,8 +300,8 @@ export function apply(ctx: Context, config: AcpConfig): void {
       } catch (error: unknown) {
         throw invalidParams((error as Error).message)
       }
-      const listed = await persistence.list(signal)
-      const filtered = await Promise.all(listed.map(async (header) => {
+      const listed = await persistence.list({ signal })
+      const filtered = await Promise.all(listed.map(async ({ header }) => {
         if (
           sessions.has(header.id)
             || activating.has(header.id)

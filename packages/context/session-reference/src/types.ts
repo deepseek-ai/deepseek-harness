@@ -7,7 +7,7 @@
 
 import type { UserMessage } from '@deepseek-ai/dsh-llm/message'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { OptionalSessionSeq, SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Durable source session, cited event seqs, and snapshot facts for prepared cross-session context. */
 export interface SessionReferenceSource {
@@ -18,7 +18,7 @@ export interface SessionReferenceSource {
   references: {
     sessionId: string
     label: string
-    capturedThroughSeq: number | null
+    capturedThroughSeq: OptionalSessionSeq
     compacted: boolean
     originalMessages: number
     retainedMessages: number

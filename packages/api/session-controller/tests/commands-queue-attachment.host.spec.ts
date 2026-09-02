@@ -4,7 +4,7 @@ import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createAssistantMessage, createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiSessionAgentController } from '../src/agent.ts'
@@ -131,7 +131,7 @@ function imageRef(id: string): ImageAttachmentRef {
   }
 }
 
-function event(type: string, seq: number, data: unknown): SessionEvent {
+function event(type: string, seq: SessionSeq, data: unknown): SessionEvent {
   return { type, seq, time: seq + 1, data } as SessionEvent
 }
 
@@ -142,10 +142,20 @@ async function persistedController(
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   const sessionId = SessionId('cold-attachment')
-  const meta: SessionHeader = { version: 0, id: sessionId, createdAt: 1, cwd: '/workspace' }
+  const meta: SessionHeader = {
+    version: 0,
+    id: sessionId,
+    createdAt: 1,
+    cwd: '/workspace',
+    isSeeded: false,
+  }
   ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
     list: () => Promise.resolve([meta]),
-    inspect: () => Promise.resolve({ meta, events }),
+    inspect: () => Promise.resolve({
+      meta,
+      inheritedEventCount: SessionLogOffset(0),
+      events,
+    }),
   }) as never)
   installSessionReadTestServices(ctx)
   ctx.provide('attachments', { readImage } as never)
@@ -160,12 +170,12 @@ describe('Session attachment authorization', () => {
     const inserted = imageRef('inserted')
     const streamed = imageRef('streamed')
     const events = [
-      { ...event('fixture/direct', 0, {
+      { ...event('fixture/direct', SessionSeq(0), {
         content: [null, [], { type: 'tool-result', content: [{ type: 'text', text: 'none' }] }, {
           type: 'tool-result', content: [{ type: 'image', attachment: nested }],
         }],
       }), ignorable: true as const },
-      { ...event('assistant/message', 1, {
+      { ...event('assistant/message', SessionSeq(1), {
         turn: 1,
         step: 1,
         message: createAssistantMessage({
@@ -173,7 +183,7 @@ describe('Session attachment authorization', () => {
           source: { provider: 'fixture', model: 'fixture' },
         }),
       }), surfaceOp: 'append' as const },
-      event('agent/inbox/spliced', 2, {
+      event('agent/inbox/spliced', SessionSeq(2), {
         target: 'next-turn',
         start: 0,
         inserted: [createUserMessage({
@@ -181,7 +191,7 @@ describe('Session attachment authorization', () => {
           source: { kind: 'user' },
         })],
       }),
-      event('assistant/chunk', 3, {
+      event('assistant/chunk', SessionSeq(3), {
         turn: 1,
         step: 1,
         chunk: { type: 'block-end', index: 0, block: { type: 'image', attachment: streamed } },
@@ -233,7 +243,7 @@ describe('Session attachment authorization', () => {
     ]) {
       const ref = imageRef(`failure-${thrown.name}`)
       const fixture = await persistedController(
-        [event('fixture/content', 0, { content: [{ type: 'image', attachment: ref }] })],
+        [event('fixture/content', SessionSeq(0), { content: [{ type: 'image', attachment: ref }] })],
         () => Promise.reject(thrown),
       )
       await expectFailure(fixture.controller.attachment({

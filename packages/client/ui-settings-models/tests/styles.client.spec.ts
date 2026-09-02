@@ -57,7 +57,7 @@ describe('ModelsSection theme styles', () => {
     // under the dark theme, so filling the row with either erases the nested
     // editor's boundary. The row is outlined; the fill is the editor's alone.
     expect(block('.editor')).toContain('background: var(--dsw-alias-bg-module-platform)')
-    expect(block('.rowCard')).toContain('border: 1px solid var(--dsw-alias-border-l2)')
+    expect(block('.rowCard')).toContain('border: 0.5px solid var(--dsw-alias-border-l4)')
     expect(block('.rowCard')).not.toMatch(/\bbackground\s*:/)
   })
 

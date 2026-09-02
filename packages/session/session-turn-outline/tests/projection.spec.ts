@@ -9,10 +9,10 @@
  * regressive turn numbers) run against the exported definition directly.
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, expectTypeOf, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as SessionTurnOutlinePlugin from '@deepseek-ai/dsh-session-turn-outline'
@@ -28,7 +28,7 @@ async function harness(withOutlinePlugin: boolean): Promise<{ ctx: Context; sess
 }
 
 /** Append one human prompt; returns its seq. */
-function appendPrompt(session: Session, text: string): number {
+function appendPrompt(session: Session, text: string): SessionSeq {
   return session.append('user/message', createUserMessage({
     content: [{ type: 'text', text }],
     source: { kind: 'user' },
@@ -47,7 +47,7 @@ function appendAssistant(session: Session, turn: number, step: number, text: str
   }, { surfaceOp: 'append' })
 }
 
-function endTurn(session: Session, turn: number): number {
+function endTurn(session: Session, turn: number): SessionSeq {
   return session.append('turn/end', { turn, reason: { kind: 'completed' } }).seq
 }
 
@@ -56,6 +56,10 @@ function outlineOf(ctx: Context, session: Session): readonly TurnOutlineEntry[] 
 }
 
 describe('turn outline projection unit', () => {
+  it('exposes the turn boundary as a branded event identity', () => {
+    expectTypeOf<TurnOutlineEntry['seq']>().toEqualTypeOf<ReturnType<typeof SessionSeq>>()
+  })
+
   it('serves an empty outline before any turn starts', async () => {
     const { ctx, session } = await harness(true)
     expect(outlineOf(ctx, session)).toEqual([])
@@ -140,7 +144,7 @@ describe('turn outline projection unit', () => {
 
   it('pushes at most three times per turn: boundary, prompt, and settled response', async () => {
     const { ctx, session } = await harness(true)
-    const changes: { seq: number; last: TurnOutlineEntry | undefined }[] = []
+    const changes: { seq: SessionSeq; last: TurnOutlineEntry | undefined }[] = []
     ctx.sessionProjections.onChanged((_session, key, value, seq) => {
       if (key !== 'turnOutline') return
       changes.push({ seq, last: (value as readonly TurnOutlineEntry[]).at(-1) })
@@ -170,11 +174,11 @@ describe('turn outline projection unit', () => {
     const def = turnOutlineProjectionDefinition
     const assistant = (blocks: readonly unknown[]): SessionEvent => ({
       type: 'assistant/message',
-      seq: 9,
+      seq: SessionSeq(9),
       time: 0,
       data: { message: { content: blocks } },
     }) as unknown as SessionEvent
-    const base: TurnOutlineState = { turns: [{ turn: 1, seq: 0, prompt: 'p', response: '' }], draft: '' }
+    const base: TurnOutlineState = { turns: [{ turn: 1, seq: SessionSeq(0), prompt: 'p', response: '' }], draft: '' }
     // Non-text blocks are skipped; whitespace-heavy short blocks cross the raw
     // reading bound early, so the collapsed (short) draft still marks the
     // unread remainder with an ellipsis.
@@ -189,23 +193,23 @@ describe('turn outline projection unit', () => {
     // A draft with no entry to commit into clears itself at the boundary…
     const end = {
       type: 'turn/end',
-      seq: 11,
+      seq: SessionSeq(11),
       time: 0,
       data: { turn: 1, reason: { kind: 'completed' } },
     } as unknown as SessionEvent
     expect(def.apply({ turns: [], draft: 'orphan' }, end)).toEqual({ turns: [], draft: '' })
     // …and a re-settled identical response keeps the entries' identity.
-    const settled: TurnOutlineState = { turns: [{ turn: 1, seq: 0, prompt: 'p', response: 'done' }], draft: 'done' }
+    const settled: TurnOutlineState = { turns: [{ turn: 1, seq: SessionSeq(0), prompt: 'p', response: 'done' }], draft: 'done' }
     const recommitted = def.apply(settled, end)
     expect(recommitted.turns).toBe(settled.turns)
     expect(recommitted.draft).toBe('')
   })
 
   it('skips a boundary that does not advance the turn number (fabricated envelope)', () => {
-    const state: TurnOutlineState = { turns: [{ turn: 2, seq: 5, prompt: 'kept', response: '' }], draft: '' }
+    const state: TurnOutlineState = { turns: [{ turn: 2, seq: SessionSeq(5), prompt: 'kept', response: '' }], draft: '' }
     const regressive = {
       type: 'turn/start',
-      seq: 9,
+      seq: SessionSeq(9),
       time: 0,
       data: { turn: 2 },
     } as unknown as SessionEvent
@@ -247,7 +251,7 @@ describe('turn outline projection unit', () => {
           draft: '',
         },
       },
-    }, [], 0, session.header)).toThrow(/strictly increasing/)
+    }, [], SessionLogOffset(0), session.header, session.inheritedEventCount)).toThrow(/strictly increasing/)
     expect(() => ctx.sessionProjections.restore({
       ...checkpoint,
       turnOutline: {
@@ -260,6 +264,6 @@ describe('turn outline projection unit', () => {
           draft: '',
         },
       },
-    }, [], 0, session.header)).not.toThrow()
+    }, [], SessionLogOffset(0), session.header, session.inheritedEventCount)).not.toThrow()
   })
 })

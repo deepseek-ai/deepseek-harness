@@ -500,6 +500,40 @@ describe('SchemaEmitter supported projection matrix', () => {
     expect(schema.safeParse(1).success).toBe(false)
   })
 
+  it('erases a unique-symbol numeric brand to its wire number', async () => {
+    const nominal = declaration('NominalNumber', 'alias', {
+      typeParameters: [{ id: 'nominal-number:brand', name: 'Brand', const: false }],
+      type: 'nominal-number:intersection',
+    })
+    const symbolMember = {
+      ...property('[TOKEN]', 'nominal-number:brand-reference', { readonly: true }),
+      computed: 'symbol',
+    } as const
+    const schema = await loadSchema(emit([
+      {
+        id: 'root',
+        kind: 'reference',
+        name: 'NominalNumber',
+        target: { kind: 'declaration', symbol: 'NominalNumber' },
+        arguments: ['brand'],
+      },
+      { id: 'brand', kind: 'literal', value: 'Fixture', text: "'Fixture'" },
+      { id: 'nominal-number:intersection', kind: 'intersection', types: ['number', 'nominal-number:marker'] },
+      keyword('number', 'number'),
+      { id: 'nominal-number:marker', kind: 'object', members: [symbolMember] },
+      {
+        id: 'nominal-number:brand-reference',
+        kind: 'reference',
+        name: 'Brand',
+        target: { kind: 'type-parameter', parameter: 'nominal-number:brand' },
+        arguments: [],
+      },
+    ], undefined, [nominal]))
+
+    expect(schema.safeParse(7).success).toBe(true)
+    expect(schema.safeParse('7').success).toBe(false)
+  })
+
   it('classifies every TypeNode kind and executes every supported kind', () => {
     const expected = Object.entries(ZOD_NODE_SUPPORT)
       .filter(([, support]) => support === 'supported')

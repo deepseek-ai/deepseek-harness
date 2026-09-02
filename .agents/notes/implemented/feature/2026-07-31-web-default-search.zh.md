@@ -4,13 +4,15 @@ Status: implemented
 
 [English](2026-07-31-web-default-search.md) | 中文
 
+[共享 base 的 Web 抓取默认值](2026-09-01-shared-base-web-fetch-default.zh.md)取代本文关于抓取按需启用的决策。本文继续负责默认搜索提供方、凭据解析、端点、超时，以及提供方可用性与模型工具注册之间的区分。
+
 ## 问题
 
 该 harness 已具备完整的 Web 能力体系：提供方注册表、DeepSeek、Exa 和 Perplexity 搜索提供方、本地抓取、稳定的面向模型工具，以及结构化结果呈现，但已交付的 `dsh web` 组合没有挂载其中任何一项。除非部署提供自定义覆盖层，否则模型无法发现最新信息。仅挂载现有 DeepSeek 提供方仍无法打通 WebUI 链路：Models 页面通过 `ctx.credentials` 存储 `DEEPSEEK_API_KEY`，而搜索提供方只会在插件加载时固定读取进程环境，因此在运行中的 UI 输入或轮换的密钥无法用于搜索。
 
 ## 决策
 
-`apps/cli/config/base.cordis.yml` 明确挂载 `dsh-web`，配置 `searchProvider: deepseek-official` 与 `fetchProvider: http`，同时挂载 `dsh-web-search-deepseek`、`dsh-web-fetch-http`，并以 `fetch: false` 和 `searchTimeoutMs: 60000` 挂载 `dsh-tool-web`。因此，共享 base 只会暴露 `web_search`，除非产品 preset 启用抓取；已交付的 Web `cordis`、`ptc` 与 `standard` preset 会启用抓取。显式提供方 id 使选择不受注册顺序影响，同时个人覆盖层或 `--config` 覆盖层仍可替换或禁用这些配置项。已交付的一分钟预算用于覆盖一次辅助 DeepSeek Messages 请求及服务端检索，同时保持 `dsh-tool-web` 提供方无关的 30 秒默认值不变，以供自定义组合使用。[Web 能力 seam 决策](../architecture/2026-06-24-web-capability-seam.zh.md)负责公开抓取安全策略与 Web preset 默认值。
+`packages/bundle/base/cordis.patch.yml` 明确挂载 `dsh-web`，配置 `searchProvider: deepseek-official` 与 `fetchProvider: http`，同时挂载 `dsh-web-search-deepseek`、`dsh-web-fetch-http`，并以 `searchTimeoutMs: 60000` 挂载 `dsh-tool-web`。[共享 base 的 Web 抓取默认值](2026-09-01-shared-base-web-fetch-default.zh.md)负责当前的 `fetch: true`；本文继续负责提供方选择、搜索凭据与超时。显式提供方 id 使选择不受注册顺序影响，同时个人覆盖层或 `--patch` 覆盖层仍可替换或禁用这些配置项。已交付的一分钟预算用于覆盖一次辅助 DeepSeek Messages 请求及服务端检索，同时保持 `dsh-tool-web` 提供方无关的 30 秒默认值不变，以供自定义组合使用。[Web 能力 seam 决策](../architecture/2026-06-24-web-capability-seam.zh.md)负责公开抓取安全策略。
 
 DeepSeek 搜索使用与官方会话适配器相同的 `DEEPSEEK_API_KEY` 凭据引用。提供方在每次搜索内部通过可选的 `ctx.credentials` 服务解析该引用；只有未挂载该 seam 的组合才会回退到启动进程的环境变量，非空的 `apiKey` 字面值仍作为程序化配置的最后兜底。因此，由 Web 的 Models 页存储或轮换的密钥无需重启即可用于下一次搜索，提供方也无需保留该值。由于 `WebSearchProvider.available()` 是同步方法，它会将已安装解析器视为本地可用；若动态凭据缺失，操作会以提供方专属错误码 `WEB_PROVIDER_CREDENTIAL_MISSING` 失败，而稳定的工具 schema 仍保持注册。
 
@@ -30,8 +32,8 @@ DeepSeek 搜索使用与官方会话适配器相同的 `DEEPSEEK_API_KEY` 凭据
 
 **提高 `dsh-tool-web` 的提供方无关超时。** 不予采纳：自定义提供方和部署有各自不同的延迟预期；这一部署预算应归已交付的 DeepSeek 组合所有。
 
-**在每个共享 base surface 上启用抓取。** 不予采纳：共享 base 服务于网络策略不同的产品。它会挂载仅限公网的提供方，但保持工具按需启用；已交付的 Web preset 会有意启用该工具，其他产品则可以继续隐藏它或添加更严格的网络策略。
+**在每个共享 base surface 上启用抓取。** 本文曾因各产品可能需要不同网络策略而否决该方案。已交付产品采用同一个完整工具集合后，[共享 base 的 Web 抓取默认值](2026-09-01-shared-base-web-fetch-default.zh.md)取代了该否决；仅限公开目的地址与无需逐次审批的约束仍然有效。
 
 ## 后果
 
-每个共享 base surface 的原生模型请求都会携带 `web_search` schema 与搜索指引；Web／无头 PTC 模式 通过 `run_code` 公开相同的搜索能力。搜索会增加一次完整的辅助模型调用，并可能多次使用原生服务器工具；发起会话的日志仍可精确重建其不含密钥的请求。已交付的 Web `cordis`、`ptc` 与 `standard` preset 还会暴露 `web_fetch`，实施公开地址强制校验且无需逐次审批。Web 快照通道会启动已交付配置树，使用本地 Messages fixture（测试前置数据），经由真实 DeepSeek 提供方驱动一次回放的 `web_search` 调用，断言持久化的辅助请求与结构化结果，并固定最终浏览器呈现。组合冒烟测试会固定共享搜索清单与各 preset 的抓取选择；构建后组合配置的转储固定已交付的一分钟搜索预算；提供方测试固定缺失、已存储及已轮换凭据的行为，以及字面值与环境变量的兼容性。
+headless、完整 SDK、ACP 与仅使用 base 的自定义 profile 的原生模型请求都会携带 `web_search` 和 `web_fetch` schema 与指引；Web preset 会暴露同一对工具，PTC mode 还会通过 `run_code` 暴露它们。搜索会增加一次完整的辅助模型调用，并可能多次使用原生服务器工具；发起会话的日志仍可精确重建其不含密钥的请求。抓取会强制使用公开地址，并且无需逐次审批。Web 快照通道会启动已交付配置树，使用本地 Messages fixture（测试前置数据），经由真实 DeepSeek 提供方驱动一次回放的 `web_search` 调用，断言持久化的辅助请求与结构化结果，并固定最终浏览器呈现。共享 snapshot header 会固定通用的抓取 schema 与提示指引。组合冒烟测试会固定工具集合；构建后组合配置的转储固定已交付的一分钟搜索预算；提供方测试固定缺失、已存储及已轮换凭据的行为，以及字面值与环境变量的兼容性。

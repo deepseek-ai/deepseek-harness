@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
@@ -59,7 +60,7 @@ function sessionJsonl(events: SessionEvent[], header?: { id?: string; createdAt?
 }
 
 /** A SessionEvent of type assistant/chunk for (turn, step). */
-function chunkEvent(seq: number, turn: number, step: number, chunk: StreamChunk): SessionEvent {
+function chunkEvent(seq: SessionSeq, turn: number, step: number, chunk: StreamChunk): SessionEvent {
   return { type: 'assistant/chunk', seq, time: 0, data: { turn, step, chunk } }
 }
 
@@ -70,7 +71,7 @@ let file: string
 function writeSession(filename: string, header: { id: string; createdAt: number }, calls: StreamChunk[][]): string {
   let seq = 1
   const events: SessionEvent[] = []
-  calls.forEach((chunks, step) => { for (const c of chunks) events.push(chunkEvent(seq++, 1, step + 1, c)) })
+  calls.forEach((chunks, step) => { for (const c of chunks) events.push(chunkEvent(SessionSeq(seq++), 1, step + 1, c)) })
   const path = join(dir, filename)
   writeFileSync(path, sessionJsonl(events, header), 'utf8')
   return path
@@ -93,20 +94,20 @@ async function drain(iter: AsyncIterable<StreamChunk>): Promise<StreamChunk[]> {
 
 describe('parseSessionLog', () => {
   it('skips the header line and parses each event', () => {
-    const events = [chunkEvent(1, 1, 1, TEXT_CHUNKS[0] as StreamChunk)]
+    const events = [chunkEvent(SessionSeq(1), 1, 1, TEXT_CHUNKS[0] as StreamChunk)]
     expect(parseSessionLog(sessionJsonl(events))).toEqual(events)
   })
 
   it('ignores blank lines', () => {
     const header = JSON.stringify({ type: 'session', version: 0, id: 's1', createdAt: 0 })
-    const ev = chunkEvent(1, 1, 1, TEXT_CHUNKS[0] as StreamChunk)
+    const ev = chunkEvent(SessionSeq(1), 1, 1, TEXT_CHUNKS[0] as StreamChunk)
     expect(parseSessionLog(`${header}\n\n${JSON.stringify(ev)}\n\n`)).toEqual([ev])
   })
 
   it('expands range-encoded source provenance', () => {
     const header = JSON.stringify({ type: 'session', version: 0, id: 's1', createdAt: 0 })
     const event = {
-      ...chunkEvent(4, 1, 1, TEXT_CHUNKS[0] as StreamChunk),
+      ...chunkEvent(SessionSeq(4), 1, 1, TEXT_CHUNKS[0] as StreamChunk),
       sourceEventSeqs: [[1, 3], 5],
     }
     expect(parseSessionLog(`${header}\n${JSON.stringify(event)}\n`)).toEqual([{
@@ -118,7 +119,7 @@ describe('parseSessionLog', () => {
   it('reports malformed range provenance with its source line', () => {
     const header = JSON.stringify({ type: 'session', version: 0, id: 's1', createdAt: 0 })
     const event = {
-      ...chunkEvent(4, 1, 1, TEXT_CHUNKS[0] as StreamChunk),
+      ...chunkEvent(SessionSeq(4), 1, 1, TEXT_CHUNKS[0] as StreamChunk),
       sourceEventSeqs: [[3, 1]],
     }
     expect(() => parseSessionLog(`${header}\n${JSON.stringify(event)}\n`))
@@ -138,9 +139,9 @@ describe('parseSessionLog', () => {
       data: { turn: 1, step: 1, index: 0, dt: [0, 0], texts: ['a', 'b', 'c'] },
     })
     expect(parseSessionLog(`${header}\n${row}\n`)).toEqual([
-      chunkEvent(1, 1, 1, { type: 'text-delta', index: 0, text: 'a' }),
-      chunkEvent(2, 1, 1, { type: 'text-delta', index: 0, text: 'b' }),
-      chunkEvent(3, 1, 1, { type: 'text-delta', index: 0, text: 'c' }),
+      chunkEvent(SessionSeq(1), 1, 1, { type: 'text-delta', index: 0, text: 'a' }),
+      chunkEvent(SessionSeq(2), 1, 1, { type: 'text-delta', index: 0, text: 'b' }),
+      chunkEvent(SessionSeq(3), 1, 1, { type: 'text-delta', index: 0, text: 'c' }),
     ])
   })
 
@@ -153,15 +154,15 @@ describe('parseSessionLog', () => {
     })
     expect(parseSessionLog(`${header}\n${ordinary}\n${packed}\n`)).toEqual([
       { type: 'turn/start', seq: 0, time: 0, data: { turn: 1 } },
-      chunkEvent(1, 1, 1, { type: 'text-delta', index: 0, text: 'a' }),
-      { ...chunkEvent(2, 1, 1, { type: 'text-delta', index: 0, text: 'b' }), time: 3 },
+      chunkEvent(SessionSeq(1), 1, 1, { type: 'text-delta', index: 0, text: 'a' }),
+      { ...chunkEvent(SessionSeq(2), 1, 1, { type: 'text-delta', index: 0, text: 'b' }), time: 3 },
     ])
   })
 })
 
 describe('deriveReplayScript', () => {
   it('groups one finished assistant/chunk stream into one replay entry', () => {
-    const events: SessionEvent[] = TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))
+    const events: SessionEvent[] = TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))
     expect(deriveReplayScript(events)).toEqual([{ kind: 'chunks', chunks: TEXT_CHUNKS }])
   })
 
@@ -172,8 +173,8 @@ describe('deriveReplayScript', () => {
     ]
     let seq = 1
     const events: SessionEvent[] = [
-      ...failed.map(chunk => chunkEvent(seq++, 1, 1, chunk)),
-      ...TEXT_CHUNKS.map(chunk => chunkEvent(seq++, 1, 1, chunk)),
+      ...failed.map(chunk => chunkEvent(SessionSeq(seq++), 1, 1, chunk)),
+      ...TEXT_CHUNKS.map(chunk => chunkEvent(SessionSeq(seq++), 1, 1, chunk)),
     ]
     expect(deriveReplayScript(events)).toEqual([
       { kind: 'chunks', chunks: failed },
@@ -190,8 +191,8 @@ describe('deriveReplayScript', () => {
     ]
     let seq = 1
     const events: SessionEvent[] = [
-      ...callA.map(c => chunkEvent(seq++, 1, 1, c)),
-      ...callB.map(c => chunkEvent(seq++, 1, 2, c)), // same turn, next step
+      ...callA.map(c => chunkEvent(SessionSeq(seq++), 1, 1, c)),
+      ...callB.map(c => chunkEvent(SessionSeq(seq++), 1, 2, c)), // same turn, next step
     ]
     expect(deriveReplayScript(events)).toEqual([
       { kind: 'chunks', chunks: callA },
@@ -202,8 +203,8 @@ describe('deriveReplayScript', () => {
   it('separates calls across turns too', () => {
     let seq = 1
     const events: SessionEvent[] = [
-      ...TEXT_CHUNKS.map(c => chunkEvent(seq++, 1, 1, c)),
-      ...TEXT_CHUNKS.map(c => chunkEvent(seq++, 2, 1, c)), // new turn, step resets to 1
+      ...TEXT_CHUNKS.map(c => chunkEvent(SessionSeq(seq++), 1, 1, c)),
+      ...TEXT_CHUNKS.map(c => chunkEvent(SessionSeq(seq++), 2, 1, c)), // new turn, step resets to 1
     ]
     expect(deriveReplayScript(events)).toHaveLength(2)
   })
@@ -211,9 +212,9 @@ describe('deriveReplayScript', () => {
   it('ignores non-assistant/chunk events', () => {
     let seq = 1
     const events: SessionEvent[] = [
-      { type: 'turn/start', seq: seq++, time: 0, data: { turn: 1 } },
-      ...TEXT_CHUNKS.map(c => chunkEvent(seq++, 1, 1, c)),
-      { type: 'turn/end', seq: seq++, time: 0, data: { turn: 1, reason: { kind: 'completed' } } },
+      { type: 'turn/start', seq: SessionSeq(seq++), time: 0, data: { turn: 1 } },
+      ...TEXT_CHUNKS.map(c => chunkEvent(SessionSeq(seq++), 1, 1, c)),
+      { type: 'turn/end', seq: SessionSeq(seq++), time: 0, data: { turn: 1, reason: { kind: 'completed' } } },
     ]
     expect(deriveReplayScript(events)).toEqual([{ kind: 'chunks', chunks: TEXT_CHUNKS }])
   })
@@ -227,7 +228,7 @@ describe('deriveReplayScript', () => {
       { type: 'block-start', index: 0, blockType: 'text' },
       { type: 'finish', reason: { kind: 'error', failure: { message: 'boom', code: 'X' } } },
     ]
-    const events = errChunks.map((c, i) => chunkEvent(i + 1, 1, 1, c))
+    const events = errChunks.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))
     expect(deriveReplayScript(events)).toEqual([{ kind: 'chunks', chunks: errChunks }])
   })
 
@@ -246,31 +247,31 @@ describe('deriveReplayScript', () => {
     ]
     let seq = 1
     const events: SessionEvent[] = [
-      ...overflow.map(chunk => chunkEvent(seq++, 1, 2, chunk)),
+      ...overflow.map(chunk => chunkEvent(SessionSeq(seq++), 1, 2, chunk)),
       {
         type: 'compaction/start',
-        seq: seq++,
+        seq: SessionSeq(seq++),
         time: 0,
         data: { compactionId: COMPACTION_ID, turn: 1 },
       },
       {
         type: 'compaction/summary',
-        seq: seq++,
+        seq: SessionSeq(seq++),
         time: 0,
         data: {
           compactionId: COMPACTION_ID,
           summary: rawOutput,
           rawOutput,
           llmStreamCall: true,
-          shadowedRange: { start: 1, end: 1 },
-          shadowedSeqs: [1],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(1) },
+          shadowedSeqs: [SessionSeq(1)],
           shadowedTokenCount: 20,
           provider: 'mock',
           model: 'mock',
           usage,
         },
       },
-      ...TEXT_CHUNKS.map(chunk => chunkEvent(seq++, 1, 2, chunk)),
+      ...TEXT_CHUNKS.map(chunk => chunkEvent(SessionSeq(seq++), 1, 2, chunk)),
     ]
 
     expect(deriveReplayScript(events)).toEqual([
@@ -283,13 +284,13 @@ describe('deriveReplayScript', () => {
   it('does not infer an LLM call from compaction/summary without raw output', () => {
     const event: SessionEvent<'compaction/summary'> = {
       type: 'compaction/summary',
-      seq: 1,
+      seq: SessionSeq(1),
       time: 0,
       data: {
         compactionId: COMPACTION_ID,
         summary: [{ type: 'text', text: 'template result' }],
-        shadowedRange: { start: 1, end: 1 },
-        shadowedSeqs: [1],
+        shadowedRange: { start: SessionSeq(1), end: SessionSeq(1) },
+        shadowedSeqs: [SessionSeq(1)],
         shadowedTokenCount: 20,
         provider: 'template',
         model: 'template',
@@ -303,14 +304,14 @@ describe('deriveReplayScript', () => {
     const block = { type: 'text' as const, text: 'remote summary' }
     const event: SessionEvent<'compaction/summary'> = {
       type: 'compaction/summary',
-      seq: 1,
+      seq: SessionSeq(1),
       time: 0,
       data: {
         compactionId: COMPACTION_ID,
         summary: [block],
         rawOutput: [block],
-        shadowedRange: { start: 1, end: 1 },
-        shadowedSeqs: [1],
+        shadowedRange: { start: SessionSeq(1), end: SessionSeq(1) },
+        shadowedSeqs: [SessionSeq(1)],
         shadowedTokenCount: 20,
         provider: 'remote',
         model: 'remote',
@@ -348,15 +349,15 @@ describe('deriveReplayScript', () => {
     const block = { type: 'text' as const, text: 'summary without usage' }
     const event: SessionEvent<'compaction/summary'> = {
       type: 'compaction/summary',
-      seq: 1,
+      seq: SessionSeq(1),
       time: 0,
       data: {
         compactionId: COMPACTION_ID,
         summary: [block],
         rawOutput: [block],
         llmStreamCall: true,
-        shadowedRange: { start: 1, end: 1 },
-        shadowedSeqs: [1],
+        shadowedRange: { start: SessionSeq(1), end: SessionSeq(1) },
+        shadowedSeqs: [SessionSeq(1)],
         shadowedTokenCount: 20,
         provider: 'mock',
         model: 'mock',
@@ -376,40 +377,40 @@ describe('deriveReplayScript', () => {
   it('throws on a group that lacks a terminal finish chunk (a thrown stream)', () => {
     // A thrown stream(): prefix chunks logged, then turn/end (error reason), NO finish.
     const events: SessionEvent[] = [
-      chunkEvent(1, 1, 1, { type: 'block-start', index: 0, blockType: 'text' }),
-      chunkEvent(2, 1, 1, { type: 'text-delta', index: 0, text: 'par' }),
-      { type: 'turn/end', seq: 3, time: 0, data: { turn: 1, reason: { kind: 'error', error: { message: 'x', code: 'UNKNOWN' } } } },
+      chunkEvent(SessionSeq(1), 1, 1, { type: 'block-start', index: 0, blockType: 'text' }),
+      chunkEvent(SessionSeq(2), 1, 1, { type: 'text-delta', index: 0, text: 'par' }),
+      { type: 'turn/end', seq: SessionSeq(3), time: 0, data: { turn: 1, reason: { kind: 'error', error: { message: 'x', code: 'UNKNOWN' } } } },
     ]
     expect(() => deriveReplayScript(events)).toThrow(/without a finish chunk.*replay\.override\.json/s)
   })
 
   it('names the offending (turn, step) when a group is incomplete', () => {
     const events: SessionEvent[] = [
-      chunkEvent(1, 2, 3, { type: 'block-start', index: 0, blockType: 'text' }),
+      chunkEvent(SessionSeq(1), 2, 3, { type: 'block-start', index: 0, blockType: 'text' }),
     ]
     expect(() => deriveReplayScript(events)).toThrow(/2\/3/)
   })
 
   it('rejects an unfinished call before consuming chunks from a new step', () => {
     const events: SessionEvent[] = [
-      chunkEvent(1, 1, 1, { type: 'block-start', index: 0, blockType: 'text' }),
-      chunkEvent(2, 1, 2, { type: 'finish', reason: { kind: 'stop' } }),
+      chunkEvent(SessionSeq(1), 1, 1, { type: 'block-start', index: 0, blockType: 'text' }),
+      chunkEvent(SessionSeq(2), 1, 2, { type: 'finish', reason: { kind: 'stop' } }),
     ]
     expect(() => deriveReplayScript(events)).toThrow(/model call 1\/1 ended without a finish chunk/)
   })
 
   it('rejects an unfinished call at a compact summary boundary', () => {
     const events: SessionEvent[] = [
-      chunkEvent(1, 1, 1, { type: 'block-start', index: 0, blockType: 'text' }),
+      chunkEvent(SessionSeq(1), 1, 1, { type: 'block-start', index: 0, blockType: 'text' }),
       {
         type: 'compaction/summary',
-        seq: 2,
+        seq: SessionSeq(2),
         time: 0,
         data: {
           compactionId: COMPACTION_ID,
           summary: [{ type: 'text', text: 'external checkpoint' }],
-          shadowedRange: { start: 1, end: 1 },
-          shadowedSeqs: [1],
+          shadowedRange: { start: SessionSeq(1), end: SessionSeq(1) },
+          shadowedSeqs: [SessionSeq(1)],
           shadowedTokenCount: 20,
           provider: 'external',
           model: 'external',
@@ -423,7 +424,7 @@ describe('deriveReplayScript', () => {
 
 describe('loadReplayScript', () => {
   it('derives from the session JSONL when no override is present', () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     expect(loadReplayScript({ file })).toEqual([{ kind: 'chunks', chunks: TEXT_CHUNKS }])
   })
 
@@ -436,7 +437,7 @@ describe('loadReplayScript', () => {
   })
 
   it('falls back to the JSONL when the override path is set but absent', () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     expect(loadReplayScript({ file, overrideFile: join(dir, 'nope.json') }))
       .toEqual([{ kind: 'chunks', chunks: TEXT_CHUNKS }])
   })
@@ -460,8 +461,8 @@ describe('loadReplayScript', () => {
     ]
     let seq = 1
     writeFileSync(file, sessionJsonl([
-      ...TEXT_CHUNKS.map(c => chunkEvent(seq++, 1, 1, c)),
-      ...callB.map(c => chunkEvent(seq++, 1, 2, c)),
+      ...TEXT_CHUNKS.map(c => chunkEvent(SessionSeq(seq++), 1, 1, c)),
+      ...callB.map(c => chunkEvent(SessionSeq(seq++), 1, 2, c)),
     ]), 'utf8')
     const overrideFile = join(dir, 'replay.override.json')
     writeFileSync(overrideFile, JSON.stringify({
@@ -474,7 +475,7 @@ describe('loadReplayScript', () => {
   })
 
   it('patches form: at == derived length appends (the retry-attempt slot)', () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     const overrideFile = join(dir, 'replay.override.json')
     writeFileSync(overrideFile, JSON.stringify({
       patches: [
@@ -489,7 +490,7 @@ describe('loadReplayScript', () => {
   })
 
   it('patches form: an out-of-range index fails loud with the derived length', () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     const overrideFile = join(dir, 'replay.override.json')
     writeFileSync(overrideFile, JSON.stringify({ patches: [{ at: 2, entry: { kind: 'hang' } }] }), 'utf8')
     expect(() => loadReplayScript({ file, overrideFile })).toThrow(/patch index 2 out of range.*1 call/s)
@@ -521,7 +522,7 @@ describe('loadReplayScript', () => {
   })
 
   it('rejects duplicate patch indexes instead of silently taking the last one', () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     const overrideFile = join(dir, 'replay.override.json')
     writeFileSync(overrideFile, JSON.stringify({
       patches: [
@@ -538,7 +539,7 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
     let seq = 1
     const events: SessionEvent[] = []
     calls.forEach((chunks, step) => {
-      for (const c of chunks) events.push(chunkEvent(seq++, 1, step + 1, c))
+      for (const c of chunks) events.push(chunkEvent(SessionSeq(seq++), 1, step + 1, c))
     })
     writeFileSync(file, sessionJsonl(events), 'utf8')
   }
@@ -1038,7 +1039,7 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
     writeLog(TEXT_CHUNKS)
     const childFile = join(dir, 'session.1.jsonl')
     writeFileSync(childFile, sessionJsonl(
-      TEXT_CHUNKS.map((chunk, i) => chunkEvent(i + 1, 1, 1, chunk)),
+      TEXT_CHUNKS.map((chunk, i) => chunkEvent(SessionSeq(i + 1), 1, 1, chunk)),
       { id: 'child', createdAt: 10 },
     ), 'utf8')
     const ctx = new Context()
@@ -1051,22 +1052,27 @@ describe('installLlmReplay (through the real LlmRuntime)', () => {
 })
 
 describe('parseSessionHeader', () => {
-  it('reads id, createdAt, and seedLength off the header line', () => {
+  it('reads id, createdAt, and the inherited event count off the v0 header line', () => {
     expect(parseSessionHeader(sessionJsonl([], { id: 'abc', createdAt: 42 })))
-      .toEqual({ id: 'abc', createdAt: 42, seedLength: 0 })
+      .toEqual({ id: 'abc', createdAt: 42, inheritedEventCount: 0 })
   })
 
-  it('reads a non-zero seedLength (a fork child header)', () => {
+  it('reads a non-zero v0 seedLength as the inherited event count', () => {
     expect(parseSessionHeader('{"type":"session","version":0,"id":"child","createdAt":7,"seedLength":4}\n'))
-      .toEqual({ id: 'child', createdAt: 7, seedLength: 4 })
+      .toEqual({ id: 'child', createdAt: 7, inheritedEventCount: 4 })
   })
 
-  it('falls back to id="" / createdAt=0 / seedLength=0 when the header lacks them', () => {
-    expect(parseSessionHeader('{"type":"session","version":0}\n')).toEqual({ id: '', createdAt: 0, seedLength: 0 })
+  it('falls back to id="" / createdAt=0 / inheritedEventCount=0 when the header lacks them', () => {
+    expect(parseSessionHeader('{"type":"session","version":0}\n')).toEqual({ id: '', createdAt: 0, inheritedEventCount: 0 })
   })
 
   it('falls back on an empty buffer (no header line)', () => {
-    expect(parseSessionHeader('')).toEqual({ id: '', createdAt: 0, seedLength: 0 })
+    expect(parseSessionHeader('')).toEqual({ id: '', createdAt: 0, inheritedEventCount: 0 })
+  })
+
+  it.each([-1, 0.5, Number.MAX_SAFE_INTEGER + 1])('rejects invalid v0 seedLength %s', (seedLength) => {
+    expect(() => parseSessionHeader(JSON.stringify({ type: 'session', version: 0, seedLength })))
+      .toThrow(/SessionLogOffset/)
   })
 })
 
@@ -1105,10 +1111,10 @@ describe('loadSessionScripts', () => {
     // The child fixture: 2 seeded parent events (a chunk + its finish) then the
     // child's own turn. seedLength = 2 marks where the inherited prefix ends.
     const childEvents: SessionEvent[] = [
-      chunkEvent(0, 1, 1, parentChunk),
-      chunkEvent(1, 1, 1, { type: 'finish', reason: { kind: 'stop' } }),
-      chunkEvent(2, 2, 1, childChunks[0]!),
-      chunkEvent(3, 2, 1, childChunks[1]!),
+      chunkEvent(SessionSeq(0), 1, 1, parentChunk),
+      chunkEvent(SessionSeq(1), 1, 1, { type: 'finish', reason: { kind: 'stop' } }),
+      chunkEvent(SessionSeq(2), 2, 1, childChunks[0]!),
+      chunkEvent(SessionSeq(3), 2, 1, childChunks[1]!),
     ]
     const childPath = join(dir, 'session.1.jsonl')
     writeFileSync(childPath, sessionJsonl(childEvents, { id: 'child', createdAt: 200, seedLength: 2 }), 'utf8')
@@ -1335,7 +1341,7 @@ describe('apply (the plugin entry)', () => {
   })
 
   it('installs replay and its catalog from explicit config', async () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     apply(ctx, {
@@ -1352,7 +1358,7 @@ describe('apply (the plugin entry)', () => {
   })
 
   it('declares flat image request pricing only for models that configure it', async () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     installLlmReplay(ctx, {
@@ -1426,7 +1432,7 @@ describe('apply (the plugin entry)', () => {
   })
 
   it('uses only the file when no override path is configured or in the env', async () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c))), 'utf8')
     process.env.DSH_SNAPSHOT_FILE = file
     delete process.env.DSH_SNAPSHOT_OVERRIDE
     const ctx = new Context()
@@ -1455,9 +1461,9 @@ describe('apply (the plugin entry)', () => {
       { type: 'text-delta', index: 0, text: 'kid' },
       { type: 'finish', reason: { kind: 'stop' } },
     ]
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c)), { id: 'p', createdAt: 1 }), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c)), { id: 'p', createdAt: 1 }), 'utf8')
     const childFile = join(dir, 'session.1.jsonl')
-    writeFileSync(childFile, sessionJsonl(childSecond.map((c, i) => chunkEvent(i + 1, 1, 1, c)), { id: 'c', createdAt: 2 }), 'utf8')
+    writeFileSync(childFile, sessionJsonl(childSecond.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c)), { id: 'c', createdAt: 2 }), 'utf8')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     apply(ctx, { file, childFiles: [childFile] })
@@ -1473,9 +1479,9 @@ describe('apply (the plugin entry)', () => {
       { type: 'text-delta', index: 0, text: 'env-kid' },
       { type: 'finish', reason: { kind: 'stop' } },
     ]
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c)), { id: 'p', createdAt: 1 }), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c)), { id: 'p', createdAt: 1 }), 'utf8')
     const childFile = join(dir, 'session.1.jsonl')
-    writeFileSync(childFile, sessionJsonl(childChunks.map((c, i) => chunkEvent(i + 1, 1, 1, c)), { id: 'c', createdAt: 2 }), 'utf8')
+    writeFileSync(childFile, sessionJsonl(childChunks.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c)), { id: 'c', createdAt: 2 }), 'utf8')
     process.env.DSH_SNAPSHOT_FILE = file
     process.env.DSH_SNAPSHOT_CHILD_FILES = childFile // single entry, no delimiter needed
     const ctx = new Context()
@@ -1488,7 +1494,7 @@ describe('apply (the plugin entry)', () => {
   })
 
   it('ignores an empty $DSH_SNAPSHOT_CHILD_FILES (single-session)', async () => {
-    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c)), { id: 'p', createdAt: 1 }), 'utf8')
+    writeFileSync(file, sessionJsonl(TEXT_CHUNKS.map((c, i) => chunkEvent(SessionSeq(i + 1), 1, 1, c)), { id: 'p', createdAt: 1 }), 'utf8')
     process.env.DSH_SNAPSHOT_FILE = file
     process.env.DSH_SNAPSHOT_CHILD_FILES = ''
     const ctx = new Context()

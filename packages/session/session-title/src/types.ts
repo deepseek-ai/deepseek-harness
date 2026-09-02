@@ -11,6 +11,7 @@
 export {}
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { OptionalSessionSeq, SessionSeq } from '@deepseek-ai/dsh-session/types'
 
 /** Identifies one session-title provider registration. */
 export type SessionTitleProviderId = Branded<'SessionTitleProviderId'>
@@ -41,7 +42,7 @@ export interface SessionTitleEventData {
   /** Normalized non-empty title text. */
   readonly title: string
   /** Exact human `user/message` seqs used to derive this title; empty for an explicit user rename. */
-  readonly messageSeqs: number[]
+  readonly messageSeqs: SessionSeq[]
   /** Whether the built-in fallback, a registered provider, or the user supplied the title. */
   readonly source: SessionTitleSource
 }
@@ -49,7 +50,7 @@ export interface SessionTitleEventData {
 /** Latest folded title plus the title event's durable envelope facts. */
 export interface SessionTitleSnapshot extends SessionTitleEventData {
   /** Seq of the latest `session/title` event. */
-  readonly eventSeq: number
+  readonly eventSeq: SessionSeq
   /** Timestamp of the latest `session/title` event. */
   readonly updatedAt: number
 }
@@ -60,7 +61,7 @@ export type TitleProjection = SessionTitleSnapshot
 /** One eligible human text message exposed to title providers. */
 export interface SessionTitleUserMessage {
   /** Source `user/message` event seq. */
-  readonly seq: number
+  readonly seq: SessionSeq
   /** Exact concatenated text-block content. */
   readonly text: string
 }
@@ -72,7 +73,7 @@ export interface TitleInputState {
   /** Total eligible messages folded so far. */
   readonly count: number
   /** Seq of the newest eligible message, or null before any. */
-  readonly lastSeq: number | null
+  readonly lastSeq: OptionalSessionSeq
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {

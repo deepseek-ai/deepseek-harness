@@ -24,7 +24,7 @@
   display: flex;
   align-items: flex-end;
   gap: 22px;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l2);
   margin-top: 2px;
 }
 

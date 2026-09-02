@@ -48,7 +48,7 @@ async function setupWalled(script: Script): Promise<{ ctx: Context; parent: Agen
   await ctx.plugin(ApprovalService)
   await ctx.plugin(AgentLoop, { agents: [] })
   ctx.llm.registerAdapter(['mock'], new MockAdapter(script))
-  const parent = ctx.agentLoop.create(
+  const parent = await ctx.agentLoop.create(
     SessionId('parent'),
     { provider: 'mock', model: 'mock' },
     { cwd: workspace },
@@ -107,7 +107,8 @@ describe('in-process policy inheritance', () => {
         { type: 'approval/policy', seq: 1, data: { policy: 'never', source: 'delegation' } },
       ])
       expect(child.session.firstLiveSeq).toBe(0)
-      expect(child.session.header.seedLength).toBeUndefined()
+      expect(child.session.header.isSeeded).toBe(false)
+      expect(child.session.inheritedEventCount).toBe(0)
       expect(ctx.sandboxPolicy.overrideOf(child.session)).toBe('read-only')
       expect(ctx.approval.overrideOf(child.session)).toBe('never')
       const request = child.session.snapshotEvents().find(
@@ -153,7 +154,8 @@ describe('in-process policy inheritance', () => {
       await run.result
       const child = run.localAgent as Agent
 
-      expect(child.session.header.seedLength).toBe(1)
+      expect(child.session.header.isSeeded).toBe(true)
+      expect(child.session.inheritedEventCount).toBe(1)
       expect(child.session.firstLiveSeq).toBe(seed.length)
       // seq 1 is the constructor's end-seed marker.
       expect(child.session.snapshotEvents().filter(event => event.type === 'sandbox/mode')).toMatchObject([

@@ -22,7 +22,8 @@
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent } from './types.ts'
+import { SessionSeq } from './types.ts'
+import type { SessionEvent, SessionSeq as SessionSeqType } from './types.ts'
 
 /** The chunk kinds that may pack; block boundaries, usage, and finish chunks always stay one event per line. */
 type DeltaKind = 'text-delta' | 'reasoning-delta' | 'tool-call-delta'
@@ -64,9 +65,9 @@ interface ToolCallRunData extends RunDataBase {
  * {@link TextRunData} payload, tool-call rows carry {@link ToolCallRunData}.
  */
 export type ChunkRow =
-  | { type: 'text-chunks'; seq0: number; time0: number; data: TextRunData }
-  | { type: 'reasoning-chunks'; seq0: number; time0: number; data: TextRunData }
-  | { type: 'tool-call-chunks'; seq0: number; time0: number; data: ToolCallRunData }
+  | { type: 'text-chunks'; seq0: SessionSeqType; time0: number; data: TextRunData }
+  | { type: 'reasoning-chunks'; seq0: SessionSeqType; time0: number; data: TextRunData }
+  | { type: 'tool-call-chunks'; seq0: SessionSeqType; time0: number; data: ToolCallRunData }
 
 /** One durable log line's JSON value: a session event verbatim, or a packed chunk row. */
 export type StorageRecord = SessionEvent | ChunkRow
@@ -118,7 +119,8 @@ function hasExactKeys(value: object, keys: readonly string[]): boolean {
 function classify(event: SessionEvent): DeltaKind | undefined {
   if (event.type !== 'assistant/chunk') return undefined
   if (!hasExactKeys(event, ['type', 'seq', 'time', 'data'])) return undefined
-  if (!Number.isSafeInteger(event.seq) || event.seq < 0 || !Number.isSafeInteger(event.time)) return undefined
+  if (!Number.isSafeInteger(event.seq) || event.seq < 0 || Object.is(event.seq, -0)
+    || !Number.isSafeInteger(event.time)) return undefined
   const data: unknown = event.data
   if (!isRecord(data) || !hasExactKeys(data, ['turn', 'step', 'chunk'])) return undefined
   if (typeof data.turn !== 'number' || typeof data.step !== 'number') return undefined
@@ -271,7 +273,7 @@ function validateRow(value: Record<string, unknown>, tag: ChunkRow['type']): Chu
   if (!hasExactKeys(value, ['type', 'seq0', 'time0', 'data'])) {
     malformed(tag, 'envelope must be exactly {type, seq0, time0, data}')
   }
-  if (!Number.isSafeInteger(value.seq0) || (value.seq0 as number) < 0) {
+  if (!Number.isSafeInteger(value.seq0) || (value.seq0 as number) < 0 || Object.is(value.seq0, -0)) {
     malformed(tag, 'seq0 must be a non-negative safe integer')
   }
   if (!Number.isSafeInteger(value.time0)) {
@@ -308,6 +310,7 @@ function validateRow(value: Record<string, unknown>, tag: ChunkRow['type']): Chu
     time += gap
     if (!Number.isSafeInteger(time)) malformed(tag, 'member times must stay safe integers')
   }
+  SessionSeq(value.seq0 as number)
   return value as unknown as ChunkRow
 }
 
@@ -343,7 +346,7 @@ function expandRow(row: ChunkRow): SessionEvent[] {
     }
     events.push({
       type: 'assistant/chunk',
-      seq: row.seq0 + k,
+      seq: SessionSeq(row.seq0 + k),
       time,
       data: { turn: row.data.turn, step: row.data.step, chunk },
     })
@@ -355,7 +358,8 @@ function expandRow(row: ChunkRow): SessionEvent[] {
  * Decode one parsed JSONL line value into the session event(s) it stores.
  * Chunk-row-tagged values validate and expand (a malformed row throws — it is
  * corrupt storage, and treating it as an event would silently drop a whole
- * run); every other value passes through as a single event, unvalidated.
+ * run); every other value passes through as a single event after admitting a
+ * numeric `seq` through the Session-sequence constructor.
  *
  * @param value - one line's `JSON.parse` result.
  * @returns the stored events, in log order.
@@ -364,7 +368,8 @@ export function decodeStorageRecord(value: unknown): SessionEvent[] {
   if (!isRecord(value)) return [value as SessionEvent]
   const tag = value.type
   if (tag !== 'text-chunks' && tag !== 'reasoning-chunks' && tag !== 'tool-call-chunks') {
-    return [value as SessionEvent]
+    if (typeof value.seq === 'number') SessionSeq(value.seq)
+    return [value as unknown as SessionEvent]
   }
   return expandRow(validateRow(value, tag))
 }

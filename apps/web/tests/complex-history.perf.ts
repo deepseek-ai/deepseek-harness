@@ -17,7 +17,7 @@ import {
   createUserMessage,
 } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import {
   SESSION_FORMAT_VERSION,
   Session,
@@ -187,7 +187,7 @@ function text(value: string): { type: 'text'; text: string }[] {
   return [{ type: 'text', text: value }]
 }
 
-function appendTitle(session: Session, title: string, messageSeq: number): void {
+function appendTitle(session: Session, title: string, messageSeq: SessionSeq): void {
   session.append('session/title', {
     title,
     messageSeqs: [messageSeq],

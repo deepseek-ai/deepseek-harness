@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AssistantBlock, AssistantMessageNode, ConvViewProps, MessageImageLoader, RenderMessageImages,
+  ToolCallBlock,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { InjectFace, PropsLocale, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
@@ -30,6 +31,14 @@ import css from './views.module.css'
 const EMPTY_TURN_IDS: ReadonlySet<number> = new Set()
 const EMPTY_RECORD_IDS: ReadonlySet<string> = new Set()
 const SEARCH_INDEX_THROTTLE_MS = 3_000
+const HISTORY_PAGE_NODES = 50
+
+function containsCall(calls: readonly ToolCallBlock[], callId: string): boolean {
+  for (const call of calls) {
+    if (call.callId === callId || containsCall(call.subCalls, callId)) return true
+  }
+  return false
+}
 
 function lastCellIndex(turns: readonly TrajectoryTurnModel[]): number {
   let last = 0
@@ -146,10 +155,40 @@ export function TrajectoryView({
   const [timelineRecordFocus, setTimelineRecordFocus] = useState<{
     readonly index: number
   } | null>(null)
-  const inspection = useTrajectory(snapshot => snapshot)
+  const completeInspection = useTrajectory(snapshot => snapshot)
+  const latestNodeSeq = completeInspection.eventNodes.at(-1)?.seq
+  const [historyTailSeq, setHistoryTailSeq] = useState(latestNodeSeq)
+  const [historyNodeLimit, setHistoryNodeLimit] = useState(HISTORY_PAGE_NODES)
+  const fixedTailSeq = historyTailSeq ?? latestNodeSeq
+  const historyTailIndex = fixedTailSeq === undefined
+    ? -1
+    : completeInspection.eventNodes.findLastIndex(node => node.seq <= fixedTailSeq)
+  const historyEndIndex = historyTailIndex < 0 && latestNodeSeq !== undefined
+    ? completeInspection.eventNodes.length
+    : historyTailIndex + 1
+  const historyStartIndex = Math.max(0, historyEndIndex - historyNodeLimit)
+  useEffect(() => {
+    if (latestNodeSeq !== undefined && (historyTailSeq === undefined || historyTailIndex < 0)) {
+      setHistoryTailSeq(latestNodeSeq)
+    }
+  }, [historyTailIndex, historyTailSeq, latestNodeSeq])
+  const inspection = useMemo<TrajectorySnapshot>(() => {
+    if (historyStartIndex === 0) return completeInspection
+    const eventNodes = completeInspection.eventNodes.slice(historyStartIndex)
+    const firstSeq = eventNodes[0]?.seq ?? 0
+    return {
+      ...completeInspection,
+      eventNodes,
+      requests: completeInspection.requests.filter(request =>
+        request.startSeq >= firstSeq || (request.resultSeq ?? -1) >= firstSeq),
+    }
+  }, [completeInspection, historyStartIndex])
   const historyLoading = useSession(snapshot => snapshot.openState === 'loading')
   const olderHistoryLoading = useSession(snapshot => snapshot.loadingOlder)
-  const hasOlderHistory = useSession(snapshot => snapshot.hasMore)
+  const sessionHasOlderHistory = useSession(snapshot => snapshot.hasMore)
+  const hasResidentOlderHistory = historyStartIndex > 0
+  const hasOlderHistory = hasResidentOlderHistory
+    || sessionHasOlderHistory
   const nodes = inspection.eventNodes
   const eventLocations = inspection.eventLocations
   const historyBaseSeq = nodes[0]?.seq ?? 0
@@ -158,14 +197,24 @@ export function TrajectoryView({
   const requests = inspection.requests
   const callSchemas = inspection.callSchemas
   const inspectCallId = viewRequest?.view === 'trajectory' ? viewRequest.focus : null
+  const inspectNodeIndex = useMemo(() => inspectCallId === null
+    ? -1
+    : completeInspection.eventNodes.findIndex(node => node.kind === 'assistant'
+      ? node.blocks.some(block => block.kind === 'tool-call' && block.callId === inspectCallId)
+      : node.kind === 'tool-result' && containsCall([node], inspectCallId)),
+  [completeInspection.eventNodes, inspectCallId])
+  useEffect(() => {
+    if (inspectNodeIndex < 0 || inspectNodeIndex >= historyStartIndex) return
+    setHistoryNodeLimit(limit => limit + historyStartIndex - inspectNodeIndex)
+  }, [historyStartIndex, inspectNodeIndex])
   const requestNumbers = useMemo<readonly TrajectoryRequestNumber[]>(() => {
     const assistantsByStep = new Map<string, AssistantMessageNode>()
-    for (const node of nodes) {
+    for (const node of completeInspection.eventNodes) {
       if (node.kind !== 'assistant' || node.step <= 0) continue
       assistantsByStep.set(`${node.turn}\u0000${node.step}`, node)
     }
     const requestsByStep = new Map(
-      requests
+      completeInspection.requests
         .filter(request => request.purpose === 'assistant')
         .map(request => [
           `${request.turn}\u0000${request.step}`,
@@ -173,7 +222,7 @@ export function TrajectoryView({
         ]),
     )
     const orderedRequests = [
-      ...requests.map(request => ({
+      ...completeInspection.requests.map(request => ({
         seq: request.startSeq,
         request,
         node: request.purpose === 'assistant'
@@ -257,7 +306,7 @@ export function TrajectoryView({
 
     return numbered
   }, [
-    nodes, requests, t,
+    completeInspection.eventNodes, completeInspection.requests, t,
   ])
   const partialTurn = partial?.turn ?? null
   const partialStep = partial?.step ?? null
@@ -448,9 +497,11 @@ export function TrajectoryView({
     })
   }
 
-  const loadEarlierHistory = useCallback(() => {
-    return loadOlder()
-  }, [loadOlder])
+  const loadEarlierHistory = useCallback(async () => {
+    if (!hasResidentOlderHistory && !await loadOlder()) return false
+    setHistoryNodeLimit(limit => limit + HISTORY_PAGE_NODES)
+    return true
+  }, [hasResidentOlderHistory, loadOlder])
 
   return (
     <div className={css.root} data-conversation-composer-overlay="">

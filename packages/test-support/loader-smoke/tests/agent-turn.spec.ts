@@ -54,9 +54,31 @@ describe('runFixtureTurn', () => {
     ['no agent registry', undefined, 0],
     ['multiple roots', { roots: () => [{}, {}] }, 2],
   ])('rejects %s', async (_label, registry, count) => {
-    const ctx = { get: () => registry } as unknown as Context
+    const ctx = { get: () => registry, on: () => () => {} } as unknown as Context
     await expect(runFixtureTurn(ctx, { task: 'ignored' }))
       .rejects.toThrow(`fixture turn requires exactly one top-level agent, found ${count}`)
+  })
+
+  it('waits for the configured agent to publish before requiring it', async () => {
+    // Configured agents publish asynchronously, so an initially empty registry
+    // waits for agent/created instead of rejecting.
+    const roots: object[] = []
+    let created: (() => void) | undefined
+    const dispose = vi.fn()
+    const ctx = {
+      get: (name: string) => name === 'agents' ? { roots: () => [...roots] } : undefined,
+      on: (name: string, callback: () => void) => {
+        if (name === 'agent/created') created = callback
+        return dispose
+      },
+    } as unknown as Context
+    const pending = runFixtureTurn(ctx, { task: 'ignored' })
+    // Publication with a second root still fails the exactly-one requirement,
+    // proving the count is re-checked after the wait.
+    roots.push({}, {})
+    created?.()
+    await expect(pending).rejects.toThrow('fixture turn requires exactly one top-level agent, found 2')
+    expect(dispose).toHaveBeenCalledOnce()
   })
 
   it('observes only the owned interval and returns its final text and deduplicated usage', async () => {

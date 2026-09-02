@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   ScheduleId,
@@ -137,13 +138,13 @@ describe('version-1 Schedule decoding and folding', () => {
   it('folds only the fork-owned suffix and validates its boundary', () => {
     const parentCreate = scheduleEvent(createData('parent'), 0)
     const childCreate = scheduleEvent(createData('child'), 1)
-    expect(foldScheduleEvents([parentCreate, childCreate], 1)).toEqual({
+    expect(foldScheduleEvents([parentCreate, childCreate], SessionLogOffset(1))).toEqual({
       active: [expect.objectContaining({ id: 'child' })],
       seenIds: ['child'],
     })
-    expect(() => foldScheduleEvents([], -1)).toThrow(/seedLength/)
-    expect(() => foldScheduleEvents([], 1)).toThrow(/seedLength/)
-    expect(() => foldScheduleEvents([], 0.5)).toThrow(/seedLength/)
+    expect(() => foldScheduleEvents([], -1 as never)).toThrow(/inheritedEventCount/)
+    expect(() => foldScheduleEvents([], SessionLogOffset(1))).toThrow(/inheritedEventCount/)
+    expect(() => foldScheduleEvents([], 0.5 as never)).toThrow(/inheritedEventCount/)
   })
 
   it('allocates a readable id without reusing ended or colliding ids', () => {

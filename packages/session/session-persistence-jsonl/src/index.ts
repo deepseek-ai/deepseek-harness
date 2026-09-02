@@ -1,8 +1,8 @@
 /**
  * JSONL durable session-persistence backend. It stores a header and contiguous
- * events in one append-only file per session, and delegates orchestration to
- * {@link PersistenceCoordinator}. Its side-effect-free locator returns the
- * absolute per-session log target before materialization.
+ * events in one append-only file per session and serves the handle-based
+ * `SessionPersistence` API: `create`/`open` return per-session handles, and
+ * every read validates the same fail-closed storage contract.
  * @module @deepseek-ai/dsh-session-persistence-jsonl
  */
 
@@ -15,17 +15,21 @@ import { performance } from 'node:perf_hooks'
 import { scheduler } from 'node:timers/promises'
 import { randomBytes } from 'node:crypto'
 import {
-  DEFAULT_PREPARED_SESSION_CACHE_SIZE, DEFAULT_WRITE_BATCH_MAX_DELAY_MS, MAX_WRITE_BATCH_DELAY_MS,
-  SessionPersistence, SessionPersistenceRevision, PersistenceCoordinator, SessionFormatUnsupportedError,
-  type BorrowedSessionSource,
-  type PersistenceBackend, type SessionLocation, type SessionPersistenceSnapshot,
-  type SessionInspection,
-  type SessionPersistenceRevision as PersistenceRevision, type SessionRawArtifact,
-  type StoredPrefix,
+  SessionPersistence, SessionPersistenceRevision, SessionFormatUnsupportedError,
+  SessionPersistenceCorruptionError,
+  SessionAlreadyExistsError, SessionPersistenceNotFoundError,
+  assertStoredId, assertVersion, materializeCreateHeader, validateStoredEvents,
+  type SessionAccess, type SessionHandle,
+  type SessionLocation, type SessionPersistenceCreateOptions,
+  type SessionPersistenceListOptions, type SessionPersistenceOpenOptions,
+  type SessionPersistenceSnapshot, type SessionPersistenceStatOptions,
+  type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
-import type { Session, SessionEvent, SessionId, SessionHeader, SessionPreparation } from '@deepseek-ai/dsh-session'
+import { JsonlBackendTracker, JsonlSessionHandle } from './storage.ts'
+import { SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
-  encodeSegment, eventLines, logPath, logSuffix, parseHeaderMeta, projectDir, scanLog, sessionDir,
+  encodeSegment, eventLines, logPath, logSuffix, parseHeader, parseHeaderMeta, projectDir, scanLog, sessionDir,
   SessionLogScanner, toHeaderLine,
   type JsonlCompression,
 } from './format.ts'
@@ -35,6 +39,13 @@ import {
 import { ensureDurableDirectoryWin32, publishNewFileWin32 } from './win32.ts'
 
 export type { JsonlCompression } from './format.ts'
+
+/**
+ * Internal handoff-reuse policy, not deployment configuration: a cold
+ * observation and the resume that immediately follows it reuse one parsed
+ * log, so the memo only needs the sessions in flight between those steps.
+ */
+const COLD_LOG_MEMO_MAX_ENTRIES = 2
 
 const DEFAULT_PACK_CHUNKS = true
 const DEFAULT_COMPRESSION: JsonlCompression = 'zstd'
@@ -78,16 +89,19 @@ export interface Config {
   packChunks?: boolean
   /** Physical encoding; defaults to checksummed Zstandard frames. */
   compression?: JsonlCompression
-  /** Maximum cold Session preparations retained for history-to-resume reuse. */
-  preparedSessionCacheSize?: number
-  /** Fixed live-event coalescing window; not a backend completion deadline. */
-  writeBatchMaxDelayMs?: number
 }
 
-/** Opaque coordinator token for replacing bytes recovered from a torn frame. */
-interface JsonlTornMarker {
-  truncateTo: number
-  recoveredEvents: SessionEvent[]
+/** A parsed, validated stored log: header, logical events, and any torn-tail repair state. */
+interface StoredLog {
+  readonly meta: SessionHeader
+  /** The logical log, including any events recovered from a torn final frame. */
+  readonly events: SessionEvent[]
+  readonly tornTruncateTo: number | undefined
+  /** Complete events recovered from the torn final frame; the write path rewrites them durably. */
+  readonly recoveredTail: SessionEvent[]
+  /** Exact fork-inherited prefix length stored in the header line. */
+  readonly inheritedEventCount: SessionLogOffsetType
+  readonly revision: PersistenceRevision
 }
 
 interface FileRevisionIdentity {
@@ -98,7 +112,7 @@ interface FileRevisionIdentity {
   readonly ctimeNs: bigint
 }
 
-/** Build the source-qualified revision shared by full and lightweight reads. */
+/** Build the stat-derived best-effort change token shared by full and lightweight reads. */
 function fileRevision(identity: FileRevisionIdentity): PersistenceRevision {
   return SessionPersistenceRevision([
     identity.dev,
@@ -116,249 +130,438 @@ function isENOENT(error: unknown): boolean {
 
 /**
  * The JSONL persistence backend. Load as a plugin; it registers as
- * `ctx.sessionPersistence` and (via the coordinator) installs the write-path
- * listeners. Its torn-tail marker carries the byte offset and any events
- * recovered from an incomplete final Zstandard frame.
+ * `ctx.sessionPersistence`. Sessions materialize lazily: a created session is
+ * visible to this process immediately, reaches disk on its first append or
+ * flush, and never existed if the process crashes before that.
  */
-export class JsonlSessionPersistence extends SessionPersistence implements PersistenceBackend<JsonlTornMarker> {
-  override readonly supportsRawArtifacts = true
-
-  static inject = ['sessions']
-
+class JsonlSessionPersistence extends SessionPersistence {
   static Config: z<Config> = z.object({
     root: z.string().required(),
     packChunks: z.boolean().default(DEFAULT_PACK_CHUNKS),
     compression: JsonlCompressionSchema,
-    preparedSessionCacheSize: z.number().step(1).min(1).default(DEFAULT_PREPARED_SESSION_CACHE_SIZE),
-    writeBatchMaxDelayMs: z.number().step(1).min(1).max(MAX_WRITE_BATCH_DELAY_MS)
-      .default(DEFAULT_WRITE_BATCH_MAX_DELAY_MS),
   })
 
-  /**
-   * Backend label for coordinator diagnostics and effects. It shadows
-   * `Service.name` without changing the service key captured by the base
-   * constructor.
-   */
+  /** Backend label for diagnostics and effects; shadows `Service.name` without changing the service key. */
   override readonly name = 'session-persistence-jsonl'
 
   private root: string
   private packChunks: boolean
   private compression: JsonlCompression
-  private coordinator: PersistenceCoordinator<JsonlTornMarker>
   private rootEncodingCheck: Promise<void> | undefined
+  private readonly tracker = new JsonlBackendTracker(this.name)
+  /**
+   * Bounded LRU of parsed, validated stored logs keyed by session id and
+   * guarded by the stat-derived revision, so an immediate cold-read handoff
+   * (observation then resume) parses the artifact once. Every local mutation
+   * for an id invalidates its entry; a foreign write misses through the
+   * revision guard.
+   */
+  private readonly coldLogMemo = new Map<SessionId, StoredLog>()
 
   constructor(ctx: Context, public config: Config) {
     super(ctx)
     // Resolve once so later process.cwd() changes cannot split one backend across roots.
     this.root = resolve(config.root)
-    // Programmatic wrappers may construct the backend without Schemastery normalization.
-    const preparedSessionCacheSize = config.preparedSessionCacheSize
-      ?? DEFAULT_PREPARED_SESSION_CACHE_SIZE
-    const writeBatchMaxDelayMs = config.writeBatchMaxDelayMs
-      ?? DEFAULT_WRITE_BATCH_MAX_DELAY_MS
     this.packChunks = config.packChunks ?? DEFAULT_PACK_CHUNKS
     this.compression = config.compression ?? DEFAULT_COMPRESSION
     this.assertUsableRoot()
-    this.coordinator = new PersistenceCoordinator<JsonlTornMarker>(this.ctx, this, {
-      preparedSessionCacheSize,
-      writeBatchMaxDelayMs,
-    })
-  }
-
-  // Each backend keeps the typed service API beside its storage hooks;
-  // extracting these trivial forwards would add an inheritance layer.
-  /* jscpd:ignore-start */
-  // --- SessionPersistence service API (delegated to the coordinator) ---
-
-  /** Resolve the absolute target path without touching the filesystem. */
-  locate(meta: SessionHeader): SessionLocation {
-    return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
-  }
-
-  create(meta: SessionHeader): Promise<void> {
-    return this.coordinator.create(meta)
-  }
-
-  override ensureMaterialized(session: Session): Promise<void> {
-    return this.coordinator.ensureMaterialized(session)
-  }
-
-  append(id: SessionId, events: readonly SessionEvent[]): Promise<void> {
-    return this.coordinator.append(id, events)
-  }
-
-  override prepare(id: SessionId, signal?: AbortSignal): Promise<SessionPreparation> {
-    return this.coordinator.prepare(id, signal)
-  }
-
-  load(id: SessionId): Promise<SessionInspection> {
-    return this.coordinator.load(id)
-  }
-
-  inspect(id: SessionId, signal?: AbortSignal): Promise<SessionInspection> {
-    return this.coordinator.inspect(id, signal)
-  }
-
-  override borrowSession(id: SessionId, signal?: AbortSignal): Promise<BorrowedSessionSource> {
-    return this.coordinator.borrowSession(id, signal)
-  }
-
-  // JSONL is sequential media: no loadStoredFrom hook, so the coordinator
-  // parses the stored prefix (both encodings) and skips forward to fromSeq.
-  readFrom(id: SessionId, fromSeq: number, signal?: AbortSignal): Promise<{ meta: SessionHeader; events: SessionEvent[] }> {
-    return this.coordinator.readFrom(id, fromSeq, signal)
-  }
-
-  // One method serves both public `list` and the backend hook; delegating it to
-  // the coordinator would call this hook recursively.
-
-  /* jscpd:ignore-end */
-  // --- PersistenceBackend hooks (the file-bytes storage primitives) ---
-
-  /** Read a stored prefix by id across all project directories when cwd is unknown. */
-  async loadStored(id: SessionId, signal?: AbortSignal): Promise<StoredPrefix<JsonlTornMarker> | undefined> {
-    signal?.throwIfAborted()
-    await this.ensureRootEncoding()
-    signal?.throwIfAborted()
-    const path = await this.findLog(id, signal)
-    if (path === undefined) return undefined
-    return this.readPrefix(path, id, signal)
+    this.tracker.install(ctx)
   }
 
   /**
-   * Read one log's stat-derived revision without loading its event bytes.
-   * Resolving an id with unknown cwd still scans the project directories.
+   * Refusal-diagnostics hook: the absolute target path, without touching the filesystem.
+   * @param meta - the stored header naming the session and its cwd.
+   * @returns the artifact kind and absolute path.
    */
-  async readStoredRevision(id: SessionId, signal?: AbortSignal): Promise<PersistenceRevision | undefined> {
-    signal?.throwIfAborted()
+  private locate(meta: SessionHeader): SessionLocation {
+    return { kind: 'jsonl', path: logPath(this.root, meta.cwd, meta.id, this.compression) }
+  }
+
+  // --- SessionPersistence service API ---
+
+  /**
+   * Create a new stored session and take its write ownership. The session is
+   * visible to this process immediately; the physical artifact appears on the
+   * first append or flush.
+   * @param header - the immutable header to store; must be losslessly
+   *   JSON-serializable with a non-negative safe-integer `createdAt`.
+   * @param options - optional cancellation.
+   * @returns the owned write handle.
+   */
+  async create(header: SessionHeader, options?: SessionPersistenceCreateOptions): Promise<SessionHandle> {
+    options?.signal?.throwIfAborted()
+    const snapshot = materializeCreateHeader(header)
+    // Fail fast on a seeded/cut mismatch with the exact refusal the header
+    // line encoder enforces at materialization.
+    toHeaderLine(snapshot, options?.inheritedEventCount)
+    const inheritedEventCount = SessionLogOffset(options?.inheritedEventCount ?? 0)
     await this.ensureRootEncoding()
-    signal?.throwIfAborted()
-    const path = await this.findLog(id, signal)
+    options?.signal?.throwIfAborted()
+    if (this.tracker.hasPending(snapshot.id) || await this.findLog(snapshot.id, options?.signal) !== undefined) {
+      throw new SessionAlreadyExistsError(snapshot.id)
+    }
+    options?.signal?.throwIfAborted()
+    this.tracker.registerCreated(snapshot, inheritedEventCount)
+    return this.tracker.adopt(new JsonlSessionHandle(this, snapshot.id, snapshot, 'write', { cursor: 0, materialized: false, inheritedEventCount }))
+  }
+
+  /**
+   * Open an existing stored session for `read` or single-writer `write`.
+   * @param id - the stored session to open.
+   * @param access - `read` (no ownership) or `write` (atomic in-process claim).
+   * @param options - optional cancellation.
+   * @returns the open handle.
+   */
+  async open(id: SessionId, access: SessionAccess, options?: SessionPersistenceOpenOptions): Promise<SessionHandle> {
+    options?.signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    const pending = this.tracker.pendingOf(id)
+    if (access === 'read') {
+      if (pending !== undefined) {
+        return this.tracker.adopt(new JsonlSessionHandle(this, id, pending.header, 'read', { cursor: 0, materialized: false, inheritedEventCount: pending.inheritedEventCount }))
+      }
+      // Header-only existence and identity check: reads scan the log on demand.
+      const snapshot = await this.stat(id, options)
+      if (snapshot === undefined) {
+        // stat() reports an artifact whose header it cannot parse as absent so
+        // listing can skip foreign junk, but a physically present log must
+        // refuse loudly here — a newer-format log's user must see "upgrade the
+        // harness", never "not found".
+        const stored = await this.requireStoredLog(id, options?.signal)
+        // The full read succeeded after the header-only read failed (a writer
+        // completed the header in between): serve the session.
+        return this.tracker.adopt(new JsonlSessionHandle(this, id, stored.meta, 'read', { cursor: 0, materialized: true, inheritedEventCount: stored.inheritedEventCount }))
+      }
+      // A stored foreign format version is refused at open, matching the
+      // refusal every read of this handle would produce.
+      assertVersion(snapshot.header, this.locate(snapshot.header))
+      return this.tracker.adopt(new JsonlSessionHandle(this, id, snapshot.header, 'read', { cursor: 0, materialized: true, inheritedEventCount: snapshot.inheritedEventCount }))
+    }
+    // A pending entry always belongs to an ACTIVE creator handle (close erases
+    // it), so the claim below rejects that case as already owned.
+    this.tracker.claimWrite(id)
+    try {
+      const stored = await this.requireStoredLog(id, options?.signal)
+      return this.tracker.adopt(new JsonlSessionHandle(this, id, stored.meta, 'write', {
+        cursor: stored.events.length,
+        materialized: true,
+        tornTruncateTo: stored.tornTruncateTo,
+        recoveredTail: stored.recoveredTail,
+        inheritedEventCount: stored.inheritedEventCount,
+        primed: stored.events,
+      }))
+    } catch (error) {
+      this.tracker.releaseClaim(id)
+      throw error
+    }
+  }
+
+  /**
+   * Flush every active write handle in one durability barrier; see the seam
+   * contract.
+   * @returns resolution once every write handle active at the call has flushed.
+   */
+  flush(): Promise<void> {
+    return this.tracker.flushAll()
+  }
+
+  /**
+   * Observe one stored session without reading its event log.
+   * @param id - the stored session to observe.
+   * @param options - optional cancellation.
+   * @returns the snapshot (`sizeBytes` carries the physical artifact size), or
+   *   `undefined` when the session does not exist.
+   */
+  async stat(
+    id: SessionId,
+    options?: SessionPersistenceStatOptions,
+  ): Promise<(SessionPersistenceSnapshot & { inheritedEventCount: SessionLogOffsetType }) | undefined> {
+    options?.signal?.throwIfAborted()
+    await this.ensureRootEncoding()
+    options?.signal?.throwIfAborted()
+    const pending = this.tracker.pendingOf(id)
+    if (pending !== undefined) {
+      return { header: pending.header, revision: pending.revision, inheritedEventCount: pending.inheritedEventCount }
+    }
+    const path = await this.findLog(id, options?.signal)
     if (path === undefined) return undefined
+    let first: string | undefined
+    try {
+      first = this.compression === 'zstd'
+        ? await this.readFirstZstdLine(path, options?.signal)
+        : await this.readFirstLine(path, options?.signal)
+    } catch (error: unknown) {
+      options?.signal?.throwIfAborted()
+      // The artifact vanished between discovery and the header read: absent.
+      if (isENOENT(error)) return undefined
+      throw error
+    }
+    options?.signal?.throwIfAborted()
+    if (first === undefined) return undefined // empty/half-written file
+    let stored
+    try {
+      stored = parseHeader(first)
+    } catch (error: unknown) {
+      // A foreign-version refusal from the raw header line names the artifact
+      // it refused, matching the refusal a full read would produce.
+      if (error instanceof SessionFormatUnsupportedError) {
+        throw new SessionFormatUnsupportedError(`${error.message} (raw log: ${path})`, { kind: 'jsonl', path })
+      }
+      throw error
+    }
+    if (stored === undefined) return undefined
+    const meta = stored.meta
+    await this.assertStoredIdentity(path, meta, id, options?.signal)
     try {
       const identity = await stat(path, { bigint: true })
-      signal?.throwIfAborted()
-      return fileRevision(identity)
+      options?.signal?.throwIfAborted()
+      return {
+        header: meta,
+        revision: fileRevision(identity),
+        sizeBytes: Number(identity.size),
+        inheritedEventCount: stored.inheritedEventCount,
+      }
     } catch (error: unknown) {
-      signal?.throwIfAborted()
+      options?.signal?.throwIfAborted()
       if (isENOENT(error)) return undefined
       throw error
     }
   }
 
   /**
-   * Read a session's stored artifact text verbatim: the durable file bytes
-   * decoded from this backend's physical encoding (complete zstd frames
-   * concatenated, or UTF-8 plaintext). The content is the exact JSONL text the
-   * backend wrote — never a reconstruction from parsed events — so packed-
-   * chunk rows, key order, and line breaks survive byte-for-byte. A torn
-   * final frame is omitted, matching the committed-prefix semantics of every
-   * other read.
-   * @param id - the persisted session to read.
-   * @param signal - optional cancellation for the stat/read/decode work.
-   * @returns the raw artifact text plus the header parsed from its own first
-   * line, or `undefined` when the session has no stored artifact.
+   * List every stored session visible to this process: materialized artifacts
+   * plus this process's created-but-unmaterialized sessions.
+   * @param options - optional cancellation.
+   * @returns one snapshot per session, in no promised order.
    */
-  override async readRaw(id: SessionId, signal?: AbortSignal): Promise<SessionRawArtifact | undefined> {
-    signal?.throwIfAborted()
-    await this.ensureRootEncoding()
-    signal?.throwIfAborted()
-    const path = await this.findLog(id, signal)
-    if (path === undefined) return undefined
-    const { buffer } = await this.readStableFile(path, signal)
-    let content: string
-    if (this.compression === 'zstd') {
-      const { frames } = scanZstdFrames(buffer)
-      if (frames.length === 0) throw new Error('empty or header-less Zstandard session log')
-      const decoder = createZstdFrameDecoder()
-      const plaintexts: Buffer[] = []
-      // The decoder yields views into a reused buffer; copy each frame's
-      // plaintext immediately so a later concat cannot read overwritten memory.
-      for (const plaintext of decoder.decode(buffer, frames)) {
+  async list(options?: SessionPersistenceListOptions): Promise<readonly SessionPersistenceSnapshot[]> {
+    const signal = options?.signal
+    const snapshots: SessionPersistenceSnapshot[] = []
+    const listed = new Set<SessionId>()
+    // Snapshot pending entries BEFORE scanning storage: a session whose first
+    // append lands mid-scan is then still in this snapshot (its artifact may
+    // predate the scan), so create-to-list visibility never has a hole.
+    const pending = [...this.tracker.pendingEntries()]
+    for (const artifact of await this.listArtifacts(signal)) {
+      signal?.throwIfAborted()
+      try {
+        const identity = await stat(artifact.path, { bigint: true })
         signal?.throwIfAborted()
-        plaintexts.push(Buffer.from(plaintext))
+        listed.add(artifact.header.id)
+        snapshots.push({
+          header: artifact.header,
+          revision: fileRevision(identity),
+          sizeBytes: Number(identity.size),
+        })
+      } catch (error: unknown) {
+        signal?.throwIfAborted()
+        if (!isENOENT(error)) throw error
       }
-      content = Buffer.concat(plaintexts).toString('utf8')
-    } else {
-      content = buffer.toString('utf8')
     }
-    const meta = parseHeaderMeta(content.split('\n', 1)[0] as string)
-    if (meta === undefined || meta.id !== id) {
-      throw new Error(`corrupt session log: invalid header line in "${path}"`)
+    for (const [id, entry] of pending) {
+      if (!listed.has(id)) snapshots.push({ header: entry.header, revision: entry.revision })
     }
-    // The logical artifact name is `session.jsonl` regardless of the physical
-    // encoding suffix (`.jsonl.zstd` marks compression only).
-    return { meta, filename: 'session.jsonl', content }
+    signal?.throwIfAborted()
+    return snapshots
+  }
+
+  // --- handle-facing storage internals (package-private via the handle class below) ---
+
+  /** Resolve and read one stored log, refusing loudly when the artifact is absent. */
+  private async requireStoredLog(id: SessionId, signal?: AbortSignal): Promise<StoredLog> {
+    const path = await this.findLog(id, signal)
+    if (path === undefined) throw new SessionPersistenceNotFoundError(id)
+    return this.readStoredLog(path, id, signal)
   }
 
   /**
-   * Read a file's bytes under a revision-stable loop: a writer appending
-   * between stat and readFile would yield a torn physical file, so retry
-   * while the stat revision changes.
+   * Read, parse, and validate one stored log as the current logical prefix.
+   * @param path - the artifact file to read.
+   * @param expectedId - the session identity the artifact must carry.
+   * @param signal - optional cancellation for the stat/read/decode work.
+   * @returns the validated stored log with any torn-tail truncation point.
+   */
+  async readStoredLog(path: string, expectedId: SessionId, signal?: AbortSignal): Promise<StoredLog> {
+    signal?.throwIfAborted()
+    const probe = fileRevision(await stat(path, { bigint: true }))
+    const memoized = this.coldLogMemo.get(expectedId)
+    if (memoized !== undefined && memoized.revision === probe) {
+      this.coldLogMemo.delete(expectedId)
+      this.coldLogMemo.set(expectedId, memoized)
+      return memoized
+    }
+    const { buffer, revision } = await this.readStableFile(path, signal)
+    let parsed: {
+      meta: SessionHeader
+      inheritedEventCount: SessionLogOffsetType
+      events: SessionEvent[]
+      tornTruncateTo: number | undefined
+      recoveredTail: SessionEvent[]
+    }
+    try {
+      if (this.compression === 'zstd') {
+        parsed = await this.readZstdPrefix(buffer, signal)
+      } else {
+        signal?.throwIfAborted()
+        const { meta, inheritedEventCount, events, committedBytes } = scanLog(buffer)
+        signal?.throwIfAborted()
+        parsed = {
+          meta,
+          inheritedEventCount,
+          events,
+          tornTruncateTo: committedBytes < buffer.byteLength ? committedBytes : undefined,
+          // A torn raw tail is one incomplete JSONL line; it holds no complete
+          // record to recover.
+          recoveredTail: [],
+        }
+      }
+    } catch (error: unknown) {
+      signal?.throwIfAborted()
+      // A parse-time format refusal predates any SessionHeader, so attach the
+      // artifact this read actually refused; every other parse failure is
+      // committed bytes the decoder cannot interpret — damage, classified for
+      // the seam's stable error vocabulary.
+      if (error instanceof SessionFormatUnsupportedError) {
+        throw new SessionFormatUnsupportedError(`${error.message} (raw log: ${path})`, { kind: 'jsonl', path })
+      }
+      throw new SessionPersistenceCorruptionError(`session "${expectedId}": stored log is corrupt: ${String(error)} (raw log: ${path})`, { cause: error })
+    }
+    signal?.throwIfAborted()
+    await this.assertStoredIdentity(path, parsed.meta, expectedId, signal)
+    signal?.throwIfAborted()
+    assertStoredId(expectedId, parsed.meta)
+    const location = this.locate(parsed.meta)
+    assertVersion(parsed.meta, location)
+    validateStoredEvents(parsed.meta, parsed.events, location)
+    const stored: StoredLog = { ...parsed, revision }
+    this.coldLogMemo.delete(expectedId)
+    this.coldLogMemo.set(expectedId, stored)
+    for (const oldest of this.coldLogMemo.keys()) {
+      if (this.coldLogMemo.size <= COLD_LOG_MEMO_MAX_ENTRIES) break
+      this.coldLogMemo.delete(oldest)
+    }
+    return stored
+  }
+
+  /**
+   * Resolve a session's unique log path.
+   * @param id - the stored session to locate.
+   * @param signal - optional cancellation for the directory scans.
+   * @returns the artifact path, or `undefined` when absent.
+   */
+  async resolveLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined> {
+    await this.ensureRootEncoding()
+    signal?.throwIfAborted()
+    return this.findLog(id, signal)
+  }
+
+  /**
+   * Durably append one validated batch; lazily materializes on the first write.
+   * @param header - the session's stored header.
+   * @param events - the validated contiguous batch, in seq order.
+   * @param isMaterialized - whether the session already has a durable artifact.
+   * @param inheritedEventCount - the exact fork-inherited prefix length written into a materializing header line.
+   */
+  async persistBatch(
+    header: SessionHeader,
+    events: readonly SessionEvent[],
+    isMaterialized: boolean,
+    inheritedEventCount: SessionLogOffsetType,
+  ): Promise<void> {
+    this.coldLogMemo.delete(header.id)
+    await this.ensureRootEncoding()
+    if (isMaterialized) {
+      await this.appendLines(header, events)
+    } else {
+      await this.materialize(header, inheritedEventCount, events)
+      this.tracker.materialized(header.id)
+    }
+  }
+
+  /**
+   * Materialize a header-only artifact for an explicitly durable empty session.
+   * @param header - the session's stored header.
+   * @param inheritedEventCount - the exact fork-inherited prefix length written into the header line.
+   */
+  async persistHeader(header: SessionHeader, inheritedEventCount: SessionLogOffsetType): Promise<void> {
+    this.coldLogMemo.delete(header.id)
+    await this.ensureRootEncoding()
+    await this.materialize(header, inheritedEventCount, [])
+    this.tracker.materialized(header.id)
+  }
+
+  /**
+   * Truncate a torn physical tail durably before this session's first new append.
+   * @param header - the session's stored header.
+   * @param truncateTo - the byte offset the artifact is truncated to.
+   */
+  async truncateTornTail(header: SessionHeader, truncateTo: number): Promise<void> {
+    this.coldLogMemo.delete(header.id)
+    await this.repair(header, truncateTo)
+    this.ctx.logger.warn(`${this.name}: session "${header.id}" recovered from a torn tail; incomplete tail bytes were discarded`)
+  }
+
+  /**
+   * Whether this process still tracks a created-but-unmaterialized session.
+   * @param id - the session to test.
+   * @returns true while the pending entry exists.
+   */
+  hasPendingSession(id: SessionId): boolean {
+    return this.tracker.hasPending(id)
+  }
+
+  /**
+   * Release one handle's backend bookkeeping on close.
+   * @param handle - the closing handle.
+   * @param materialized - whether the session reached durable storage.
+   */
+  releaseHandle(handle: JsonlSessionHandle, materialized: boolean): void {
+    this.tracker.release(handle, materialized)
+  }
+
+  /**
+   * Read a file's bytes with one bounded stability retry: a writer appending
+   * between stat and readFile yields a torn read, so a changed revision
+   * triggers exactly one re-read. A second change does not loop — the log is
+   * append-only, so the bytes at the retry's own pre-read stat size are a
+   * committed prefix, and the decoders treat anything past a torn cut as
+   * unwritten. A continuous writer therefore delays a read by at most one
+   * extra whole-file read instead of starving it.
    * @param path - the artifact file to read.
    * @param signal - optional cancellation for the stat/read work.
-   * @returns the stable bytes and the revision that matched both stats.
+   * @returns the stable bytes (or the committed prefix) and their revision.
    */
   private async readStableFile(
     path: string,
     signal?: AbortSignal,
   ): Promise<{ buffer: Buffer; revision: PersistenceRevision }> {
-    for (;;) {
-      signal?.throwIfAborted()
-      const before = fileRevision(await stat(path, { bigint: true }))
+    signal?.throwIfAborted()
+    let identity = await stat(path, { bigint: true })
+    for (let attempt = 0; ; attempt += 1) {
+      const before = fileRevision(identity)
       const buffer = await readFile(path, { signal })
       signal?.throwIfAborted()
-      const after = fileRevision(await stat(path, { bigint: true }))
-      if (before === after) return { buffer, revision: after }
-    }
-  }
-
-  /**
-   * Read a stored prefix and convert torn-tail state to the opaque marker the
-   * coordinator can round-trip without knowing the physical encoding.
-   */
-  private async readPrefix(
-    path: string,
-    expectedId?: SessionId,
-    signal?: AbortSignal,
-  ): Promise<StoredPrefix<JsonlTornMarker>> {
-    const { buffer, revision } = await this.readStableFile(path, signal)
-    let prefix: Omit<StoredPrefix<JsonlTornMarker>, 'revision'>
-    try {
-      if (this.compression === 'zstd') {
-        prefix = await this.readZstdPrefix(buffer, signal)
-      } else {
-        signal?.throwIfAborted()
-        const { meta, events, committedBytes } = scanLog(buffer)
-        signal?.throwIfAborted()
-        prefix = {
-          meta,
-          events,
-          ...committedBytes < buffer.byteLength
-            ? { tornMarker: { truncateTo: committedBytes, recoveredEvents: [] } }
-            : {},
-        }
+      const after = await stat(path, { bigint: true })
+      if (before === fileRevision(after)) return { buffer, revision: before }
+      if (attempt === 1) {
+        return { buffer: buffer.subarray(0, Number(identity.size)), revision: before }
       }
-    } catch (error: unknown) {
-      // A parse-time format refusal predates any SessionHeader, so the
-      // coordinator's locate-based enrichment cannot run; attach the artifact
-      // this read actually refused.
-      if (error instanceof SessionFormatUnsupportedError && error.location === undefined) {
-        throw new SessionFormatUnsupportedError(`${error.message} (raw log: ${path})`, { kind: 'jsonl', path })
-      }
-      throw error
+      identity = after
     }
-    signal?.throwIfAborted()
-    await this.assertStoredIdentity(path, prefix.meta, expectedId, signal)
-    signal?.throwIfAborted()
-    return { ...prefix, revision }
   }
 
   /** Decode complete frames and retain complete JSONL records from a torn final frame. */
   private async readZstdPrefix(
     buffer: Buffer,
     signal?: AbortSignal,
-  ): Promise<Omit<StoredPrefix<JsonlTornMarker>, 'revision'>> {
+  ): Promise<{
+    meta: SessionHeader
+    inheritedEventCount: SessionLogOffsetType
+    events: SessionEvent[]
+    tornTruncateTo: number | undefined
+    recoveredTail: SessionEvent[]
+  }> {
     signal?.throwIfAborted()
     const { frames, tornStart } = scanZstdFrames(buffer)
     signal?.throwIfAborted()
@@ -394,9 +597,17 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
       }
       if (tornStart === undefined) {
         const prefix = scanner.finish()
-        return { meta: prefix.meta, events: prefix.events }
+        return {
+          meta: prefix.meta,
+          inheritedEventCount: prefix.inheritedEventCount,
+          events: prefix.events,
+          tornTruncateTo: undefined,
+          recoveredTail: [],
+        }
       }
-
+      // A torn final frame's append never resolved, but complete JSONL records
+      // already flushed into it are real emitted events: recover them, and let
+      // the write path truncate the torn bytes and rewrite them durably.
       let recoveredPlaintext: Buffer = Buffer.alloc(0)
       try {
         signal?.throwIfAborted()
@@ -404,20 +615,18 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
       } catch {
         /* v8 ignore next -- decoder failure plus concurrent abort is timing-dependent */
         if (signal?.aborted) signal.throwIfAborted()
-        // A structurally incomplete final frame may end before Node's decoder can
-        // emit any plaintext; the complete prior frames remain recoverable.
+        // A structurally incomplete final frame may end before Node's decoder
+        // can emit any plaintext; the complete prior frames remain recoverable.
       }
       signal?.throwIfAborted()
       scanner.write(recoveredPlaintext)
-      const recoveredPrefix = scanner.finish()
-      signal?.throwIfAborted()
+      const prefix = scanner.finish()
       return {
-        meta: recoveredPrefix.meta,
-        events: recoveredPrefix.events,
-        tornMarker: {
-          truncateTo: tornStart,
-          recoveredEvents: recoveredPrefix.events.slice(complete.eventCount),
-        },
+        meta: prefix.meta,
+        inheritedEventCount: prefix.inheritedEventCount,
+        events: prefix.events,
+        tornTruncateTo: tornStart,
+        recoveredTail: prefix.events.slice(complete.eventCount),
       }
     } catch (error) {
       /* v8 ignore next -- decoder failure plus concurrent abort is timing-dependent */
@@ -426,63 +635,6 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
     } finally {
       decoder.close()
     }
-  }
-
-  /** Durably append a batch, lazily materializing the file when not yet present. */
-  async appendBatch(meta: SessionHeader, events: readonly SessionEvent[], isMaterialized: boolean): Promise<void> {
-    await this.ensureRootEncoding()
-    if (isMaterialized) {
-      await this.appendLines(meta, events)
-    } else {
-      await this.materialize(meta, events)
-    }
-  }
-
-  /** Materialize a header-only JSONL artifact for an explicitly durable empty session. */
-  async materializeHeader(meta: SessionHeader): Promise<void> {
-    await this.materialize(meta, [])
-  }
-
-  /**
-   * Make a crash repair durable: truncate a torn tail, restore complete events
-   * decoded from it, then append synthetic closers. Two fsync'd steps — the seam
-   * does not require this to be atomic.
-   */
-  async commitRepair(
-    meta: SessionHeader,
-    tornMarker: JsonlTornMarker | undefined,
-    closers: readonly SessionEvent[],
-  ): Promise<void> {
-    if (tornMarker !== undefined) await this.repair(meta, tornMarker.truncateTo)
-    const repairedEvents = [...(tornMarker?.recoveredEvents ?? []), ...closers]
-    if (repairedEvents.length > 0) await this.appendLines(meta, repairedEvents)
-    if (tornMarker !== undefined) this.ctx.logger.warn(`${this.name}: session "${meta.id}" recovered from a torn tail; incomplete tail bytes were discarded`)
-  }
-
-  /** List valid unique stored sessions' metadata (header line only — no full-log parse). */
-  async list(signal?: AbortSignal): Promise<SessionHeader[]> {
-    return (await this.listArtifacts(signal)).map(artifact => artifact.header)
-  }
-
-  /** List metadata plus a stat-derived identity for each append-only log. */
-  async listSnapshots(signal?: AbortSignal): Promise<SessionPersistenceSnapshot[]> {
-    const snapshots: SessionPersistenceSnapshot[] = []
-    for (const artifact of await this.listArtifacts(signal)) {
-      signal?.throwIfAborted()
-      try {
-        const identity = await stat(artifact.path, { bigint: true })
-        signal?.throwIfAborted()
-        snapshots.push({
-          header: artifact.header,
-          revision: fileRevision(identity),
-        })
-      } catch (error: unknown) {
-        signal?.throwIfAborted()
-        if (!isENOENT(error)) throw error
-      }
-    }
-    signal?.throwIfAborted()
-    return snapshots
   }
 
   private async listArtifacts(signal?: AbortSignal): Promise<Array<{ header: SessionHeader; path: string }>> {
@@ -509,7 +661,15 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
           : await this.readFirstLine(path, signal)
         signal?.throwIfAborted()
         if (first === undefined) continue // empty/half-written file
-        const meta = parseHeaderMeta(first)
+        let meta: SessionHeader | undefined
+        try {
+          meta = parseHeaderMeta(first)
+        } catch (error: unknown) {
+          // Listing skips an unreadable (foreign-version) header instead of
+          // failing the whole list; opening that id still refuses loudly.
+          if (error instanceof SessionFormatUnsupportedError) continue
+          throw error
+        }
         if (meta === undefined) continue // not a session header
         await this.assertStoredIdentity(path, meta, undefined, signal)
         signal?.throwIfAborted()
@@ -527,12 +687,16 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   // --- materialization / append / repair (file mechanics) ---
 
   /** Atomically write the header line + first batch (temp-write, fsync, publish). */
-  private async materialize(meta: SessionHeader, events: readonly SessionEvent[]): Promise<void> {
+  private async materialize(
+    meta: SessionHeader,
+    inheritedEventCount: SessionLogOffsetType,
+    events: readonly SessionEvent[],
+  ): Promise<void> {
     const project = projectDir(this.root, meta.cwd)
     const dir = sessionDir(this.root, meta.cwd, meta.id)
     const finalPath = logPath(this.root, meta.cwd, meta.id, this.compression)
     await this.rejectOppositeArtifact(meta.cwd, meta.id)
-    const content = await this.encodeMaterialization(meta, events)
+    const content = await this.encodeMaterialization(meta, inheritedEventCount, events)
     /* v8 ignore next -- native Windows coverage exercises this platform dispatch; Linux covers the POSIX peer */
     if (process.platform === 'win32') {
       await this.materializeWin32(project, dir, finalPath, meta.id, content)
@@ -610,12 +774,12 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   private async rejectExistingLog(finalPath: string, id: SessionId): Promise<void> {
     // Never publish over an existing committed log: materialize is the first
     // write of a session the backend believes is new. A file here means a
-    // different session shares this id on disk — reject loudly. (createCore
-    // already guards the create path, so this is unreachable-in-practice TOCTOU
+    // different session shares this id on disk — reject loudly. (create already
+    // guards the create path, so this is unreachable-in-practice TOCTOU
     // defense.)
-    /* v8 ignore next 3 -- createCore guards collisions before materialize; this is a TOCTOU backstop */
+    /* v8 ignore next 3 -- create guards collisions before materialize; this is a TOCTOU backstop */
     if (await this.exists(finalPath)) {
-      throw new Error(`refusing to materialize "${id}": a log already exists on disk (load/resume it instead)`)
+      throw new Error(`refusing to materialize "${id}": a log already exists on disk (open it instead)`)
     }
   }
 
@@ -632,8 +796,12 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   }
 
   /** Encode the header and first batch without combining their frame boundaries. */
-  private async encodeMaterialization(meta: SessionHeader, events: readonly SessionEvent[]): Promise<Buffer | string> {
-    const header = JSON.stringify(toHeaderLine(meta)) + '\n'
+  private async encodeMaterialization(
+    meta: SessionHeader,
+    inheritedEventCount: SessionLogOffsetType,
+    events: readonly SessionEvent[],
+  ): Promise<Buffer | string> {
+    const header = JSON.stringify(toHeaderLine(meta, meta.isSeeded ? inheritedEventCount : undefined)) + '\n'
     if (events.length === 0) {
       return this.compression === 'none' ? header : compressZstdFrame(header)
     }
@@ -985,5 +1153,11 @@ export class JsonlSessionPersistence extends SessionPersistence implements Persi
   }
   /* v8 ignore stop */
 }
+
+/**
+ * One open channel onto a JSONL-stored session: the shared storage-handle
+ * scaffolding over this backend's file primitives. Reads re-scan the artifact
+ * under the stable-read loop.
+ */
 
 export default JsonlSessionPersistence

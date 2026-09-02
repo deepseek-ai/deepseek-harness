@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { inspectRequestPrompt } from '../src/client/contract/request-inspection.ts'
 
 const CONFIG = { provider: 'test', model: 'test' }
 
 function header(
-  seq: number,
+  seq: SessionSeq,
   reason: SessionEvent<'request/header'>['data']['reason'],
   value: SessionEvent<'request/header'>['data']['header'],
 ): SessionEvent<'request/header'> {
@@ -19,7 +20,7 @@ function header(
 
 describe('inspectRequestPrompt', () => {
   it('classifies the first complete header as the initial prompt', () => {
-    expect(inspectRequestPrompt(undefined, header(1, 'initial', {
+    expect(inspectRequestPrompt(undefined, header(SessionSeq(1), 'initial', {
       config: CONFIG,
       system: '# System\n\nFollow instructions.',
       tools: [{ name: 'read', description: 'Read a file', parameters: { type: 'object' } }],
@@ -34,7 +35,7 @@ describe('inspectRequestPrompt', () => {
   })
 
   it('suppresses a resume header when the earlier prompt is outside the loaded window', () => {
-    expect(inspectRequestPrompt(undefined, header(2, 'resume', {
+    expect(inspectRequestPrompt(undefined, header(SessionSeq(2), 'resume', {
       config: CONFIG,
       system: 'same prompt',
     }))).toEqual({
@@ -43,22 +44,22 @@ describe('inspectRequestPrompt', () => {
   })
 
   it('classifies system, tool, and combined changes against the previous prompt', () => {
-    const initial = inspectRequestPrompt(undefined, header(1, 'initial', {
+    const initial = inspectRequestPrompt(undefined, header(SessionSeq(1), 'initial', {
       config: CONFIG,
       system: 'first',
       tools: [{ name: 'read', description: 'Read', parameters: { type: 'object' } }],
     })).prompt
-    const system = inspectRequestPrompt(initial, header(2, 'change', {
+    const system = inspectRequestPrompt(initial, header(SessionSeq(2), 'change', {
       config: CONFIG,
       system: 'second',
       tools: [...initial.tools],
     }))
-    const tools = inspectRequestPrompt(system.prompt, header(3, 'change', {
+    const tools = inspectRequestPrompt(system.prompt, header(SessionSeq(3), 'change', {
       config: CONFIG,
       system: 'second',
       tools: [{ name: 'write', description: 'Write', parameters: { type: 'object' } }],
     }))
-    const combined = inspectRequestPrompt(tools.prompt, header(4, 'change', {
+    const combined = inspectRequestPrompt(tools.prompt, header(SessionSeq(4), 'change', {
       config: CONFIG,
       system: 'third',
       tools: [],
@@ -71,12 +72,12 @@ describe('inspectRequestPrompt', () => {
   })
 
   it('omits a change when the prompt and tools are unchanged', () => {
-    const previous = inspectRequestPrompt(undefined, header(1, 'initial', {
+    const previous = inspectRequestPrompt(undefined, header(SessionSeq(1), 'initial', {
       config: CONFIG,
       system: 'same',
     })).prompt
 
-    expect(inspectRequestPrompt(previous, header(2, 'resume', {
+    expect(inspectRequestPrompt(previous, header(SessionSeq(2), 'resume', {
       config: { ...CONFIG, maxTokens: 1_024 },
       system: 'same',
     }))).toEqual({

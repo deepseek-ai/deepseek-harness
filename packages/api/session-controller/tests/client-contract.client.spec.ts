@@ -1,11 +1,18 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { PromptContentPart as AttachmentPromptContentPart } from '@deepseek-ai/dsh-attachment/types'
+import { SessionSeq, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import {
   MutableSessionEventSource, type SessionLiveEventEntry,
 } from '../src/client/contract/events.ts'
-import type { PromptContentPart as SessionPromptContentPart } from '../src/types.ts'
+import type { ISession } from '../src/client/contract/session.ts'
+import type { ProjectionsBaseline } from '../src/client/sessions/projection-store.ts'
+import { ProjectionValueStore } from '../src/client/sessions/projection-store.ts'
+import type { PromptContentPart as SessionPromptContentPart, SessionPageRequest } from '../src/types.ts'
+import { ev, plainTurn } from './event-script.client.ts'
 
-function entry(seq: number): SessionLiveEventEntry {
+type RenameSuccess = Extract<Awaited<ReturnType<ISession['rename']>>, { readonly ok: true }>
+
+function entry(seq: SessionSeq): SessionLiveEventEntry {
   return {
     type: 'event',
     event: {
@@ -18,6 +25,23 @@ function entry(seq: number): SessionLiveEventEntry {
 }
 
 describe('Client Session contracts', () => {
+  it('requires branded Session positions at internal event fixture boundaries', () => {
+    expectTypeOf(entry).parameter(0).toEqualTypeOf<SessionSeq>()
+    expectTypeOf(ev.user).parameter(0).toEqualTypeOf<SessionSeq>()
+    expectTypeOf(ev.commandDone).parameter(4).toEqualTypeOf<SessionSeq | undefined>()
+    expectTypeOf(ev.compactSummary).parameter(2).toEqualTypeOf<SessionSeq>()
+    expectTypeOf(ev.compactCheckpoint).parameter(1).toEqualTypeOf<SessionSeq>()
+    expectTypeOf(plainTurn).parameter(0).toEqualTypeOf<SessionSeq>()
+  })
+
+  it('brands same-process Session event positions while keeping the API wire numeric', () => {
+    expectTypeOf<ISession['loadThrough']>().parameter(0).toEqualTypeOf<SessionSeq>()
+    expectTypeOf<RenameSuccess['value']['seq']>().toEqualTypeOf<SessionSeq>()
+    expectTypeOf<ProjectionValueStore['apply']>().parameter(2).toEqualTypeOf<SessionSeqCursor>()
+    expectTypeOf<ProjectionsBaseline['asOfSeq']>().toEqualTypeOf<SessionSeqCursor>()
+    expectTypeOf<SessionPageRequest['throughSeq']>().toEqualTypeOf<number>()
+  })
+
   it('keeps its catalog-visible prompt parts identical to attachment intake', () => {
     expectTypeOf<SessionPromptContentPart>().toEqualTypeOf<AttachmentPromptContentPart>()
   })
@@ -26,9 +50,9 @@ describe('Client Session contracts', () => {
     const feed = new MutableSessionEventSource()
     const listener = vi.fn()
     const dispose = feed.subscribe(listener)
-    const first = entry(1)
-    const older = entry(0)
-    const live = entry(2)
+    const first = entry(SessionSeq(1))
+    const older = entry(SessionSeq(0))
+    const live = entry(SessionSeq(2))
 
     feed.replace([first], true)
     expect(feed.getSnapshot()).toEqual({
@@ -56,13 +80,13 @@ describe('Client Session contracts', () => {
     expect(listener).toHaveBeenCalledTimes(3)
 
     dispose()
-    feed.append(entry(3))
+    feed.append(entry(SessionSeq(3)))
     expect(listener).toHaveBeenCalledTimes(3)
   })
 
   it('does not traverse the complete event window while appending', () => {
     const feed = new MutableSessionEventSource()
-    const first = entry(1)
+    const first = entry(SessionSeq(1))
     const base = [first]
     const iterate = vi.fn(Array.prototype[Symbol.iterator].bind(base))
     Object.defineProperty(base, Symbol.iterator, { value: iterate })
@@ -70,7 +94,7 @@ describe('Client Session contracts', () => {
     iterate.mockClear()
 
     const before = feed.getSnapshot()
-    const live = entry(2)
+    const live = entry(SessionSeq(2))
     feed.append(live)
     const after = feed.getSnapshot()
 

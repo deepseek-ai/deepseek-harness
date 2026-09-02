@@ -11,13 +11,15 @@ import { Context } from '@deepseek-ai/cordis'
 import { normalizeSessionSnapshot, type NormalizeContext } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, {
+import {
   SESSION_FORMAT_VERSION,
   SessionId,
+  SessionSeq,
   type SessionEvent,
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
+import { logPath } from '../../../../../../packages/session/session-persistence-jsonl/src/format.ts'
 import { renderWorkspaceContext } from '@deepseek-ai/dsh-agent-instructions'
 import { resolveConfig, workspaceBaselineIdentity } from '@deepseek-ai/dsh-agent-instructions/src/config.ts'
 import { describe, expect, it } from 'vitest'
@@ -46,13 +48,13 @@ async function seedVisibleBaseline(
   options: SeedBaselineOptions = {},
 ): Promise<string> {
   const ctx = new Context()
-  await ctx.plugin(SessionStore)
   await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
   const meta: SessionHeader = {
     version: SESSION_FORMAT_VERSION,
     id: sessionId,
     createdAt: 1,
     cwd,
+    isSeeded: false,
     delegationDepth: 0,
   }
   const files = options.files ?? [{ name: 'AGENTS.md', content: oldInstruction }]
@@ -69,17 +71,17 @@ async function seedVisibleBaseline(
       : { instructionFileCandidates: options.instructionFileCandidates },
   })
   const events: SessionEvent[] = [
-    { type: 'turn/start', seq: 0, time: 10, data: { turn: 1 } },
+    { type: 'turn/start', seq: SessionSeq(0), time: 10, data: { turn: 1 } },
     {
       type: 'user/message',
-      seq: 1,
+      seq: SessionSeq(1),
       time: 11,
       data: createUserMessage({ content: [{ type: 'text', text: 'Remember the workspace instruction.' }], source: { kind: 'user' } }),
       surfaceOp: 'append',
     },
     {
       type: 'user/message',
-      seq: 2,
+      seq: SessionSeq(2),
       time: 12,
       data: createUserMessage({
         content: [{ type: 'text', text: baseline.text }],
@@ -98,14 +100,13 @@ async function seedVisibleBaseline(
       }),
       surfaceOp: 'append',
     },
-    { type: 'turn/end', seq: 3, time: 13, data: { turn: 1, reason: { kind: 'completed' } } },
+    { type: 'turn/end', seq: SessionSeq(3), time: 13, data: { turn: 1, reason: { kind: 'completed' } } },
   ]
   try {
-    await ctx.sessionPersistence.create(meta)
-    await ctx.sessionPersistence.append(sessionId, events)
-    const location = ctx.sessionPersistence.locate(meta)
-    if (location === undefined) throw new Error('JSONL backend did not locate the seeded session')
-    return location.path
+    const handle = await ctx.sessionPersistence.create(meta)
+    await handle.append(events)
+    await handle.close()
+    return logPath(root, meta.cwd, meta.id, 'none')
   } finally {
     await ctx.fiber.dispose()
   }

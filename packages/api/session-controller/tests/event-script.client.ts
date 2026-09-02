@@ -1,6 +1,7 @@
 import {
   ToolCallId, createMessage, createToolResultMessage, createUserMessage,
 } from '@deepseek-ai/dsh-llm'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 // Minimal SessionEvent builders for orchestration tests (shape mirrors what the
 // host emits; only the fields the object layer reads).
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
@@ -14,23 +15,23 @@ import type {
 /** One text content block (local helper). */
 const text = (t: string): ContentBlock[] => [{ type: 'text', text: t }]
 
-const at = (seq: number, e: Record<string, unknown>): SessionEvent =>
+const at = (seq: SessionSeq, e: Record<string, unknown>): SessionEvent =>
   ({ seq, time: 1_700_000_000_000 + seq, ...e }) as unknown as SessionEvent
 
 export const ev = {
-  turnStart: (seq: number, turn: number): SessionEvent =>
+  turnStart: (seq: SessionSeq, turn: number): SessionEvent =>
     at(seq, { type: 'turn/start', data: { turn } }),
-  user: (seq: number, body: string): SessionEvent =>
+  user: (seq: SessionSeq, body: string): SessionEvent =>
     at(seq, { type: 'user/message', surfaceOp: 'append', data: createUserMessage({
       content: text(body), source: { kind: 'user' },
     }) }),
-  stepStart: (seq: number, turn: number, step = 0): SessionEvent =>
+  stepStart: (seq: SessionSeq, turn: number, step = 0): SessionEvent =>
     at(seq, { type: 'step/start', data: { turn, step } }),
-  chunkStart: (seq: number, turn: number, step = 0, index = 0): SessionEvent =>
+  chunkStart: (seq: SessionSeq, turn: number, step = 0, index = 0): SessionEvent =>
     at(seq, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'block-start', index, blockType: 'text' } } }),
-  chunkText: (seq: number, turn: number, piece: string, step = 0, index = 0): SessionEvent =>
+  chunkText: (seq: SessionSeq, turn: number, piece: string, step = 0, index = 0): SessionEvent =>
     at(seq, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'text-delta', index, text: piece } } }),
-  assistant: (seq: number, turn: number, body: string, step = 0): SessionEvent =>
+  assistant: (seq: SessionSeq, turn: number, body: string, step = 0): SessionEvent =>
     at(seq, { type: 'assistant/message', surfaceOp: 'append', data: {
       turn, step,
       message: createMessage({
@@ -42,9 +43,9 @@ export const ev = {
         },
       }),
     } }),
-  toolCall: (seq: number, turn: number, callId: string, name: string, args: string, step = 0): SessionEvent =>
+  toolCall: (seq: SessionSeq, turn: number, callId: string, name: string, args: string, step = 0): SessionEvent =>
     at(seq, { type: 'tool/call', data: { turn, step, callId, name, arguments: args } }),
-  toolResult: (seq: number, turn: number, callId: string, body: string, step = 0): SessionEvent =>
+  toolResult: (seq: SessionSeq, turn: number, callId: string, body: string, step = 0): SessionEvent =>
     at(seq, {
       type: 'tool/result',
       surfaceOp: 'append',
@@ -58,20 +59,28 @@ export const ev = {
         }),
       },
     }),
-  codeDispatchStart: (seq: number, parentCallId: string, n: number, name: string, args: unknown): SessionEvent =>
+  codeDispatchStart: (seq: SessionSeq, parentCallId: string, n: number, name: string, args: unknown): SessionEvent =>
     at(seq, {
       type: 'tool/code-dispatch-start',
       data: { rootCallId: parentCallId, parentCallId, subCallId: `${parentCallId}:code:${n}`, name, arguments: args },
     }),
-  codeDispatch: (seq: number, parentCallId: string, n: number, name: string, args: unknown, body: string, isError = false): SessionEvent =>
+  codeDispatch: (
+    seq: SessionSeq,
+    parentCallId: string,
+    n: number,
+    name: string,
+    args: unknown,
+    body: string,
+    isError = false,
+  ): SessionEvent =>
     at(seq, {
       type: 'tool/code-dispatch',
       data: { rootCallId: parentCallId, parentCallId, subCallId: `${parentCallId}:code:${n}`, name, arguments: args, isError, content: text(body) },
     }),
-  stepEnd: (seq: number, turn: number, step = 0): SessionEvent =>
+  stepEnd: (seq: SessionSeq, turn: number, step = 0): SessionEvent =>
     at(seq, { type: 'step/end', data: { turn, step } }),
   retry: (
-    seq: number,
+    seq: SessionSeq,
     turn: number,
     step = 0,
     retry = 1,
@@ -88,23 +97,23 @@ export const ev = {
         failure: { code: 'TRANSPORT', message },
       },
     }),
-  turnEnd: (seq: number, turn: number, reason: 'completed' | 'aborted' | 'disposed' = 'completed'): SessionEvent =>
+  turnEnd: (seq: SessionSeq, turn: number, reason: 'completed' | 'aborted' | 'disposed' = 'completed'): SessionEvent =>
     at(seq, { type: 'turn/end', data: {
       turn,
       reason: reason === 'completed'
         ? { kind: 'completed' }
         : { kind: 'aborted', reason: { kind: reason === 'disposed' ? 'disposed' : 'user' } },
     } }),
-  commandRun: (seq: number, commandId: string, name: string, args = ''): SessionEvent =>
+  commandRun: (seq: SessionSeq, commandId: string, name: string, args = ''): SessionEvent =>
     at(seq, { type: 'command/run', data: { commandId, name, args, source: { kind: 'user' } } }),
-  commandRunWithoutInput: (seq: number, commandId: string, name: string): SessionEvent =>
+  commandRunWithoutInput: (seq: SessionSeq, commandId: string, name: string): SessionEvent =>
     at(seq, { type: 'command/run', data: { commandId, name, source: { kind: 'user' } } }),
   commandDone: (
-    seq: number,
+    seq: SessionSeq,
     commandId: string,
     kind: 'success' | 'error' = 'success',
     text?: string,
-    sourceEventSeq?: number,
+    sourceEventSeq?: SessionSeq,
   ): SessionEvent =>
     at(seq, { type: 'command/done', data: {
       commandId,
@@ -113,7 +122,7 @@ export const ev = {
       ...sourceEventSeq === undefined ? {} : { sourceEventSeq },
     } }),
   /** A compaction's log-only `compaction/summary` record. */
-  compactSummary: (seq: number, summary: string, start: number, end: number): SessionEvent =>
+  compactSummary: (seq: SessionSeq, summary: string, start: SessionSeq, end: SessionSeq): SessionEvent =>
     at(seq, { type: 'compaction/summary', data: {
       summary: text(summary),
       shadowedRange: { start, end },
@@ -123,7 +132,12 @@ export const ev = {
       model: 'compact-1',
     } }),
   /** The replacement user message a compaction backend lands (the checkpoint). */
-  compactCheckpoint: (seq: number, summarySeq: number, start: number, end: number): SessionEvent =>
+  compactCheckpoint: (
+    seq: SessionSeq,
+    summarySeq: SessionSeq,
+    start: SessionSeq,
+    end: SessionSeq,
+  ): SessionEvent =>
     at(seq, {
       type: 'user/message',
       surfaceOp: { op: 'replace', start, end },
@@ -136,14 +150,14 @@ export const ev = {
 }
 
 /** One complete plain turn (turn/start → user → step → assistant → turn/end), 6 events from startSeq. */
-export function plainTurn(startSeq: number, turn: number, ask: string, answer: string): SessionEvent[] {
+export function plainTurn(startSeq: SessionSeq, turn: number, ask: string, answer: string): SessionEvent[] {
   return [
     ev.turnStart(startSeq, turn),
-    ev.user(startSeq + 1, ask),
-    ev.stepStart(startSeq + 2, turn),
-    ev.assistant(startSeq + 3, turn, answer),
-    ev.stepEnd(startSeq + 4, turn),
-    ev.turnEnd(startSeq + 5, turn),
+    ev.user(SessionSeq(startSeq + 1), ask),
+    ev.stepStart(SessionSeq(startSeq + 2), turn),
+    ev.assistant(SessionSeq(startSeq + 3), turn, answer),
+    ev.stepEnd(SessionSeq(startSeq + 4), turn),
+    ev.turnEnd(SessionSeq(startSeq + 5), turn),
   ]
 }
 

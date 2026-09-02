@@ -23,7 +23,7 @@
   min-height: 44px;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border: 0.5px solid var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 16px;
   background: var(--dsw-alias-interactive-bg-hover);
   cursor: zoom-in;
@@ -53,7 +53,7 @@
 .error {
   max-width: 240px;
   padding: 10px 12px;
-  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border: 0.5px solid var(--dsw-alias-border-l2-darkmode-thin);
   border-radius: 10px;
   background: var(--dsw-alias-interactive-bg-hover-danger);
   cursor: pointer;

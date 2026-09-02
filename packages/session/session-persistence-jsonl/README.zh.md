@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-persistence-jsonl` 把每个会话存为一份仅追加 JSONL 日志——默认以带校验和的 Zstandard 帧存储，禁用压缩时以换行分隔的原始文本行存储。它提供与任何持久化后端相同的逻辑 `SessionEvent` 流，因此选择它不会改变 agent loop、模型或回放的任何行为；压缩、打包与崩溃恢复都是存储内部细节。当消费方需要按会话的磁盘产物时选择它：`locate(meta)` 返回 transcript 路径，选择 `compression: 'none'` 后日志可作为纯文本按行读取。根目录是唯一必填配置；持久性、延迟实体化与中断轮次恢复都随后端提供。
+`dsh-session-persistence-jsonl` 把每个会话存为一份仅追加 JSONL 日志——默认以带校验和的 Zstandard 帧存储，禁用压缩时以换行分隔的原始文本行存储。它提供与任何持久化后端相同的逻辑 `SessionEvent` 流，因此选择它不会改变 agent loop、模型或回放的任何行为；压缩、打包与崩溃恢复都是存储内部细节。当消费方需要按会话的磁盘文件时选择它；选择 `compression: 'none'` 后日志可作为纯文本按行读取。根目录是唯一必填配置；持久性、延迟实体化与撕裂尾部崩溃恢复都随后端提供。
 
 ## 目录
 
@@ -47,14 +47,14 @@ kind: "package-reference"
 | `root` | 必填 | 所有会话文件的根目录 |
 | `packChunks` | `true` | 把符合条件的 `assistant/chunk` 连续段写为打包行；`false` 为诊断保留每事件一行 |
 | `compression` | `'zstd'` | 物理编码：`'zstd'` 带校验和帧，或 `'none'` 换行分隔 UTF-8 文本 |
-| `preparedSessionCacheSize` | `5` | 为恢复复用而保留的冷会话准备结果数量 |
-| `writeBatchMaxDelayMs` | `200` | 实时事件的固定聚合窗口，单位为毫秒 |
+
+实时事件的写入批处理不是配置：批处理窗口是该 seam 在每个写句柄内部的调度策略。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-persistence-jsonl)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
 ### 磁盘布局
 
-每个会话在可读项目目录下获得一个会话自有目录；日志第一个逻辑行是不可变 `SessionHeader`，之后每个逻辑事件一条存储记录（或每个符合条件的连续段一条打包分片行）。存储记录使用下文所述的无损来源序列表示：
+每个会话在可读项目目录下获得一个会话自有目录；第一个逻辑行是私有 v0 物理 header，之后每个逻辑事件一条存储记录（或每个符合条件的连续段一条打包分片行）。其可选数字 `seedLength` 保持字节兼容：缺席解码为 `SessionHeader.isSeeded: false`，零或正值解码为 `isSeeded: true` 加精确 `inheritedEventCount`。存储记录使用下文所述的无损来源序列表示：
 
 ```text
 <root>/
@@ -64,15 +64,15 @@ kind: "package-reference"
       session.jsonl              # only with compression: 'none'
 ```
 
-会话 id 在使用前被单射转义为一个安全路径段（无遍历、无冲突）。规范化 cwd 让项目目录保持可读、便于导航；规范化相同的 cwd 字符串共享项目目录，而会话 id 仍选择不同会话目录。`locate(meta)` 返回已解析目录内固定 transcript 的 `{ kind: 'jsonl', path }`，不执行任何文件系统 I/O。
+会话 id 在使用前被单射转义为一个安全路径段（无遍历、无冲突）。规范化 cwd 让项目目录保持可读、便于导航；规范化相同的 cwd 字符串共享项目目录，而会话 id 仍选择不同会话目录。格式拒绝诊断会点名已解析目录内固定 transcript 的绝对路径，让操作者能找到构建拒绝解读的原始日志。
 
 ### 持久性与崩溃语义
 
-会话延迟实体化：`create(meta)` 不写入任何内容，第一次 `append` 通过无覆盖发布写入并 `fsync` 编码后的 header 与第一批——因此已创建但从未 append 的会话不留下任何磁盘内容，除非生命周期消费方调用 `ensureMaterialized`，以无事件的单个 header 帧发布它。已 flush 事件绝不重写；后续每个批次追加行或一个压缩帧，捕获到写入或同步失败时把文件回滚到之前的字节长度。崩溃后，`load` 保留被中断的最终轮次：保留不完整最后帧中完整解码的记录，从该帧开头截断，并按共享持久化约定的要求，用合成工具、步骤与轮次 closer 重新编码这些记录。只有从未完整写入的撕裂尾部被丢弃；已提交前缀中的校验和、解压或结构失败以损坏拒绝。
+会话延迟实体化：`create(header)` 不写入任何内容并返回持有的写句柄，句柄的第一次 `append` 通过无覆盖发布写入并 `fsync` 编码后的 header 与第一批——因此已创建但从未 append 的会话不留下任何磁盘内容，除非其所有者调用 `handle.flush()`，以无事件的单个 header 帧发布它。后续每个批次追加行或一个压缩帧，并在 append 完成前 `fsync`；捕获到写入或同步失败时把文件回滚到之前的字节长度。已提交事件绝不重写。崩溃后，已存储日志保留被中断的最终轮次——已提交前缀中的每条记录都保留下来，由执行恢复的读方通过其写句柄追加合成 closer。撕裂尾部——不完整的最后一行，或撕裂的最后一帧——绝不返回给读取方并被整体丢弃，在写句柄的第一次新 append 之前被持久截断，因为其自身的 append 从未成功返回，其中没有任何内容被确认为已持久；已提交前缀中的校验和、解压或结构失败以损坏拒绝。
 
 ### 读取日志
 
-`inspect(id)` 返回不可变的平衡视图，不提交恢复。`readFrom(id, fromSeq)` 为水位消费方返回该序列号及之后的已存储事件；JSONL 这类顺序介质解析整个产物并向前跳过。选择 `compression: 'none'` 后，日志是外部读取方可直接消费的换行分隔文本；压缩默认值必须经后端读取。
+`open(id, 'read')` 返回一个句柄，其 `read(offset?, length?)` 提供经过验证的连续切片；产物在有界稳定读取下按需重新扫描，因此切片绝不包含撕裂尾部。撕裂的最终 Zstandard 帧会被部分解码：其中已刷入的完整 JSONL 记录被恢复进逻辑日志，写句柄的第一次修改会截掉撕裂字节并在自己的批次之前持久重写这些恢复的记录。`open(id, 'write')` 会用已验证的存储前缀预热句柄，因此恢复的全日志读取无需在第一次 append 之前再解析一遍。一个按会话 id 与 stat 派生修订号作键的有界 memo 让紧随其后的 open 复用已解析日志——冷的观察后恢复交接只解析一次——任何本地修改都会使该 id 失效。`stat(id)` 与 `list()` 只读取 header 行并执行一次 `fs.stat`，携带 `sizeBytes` 与尽力而为的、由 stat 派生的修订号（device、inode、size、纳秒时间戳），而不解析日志。选择 `compression: 'none'` 后，日志是外部读取方可直接消费的换行分隔文本；压缩默认值必须经后端读取。
 
 -----
 
@@ -86,7 +86,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-该后端是共享 [PersistenceCoordinator](../session-persistence/README.zh.md#understand-the-implementation) 之上的一层薄存储：它加载已存储记录、追加批次、提交修复，并把生命周期编排委托给协调器。其物理身份是文件修订值：device、inode、size 与纳秒时间戳标识一份日志，并在追加或修复后改变，这正是 `listSnapshots` 与保留准备结果校验所使用的身份。
+该后端拥有自己完整的存储运行时（`src/storage.ts`）：`JsonlSessionHandle` 承载逐句柄修改链、带固定批处理窗口与 single-flight 排空的已路由实时事件缓冲、单调读取与幂等 close；一个 tracker 持有进程内单写者认领、teardown 清扫所遍历的打开句柄集合，以及后端自己的会话监听器所路由进的已创建但未实体化待定会话。本包有意只暴露默认插件导出与配置类型——具体类不是具名导出，因此消费方只耦合 `ctx.sessionPersistence`，其可观察行为由共享 seam 测试套件（`runPersistenceContract`/`runLiveWritePathContract`）钉住。其变更令牌是尽力而为的文件修订值：device、inode、size 与纳秒时间戳标识一份日志，供 `stat`/`list` 以及在并发 append 撕裂读取时重试的稳定读取循环使用。
 
 ### 物理编码
 
@@ -96,7 +96,8 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、后端类、协调器接线 |
+| [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、后端服务类与文件存储原语 |
+| [`src/storage.ts`](src/storage.ts) | JSONL 句柄、已路由实时事件缓冲、进程内写入者记账、监听器、teardown |
 | [`src/format.ts`](src/format.ts) | 日志路径派生、header 编码、记录扫描、打包行布局 |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard 帧压缩、解码与帧扫描 |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through 发布与目录创建 |
@@ -146,7 +147,7 @@ JSONL 存储不修改实时请求前缀。只有重建历史、当前 envelope �
 - **平铺文件存储布局不加载**——加载前使用独立根，或将预发布产物移入项目/会话目录布局。
 - **压缩文件不能直接按行读取**——使用后端加载；或在写入新根前选择 `compression: 'none'`，供外部行读取方使用。
 - **不删除会话文件**——日志在 `root` 下累积，直到外部移除；seam 无删除接口。
-- **每会话一个活动写入方**——append 与修复只在所属后端实例内协调；在该所有者达到完全停稳的 dispose 前，另一实例或进程不得写入同一会话。
+- **每会话一个活动写入方，仅限进程内**——写句柄认领只在所属后端实例内排除第二个写入方；在该句柄关闭前，另一实例或进程不得写入同一会话（持久的跨进程租约是该 seam 计划中的下一层）。
 - **POSIX 实体化需要硬链接支持**——第一次 append 使用 `link()`，使同 id 竞态失败而不覆盖已提交日志；Windows 使用无替换 write-through rename。
 
 <a id="dev-note"></a>

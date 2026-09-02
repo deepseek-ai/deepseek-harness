@@ -17,7 +17,8 @@ import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import type { Session, SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionSeq } from '@deepseek-ai/dsh-session'
+import type { Session, SessionEvent, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 // Empty type imports carry the loader Context merge for the settlement await
 // and the cmdline Context merge for the appExit host value.
 import type {} from '@deepseek-ai/cordis-plugin-loader'
@@ -60,13 +61,13 @@ export const internals: { stdout: HeadlessIo['stdout']; stderr: HeadlessIo['stde
 }
 
 /** Aggregate the last assistant text and turn outcome in one owned interval. */
-function summarize(session: Session, firstSeq: number): RunOutcome {
+function summarize(session: Session, firstSeq: SessionLogOffset): RunOutcome {
   let started = false
   let text = ''
   let reason: SessionEvent<'turn/end'>['data']['reason'] | undefined
   const length = session.seq
   for (let seq = firstSeq; seq < length; seq++) {
-    const event = session.eventAt(seq)
+    const event = session.eventAt(SessionSeq(seq))
     if (event === undefined) {
       throw new Error(`headless summary cannot read seq ${String(seq)} below captured length ${String(length)}`)
     }

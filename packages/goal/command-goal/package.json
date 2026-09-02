@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-command-goal",
   "description": "Human-facing slash command for persisted same-session goals",
-  "version": "0.1.2-alpha.3",
+  "version": "0.1.2-alpha.4",
   "publishConfig": {
     "access": "public"
   },

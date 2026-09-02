@@ -62,6 +62,8 @@ describe('mergeTurnRailItems', () => {
     const items = mergeTurnRailItems([], [
       { turn: -1, seq: 0, prompt: 'negative turn', response: '' },
       { turn: 2, seq: 0.5, prompt: 'fractional seq', response: '' },
+      { turn: 4, seq: -0, prompt: 'negative zero seq', response: '' },
+      { turn: 5, seq: Number.MAX_SAFE_INTEGER + 1, prompt: 'unsafe seq', response: '' },
       { turn: 3, seq: 4, prompt: 5, response: 6 },
       { turn: 6, seq: 7, prompt: 'kept', response: 8 },
       null,

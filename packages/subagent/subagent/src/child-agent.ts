@@ -132,13 +132,13 @@ export function resolveChildAgentOptions(
  * child never had.
  * @param parent - the delegating parent agent.
  * @param childDepth - the resolved delegation depth to persist.
- * @param lineageSeedLength - how many leading events came from the parent's log.
+ * @param isSeeded - whether this child inherits a parent-log prefix, including an explicitly empty one.
  * @returns the `meta` for `ctx.agents.create()`.
  */
 export function childSessionMeta(
   parent: Agent,
   childDepth: number,
-  lineageSeedLength: number,
+  isSeeded: boolean,
 ): NonNullable<CreateAgentOptions['meta']> {
   const parentHeader = parent.session.header
   const agentPreset = parent.ctx.get('agentPresets')?.composedPreset(parent.ctx)
@@ -146,12 +146,12 @@ export function childSessionMeta(
     ...parentHeader.cwd !== undefined ? { cwd: parentHeader.cwd } : {},
     ...agentPreset === undefined ? {} : { agentPreset },
     parentSession: parentHeader.id,
+    isSeeded,
     // Navigation classification only; the descriptor remains the authority
     // for mode and continuation capability.
     origin: 'subagent',
     // Durable: the recursion budget must survive persistence and resume.
     delegationDepth: childDepth,
-    ...lineageSeedLength > 0 ? { seedLength: lineageSeedLength } : {},
   }
 }
 

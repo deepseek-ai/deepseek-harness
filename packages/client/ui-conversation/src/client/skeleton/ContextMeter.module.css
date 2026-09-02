@@ -1,5 +1,5 @@
 /* Context-occupancy ring beside the send button plus its click-open breakdown
-   panel (menu surface: r12, inverted hairline, shadow-lv3). */
+   panel (menu surface: r12, elevation-prominent). */
 
 .root {
   position: relative;
@@ -15,6 +15,7 @@
   height: 28px;
   border: none;
   border-radius: 999px;
+  corner-shape: round;
   background: transparent;
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
@@ -45,10 +46,11 @@
   box-sizing: border-box;
   width: 264px;
   padding: 12px;
-  border: 1px solid var(--dsw-alias-border-inverted);
+  border: 0;
   border-radius: 12px;
   background: var(--dsw-specific-menu);
-  box-shadow: var(--dsw-shadow-lv3);
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-elevation-prominent);
   font-size: 12px;
   line-height: 20px;
   color: var(--dsw-alias-label-secondary);
@@ -89,6 +91,7 @@
   margin: 10px 0 12px;
   height: 4px;
   border-radius: 999px;
+  corner-shape: round;
   background: var(--dsw-alias-interactive-bg-hover);
   overflow: hidden;
 }

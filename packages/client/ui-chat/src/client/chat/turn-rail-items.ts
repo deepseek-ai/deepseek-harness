@@ -7,6 +7,7 @@
  */
 
 import type {} from '@deepseek-ai/dsh-session-turn-outline/client'
+import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { TurnNavigationItem } from '../contract/snapshot.ts'
 
 /** One rail mark: a loaded Turn scrolls to its row; an unloaded one pages history through its seq first. */
@@ -19,7 +20,7 @@ export interface TurnRailItem {
   /** How the rail reaches the Turn. */
   readonly anchor:
     | { readonly kind: 'loaded'; readonly key: string }
-    | { readonly kind: 'unloaded'; readonly seq: number }
+    | { readonly kind: 'unloaded'; readonly seq: SessionSeq }
 }
 
 const EMPTY_ITEMS: readonly TurnRailItem[] = []
@@ -31,14 +32,14 @@ const EMPTY_ITEMS: readonly TurnRailItem[] = []
  * decorative, so a malformed one degrades to `''` and the turn stays
  * navigable by number.
  */
-function outlineEntry(value: unknown): { turn: number; seq: number; prompt: string; response: string } | undefined {
+function outlineEntry(value: unknown): { turn: number; seq: SessionSeq; prompt: string; response: string } | undefined {
   if (typeof value !== 'object' || value === null) return undefined
   const entry = value as { turn?: unknown; seq?: unknown; prompt?: unknown; response?: unknown }
   if (typeof entry.turn !== 'number' || !Number.isSafeInteger(entry.turn) || entry.turn < 0) return undefined
-  if (typeof entry.seq !== 'number' || !Number.isSafeInteger(entry.seq) || entry.seq < 0) return undefined
+  if (typeof entry.seq !== 'number' || !Number.isSafeInteger(entry.seq) || entry.seq < 0 || Object.is(entry.seq, -0)) return undefined
   return {
     turn: entry.turn,
-    seq: entry.seq,
+    seq: SessionSeq(entry.seq),
     prompt: typeof entry.prompt === 'string' ? entry.prompt : '',
     response: typeof entry.response === 'string' ? entry.response : '',
   }

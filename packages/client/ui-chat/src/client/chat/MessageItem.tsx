@@ -148,7 +148,7 @@ function TurnMaxTokensItem({ t }: {
 
 /** Right-aligned bubble shared by user and steering rows. */
 function UserStyleBubble({
-  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], previewImages, reveal = 'always', t,
+  content, renderMessageImages, actions, pending = false, echo = false, referenceLabels = [], previewImages, t,
 }: {
   content: readonly unknown[]
   renderMessageImages: ChatNodeOwnerProps['renderMessageImages']
@@ -162,8 +162,6 @@ function UserStyleBubble({
   referenceLabels?: readonly string[]
   /** Local submission-echo previews replacing the content-derived image group. */
   previewImages?: readonly MessageImageSource[]
-  /** Whole actions-row visibility: earlier rows reveal on hover, the latest stays shown (turn tails' gate). */
-  reveal?: 'always' | 'hover'
   t: ChatViewSlotProps['t']
 }): ReactNode {
   const { text, images: contentImages, rest } = contentParts(content)
@@ -175,7 +173,6 @@ function UserStyleBubble({
       className={css.userRow}
       data-pending-steering={pending || undefined}
       data-submission-echo={echo || undefined}
-      data-actions-reveal={reveal}
     >
       <div className={css.userStack}>
         {renderMessageImages({ images, align: 'end' })}
@@ -274,24 +271,14 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
 
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, useChat, t,
+  node, renderMessageImages, t,
 }: ChatNodeViewProps<'user' | 'steering'>) {
   const data = node.data
-  // The transcript's last user-authored row keeps its actions row shown, the
-  // same recency gate turn tails use; earlier rows reveal on hover.
-  const isLatestUserRow = useChat((snapshot) => {
-    for (let index = snapshot.order.length - 1; index >= 0; index -= 1) {
-      const candidate = snapshot.nodes.get(snapshot.order[index] ?? '')
-      if (candidate?.kind === 'user' || candidate?.kind === 'steering') return candidate.key === node.key
-    }
-    return true
-  })
   return (
     <UserStyleBubble
       content={data.content}
       renderMessageImages={renderMessageImages}
       {...data.referenceLabels === undefined ? {} : { referenceLabels: data.referenceLabels }}
-      reveal={isLatestUserRow ? 'always' : 'hover'}
       t={t}
       actions={text => (
         <MessageIconActions

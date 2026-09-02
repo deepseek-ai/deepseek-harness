@@ -18,7 +18,7 @@
   backdrop-filter: var(--dsw-mask-blur);
 }
 
-/* Dialog card: r24, shadow-lv3, layer-2 fill, inverted border, pb 24. */
+/* Dialog card: r24, elevation-prominent, layer-2 fill, pb 24. */
 .dialog {
   position: relative;
   z-index: 1;
@@ -28,10 +28,10 @@
   width: min(380px, 100%);
   padding: 0 0 24px;
   overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-inverted);
+  border: 0;
   border-radius: 24px;
   background: var(--dsw-alias-bg-layer-2);
-  box-shadow: var(--dsw-shadow-lv3);
+  box-shadow: var(--dsw-elevation-prominent);
 }
 
 .content {

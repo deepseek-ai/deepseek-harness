@@ -149,6 +149,8 @@ function withCompaction(raw: string, meter: TokenMeter): string {
   at({
     type: 'user/message',
     data: {
+      id: '00000000-0000-4000-8000-00000000c0de',
+      role: 'user',
       content: [{
         type: 'text',
         text: '<context_checkpoint>Model-only compact checkpoint.</context_checkpoint>',

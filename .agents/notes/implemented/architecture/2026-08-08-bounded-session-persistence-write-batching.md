@@ -20,19 +20,19 @@ The scheduling bound is deterministic. With an immediately resolving sink, the f
 
 ## Decision
 
-The JSONL provider exposes `writeBatchMaxDelayMs`, a positive integer no greater than Node's timer limit. Its default is `200`. The provider resolves the value at load and passes it to `PersistenceCoordinator`; the coordinator remains the single owner of batching behavior.
+The fixed window is the JSONL provider's constant `LIVE_WRITE_BATCH_MAX_DELAY_MS` (200 ms), an internal scheduling policy rather than configuration: the backend's own session listeners route live events by id into the active write handle's buffer, so batching never crosses the package boundary ([handle note](2026-08-27-handle-based-session-persistence.md)).
 
-Each live Session receives a package-private `SessionWriteBehind`. When its pending queue changes from empty to non-empty, the controller starts one fixed window. Later events join that batch without resetting the deadline: this is bounded coalescing, not debounce. When the deadline expires, the controller hands the complete pending prefix to the existing per-id serialization and `appendBatch` path. At most one write for a Session is active. Events admitted during that write form a new pending prefix with their own fixed deadline; if that deadline expires before the active write completes, the new prefix starts immediately after it.
+Each active write handle owns its buffer directly. A routed event lands in the handle's pending array, and the first event of an idle buffer arms one fixed timer. Later events join that batch without resetting the deadline: this is bounded coalescing, not debounce. When the deadline expires, a single-flight drain persists the pending prefix through the handle's mutation chain, which already serializes it against explicit appends. Events admitted during a drain pass coalesce into the next chained batch, in order.
 
-`writeBatchMaxDelayMs` bounds only the controller's intentional batching wait. Event-loop scheduling, initialization, an earlier serialized operation, and backend I/O can delay durable completion, so the option is not a hard fsync or crash-loss SLA.
+The window bounds only the controller's intentional batching wait. Event-loop scheduling, initialization, an earlier serialized operation, and backend I/O can delay durable completion, so the option is not a hard fsync or crash-loss SLA.
 
-`session/flush` cancels any remaining wait and becomes a shared quiescence barrier. It drains the active attempt and every event admitted while the barrier is running before it resolves. Session retirement and backend disposal use that same barrier, so lifecycle teardown never waits for the batching timer. The checkpoint policy continues to place mandatory barriers before model requests and top-level tool side effects.
+`session/flush` cancels any remaining wait and becomes a shared quiescence barrier. It drains the active attempt and every event admitted while the barrier is running before it resolves. Session retirement (`session/disposed`), the handle's close, and backend teardown's close sweep use that same barrier, so lifecycle teardown never waits for the batching timer. The checkpoint policy continues to place mandatory barriers before model requests and top-level tool side effects.
 
 Every event remains durable in its original order and shape. The controller copies each event on admission; no `assistant/chunk`, `seq`, `time`, surface metadata, or storage record is removed or rewritten. JSONL can therefore encode more events in one append frame without changing its on-disk format.
 
-A failed background append restores its complete batch before any newer pending events, reports the failure once, and pauses automatic retry. The next newly admitted event opens a fresh fixed window; an explicit flush, retirement, or disposal retries immediately and surfaces a repeated failure to its caller. This avoids a timer-driven failure loop while preserving the existing recoverable flush boundary.
+A failed background drain retains its complete batch in order ahead of newer pending events, reports the failure once, and pauses the automatic timer. The next explicit drain — a `session/flush` barrier, service-level `flush()`, or close — retries immediately and surfaces a repeated failure to its caller. This avoids a timer-driven failure loop while preserving the existing recoverable flush boundary.
 
-This decision supersedes only the immediate scheduling cadence in [Collapse live persistence into one flush controller](../simplification/2026-07-23-collapse-persistence-flush-state.md). That note remains authoritative for one controller per live Session, retained failed batches, per-id serialization, retirement, and quiescent disposal. The [shared persistence coordinator](2026-06-18-shared-persistence-write-coordinator.md) remains the owner of the backend hook boundary.
+This decision supersedes only the immediate scheduling cadence in [Collapse live persistence into one flush controller](../simplification/2026-07-23-collapse-persistence-flush-state.md). That note remains authoritative for one buffer owner per live Session, retained failed batches, retirement, and quiescent disposal. The coordinator and the separate write-behind controller that first hosted this behavior are deleted; the buffer, timer, and drain live on the provider's handle, and the [handle-based seam](2026-08-27-handle-based-session-persistence.md) owns the storage boundary they write through.
 
 ## Alternatives considered
 
@@ -42,11 +42,11 @@ This decision supersedes only the immediate scheduling cadence in [Collapse live
 
 **Debounce from the latest event.** Rejected: a continuously streaming response could postpone its first write indefinitely. A fixed window from the first pending event provides a real upper bound on intentional coalescing wait.
 
-**Implement the timer inside JSONL.** Rejected: scheduling, failure retention, flush races, and teardown are provider-neutral lifecycle concerns that belong in `PersistenceCoordinator`; an out-of-tree provider can reuse the same behavior.
+**A shared provider-neutral controller component.** Rejected after one iteration shipped it: the handle's mutation chain already serializes writes, so a separate controller duplicated that ordering machinery. Each provider implements the buffer on its own handle, and the shared live-write contract suite pins the equivalent observable behavior for any provider.
 
 ## Verification
 
-The controller tests use a fake clock to prove the fixed, non-resetting 200 ms window; immediate and shared flush barriers; events admitted during a barrier; an over-budget tail behind an active write; ordered failure retention; paused automatic retry; and explicit retry of an overlapping background failure. Coordinator tests run the controller through Session notifications, retirement, collision reclamation, and teardown. The JSONL suite retains storage-format, recovery, and shared persistence-contract coverage.
+The shared live-write contract suite (`runLiveWritePathContract`) uses a fake clock to prove the fixed, non-resetting 200 ms window; the `session/flush` barrier and its loud failure surfacing; ordered failure retention with exactly-once recovery; the service-level `flush()` sweep with per-session failure aggregation; and the disposed/close/teardown drains. The JSONL suite retains its storage-format, recovery, and shared persistence-contract coverage.
 
 ## Consequences
 
@@ -54,6 +54,6 @@ High-frequency event bursts normally produce fewer durable append operations whi
 
 This decision does not cap pending event count or bytes behind a slow provider, and it does not reduce the decoded logical log. A demonstrated memory bound or logical-retention policy would require its own failure and replay contract rather than another hidden timer rule.
 
-An admitted event can remain only in memory during the configured window, and then while scheduling or backend work is outstanding. Deployments choose a smaller value for a narrower ordinary loss window or a larger value for stronger batching. Explicit durability boundaries remain unchanged and bypass the wait.
+An admitted event can remain only in memory during the fixed window, and then while scheduling or backend work is outstanding. Explicit durability boundaries remain unchanged and bypass the wait.
 
-The deep module gives the timer, active write, pending prefix, retry pause, and barrier one owner. `PersistenceCoordinator` retains initialization and identity serialization; the provider retains only durable storage primitives. `SESSION_FORMAT_VERSION` remains unchanged.
+The handle gives the timer, active drain, pending prefix, retry pause, and barrier one owner; the backend's listeners own routing and lifecycle-driven drains. `SESSION_FORMAT_VERSION` remains unchanged.

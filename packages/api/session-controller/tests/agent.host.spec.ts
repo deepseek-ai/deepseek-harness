@@ -5,7 +5,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-presets'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionObservation } from '@deepseek-ai/dsh-session-query'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
@@ -47,6 +47,7 @@ function header(id: string, cwd: string | null = '/workspace'): SessionHeader {
     version: 0,
     id: SessionId(id),
     createdAt: 1,
+    isSeeded: false,
     ...(cwd === null ? {} : { cwd }),
   }
 }
@@ -86,12 +87,16 @@ describe('ApiSession identity failures', () => {
       .rejects.toBeInstanceOf(ApiSessionNotFound)
 
     const inspect = vi.fn(() => Promise.resolve(undefined))
+    const stat = vi.fn(() => Promise.resolve(undefined))
     const disposeMissing = providePersistence(ctx, {
       list: () => Promise.resolve([]),
+      stat,
       inspect,
     })
     await expect(inspectApiSession(ctx, SessionId('missing'))).rejects.toBeInstanceOf(ApiSessionNotFound)
-    expect(inspect).toHaveBeenCalledOnce()
+    // Absence is decided by the stat preflight; the log itself is never opened.
+    expect(stat).toHaveBeenCalledOnce()
+    expect(inspect).not.toHaveBeenCalled()
     disposeMissing()
 
     const listed = header('cwd-less-catalog', null)
@@ -117,11 +122,14 @@ describe('ApiSession identity failures', () => {
     await ctx.plugin(SessionStore)
     installSessionReadTestServices(ctx)
     const meta = header('signalled-inspection')
-    const inspect = vi.fn(() => Promise.resolve({ meta, events: [] }))
-    providePersistence(ctx, { inspect })
+    const inspect = vi.fn(() => Promise.resolve({ meta, inheritedEventCount: SessionLogOffset(0), events: [] }))
+    providePersistence(ctx, {
+      list: () => Promise.resolve([meta]),
+      inspect,
+    })
     const signal = new AbortController().signal
 
-    await expect(inspectApiSession(ctx, meta.id, signal)).resolves.toEqual({ meta, events: [] })
+    await expect(inspectApiSession(ctx, meta.id, signal)).resolves.toEqual({ meta, inheritedEventCount: SessionLogOffset(0), events: [] })
     expect(inspect).toHaveBeenCalledWith(meta.id, signal)
   })
 })

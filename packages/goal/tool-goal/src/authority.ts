@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { GoalView } from '@deepseek-ai/dsh-goal'
 import { HarnessError } from '@deepseek-ai/dsh-llm'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-session-projection'
 
@@ -12,7 +12,7 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 export interface GoalToolExecution {
   readonly agent: Agent
   readonly events: readonly SessionEvent[]
-  readonly openTurnStartSeq: number
+  readonly openTurnStartSeq: SessionSeq
 }
 
 /** Hard authority granted to one state-changing call. */

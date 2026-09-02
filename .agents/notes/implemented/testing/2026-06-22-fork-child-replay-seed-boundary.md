@@ -18,19 +18,19 @@ Deriving the child script from the whole fork-child log therefore replays the **
 
 Record where a session's **inherited** prefix ends, persist it, and have the replay harness derive a child's script from its **own** events only.
 
-### 1. `seedLength` on the session header
+### 1. Lineage metadata and an exact body-owned cut
 
-`SessionHeader` gains an optional `seedLength: number` — how many leading events were inherited via a seed rather than produced by this session. The fork backend stamps it (= the seeded-prefix length) when it creates the child; a fresh spawn leaves it absent (≡ 0). It is threaded through `CreateSessionOptions.meta` (and `CreateAgentOptions.meta`), set in `SessionStore.prepare`.
+`SessionHeader.isSeeded` records whether a Session has inherited lineage without exposing a body coordinate to header-only readers. The exact leading-event count is the separately branded `SessionLogOffset` `inheritedEventCount`; a fork supplies both `isSeeded: true` and the copied-prefix length, while a fresh spawn supplies an unseeded header and cut zero. The cut travels through `CreateSessionOptions`, `CreateAgentOptions`, persistence inspection, and restored Session state.
 
-`seedLength` is **explicit**, never inferred from `seed.length`. A reconstruction (resume/load) seeds the session with its WHOLE stored log, so `seed.length` there is the full length, not the original boundary — the resume path passes the persisted `seedLength` back from the loaded header instead. (Same shape as `createdAt`, which is also explicitly preserved on reconstruction rather than re-defaulted to now.)
+`inheritedEventCount` is **explicit**, never inferred from `seed.length`. A reconstruction (resume/load) seeds the session with its WHOLE stored log, so `seed.length` there is the full length, not the original boundary — the resume path passes the decoded cut beside the logical header instead.
 
 ### 2. JSONL round-trips it
 
-JSONL stores `seedLength` on the header line (`toHeaderLine`/`fromHeaderLine`) and returns it through the shared persistence contract.
+The v0 JSONL header keeps its optional numeric `seedLength` for byte compatibility. `toHeaderLine` / `fromHeaderLine` translate it to and from logical `isSeeded` plus the exact `inheritedEventCount`, which the shared body-bearing persistence values return separately.
 
 ### 3. Replay derives a child script after the boundary
 
-`dsh-llm-replay`'s `parseSessionHeader` now also reads `seedLength` (absent ⇒ 0), and `loadSessionScripts` derives a child's entries from `parseSessionLog(text).slice(seedLength)` — the events at or after the boundary, i.e. the child's own model calls. For a spawn child `seedLength` is 0 and this is a no-op, so spawn scenarios are byte-for-byte unchanged.
+`dsh-llm-replay`'s private v0 parser reads physical `seedLength` into `inheritedEventCount` (absent ⇒ 0), and `loadSessionScripts` derives a child's entries from `parseSessionLog(text).slice(inheritedEventCount)` — the events at or after the boundary, i.e. the child's own model calls. For a spawn child the cut is 0 and this is a no-op, so spawn scenarios are byte-for-byte unchanged.
 
 This closes the routing correctness gap, and two recorded fork scenarios exercise it end to end — see [Record fork and mixed spawn+fork snapshot scenarios](../../archived/testing/2026-06-22-fork-snapshot-scenarios.md).
 
@@ -40,5 +40,5 @@ This closes the routing correctness gap, and two recorded fork scenarios exercis
 
 ## Consequences
 
-- A new persisted header field spans core and the JSONL provider; the subsystems catalog (`persistence.md`) is updated in the same change (its `SessionHeader` / `CreateSessionOptions` `type-equiv` blocks).
-- Spawn replay is unchanged (`seedLength` 0). Fork replay now routes a child to its own script; covered by a regression in `llm-replay`'s tests (a child fixture whose seeded prefix carries a parent chunk — the derived child script must exclude it, proven red without the slice) and a JSONL persistence round trip through the shared coordinator contract.
+- The lineage bit spans logical Session metadata while the exact cut spans only body-bearing core, persistence, query, and replay values; the v0 physical header remains unchanged.
+- Spawn replay is unchanged (cut 0). Fork replay routes a child to its own script; covered by a regression in `llm-replay`'s tests (a child fixture whose seeded prefix carries a parent chunk — the derived child script must exclude it, proven red without the slice) and a JSONL persistence round trip through the shared coordinator contract.
