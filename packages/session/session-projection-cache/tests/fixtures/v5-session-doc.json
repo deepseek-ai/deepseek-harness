@@ -1,0 +1,220 @@
+{
+  "version": 5,
+  "record": {
+    "identity": {
+      "createdAt": 1788286864454,
+      "cwd": "/tmp",
+      "isSeeded": false,
+      "inheritedEventCount": 0
+    },
+    "rows": {
+      "title": {
+        "ver": 1,
+        "seq": 71,
+        "val": "验收标题-rc2"
+      },
+      "titleInput": {
+        "ver": 3,
+        "seq": 71,
+        "val": {
+          "first": {
+            "seq": 7,
+            "text": "请只回复一个词：pong"
+          },
+          "count": 3,
+          "lastSeq": 60
+        }
+      },
+      "llmRetry": {
+        "ver": 1,
+        "seq": 71,
+        "val": {}
+      },
+      "sandboxMode": {
+        "ver": 1,
+        "seq": 71,
+        "val": "workspace-write"
+      },
+      "goal": {
+        "ver": 6,
+        "seq": 71,
+        "val": {
+          "current": null,
+          "seenGoalIds": [],
+          "failure": null
+        }
+      },
+      "tokenUsage": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "totals": {
+            "uncachedInputTokens": 14219,
+            "outputTokens": 24,
+            "cacheReadTokens": 9728,
+            "cacheWriteTokens": 0
+          },
+          "last": {
+            "turn": 3,
+            "step": 1,
+            "buckets": {
+              "uncachedInputTokens": 8136,
+              "outputTokens": 4,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            }
+          }
+        }
+      },
+      "contextPressure": {
+        "ver": 4,
+        "seq": 71,
+        "val": {
+          "surfaceTokens": 200,
+          "contextWindow": 1000000,
+          "pressureTokens": 8136,
+          "sampledSurfaceTokens": 190
+        }
+      },
+      "contextBreakdown": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "systemTokens": 1729,
+          "toolsTokens": 6611,
+          "messageTokens": 200
+        }
+      },
+      "sessionStats": {
+        "ver": 1,
+        "seq": 71,
+        "val": {
+          "turns": 3,
+          "steps": 3,
+          "llmMs": 4368,
+          "toolMs": 0,
+          "ttftMs": 4030,
+          "ttftSteps": 3,
+          "decodeMs": 338,
+          "decodeTokens": 24,
+          "lastTurn": 3,
+          "openStep": null,
+          "pendingCalls": {}
+        }
+      },
+      "agentPreset": {
+        "ver": 1,
+        "seq": 71,
+        "val": "standard"
+      },
+      "subagentTiming": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "descriptorSeen": false,
+          "settledMs": 0
+        }
+      },
+      "subagent": {
+        "ver": 2,
+        "seq": 71,
+        "val": {}
+      },
+      "turnBoundary": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "openTurnStartSeq": null,
+          "lastStepStartSeq": 59,
+          "lastStepBoundary": {
+            "kind": "end",
+            "seq": 70
+          },
+          "lastTurn": 3
+        }
+      },
+      "turnOutline": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "turns": [
+            {
+              "turn": 1,
+              "seq": 4,
+              "prompt": "请只回复一个词：pong",
+              "response": "pong"
+            },
+            {
+              "turn": 2,
+              "seq": 40,
+              "prompt": "请只回复一个词：pong2",
+              "response": "pong2"
+            },
+            {
+              "turn": 3,
+              "seq": 57,
+              "prompt": "请只回复一个词：pong3",
+              "response": "pong3"
+            }
+          ],
+          "draft": ""
+        }
+      },
+      "permissions": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "preset": "workspace-write",
+          "sandbox": "workspace-write",
+          "approval": "ask",
+          "seeded": true
+        }
+      },
+      "modelSelection": {
+        "ver": 2,
+        "seq": 71,
+        "val": {
+          "lastUsed": {
+            "provider": "deepseek-official",
+            "model": "deepseek-v4-flash",
+            "reasoningEffort": "high"
+          },
+          "pending": null
+        }
+      },
+      "sessionListMetadata": {
+        "ver": 1,
+        "seq": 71,
+        "val": {
+          "blank": false,
+          "lastPromptAt": 1788287660106
+        }
+      },
+      "imageLimits": {
+        "ver": 1,
+        "seq": 71,
+        "val": null
+      },
+      "todos": {
+        "ver": 2,
+        "seq": 71,
+        "val": null
+      },
+      "plan": {
+        "ver": 3,
+        "seq": 71,
+        "val": {
+          "active": false,
+          "wanted": null,
+          "running": null,
+          "activeAtLastHeader": false
+        }
+      },
+      "subagentModelSelectionPolicy": {
+        "ver": 1,
+        "seq": 71,
+        "val": null
+      }
+    }
+  }
+}

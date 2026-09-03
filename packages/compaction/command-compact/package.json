@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-command-compact",
   "description": "Human-facing slash command for explicit session compaction",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

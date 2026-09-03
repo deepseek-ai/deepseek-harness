@@ -367,12 +367,18 @@ function identityOf(
   }
 }
 
-/** Whether a stored record's bound identity names the caller's lifecycle. */
+/**
+ * Whether a stored record's bound identity names the caller's lifecycle.
+ * Absent lineage fields (records admitted via `compatibleVersions` predate
+ * them) read as the unseeded lineage: exact for an unseeded caller, and a
+ * seeded caller's expectation then fails the match, discarding the record to
+ * a cold rebuild.
+ */
 function identityMatches(stored: CheckpointIdentity, expected: CheckpointIdentity): boolean {
   return stored.createdAt === expected.createdAt
     && stored.cwd === expected.cwd
-    && stored.isSeeded === expected.isSeeded
-    && stored.inheritedEventCount === expected.inheritedEventCount
+    && (stored.isSeeded ?? false) === expected.isSeeded
+    && (stored.inheritedEventCount ?? 0) === expected.inheritedEventCount
 }
 
 export default SessionProjectionCache

@@ -29,4 +29,4 @@ Both image-reading operations live in `dsh-tool-fs` and publish ordinary logged 
 
 - The tools refuse execution on a text-only route, while existing images in session history are represented by request-local placeholders.
 - Repeated image results accumulate request cost until request projection or compaction removes them; content addressing deduplicates durable bytes.
-- The tool-result card renders the durable reference, not pixels; inline preview is deferred to the UI packages.
+- The tool-result card now renders the image itself through the browser's `tool.call.images` slot (see [the tool-card image results note](2026-08-20-tool-card-image-results.md)); a UI without the attachment presentation plugin shows the result's envelope text.

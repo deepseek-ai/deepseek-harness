@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tools",
   "description": "Tool registry and execution pipeline for the DeepSeek Harness",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

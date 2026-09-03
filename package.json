@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -110,6 +110,7 @@
     "verify-npm-install-layout": "tsx scripts/verify-npm-install-layout.ts",
     "verify-client-packages": "tsx scripts/verify-client-packages.ts",
     "verify-client-ui-i18n": "tsx scripts/verify-client-ui-i18n.ts",
+    "verify-no-bare-dispatcher": "tsx scripts/verify-no-bare-dispatcher.ts",
     "verify-vendored-links": "tsx scripts/verify-vendored-links.ts",
     "verify-cordis-config": "tsx scripts/verify-cordis-config.ts",
     "rescope-vendor": "tsx scripts/rescope-vendor.ts",
@@ -169,6 +170,7 @@
     "@types/node": "^22.20.0",
     "@types/spdx-expression-parse": "^4.0.0",
     "@vitest/coverage-v8": "^4.1.8",
+    "@yao-pkg/pkg": "6.21.0",
     "@yarnpkg/cli-dist": "4.17.1",
     "eslint-plugin-sonarjs": "^4.1.0",
     "execa": "^10.0.0",

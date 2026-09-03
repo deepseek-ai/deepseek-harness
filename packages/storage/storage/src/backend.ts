@@ -56,11 +56,21 @@ export interface KvUnitDescriptor {
    * Medium layout. `single` (the default) keeps the whole unit in one
    * document; `per-record` keeps each record in its own document, so a unit
    * whose records are large or sparse never rewrites the rest on one write,
-   * and a version bump discards stale records instead of rejecting the whole
-   * unit. Backends that only serve one layout accept the other's units as
-   * foreign documents.
+   * and an unaccepted version stamp discards only that record instead of
+   * rejecting the whole unit. Backends that only serve one layout accept the
+   * other's units as foreign documents.
    */
   readonly layout?: 'single' | 'per-record'
+  /**
+   * Older unit versions whose stored records are also readable under the
+   * declaring owner's current record schemas (the owner vouches for that —
+   * typically by declaring the fields old records lack as optional). Reads of
+   * a `per-record` unit accept documents stamped with any listed version, and
+   * the legacy whole-unit bootstrap accepts a legacy file stamped with one;
+   * writes always stamp {@link version}. `single`-layout reads stay
+   * exact-version.
+   */
+  readonly compatibleVersions?: readonly number[]
 }
 
 /**
@@ -98,6 +108,19 @@ export interface KvUnit {
    * @returns resolution after durability.
    */
   deleteRecord(table: string, key: string): Promise<void>
+
+  /**
+   * Move one record's stored document out of the unit's readable set,
+   * preserving its bytes for inspection instead of deleting them. Backends
+   * whose medium has no per-record document to move (the `single` layout, a
+   * row store) omit this member, and the caller falls back to its
+   * reject-loud path. Absent after the move: a later {@link loadAll} reads
+   * the key as missing and a later {@link putRecord} recreates it fresh.
+   * @param table - Declared table name.
+   * @param key - Record key.
+   * @returns the medium location the document was moved to (diagnostics).
+   */
+  backupRecord?(table: string, key: string): Promise<string>
 
   /**
    * Write the global singleton durably. Only valid when the descriptor

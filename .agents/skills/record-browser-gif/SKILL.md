@@ -1,24 +1,24 @@
 ---
 name: record-browser-gif
-description: Record browser or Web UI interaction demos as optimized GIFs using the available built-in browser, state-based frame capture, and deterministic encoding, then publish to a dedicated assets branch when the task includes attaching the GIF to a pull request. Use when asked to make, record, or generate a GIF that demonstrates a browser workflow, and for every pull request that changes product-user-visible GUI behavior, which MUST include a GIF recorded from the pull request's real server and model flow.
+description: Record browser or Web UI interaction demos as optimized GIFs using the available built-in browser, state-based frame capture, and deterministic encoding, then attach the GIF to a pull request with `gh --attach`, falling back to a dedicated assets branch where attach cannot apply. Use when asked to make, record, or generate a GIF that demonstrates a browser workflow, and for every pull request that changes product-user-visible GUI behavior, which MUST include a GIF recorded from the pull request's real server and model flow.
 ---
 
 # Record Browser GIF
 
-Produce a short, truthful UI demonstration as a local GIF, and — only when the task includes attaching it to a pull request — publish it through the assets-branch workflow at the end of this skill. Use the browser-control skill for interaction and the bundled encoder for repeatable timing, dimensions, and size.
+Produce a short, truthful UI demonstration as a local GIF, and — only when the task includes attaching it to a pull request — publish it through the attach workflow at the end of this skill. Use the browser-control skill for interaction and the bundled encoder for repeatable timing, dimensions, and size.
 
 The [evidence-chain decision](../../notes/implemented/process/2026-08-08-browser-gif-evidence-chain.md) owns why one storyboard comes from one isolated run and why publication revalidates both the artifact and the demonstrated pull-request head.
 
 ## Every GUI pull request includes a GIF
 
-A pull request that changes product-user-visible GUI behavior MUST include a demonstration GIF recorded with this skill and embedded in the pull request body via [the assets-branch workflow](#publish-to-an-assets-branch).
+A pull request that changes product-user-visible GUI behavior MUST include a demonstration GIF recorded with this skill and embedded in the pull request body via [the attach workflow](#publish-the-gif).
 
 The recording itself is part of the evidence: use a real server booted from that pull request's branch tree, a real API key, and real model rounds. Never substitute fixture queries, mock transports, synthetic event injection, or test-only hooks unless the user explicitly asked for a fixture recording. Next to the embed, state the exact demonstrated commit SHA, the tree and origin that served it, any mode flags or browser-state exceptions, and whether a real model round ran, so reviewers know exactly what the recording proves.
 
 ## Keep recording separate from publication
 
 - Recording produces frame images and one local `.gif` artifact only; it never mutates remote state.
-- Publication — pushing the GIF to an assets branch and embedding it in a pull request body — is the separate final step, performed only when the task includes attaching the GIF to a pull request. It never touches the pull request's own branch.
+- Publication — attaching the GIF to a pull request body with `gh --attach`, or pushing it to an assets branch and embedding its URL where attach cannot apply — is the separate final step, performed only when the task includes attaching the GIF to a pull request. It never touches the pull request's own branch.
 - Preserve the requested recording conditions. A real-server or real-API demo must not use fixture queries, mock transports, synthetic event injection, or test-only hooks. If credentials or the server are unavailable, report that limitation instead of substituting a fixture.
 - Never read or expose credential values. Use the application's normal configuration path and a benign demonstration prompt.
 
@@ -76,11 +76,34 @@ For a large artifact, reduce `--max-width` first, then `--colors` or `--fps`; re
 3. Run `git status --short` and confirm frames and the artifact landed only under ignored paths.
 4. Return the absolute GIF path, render it when the client supports local media, and state whether the recording used a real API, fixture, or another transport. When the task does not include attaching the GIF to a pull request, stop here.
 
-## Publish to an assets branch
+## Publish the GIF
 
 Perform this step only when the task includes attaching the GIF to a pull request.
 
-Never commit a GIF to the pull request's own branch or any branch that merges into a long-lived branch: binary media committed there bloats the repository history for every future clone. GIFs live on a dedicated orphan assets branch — a branch with no parent commit and nothing but media — and one assets branch serves a whole pull request series (named `<series>-assets`; list existing ones with `git ls-remote --heads origin '*assets*'`).
+Never commit a GIF to the pull request's own branch or any branch that merges into a long-lived branch: binary media committed there bloats the repository history for every future clone. Prefer `gh --attach`, which uploads the GIF to GitHub and rewrites the body reference in one command, so no branch carries the media.
+
+### Attach with gh
+
+`gh --attach` requires `gh` v2.99.0 or later (`gh --version`), a repository on github.com — GitHub Enterprise Server is not supported — write access to the repository, and a GIF at or below 10 MB. Confirm the verified artifact fits that limit; when it does not, shrink it with `--max-width`, then `--colors` or `--fps`, before attaching.
+
+Write the GIF into the body file as an ordinary local-path reference, using the same path passed to `--attach`; `gh` rewrites the reference in place to the uploaded URL, keeping its position and alt text:
+
+```markdown
+![<alt text>](<path/to/demo.gif>)
+```
+
+Immediately before attaching, re-read the pull request's live head — for a new pull request, the pushed branch tip — and compare it with the commit recorded next to the GIF. Stop and re-record when it moved. Then attach:
+
+```sh
+gh pr create --body-file <body.md> --attach <path/to/demo.gif>     # new pull request
+gh pr edit <pr> --body-file <body.md> --attach <path/to/demo.gif>  # existing pull request
+```
+
+`--attach` is repeatable but refuses the same file twice. A GIF the body does not reference is appended at the end, where alt text set on the flag (`--attach '<path>#<alt text>'`) applies; a rewritten reference keeps the body's alt text. After attaching, re-read the live head and require it to remain at that recorded commit. Re-read the live body and confirm the reference now points at the uploaded URL, render the body through GitHub's Markdown API and confirm the expected `<img>`, and fetch the uploaded URL once to confirm `200` and `image/gif`.
+
+### Fall back to an assets branch
+
+Use the assets-branch workflow only when `gh --attach` cannot apply: the GIF still exceeds 10 MB, `gh` is older than v2.99.0, or the repository is not on github.com. GIFs then live on a dedicated orphan assets branch — a branch with no parent commit and nothing but media — and one assets branch serves a whole pull request series (named `<series>-assets`; list existing ones with `git ls-remote --heads origin '*assets*'`).
 
 Before either workflow below pushes, verify that the assets branch contains media only and that the staged GIF's checksum matches the verified local artifact.
 

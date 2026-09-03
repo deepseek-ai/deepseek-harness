@@ -8,7 +8,7 @@ Platform runtime wheel for the DeepSeek Harness Python SDK. It packages the norm
 
 The wheel installs a `dsh` console command and the `deepseek_harness_runtime` Python module. `dsh` forwards its arguments to the bundled executable and requires a non-empty `DSH_HOME`; it never falls back to `~/.dsh`.
 
-Production executables are named `deepseek-harness-sdk-runtime-<platform>-<arch>` under the module's `runtime/` directory; Windows uses the `.exe` suffix. Linux and macOS wheels include a target-native `-rg` sidecar, Windows includes `-rg.exe`, and macOS also includes `-spawn-helper` for `node-pty`. Published targets are Linux x64, Linux arm64, macOS arm64, and Windows x64. The wheel tag and payload must match exactly; no Windows arm64 wheel is published.
+Production executables are named `deepseek-harness-sdk-runtime-<platform>-<arch>` under the module's `runtime/` directory; Windows uses the `.exe` suffix. Linux and macOS wheels include a target-native `-rg` sidecar, Windows includes `-rg.exe`, and macOS also includes `-spawn-helper` for `node-pty`. Published targets are Linux x64, Linux arm64, macOS arm64, macOS x64, and Windows x64. The wheel tag and payload must match exactly; no Windows arm64 wheel is published.
 
 Repository builds also materialize a dev-only `runtime/node/` carrier. It runs `node runtime/node/node_modules/@deepseek-ai/dsh/lib/bin.js` on system Node 22.19 or newer. It is never selected automatically and is excluded from wheels and sdists.
 

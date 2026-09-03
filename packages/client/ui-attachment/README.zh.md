@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包渲染对话 UI 中与附件相关的一切：composer 下的待发送草稿图片、全视口拖放邀请层、Chat 与 Trajectory 中的持久图片，以及查看原图的灯箱。它是纯呈现层——附件数据、图片加载与回调都经声明槽位来自 conversation 包。需要 DeepSeek Chat 风格的图片体验时选择它；非图片文件在此没有任何表面。
+本包渲染对话 UI 中与附件相关的一切：composer 下的待发送草稿图片、全视口拖放邀请层、Chat、Trajectory 与工具结果中的持久图片，以及查看原图的灯箱。它是纯呈现层——附件数据、图片加载与回调都经声明槽位来自 conversation 包。需要 DeepSeek Chat 风格的图片体验时选择它；非图片文件在此没有任何表面。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 [`ui-conversation`](../ui-conversation/README.zh.md) 一起挂载本插件；它等待 conversation 包的槽位声明，并把自身表面注册进这些槽位。用户随即看到：带逐图删除与点击打开的草稿图片栏、带上限说明的拖放遮罩、按数量定尺寸的消息图片，以及支持 Escape／遮罩／关闭按钮的灯箱。
+与 [`ui-conversation`](../ui-conversation/README.zh.md)（以及工具结果图库所需的 [`ui-tool`](../ui-tool/README.zh.md)）一起挂载本插件；它等待 conversation 包的槽位声明，并把自身表面注册进这些槽位。用户随即看到：带逐图删除与点击打开的草稿图片栏、带上限说明的拖放遮罩、按数量定尺寸的消息图片、工具卡片的图库，以及支持 Escape／遮罩／关闭按钮的灯箱。
 
 ### 草稿图片
 
@@ -47,7 +47,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-插件通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images` 与 `conversation.trajectory.images`。随后它注册 composer rail、文档拖放目标、供 Chat 和 Trajectory 共用的历史图片 gallery，以及原图灯箱。呈现组件保持纯 props：conversation 槽位持有方提供附件数据、图片加载、回调与语言包翻译器；包入口不导出任何组件。
+插件通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images`、`conversation.trajectory.images` 与 `tool.call.images`。随后它注册 composer rail、文档拖放目标、供 Chat、Trajectory 与工具结果共用的历史图片 gallery，以及原图灯箱。呈现组件保持纯 props：槽位持有方提供附件数据、图片加载、回调与语言包翻译器；包入口不导出任何组件。
 
 | 文件 | 职责 |
 |---|---|

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subagent-acp",
   "description": "Out-of-process ACP subagent backend: drives a child agent in a spawned subprocess over the Agent Client Protocol",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

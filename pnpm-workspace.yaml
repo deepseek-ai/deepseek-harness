@@ -75,4 +75,5 @@ minimumReleaseAgeExclude:
   - '@openai/codex@0.149.1||0.149.1-darwin-arm64||0.149.1-darwin-x64||0.149.1-linux-arm64||0.149.1-linux-x64||0.149.1-win32-arm64||0.149.1-win32-x64'
 
 patchedDependencies:
+  '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
   node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch

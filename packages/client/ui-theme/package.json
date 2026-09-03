@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-theme",
   "description": "Theme plugin: Host bootstrap for the pre-plugin palette; DOM-free ThemeRuntime for light/dark/system state; --dsw-* token styles and Appearance settings row",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

@@ -1,5 +1,5 @@
 ---
-description: "十个让模型创建、发消息与协调 teammate 的工具，供组合实验性 Team 插件的部署方阅读。"
+description: "九个让模型创建、发消息与协调 teammate 的工具，供组合实验性 Team 插件的部署方阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-experimental-tool-agent-team` 在团队领域包之上给模型一套团队工具：创建具名 teammate、给它们发消息或后续任务、查看谁在线、等待进展、中断卡住的 teammate，以及管理共享任务板——共十个工具。每个成员的提示词中都有一段简短策略，教模型何时组建团队（只有你要求时）以及如何在共享工作区协作。挂载它会用同名的团队工具取代旧版 subagent 控件，因此想同时使用两者的组合必须禁用旧定义。它是实验性的：不进入正式发布、不承诺稳定性，并且只有你明确要求组建团队时才会创建 teammate。
+`dsh-experimental-tool-agent-team` 在团队领域包之上给模型一套团队工具：创建具名 teammate、向它们 Steer 消息、查看谁在线、等待进展、中断卡住的 teammate，以及管理共享任务板——共九个工具。每个成员的提示词中都有一段简短策略，教模型何时组建团队（只有你要求时）以及如何在共享工作区协作。挂载它会用同名的团队工具取代旧版 subagent 控件，因此想同时使用两者的组合必须禁用旧定义。它是实验性的：不进入正式发布、不承诺稳定性，并且只有你明确要求组建团队时才会创建 teammate。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当模型应该通过工具运行一支团队时，在 `@deepseek-ai/dsh-experimental-agent-team` 之上挂载本包。挂载后，每个团队成员——Lead 与每个 teammate——都会获得相同的十个工具，外加一段说明自身角色与名字的策略段落。
+当模型应该通过工具运行一支团队时，在 `@deepseek-ai/dsh-experimental-agent-team` 之上挂载本包。挂载后，每个团队成员——Lead 与每个 teammate——都会获得相同的九个工具，外加一段说明自身角色与名字的策略段落。
 
 ### 何时选择
 
@@ -54,10 +54,10 @@ kind: "package-reference"
 
 ### 模型能做什么
 
-十个工具分为四类能力：
+九个工具分为四类能力：
 
 - **创建 teammate**——`spawn_teammate` 接收名字、描述与初始任务；只有 Lead 可以调用它。
-- **发送消息**——`send_message` 在不唤醒 idle teammate 的情况下传达信息；`followup_task` 让消息成为接收方的下一个轮次，并在需要时唤醒它。
+- **发送消息**——`send_message` 在最近的步骤边界 Steer running member、启动 idle member，并冷恢复 inactive teammate。
 - **查看与等待**——`list_agents` 显示带实时状态的 roster；`wait_agent` 等待下一次团队变化；`interrupt_agent` 停止 teammate 的当前轮次（仅限 Lead）。
 - **管理任务板**——`team_task_create`、`team_task_list`、`team_task_get` 与 `team_task_update` 添加、浏览、读取与更新共享任务。
 
@@ -91,12 +91,12 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：配置、固定策略文本与十个 scoped 工具注册 |
-| — | 不发布运行时不变式伴生入口；委托只能通过 `ctx.agentTeams` 观察。 |
+| [`src/index.ts`](src/index.ts) | 插件入口：配置、固定策略文本与九个 scoped 工具注册 |
+| — | 不发布运行时不变式伴生入口；Team 服务拥有持久化与授权关系。 |
 
 ### 策略与工具
 
-member scope 上的一个 `team:policy` 段落教每个成员自己的角色与协作规则；固定文本与十个工具注册都声明在 [`src/index.ts`](src/index.ts)。十个工具 schema 只出现在 Team member scope 中，因此非 Team subagent 保持默认目录。与旧全局 continuable-subagent 控件同名的 scoped 注册只会为团队成员覆盖这些全局控件。
+member scope 上的一个 `team:policy` 段落教每个成员自己的角色与协作规则；固定文本与九个工具注册都声明在 [`src/index.ts`](src/index.ts)。九个工具 schema 只出现在 Team member scope 中，因此非 Team subagent 保持默认目录。与旧全局 continuable-subagent 控件同名的 scoped 注册只会为团队成员覆盖这些全局控件。
 
 ### 按作用域注册与拆除
 
@@ -125,7 +125,7 @@ member scope 上的一个 `team:policy` 段落教每个成员自己的角色与�
 
 #### 模型看到什么
 
-一段稳定策略会说明确切 Team role／name／id、显式 delegation 要求、共享 cwd 行为、文件 stale-version 恢复、Bash／formatter／codegen 风险、task／write-scope 协调、quiet 与 waking 投递区别、mailbox 不重试规则，以及 Lead 必须在回答前等待。`spawn_teammate` 到 `team_task_update` 的十个 Team schema 只出现在 Team member scope。
+一段稳定策略会说明确切 Team role／name／id、显式 delegation 要求、共享 cwd 行为、文件 stale-version 恢复、Bash／formatter／codegen 风险、task／write-scope 协调、Steer 投递、mailbox 不重试规则，以及 Lead 必须在回答前等待。`spawn_teammate` 到 `team_task_update` 的九个 Team schema 只出现在 Team member scope。
 
 #### Token 影响
 

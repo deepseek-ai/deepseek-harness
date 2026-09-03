@@ -370,7 +370,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       {
         signature: 'async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult>',
         description: 'Queue one durable peer message, then attempt immediate delivery.',
-        parameters: [{ name: 'caller', description: 'exact live sending Team member.' }, { name: 'request', description: 'target name, content, scheduling mode, and pre-queue cancellation.' }],
+        parameters: [{ name: 'caller', description: 'exact live sending Team member.' }, { name: 'request', description: 'target name, content, and pre-queue cancellation.' }],
         returns: 'durable message identity and immediate-delivery observation.',
       },
       {
@@ -2135,7 +2135,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     methods: [
       {
         signature: 'async open<S extends DomainSpec>(spec: S): Promise<Domain<S>>',
-        description: 'Open one declared domain. Steps, each failing the whole call: reject a name that is already open (`already-open`); resolve the backend route (`backend-not-found` passes through from the hub); require its `kv` facet (`facet-unsupported`); open the unit projected from the spec (backend `version-mismatch`/`malformed-medium` pass through); load and validate every stored record against the spec\'s zod schemas (`invalid-record` with the offending table and key); construct the domain.\n\nLifecycle: the CALLER owns the returned handle and closes it via `Domain.close()` (typically as its own `ctx.effect` disposer) — the facility does not tie the domain to any consumer fiber. Domains still open when the facility unmounts are closed by the plugin disposer.',
+        description: 'Open one declared domain. Steps, each failing the whole call: reject a name that is already open (`already-open`); resolve the backend route (`backend-not-found` passes through from the hub); require its `kv` facet (`facet-unsupported`); open the unit projected from the spec (backend `version-mismatch`/`malformed-medium` pass through); load and validate every stored record against the spec\'s zod schemas (`invalid-record` with the offending table and key — unless the spec declares `invalidRecords: \'backup-and-skip\'` and the unit can move documents aside, in which case the failing record is backed up, logged, and skipped); construct the domain.\n\nLifecycle: the CALLER owns the returned handle and closes it via `Domain.close()` (typically as its own `ctx.effect` disposer) — the facility does not tie the domain to any consumer fiber. Domains still open when the facility unmounts are closed by the plugin disposer.',
         parameters: [{ name: 'spec', description: 'The domain declaration, typically from `defineDomain`.' }],
         returns: 'the opened domain handle, typed by the spec.',
       },
@@ -3944,7 +3944,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DomainSpec',
-    declaration: 'export interface DomainSpec {\n    readonly name: string;\n    readonly version: number;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly global?: DomainGlobalSpec<unknown>;\n    readonly tables: Record<string, DomainTableSpec>;\n}',
+    declaration: 'export interface DomainSpec {\n    readonly name: string;\n    readonly version: number;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n    readonly invalidRecords?: \'backup-and-skip\';\n    readonly global?: DomainGlobalSpec<unknown>;\n    readonly tables: Record<string, DomainTableSpec>;\n}',
   },
   {
     name: 'DomainTableSpec',
@@ -4252,11 +4252,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'KvUnit',
-    declaration: 'export interface KvUnit {\n    loadAll(): Promise<{\n        tables: Record<string, Record<string, unknown>>;\n        global: unknown;\n    }>;\n    putRecord(table: string, key: string, value: unknown): Promise<void>;\n    deleteRecord(table: string, key: string): Promise<void>;\n    setGlobal(value: unknown): Promise<void>;\n    close(): Promise<void>;\n}',
+    declaration: 'export interface KvUnit {\n    loadAll(): Promise<{\n        tables: Record<string, Record<string, unknown>>;\n        global: unknown;\n    }>;\n    putRecord(table: string, key: string, value: unknown): Promise<void>;\n    deleteRecord(table: string, key: string): Promise<void>;\n    backupRecord?(table: string, key: string): Promise<string>;\n    setGlobal(value: unknown): Promise<void>;\n    close(): Promise<void>;\n}',
   },
   {
     name: 'KvUnitDescriptor',
-    declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n}',
+    declaration: 'export interface KvUnitDescriptor {\n    readonly name: string;\n    readonly version: number;\n    readonly tables: readonly string[];\n    readonly hasGlobal: boolean;\n    readonly layout?: \'single\' | \'per-record\';\n    readonly compatibleVersions?: readonly number[];\n}',
   },
   {
     name: 'LlmAdapter',
@@ -4808,7 +4808,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'SendTeamMessageRequest',
-    declaration: 'export interface SendTeamMessageRequest {\n    readonly target: string;\n    readonly content: ContentBlock[];\n    readonly delivery: \'quiet\' | \'wakeup\';\n    readonly signal: AbortSignal;\n}',
+    declaration: 'export interface SendTeamMessageRequest {\n    readonly target: string;\n    readonly content: ContentBlock[];\n    readonly signal: AbortSignal;\n}',
   },
   {
     name: 'SendTeamMessageResult',

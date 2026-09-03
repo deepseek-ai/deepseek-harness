@@ -9,6 +9,8 @@ import { posix } from 'node:path'
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { FileType, Sandbox, SandboxNotFoundError } from 'e2b'
+import { proxyRouteFor } from '@deepseek-ai/dsh-http-proxy'
+import { e2bApiUrl } from './api-url.ts'
 
 export {
   CommandExitError,
@@ -65,6 +67,7 @@ declare module '@deepseek-ai/cordis' {
     e2b: E2BRuntime
   }
 }
+
 
 /**
  * Creates one lazily consumable E2B SDK handle and deletes the sandbox at
@@ -149,11 +152,17 @@ export class E2BRuntime extends Service {
   }
 
   private async open(): Promise<Sandbox> {
+    // The SDK builds its own undici dispatcher, so the global one never reaches it; it takes a proxy
+    // URL instead and reads no environment of its own. The decision is made against the URL the SDK
+    // will really call, so a bypass entry naming that host is honored and a loopback debug plane
+    // stays direct.
+    const route = proxyRouteFor(new URL(e2bApiUrl()))
     const sandbox = await Sandbox.create({
       apiKey: this.config.apiKey,
       timeoutMs: this.config.timeoutMs,
       secure: true,
       lifecycle: { onTimeout: 'kill' },
+      ...route.proxied ? { proxy: route.proxy } : {},
     })
     try {
       await sandbox.files.makeDir(this.cwd)

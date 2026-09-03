@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-11-python-publication-workflow.md
-2026-08-11-python-publication-workflow.md: 282bd453013da9b745c601f7b1f4be2cbd133629
-2026-08-11-python-publication-workflow.zh.md: 279dc4b5798d5ceb5968f92c58a7f57c4f2c5cdd
+2026-08-11-python-publication-workflow.md: afb18ee97d0708d8a79885a8f6639681e97eef72
+2026-08-11-python-publication-workflow.zh.md: f2d045f686c41c3e45a3cd6739dc5e1b37c58478

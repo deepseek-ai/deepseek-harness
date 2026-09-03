@@ -1,0 +1,12 @@
+diff --git a/prelude/sea-bootstrap.bundle.js b/prelude/sea-bootstrap.bundle.js
+index ac14980e953134f2285e326a5111cf52de717cf5..6b0c9d5b5063f447cb8aa3e0fc9d342729f29989 100644
+--- a/prelude/sea-bootstrap.bundle.js
++++ b/prelude/sea-bootstrap.bundle.js
+@@ -5560,7 +5560,6 @@ var require_sea_bootstrap_core = __commonJS({
+     var insideSnapshot = vfs.insideSnapshot;
+     var SNAPSHOT_PREFIX = vfs.SNAPSHOT_PREFIX;
+     shared.patchDlopen(insideSnapshot);
+-    shared.patchChildProcess(entrypoint2);
+     shared.setupProcessPkg(entrypoint2, manifest2.entrypoint);
+     if (manifest2.debug) {
+       shared.installDiagnostic(SNAPSHOT_PREFIX);

@@ -60,8 +60,16 @@ sdk-wheel:
         docker run --rm -v "$PWD:/work" -w /work "$image" bash -euxo pipefail -c "/opt/python/cp310-cp310/bin/python -m venv /tmp/dsh-sdk && /tmp/dsh-sdk/bin/python -m pip install --find-links /work/release/$PLATFORM --find-links /work/release/sdk deepseek-harness-sdk==$DSH_WHEEL_VERSION && /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-default && /tmp/dsh-sdk/bin/python /work/scripts/smoke-python-runtime.py --scenario sdk-mcp"
       fi
     - |
-      if [ "$PLATFORM" = macos-arm64 ]; then
-        python3 scripts/check-macos-deployment-target.py "$EXE" "$EXE-spawn-helper"
+      if [ "${PLATFORM#macos-}" != "$PLATFORM" ]; then
+        case "$PLATFORM" in
+          macos-arm64) macho_arch=arm64 ;;
+          macos-x64) macho_arch=x86_64 ;;
+          *) echo "Unsupported macOS platform $PLATFORM"; exit 1 ;;
+        esac
+        for payload in "$EXE" "$EXE-rg" "$EXE-spawn-helper"; do
+          lipo "$payload" -verify_arch "$macho_arch"
+        done
+        python3 scripts/check-macos-deployment-target.py --platform "$PLATFORM" "$EXE" "$EXE-rg" "$EXE-spawn-helper"
       fi
   artifacts:
     paths: [release/$PLATFORM/*.whl]
@@ -93,6 +101,16 @@ runtime-macos-arm64:
   variables:
     PKG_TARGET: node24-macos-arm64
     PLATFORM: macos-arm64
+  needs:
+    - job: sdk-wheel
+      artifacts: true
+
+runtime-macos-x64:
+  extends: .runtime-wheel
+  tags: [macos-x64]
+  variables:
+    PKG_TARGET: node24-macos-x64
+    PLATFORM: macos-x64
   needs:
     - job: sdk-wheel
       artifacts: true
@@ -147,6 +165,8 @@ publish-python:
       artifacts: true
     - job: runtime-macos-arm64
       artifacts: true
+    - job: runtime-macos-x64
+      artifacts: true
     - job: runtime-windows-x64
       artifacts: true
   before_script:
@@ -157,11 +177,12 @@ publish-python:
     - test "$CI_COMMIT_TAG" = "python-v$DSH_VERSION" || { echo "Tag $CI_COMMIT_TAG does not match package.json version $DSH_VERSION"; exit 1; }
     - python -m pip install twine==6.2.0
   script:
-    - test "$(find release -name '*.whl' | wc -l | tr -d ' ')" = 5
+    - test "$(find release -name '*.whl' | wc -l | tr -d ' ')" = 6
     - test -f "release/sdk/deepseek_harness_sdk-${DSH_WHEEL_VERSION}-py3-none-any.whl"
     - test -f "release/linux-x64/deepseek_harness_runtime_bin-${DSH_WHEEL_VERSION}-py3-none-manylinux_2_28_x86_64.whl"
     - test -f "release/linux-arm64/deepseek_harness_runtime_bin-${DSH_WHEEL_VERSION}-py3-none-manylinux_2_28_aarch64.whl"
     - test -f "release/macos-arm64/deepseek_harness_runtime_bin-${DSH_WHEEL_VERSION}-py3-none-macosx_14_0_arm64.whl"
+    - test -f "release/macos-x64/deepseek_harness_runtime_bin-${DSH_WHEEL_VERSION}-py3-none-macosx_14_0_x86_64.whl"
     - test -f "release/win-x64/deepseek_harness_runtime_bin-${DSH_WHEEL_VERSION}-py3-none-win_amd64.whl"
     - python -m twine check release/*/*.whl
     - export TWINE_USERNAME=gitlab-ci-token

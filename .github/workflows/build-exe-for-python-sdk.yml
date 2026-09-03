@@ -2,7 +2,7 @@ name: Build single-exe
 
 # Native builds for the release targets; see
 # .agents/notes/implemented/architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md.
-# A full target run retains one SDK wheel and four runtime wheels; subset
+# A full target run retains one SDK wheel and five runtime wheels; subset
 # dispatch retains the SDK wheel and selected runtime wheels. Bare executables
 # and source closures are test inputs. Run manually or call it from the Python
 # release workflow. There is no `pull_request` trigger: a label trigger would
@@ -12,7 +12,7 @@ on:
   workflow_call:
     inputs:
       targets:
-        description: Comma-separated pkg targets to build; empty builds all four.
+        description: Comma-separated pkg targets to build; empty builds all five.
         type: string
         required: false
         default: ''
@@ -36,7 +36,7 @@ on:
         description: >-
           Comma-separated pkg targets to build. Any subset of:
           node24-linux-x64, node24-linux-arm64, node24-macos-arm64,
-          node24-win-x64. Empty builds all four.
+          node24-macos-x64, node24-win-x64. Empty builds all five.
         type: string
         required: false
         default: ''
@@ -89,7 +89,7 @@ jobs:
         id: plan
         env:
           # Blank dispatch inputs build all targets.
-          TARGETS: ${{ inputs.targets || 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-win-x64' }}
+          TARGETS: ${{ inputs.targets || 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64' }}
         run: |
           set -euo pipefail
           matrix='[]'
@@ -98,14 +98,15 @@ jobs:
             t="$(echo "$raw" | xargs)" # trim surrounding whitespace
             [ -z "$t" ] && continue
             # Native-only: hosted arm64 Linux uses ubuntu-24.04-arm, while
-            # macos-latest is Apple Silicon.
+            # macos-latest is Apple Silicon; macos-15-intel is native x64.
             case "$t" in
               node24-linux-x64)   runner=ubuntu-latest ;;
               node24-linux-arm64) runner=ubuntu-24.04-arm ;;
               node24-macos-arm64) runner=macos-latest ;;
+              node24-macos-x64)   runner=macos-15-intel ;;
               node24-win-x64)     runner=windows-2025 ;;
               *)
-                echo "::error::Unknown target '$t'. Supported: node24-linux-x64, node24-linux-arm64, node24-macos-arm64, node24-win-x64."
+                echo "::error::Unknown target '$t'. Supported: node24-linux-x64, node24-linux-arm64, node24-macos-arm64, node24-macos-x64, node24-win-x64."
                 exit 1
                 ;;
             esac
@@ -251,6 +252,7 @@ jobs:
             linux-x64) wheel=deepseek_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_x86_64.whl ;;
             linux-arm64) wheel=deepseek_harness_runtime_bin-$VERSION-py3-none-manylinux_2_28_aarch64.whl ;;
             macos-arm64) wheel=deepseek_harness_runtime_bin-$VERSION-py3-none-macosx_14_0_arm64.whl ;;
+            macos-x64) wheel=deepseek_harness_runtime_bin-$VERSION-py3-none-macosx_14_0_x86_64.whl ;;
             *) echo "::error::Unsupported runtime platform $platform"; exit 1 ;;
           esac
           [ -x "$exe" ] || { echo "::error::$exe missing or not executable"; exit 1; }
@@ -432,13 +434,23 @@ jobs:
             exit 1
           }
 
-      - name: Check macOS deployment target
+      - name: Check macOS payload architecture and deployment target
         if: runner.os == 'macOS'
         env:
           EXE: ${{ steps.runtime-posix.outputs.exe }}
-        run: >-
-          python3 scripts/check-macos-deployment-target.py
-          "$EXE" "$EXE-spawn-helper"
+          PLATFORM: ${{ steps.runtime-posix.outputs.platform }}
+        run: |
+          set -euo pipefail
+          case "$PLATFORM" in
+            macos-arm64) macho_arch=arm64 ;;
+            macos-x64) macho_arch=x86_64 ;;
+            *) echo "::error::Unsupported macOS platform $PLATFORM"; exit 1 ;;
+          esac
+          for payload in "$EXE" "$EXE-rg" "$EXE-spawn-helper"; do
+            lipo "$payload" -verify_arch "$macho_arch"
+          done
+          python3 scripts/check-macos-deployment-target.py \
+            --platform "$PLATFORM" "$EXE" "$EXE-rg" "$EXE-spawn-helper"
 
       - name: Run wheel in a manylinux 2.28 container
         if: runner.os == 'Linux'

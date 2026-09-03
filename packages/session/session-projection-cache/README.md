@@ -64,6 +64,8 @@ Three mandatory points always write: session creation persists the seed-derived 
 
 The log leads and the cache follows: a live checkpoint flushes the session's buffered events durably before the cache row lands, so a crash can leave the cache behind the log but never ahead of it. Reads and writes share the storage domain's coherent in-memory state; the per-unit write chain mutates memory only after durability. Each version-stamped record must match the live unit schema and complete lifecycle identity (`createdAt`, `cwd`, `isSeeded`, and `inheritedEventCount`), so a row initialized under one fork cut cannot seed another. The JSON backend stores each record at `<root>/session_projcache/sessions/<id>.json` in an owner-only directory tree.
 
+Upgrades never cost the boot or the listing: records stamped with a version in the spec's `compatibleVersions` stay readable (their absent lineage fields decode as the unseeded lineage — exact for unseeded sessions, while a seeded caller fails the identity match and refolds cold), and a stored record that still fails schema validation is moved aside as `<id>.json.bak.<stamp>` under the domain's `invalidRecords: 'backup-and-skip'` policy, logged with its cause, and rebuilt by the next checkpoint.
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -126,6 +128,7 @@ These limits define where the cache needs operational care. They are current pac
 - **No eviction or retention surface** — records accumulate per session; pruning stored checkpoints is out-of-band maintenance, same stance as session persistence itself.
 - **Interval throttle is per-session coarse** — the timer arms at the first dirty event after a clean write; a steady sub-threshold trickle writes once per interval, not a sliding window.
 - **No cache-side cold refold** — the cache serves and refreshes its rows but never reads the session log (it does not depend on the persistence layer); a consumer that needs a guaranteed cold snapshot refolds from the log itself.
+- **Every schema or domain-version change must prove its upgrade story** — a change to the stored record schema or the domain version lands in the same PR with an archived fixture of the previously shipped on-disk format under `tests/fixtures/` and test cases in `tests/fixtures.spec.ts` proving the chosen disposition: read-compat recovery (`compatibleVersions`), current-version rewrite, or backup-and-skip salvage. A bump whose old records are simply discarded still proves that the discard neither fails the boot nor poisons the tree.
 
 <a id="dev-note"></a>
 ### Dev Note

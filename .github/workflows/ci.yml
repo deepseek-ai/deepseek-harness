@@ -328,7 +328,7 @@ jobs:
     name: python runtime / release-shaped matrix
     uses: ./.github/workflows/build-exe-for-python-sdk.yml
     with:
-      targets: node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-win-x64
+      targets: node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64
       ci: true
     secrets:
       DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}

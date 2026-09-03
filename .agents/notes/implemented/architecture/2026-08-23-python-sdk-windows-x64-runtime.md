@@ -20,7 +20,7 @@ The Python process still launches the ordinary `dsh --profile sdk` application a
 
 The executable builder accepts `win` as a pkg platform only with x64, requires the Windows build to run under x64 Node on a Windows host, preserves `.exe` names, and copies `@vscode/ripgrep-win32-x64` as the conventional `-rg.exe` sidecar. Pnpm subprocesses use a caller-supplied JavaScript entry through `process.execPath`. When the caller exposes a `.cmd` shim, the builder resolves the installed `pnpm.mjs` or `pnpm.cjs` through `PNPM_HOME`; it fails if no JavaScript entry exists instead of spawning the shim or enabling a command shell.
 
-The required GitHub matrix builds `node24-win-x64` on `windows-2025` beside the three existing targets. The public GitHub release and GitLab tag pipeline each publish the same four runtime wheels plus the pure SDK wheel. Windows arm64 is absent from target parsing, manifests, matrices, release contents, and documentation.
+The required GitHub matrix builds `node24-win-x64` on `windows-2025` beside Linux x64, Linux arm64, macOS arm64, and macOS x64. The public GitHub release and GitLab tag pipeline each publish the same five runtime wheels plus the pure SDK wheel. Windows arm64 is absent from target parsing, manifests, matrices, release contents, and documentation.
 
 ### Installed-wheel behavior
 
@@ -48,4 +48,4 @@ This decision partially supersedes the Windows non-goal in the [single-file runt
 
 ## Consequences
 
-Python installation now selects a Node-free Windows x64 runtime with the same explicit-home and profile customization model as Linux and macOS. Every pull request pays for a fourth executable, runtime wheel, full keyless blackbox, and—on trusted heads—real provider task. Release validation retains five wheels instead of four. Windows arm64 users receive an explicit unsupported-platform failure until a separate native product decision supplies and proves that carrier.
+Python installation selects a Node-free Windows x64 runtime with the same explicit-home and profile customization model as Linux and macOS. Every pull request builds the Windows executable and runtime wheel as one of five native targets, runs the full keyless blackbox, and—on trusted heads—runs the real-provider task. Release validation retains six wheels. Windows arm64 users receive an explicit unsupported-platform failure until a separate native product decision supplies and proves that carrier.

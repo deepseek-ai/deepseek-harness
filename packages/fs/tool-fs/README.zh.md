@@ -242,7 +242,7 @@ Use the edit tool for targeted changes to existing UTF-8 text files. It replaces
 - **`read` 只处理 UTF-8 文本文件**：图像使用独立的 `read_image` 工具；PDF、音频和视频仍延期处理。目录目标为 `FS_NOT_REGULAR_FILE`。
 - **媒体类型按扩展名声明**：扩展名选择声明类型，附件存储的魔数校验保持权威；扩展名错误但格式正确的图像会得到改名修复提示，而不是被嗅探接受。只有没有扩展名的路径按文件签名识别格式。
 - **对象路径重新走源准入**：对规范化附件对象调用 `read_image` 会把其字节作为新来源重新准入，因此把 `maxImageBytes`/`maxMessageImageBytes` 配置得低于规范化图片字节预算的部署可能拒绝 `ctx.attachments.readImage` 仍可读取的对象路径；默认配置下规范化预算（4 MiB）远低于源上限（20 MiB）。
-- **工具结果卡片没有内嵌图像预览**：UI 表面以通用形式渲染图像结果（持久引用而非像素）；内嵌渲染延后到 UI 包处理。
+- **内嵌图像预览依赖 UI 组合**：工具结果卡片经由浏览器的 `tool.call.images` 槽位渲染图像，由附件呈现插件填充；未组合该插件的 UI 改为显示结果的信封文本。
 - **没有附件区域工具**：agent 在拥有文件系统路径时可以通过其他可用工具裁剪图片；没有路径的粘贴或拖入图片无法按更高分辨率重新读取。
 - **没有超时接口**：`read`/`write`/`edit` 不接受超时参数，也不声明超时预算；取消只通过 `exec.signal` 传递（见[提供方理由](../README.zh.md)）。
 

@@ -1,0 +1,7 @@
+version: 1
+scenario: read-image-gif
+profile: headless
+composition: image
+recording: authored
+header:
+  class: image

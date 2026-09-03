@@ -558,6 +558,49 @@ describe('headless stream-json snapshots', () => {
         const tasks = rows.filter(row => row.type === 'team/task')
           .map(row => ((row.data as JsonObject).task as JsonObject))
         const latestTasks = Object.values(Object.fromEntries(tasks.map(task => [String(task.subject), task])))
+        const implementer = logs.find(log => typeof log.header.parentSession === 'string'
+          && parseJsonl(log.content).some((row) => {
+            if (row.type !== 'user/message') return false
+            const content: unknown = (row.data as JsonObject).content
+            return Array.isArray(content) && content.some((block: unknown) => (
+              typeof block === 'object' && block !== null && !Array.isArray(block)
+              && (block as JsonObject).type === 'text'
+              && typeof (block as JsonObject).text === 'string'
+              && ((block as JsonObject).text as string).includes('IMPLEMENTER_MARK')
+            ))
+          }))
+        if (implementer === undefined) throw new Error('Agent Teams snapshot did not persist the implementer')
+        const implementerRows = parseJsonl(implementer.content)
+        const steeredInboxIndex = implementerRows.findIndex((row) => {
+          if (row.type !== 'agent/inbox/spliced') return false
+          const data = row.data as JsonObject
+          const inserted: unknown = data.inserted
+          return data.target === 'next-step' && Array.isArray(inserted)
+            && inserted.some((message: unknown) => {
+              if (typeof message !== 'object' || message === null || Array.isArray(message)) return false
+              const source = (message as JsonObject).source
+              return typeof source === 'object' && source !== null && !Array.isArray(source)
+                && (source as JsonObject).kind === 'team-message'
+            })
+        })
+        const steeredMessageIndex = implementerRows.findIndex((row) => {
+          if (row.type !== 'user/message') return false
+          const source = (row.data as JsonObject).source
+          return typeof source === 'object' && source !== null && !Array.isArray(source)
+            && (source as JsonObject).kind === 'team-message'
+        })
+        const openTurnStart = implementerRows.findLastIndex((row, index) => (
+          index < steeredMessageIndex && row.type === 'turn/start'
+        ))
+        const openTurnEnd = implementerRows.findLastIndex((row, index) => (
+          index < steeredMessageIndex && row.type === 'turn/end'
+        ))
+        const completionAfterSteer = implementerRows.some((row, index) => {
+          if (index <= steeredMessageIndex || row.type !== 'tool/call') return false
+          const data = row.data as JsonObject
+          if (data.name !== 'team_task_update' || typeof data.arguments !== 'string') return false
+          return (JSON.parse(data.arguments) as JsonObject).action === 'complete'
+        })
         projection = {
           sessions: logs.length,
           memberEdges: members.length,
@@ -573,6 +616,12 @@ describe('headless stream-json snapshots', () => {
             && (row.data as JsonObject).name === 'wait_agent'),
           checkedRoster: rows.some(row => row.type === 'tool/call'
             && (row.data as JsonObject).name === 'list_agents'),
+          steerEvidence: {
+            nextStepInbox: steeredInboxIndex >= 0,
+            messageEntered: steeredMessageIndex > steeredInboxIndex,
+            enteredOpenTurn: openTurnStart > openTurnEnd,
+            completedAfterMessage: completionAfterSteer,
+          },
         }
       },
     })
@@ -592,6 +641,12 @@ describe('headless stream-json snapshots', () => {
         "memberEdges": 4,
         "queuedMessages": 2,
         "sessions": 3,
+        "steerEvidence": {
+          "completedAfterMessage": true,
+          "enteredOpenTurn": true,
+          "messageEntered": true,
+          "nextStepInbox": true,
+        },
         "tasks": [
           {
             "revision": 3,

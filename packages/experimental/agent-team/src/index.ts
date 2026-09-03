@@ -157,7 +157,7 @@ export class TeamService extends TypertRemoteService {
   /**
    * Queue one durable peer message, then attempt immediate delivery.
    * @param caller - exact live sending Team member.
-   * @param request - target name, content, scheduling mode, and pre-queue cancellation.
+   * @param request - target name, content, and pre-queue cancellation.
    * @returns durable message identity and immediate-delivery observation.
    */
   async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult> {

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-storage-json",
   "description": "JSON file KV storage backend for the DeepSeek Harness storage hub",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

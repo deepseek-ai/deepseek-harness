@@ -106,7 +106,7 @@ profile 通过可选 settings seam 每次操作重新读取：base 与用户的 
 
 ### 从端点发现模型
 
-插件会回答"该提供方可以提供哪些模型？"，供配置界面正在编辑或起草的路由使用。已安装目录提供的路由直接由目录回答，不发网络请求；只有目录未描述的路由才会经网络询问（`openai-completions` 与 `openai-responses` 形状）。已配置且具名的路由会在 Host 内部提供已存凭据与 profile `headers`，因此通过 `settings.yaml` 或 Cordis 配置设置的部署标头可以到达 `GET /models`，但不会成为发现请求或 Models 页面的字段；表单中新键入的密钥仍优先于已存凭据。回答是界面可以提供给用户采纳的候选元数据——不存储任何内容，`settings.yaml` 仍然是决定路由服务内容的唯一事实。
+插件会回答"该提供方可以提供哪些模型？"，供配置界面正在编辑或起草的路由使用。已安装目录提供的路由直接由目录回答，不发网络请求；只有目录未描述的路由才会经网络询问。`openai-completions` 与 `openai-responses` 使用带 bearer 鉴权的 `GET {baseURL}/models`，`anthropic-messages` 则以 `x-api-key` 和 `anthropic-version` 使用原生 `GET /v1/models?limit=1000` 语义；其列表 URL 接受带或不带末尾 `/v1` 的 API 根地址，因为网关文档两种写法都会发布，且只有该列表 URL 会归一化这一段，模型请求收到的仍是配置原样的 `baseURL`。已配置且具名的路由会在 Host 内部提供已存凭据与 profile `headers`，因此通过 `settings.yaml` 或 Cordis 配置设置的部署标头可以到达模型发现请求，但不会成为发现请求或 Models 页面的字段；表单中新键入的密钥仍优先于已存凭据。解析器接受标准 `data` 数组或富信息 `models` 对象，并归一化每个候选的 id、显示名、上下文窗口与最大输出 token 数；Anthropic 的 `max_input_tokens` 与 `max_tokens` 会进入相同容量字段，即使对象条目点名了另一个规范 id，对象键仍是请求 id，原始类型的对象属性会被忽略，缺失的显示名则回退到该请求 id。回答是界面可以提供给用户采纳的候选元数据——不存储任何内容，`settings.yaml` 仍然是决定路由服务内容的唯一事实。
 
 ### 失败与恢复
 
@@ -212,6 +212,7 @@ pi-ai 事件变成 harness 的推理、文本、工具调用、用量与 finish 
 - **分层合并对字典键没有删除**——base 声明的 `reasoningEfforts` 等级、`modelOverrides` 条目或 `compat` 字段可以被用户层覆盖，但不能被移除。
 - **`headers` 可以携带 redactor 永远看不到的凭据**——profile 解析会拒绝 Fetch 无法表示的名称与值，但该字典仍是纯字符串；以 `apiKeyEnv` 引用存储凭据。
 - **路由目录不会自行刷新**——目录就是 `settings.yaml` 的内容；这里没有任何机制向提供方查询它提供的模型。
+- **Anthropic 模型发现最多读取 1,000 个模型**——请求使用 API 的最大页大小，但不会遍历 `has_more`；第一页之外的条目需要手工添加。
 - **每条路由一种协议格式**——混合协议目录路由无法承载另一协议格式的模型；把提供方拆到两个路由键是变通办法。
 - **模态声明不受校验**——声明 `image` 而其网关不支持的模型会在提示词准入后被提供方拒绝。持久图片仍留在历史中，同一误声明模型可能再次失败；切换到纯文本模型仍然可行，因为共享 LLM 运行时会针对该请求把图片引用投影为稳定文本。
 - **未认证路由取决于其协议**——不点名凭据的路由解析为已配置但无密钥，但 pi-ai 的 OpenAI 兼容实现仍要求 API 密钥或 `Authorization` 标头，因此无密钥本地服务器需要由 `apiKeyEnv` 引用或 `headers` 中的 `Authorization` 条目提供的占位凭据。

@@ -2,7 +2,7 @@
 
 [English](agent-team.md) | 中文
 
-实验性隐式 Root Team 领域、模型工具与宿主适配器共享的类型。[Agent Teams Agent Note](../../.agents/notes/implemented/feature/2026-08-05-agent-teams.zh.md)负责身份、mailbox、task 与共享 checkout 决策；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的字面持久形式。
+实验性隐式 Root Team 领域、模型工具与宿主适配器共享的类型。[Agent Teams Agent Note](../../.agents/notes/implemented/feature/2026-08-05-agent-teams.zh.md)负责身份、mailbox、task 与共享 checkout 决策；[Team Steer 消息 Agent Note](../../.agents/notes/implemented/simplification/2026-08-30-team-send-message-steer.zh.md)负责消息调度；本页记录 [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts) 中的字面持久形式。
 
 ## 身份与 roster
 
@@ -34,10 +34,11 @@ interface TeamMessageSnapshot {
   readonly senderId: SessionId
   readonly senderName: string
   readonly targetId: SessionId
-  readonly delivery: 'quiet' | 'wakeup'
   readonly content: ContentBlock[]
 }
 ```
+
+每条消息都会尝试 Steer 投递。running target 在最近的步骤边界收到消息，idle target 启动一个轮次，inactive teammate 则冷恢复。调用方不能选择其他模式，因此持久记录不存储调度方式。
 
 target Session 会在 pending inbox 条目和最终用户消息上保留消息身份与发送者归因。跨 inbox 与历史折叠该 source 构成 target 侧去重键；模型可见的 framing 会重复 id 和发送者。
 
@@ -116,7 +117,7 @@ async spawnTeammate(caller: Agent, request: SpawnTeammateRequest): Promise<Spawn
 /**
  * Queue one durable peer message, then attempt immediate delivery.
  * @param caller - exact live sending Team member.
- * @param request - target name, content, scheduling mode, and pre-queue cancellation.
+ * @param request - target name, content, and pre-queue cancellation.
  * @returns durable message identity and immediate-delivery observation.
  */
 async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult>

@@ -1,0 +1,146 @@
+{
+  "id": "anthropic",
+  "env": [
+    "ANTHROPIC_API_KEY"
+  ],
+  "npm": "@ai-sdk/anthropic",
+  "name": "Anthropic",
+  "doc": "https://docs.anthropic.com/en/docs/about-claude/models",
+  "models": {
+    "claude-opus-4-7": {
+      "id": "claude-opus-4-7",
+      "name": "Claude Opus 4.7",
+      "description": "Stronger Opus tier for advanced software work and high-stakes reasoning",
+      "family": "claude-opus",
+      "attachment": true,
+      "reasoning": true,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      ],
+      "tool_call": true,
+      "structured_output": true,
+      "temperature": false,
+      "knowledge": "2026-01-31",
+      "release_date": "2026-04-14",
+      "last_updated": "2026-04-16",
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "open_weights": false,
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "cost": {
+        "input": 5,
+        "output": 25,
+        "cache_read": 0.5,
+        "cache_write": 6.25
+      }
+    },
+    "claude-fable-5-1": {
+      "id": "claude-fable-5-1",
+      "name": "Claude Fable 5.1",
+      "description": "Claude model for demanding reasoning and long-horizon agentic work",
+      "family": "claude-fable",
+      "attachment": true,
+      "reasoning": true,
+      "reasoning_options": [
+        {
+          "type": "effort",
+          "values": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ]
+        }
+      ],
+      "tool_call": true,
+      "structured_output": true,
+      "temperature": false,
+      "knowledge": "2026-06",
+      "release_date": "2026-09-01",
+      "last_updated": "2026-09-01",
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "open_weights": false,
+      "limit": {
+        "context": 1000000,
+        "output": 128000
+      },
+      "cost": {
+        "input": 10,
+        "output": 50,
+        "cache_read": 0.25,
+        "cache_write": 12.5
+      }
+    },
+    "claude-haiku-4-5": {
+      "id": "claude-haiku-4-5",
+      "name": "Claude Haiku 4.5 (latest)",
+      "description": "Fast Claude lane for lightweight agents, office tasks, and responsive chat",
+      "family": "claude-haiku",
+      "attachment": true,
+      "reasoning": true,
+      "reasoning_options": [
+        {
+          "type": "budget_tokens",
+          "min": 1024
+        }
+      ],
+      "tool_call": true,
+      "structured_output": true,
+      "temperature": true,
+      "knowledge": "2025-02-28",
+      "release_date": "2025-10-15",
+      "last_updated": "2025-10-15",
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "pdf"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "open_weights": false,
+      "limit": {
+        "context": 200000,
+        "output": 64000
+      },
+      "cost": {
+        "input": 1,
+        "output": 5,
+        "cache_read": 0.1,
+        "cache_write": 1.25
+      }
+    }
+  }
+}

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-schedule",
   "description": "Agent-scoped durable after, at, and fixed-rate reminders over the session event log",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

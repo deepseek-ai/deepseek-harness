@@ -50,7 +50,7 @@ With an exact live agent idle, an active armed goal, and remaining capacity, the
 
 ### When continuation stops
 
-A round starts only at whole-agent idle, and completion, pause, and blocking suppress continuation; an edit only invalidates an in-flight round through the revision fence, and the driver continues the new revision. The driver also stops on its own when a turn ends on max tokens, a durability write fails, the agent is cancelled, the plugin unloads, or the round cap is exhausted — at the cap it records a blocker with the stable code `round-limit`. Cancellation never auto-restarts a round: a goal whose round was under way or already queued is paused at the next idle point, and a cancellation unrelated to a goal attempt only disarms continuation.
+A round starts only at whole-agent idle, and completion, pause, and blocking suppress continuation; a host-initiated pause also aborts the turn already running, while a model-initiated pause inside its own turn finishes normally. An edit only invalidates an in-flight round through the revision fence, and the driver continues the new revision. The driver also stops on its own when a turn ends on max tokens, a durability write fails, the agent is cancelled, the plugin unloads, or the round cap is exhausted — at the cap it records a blocker with the stable code `round-limit`. Cancellation never auto-restarts a round: a goal whose round was under way or already queued is paused at the next idle point, and a cancellation unrelated to a goal attempt only disarms continuation.
 
 ### After resume, fork, or unload
 

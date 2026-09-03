@@ -225,6 +225,15 @@ export function applyReadImageTool(ctx: Context): void {
         },
       },
       render: (_args, value) => imageReadContent(value),
+      // Persist the resolved path only. The attachment reference is NOT copied
+      // here: the settled `content` already carries the image block with the
+      // complete reference, so a second copy would keep two records of one fact —
+      // and a `tools/post-execute` hook that legitimately replaces the content
+      // would leave the stale copy behind, showing an image the result no longer
+      // returns. The path needs its own structured record because the content
+      // carries it only as model-facing envelope text, which the client does not
+      // parse.
+      presentationMeta: (_args, value) => ({ path: value.path }),
     },
     // Content-addressed attachment writes are idempotent, so concurrent reads
     // of the same file cannot conflict.

@@ -10,7 +10,8 @@ import { WebError } from '@deepseek-ai/dsh-web'
 import type { WebFetchBody, WebFetchProvider, WebFetchRequest, WebFetchResult } from '@deepseek-ai/dsh-web'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import type { Response } from 'undici'
-import { publicHttpNetwork } from './network.ts'
+import { proxyRouteFor } from '@deepseek-ai/dsh-http-proxy'
+import { isNonPublicIpLiteral, publicHttpNetwork } from './network.ts'
 import type { PublicAddress } from './network.ts'
 import { classifyContentType, decoderForCharset, isSameOrigin, parseCharset, validateFetchUrl } from './policy.ts'
 
@@ -114,12 +115,28 @@ export class HttpFetchProvider implements WebFetchProvider {
   }
 
   private async requestOnce(url: URL, signal: AbortSignal) {
+    const headers = {
+      'user-agent': this.limits.userAgent,
+      'accept': 'text/html,application/xhtml+xml,text/*;q=0.9,application/json;q=0.8',
+    }
     try {
+      // A proxied hop skips public-address resolution and pinning: the proxy performs the origin's
+      // DNS, so there is no local address to validate, and pinning one would connect directly and
+      // bypass the proxy. A hop the policy bypasses — every loopback and every `NO_PROXY` entry —
+      // still takes the resolved-and-pinned path unchanged.
+      //
+      // One route decides both the branch and the dispatcher, so a mount or disposal between two
+      // reads cannot return a direct, unpinned agent for a URL this branch cleared as proxied.
+      //
+      // An IP literal the address checks would refuse never takes it. The proxy would resolve
+      // nothing — the address is already stated — so the shortcut would spend the checks for
+      // nothing and let a proxy on this machine reach the very service they keep out of reach.
+      const route = proxyRouteFor(url)
+      if (route.proxied && !isNonPublicIpLiteral(url.hostname)) {
+        return await publicHttpNetwork.requestVia(route.dispatcher, url, headers, signal)
+      }
       const addresses = await this.resolveAddresses(url.hostname, signal)
-      return await publicHttpNetwork.request(url, addresses, {
-        'user-agent': this.limits.userAgent,
-        'accept': 'text/html,application/xhtml+xml,text/*;q=0.9,application/json;q=0.8',
-      }, signal)
+      return await publicHttpNetwork.request(url, addresses, headers, signal)
     } catch (error: unknown) {
       if (error instanceof WebError) throw error
       throw translateAbortOrNetwork(error, signal)

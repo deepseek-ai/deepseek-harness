@@ -16,7 +16,7 @@ Issue 生命周期工作流把评审 webhook 视为命令。`pull_request.review
 
 工作流订阅的普通 PR 事件仍是只向前推进的实现信号：它们可以将 `Inbox`、`Backlog` 或 `Ready` 推进至 `In progress`，但不能让 `In review` 倒退。请求评审命令可将任意较早的活跃状态推进至 `In review`。请求修改命令可将较早的活跃状态推进至 `In progress`；它也可以让 `In review` 状态回退，但仅在目标 Project 的最新状态事件由配置的生命周期执行主体写入时进行。若最新状态事件的执行主体是人工用户或未知主体，则保留当前状态。
 
-状态投影仅解析同一仓库内严格匹配的 `Fixes`、`Closes` 或 `Resolves` 引用。它不会更改终态、将没有 Project 状态的 Issue 添加到 Project、依赖 PR 元数据是否有效、查询 `reviewDecision`、重建评审轮次、从 Issue 反向查找 PR，或运行定时协调器。独立的日期初始化由[在 PR 创建时设置 Issue 开始日期](2026-08-31-pr-opened-issue-start-dates.zh.md)负责，并处理每个同仓库 Issue 引用。
+状态投影仅解析同一仓库内严格匹配的 `Fixes`、`Closes` 或 `Resolves` 引用。它不会更改终态、将没有 Project 状态的 Issue 添加到 Project、依赖 PR 元数据是否有效、查询 `reviewDecision`、重建评审轮次、从 Issue 反向查找 PR，或运行定时协调器。独立的日期初始化由[Project 局部 Issue 规划字段](2026-09-02-project-local-issue-planning-fields.zh.md)负责，并处理每个同仓库 Issue 引用。
 
 [Issue 生命周期](../../../../.github/workflows/issue-lifecycle.yml)仍不订阅 `pull_request.ready_for_review`；两条事件命令均不依赖该动作。[Issue 策略](../../../../.github/workflows/issue-policy.yml)保留 `ready_for_review`，因为人工提交的 PR 进入评审时，该工作流负责执行必需检查门禁。
 

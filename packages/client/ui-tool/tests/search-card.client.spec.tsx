@@ -187,6 +187,7 @@ describe('searchCardModel', () => {
 
 describe('chat row search body (GenericToolCard fallback)', () => {
   const ownerProps = (block: RunningToolCall | ToolResultNode, toolName: string): GenericToolCardProps => ({
+    loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     callId: 'c1', toolName, block, openFile: vi.fn(), t,
   })
   /** The whole summary row is the expand toggle (ToolRow's unified interaction). */

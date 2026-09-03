@@ -778,12 +778,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /** Whole teammate lifecycle value, stored only in the Team Lead Session. */
-'team/member': { version: 1; teamId: TeamId; member: TeamMemberSnapshot }
+'team/member': { version: 2; teamId: TeamId; member: TeamMemberSnapshot }
 ```
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamMemberSnapshot](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:206`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:204`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagedelivered--log-only"></a>
 
@@ -792,7 +792,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 ```ts persistence-catalog
 /** Durable acknowledgement that the target Session recorded the message. */
 'team/message/delivered': {
-  version: 1
+  version: 2
   teamId: TeamId
   messageId: TeamMessageId
   targetId: SessionId
@@ -801,7 +801,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamMessageId](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:212`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:210`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagequeued--log-only"></a>
 
@@ -809,12 +809,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /** Durable mailbox enqueue, stored before delivery is attempted. */
-'team/message/queued': { version: 1; teamId: TeamId; message: TeamMessageSnapshot }
+'team/message/queued': { version: 2; teamId: TeamId; message: TeamMessageSnapshot }
 ```
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamMessageSnapshot](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:210`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:208`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teamtask--log-only"></a>
 
@@ -822,12 +822,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /** Whole shared-task value, stored only in the Team Lead Session. */
-'team/task': { version: 1; teamId: TeamId; task: TeamTaskSnapshot }
+'team/task': { version: 2; teamId: TeamId; task: TeamTaskSnapshot }
 ```
 
 类型：[TeamId](subsystems/agent-team.zh.md) · [TeamTaskSnapshot](subsystems/agent-team.zh.md)
 
-来源：[`packages/experimental/agent-team/src/types.ts:208`](../packages/experimental/agent-team/src/types.ts)
+来源：[`packages/experimental/agent-team/src/types.ts:206`](../packages/experimental/agent-team/src/types.ts)
 
 ### `todo/*`
 

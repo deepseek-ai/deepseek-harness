@@ -34,10 +34,10 @@ The Team Lead and all teammates share the same working directory and filesystem.
 
 Prefer read/edit/write for file changes. If a file operation returns FS_STALE_VERSION, read the current file, rebase your intended change onto the new content, and retry. Bash, formatters, code generators, and scripts are not fully protected by the filesystem version guard; coordinate them explicitly and have the Lead review the final diff and run tests.
 
-Use send_message for quiet information that must not start an idle teammate. Use followup_task when the target should run another turn. A delivered peer item starts with its stable message id and sender name. A successful send is already durable even when its result says queued; do not resend it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use followup_task first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
+send_message steers a running target at its nearest step boundary, starts an idle target, and cold-resumes an inactive teammate. A delivered peer item starts with its stable message id and sender name. A successful send is already durable even when its result says queued; do not resend it. Shared-task workflow is list, get, claim with the current revision, perform the work, then complete. Task readiness never starts an owner. Before wait_agent, use list_agents and make sure another required member is running or provisioning; use send_message first when the required member is inactive. wait_agent observes only changes after that call starts, never wakes a member, and returns noProgress immediately when no other member can produce a change. Re-list after wakeup or timeout. The Lead must wait for required teammates before giving the final answer.`
 
 const ACTIVE_WAIT_STATUSES: ReadonlySet<TeamMemberView['status']> = new Set(['running', 'provisioning'])
-const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use followup_task to wake each required inactive teammate before waiting again.'
+const NO_ACTIVE_PEER_MESSAGE = 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake each required inactive teammate before waiting again.'
 
 /**
  * One roster row, matching `TeamMemberView`. The Lead pseudo-row omits the
@@ -198,29 +198,22 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
       },
     })))
 
-    const messageTool = (toolName: 'send_message' | 'followup_task', delivery: 'quiet' | 'wakeup'): void => {
-      register(scoped.tools.register(defineTool({
-        name: toolName,
-        description: delivery === 'quiet'
-          ? 'Send durable information to another Team member without starting an idle member.'
-          : 'Send a durable follow-up task to another Team member and start a turn when needed.',
-        parameters: {
-          target: { type: 'string', required: true, description: 'Team member name, or lead.' },
-          message: { type: 'string', required: true, description: 'Self-contained message for the target.' },
-        },
-        output: jsonOutput(SEND_VALUE_SCHEMA),
-        execute(args, exec) {
-          return ctx.agentTeams.sendMessage(callingAgent(exec.agent, toolName), {
-            target: args.target,
-            content: [{ type: 'text', text: args.message }],
-            delivery,
-            signal: exec.signal,
-          })
-        },
-      })))
-    }
-    messageTool('send_message', 'quiet')
-    messageTool('followup_task', 'wakeup')
+    register(scoped.tools.register(defineTool({
+      name: 'send_message',
+      description: 'Send one durable message to another Team member. A running target receives it at the nearest step boundary; an idle target starts a turn; an inactive teammate cold-resumes.',
+      parameters: {
+        target: { type: 'string', required: true, description: 'Team member name, or lead.' },
+        message: { type: 'string', required: true, description: 'Self-contained message for the target.' },
+      },
+      output: jsonOutput(SEND_VALUE_SCHEMA),
+      execute(args, exec) {
+        return ctx.agentTeams.sendMessage(callingAgent(exec.agent, 'send_message'), {
+          target: args.target,
+          content: [{ type: 'text', text: args.message }],
+          signal: exec.signal,
+        })
+      },
+    })))
 
     register(scoped.tools.register(defineTool({
       name: 'list_agents',

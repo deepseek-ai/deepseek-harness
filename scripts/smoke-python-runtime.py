@@ -10,6 +10,7 @@ import importlib.metadata
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import sysconfig
@@ -55,6 +56,17 @@ MINIMAL_SHELL_COMMAND = (
     )
 )
 MINIMAL_SHELL_SECOND_CWD = str(Path(tempfile.gettempdir()).resolve()) if IS_WINDOWS else "/tmp"
+SPAWN_NODE_PROMPT = "Run node --version through the packaged shell tool."
+SPAWN_NODE_TEXT = "spawn node smoke ok"
+SPAWN_NODE_CALL_ID = "spawn-node-shell"
+# The POSIX command string starts with `node ` inside the shell tool's `bash -c`
+# argv, the exact form @yao-pkg/pkg's unpatched SEA bootstrap rewrites to the
+# executable itself while stamping PKG_EXECPATH into the child environment.
+SPAWN_NODE_COMMAND = (
+    'node --version; if ($env:PKG_EXECPATH) { "PKG_EXECPATH=$env:PKG_EXECPATH" } else { "PKG_EXECPATH=ABSENT" }'
+    if IS_WINDOWS
+    else 'node --version; echo "PKG_EXECPATH=${PKG_EXECPATH:-ABSENT}"'
+)
 LEGACY_CUSTOM_DISABLED_ROWS = (
     "agent-instructions",
     "goal",
@@ -309,6 +321,9 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         fs_search = fs_search_tool_followup(call_id, tool_name, tool_text)
         if fs_search is not None:
             return fs_search
+        spawn_node = spawn_node_tool_followup(call_id, tool_name, tool_text)
+        if spawn_node is not None:
+            return spawn_node
         minimal = minimal_tool_followup(body, call_id, tool_name, tool_text)
         if minimal is not None:
             return minimal
@@ -351,6 +366,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         CODE_PROMPT,
         WORKFLOW_PROMPT,
         FS_SEARCH_PROMPT,
+        SPAWN_NODE_PROMPT,
         MCP_PROMPT,
         RESTART_FIRST_PROMPT,
         RESTART_SECOND_PROMPT,
@@ -414,6 +430,13 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
             "grep",
             {"pattern": FS_SEARCH_MARKER, "path": "."},
         )
+    if prompt == SPAWN_NODE_PROMPT:
+        assert_advertised_tool(body, MINIMAL_SHELL_TOOL)
+        return tool_call_chunks(
+            SPAWN_NODE_CALL_ID,
+            MINIMAL_SHELL_TOOL,
+            {"command": SPAWN_NODE_COMMAND, "description": "Report the reachable Node version"},
+        )
     if prompt == MCP_PROMPT:
         assert_advertised_tool(body, "mcp__fixture__add")
         return tool_call_chunks(
@@ -467,6 +490,36 @@ def fs_search_tool_followup(
             raise AssertionError(f"packaged glob returned no fixture path: {tool_text}")
         return text_chunks(FS_SEARCH_TEXT)
     raise AssertionError(f"unexpected filesystem-search follow-up: {call_id} {tool_name}: {tool_text}")
+
+
+def host_node_version() -> str:
+    """The machine's own `node --version` line, the required shell resolution target."""
+    node = shutil.which("node")
+    if node is None:
+        raise AssertionError("the spawn-node scenario requires Node on PATH for comparison")
+    return subprocess.run(
+        [node, "--version"], capture_output=True, text=True, check=True,
+    ).stdout.strip()
+
+
+def spawn_node_tool_followup(
+    call_id: str,
+    tool_name: str,
+    tool_text: str,
+) -> list[dict[str, object]] | None:
+    """Verify the packaged shell reached the machine's Node with a clean environment."""
+    if call_id != SPAWN_NODE_CALL_ID:
+        return None
+    if tool_name != MINIMAL_SHELL_TOOL:
+        raise AssertionError(f"spawn-node follow-up used an unexpected tool: {tool_name}")
+    expected = host_node_version()
+    if expected not in tool_text:
+        raise AssertionError(
+            f"packaged shell did not reach the machine's node {expected}: {tool_text}"
+        )
+    if "PKG_EXECPATH=ABSENT" not in tool_text:
+        raise AssertionError(f"PKG_EXECPATH reached the shell child environment: {tool_text}")
+    return text_chunks(SPAWN_NODE_TEXT)
 
 
 def minimal_tool_followup(
@@ -711,7 +764,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "direct"),
+        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-spawn-node", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "direct"),
         default="all",
     )
     parser.add_argument("--exe", type=Path)
@@ -730,7 +783,7 @@ def main() -> None:
         parser.error("--scenario sdk-profile-plugin requires --installed-wheel")
     if args.installed_wheel:
         args.exe = assert_installed_wheel_environment()
-    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-snapshot", "sdk-restart", "direct"} and args.exe is None:
+    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-spawn-node", "sdk-snapshot", "sdk-restart", "direct"} and args.exe is None:
         parser.error("--exe is required for custom, minimal, snapshot, and direct scenarios")
     if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-snapshot", "sdk-restart"}:
         parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-snapshot, sdk-restart, or all")
@@ -754,6 +807,9 @@ def main() -> None:
         if args.scenario in {"all", "sdk-fs-search"}:
             assert args.exe is not None
             smoke_sdk_fs_search(model.url, args.exe.resolve())
+        if args.scenario in {"all", "sdk-spawn-node"}:
+            assert args.exe is not None
+            smoke_sdk_spawn_node(model.url, args.exe.resolve())
         if args.scenario in {"all", "sdk-mcp"}:
             smoke_sdk_mcp(model.url, None if args.exe is None else args.exe.resolve())
         if args.scenario in {"all", "sdk-snapshot"}:
@@ -1047,6 +1103,36 @@ def smoke_sdk_fs_search(base_url: str, executable: Path) -> None:
 
         assert result.final_response == FS_SEARCH_TEXT, result.final_response
         assert_session_log(sessions, root, FS_SEARCH_TEXT, FS_SEARCH_MARKER, "needle.txt")
+
+
+def smoke_sdk_spawn_node(base_url: str, executable: Path) -> None:
+    """A shell command starting with `node` must reach the machine's Node, not the executable."""
+    from deepseek_harness import DeepSeekHarness
+
+    with tempfile.TemporaryDirectory(prefix="dsh-sdk-spawn-node-") as temporary:
+        root = Path(temporary).resolve()
+        dsh_home = root / "home"
+        sessions = dsh_home / "sessions"
+        patch = write_profile_patch(root, "spawn-node.patch.yml", sessions, [])
+        with DeepSeekHarness(
+            provider="deepseek-official",
+            model="smoke-model",
+            cwd=str(root),
+            dsh_bin=str(executable),
+            dsh_home=str(dsh_home),
+            patches=(str(patch),),
+            env={
+                "DSH_PERMISSION_MODE": "danger-full-access",
+                "DSH_TELEMETRY_DISABLED": "1",
+            },
+            api_key="sk-keyless-smoke",
+            base_url=base_url,
+            request_timeout_seconds=60,
+        ) as harness:
+            result = harness.run(SPAWN_NODE_PROMPT, session_id="spawn-node-smoke")
+
+        assert result.final_response == SPAWN_NODE_TEXT, result.final_response
+        assert_session_log(sessions, root, SPAWN_NODE_TEXT, "PKG_EXECPATH=ABSENT")
 
 
 def smoke_sdk_mcp(base_url: str, executable: Path | None) -> None:

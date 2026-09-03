@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh",
   "description": "dsh CLI: profile boot, plugin management, and the browser UI alias",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -97,7 +97,8 @@
     "@deepseek-ai/schemastery": "workspace:^",
     "commander": "^15.0.0",
     "js-yaml": "^4.2.0",
-    "node-addon-require-builtin": "^0.1.4"
+    "node-addon-require-builtin": "^0.1.4",
+    "@deepseek-ai/dsh-http-proxy": "workspace:^"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.4.0",

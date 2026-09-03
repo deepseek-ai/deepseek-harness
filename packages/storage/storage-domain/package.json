@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-storage-domain",
   "description": "Domain data form (ctx.storage.domain): schema-validated, event-emitting KV domains over storage backends for the DeepSeek Harness",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

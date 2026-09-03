@@ -67,7 +67,7 @@ export class TeamTaskBoard {
         writeScopes: this.writeScopes(request.writeScopes ?? []),
       }
       this.assertTaskGraph(state, task)
-      await this.journal.appendAndFlush(root, 'team/task', { version: 1, teamId: TeamId(root.id), task })
+      await this.journal.appendAndFlush(root, 'team/task', { version: 2, teamId: TeamId(root.id), task })
       return this.taskView(root, state, task)
     })
   }
@@ -209,7 +209,7 @@ export class TeamTaskBoard {
         revision: current.revision + 1,
       }
       this.assertTaskGraph(state, task)
-      await this.journal.appendAndFlush(root, 'team/task', { version: 1, teamId: TeamId(root.id), task })
+      await this.journal.appendAndFlush(root, 'team/task', { version: 2, teamId: TeamId(root.id), task })
       return this.taskView(root, state, task)
     })
   }

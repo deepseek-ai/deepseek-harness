@@ -30,7 +30,7 @@ Fork 与 Dependabot 拉取请求永远不会获得仓库密钥。它们的原生
 
 ### 必需目标
 
-拉取请求的 `python-runtime` job 会针对 Linux x64、Linux arm64、macOS arm64 与 Windows x64 调用可复用构建器。其聚合结果仍是 `all checks passed` 的依赖项，因此任一原生载体失败、取消或缺失都会阻止必需判定通过。[Windows x64 运行时决策](../architecture/2026-08-23-python-sdk-windows-x64-runtime.zh.md)负责第四个目标及其 PowerShell 专属极简快照。
+拉取请求的 `python-runtime` job 会针对 Linux x64、Linux arm64、macOS arm64、macOS x64 与 Windows x64 调用可复用构建器。其聚合结果仍是 `all checks passed` 的依赖项，因此任一原生载体失败、取消或缺失都会阻止必需判定通过。[Windows x64 运行时决策](../architecture/2026-08-23-python-sdk-windows-x64-runtime.zh.md)负责 Windows 目标及其 PowerShell 专属极简快照。
 
 ## Existing decisions and supersession
 
@@ -38,7 +38,7 @@ Fork 与 Dependabot 拉取请求永远不会获得仓库密钥。它们的原生
 
 ## Alternatives considered
 
-**只保留 Linux x64 必需载体。** 否决：四个已发布目标的原生 addon、可执行文件构建、wheel 包标签与 helper 文件不同。等到发布时才发现问题，对每个 Python SDK 安装都会按平台选择的产物而言太晚。
+**只保留 Linux x64 必需载体。** 否决：五个已发布目标的原生 addon、可执行文件构建、wheel 包标签与 helper 文件不同。等到发布时才发现问题，对每个 Python SDK 安装都会按平台选择的产物而言太晚。
 
 **在 wheel 构建前运行完整行为，并保留两个很小的安装后冒烟测试。** 否决：这只能证明可执行文件配合源码 import 工作，再通过 distribution 证明很少的行为。干净安装环境是在同一批场景中验证用户实际安装内容的更强位置。
 
@@ -48,4 +48,4 @@ Fork 与 Dependabot 拉取请求永远不会获得仓库密钥。它们的原生
 
 ## Consequences
 
-每个拉取请求都会承担四个原生可执行文件及 wheel 包构建，并运行确定性的安装后产物场景。可信的同仓库拉取请求还会在每个目标上承担一次双轮 DeepSeek 任务。相应地，必需结果描述 Python 用户实际安装的文件，在合并前证明每个已发布载体，并且不能通过导入 checkout 或静默跳过真实提供方而通过。
+每个拉取请求都会承担五个原生可执行文件及 wheel 包构建，并运行确定性的安装后产物场景。可信的同仓库拉取请求还会在每个目标上承担一次双轮 DeepSeek 任务。相应地，必需结果描述 Python 用户实际安装的文件，在合并前证明每个已发布载体，并且不能通过导入 checkout 或静默跳过真实提供方而通过。

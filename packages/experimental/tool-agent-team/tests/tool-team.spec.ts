@@ -26,7 +26,6 @@ const SIGNAL = new AbortController().signal
 const TOOL_NAMES = [
   'spawn_teammate',
   'send_message',
-  'followup_task',
   'list_agents',
   'wait_agent',
   'interrupt_agent',
@@ -179,7 +178,7 @@ describe('dsh-tool-team', () => {
       timedOut: false,
       noProgress: {
         reason: 'no-active-peer',
-        message: 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use followup_task to wake each required inactive teammate before waiting again.',
+        message: 'No other Team member is running or provisioning. wait_agent cannot make progress or wake inactive teammates. Re-list with list_agents and team_task_list, then use send_message to wake each required inactive teammate before waiting again.',
       },
     })
     for (const timeout_ms of [9_999, 3_600_001, Number.MAX_SAFE_INTEGER + 1]) {
@@ -221,12 +220,12 @@ describe('dsh-tool-team', () => {
     // Every Team result reaches the model as compact JSON: indentation would
     // spend tokens on every roster, task, and receipt without adding meaning.
     expect(text(roster)).toBe(JSON.stringify(JSON.parse(text(roster))))
-    const peer = await execute(ctx, child, 'send_message', { target: 'lead', message: 'quiet report' })
+    const peer = await execute(ctx, child, 'send_message', { target: 'lead', message: 'progress report' })
     expect(peer.isError).toBe(false)
     expect(JSON.parse(text(peer))).toMatchObject({ status: 'accepted' })
-    const waking = await execute(ctx, child, 'followup_task', { target: 'lead', message: 'review the report' })
-    expect(waking.isError).toBe(false)
-    expect(JSON.parse(text(waking))).toMatchObject({ status: 'accepted' })
+    const followup = await execute(ctx, child, 'send_message', { target: 'lead', message: 'review the report' })
+    expect(followup.isError).toBe(false)
+    expect(JSON.parse(text(followup))).toMatchObject({ status: 'accepted' })
     await lead.whenIdle()
 
     const created = await execute(ctx, lead, 'team_task_create', {
@@ -425,7 +424,6 @@ describe('dsh-tool-team', () => {
     await ctx.agentTeams.sendMessage(lead, {
       target: 'cold-worker',
       content: [{ type: 'text', text: 'resume with Team scope' }],
-      delivery: 'wakeup',
       signal: SIGNAL,
     })
     const resumed = await waitRunning(ctx, childId)

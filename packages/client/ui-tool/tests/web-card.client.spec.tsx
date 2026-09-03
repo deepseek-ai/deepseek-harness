@@ -138,7 +138,7 @@ describe('webCardModel', () => {
 
 describe('chat row web body', () => {
   const ownerProps = (block: RunningToolCall | ToolResultNode, toolName: string): ToolCallOwnerProps => ({
-    callId: block.callId, toolName, block, openFile: vi.fn(),
+    callId: block.callId, toolName, block, openFile: vi.fn(), loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
   })
   // WebRow reads only toolName/block off the full runtime share plus the locale
   // seat; the standard kit is unused, so the cast supplies the owner slice and

@@ -44,6 +44,11 @@ const TOOL_VARIANTS: Record<string, ToolRowVariant> = {
   // with its own title from TOOL_TITLE_KEYS, not the generic `others` row.
   pwsh: 'bash',
   read: 'read',
+  // read_image is a single-file read: the same browse icon and the same openable
+  // path summary (FILE_PATH_VARIANTS covers `read`), with its own title key below.
+  // Left unclassified it falls to `others`, which titles the row generically and
+  // derives no filePath — so the path the row advertises as openable never is.
+  read_image: 'read',
   web_fetch: 'read',
   web_search: 'search',
   grep: 'search',
@@ -70,6 +75,7 @@ const TOOL_TITLE_KEYS: Record<string, ToolTitleKey> = {
   cordis_stop: 'tool.title.stopCordis',
   cordis_undefine: 'tool.title.removeCordis',
   pwsh: 'tool.title.pwsh',
+  read_image: 'tool.title.readImage',
 }
 
 /**

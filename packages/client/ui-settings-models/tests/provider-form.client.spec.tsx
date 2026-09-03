@@ -529,7 +529,8 @@ describe('endpoint interrogation', () => {
 
   it('adopts only the picked candidates, keeping a row the user already tuned', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([
-      { id: 'kept', contextWindow: 999 }, { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
+      { id: 'kept', contextWindow: 999 },
+      { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh' },
     ])))
     const { mutate } = await mountSection({
       discover,
@@ -544,11 +545,17 @@ describe('endpoint interrogation', () => {
     expect(boxes.map(box => box.checked)).toEqual([false, true])
     fireEvent.click(screen.getByText(en.fetchAdopt))
 
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('fresh')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelName} 2`).value).toBe('Fresh')
+    expandModel(2)
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelContextWindow} 2`).value).toBe('4096')
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelMaxTokens} 2`).value).toBe('2048')
+
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
       { id: 'kept', contextWindow: 111 },
-      { id: 'fresh', contextWindow: 4096, name: 'Fresh' },
+      { id: 'fresh', contextWindow: 4096, maxTokens: 2048, name: 'Fresh' },
     ])
   })
 
@@ -661,7 +668,7 @@ describe('endpoint interrogation', () => {
     expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'a' }, { id: 'b', maxTokens: 2048 }])
   })
 
-  it('filters by model id or name and scopes bulk selection to visible candidates', async () => {
+  it('filters by model id or name, selects visible candidates, and clears every selection', async () => {
     const discover = vi.fn(() => Promise.resolve(ok([
       { id: 'alpha' }, { id: 'opaque-id', name: 'Beta Display' }, { id: 'gamma' },
     ])))
@@ -687,14 +694,17 @@ describe('endpoint interrogation', () => {
     expect([...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
       .map(box => box.checked)).toEqual([false])
 
-    // Clearing the filter restores every row and preserves hidden selections.
+    // Deselecting a filtered result must also clear hidden selections so they
+    // cannot be adopted accidentally.
     fireEvent.change(search, { target: { value: '' } })
     const boxes = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
-    expect(boxes.map(box => box.checked)).toEqual([true, false, true])
+    expect(boxes.map(box => box.checked)).toEqual([false, false, false])
 
+    // Selecting while filtered adds only visible candidates.
+    fireEvent.change(search, { target: { value: 'alpha' } })
     fireEvent.click(within_(dialog, en.fetchSelectAll))
-    expect(boxes.map(box => box.checked)).toEqual([true, true, true])
-    expect(within_(dialog, en.fetchDeselectAll)).toBeTruthy()
+    fireEvent.change(search, { target: { value: '' } })
+    expect(boxes.map(box => box.checked)).toEqual([true, false, false])
 
     fireEvent.change(search, { target: { value: 'missing' } })
     expect(screen.getByText(en.fetchNoMatches)).toBeTruthy()

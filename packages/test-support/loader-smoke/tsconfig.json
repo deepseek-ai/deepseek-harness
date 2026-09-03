@@ -19,6 +19,9 @@
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../util/http-proxy"
     }
   ]
 }

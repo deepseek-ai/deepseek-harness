@@ -11,6 +11,10 @@
     "tag": "macosx_14_0_arm64",
     "executable": "deepseek-harness-sdk-runtime-macos-arm64"
   },
+  "macos-x64": {
+    "tag": "macosx_14_0_x86_64",
+    "executable": "deepseek-harness-sdk-runtime-macos-x64"
+  },
   "win-x64": {
     "tag": "win_amd64",
     "executable": "deepseek-harness-sdk-runtime-win-x64.exe"

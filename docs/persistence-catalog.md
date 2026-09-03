@@ -776,12 +776,12 @@ Source: [`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../p
 
 ```ts persistence-catalog
 /** Whole teammate lifecycle value, stored only in the Team Lead Session. */
-'team/member': { version: 1; teamId: TeamId; member: TeamMemberSnapshot }
+'team/member': { version: 2; teamId: TeamId; member: TeamMemberSnapshot }
 ```
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMemberSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:223`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:221`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagedelivered--log-only"></a>
 
@@ -790,7 +790,7 @@ Source: [`packages/experimental/agent-team/src/types.ts:223`](../packages/experi
 ```ts persistence-catalog
 /** Durable acknowledgement that the target Session recorded the message. */
 'team/message/delivered': {
-  version: 1
+  version: 2
   teamId: TeamId
   messageId: TeamMessageId
   targetId: SessionId
@@ -799,7 +799,7 @@ Source: [`packages/experimental/agent-team/src/types.ts:223`](../packages/experi
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageId](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:229`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:227`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teammessagequeued--log-only"></a>
 
@@ -807,12 +807,12 @@ Source: [`packages/experimental/agent-team/src/types.ts:229`](../packages/experi
 
 ```ts persistence-catalog
 /** Durable mailbox enqueue, stored before delivery is attempted. */
-'team/message/queued': { version: 1; teamId: TeamId; message: TeamMessageSnapshot }
+'team/message/queued': { version: 2; teamId: TeamId; message: TeamMessageSnapshot }
 ```
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamMessageSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:227`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:225`](../packages/experimental/agent-team/src/types.ts)
 
 <a id="teamtask--log-only"></a>
 
@@ -820,12 +820,12 @@ Source: [`packages/experimental/agent-team/src/types.ts:227`](../packages/experi
 
 ```ts persistence-catalog
 /** Whole shared-task value, stored only in the Team Lead Session. */
-'team/task': { version: 1; teamId: TeamId; task: TeamTaskSnapshot }
+'team/task': { version: 2; teamId: TeamId; task: TeamTaskSnapshot }
 ```
 
 Types: [TeamId](subsystems/agent-team.md) · [TeamTaskSnapshot](subsystems/agent-team.md)
 
-Source: [`packages/experimental/agent-team/src/types.ts:225`](../packages/experimental/agent-team/src/types.ts)
+Source: [`packages/experimental/agent-team/src/types.ts:223`](../packages/experimental/agent-team/src/types.ts)
 
 ### `todo/*`
 

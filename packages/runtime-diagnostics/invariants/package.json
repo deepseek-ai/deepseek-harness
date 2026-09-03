@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-invariants",
   "description": "Registry service for package-owned DeepSeek Harness runtime invariants",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

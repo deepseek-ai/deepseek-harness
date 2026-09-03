@@ -20,7 +20,7 @@ Python 进程仍按 [Python profile 运行时决策](2026-08-23-python-sdk-dsh-p
 
 可执行文件构建器仅允许 x64 使用 pkg 的 `win` 平台，并要求 Windows 构建在 Windows 宿主的 x64 Node 下运行；构建器保留 `.exe` 文件名，并把 `@vscode/ripgrep-win32-x64` 复制为常规 `-rg.exe` sidecar。Pnpm 子进程通过 `process.execPath` 执行调用方提供的 JavaScript 入口。当调用方暴露 `.cmd` shim 时，构建器会通过 `PNPM_HOME` 解析已安装的 `pnpm.mjs` 或 `pnpm.cjs`；如果不存在 JavaScript 入口，构建会失败，而不会启动 shim 或启用命令 shell。
 
-必需 GitHub 矩阵会在 `windows-2025` 上构建 `node24-win-x64`，与现有三个目标并列。公开 GitHub 发布与 GitLab 标签流水线都会发布同一组四个运行时 wheel 加纯 SDK wheel。目标解析、manifest、矩阵、发布内容与文档均不包含 Windows arm64。
+必需 GitHub 矩阵会在 `windows-2025` 上构建 `node24-win-x64`，与 Linux x64、Linux arm64、macOS arm64 和 macOS x64 并列。公开 GitHub 发布与 GitLab 标签流水线都会发布同一组五个运行时 wheel 加纯 SDK wheel。目标解析、manifest、矩阵、发布内容与文档均不包含 Windows arm64。
 
 ### Installed-wheel 行为
 
@@ -48,4 +48,4 @@ Windows lane 会创建干净的 Windows 虚拟环境，安装版本精确匹配�
 
 ## Consequences
 
-Python 安装现在会选择无需 Node 的 Windows x64 运行时，并与 Linux、macOS 使用同一套显式 home 与 profile 自定义模型。每个拉取请求都要承担第四个可执行文件、运行时 wheel 与完整 keyless 黑盒测试；可信 head 还要承担真实提供方任务。候选发行版验证会保留五个而不是四个 wheel。Windows arm64 用户会收到明确的不支持平台错误，直到另一项原生产品决策提供并证明该载体。
+Python 安装会选择无需 Node 的 Windows x64 运行时，并与 Linux、macOS 使用同一套显式 home 与 profile 自定义模型。每个拉取请求都会把 Windows 可执行文件和运行时 wheel 作为五个原生目标之一进行构建，运行完整 keyless 黑盒测试，并在可信 head 上运行真实提供方任务。候选发行版验证会保留六个 wheel。Windows arm64 用户会收到明确的不支持平台错误，直到另一项原生产品决策提供并证明该载体。

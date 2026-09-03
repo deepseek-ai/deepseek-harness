@@ -5,6 +5,7 @@ import {
   countVisibleUnits,
   initializeIssueStartDate,
   initializePullRequestStartDates,
+  issueSnapshot,
   nextResolvingIssueStatus,
   parseReferences,
   projectDate,
@@ -18,9 +19,14 @@ import {
 
 const projectGraphqlData = ({
   projectItem = true,
+  priority = null,
+  priorityField = true,
+  priorityType = 'SINGLE_SELECT',
+  priorityIsIssueField = false,
   startDate = null,
   startDateField = true,
   startDateType = 'DATE',
+  startDateIsIssueField = false,
 } = {}) => ({
   organization: {
     projectV2: {
@@ -28,9 +34,33 @@ const projectGraphqlData = ({
       title: 'DSH Issue Management',
       fields: {
         nodes: [
-          { id: 'status-field-id', name: 'Status', dataType: 'SINGLE_SELECT', options: [] },
+          {
+            id: 'status-field-id',
+            name: 'Status',
+            dataType: 'SINGLE_SELECT',
+            isIssueField: false,
+            options: [],
+          },
+          ...(priorityField
+            ? [
+                {
+                  id: 'priority-project-field-id',
+                  name: 'Priority',
+                  dataType: priorityType,
+                  isIssueField: priorityIsIssueField,
+                  options: [],
+                },
+              ]
+            : []),
           ...(startDateField
-            ? [{ id: 'start-date-field-id', name: 'Start date', dataType: startDateType }]
+            ? [
+                {
+                  id: 'start-date-field-id',
+                  name: 'Start Date',
+                  dataType: startDateType,
+                  isIssueField: startDateIsIssueField,
+                },
+              ]
             : []),
         ],
       },
@@ -46,6 +76,8 @@ const projectGraphqlData = ({
                 id: 'item-id',
                 project: { id: 'project-id' },
                 fieldValueByName: { name: 'Inbox', optionId: 'inbox-option-id' },
+                priorityValue:
+                  priority === null ? null : { name: priority, optionId: `${priority}-option-id` },
                 startDateValue: startDate === null ? null : { date: startDate },
               },
             ]
@@ -258,7 +290,53 @@ test('initializes every referenced Issue only for a PR opened event', async () =
   assert.equal(writes.length, 3)
 })
 
-test('writes an empty Project Start date with the configured field', async (t) => {
+test('reads Priority and Status from Project custom fields', async (t) => {
+  const previousGhToken = process.env.GH_TOKEN
+  const previousGithubToken = process.env.GITHUB_TOKEN
+  const previousProjectToken = process.env.PROJECT_TOKEN
+  delete process.env.GH_TOKEN
+  process.env.GITHUB_TOKEN = 'repository-token'
+  process.env.PROJECT_TOKEN = 'project-token'
+  t.after(() => {
+    if (previousGhToken === undefined) delete process.env.GH_TOKEN
+    else process.env.GH_TOKEN = previousGhToken
+    if (previousGithubToken === undefined) delete process.env.GITHUB_TOKEN
+    else process.env.GITHUB_TOKEN = previousGithubToken
+    if (previousProjectToken === undefined) delete process.env.PROJECT_TOKEN
+    else process.env.PROJECT_TOKEN = previousProjectToken
+  })
+  const urls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    urls.push(url)
+    if (url.endsWith('/issues/42')) {
+      assert.equal(options.headers.Authorization, 'Bearer repository-token')
+      return Response.json({
+        node_id: 'issue-id',
+        title: 'Project metadata',
+        body: null,
+        assignees: [],
+        labels: [],
+        type: { name: 'Task' },
+        state: 'open',
+        state_reason: null,
+      })
+    }
+    assert.equal(url, 'https://api.github.com/graphql')
+    assert.equal(options.headers.Authorization, 'Bearer project-token')
+    return Response.json({ data: projectGraphqlData({ priority: 'P1' }) })
+  })
+
+  const issue = await issueSnapshot(42)
+
+  assert.equal(issue.priority, 'P1')
+  assert.equal(issue.status, 'Inbox')
+  assert.deepEqual(urls, [
+    'https://api.github.com/repos/deepseek-harness/deepseek-harness/issues/42',
+    'https://api.github.com/graphql',
+  ])
+})
+
+test('writes an empty Project Start Date with the configured field', async (t) => {
   const requests = mockGraphql(t, (request) => {
     if (request.query.includes('query(')) return projectGraphqlData()
     return { updateProjectV2ItemFieldValue: { projectV2Item: { id: 'item-id' } } }
@@ -267,6 +345,12 @@ test('writes an empty Project Start date with the configured field', async (t) =
   await initializeIssueStartDate(42, '2026-08-28')
 
   assert.equal(requests.length, 2)
+  assert.match(requests[0].query, /isIssueField/)
+  assert.doesNotMatch(requests[0].query, /issueField\s*\{/)
+  assert.match(requests[0].query, /priorityValue: fieldValueByName/)
+  assert.equal(requests[0].variables.priorityField, 'Priority')
+  assert.match(requests[0].query, /ProjectV2ItemFieldDateValue/)
+  assert.match(requests[1].query, /updateProjectV2ItemFieldValue/)
   assert.match(requests[1].query, /value: \{date: \$date\}/)
   assert.deepEqual(requests[1].variables, {
     projectId: 'project-id',
@@ -276,7 +360,7 @@ test('writes an empty Project Start date with the configured field', async (t) =
   })
 })
 
-test('preserves an existing Project Start date', async (t) => {
+test('preserves an existing Project Start Date', async (t) => {
   const requests = mockGraphql(t, () => projectGraphqlData({ startDate: '2026-08-01' }))
 
   await initializeIssueStartDate(42, '2026-08-28')
@@ -284,7 +368,7 @@ test('preserves an existing Project Start date', async (t) => {
   assert.equal(requests.length, 1)
 })
 
-test('adds a referenced Issue to the Project before setting Start date', async (t) => {
+test('adds a referenced Issue to the Project before setting Start Date', async (t) => {
   const requests = mockGraphql(t, (request) => {
     if (request.query.includes('query(')) return projectGraphqlData({ projectItem: false })
     if (request.query.includes('addProjectV2ItemById')) {
@@ -297,17 +381,45 @@ test('adds a referenced Issue to the Project before setting Start date', async (
 
   assert.equal(requests.length, 3)
   assert.deepEqual(requests[1].variables, { projectId: 'project-id', contentId: 'issue-id' })
-  assert.equal(requests[2].variables.itemId, 'new-item-id')
+  assert.deepEqual(requests[2].variables, {
+    projectId: 'project-id',
+    itemId: 'new-item-id',
+    fieldId: 'start-date-field-id',
+    date: '2026-08-28',
+  })
 })
 
-test('rejects a missing or non-Date Start date field', async (t) => {
+test('rejects a missing, non-Date, or Issue-level Start Date field', async (t) => {
   let response = projectGraphqlData({ startDateField: false })
   const requests = mockGraphql(t, () => response)
 
-  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project 缺少 Start date 字段/)
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project 缺少 Start Date 字段/)
   response = projectGraphqlData({ startDateType: 'TEXT' })
-  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Start date 字段必须为 Date/)
-  assert.equal(requests.length, 2)
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Start Date 字段必须为 Date/)
+  response = projectGraphqlData({ startDateIsIssueField: true })
+  await assert.rejects(
+    initializeIssueStartDate(42, '2026-08-28'),
+    /Start Date 字段必须为 Project Date 字段/,
+  )
+  assert.equal(requests.length, 3)
+})
+
+test('rejects a missing, non-select, or Issue-level Priority field', async (t) => {
+  let response = projectGraphqlData({ priorityField: false })
+  const requests = mockGraphql(t, () => response)
+
+  await assert.rejects(initializeIssueStartDate(42, '2026-08-28'), /Project 缺少 Priority 字段/)
+  response = projectGraphqlData({ priorityType: 'TEXT' })
+  await assert.rejects(
+    initializeIssueStartDate(42, '2026-08-28'),
+    /Priority 字段必须为 Single Select/,
+  )
+  response = projectGraphqlData({ priorityIsIssueField: true })
+  await assert.rejects(
+    initializeIssueStartDate(42, '2026-08-28'),
+    /Priority 字段必须为 Project custom field/,
+  )
+  assert.equal(requests.length, 3)
 })
 
 test('does not treat pull request references as Issue associations', () => {

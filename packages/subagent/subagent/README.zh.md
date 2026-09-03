@@ -77,7 +77,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 服务入口：提供方注册表、启动与继续 API、生命周期事件 |
 | [`src/continuation.ts`](src/continuation.ts) | 可继续子级：身份预留、Activation 驻留、相邻消息、中断、结算 |
-| [`src/internal.ts`](src/internal.ts) | 供浏览器与 Team 消息协议使用的 host-only Queue 适配器 |
+| [`src/internal.ts`](src/internal.ts) | 供浏览器与 Team 消息协议使用的 host-only Queue 与 Steer 适配器 |
 | [`src/types.ts`](src/types.ts) | 公开的请求、结果与提供方约定 |
 | [`src/descriptor.ts`](src/descriptor.ts) | 版本化的 `subagent/descriptor` 会话事件词汇 |
 | [`src/child-agent.ts`](src/child-agent.ts) | 子级组装、委派策略、深度辅助函数 |

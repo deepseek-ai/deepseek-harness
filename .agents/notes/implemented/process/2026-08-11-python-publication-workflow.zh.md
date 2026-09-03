@@ -6,15 +6,15 @@ Status: implemented
 
 ## 问题
 
-Python SDK 由一个平台无关的客户端 wheel 包和四个原生运行时 wheel 包组成，它们必须使用同一版本，并作为一组可安装。public PyPI 上传会立即公开包元数据和文件，无法替换已上传的同名文件；如果精确版本的运行时依赖尚未到达，还会产生暂时不可用的 SDK。私有仓库需要在不向外发布任何产物的情况下，执行完整的原生构建与验证流程。
+Python SDK 由一个平台无关的客户端 wheel 包和五个原生运行时 wheel 包组成，它们必须使用同一版本，并作为一组可安装。public PyPI 上传会立即公开包元数据和文件，无法替换已上传的同名文件；如果精确版本的运行时依赖尚未到达，还会产生暂时不可用的 SDK。私有仓库需要在不向外发布任何产物的情况下，执行完整的原生构建与验证流程。
 
 ## 决策
 
-GitHub 的 `Release (Python)` 工作流为设置 `publish=false` 的手动运行提供无凭据验证。该运行会为全部四个平台调用原生 wheel 包构建器，在 Python 3.10 和 3.14 上安装 Linux 发行集合，下载所得五份产物，验证其精确文件名和包元数据，执行 PyPI 默认单文件大小限制，记录 SHA-256 哈希，并保留一份汇总候选发行版。这些作业只有仓库读取权限，没有注册表凭据或 OIDC 权限，dry-run 运行无法进入任何发布作业。
+GitHub 的 `Release (Python)` 工作流为设置 `publish=false` 的手动运行提供无凭据验证。该运行会为全部五个目标调用原生 wheel 包构建器，在 Python 3.10 和 3.14 上安装 Linux 发行集合，下载所得六份产物，验证其精确文件名和包元数据，执行 PyPI 默认单文件大小限制，记录 SHA-256 哈希，并保留一份汇总候选发行版。这些作业只有仓库读取权限，没有注册表凭据或 OIDC 权限，dry-run 运行无法进入任何发布作业。
 
 设置 `publish=true` 时，运行必须在私有自动化仓库使用 `python-v<repository-version>` 标签，将该仓库的 `github.repository` 与其仓库级 `PYPI_PUBLISHER_REPOSITORY` 变量匹配，找到 `PUBLIC_PYPI_RELEASE_ENABLED=true`，并分别获得 GitHub `pypi-runtime` 和 `pypi` 环境对运行时与 SDK 发布的批准。只读公开镜像提供包元数据 URL，但不运行发布 Actions。只有两个发布作业获得 `id-token: write`；PyPI Trusted Publishing 会把私有仓库身份换成短期项目凭据，因此仓库不保存 PyPI token。
 
-发布过程使用同一次工作流运行中生成并检查过的汇总产物。每个发布作业都会在选择上传文件前验证保留的 `SHA256SUMS`。一个运行时作业先上传全部四个平台 wheel 包，再由依赖它的作业上传 SDK wheel 包，因为 PyPI 上传不是原子操作，而 SDK 会把运行时分发包固定到完全相同的版本。两个作业都不会检出源码，也不会重新构建 wheel 包。将它们拆开后，GitHub 的失败作业重试可以在 SDK 上传失败时继续执行，而不会尝试替换不可变的运行时文件。
+发布过程使用同一次工作流运行中生成并检查过的汇总产物。每个发布作业都会在选择上传文件前验证保留的 `SHA256SUMS`。一个运行时作业先上传全部五个平台 wheel 包，再由依赖它的作业上传 SDK wheel 包，因为 PyPI 上传不是原子操作，而 SDK 会把运行时分发包固定到完全相同的版本。两个作业都不会检出源码，也不会重新构建 wheel 包。将它们拆开后，GitHub 的失败作业重试可以在 SDK 上传失败时继续执行，而不会尝试替换不可变的运行时文件。
 
 两个发布 action 都会禁用公开 attestation。action 仍使用 Trusted Publishing 进行身份认证，同时不上传会披露私有发布仓库而非公开源码镜像的 provenance。
 

@@ -120,12 +120,11 @@ def _current_platform_tag() -> str:
         plat is None
         or arch is None
         or (plat == "win" and arch != "x64")
-        or (plat == "macos" and arch != "arm64")
     ):
         raise FileNotFoundError(
             "no bundled DeepSeek Harness SDK runtime exists for this platform "
             f"(sys.platform={sys.platform!r}, machine={platform.machine()!r}); supported: "
-            "Linux x64/arm64, macOS arm64, and Windows x64. " + _EXE_ACQUISITION_HINT
+            "Linux x64/arm64, macOS x64/arm64, and Windows x64. " + _EXE_ACQUISITION_HINT
         )
     return f"{plat}-{arch}"
 

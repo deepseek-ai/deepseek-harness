@@ -30,7 +30,7 @@ Fork and Dependabot pull requests never receive the repository secret. Their nat
 
 ### Required targets
 
-The pull-request `python-runtime` job calls the reusable builder for Linux x64, Linux arm64, macOS arm64, and Windows x64. Its aggregate result remains a dependency of `all checks passed`, so a failed, cancelled, or missing native carrier blocks the required verdict. The [Windows x64 runtime decision](../architecture/2026-08-23-python-sdk-windows-x64-runtime.md) owns the fourth target and its PowerShell-specific minimal snapshot.
+The pull-request `python-runtime` job calls the reusable builder for Linux x64, Linux arm64, macOS arm64, macOS x64, and Windows x64. Its aggregate result remains a dependency of `all checks passed`, so a failed, cancelled, or missing native carrier blocks the required verdict. The [Windows x64 runtime decision](../architecture/2026-08-23-python-sdk-windows-x64-runtime.md) owns the Windows target and its PowerShell-specific minimal snapshot.
 
 ## Existing decisions and supersession
 
@@ -38,7 +38,7 @@ This decision supersedes the single-target topology in the archived [required Py
 
 ## Alternatives considered
 
-**Keep Linux x64 as the only required carrier.** Rejected because native addons, executable construction, wheel tags, and helper files differ across the four published targets. Release-time discovery is too late for an artifact that every Python SDK installation selects by platform.
+**Keep Linux x64 as the only required carrier.** Rejected because native addons, executable construction, wheel tags, and helper files differ across the five published targets. Release-time discovery is too late for an artifact that every Python SDK installation selects by platform.
 
 **Run full behavior before wheel construction and keep two small installed smokes.** Rejected because that proves the executable against source imports, then proves too little through the distribution users install. The clean installed environment is the stronger common location for the same scenarios.
 
@@ -48,4 +48,4 @@ This decision supersedes the single-target topology in the archived [required Py
 
 ## Consequences
 
-Every pull request pays for four native executable and wheel builds plus deterministic installed-artifact scenarios. Trusted same-repository pull requests also pay for one two-turn DeepSeek task per target. In exchange, the required result describes the files Python users install, proves every published carrier before merge, and cannot pass by importing the checkout or silently skipping the real provider.
+Every pull request pays for five native executable and wheel builds plus deterministic installed-artifact scenarios. Trusted same-repository pull requests also pay for one two-turn DeepSeek task per target. In exchange, the required result describes the files Python users install, proves every published carrier before merge, and cannot pass by importing the checkout or silently skipping the real provider.

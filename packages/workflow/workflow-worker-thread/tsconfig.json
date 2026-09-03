@@ -37,6 +37,9 @@
     },
     {
       "path": "../workflow"
+    },
+    {
+      "path": "../../util/http-proxy"
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-hooks-codex",
   "description": "Bridge plugin: run a Codex hooks.json hook config on the DeepSeek Harness interception seams",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },

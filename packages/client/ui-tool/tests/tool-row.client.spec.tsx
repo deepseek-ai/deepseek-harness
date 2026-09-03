@@ -429,6 +429,7 @@ describe('ToolRow', () => {
 
 describe('GenericToolCard', () => {
   const props = (toolName: string, block: RunningToolCall | ToolResultNode): GenericToolCardProps => ({
+    loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     callId: 'c1', toolName, block, openFile: vi.fn(), t,
   })
 

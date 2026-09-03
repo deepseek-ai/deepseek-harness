@@ -48,6 +48,7 @@ function props(
     openFile: vi.fn(),
     inspectCall: vi.fn(),
     forkAt: vi.fn(),
+    loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     fileMentions: vi.fn(),
     useHostInfo: ((selector: (info: { home: string | undefined }) => unknown) => selector({ home })) as ToolTreeProps['useHostInfo'],
     t,

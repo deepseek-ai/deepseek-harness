@@ -1,0 +1,212 @@
+{
+  "version": 4,
+  "record": {
+    "identity": {
+      "createdAt": 1788286912530,
+      "cwd": "/tmp"
+    },
+    "rows": {
+      "title": {
+        "ver": 1,
+        "seq": 68,
+        "val": "验收标题-alpha3"
+      },
+      "titleInput": {
+        "ver": 3,
+        "seq": 68,
+        "val": {
+          "first": {
+            "seq": 7,
+            "text": "请只回复一个词：pong"
+          },
+          "count": 2,
+          "lastSeq": 58
+        }
+      },
+      "llmRetry": {
+        "ver": 1,
+        "seq": 68,
+        "val": {}
+      },
+      "sandboxMode": {
+        "ver": 1,
+        "seq": 68,
+        "val": "workspace-write"
+      },
+      "goal": {
+        "ver": 6,
+        "seq": 68,
+        "val": {
+          "current": null,
+          "seenGoalIds": [],
+          "failure": null
+        }
+      },
+      "tokenUsage": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "totals": {
+            "uncachedInputTokens": 8192,
+            "outputTokens": 35,
+            "cacheReadTokens": 8064,
+            "cacheWriteTokens": 0
+          },
+          "last": {
+            "turn": 2,
+            "step": 1,
+            "buckets": {
+              "uncachedInputTokens": 86,
+              "outputTokens": 4,
+              "cacheReadTokens": 8064,
+              "cacheWriteTokens": 0
+            }
+          }
+        }
+      },
+      "contextPressure": {
+        "ver": 4,
+        "seq": 68,
+        "val": {
+          "surfaceTokens": 193,
+          "contextWindow": 1000000,
+          "pressureTokens": 8150,
+          "sampledSurfaceTokens": 183
+        }
+      },
+      "contextBreakdown": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "systemTokens": 1760,
+          "toolsTokens": 6579,
+          "messageTokens": 193
+        }
+      },
+      "turnBoundary": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "openTurnStartSeq": null,
+          "lastStepStartSeq": 57,
+          "lastStepBoundary": {
+            "kind": "end",
+            "seq": 67
+          },
+          "lastTurn": 2
+        }
+      },
+      "sessionStats": {
+        "ver": 1,
+        "seq": 68,
+        "val": {
+          "turns": 2,
+          "steps": 2,
+          "llmMs": 3486,
+          "toolMs": 0,
+          "ttftMs": 3199,
+          "ttftSteps": 2,
+          "decodeMs": 287,
+          "decodeTokens": 35,
+          "lastTurn": 2,
+          "openStep": null,
+          "pendingCalls": {}
+        }
+      },
+      "turnOutline": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "turns": [
+            {
+              "turn": 1,
+              "seq": 4,
+              "prompt": "请只回复一个词：pong",
+              "response": "pong"
+            },
+            {
+              "turn": 2,
+              "seq": 55,
+              "prompt": "请只回复一个词：pong2",
+              "response": "pong2"
+            }
+          ],
+          "draft": ""
+        }
+      },
+      "agentPreset": {
+        "ver": 1,
+        "seq": 68,
+        "val": "standard"
+      },
+      "subagentTiming": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "descriptorSeen": false,
+          "settledMs": 0
+        }
+      },
+      "subagent": {
+        "ver": 2,
+        "seq": 68,
+        "val": {}
+      },
+      "permissions": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "preset": "workspace-write",
+          "sandbox": "workspace-write",
+          "approval": "ask",
+          "seeded": false
+        }
+      },
+      "modelSelection": {
+        "ver": 2,
+        "seq": 68,
+        "val": {
+          "lastUsed": {
+            "provider": "deepseek-official",
+            "model": "deepseek-v4-flash",
+            "reasoningEffort": "high"
+          },
+          "pending": null
+        }
+      },
+      "sessionListMetadata": {
+        "ver": 1,
+        "seq": 68,
+        "val": {
+          "blank": false,
+          "lastPromptAt": 1788286917834
+        }
+      },
+      "imageLimits": {
+        "ver": 1,
+        "seq": 68,
+        "val": null
+      },
+      "todos": {
+        "ver": 2,
+        "seq": 68,
+        "val": null
+      },
+      "plan": {
+        "ver": 3,
+        "seq": 68,
+        "val": {
+          "active": false,
+          "wanted": null,
+          "running": null,
+          "activeAtLastHeader": false
+        }
+      },
+      "subagentModelSelectionPolicy": {
+        "ver": 1,
+        "seq": 68,
+        "val": null
+      }
+    }
+  }
+}

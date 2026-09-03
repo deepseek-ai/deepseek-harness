@@ -179,7 +179,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('filters the discovered model catalog and preserves hidden selections', async () => {
+  it('filters the discovered model catalog and clears hidden selections', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-picker'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
     await settingsDialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
@@ -206,8 +206,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await search.fill('')
     await expect.poll(async () => boxes.count()).toBe(count)
     const restored = await boxes.evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).checked))
-    expect(restored.filter(Boolean)).toHaveLength(count - 1)
-    expect(restored.filter(checked => !checked)).toHaveLength(1)
+    expect(restored).toEqual(Array.from({ length: count }, () => false))
     await picker.getByRole('button', { name: '全选' }).waitFor()
     await picker.getByRole('button', { name: '全选' }).click()
     const snapshot = await captureStableAria(

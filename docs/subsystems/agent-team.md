@@ -2,7 +2,7 @@
 
 English | [中文](agent-team.zh.md)
 
-Types shared by the experimental implicit-root Team domain, model tools, and host adapters. The [Agent Teams Agent Note](../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) owns identity, mailbox, task, and shared-checkout decisions; this page records the literal durable forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
+Types shared by the experimental implicit-root Team domain, model tools, and host adapters. The [Agent Teams Agent Note](../../.agents/notes/implemented/feature/2026-08-05-agent-teams.md) owns identity, mailbox, task, and shared-checkout decisions; the [Team Steer messaging Agent Note](../../.agents/notes/implemented/simplification/2026-08-30-team-send-message-steer.md) owns message scheduling; this page records the literal durable forms from [`packages/experimental/agent-team/src/types.ts`](../../packages/experimental/agent-team/src/types.ts).
 
 ## Identity and roster
 
@@ -34,10 +34,11 @@ interface TeamMessageSnapshot {
   readonly senderId: SessionId
   readonly senderName: string
   readonly targetId: SessionId
-  readonly delivery: 'quiet' | 'wakeup'
   readonly content: ContentBlock[]
 }
 ```
+
+Every message attempts Steer delivery. A running target receives it at the nearest step boundary, an idle target starts a turn, and an inactive teammate cold-resumes. Scheduling is not stored in the durable record because callers cannot select another mode.
 
 The target Session keeps message identity and sender attribution on both the pending inbox item and the eventual user message. Folding that source across inbox and history is the target-side de-duplication key; the model-visible framing repeats the id and sender.
 
@@ -116,7 +117,7 @@ async spawnTeammate(caller: Agent, request: SpawnTeammateRequest): Promise<Spawn
 /**
  * Queue one durable peer message, then attempt immediate delivery.
  * @param caller - exact live sending Team member.
- * @param request - target name, content, scheduling mode, and pre-queue cancellation.
+ * @param request - target name, content, and pre-queue cancellation.
  * @returns durable message identity and immediate-delivery observation.
  */
 async sendMessage(caller: Agent, request: SendTeamMessageRequest): Promise<SendTeamMessageResult>

@@ -35,6 +35,7 @@ import {
   type AgentUnderTest,
   type LaunchedAcpTestAgent,
 } from './launcher.ts'
+import { clearedProxyEnv } from '@deepseek-ai/dsh-http-proxy'
 import { captureWorkspaceSnapshot, type WorkspaceSnapshotEntry } from './workspace.ts'
 
 export type { AgentUnderTest } from './launcher.ts'
@@ -257,6 +258,12 @@ export async function runScenario(input: InputScript, opts: RunOptions): Promise
     })
     const env: NodeJS.ProcessEnv = {
       ...opts.env,
+      // A replay must not depend on the machine's network policy, the same reason it pins its home
+      // and sessions root. The harness honors the proxy environment, so a runner that exports one
+      // would send a scenario's fixture-server request to a proxy that cannot resolve the fixture
+      // host and record that proxy's error page as the expected output. `undefined` removes the
+      // name from the child rather than setting it empty.
+      ...clearedProxyEnv(),
       DSH_SNAPSHOT: opts.mode,
       DSH_SNAPSHOT_FILE: opts.fixtureFile,
       DSH_SNAPSHOT_SESSIONS_ROOT: sessionsRoot,

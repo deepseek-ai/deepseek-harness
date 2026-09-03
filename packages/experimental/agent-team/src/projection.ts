@@ -90,7 +90,6 @@ const teamMessageSnapshotSchema = z.object({
   senderId: sessionIdSchema,
   senderName: z.string(),
   targetId: sessionIdSchema,
-  delivery: z.enum(['quiet', 'wakeup']),
   content: z.array(contentBlockSchema),
 }).strict() as z.ZodType<TeamMessageSnapshot>
 
@@ -100,25 +99,25 @@ const teamEventSelectorSchema = z.object({
 }).loose()
 
 const teamMemberEventSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   teamId: teamIdSchema,
   member: teamMemberSnapshotSchema,
 }).strict() as z.ZodType<SessionEventMap['team/member']>
 
 const teamTaskEventSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   teamId: teamIdSchema,
   task: teamTaskSnapshotSchema,
 }).strict() as z.ZodType<SessionEventMap['team/task']>
 
 const teamMessageQueuedEventSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   teamId: teamIdSchema,
   message: teamMessageSnapshotSchema,
 }).strict() as z.ZodType<SessionEventMap['team/message/queued']>
 
 const teamMessageDeliveredEventSchema = z.object({
-  version: z.literal(1),
+  version: z.literal(2),
   teamId: teamIdSchema,
   messageId: teamMessageIdSchema,
   targetId: sessionIdSchema,
@@ -225,7 +224,7 @@ function applyProjectionEvent(state: TeamProjectionState, event: SessionEvent): 
   try {
     const selector = parsePersisted(event.type, teamEventSelectorSchema, event.data)
     if (selector.teamId !== state.id) return
-    if (selector.version !== 1) {
+    if (selector.version !== 2) {
       throw new Error(`unsupported Agent Teams event version ${String(selector.version)}`)
     }
     applyCurrentTeamEvent(state, parseCurrentTeamEvent(event))
@@ -307,7 +306,7 @@ function applyCurrentTeamEvent(state: TeamState, event: TeamSessionEvent): void 
 /** Host-only Team projection selected by the projected Session identity. */
 export const teamProjectionDefinition = {
   key: 'agentTeam',
-  stateVersion: 2,
+  stateVersion: 3,
   stateSchema: teamProjectionEntrySchema,
   init: header => emptyTeamState(header.id),
   apply: (state, event) => {

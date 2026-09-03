@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-19-projection-cache-per-session-files.md
-2026-08-19-projection-cache-per-session-files.md: 9e102e786a6c06d82d1a0f45cc2f96a50c8abcd8
-2026-08-19-projection-cache-per-session-files.zh.md: d875c3f57800936f66fbf65233637df9bf300e2d
+2026-08-19-projection-cache-per-session-files.md: c0ead55557e45905cfd368c70d826bf0c3eaade3
+2026-08-19-projection-cache-per-session-files.zh.md: e5582d14d68c1aed76ef8aab08a8d575e8a1842d

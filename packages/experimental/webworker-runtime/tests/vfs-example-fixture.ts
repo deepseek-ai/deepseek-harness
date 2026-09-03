@@ -412,7 +412,7 @@ export function buildVfsExampleFiles(): ReadonlyMap<string, string> {
   const project = projectKey(WORKSPACE)
   const sessionPath = (id: string): string => `home/sessions/${project}/${id}/session.jsonl`
   const projectionCache = `${JSON.stringify({
-    unit: { name: 'session_projcache', version: 5 },
+    unit: { name: 'session_projcache', version: 6 },
     global: null,
     tables: {
       sessions: {

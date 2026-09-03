@@ -117,7 +117,7 @@ The plugin is built on one explicit resolve step and one registration fact. `res
 | [`src/file-store.ts`](src/file-store.ts) + [`src/files-api.ts`](src/files-api.ts) | Scoped upload caching, expiry, stale-id recovery, quota cleanup, and remote file operations |
 | [`src/serialize.ts`](src/serialize.ts) | Wire serialization: thinking defaults, Files or inline image blocks, history rules |
 | [`src/sse.ts`](src/sse.ts) | `eventsource-parser` SSE framing for the direct `fetch` stream |
-| [`src/translate.ts`](src/translate.ts) | SSE payload translation into harness `StreamChunk` values |
+| [`src/translate.ts`](src/translate.ts) | SSE payload translation into harness `StreamChunk` values; tool-call `id` and `name` are identity, so a continuation delta repeating them empty or null leaves the established value alone |
 | [`src/types.ts`](src/types.ts) | Wire-level types shared by the modules above |
 
 ### Wire flow

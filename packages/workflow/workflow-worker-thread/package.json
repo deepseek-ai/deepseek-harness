@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-workflow-worker-thread",
   "description": "worker-thread workflow engine: executes model-written orchestration scripts off the host event loop, bridging agent() calls back to ctx.subagents",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "publishConfig": {
     "access": "public"
   },
@@ -59,6 +59,7 @@
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-workflow": "workspace:^",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "@deepseek-ai/dsh-http-proxy": "workspace:^"
   }
 }

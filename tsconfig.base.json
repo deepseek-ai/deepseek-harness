@@ -285,6 +285,7 @@
       "@deepseek-ai/dsh-hook-protocol/invariant": ["./packages/hooks/hook-protocol/src/invariant.ts"],
       "@deepseek-ai/dsh-hooks-claude-code": ["./packages/hooks/hooks-claude-code/src"],
       "@deepseek-ai/dsh-hooks-codex": ["./packages/hooks/hooks-codex/src"],
+      "@deepseek-ai/dsh-http-proxy": ["./packages/util/http-proxy/src"],
       "@deepseek-ai/dsh-jobs": ["./packages/jobs/jobs/src"],
       "@deepseek-ai/dsh-jobs/invariant": ["./packages/jobs/jobs/src/invariant.ts"],
       "@deepseek-ai/dsh-jobs-local": ["./packages/jobs/jobs-local/src"],

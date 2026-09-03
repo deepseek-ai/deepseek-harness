@@ -77,7 +77,7 @@ This section explains how the service is built and where the observable behavior
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service entry: provider registry, start and continuation API, lifecycle events |
 | [`src/continuation.ts`](src/continuation.ts) | Continuable children: identity reservation, Activation residency, adjacent messaging, interrupt, settlement |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue adapter for browser and Team message protocols |
+| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters for browser and Team message protocols |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
 | [`src/child-agent.ts`](src/child-agent.ts) | Child composition, delegated policy, depth helpers |

@@ -88,6 +88,9 @@ function implementer(messages) {
   const names = calls(messages)
   const last = latestAssistantCalls(messages)
   const text = latestToolText(messages)
+  const userText = messages.flatMap(message => message.role === 'user'
+    ? message.content.filter(block => block.type === 'text').map(block => block.text)
+    : []).join('\n')
   if (!names.includes('team_task_create')) {
     if (last.includes('team_task_get') && text.includes('"subject":"Research"')) {
       return toolChunks([{ name: 'team_task_create', args: {
@@ -115,6 +118,9 @@ function implementer(messages) {
       return toolChunks([{ name: 'team_task_get', args: { task_id: 'task-1' } }])
     }
     return toolChunks([{ name: 'team_task_get', args: { task_id: 'task-1' } }])
+  }
+  if (!userText.includes('Research complete: use the deterministic finding.')) {
+    return toolChunks([{ name: 'wait_agent', args: { timeout_ms: 10000 } }])
   }
   if (!names.includes('send_message')) {
     return toolChunks([

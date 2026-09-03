@@ -42,9 +42,11 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
     'cache-test/marks2': Map<string, string>
     'cache-test/count': number
     'cache-test/secret': string
+    'cache-test/marks3': MarksState
   }
   interface SessionProjectionMap {
     'cache-test/marks': { marks: string[] }
+    'cache-test/marks3': { marks: string[] }
   }
 }
 
@@ -70,6 +72,18 @@ const marksUnit = (stateVersion = 1) => ({
   },
   stateVersion,
 }) satisfies ProjectionDefinition<'cache-test/marks', MarksState>
+
+const marks3Unit = {
+  key: 'cache-test/marks3',
+  stateSchema: z.object({ marks: z.array(z.string()) }).nullable(),
+  init: () => null,
+  apply: state => state,
+  wire: {
+    viewSchema: z.object({ marks: z.array(z.string()) }),
+    view: state => state ?? { marks: [] },
+  },
+  stateVersion: 1,
+} satisfies ProjectionDefinition<'cache-test/marks3', MarksState>
 
 const secretUnit = {
   key: 'cache-test/secret',
@@ -376,14 +390,35 @@ describe('SessionProjectionCache listing read', () => {
       .toBeUndefined()
   })
 
-  it('returns undefined when the stored record is version-mismatched', async () => {
+  it('carries ONE cut across multiple served rows: the lowest watermark wins', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-'))
     roots.push(root)
-    // A stale version-stamped document is discarded at open: absent record.
+    // Equal watermarks: whichever row is visited second cannot lower the cut,
+    // so the one-cut fold sees both a lowering and a non-lowering row in
+    // every iteration order.
+    await seedRecord(root, 'multi-row', {
+      'cache-test/marks': { ver: 1, seq: SessionSeq(4), val: { marks: ['a'] } },
+      'cache-test/marks3': { ver: 1, seq: SessionSeq(4), val: { marks: ['b'] } },
+    })
+    const { ctx, cache } = await harness({ root })
+    ctx.sessionProjections.register(marks3Unit)
+    const block = cache.cachedSnapshot(headerOf(SessionId('multi-row')), SessionLogOffset(0))
+    expect(block?.values).toEqual({
+      'cache-test/marks': { marks: ['a'] },
+      'cache-test/marks3': { marks: ['b'] },
+    })
+    expect(block?.asOfSeq).toBe(4)
+  })
+
+  it('returns undefined when the stored record version is not accepted', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-'))
+    roots.push(root)
+    // Version 2 is neither current nor declared compatible, so the document
+    // is discarded at open and the record reads as absent.
     const path = recordPath(root, SessionId('all-stale'))
     await mkdir(dirname(path), { recursive: true })
     await writeFile(path, JSON.stringify({
-      version: projectionCacheDomainSpec.version + 1,
+      version: 2,
       record: {
         identity: { createdAt: 0, isSeeded: false, inheritedEventCount: 0 },
         rows: { 'cache-test/marks': { ver: 1, seq: 4, val: { marks: ['old'] } } },
@@ -391,6 +426,30 @@ describe('SessionProjectionCache listing read', () => {
     }))
     const { cache } = await harness({ root })
     expect(cache.cachedSnapshot(headerOf(SessionId('all-stale')), SessionLogOffset(0)))
+      .toBeUndefined()
+  })
+
+  it('serves a pre-lineage record (accepted old version) to an unseeded caller only', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-'))
+    roots.push(root)
+    // A document stamped with an accepted older version whose identity
+    // predates the lineage fields: absent lineage reads as unseeded.
+    const path = recordPath(root, SessionId('pre-lineage'))
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, JSON.stringify({
+      version: 4,
+      record: {
+        identity: { createdAt: 0 },
+        rows: { 'cache-test/marks': { ver: 1, seq: 4, val: { marks: ['kept'] } } },
+      },
+    }))
+    const { cache } = await harness({ root })
+    const id = SessionId('pre-lineage')
+    // Unseeded caller: the absent lineage is exactly its identity — served.
+    expect(cache.cachedSnapshot(headerOf(id), SessionLogOffset(0)))
+      .toEqual({ asOfSeq: 4, values: { 'cache-test/marks': { marks: ['kept'] } } })
+    // Seeded caller: the lineage-less record cannot vouch for the cut — refused.
+    expect(cache.cachedSnapshot({ ...headerOf(id), isSeeded: true }, SessionLogOffset(2)))
       .toBeUndefined()
   })
 

@@ -1,0 +1,299 @@
+{
+  "data": [
+    {
+      "id": "anthropic/claude-fable-5.1",
+      "canonical_slug": "anthropic/claude-fable-5.1-20260831",
+      "hugging_face_id": null,
+      "name": "Anthropic: Claude Fable 5.1",
+      "created": 1788285838,
+      "description": "Claude Fable 5.1 improves on Claude Fable 5 across the board, with the biggest gains in agentic coding, long-running agentic workflows, and knowledge work: long code refactors, front-end and visual...",
+      "context_length": 1000000,
+      "architecture": {
+        "modality": "text+image+file->text",
+        "input_modalities": [
+          "text",
+          "image",
+          "file"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "Claude",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00005",
+        "web_search": "0.01",
+        "input_cache_read": "0.00000025",
+        "input_cache_write": "0.0000125",
+        "input_cache_write_1h": "0.00002"
+      },
+      "top_provider": {
+        "context_length": 1000000,
+        "max_completion_tokens": 128000,
+        "is_moderated": true
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "stop",
+        "structured_outputs",
+        "tools",
+        "verbosity"
+      ],
+      "default_parameters": {},
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": null,
+      "links": {
+        "details": "/api/v1/models/anthropic/claude-fable-5.1-20260831/endpoints"
+      },
+      "benchmarks": {
+        "design_arena": [
+          {
+            "arena": "models",
+            "category": "website",
+            "elo": 1351,
+            "win_rate": 58.5,
+            "rank": 2
+          }
+        ],
+        "artificial_analysis": {
+          "intelligence_index": 65.7,
+          "coding_index": 81.6,
+          "agentic_index": 61.3
+        }
+      },
+      "reasoning": {
+        "mandatory": true,
+        "supported_efforts": [
+          "max",
+          "xhigh",
+          "high",
+          "medium",
+          "low"
+        ],
+        "default_effort": "high"
+      }
+    },
+    {
+      "id": "openrouter/auto-beta",
+      "canonical_slug": "openrouter/auto-beta",
+      "hugging_face_id": null,
+      "name": "Auto Router (Beta)",
+      "created": 1784311165,
+      "description": "Auto Router (Beta) is a task-aware router from OpenRouter. It classifies each request, then routes it the [most popular model](/rankings#task-spend) for that task based on aggregate spend, filtered by your...",
+      "context_length": 2000000,
+      "architecture": {
+        "modality": "text+image+file+audio+video->text+image",
+        "input_modalities": [
+          "text",
+          "image",
+          "audio",
+          "file",
+          "video"
+        ],
+        "output_modalities": [
+          "text",
+          "image"
+        ],
+        "tokenizer": "Router",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "-1",
+        "completion": "-1"
+      },
+      "top_provider": {
+        "context_length": null,
+        "max_completion_tokens": null,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "prediction",
+        "presence_penalty",
+        "reasoning",
+        "reasoning_effort",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_a",
+        "top_k",
+        "top_logprobs",
+        "top_p",
+        "web_search_options"
+      ],
+      "default_parameters": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "frequency_penalty": null,
+        "presence_penalty": null,
+        "repetition_penalty": null
+      },
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": null,
+      "links": {
+        "details": "/api/v1/models/openrouter/auto-beta/endpoints"
+      }
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "canonical_slug": "deepseek/deepseek-v4-flash-20260423",
+      "hugging_face_id": "deepseek-ai/DeepSeek-V4-Flash",
+      "name": "DeepSeek: DeepSeek V4 Flash 0423",
+      "created": 1777000666,
+      "description": "DeepSeek V4 Flash is an efficiency-optimized Mixture-of-Experts model from DeepSeek with 284B total parameters and 13B activated parameters, supporting a 1M-token context window. It is designed for fast inference and...",
+      "context_length": 1048576,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": [
+          "text"
+        ],
+        "output_modalities": [
+          "text"
+        ],
+        "tokenizer": "DeepSeek",
+        "instruct_type": null
+      },
+      "pricing": {
+        "prompt": "0.00000008708",
+        "completion": "0.00000017416",
+        "input_cache_read": "0.000000017416"
+      },
+      "top_provider": {
+        "context_length": 1024000,
+        "max_completion_tokens": 384000,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_completion_tokens",
+        "max_tokens",
+        "min_p",
+        "presence_penalty",
+        "reasoning",
+        "reasoning_effort",
+        "repetition_penalty",
+        "response_format",
+        "seed",
+        "stop",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_a",
+        "top_k",
+        "top_logprobs",
+        "top_p"
+      ],
+      "default_parameters": {},
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": null,
+      "links": {
+        "details": "/api/v1/models/deepseek/deepseek-v4-flash-20260423/endpoints"
+      },
+      "benchmarks": {
+        "design_arena": [
+          {
+            "arena": "models",
+            "category": "3d",
+            "elo": 1229,
+            "win_rate": 49.3,
+            "rank": 40
+          },
+          {
+            "arena": "models",
+            "category": "asciiart",
+            "elo": 1138,
+            "win_rate": 42.8,
+            "rank": 47
+          },
+          {
+            "arena": "models",
+            "category": "codecategories",
+            "elo": 1226,
+            "win_rate": 48.9,
+            "rank": 43
+          },
+          {
+            "arena": "models",
+            "category": "dataviz",
+            "elo": 1148,
+            "win_rate": 40.6,
+            "rank": 74
+          },
+          {
+            "arena": "models",
+            "category": "gamedev",
+            "elo": 1232,
+            "win_rate": 50.2,
+            "rank": 39
+          },
+          {
+            "arena": "models",
+            "category": "svg",
+            "elo": 1193,
+            "win_rate": 48.4,
+            "rank": 34
+          },
+          {
+            "arena": "models",
+            "category": "uicomponent",
+            "elo": 1188,
+            "win_rate": 44.7,
+            "rank": 58
+          },
+          {
+            "arena": "models",
+            "category": "website",
+            "elo": 1224,
+            "win_rate": 49.1,
+            "rank": 45
+          }
+        ],
+        "artificial_analysis": {
+          "intelligence_index": 42.1,
+          "coding_index": 56.2,
+          "agentic_index": 33.7
+        }
+      },
+      "reasoning": {
+        "mandatory": false,
+        "supported_efforts": [
+          "xhigh",
+          "high"
+        ],
+        "default_effort": "high"
+      }
+    }
+  ],
+  "total_count": 421,
+  "links": {
+    "next": null
+  }
+}

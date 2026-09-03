@@ -53,9 +53,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### Observable behavior
 
-A missing `single` file or `per-record` directory opens as an empty unit and materializes on the first write. In `single`, malformed content rejects with `malformed-medium`, and a different stored version rejects with `version-mismatch`. In `per-record`, each malformed, unreadable, or differently versioned document reads as an absent record, so one bad document does not reject the unit. Record keys must match `[a-zA-Z0-9_-]+`; an unsafe key rejects before any file operation. Every resolved write is durable, and operations after close reject with `closed`.
+A missing `single` file or `per-record` directory opens as an empty unit and materializes on the first write. In `single`, malformed content rejects with `malformed-medium`, and a different stored version rejects with `version-mismatch`. In `per-record`, each malformed or unreadable document, and each document whose version is outside the descriptor's current and compatible versions, reads as an absent record, so one bad document does not reject the unit. Record keys must match `[a-zA-Z0-9_-]+`; an unsafe key rejects before any file operation. Every resolved write is durable, and operations after close reject with `closed`.
 
-An empty `per-record` tree can initialize its declared tables from a valid `<root>/<unit>.json` whole-unit document. The backend leaves that source file unchanged. Any document path in a declared table, or a declared `global.json`, suppresses this initialization for the complete unit, even if that document is unreadable or stale.
+An empty `per-record` tree can initialize its declared tables from a valid `<root>/<unit>.json` whole-unit document only when the source unit name matches and its version is current or declared compatible. The backend leaves that source file unchanged and stamps migrated records with the current version. A source version outside the accepted set leaves the new tree empty. Any document path in a declared table, or a declared `global.json`, suppresses this initialization for the complete unit, even if that document is unreadable or stale.
 
 -----
 

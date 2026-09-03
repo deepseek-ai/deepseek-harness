@@ -43,7 +43,7 @@ inherited process environment      (read-only, wins)
 
 **harness 被启动于其中的项目默认可信，且不做询问。** 一个 checkout 可以携带自己的 endpoint、自己的普通变量和自己的密钥；密钥排在受管存储之下，因此通过 Models 页存下的密钥绝不会被 checkout 中恰好带有的那一个顶掉。`LaunchEnvironmentSnapshot.getFrom(name, sources)` 仍然只搜索调用方点名的层，省略某层仍是拒绝而不是降级——该机制供要求某一层不可达的决策使用；本决策包含项目层。
 
-**信任不延伸到改变 harness 本身。** `loadLayeredEnv` 会在加载时、且在物化任何内容之前，拒绝任何设置了下列变量的 `.env`：决定进程如何启动的（`PATH`、`SHELL`、`NODE_OPTIONS`、`LD_PRELOAD`）、决定由哪个环境程序处理一项操作的（`EDITOR`、`PAGER`、`BROWSER`）、决定运行时在执行被要求运行的程序之前先执行哪些代码的（`BASH_ENV`、`PERL5OPT`、`PYTHONSTARTUP`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、Git 的钩子命令）、决定模型可见指令从哪里加载的（整个 `DSH_*` 命名空间、`HOME`、`XDG_*`），以及决定网络如何访问以及如何建立信任的（proxy 与 CA 变量）。匹配不区分大小写，因此 `https_proxy` 不是绕过手段。
+**信任不延伸到改变 harness 本身。** `loadLayeredEnv` 会在加载时、且在物化任何内容之前，拒绝任何设置了下列变量的 `.env`：决定进程如何启动的（`PATH`、`SHELL`、`NODE_OPTIONS`、`LD_PRELOAD`）、决定由哪个环境程序处理一项操作的（`EDITOR`、`PAGER`、`BROWSER`）、决定运行时在执行被要求运行的程序之前先执行哪些代码的（`BASH_ENV`、`PERL5OPT`、`PYTHONSTARTUP`、`RUBYOPT`、`JAVA_TOOL_OPTIONS`、Git 的钩子命令）、决定模型可见指令从哪里加载的（整个 `DSH_*` 命名空间、`HOME`、`XDG_*`），以及决定网络如何访问以及如何建立信任的（proxy 与 CA 变量）。匹配不区分大小写，因此 `https_proxy` 不是绕过手段。唯一的豁免记录在[代理策略笔记](2026-08-27-outbound-proxy-policy.zh.md)中：四个代理名可从 `$DSH_HOME/.env` 接受——没有任何 `.env` 能挪动该文件——但仍拒绝来自调用目录文件的同名变量。
 
 这条界线在于：它们无需任何用户动作、在任何轮次开始之前、且在权限策略与沙箱之外就生效。`DSH_PERMISSION_MODE` 会关掉让「信任项目」根本成立的那道审批，而 `BASH_ENV` 会在 bash 工具每次发出 `bash -c` 时执行项目指定的文件——项目的代码在 agent（智能体）的策略下运行是约定，项目改写那份策略不是。一个变量一个变量地枚举是必输的游戏，所以整个 `DSH_*` 命名空间被拒绝而不是只拒绝一份经审查的子集，也所以这份清单是按变量*做什么*而不是按哪个运行时拥有它来组织的。不设逃生门：逃生门本身总得从某处读取，而任何被发现的文件能设置的东西，就是那个漏洞本身。
 
@@ -54,7 +54,7 @@ inherited process environment      (read-only, wins)
 ## Consequences
 
 - Web 凭据表单现在能压过用户 `.env` 里更旧的密钥；只有在启动 shell 里 export 的密钥才会让它变成只读，诊断信息也会这么说。
-- 含 `DSH_*`、`PATH`、`BROWSER` 或 proxy 变量的 `.env` 会导致启动失败而不是被应用。把开关放在仓库 `.env` 里的开发者需要改放到 shell——这是一次刻意且响亮的破坏。
+- 含 `DSH_*`、`PATH`、`BROWSER` 或（在调用目录中）proxy 变量的 `.env` 会导致启动失败而不是被应用。把开关放在仓库 `.env` 里的开发者需要改放到 shell——这是一次刻意且响亮的破坏。
 - composition 不再会被陈旧的 shell endpoint 覆盖。但它仍然会被用户已存的 `settings.yaml` 覆盖，这是 settings seam 的分层方式，本 Note 不改变它；产品 CLI 没有高于它的标志，因此需要压过已存 settings 的部署方要自带 bin 或 loader 配置树。
 - 未解决的：各层仍然会被物化进 `process.env`，因此普通项目变量继续按子进程清洗规则抵达子进程。bootstrap 变量完全不能来自文件；环境包将其余变量仍可抵达子进程这一点记录为一项限制。
 - Exa 与 Perplexity 仍在加载时捕获密钥，而不是经凭据 seam。它们不再读裸 `process.env`——改为经受信层解析——但把它们改造成按请求解析凭据是另一件事。

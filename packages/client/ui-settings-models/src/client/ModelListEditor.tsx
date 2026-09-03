@@ -297,12 +297,11 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
 
   const toggleVisibleCandidates = (): void => {
     setPicked((current) => {
-      const next = new Set(current)
       if (visibleCandidates.every(candidate => current.has(candidate.id))) {
-        for (const candidate of visibleCandidates) next.delete(candidate.id)
-      } else {
-        for (const candidate of visibleCandidates) next.add(candidate.id)
+        return new Set()
       }
+      const next = new Set(current)
+      for (const candidate of visibleCandidates) next.add(candidate.id)
       return next
     })
   }

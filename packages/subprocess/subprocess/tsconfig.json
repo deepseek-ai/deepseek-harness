@@ -13,6 +13,12 @@
     },
     {
       "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../util/http-proxy"
+    },
+    {
+      "path": "../../util/launch-environment"
     }
   ]
 }

@@ -9,6 +9,9 @@
   ],
   "references": [
     {
+      "path": "../../attachment/attachment"
+    },
+    {
       "path": "../../api/remotes/tsconfig.client.json"
     },
     {

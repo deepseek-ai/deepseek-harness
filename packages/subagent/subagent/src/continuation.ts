@@ -134,7 +134,15 @@ export interface SubagentSendMessageOptions {
 
 /** Inputs shared by model steering and the human Queue adapter. */
 type ChildDeliveryOptions =
-  | { readonly delivery: 'steer'; readonly signal: AbortSignal }
+  | {
+    readonly delivery: 'steer'
+    /**
+     * A provided host source is preserved on the user message; omission attributes
+     * an adjacent-Agent message to the parent.
+     */
+    readonly source?: MessageSource
+    readonly signal: AbortSignal
+  }
   | { readonly delivery: 'queue'; readonly source: MessageSource; readonly signal: AbortSignal }
 
 /**
@@ -614,6 +622,25 @@ export class SubagentContinuationManager {
     signal: AbortSignal,
   ): Promise<MessageId> {
     return this.deliverToChild(parent, childId, content, { source, signal, delivery: 'queue' })
+  }
+
+  /**
+   * Steer one host-authored prompt to a direct continuable child.
+   * @param parent - exact live direct parent authorizing delivery.
+   * @param childId - durable direct-child session id.
+   * @param content - host-authored content to deliver.
+   * @param source - durable host-protocol provenance.
+   * @param signal - caller cancellation before inbox acceptance.
+   * @returns the accepted message's inbox id.
+   */
+  async steerPrompt(
+    parent: Agent,
+    childId: SessionId,
+    content: ContentBlock[],
+    source: MessageSource,
+    signal: AbortSignal,
+  ): Promise<MessageId> {
+    return this.deliverToChild(parent, childId, content, { source, signal, delivery: 'steer' })
   }
 
   /** Route one parent-originated delivery through residency and cold resume. */
@@ -1330,7 +1357,7 @@ export class SubagentContinuationManager {
     // Parent-originated delivery keeps the parent live through ownership, so
     // establish it before the message can enter the child's inbox.
     this.acquireOwnership(parent, activation.childId)
-    const message = options.delivery === 'steer'
+    const message = options.source === undefined
       ? agentMessage(parent, content)
       : createUserMessage({ content, source: options.source })
     const accepted = this.admitWaking(activation, message.id, () => {

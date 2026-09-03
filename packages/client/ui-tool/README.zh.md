@@ -39,11 +39,11 @@ ctx.slots.inject('tool.call.toolview', () =>
   }, BusinessToolRow))
 ```
 
-owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`、可选 `cwd` 与 `home`，以及普通的 `openFile`/`inspect` 回调。Code Dispatch block 保留事件的 `parentCallId`；root Session call 没有该字段，因此 descendant 无需另一项 placement 标志即可保持 generic 压平形态。路径摘要先相对 Session cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开仍使用作者给出的文件系统路径。注册项会收到常规 Session slot runtime share，但不会收到 React node 或 runtime service。
+owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`、可选 `cwd` 与 `home`、会话授权的 `loadImage` loader（供结果携带持久图像的视图使用），以及普通的 `openFile`/`inspect` 回调。Code Dispatch block 保留事件的 `parentCallId`；root Session call 没有该字段，因此 descendant 走同一条按 key 分发——注册过视图的调用（如 `read_image`）在嵌套处也渲染其卡片，未注册的 descendant 保持 generic 压平形式。路径摘要先相对 Session cwd 缩短，再把剩余的 POSIX Host home 写成 `~`；`filePath` 与 Host 打开仍使用作者给出的文件系统路径。注册项会收到常规 Session slot runtime share，但不会收到 React node 或 runtime service。
 
 ### 内置视图
 
-本包拥有 generic fallback，以及 shell/pwsh、read、write/edit、running `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 Code Dispatch 的内置展示。结构化卡片直接从第一方原始 event 字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。前台一次性 shell 结果使用 terminal 卡片。已完成的持久 shell 结果使用可展开的 generic 输入／输出卡片，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；后台启动回执保持折叠。成功的问题行按稳定 id 配对调用中的问题与结果中的回答，展开后显示可读的问答行。已取消或已中断的问题行显示其裁决与原始问题，不虚构回答。不受支持、格式错误或含糊的输入回退为压平的工具输入／结果文本。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。
+本包拥有 generic fallback，以及 shell/pwsh、read、read_image、write/edit、running `str_replace_editor` `create`／`str_replace`、grep/glob、web、todo、question 与 Code Dispatch 的内置展示。结构化卡片直接从第一方原始 event 字段派生；Host `presentCall` 与 `presentResult` 值不会进入 Client。前台一次性 shell 结果使用 terminal 卡片。已完成的持久 shell 结果使用可展开的 generic 输入／输出卡片，因为 reset 与部分输出诊断不一定描述单个进程的退出状态；后台启动回执保持折叠。成功的问题行按稳定 id 配对调用中的问题与结果中的回答，展开后显示可读的问答行。已取消或已中断的问题行显示其裁决与原始问题，不虚构回答。不受支持、格式错误或含糊的输入回退为压平的工具输入／结果文本。`ui-skill` 展示了业务包自行拥有的 `skill` 注册项。
 
 -----
 
@@ -61,8 +61,8 @@ owner 载荷为 `ToolCallOwnerProps`：`callId`、`toolName`、冻结的 `block`
 
 ### 详情与卡片
 
-本包通过 `ToolDetails` 填充 `conversation.details.tool`。行 renderer 与 Details renderer 分别为 terminal、read、diff、search 和 web 卡片复用同一个纯 card model。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、Code Dispatch `parentCallId` 与 Session 路径事实。Generic row 保留原始 `argsRaw` 引用，只在展开期间格式化 input body；结构化卡片跳过 generic body 格式化。不受支持或格式错误的输入使用压平的工具结果文本。各类卡片的上限与 fallback 规则仍由对应的 [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.zh.md)、[diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.zh.md)、[read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.zh.md)、[search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.zh.md)、[web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.zh.md) 与 [question](../../../.agents/notes/implemented/feature/2026-07-29-ask-question-web-presentation.zh.md) 笔记负责。
 
+本包通过 `ToolDetails` 填充 `conversation.details.tool`。行 renderer 与 Details renderer 分别为 terminal、read、diff、search 和 web 卡片复用同一个纯 card model；image 卡片仅属于行，因为其图库经由工具自有 `tool.call.images` 槽位渲染，而 details 面板不声明该槽位。这些 model 校验原始调用参数、结果内容、失败状态、持久 metadata、Code Dispatch `parentCallId` 与 Session 路径事实。不受支持或格式错误的输入使用压平的工具结果文本。各类卡片的上限与 fallback 规则仍由对应的 [terminal](../../../.agents/notes/implemented/feature/2026-07-28-web-terminal-card.zh.md)、[diff](../../../.agents/notes/implemented/feature/2026-07-30-web-diff-card.zh.md)、[read](../../../.agents/notes/implemented/feature/2026-07-30-web-read-card-frontend.zh.md)、[image](../../../.agents/notes/implemented/feature/2026-08-20-tool-card-image-results.zh.md)、[search](../../../.agents/notes/implemented/feature/2026-07-30-web-search-card.zh.md)、[web](../../../.agents/notes/implemented/feature/2026-07-30-web-result-card-frontend.zh.md) 与 [question](../../../.agents/notes/implemented/feature/2026-07-29-ask-question-web-presentation.zh.md) 笔记负责。
 </details>
 
 -----

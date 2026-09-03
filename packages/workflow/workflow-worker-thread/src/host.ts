@@ -29,7 +29,11 @@ interface ChildRecord {
 }
 
 /**
- * The scrubbed worker environment: no ambient credentials, no loader flags.
+ * The scrubbed worker environment: no ambient credentials, no loader flags, and deliberately no
+ * proxy policy. A worker thread does not inherit the host's global dispatcher, so a workflow's own
+ * requests go direct — the alternative is handing the worker a proxy URL that may carry
+ * `user:password`, and this worker executes the model-authored script body. That is the same
+ * containment the code runtime keeps, and `docs/defensive-patterns.md` requires it.
  * Windows derives `os.tmpdir()` from `TMP`/`TEMP` and falls back to the
  * literal relative path `undefined\temp` when the environment is empty, so
  * tsx's transform cache would land in a cwd-relative `undefined/temp`

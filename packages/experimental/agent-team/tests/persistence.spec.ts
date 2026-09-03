@@ -178,12 +178,12 @@ for (const backend of backends) {
       await Promise.resolve()
 
       activeRoot.session.append('team/member', {
-        version: 1,
+        version: 2,
         teamId: TeamId(activeRoot.id),
         member: provisioning(childId, 'recoverable'),
       })
       failedRoot.session.append('team/member', {
-        version: 1,
+        version: 2,
         teamId: TeamId(failedRoot.id),
         member: provisioning(SessionId(`${backend.name}-missing`), 'missing'),
       })
@@ -225,7 +225,6 @@ for (const backend of backends) {
       const receipt = await second.ctx.agentTeams.sendMessage(activeHandle.agent, {
         target: 'recoverable',
         content: [{ type: 'text', text: 'resume after reconciliation' }],
-        delivery: 'wakeup',
         signal: SIGNAL,
       })
       expect(receipt.status).toBe('accepted')
@@ -249,7 +248,7 @@ for (const backend of backends) {
       await Promise.resolve()
       await Promise.resolve()
       root.session.append('team/member', {
-        version: 1,
+        version: 2,
         teamId: TeamId(root.id),
         member: provisioning(childId, 'pending-worker'),
       })
@@ -278,7 +277,7 @@ for (const backend of backends) {
       await second.dispose()
     })
 
-    it('replays queued-minus-delivered mail in FIFO order without waking for quiet mail', {
+    it('retries queued mail through cold-resume Steer after restart', {
       timeout: PERSISTENCE_TEST_TIMEOUT_MS,
     }, async () => {
       const storageRoot = mkdtempSync(join(tmpdir(), `dsh-team-mail-${backend.name.toLowerCase()}-`))
@@ -296,14 +295,15 @@ for (const backend of backends) {
         signal: SIGNAL,
       })
       await vi.waitFor(() => { expect(first.ctx.agents.get(started.member.id)).toBeUndefined() }, { timeout: 5_000 })
-      const quiet = await first.ctx.agentTeams.sendMessage(firstLead, {
+      vi.spyOn(first.ctx.sessionPersistence, 'open')
+        .mockRejectedValueOnce(new Error('temporary target read failure'))
+      const queued = await first.ctx.agentTeams.sendMessage(firstLead, {
         target: 'mail-worker',
-        content: [{ type: 'text', text: 'durable quiet context' }],
-        delivery: 'quiet',
+        content: [{ type: 'text', text: 'durable retry context' }],
         signal: SIGNAL,
       })
-      expect(quiet.status).toBe('queued')
-      expect(durable(firstLead).pendingMessages.map(message => message.id)).toEqual([quiet.messageId])
+      expect(queued.status).toBe('queued')
+      expect(durable(firstLead).pendingMessages.map(message => message.id)).toEqual([queued.messageId])
       await first.dispose()
 
       const second = await stack(backend, storageRoot, [textResponse('resumed teammate answer')])
@@ -311,19 +311,6 @@ for (const backend of backends) {
         resumeSessionId: rootId,
         agentOptions: { provider: 'mock', model: 'mock' },
       })
-      await vi.waitFor(() => {
-        expect(durable(rootHandle.agent).pendingMessages.map(message => message.id))
-          .toEqual([quiet.messageId])
-      })
-      expect(second.ctx.agents.get(started.member.id)).toBeUndefined()
-
-      const waking = await second.ctx.agentTeams.sendMessage(rootHandle.agent, {
-        target: 'mail-worker',
-        content: [{ type: 'text', text: 'resume after restart' }],
-        delivery: 'wakeup',
-        signal: SIGNAL,
-      })
-      expect(waking.status).toBe('accepted')
       await vi.waitFor(() => { expect(second.ctx.agents.get(started.member.id)).toBeUndefined() }, { timeout: 5_000 })
       await vi.waitFor(() => { expect(durable(rootHandle.agent).pendingMessages).toEqual([]) })
 
@@ -332,7 +319,7 @@ for (const backend of backends) {
         && event.data.source.kind === 'team-message'
         ? [event.data.source.messageId]
         : [])
-      expect(peerIds).toEqual([quiet.messageId, waking.messageId])
+      expect(peerIds).toEqual([queued.messageId])
 
       await rootHandle.dispose()
       await second.dispose()
@@ -386,11 +373,10 @@ for (const backend of backends) {
         senderId: rootId,
         senderName: 'lead',
         targetId: started.member.id,
-        delivery: 'wakeup',
         content: [{ type: 'text', text: 'already recorded before acknowledgement' }],
       }
       firstLead.session.append('team/message/queued', {
-        version: 1,
+        version: 2,
         teamId: TeamId(rootId),
         message: queued,
       })
@@ -439,21 +425,20 @@ for (const backend of backends) {
         senderId: rootId,
         senderName: 'lead',
         targetId: childId,
-        delivery: 'wakeup',
         content: [{ type: 'text', text: 'already durable in target inbox' }],
       }
       root.session.append('team/member', {
-        version: 1,
+        version: 2,
         teamId: TeamId(root.id),
         member: provisioned,
       })
       root.session.append('team/member', {
-        version: 1,
+        version: 2,
         teamId: TeamId(root.id),
         member: active,
       })
       root.session.append('team/message/queued', {
-        version: 1,
+        version: 2,
         teamId: TeamId(root.id),
         message: queued,
       })

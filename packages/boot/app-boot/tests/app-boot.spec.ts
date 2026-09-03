@@ -149,6 +149,83 @@ describe('loadLayeredEnv', () => {
     }
   })
 
+  const PROXY = ['HTTP_PROXY', 'http_proxy', 'HTTPS_PROXY', 'https_proxy', 'NO_PROXY', 'no_proxy'] as const
+  function clearProxy(): void {
+    for (const name of PROXY) Reflect.deleteProperty(process.env, name)
+  }
+
+  it('accepts the proxy names from the Harness-home .env, below an exported one', () => {
+    const home = tmp()
+    const project = tmp()
+    // Both casings, because a shell profile writes either and the rejection matches both. Each
+    // spelling gets its own name here: Windows folds `https_proxy` and `HTTPS_PROXY` into one
+    // variable, so which spelling a value lands under is the platform's to decide — that the file
+    // supplies it, and that the launching shell outranks the file, is not.
+    writeFileSync(join(home, '.env'), 'HTTP_PROXY=http://from-home:8080\nno_proxy=example.com\nHTTPS_PROXY=http://from-home:8443\n')
+    clear(); clearProxy()
+    vi.stubEnv('DSH_HOME', home)
+    vi.stubEnv('HTTPS_PROXY', 'http://exported:8080')
+    try {
+      const snapshot = loadLayeredEnv(NAME, project, vi.fn())
+      expect(snapshot.get('HTTP_PROXY')).toEqual({ value: 'http://from-home:8080', source: 'user-env', path: join(home, '.env') })
+      expect(snapshot.get('no_proxy')).toEqual({ value: 'example.com', source: 'user-env', path: join(home, '.env') })
+      // The launching shell still outranks the file for the same variable.
+      expect(snapshot.get('HTTPS_PROXY')).toEqual({ value: 'http://exported:8080', source: 'process' })
+      expect(process.env.HTTP_PROXY).toBe('http://from-home:8080')
+      expect(process.env.HTTPS_PROXY).toBe('http://exported:8080')
+    } finally {
+      clear(); clearProxy()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('still refuses every other bootstrap name in the Harness-home .env', () => {
+    const home = tmp()
+    const project = tmp()
+    // A CA path sits in the same network group as the proxy names and changes what is trusted,
+    // not where traffic goes; the exemption must not widen to it.
+    writeFileSync(join(home, '.env'), 'SSL_CERT_FILE=/tmp/ca.pem\n')
+    clear()
+    vi.stubEnv('DSH_HOME', home)
+    try {
+      expect(() => loadLayeredEnv(NAME, project, vi.fn())).toThrow(/only the launching environment may set/)
+    } finally {
+      clear()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('names the Harness-home file as the way out when a project .env sets a proxy', () => {
+    const home = tmp()
+    const project = tmp()
+    writeFileSync(join(project, '.env'), 'HTTP_PROXY=http://attacker.example\n')
+    clear(); clearProxy()
+    vi.stubEnv('DSH_HOME', home)
+    try {
+      expect(() => loadLayeredEnv(NAME, project, vi.fn()))
+        .toThrow(`export HTTP_PROXY, or put it in ${join(home, '.env')}, which does not travel with a repository`)
+      expect(process.env.HTTP_PROXY).toBeUndefined()
+    } finally {
+      clear(); clearProxy()
+      vi.unstubAllEnvs()
+    }
+  })
+
+  it('treats the invoking directory as the Harness home when they are the same directory', () => {
+    const home = tmp()
+    writeFileSync(join(home, '.env'), 'HTTP_PROXY=http://from-home:8080\n')
+    clear(); clearProxy()
+    vi.stubEnv('DSH_HOME', home)
+    try {
+      // Launched from inside the home itself, its one file is read as the project layer; the
+      // exemption follows the directory, not the layer name.
+      expect(loadLayeredEnv(NAME, home, vi.fn()).get('HTTP_PROXY')?.value).toBe('http://from-home:8080')
+    } finally {
+      clear(); clearProxy()
+      vi.unstubAllEnvs()
+    }
+  })
+
   it('reports each file value with its absolute path', () => {
     const home = tmp()
     const project = tmp()

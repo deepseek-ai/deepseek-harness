@@ -68,7 +68,7 @@ Only the Lead can create teammates or interrupt them.
 
 Any member can send a message to any other member or to the Lead. A live member receives it immediately; an offline member's messages queue and arrive when it resumes. Messages are never lost and never delivered twice.
 
-Two delivery modes cover the two common intents: a quiet message delivers information without starting an idle teammate (use it for updates that can wait), and a follow-up makes the message the recipient's next turn (use it to hand over work). The sender always sees the outcome — delivered now, or queued. A queued message is already safely stored, so it must not be resent.
+Every message uses Steer: a running target receives it at the nearest step boundary, an idle target starts a turn, and an inactive teammate cold-resumes. The sender always sees the outcome — accepted by the target inbox, or retained as queued when delivery is temporarily unavailable. A queued message is already safely stored, so it must not be resent.
 
 ### Shared task board
 
@@ -130,6 +130,8 @@ Every ordinary runtime root is the implicit Lead of a Team whose `TeamId` equals
 ### Durable mailbox
 
 `sendMessage()` validates peer membership, appends `team/message/queued`, and flushes before attempting delivery. The target message begins with `Team message <id> from <name>:` and keeps the same id and sender in `TeamMessageSource`. A target receipt is acknowledged with `team/message/delivered` only after the target Session durably holds the message identity in its pending inbox or recorded history. Immediate admissions are serialized per target in durable queue order; recovery dispatches queued-minus-delivered records in the same order. Delivery folds both live and persisted target inbox/history state before retrying, so a crash between inbox acceptance and model claim does not duplicate the message. The guarantee is process-local retry plus target-Session de-duplication, not cross-process exactly-once delivery.
+
+Lead delivery calls `Agent.steer()` directly. Teammate delivery uses the continuation owner's host-only Steer path, which preserves the Team sender source while authorizing the Lead-to-child edge and cold-resuming inactive targets. Sibling messages never impersonate the Lead through the public adjacent-Agent messaging operation.
 
 ### Shared task board
 

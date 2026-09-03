@@ -364,3 +364,83 @@ describe('translate: defensive tool-call branches', () => {
     expect(chunks[1]).toEqual({ type: 'tool-call-delta', index: 0, id: 'c', argumentsDelta: '' })
   })
 })
+
+describe('translate: tool-call identity across deltas', () => {
+  it('keeps the established identity when continuation deltas re-send it empty', async () => {
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_00_x', type: 'function', function: { name: 'get_weather', arguments: '' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: '', type: 'function', function: { name: '', arguments: '{"city"' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: '', type: 'function', function: { name: '', arguments: ': "Paris"}' } }] } }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      DONE,
+    )))
+    expect(chunks.filter(chunk => chunk.type === 'block-end')).toEqual([{
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'call_00_x', name: 'get_weather', arguments: '{"city": "Paris"}' },
+    }])
+  })
+
+  it('keeps the established identity when continuation deltas re-send it null', async () => {
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'Glob', arguments: '' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: null, function: { name: null, arguments: '{}' } }] } }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      DONE,
+    )))
+    expect(chunks.filter(chunk => chunk.type === 'block-end')).toEqual([{
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'call_1', name: 'Glob', arguments: '{}' },
+    }])
+  })
+
+  it('re-sending the same non-empty identity does not duplicate it', async () => {
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'Glob', arguments: '' } }] } }] },
+      { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'Glob', arguments: '{}' } }] } }] },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      DONE,
+    )))
+    expect(chunks.filter(chunk => chunk.type === 'block-end')).toEqual([{
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'call_1', name: 'Glob', arguments: '{}' },
+    }])
+  })
+
+  it('maintains each parallel call identity separately under empty continuation deltas', async () => {
+    const chunks = await collect(translate(feed(
+      firstChunk,
+      {
+        choices: [{
+          delta: {
+            tool_calls: [
+              { index: 0, id: 'a', type: 'function', function: { name: 'one', arguments: '' } },
+              { index: 1, id: 'b', type: 'function', function: { name: 'two', arguments: '' } },
+            ],
+          },
+        }],
+      },
+      {
+        choices: [{
+          delta: {
+            tool_calls: [
+              { index: 1, id: '', function: { name: '', arguments: '{"b":1}' } },
+              { index: 0, id: '', function: { name: '', arguments: '{"a":1}' } },
+            ],
+          },
+        }],
+      },
+      { choices: [{ delta: {}, finish_reason: 'tool_calls' }] },
+      DONE,
+    )))
+    expect(chunks.filter(chunk => chunk.type === 'block-end')).toEqual([
+      { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'a', name: 'one', arguments: '{"a":1}' } },
+      { type: 'block-end', index: 1, block: { type: 'tool-call', id: 'b', name: 'two', arguments: '{"b":1}' } },
+    ])
+  })
+})

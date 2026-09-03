@@ -262,8 +262,13 @@ export function apply(ctx: Context): void {
         state.competingQueued = false
         const attempt = state.attempt
         const goal = currentGoal(state)
-        if ((attempt?.phase === 'queued' || attempt?.phase === 'claimed' || attempt?.cancelled)
-          && goal?.phase === 'active' && goal.activation === 'armed') {
+        // Fence the pause to the exact dropped attempt's ref. A resume bumps
+        // the revision, so a host pause followed by an immediate resume (before
+        // the aborted turn converges to idle) must not re-pause the resumed goal.
+        if (attempt !== undefined
+          && (attempt.phase === 'queued' || attempt.phase === 'claimed' || attempt.cancelled)
+          && goal !== undefined && goal.phase === 'active' && goal.activation === 'armed'
+          && attempt.goalId === goal.id && attempt.revision === goal.revision) {
           state.attempt = undefined
           try {
             ctx.goals.pause(agent, goalRef(goal))
@@ -275,9 +280,16 @@ export function apply(ctx: Context): void {
         requestDrive(state)
       }
     })
-    ctx.on('goal/changed', ({ agent }) => {
+    ctx.on('goal/changed', ({ agent, change }) => {
       const state = stateFor(agent)
       state.needsCheckpoint = true
+      // A host-initiated pause stops goal execution: abort the live turn so the
+      // model cannot keep acting or resume in the same turn. A model-initiated
+      // pause (update_goal inside its own turn) finishes normally.
+      if (change.operation === 'pause' && agent.status === 'running'
+        && ctx.agents.currentInitiator() !== agent) {
+        agent.cancel({ kind: 'user' }, { keepInbox: true })
+      }
       requestDrive(state)
     })
 

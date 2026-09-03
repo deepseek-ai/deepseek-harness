@@ -12,7 +12,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 RELEASE = runpy.run_path(str(ROOT / "scripts" / "build-python-release.py"))
-MACOS_PLATFORM_TAG = RELEASE["PLATFORMS"]["macos-arm64"][0]
+MACOS_PLATFORMS = {
+    name: details[0]
+    for name, details in RELEASE["PLATFORMS"].items()
+    if name.startswith("macos-")
+}
 
 
 def parse_version(value: str) -> tuple[int, ...]:
@@ -24,7 +28,7 @@ def parse_version(value: str) -> tuple[int, ...]:
 
 def claimed_version(platform_tag: str) -> tuple[int, ...]:
     """Return the minimum macOS version encoded by a wheel platform tag."""
-    match = re.fullmatch(r"macosx_(\d+)_(\d+)_arm64", platform_tag)
+    match = re.fullmatch(r"macosx_(\d+)_(\d+)_(?:arm64|x86_64)", platform_tag)
     if match is None:
         raise ValueError(f"unsupported macOS wheel platform tag: {platform_tag!r}")
     return int(match.group(1)), int(match.group(2))
@@ -32,12 +36,22 @@ def claimed_version(platform_tag: str) -> tuple[int, ...]:
 
 def parse_otool_deployment_target(output: str) -> tuple[int, ...]:
     """Return the newest deployment target from one or more Mach-O slices."""
-    versions = [
-        parse_version(match.group(1))
-        for match in re.finditer(r"^\s*minos\s+(\d+(?:\.\d+)*)\s*$", output, re.MULTILINE)
-    ]
+    versions: list[tuple[int, ...]] = []
+    command: str | None = None
+    for line in output.splitlines():
+        stripped = line.strip()
+        if re.fullmatch(r"Load command \d+", stripped):
+            command = None
+        elif stripped == "cmd LC_BUILD_VERSION":
+            command = "build"
+        elif stripped == "cmd LC_VERSION_MIN_MACOSX":
+            command = "minimum"
+        elif command == "build" and (match := re.fullmatch(r"minos\s+(\d+(?:\.\d+)*)", stripped)):
+            versions.append(parse_version(match.group(1)))
+        elif command == "minimum" and (match := re.fullmatch(r"version\s+(\d+(?:\.\d+)*)", stripped)):
+            versions.append(parse_version(match.group(1)))
     if not versions:
-        raise ValueError("otool output contains no LC_BUILD_VERSION deployment target")
+        raise ValueError("otool output contains no macOS deployment target load command")
     return max(versions)
 
 
@@ -73,7 +87,7 @@ def ensure_compatible(
 
 
 def validate_deployment_targets(
-    executables: list[Path], platform_tag: str = MACOS_PLATFORM_TAG
+    executables: list[Path], platform_tag: str
 ) -> list[tuple[Path, tuple[int, ...]]]:
     """Validate every executable and return its measured deployment target."""
     measured = [(executable, deployment_target(executable)) for executable in executables]
@@ -84,11 +98,13 @@ def validate_deployment_targets(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--platform", choices=tuple(MACOS_PLATFORMS), required=True)
     parser.add_argument("executables", type=Path, nargs="+")
     args = parser.parse_args()
-    for executable, version in validate_deployment_targets(args.executables):
+    platform_tag = MACOS_PLATFORMS[args.platform]
+    for executable, version in validate_deployment_targets(args.executables, platform_tag):
         rendered = ".".join(str(part) for part in version)
-        print(f"{executable}: macOS {rendered} <= {MACOS_PLATFORM_TAG}")
+        print(f"{executable}: macOS {rendered} <= {platform_tag}")
 
 
 if __name__ == "__main__":

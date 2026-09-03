@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-jobs",
   "description": "Session-header background-job list: live registry state mirrored from session/jobs frames",
-  "version": "0.1.2-alpha.4",
+  "version": "0.1.2-rc.1",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

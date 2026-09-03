@@ -13,7 +13,7 @@ pnpm install
 pnpm exec tsx scripts/build-exe-for-python-sdk.ts
 ```
 
-所需 `lib/` 产物已存在时使用 `--skip-build`；如需选择平台，请使用 `--targets=node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-win-x64`。每个目标都应在其原生架构上构建。产物写入 `dist-exe/`，脚本会将所选载体同步到 `python/sdk-runtime/`。Windows 会生成 `.exe` 与 `-rg.exe`；macOS 构建还会同步 `node-pty` 所需的配套 spawn 辅助程序。
+所需 `lib/` 产物已存在时使用 `--skip-build`；如需选择平台，请使用 `--targets=node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64`。每个目标都应在其原生架构上构建。产物写入 `dist-exe/`，脚本会将所选载体同步到 `python/sdk-runtime/`。Windows 会生成 `.exe` 与 `-rg.exe`；macOS 构建还会同步 `node-pty` 所需的配套 spawn 辅助程序。
 
 ## 验证 SDK
 
@@ -79,11 +79,11 @@ pip install \
   "dist-python/deepseek_harness_runtime_bin-$version-py3-none-macosx_14_0_arm64.whl"
 ```
 
-运行时分发包仅提供 wheel 包。发布流水线会连同纯 SDK wheel 包一起发布四个平台 wheel 包：Linux x64、Linux arm64、macOS 14 或更高版本的 arm64，以及 Windows x64（`win_amd64`）。只有与仓库版本匹配时，才接受 `python-v<repository-version>` 标签；`0.0.1-rc.1` 之类的仓库预发布版本在 wheel 包文件名和元数据中使用规范化的 PEP 440 写法，例如 `0.0.1rc1`。
+运行时分发包仅提供 wheel 包。发布流水线会连同纯 SDK wheel 包一起发布五个平台 wheel 包：Linux x64、Linux arm64、macOS 14 或更高版本的 arm64 与 x64，以及 Windows x64（`win_amd64`）。只有与仓库版本匹配时，才接受 `python-v<repository-version>` 标签；`0.0.1-rc.1` 之类的仓库预发布版本在 wheel 包文件名和元数据中使用规范化的 PEP 440 写法，例如 `0.0.1rc1`。
 
 ## 验证候选发行版
 
-手动运行 GitHub 的 `Release (Python)` 工作流并设置 `publish=false`，即可构建全部五个 wheel 包，在 Python 3.10 和 3.14 上安装 Linux 发行集合，检查精确文件名和元数据，执行 PyPI 默认单文件大小限制，并保留一份带 SHA-256 哈希的汇总产物。该运行没有注册表凭据，dry-run 运行无法进入任何发布作业。
+手动运行 GitHub 的 `Release (Python)` 工作流并设置 `publish=false`，即可构建全部六个 wheel 包，在 Python 3.10 和 3.14 上安装 Linux 发行集合，检查精确文件名和元数据，执行 PyPI 默认单文件大小限制，并保留一份带 SHA-256 哈希的汇总产物。该运行没有注册表凭据，dry-run 运行无法进入任何发布作业。
 
 公开发布从私有自动化仓库运行。包元数据指向独立的只读公开源码镜像，该镜像不运行发布 Actions。私有仓库把仓库变量 `PYPI_PUBLISHER_REPOSITORY` 定义为自身的 `owner/name`，并且只在有意发布期间把 `PUBLIC_PYPI_RELEASE_ENABLED` 从 `false` 改为 `true`。
 

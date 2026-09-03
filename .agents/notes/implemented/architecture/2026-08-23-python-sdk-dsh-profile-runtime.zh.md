@@ -34,7 +34,7 @@ Python SDK 分发一个私有 Node 应用，直接启动完整外部 `cordis.yml
 
 普通 Node profile 在 `$DSH_HOME/profiles/node_modules` 中使用符号链接，让外部插件共享安装包。操作系统符号链接无法进入 pkg 的 `/snapshot` 文件系统，因此打包 CLI 改为写入小型真实 ESM 代理包。每个代理直接按 Node import 条件解析源包的显式 ESM exports map，公开安装中实际存在的目标，并重新导出其虚拟模块 URL。没有 ESM 运行时目标的 export 项以及仅含可执行入口或类型声明入口的包不会产生不可用的代理条目；格式错误的 exports map 会导致启动失败。完整且匹配的 generation 不会获取跨进程写入锁。缺失或过期的配置项会获取该锁、重新检查 generation，并在不暴露半成品代理的前提下修复；任一载体都可以替换另一载体留下的受管配置项。Loader 配置项和外部插件 peer 因而可以通过普通 profile 逐级向上查找解析，同时保留一个 Cordis 和每个内置模块的单一实例。
 
-已发布目标集合是 Linux x64、Linux arm64、macOS arm64 与 Windows x64。Installed-wheel 黑盒 CI 在每个目标上负责产物来源、默认及 patched profile、外部 bundle 安装、原生工具、MCP、直接 JSON-RPC、快照，以及可信真实提供方轮次。[Windows x64 运行时决策](2026-08-23-python-sdk-windows-x64-runtime.zh.md)负责第四个产物及其平台专属 shell surface。
+已发布目标集合是 Linux x64、Linux arm64、macOS arm64、macOS x64 与 Windows x64。Installed-wheel 黑盒 CI 在每个目标上负责产物来源、默认及 patched profile、外部 bundle 安装、原生工具、MCP、直接 JSON-RPC、快照，以及可信真实提供方轮次。[Windows x64 运行时决策](2026-08-23-python-sdk-windows-x64-runtime.zh.md)负责 Windows 产物及其平台专属 shell surface。
 
 ## 既有决策与取代关系
 
