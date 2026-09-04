@@ -42,6 +42,15 @@ async function mountPersistentHarness(root: string, adapter: MockAdapter, compre
   return ctx
 }
 
+/** Remove every `session.lock` under the root: the POSIX forfeit-by-unlink escape hatch, without importing backend internals. */
+async function removeSessionLocks(dir: string): Promise<void> {
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name)
+    if (entry.isDirectory()) await removeSessionLocks(path)
+    else if (entry.name === 'session.lock') await rm(path, { force: true })
+  }
+}
+
 /** Seed one stored session through the persistence seam (header minted by the store). */
 async function seedStoredSession(ctx: Context, sessionId: SessionId, events: readonly SessionEvent[]): Promise<void> {
   const detached = ctx.sessions.prepare(sessionId)
@@ -930,7 +939,11 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     await ctx2.fiber.dispose()
   })
 
-  it('a pending idle inject() survives persist + resume without a synthetic turn', async () => {
+  // The crash simulation removes the wedged lifecycle's lock file, which only
+  // POSIX's orphan-inode forfeit honors; Windows pins the name until the
+  // process exits, and cross-process crash release is pinned by the jsonl
+  // two-process e2e.
+  it.skipIf(process.platform === 'win32')('a pending idle inject() survives persist + resume without a synthetic turn', async () => {
     const adapter1 = new MockAdapter([textResponse('answer')])
     const { ctx: ctx1, root } = await persistentHarness(adapter1)
     const a1 = (await ctx1.agents.create({ sessionId: SessionId('inject-sess'), meta: { cwd: '/w' } })).agent
@@ -939,6 +952,12 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
     a1.inject(createUserMessage({ content: [{ type: 'text', text: 'background job 42 finished' }], source: { kind: 'plugin', plugin: 'tool-bash' } }))
     await a1.whenIdle()
     await ctx1.sessions.flush(a1.session)
+    // Simulate a wedged first lifecycle: a graceful dispose would durably
+    // discard the pending inject, and the still-open kernel write lock would
+    // otherwise exclude the second lifecycle. Removing the lock file orphans
+    // the held inode so the resumer locks a fresh one (the documented
+    // forfeit-by-unlink escape hatch).
+    await removeSessionLocks(root)
 
     // Lifecycle 2: resume; the injected context is still pending and becomes
     // model-visible when the next turn admits it.

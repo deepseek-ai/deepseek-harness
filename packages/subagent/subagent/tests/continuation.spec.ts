@@ -469,6 +469,9 @@ describe('SubagentRuntime.startContinuable', () => {
     const routeless = await ctx.agentLoop.create(SessionId('routeless-resume'), {})
     const started = await ctx.subagents.startContinuable(startSpec(routeless))
     await waitNoActivation(ctx, started.childId)
+    // End the first lifecycle so its write leases release before the fresh
+    // context re-creates the parent identity and cold-resumes the child.
+    await ctx.fiber.dispose()
 
     const fresh = new Context()
     await mountAgentLoopTestDependencies(fresh)
@@ -481,7 +484,9 @@ describe('SubagentRuntime.startContinuable', () => {
     await fresh.plugin(TestSessionQuery)
     await fresh.plugin(SubagentRuntime)
     await fresh.plugin(SubagentSpawn, { providerName: 'spawn' })
-    const freshParent = await fresh.agentLoop.create(SessionId('routeless-resume'), {})
+    // The disposed lifecycle drained the parent's log durably, so the fresh
+    // context resumes that identity instead of re-creating it.
+    const freshParent = (await fresh.agents.resume({ resumeSessionId: SessionId('routeless-resume'), agentOptions: {} })).agent
     await queuePrompt(fresh, freshParent, started.childId, message('resume routeless'))
 
     const resumed = await vi.waitFor(() => {

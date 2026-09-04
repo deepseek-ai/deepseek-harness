@@ -14,8 +14,8 @@ import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { Session, SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import {
   assertContiguous,
-  materializeAppendBatch,
   SessionAlreadyExistsError,
+  materializeAppendBatch,
   SessionAlreadyOwnedError,
   SessionHandleClosedError,
   SessionPersistenceNotFoundError,
@@ -29,6 +29,7 @@ import type {
   SessionHandleFlushOptions,
   SessionHandleReadOptions,
 } from '@deepseek-ai/dsh-session-persistence'
+import type { SessionWriteLease } from './lease.ts'
 
 /** Maximum intentional wait before a routed live session batch starts writing. */
 export const LIVE_WRITE_BATCH_MAX_DELAY_MS = 200
@@ -52,6 +53,8 @@ export interface JsonlHandleStorage {
   readStoredLog(path: string, expectedId: SessionId, signal?: AbortSignal): Promise<{ events: SessionEvent[] }>
   /** Whether the id is still a created-but-unmaterialized session here. */
   hasPendingSession(id: SessionId): boolean
+  /** Acquire the session's cross-process write lock in its artifact directory. */
+  acquireWriteLease(header: SessionHeader): Promise<SessionWriteLease>
   /** Drop the handle's bookkeeping on close. */
   releaseHandle(handle: JsonlSessionHandle, materialized: boolean): void
 }
@@ -95,6 +98,8 @@ export class JsonlSessionHandle implements SessionHandle {
     readonly header: SessionHeader,
     readonly access: SessionAccess,
     private readonly state: StorageHandleState,
+    /** The cross-process write lock; a create handle acquires it lazily at first materialization. */
+    private lease?: SessionWriteLease,
   ) {}
 
   /** Exact fork-inherited prefix length stored with this session's log. */
@@ -166,6 +171,7 @@ export class JsonlSessionHandle implements SessionHandle {
       options?.signal?.throwIfAborted()
       if (this.access !== 'write') throw new SessionReadOnlyError(this.id, 'flush')
       if (this.state.materialized) return // appends are durable on resolution
+      await this.ensureLease()
       await this.storage.persistHeader(this.header, this.state.inheritedEventCount)
       this.state.materialized = true
     })
@@ -175,7 +181,9 @@ export class JsonlSessionHandle implements SessionHandle {
    * Release the handle; see the seam contract. Idempotent and uncancellable.
    * A write handle first drains its routed live buffer through the still-open
    * storage, so backend teardown loses nothing regardless of which fiber
-   * unwinds first; a drain failure still releases ownership, then rejects.
+   * unwinds first; a drain or lock-release failure still frees the in-process
+   * claim, then rejects — both failures together reject as one
+   * `AggregateError`.
    * @returns settlement of the release.
    */
   close(): Promise<void> {
@@ -198,10 +206,22 @@ export class JsonlSessionHandle implements SessionHandle {
       }
       // After a drain failure the chain may still hold in-flight mutations.
       await this.chain
-      this.storage.releaseHandle(this, this.state.materialized)
+      // Free the in-process claim no matter how the kernel-lock release
+      // fares: a skipped releaseHandle would wedge the id in this process
+      // behind a lock the kernel may already have dropped.
+      const failures: Error[] = []
       if (drainFailure !== undefined) {
-        throw drainFailure instanceof Error ? drainFailure : new Error(errorChain(drainFailure))
+        failures.push(drainFailure instanceof Error ? drainFailure : new Error(errorChain(drainFailure)))
       }
+      try {
+        await this.lease?.release()
+      } catch (releaseFailure: unknown) {
+        /* v8 ignore next -- lock releases reject with Error */
+        failures.push(releaseFailure instanceof Error ? releaseFailure : new Error(errorChain(releaseFailure)))
+      }
+      this.storage.releaseHandle(this, this.state.materialized)
+      if (failures.length > 1) throw new AggregateError(failures, `session "${this.id}": close failed to drain and to release its write lock`)
+      if (failures[0] !== undefined) throw failures[0]
     })()
   }
 
@@ -261,10 +281,11 @@ export class JsonlSessionHandle implements SessionHandle {
     }
   }
 
-  /** The shared durable-append body: contiguity, torn-tail repair, storage write, state advance. */
+  /** The shared durable-append body: contiguity, ownership, torn-tail repair, storage write, state advance. */
   private async persistContiguous(batch: readonly SessionEvent[]): Promise<void> {
     if (this.access !== 'write') throw new SessionReadOnlyError(this.id, 'append')
     if (batch.length === 0) return
+    await this.ensureLease()
     assertContiguous(this.id, batch, this.state.cursor)
     // Commit any pending torn-tail repair first, clearing each step's state
     // only once it lands so a failed step retries on the next mutation:
@@ -285,6 +306,17 @@ export class JsonlSessionHandle implements SessionHandle {
     this.state.cursor += batch.length
     this.state.primed = undefined
     this.observedLength = this.state.cursor
+  }
+
+  /**
+   * Hold the cross-process write lock before this session's first durable
+   * write. An open write handle holds it from construction; a create handle
+   * acquires it here — immediately before the first log bytes publish — and
+   * keeps it through close even when materialization then fails, so a
+   * materializing session stays exclusively owned across retries.
+   */
+  private async ensureLease(): Promise<void> {
+    this.lease ??= await this.storage.acquireWriteLease(this.header)
   }
 
   /** Serialize one operation onto the chain without the closed-handle refusal (drain-from-close). */
@@ -335,7 +367,11 @@ export class JsonlBackendTracker {
 
   /**
    * Claim write ownership and record the created session as pending, making
-   * it observable to this process before it materializes.
+   * it observable to this process before it materializes. Before
+   * materialization this registration is the only guard — session ids do not
+   * collide across processes, and no durable artifact exists for another
+   * process to open; the handle takes the cross-process lock at its first
+   * materializing write.
    * @param header - the validated detached header.
    * @param inheritedEventCount - the exact fork-inherited prefix length.
    * @throws {SessionAlreadyExistsError} when a concurrent create or an open

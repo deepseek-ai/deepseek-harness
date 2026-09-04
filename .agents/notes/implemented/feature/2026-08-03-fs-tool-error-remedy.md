@@ -1,4 +1,4 @@
-# Agent Note: Guarded-mutation errors append the recovery instruction at the model boundary
+# Agent Note: Stale-version errors append the recovery instruction at the model boundary
 
 Status: implemented
 
@@ -10,14 +10,13 @@ Guarded `write` and `edit` failures reach the model with messages that state the
 
 ## Decision
 
-`dsh-tool-fs` owns a model-facing error wrapper, `remediateFsError` in `src/error.ts`, applied in `write.ts` and `edit.ts` after the sandbox denial mapping. It appends the recovery instruction to the two guarded-mutation codes and passes everything else through untouched:
+`dsh-tool-fs` owns a model-facing error wrapper, `remediateFsError` in `src/error.ts`, applied in `write.ts` and `edit.ts` after the sandbox denial mapping. It appends the recovery instruction to stale-version failures and passes unrelated errors through untouched. The [normalized unread-mutation diagnostic](../bug-fix/2026-09-03-normalized-unread-fs-tool-diagnostic.md) supersedes this note's original `FS_NOT_OBSERVED` text treatment.
 
 - `FS_STALE_VERSION` (including a missing edit target, which shares the stale code) gains `— re-read the file, then retry`.
-- `FS_NOT_OBSERVED` gains `— read the file, then retry`.
 
 The structured `FsError` code is preserved so retry/permission/UI layers keep routing on it, and the original error chains as `cause`. Provider messages stay machine-oriented and unchanged.
 
-In `edit.ts` the `fs/edit-intent` waterfall now sits inside the same `try` as the provider mutation, so the policy plugin's `FS_NOT_OBSERVED` refusal thrown from the intent slot also receives the remedy — both refusal paths reach the model with the same recovery wording.
+In `edit.ts` the `fs/edit-intent` waterfall sits inside the same `try` as the provider mutation, so the policy plugin's `FS_NOT_OBSERVED` refusal and the provider refusal both pass through the model-facing wrapper.
 
 ## Alternatives considered
 
@@ -27,6 +26,6 @@ In `edit.ts` the `fs/edit-intent` waterfall now sits inside the same `try` as th
 
 ## Consequences
 
-Model-visible text for the two codes changes; the `fs-policy-reject` keyless snapshot is re-recorded, and the READMEs of `dsh-tool-fs` and `dsh-fs-observation-policy` pin the exact appended text. Unit tests cover the wrapper directly (remedy text, code preservation, cause chaining, passthrough of other codes and non-`FsError` values) and the assembled tool paths assert the remedy reaches the model for both codes.
+The `FS_STALE_VERSION` model-visible text includes its appended remedy. Unit tests cover its text, code preservation, cause chaining, and passthrough of unrelated values; assembled tool paths assert that the remedy reaches the model.
 
 The [filesystem absence-observation follow-up](../bug-fix/2026-08-09-filesystem-absence-observation.md) makes the stale remedy actionable for external deletion. The failed reread still returns `FS_NOT_FOUND`, but records confirmed absence: edit then returns `FS_NOT_FOUND` without another stale remedy, while write retries as an atomic `createIfAbsent` and preserves any concurrent creator.

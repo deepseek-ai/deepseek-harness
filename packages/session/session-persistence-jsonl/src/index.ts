@@ -30,6 +30,7 @@ import {
   type SessionPersistenceRevision as PersistenceRevision,
 } from '@deepseek-ai/dsh-session-persistence'
 import { JsonlBackendTracker, JsonlSessionHandle } from './storage.ts'
+import { SessionWriteLease } from './lease.ts'
 import { SESSION_FORMAT_VERSION, SessionId as makeSessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId, SessionHeader, SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import {
@@ -228,6 +229,10 @@ class JsonlSessionPersistence extends SessionPersistence {
       throw new SessionAlreadyExistsError(snapshot.id)
     }
     options?.signal?.throwIfAborted()
+    // No lock yet: before materialization there is no durable artifact for
+    // another process to contend over, so the handle acquires the lock right
+    // before its first log bytes publish (ensureLease); an unmaterialized
+    // session leaves no filesystem footprint at all.
     this.tracker.registerCreated(snapshot, inheritedEventCount)
     return this.tracker.adopt(new JsonlSessionHandle(this, snapshot.id, snapshot, 'write', { cursor: 0, materialized: false, inheritedEventCount }))
   }
@@ -258,7 +263,11 @@ class JsonlSessionPersistence extends SessionPersistence {
     // A pending entry always belongs to an ACTIVE creator handle (close erases
     // it), so the claim below rejects that case as already owned.
     this.tracker.claimWrite(id)
+    let lease: SessionWriteLease | undefined
     try {
+      const resolved = await this.findLog(id, options?.signal)
+      if (resolved === undefined) throw new SessionPersistenceNotFoundError(id)
+      lease = await this.acquireLease(id, undefined, dirname(resolved.currentPath))
       const stored = await this.requireStoredLog(id, options?.signal)
       return this.tracker.adopt(new JsonlSessionHandle(this, id, stored.meta, 'write', {
         cursor: stored.events.length,
@@ -267,10 +276,25 @@ class JsonlSessionPersistence extends SessionPersistence {
         recoveredTail: stored.recoveredTail,
         inheritedEventCount: stored.inheritedEventCount,
         primed: stored.events,
-      }))
+      }, lease))
     } catch (error) {
+      // Free the in-process claim no matter how the kernel-lock release
+      // fares, and keep the original diagnostic: a release failure joins it
+      // instead of replacing it.
+      /* v8 ignore next -- typed backends and fs reject with Error */
+      const failure = error instanceof Error ? error : new Error(String(error))
+      let releaseFailure: Error | undefined
+      try {
+        await lease?.release()
+      } catch (raw: unknown) {
+        /* v8 ignore next -- lock releases reject with Error */
+        releaseFailure = raw instanceof Error ? raw : new Error(String(raw))
+      }
       this.tracker.releaseClaim(id)
-      throw error
+      if (releaseFailure !== undefined) {
+        throw new AggregateError([failure, releaseFailure], `session "${id}": write open failed and its lock release failed`)
+      }
+      throw failure
     }
   }
 
@@ -591,6 +615,31 @@ class JsonlSessionPersistence extends SessionPersistence {
    */
   releaseHandle(handle: JsonlSessionHandle, materialized: boolean): void {
     this.tracker.release(handle, materialized)
+  }
+
+  /**
+   * Acquire the session directory's kernel write lock; the kernel holds it
+   * until the handle's close releases the descriptor, including on process death.
+   * @param id - the session the lock guards.
+   * @param cwd - header cwd used to derive the directory for a fresh session.
+   * @param dir - the resolved directory of an existing artifact, when known.
+   * @returns the held lock.
+   */
+  private acquireLease(id: SessionId, cwd: string | undefined, dir = sessionDir(this.root, cwd, id)): Promise<SessionWriteLease> {
+    return SessionWriteLease.acquire(dir, id)
+  }
+
+  /**
+   * Acquire the cross-process write lock for a materializing created session,
+   * called by its handle immediately before the first log bytes publish.
+   * @param header - the session's stored header (its cwd derives the directory).
+   * @returns the held lock.
+   */
+  async acquireWriteLease(header: SessionHeader): Promise<SessionWriteLease> {
+    // Refuse an opposite-encoding artifact before the lock's mkdir publishes
+    // the session directory — the last moment the directory can be absent.
+    await this.rejectOppositeArtifact(header.cwd, header.id)
+    return this.acquireLease(header.id, header.cwd)
   }
 
   /** Decode complete frames and retain complete JSONL records from a torn final frame. */

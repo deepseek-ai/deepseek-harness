@@ -1,6 +1,6 @@
 /**
- * Unit tests for the model-facing error remediation: the remedy appended to
- * guarded-mutation failures, code preservation, and passthrough behavior.
+ * Unit tests for model-facing guarded-mutation diagnostics: normalized unread
+ * failures, the stale-version remedy, code preservation, and passthrough.
  */
 
 import { describe, expect, it } from 'vitest'

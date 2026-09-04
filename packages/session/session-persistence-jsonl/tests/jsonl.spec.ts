@@ -2240,15 +2240,14 @@ describe('JsonlSessionPersistence: edge cases', () => {
     await expect(backend.exists(join(blocker, 'child.jsonl'))).rejects.toThrow(/ENOTDIR/)
   })
 
-  it('materialization surfaces a project-directory storage fault', async () => {
+  it('a project-directory storage fault surfaces at the first materializing write', async () => {
     const cwd = '/x'
     await writeFile(projectDir(root, cwd), 'x') // project path is now a file
+    // Create touches no storage; the lock acquisition ahead of the first
+    // materializing append walks into the fault.
     const handle = await ctx.sessionPersistence.create(meta('exists-fault', cwd))
-    try {
-      await expectCode(handle.append(oneTurnLog()), ['EEXIST', 'ENOTDIR'])
-    } finally {
-      await handle.close()
-    }
+    await expectCode(handle.append([{ type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } }]), ['EEXIST', 'ENOTDIR'])
+    await handle.close()
   })
 
   it('backend teardown closes handles left open and fails later operations loudly', async () => {

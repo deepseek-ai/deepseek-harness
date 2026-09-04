@@ -11,14 +11,23 @@
  * @module dsh-session-persistence-jsonl/win32
  */
 
+import { createHash } from 'node:crypto'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { join, parse, resolve, toNamespacedPath } from 'node:path'
 
 type MoveFileExW = (existing: string, replacement: string, flags: number) => number
+type CreateSemaphoreW = (security: null, initial: number, maximum: number, name: string) => number
+type WaitForSingleObject = (handle: number, milliseconds: number) => number
+type ReleaseSemaphore = (handle: number, count: number, previous: null) => number
+type CloseHandle = (handle: number) => number
 type GetLastError = () => number
 
 interface Win32Bindings {
   moveFileExW: MoveFileExW
+  createSemaphoreW: CreateSemaphoreW
+  waitForSingleObject: WaitForSingleObject
+  releaseSemaphore: ReleaseSemaphore
+  closeHandle: CloseHandle
   getLastError: GetLastError
 }
 
@@ -28,10 +37,13 @@ interface Win32ErrnoException extends NodeJS.ErrnoException {
 }
 
 const MOVEFILE_WRITE_THROUGH = 0x00000008
+const WAIT_OBJECT_0 = 0
+const WAIT_TIMEOUT = 0x00000102
 const ERROR_FILE_NOT_FOUND = 2
 const ERROR_PATH_NOT_FOUND = 3
 const ERROR_ACCESS_DENIED = 5
 const ERROR_NOT_SAME_DEVICE = 17
+const ERROR_SHARING_VIOLATION = 32
 const ERROR_FILE_EXISTS = 80
 const ERROR_INVALID_NAME = 123
 const ERROR_ALREADY_EXISTS = 183
@@ -45,6 +57,10 @@ async function win32(): Promise<Win32Bindings> {
   const kernel32 = koffi.load('kernel32.dll')
   bindings = {
     moveFileExW: kernel32.func('__stdcall', 'MoveFileExW', 'int', ['str16', 'str16', 'uint']) as MoveFileExW,
+    createSemaphoreW: kernel32.func('__stdcall', 'CreateSemaphoreW', 'intptr', ['void*', 'int', 'int', 'str16']) as CreateSemaphoreW,
+    waitForSingleObject: kernel32.func('__stdcall', 'WaitForSingleObject', 'uint', ['intptr', 'uint']) as WaitForSingleObject,
+    releaseSemaphore: kernel32.func('__stdcall', 'ReleaseSemaphore', 'int', ['intptr', 'int', 'void*']) as ReleaseSemaphore,
+    closeHandle: kernel32.func('__stdcall', 'CloseHandle', 'int', ['intptr']) as CloseHandle,
     getLastError: kernel32.func('__stdcall', 'GetLastError', 'uint', []) as GetLastError,
   }
   return bindings
@@ -59,6 +75,8 @@ function errnoCode(win32Code: number): string {
       return 'EACCES'
     case ERROR_NOT_SAME_DEVICE:
       return 'EXDEV'
+    case ERROR_SHARING_VIOLATION:
+      return 'EBUSY'
     case ERROR_FILE_EXISTS:
     case ERROR_ALREADY_EXISTS:
       return 'EEXIST'
@@ -117,6 +135,41 @@ export async function publishNewFileWin32(existing: string, replacement: string)
   const api = await win32()
   const ok = api.moveFileExW(toNamespacedPath(existing), toNamespacedPath(replacement), MOVEFILE_WRITE_THROUGH)
   if (ok === 0) throw win32Error('MoveFileExW', api.getLastError(), existing, replacement)
+}
+
+/**
+ * Acquire the session write lock as a named kernel semaphore (count 1) whose
+ * name is derived from the canonical lock path. A kernel object never touches
+ * the filesystem, so readers, searches, and directory removal proceed freely
+ * while the lock is held; a second acquirer's zero-timeout wait times out
+ * (`EBUSY`); and when the last handle closes — including on any process
+ * death — the object is destroyed, so a successor's create starts fresh.
+ * @param path - the lock file path the name is derived from (case-folded:
+ *   Windows paths are case-insensitive).
+ * @returns the open semaphore handle, released via {@link releaseLockHandleWin32}.
+ */
+export async function acquireLockHandleWin32(path: string): Promise<number> {
+  const api = await win32()
+  const name = `Local\\dsh-session-lock-${createHash('sha256').update(resolve(path).toLowerCase()).digest('hex')}`
+  const handle = api.createSemaphoreW(null, 1, 1, name)
+  if (handle === 0) throw win32Error('CreateSemaphoreW', api.getLastError(), path, name)
+  const wait = api.waitForSingleObject(handle, 0)
+  if (wait === WAIT_OBJECT_0) return handle
+  api.closeHandle(handle)
+  if (wait === WAIT_TIMEOUT) throw win32Error('WaitForSingleObject', ERROR_SHARING_VIOLATION, path, name)
+  throw win32Error('WaitForSingleObject', api.getLastError(), path, name)
+}
+
+/**
+ * Release a lock from {@link acquireLockHandleWin32}: restore the semaphore
+ * count and close the handle (the object dies with its last handle).
+ * @param handle - the open semaphore handle.
+ */
+export async function releaseLockHandleWin32(handle: number): Promise<void> {
+  const api = await win32()
+  const released = api.releaseSemaphore(handle, 1, null)
+  const closed = api.closeHandle(handle)
+  if (released === 0 || closed === 0) throw win32Error('ReleaseSemaphore', api.getLastError(), `handle:${handle}`, `handle:${handle}`)
 }
 
 /**

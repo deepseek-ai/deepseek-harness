@@ -1,4 +1,4 @@
-# Agent Note: 受防护变更错误在模型边界追加恢复指令
+# Agent Note: 陈旧版本错误在模型边界追加恢复指令
 
 Status: implemented
 
@@ -10,14 +10,13 @@ Status: implemented
 
 ## 决策
 
-`dsh-tool-fs` 拥有一个面向模型的错误包装层 `remediateFsError`（位于 `src/error.ts`），在 `write.ts` 与 `edit.ts` 中于沙箱拒绝映射之后应用。它为两个受防护变更错误码追加恢复指令，其余错误原样透传：
+`dsh-tool-fs` 拥有一个面向模型的错误包装层 `remediateFsError`（位于 `src/error.ts`），在 `write.ts` 与 `edit.ts` 中于沙箱拒绝映射之后应用。它为陈旧版本错误追加恢复指令，其余无关错误原样透传。[未读取变更的统一诊断](../bug-fix/2026-09-03-normalized-unread-fs-tool-diagnostic.zh.md)取代本记录最初对 `FS_NOT_OBSERVED` 文本的处理方式。
 
 - `FS_STALE_VERSION`（包括缺失的编辑目标——它与陈旧错误共用同一错误码）追加 `— re-read the file, then retry`。
-- `FS_NOT_OBSERVED` 追加 `— read the file, then retry`。
 
 结构化 `FsError` 错误码保持不变，使重试/权限/UI 层继续基于它路由；原始错误作为 `cause` 链入。提供方消息保持面向机器且不变。
 
-在 `edit.ts` 中，`fs/edit-intent` waterfall（瀑布式事件）现在与提供方变更位于同一个 `try` 内，因此策略插件从 intent slot 抛出的 `FS_NOT_OBSERVED` 拒绝也会获得恢复指令——两条拒绝路径都以相同的恢复措辞到达模型。
+在 `edit.ts` 中，`fs/edit-intent` waterfall（瀑布式事件）与提供方变更位于同一个 `try` 内，因此策略插件的 `FS_NOT_OBSERVED` 拒绝和提供方拒绝都会经过面向模型的包装层。
 
 ## 考虑过的替代方案
 
@@ -27,6 +26,6 @@ Status: implemented
 
 ## 后果
 
-两个错误码的模型可见文本发生变化；`fs-policy-reject` 无密钥快照被重新录制，`dsh-tool-fs` 与 `dsh-fs-observation-policy` 的 README 逐字固定追加后的文本。单元测试直接覆盖包装层（恢复指令文本、错误码保留、cause 链、其他错误码与非 `FsError` 值的透传），组装后的工具路径断言两个错误码的恢复指令都到达模型。
+`FS_STALE_VERSION` 的模型可见文本包含追加的恢复指令。单元测试覆盖该文本、错误码保留、cause 链和无关值透传；组装后的工具路径断言恢复指令到达模型。
 
 [文件系统缺失观测后续决策](../bug-fix/2026-08-09-filesystem-absence-observation.zh.md)使外部删除场景下的陈旧恢复指令能够生效。失败的重新读取仍返回 `FS_NOT_FOUND`，但会记录确认缺失：随后 edit 返回 `FS_NOT_FOUND`，不再附加陈旧恢复指令；write 则以原子 `createIfAbsent` 重试，并保留任何并发创建者写入的文件。

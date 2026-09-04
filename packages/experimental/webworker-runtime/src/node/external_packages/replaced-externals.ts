@@ -10,6 +10,7 @@
 export const REPLACED_EXTERNAL_PACKAGES: readonly string[] = [
   '@earendil-works/pi-ai',
   '@vscode/ripgrep',
+  'fs-ext',
   'koffi',
   'node-pty',
   'sharp',

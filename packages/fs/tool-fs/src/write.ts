@@ -113,8 +113,8 @@ export function applyWriteTool(ctx: Context, sandbox: FsSandboxController): void
         outcome = await ctx.fs.writeText(target, input.content, intent, exec.signal, sandboxPolicy)
       } catch (error: unknown) {
         // A sandbox denial becomes the shared [sandbox: …] marker (the model
-        // recognizes it from bash); stale/not-observed failures gain their
-        // model-facing remedy; anything else passes through.
+        // recognizes it from bash); guarded mutation failures receive their
+        // stable model-facing diagnostic; anything else passes through.
         throw remediateFsError(sandbox.mapError(error, sandboxPolicy), target.displayPath)
       }
       ctx.emit('fs/observed', target, { kind: 'present', version: outcome.version }, exec)

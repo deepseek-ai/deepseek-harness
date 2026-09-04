@@ -106,8 +106,10 @@ describe('session format guard through the assembled app', () => {
           version: SESSION_FORMAT_VERSION,
         })
         expect(current.trimEnd().split('\n').length).toBeGreaterThan(closedTurn().length + 1)
+        // `session.lock` is the write handle's kernel lock file, published
+        // with the first materializing write and kept across release.
         expect((await readdir(dirname(sourcePath))).sort())
-          .toEqual(['session.jsonl', generationLogFilename(SESSION_FORMAT_VERSION, 'none')])
+          .toEqual(['session.jsonl', 'session.lock', generationLogFilename(SESSION_FORMAT_VERSION, 'none')])
       },
     })
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)

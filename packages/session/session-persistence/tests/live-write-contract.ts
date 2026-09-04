@@ -233,6 +233,10 @@ export function runLiveWritePathContract(
       const handle = await ctx.sessionPersistence.create(session.header)
       const warned = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => undefined)
       const host = ctx.sessionPersistence as unknown as { persistBatch: (...args: unknown[]) => Promise<void> }
+      // Materialize under real timers first: the write lock is acquired ahead
+      // of the first materializing write, and that real I/O must not sit
+      // inside the fake-timer window below.
+      await handle.flush()
       const real = host.persistBatch.bind(host)
       const persist = vi.spyOn(host, 'persistBatch').mockRejectedValue(new Error('first drain refused'))
 

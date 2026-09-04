@@ -8,7 +8,7 @@ The seam is a [capability seam](../../.agents/notes/implemented/architecture/202
 
 ## `SessionHandle` — one open channel onto a stored session
 
-Every log read and write flows through a handle, never through id-addressed service methods: the handle is the single door a future cross-process write lease will guard. One handle type serves both accesses — a mutation on a `read` handle is a runtime `SessionReadOnlyError` rather than a typed split — and in-process single-writer ownership makes a second `open(id, 'write')` reject with `SessionAlreadyOwnedError` while an owner is active.
+Every log read and write flows through a handle, never through id-addressed service methods: the handle is the single door the cross-process write lease guards. One handle type serves both accesses — a mutation on a `read` handle is a runtime `SessionReadOnlyError` rather than a typed split — and in-process single-writer ownership makes a second `open(id, 'write')` reject with `SessionAlreadyOwnedError` while an owner is active.
 
 ```ts type-equiv
 /**

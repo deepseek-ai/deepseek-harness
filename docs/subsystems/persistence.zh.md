@@ -8,7 +8,7 @@
 
 ## `SessionHandle`——通向已存储会话的一条打开通道
 
-每一次日志读写都经由句柄流动，绝不经由按 id 寻址的服务方法：句柄是未来跨进程写租约将要把守的那扇唯一的门。一种句柄类型同时服务两种访问——在 `read` 句柄上执行修改是运行时的 `SessionReadOnlyError`，而非类型层面的拆分——而进程内单写者所有权使得在已有活跃持有者时第二次 `open(id, 'write')` 以 `SessionAlreadyOwnedError` 拒绝。
+每一次日志读写都经由句柄流动，绝不经由按 id 寻址的服务方法：句柄是跨进程写租约把守的那扇唯一的门。一种句柄类型同时服务两种访问——在 `read` 句柄上执行修改是运行时的 `SessionReadOnlyError`，而非类型层面的拆分——而进程内单写者所有权使得在已有活跃持有者时第二次 `open(id, 'write')` 以 `SessionAlreadyOwnedError` 拒绝。
 
 ```ts type-equiv
 /**
