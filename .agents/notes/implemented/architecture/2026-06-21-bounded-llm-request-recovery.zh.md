@@ -10,7 +10,7 @@ Status: implemented
 
 提供方适配器可能在分发或迭代时抛出异常，也可能以 `finish { kind: 'error' | 'aborted' }` 结束。最终适配器边界会在 `dsh-agent-loop` 接收前把抛出值规范化为该终止 finish 协议；middleware 与结果处理缺陷仍会抛出。loop 会将终止模型请求失败交给 `agent/request-error`。未被处理的失败是终态；处理失败的监听器修复策略自有状态，返回 `{ kind: 'retry' }`，并停止 waterfall（瀑布式事件）委托。[重试动作决策](../simplification/2026-07-27-request-error-retry-action.zh.md)规定这一返回约定。
 
-该边界已能安全地再次发起请求。原始 `assistant/chunk` 事件携带失败的 `turn` 和 `step`；除非某条成功的 `assistant/message` 引用这些事件，否则消息派生会忽略它们。只有终止性 finish 成功且组装完成后，系统才会分发工具调用；重试则会从持久日志重建下一次尝试。因此，harness 无需引入第二套响应生命周期或暂定输出协议，即可分隔两次尝试。
+该边界已能安全地再次发起请求。每个失败 stream 会提交一个包含精确紧凑 stream 的仅日志 `assistant/attempt`，message derivation 会忽略它；系统只会在 terminal finish 成功并组装 `assistant/message` 后分派工具调用，重试则从持久 surface 重建下一次 attempt。因此，harness 无需引入第二套响应生命周期或暂定输出协议，即可分隔两次 attempt。
 
 此前的边界还留有三个较窄的缺口。
 
@@ -38,7 +38,7 @@ interface LlmFailure {
 }
 ```
 
-`code` 仍是 `HarnessError` 建立的提供方无关机器路由分类体系；新字段是在提供方边界观测到的事实。`ProviderRequestId` 由 `dsh-llm` 拥有并构造，序列化后为提供方发放的字符串。该载荷有意不包含 `retryable`、`failover`、`partialOutput`、提供方、模型、阶段或路由 id 字段。是否可重试属于策略，提供方／模型已位于持久请求头中，部分输出则从失败步骤的 `assistant/chunk` 事件派生。
+`code` 仍是 `HarnessError` 建立的 provider-neutral 机器路由分类；新字段是在 provider 边界观测到的事实。`ProviderRequestId` 由 `dsh-llm` 拥有并构造，序列化后是 provider 发放的字符串。该 payload 有意不包含 `retryable`、`failover`、`partialOutput`、provider、model、phase 或 route id。是否可重试属于 policy，provider/model 已位于持久 request header 中，部分输出由失败 attempt 的嵌入式 stream 保留。
 
 `LlmError` 携带 `failure: LlmFailure`，并保持 `failure.code === error.code`。`FinishReasonMap.error` 和 `FinishReasonMap.aborted` 携带同一载荷，而不是并行的失败形状。最终适配器边界会从适配器抛出值中分离这些事实，并发出相应的终止 finish；未知 SDK 异常会获得 `UNKNOWN` 载荷。精确的抛出对象身份不会跨越 LLM 流 seam。
 
@@ -82,7 +82,7 @@ agent loop（智能体循环）会将终止 finish 的 `LlmFailure` 传给 `agen
 
 ### 在现有日志中分隔尝试
 
-一次失败尝试可以在其步骤中留下 `assistant/chunk` 事件，但绝不会追加 `assistant/message`，也不会分发工具。重试在失败的轮次与步骤内继续，从持久表层重建请求，并生成自己的分片；只有最终结果才会关闭该轮次。步骤仍处于打开状态时，UI 可以渲染实时分片；当 `llm/retry` 标识失败尝试，或 `turn/end` 记录失败时，UI 再标记或清除这份暂时视图。Web 会验证完整的重试载荷约定，在 `llm/retry` 到达时清除失败的部分输出，将每条生产方关联的 `retryId` 重试链投影为稳定的一行，并用最新一次尝试更新该行，再从 `llm/retry-started` 与所属轮次、步骤边界的关闭派生 scheduled、started 或 cancelled 状态。倒计时以浏览器收到事件的时刻为计划延迟的起点，而不是使用 Host 事件时钟；它按向上取整且不低于 1 秒的秒数显示，仅在重试尚未结束时显示动画，并把最近一次失败的准确详情折叠在该行之后。即使失败尝试没有 assistant 节点，重试节点也会锚定自身的轨迹轮次。消息派生仍会忽略失败分片；Web 在重建历史时也会应用同一投影，因此刷新页面不会让已丢弃的部分输出重新出现，也不会生成重复的重试行。
+失败 attempt 会追加带嵌入式 stream 的 `assistant/attempt`，但绝不追加 surface `assistant/message` 或分派工具。重试在失败 turn 与 step 内继续，从持久 surface 重建请求，并产生自己的 settlement；只有最终结果才会关闭 turn。step 打开时，UI 可以渲染瞬态 `assistant/live-chunk` update；当 `llm/retry` 标识失败 attempt 或 `turn/end` 记录失败时，UI 再结算它。Web 会校验完整 retry payload contract，把每条 producer-correlated `retryId` chain 投影为稳定一行并更新到最新 attempt，再从 `llm/retry-started` 与所属 turn、step boundary 的关闭派生 scheduled、started 或 cancelled 状态。倒计时以浏览器收到 event 的时刻为计划延迟起点，而不是 Host event clock；它按向上取整且不低于 1 秒的秒数显示，只在未结算时动画，并把最新失败详情折叠在该行后。即使失败 attempt 没有 surface Assistant node，retry node 也会锚定自己的 trajectory turn。Message derivation 会忽略 `assistant/attempt`，Web 在历史重建时应用同一投影，因此刷新不会把失败 partial 提升进模型历史，也不会生成重复 retry row。
 
 如果恢复预算耗尽，最终失败会连同结构化事实在 `turn/end.reason` 中存储一次。Web 会在该序列位置派生一个 `turn-error` 节点，并内联渲染适合展示的消息与可选错误码；AUTH 投影会把可能回显凭据片段的提供方文案替换为 `API key is invalid`，原始诊断仍保留在会话日志中。实时事件和历史回放使用同一套折叠逻辑。暂时性恢复继续期间，`llm/retry` 是每次中间失败与延迟的持久归属位置；终态错误行只在 `turn/end` 记录错误后才存在，而由于耗尽的恢复与失败共享同一轮次，该轮次的重试历史绝不会抑制这一行——定格的重试链与终态错误并列渲染。本决策不增加独立的最终错误事件或响应 id 词汇。
 

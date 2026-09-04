@@ -1,2 +1,2 @@
 {"type":"session","id":"{{session:1}}","createdAt":600,"cwd":"/var/folders/2g/b32ct0qn1d728l_v6tdkjytr0000gn/T/acp-snap-cwd-nOQ4Gy","delegationDepth":0}
-{"type":"request/header","data":{"header":{"config":{"model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}

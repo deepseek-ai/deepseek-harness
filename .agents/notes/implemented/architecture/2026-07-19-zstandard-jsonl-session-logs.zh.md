@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-JSONL 持久化后端会逐字保留每个 `SessionEvent`，其中包括数量庞大的 `assistant/chunk` 记录。原始文本便于检查，但重复的 JSON 键和模型文本会增加存储与 I/O 开销。压缩编码必须保留既有的 append/fsync 提交边界、首次物化时的无冲突发布、崩溃修复以及仅元数据列举；如果每轮都重写整个压缩文件，就会失去这些属性。
+JSONL 持久化后端会逐字保留每个 `SessionEvent`，包括嵌入模型 stream 的 Assistant settlement。原始文本便于检查，但重复的 JSON key 和模型文本会增加存储与 I/O 开销。压缩编码必须保留既有 append/fsync 提交边界、首次物化时的无冲突发布、崩溃修复与仅元数据列举；如果每轮都重写整个压缩文件，就会失去这些属性。
 
 编码还必须在部署边界上保持显式。快照 fixture（测试前置数据）与外部逐行读取器需要原始 JSONL，而后端无法在同一根目录中安全猜测压缩产物与原始产物，也不能静默迁移预发布会话数据。
 
@@ -14,9 +14,9 @@ JSONL 持久化后端会逐字保留每个 `SessionEvent`，其中包括数量�
 
 ### 配置与后缀归属
 
-`dsh-session-persistence-jsonl` 接受 `compression?: 'zstd' | 'none'`，并将省略值显式解析为 `'zstd'`。Zstandard 产物使用 `.jsonl.zstd` 后缀；`'none'` 保留原有的换行分隔 UTF-8 `.jsonl` 表示。`SessionLocation.kind` 仍为 `'jsonl'`，因为两种编码承载同一逻辑记录格式；按照仓库的预发布拒绝且不迁移策略，`SESSION_FORMAT_VERSION` 仍为 `0`。
+`dsh-session-persistence-jsonl` 接受 `compression?: 'zstd' | 'none'`，并将省略值显式解析为 `'zstd'`。Zstandard 产物使用 `.jsonl.zstd` 后缀；`'none'` 保留换行分隔 UTF-8 `.jsonl` 表示。在任一已配置后缀内，v0 使用无版本后缀 `session.jsonl[.zstd]`，每个正格式 generation 使用小写 `session.vN.jsonl[.zstd]`。`SessionLocation.kind` 仍为 `'jsonl'`，因为两种编码承载同一逻辑记录格式。Session 格式迁移使用配置后的完整后缀和同一条逻辑链，因此压缩不会分叉 generation 选择或发布。
 
-每个持久化根目录只归属于一种编码。一次性的发现预检会拒绝任何相反后缀，而针对性的加载、活跃采用、列举与物化路径会在最初空目录预检之后再次执行对应后缀检查。错误会指出不兼容产物，并要求部署选择匹配配置或单独根目录。系统不提供迁移、双重读取、双重写入或基于扩展名的兜底。
+每个持久化根目录只归属于一种编码。一次性的发现预检会拒绝任何相反后缀，而针对性的加载、活跃采用、列举与物化路径会在最初空目录预检之后再次执行对应后缀检查。错误会指出不兼容产物，并要求部署选择匹配配置或单独根目录。系统不提供压缩转换、双重读取、双重写入或基于扩展名的 fallback；逻辑版本迁移始终留在配置后缀内，保留源 generation，并排他发布最终具名版本后继。
 
 ### 帧与写入路径
 

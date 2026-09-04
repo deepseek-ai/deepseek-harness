@@ -1,12 +1,12 @@
 {
   "prompt": "respond",
   "logs": [{
-    "file": "b/main/session.jsonl",
+    "file": "b/main/session.v2.jsonl",
     "lines": [
-      { "type": "session", "id": "{{SID}}", "createdAt": 100, "cwd": "{{CWD}}", "delegationDepth": 0 },
-      { "type": "request/header", "seq": 0, "time": 100, "data": { "header": { "config": { "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
-      { "type": "request/header", "seq": 1, "time": 100, "data": { "header": { "config": { "model": "fake" }, "system": "SYS PROMPT\n\nNEW PROMPT LINE", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "change" } },
-      { "type": "turn/start", "seq": 2, "time": 100, "data": { "turn": 1 } }
+      { "type": "session", "version": 2, "id": "{{SID}}", "createdAt": 100, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
+      { "type": "turn/start", "seq": 0, "time": 100, "data": { "turn": 1 } },
+      { "type": "request/header", "seq": 1, "time": 100, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
+      { "type": "request/header", "seq": 2, "time": 100, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT\n\nNEW PROMPT LINE", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "change" } }
     ]
   }]
 }

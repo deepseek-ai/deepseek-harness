@@ -6,15 +6,22 @@
  * from the file a user can write.
  */
 
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { METADATA_FILE, readPresetMetadata, renderPresetMetadata } from '../src/metadata.ts'
+
+/** Every temp preset directory created by this file, removed after each test. */
+const tempDirs: string[] = []
+afterEach(async () => {
+  for (const dir of tempDirs.splice(0)) await rm(dir, { recursive: true, force: true })
+})
 
 /** A preset directory holding exactly the given metadata text. */
 async function presetDir(content?: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'dsh-preset-meta-'))
+  tempDirs.push(dir)
   await mkdir(dir, { recursive: true })
   if (content !== undefined) await writeFile(join(dir, METADATA_FILE), content)
   return dir

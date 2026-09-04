@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TokenUsage } from '@deepseek-ai/dsh-llm'
+import type { StreamChunk, TokenUsage } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import { deriveTurnTokenUsage } from '../src/turn-usage.ts'
 
@@ -26,10 +26,17 @@ function message(
   provider = 'deepseek',
   model = 'deepseek-chat',
   step = 1,
+  streamTokenUsage = tokenUsage,
 ) {
   return event(seq, 'assistant/message', {
     turn: 1,
     step,
+    stream: [
+      { type: 'chunk', time: seq, chunk: { type: 'block-start', index: 0, blockType: 'text' } },
+      ...(streamTokenUsage === undefined
+        ? []
+        : [{ type: 'chunk' as const, time: seq, chunk: { type: 'usage' as const, usage: streamTokenUsage } }]),
+    ],
     message: {
       id: `message-${seq}`,
       role: 'assistant',
@@ -37,6 +44,14 @@ function message(
       source: { kind: 'model', provider, model },
     },
     ...tokenUsage === undefined ? {} : { usage: tokenUsage },
+  })
+}
+
+function attempt(seq: number, chunks: readonly StreamChunk[], step = 1): SessionEvent {
+  return event(seq, 'assistant/attempt', {
+    turn: 1,
+    step,
+    stream: chunks.map((chunk, index) => ({ type: 'chunk', time: seq + index, chunk })),
   })
 }
 
@@ -83,28 +98,31 @@ describe('deriveTurnTokenUsage', () => {
 
   it('lets final message usage replace the latest streaming sample', () => {
     const result = deriveTurnTokenUsage(completeAttempt(
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
-      message(4, usage({ inputTokens: 30, outputTokens: 5, totalTokens: 45, cacheReadTokens: 10 })),
+      message(
+        4,
+        usage({ inputTokens: 30, outputTokens: 5, totalTokens: 45, cacheReadTokens: 10 }),
+        'deepseek',
+        'deepseek-chat',
+        1,
+        usage(),
+      ),
     ))
     expect(result).toMatchObject({ uncachedInputTokens: 30, outputTokens: 5, totalTokens: 45 })
   })
 
   it('keeps the latest streaming sample when the final message omits usage', () => {
     const result = deriveTurnTokenUsage(completeAttempt(
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
-      message(4),
+      message(4, undefined, 'deepseek', 'deepseek-chat', 1, usage()),
     ))
     expect(result).toMatchObject({ uncachedInputTokens: 100, outputTokens: 20, totalTokens: 170 })
   })
 
   it('counts an error-finished attempt once across its retry boundary', () => {
     const events = completeAttempt(
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
-      event(4, 'assistant/chunk', {
-        turn: 1,
-        step: 1,
-        chunk: { type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } } },
-      }),
+      attempt(3, [
+        { type: 'usage', usage: usage() },
+        { type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } } },
+      ]),
       event(5, 'llm/retry', { turn: 1, step: 1 }),
       event(6, 'llm/retry-started', { turn: 1, step: 1, retry: 1 }),
       message(7, usage({ inputTokens: 40, outputTokens: 10, totalTokens: 70, cacheReadTokens: 20 })),
@@ -119,7 +137,10 @@ describe('deriveTurnTokenUsage', () => {
 
   it('does not invent an attempt for a scheduled retry that never started', () => {
     const result = deriveTurnTokenUsage(completeAttempt(
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
+      attempt(3, [
+        { type: 'usage', usage: usage() },
+        { type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } } },
+      ]),
       event(4, 'llm/retry', { turn: 1, step: 1 }),
     ))
     expect(result).toMatchObject({ totalTokens: 170 })
@@ -258,24 +279,20 @@ describe('deriveTurnTokenUsage', () => {
 
   it('closes a sampled attempt at step/end', () => {
     expect(deriveTurnTokenUsage(completeAttempt(
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
-      event(4, 'assistant/chunk', {
-        turn: 1,
-        step: 1,
-        chunk: { type: 'finish', reason: { kind: 'stop' } },
-      }),
+      attempt(3, [
+        { type: 'usage', usage: usage() },
+        { type: 'finish', reason: { kind: 'stop' } },
+      ]),
       event(5, 'tool/call', { turn: 1, step: 1 }),
     ))).toMatchObject({ totalTokens: 170 })
   })
 
   it('accepts an aborted finish after observing usage', () => {
     expect(deriveTurnTokenUsage(completeAttempt(
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
-      event(4, 'assistant/chunk', {
-        turn: 1,
-        step: 1,
-        chunk: { type: 'finish', reason: { kind: 'aborted' } },
-      }),
+      attempt(3, [
+        { type: 'usage', usage: usage() },
+        { type: 'finish', reason: { kind: 'aborted', failure: { message: 'aborted', code: 'ABORTED' } } },
+      ]),
     ))).toMatchObject({ totalTokens: 170 })
   })
 
@@ -329,27 +346,28 @@ describe('deriveTurnTokenUsage', () => {
     ['retry start for the wrong step', [
       event(1, 'turn/start', { turn: 1 }),
       event(2, 'step/start', { turn: 1, step: 1 }),
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
+      attempt(3, [
+        { type: 'usage', usage: usage() },
+        { type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } } },
+      ]),
       event(4, 'llm/retry', { turn: 1, step: 1 }),
       event(5, 'llm/retry-started', { turn: 1, step: 2, retry: 1 }),
     ]],
-    ['usage chunk outside an attempt', [
+    ['attempt outside a step', [
       event(1, 'turn/start', { turn: 1 }),
-      event(2, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
+      attempt(2, [{ type: 'usage', usage: usage() }]),
     ]],
-    ['usage chunk for the wrong step', [
+    ['attempt for the wrong step', [
       event(1, 'turn/start', { turn: 1 }),
       event(2, 'step/start', { turn: 1, step: 1 }),
-      event(3, 'assistant/chunk', { turn: 1, step: 2, chunk: { type: 'usage', usage: usage() } }),
+      attempt(3, [{ type: 'usage', usage: usage() }], 2),
     ]],
     ['error finish without usage', [
       event(1, 'turn/start', { turn: 1 }),
       event(2, 'step/start', { turn: 1, step: 1 }),
-      event(3, 'assistant/chunk', {
-        turn: 1,
-        step: 1,
-        chunk: { type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } } },
-      }),
+      attempt(3, [{
+        type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } },
+      }]),
     ]],
     ['retry outside an attempt', [
       event(1, 'turn/start', { turn: 1 }),
@@ -358,7 +376,10 @@ describe('deriveTurnTokenUsage', () => {
     ['retry for the wrong step', [
       event(1, 'turn/start', { turn: 1 }),
       event(2, 'step/start', { turn: 1, step: 1 }),
-      event(3, 'assistant/chunk', { turn: 1, step: 1, chunk: { type: 'usage', usage: usage() } }),
+      attempt(3, [
+        { type: 'usage', usage: usage() },
+        { type: 'finish', reason: { kind: 'error', failure: { code: 'HTTP', message: 'failed' } } },
+      ]),
       event(4, 'llm/retry', { turn: 1, step: 2 }),
     ]],
     ['retry after a final message', [

@@ -16,7 +16,13 @@ import { WorkspaceBrowser } from '../src/client/rows/WorkspaceBrowser.tsx'
 import { zh } from '../src/client/locales.ts'
 
 afterEach(cleanup)
-beforeEach(() => { localStorage.clear(); createWorkspaceViewStore().create().actions.setOrderBy('manual') })
+const scrollIntoView = vi.fn()
+beforeEach(() => {
+  localStorage.clear()
+  createWorkspaceViewStore().create().actions.setOrderBy('manual')
+  Element.prototype.scrollIntoView = scrollIntoView
+  scrollIntoView.mockClear()
+})
 
 // The seat's key domain is workspace ∪ common; the stub mirrors the real
 // lookup chain (namespace, then common vocabulary, then the key).
@@ -664,7 +670,7 @@ describe('WorkspaceBrowser', () => {
     expect(input.value).toBe('kept')
   })
 
-  it('adds Host content hits with context, shows the result bound, and opens without clearing the query', async () => {
+  it('opens a Host content hit, exits search, and reveals its hidden grouped row', async () => {
     vi.useFakeTimers()
     try {
       const open = vi.fn()
@@ -672,12 +678,19 @@ describe('WorkspaceBrowser', () => {
         items: [{ sessionId: sid('body-hit'), snippet: '…the waterfall token appears here…' }],
         hasMore: true,
       }))
-      mount({
+      const b = mount({
         useSessions: hook(sessionState([
+          summary('newest-1', 6),
+          summary('newest-2', 5),
+          summary('newest-3', 4),
+          summary('newest-4', 3),
+          summary('newest-5', 2),
           summary('body-hit', 1, { displayTitle: 'Research notes' }),
         ])),
         useWorkspaces: hook(workspaceState([
-          workspace('research', ['body-hit'], 'Research Workspace'),
+          workspace('research', [
+            'newest-1', 'newest-2', 'newest-3', 'newest-4', 'newest-5', 'body-hit',
+          ], 'Research Workspace'),
         ])),
         open,
         searchSessions,
@@ -696,10 +709,148 @@ describe('WorkspaceBrowser', () => {
       expect(screen.getByText('仅显示前 20 条结果，请缩小搜索范围。')).toBeTruthy()
       fireEvent.click(screen.getByRole('treeitem'))
       expect(open).toHaveBeenCalledWith(sid('body-hit'))
-      expect(input.value).toBe('waterfall token')
+      expect(input.value).toBe('')
+      expect(screen.queryByRole('tree', { name: '搜索结果' })).toBeNull()
+      expect(screen.getByRole('tree', { name: '会话' })).toBeTruthy()
+      expect(b.store.getSnapshot().groupExpansion).toEqual({ research: true })
+      const targetRow = screen.getByText('Research notes').closest('[role="treeitem"]')
+      expect(targetRow).toBeTruthy()
+      expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+      expect(scrollIntoView.mock.instances.at(-1)).toBe(targetRow)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('waits for authoritative Workspace membership before revealing a grouped search result', async () => {
+    const sessions = sessionState([
+      summary('newest-1', 6),
+      summary('newest-2', 5),
+      summary('newest-3', 4),
+      summary('newest-4', 3),
+      summary('newest-5', 2),
+      summary('target', 1, { displayTitle: 'Needle session' }),
+    ])
+    const pending = { ...workspaceState([]), phase: 'pending' as const, state: 'loading' as const }
+    const b = mount({ useSessions: hook(sessions), useWorkspaces: hook(pending) })
+    const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话…')
+    fireEvent.change(input, { target: { value: 'needle' } })
+    fireEvent.click(screen.getByRole('treeitem'))
+
+    expect(scrollIntoView).not.toHaveBeenCalled()
+    expect(b.store.getSnapshot().groupExpansion).toEqual({})
+
+    rerender(b, {
+      useWorkspaces: hook(workspaceState([workspace('research', [
+        'newest-1', 'newest-2', 'newest-3', 'newest-4', 'newest-5', 'target',
+      ])])),
+    })
+    await waitFor(() => {
+      expect(b.store.getSnapshot().groupExpansion).toEqual({ research: true })
+      expect(screen.getByText('Needle session')).toBeTruthy()
+    })
+    const targetRow = screen.getByText('Needle session').closest('[role="treeitem"]')
+    expect(scrollIntoView.mock.instances.at(-1)).toBe(targetRow)
+    expect(screen.getByRole('button', { name: '收起' })).toBeTruthy()
+  })
+
+  it('waits for the reconnect baseline before resolving reveal membership', async () => {
+    const sessions = sessionState([
+      summary('newest-1', 6),
+      summary('newest-2', 5),
+      summary('newest-3', 4),
+      summary('newest-4', 3),
+      summary('newest-5', 2),
+      summary('target', 1, { displayTitle: 'Needle session' }),
+    ])
+    const reconnecting = {
+      ...workspaceState([workspace('stale', [...sessions.ids])]),
+      state: 'loading' as const,
+    }
+    const b = mount({ useSessions: hook(sessions), useWorkspaces: hook(reconnecting) })
+    const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话…')
+    fireEvent.change(input, { target: { value: 'needle' } })
+    fireEvent.click(screen.getByRole('treeitem'))
+
+    expect(b.store.getSnapshot().groupExpansion).toEqual({})
+    expect(scrollIntoView).not.toHaveBeenCalled()
+
+    rerender(b, {
+      useWorkspaces: hook(workspaceState([workspace('current', [...sessions.ids])])),
+    })
+    await waitFor(() => {
+      expect(b.store.getSnapshot().groupExpansion).toEqual({ current: true })
+      expect(screen.getByText('Needle session')).toBeTruthy()
+    })
+    const targetRow = screen.getByText('Needle session').closest('[role="treeitem"]')
+    expect(scrollIntoView.mock.instances.at(-1)).toBe(targetRow)
+    expect(b.store.getSnapshot().groupExpansion).not.toHaveProperty('stale')
+  })
+
+  it('keeps the bounded group projection when the revealed result is already within it', () => {
+    const sessions = sessionState([
+      summary('target', 6, { displayTitle: 'Needle session' }),
+      summary('second', 5),
+      summary('third', 4),
+      summary('fourth', 3),
+      summary('fifth', 2),
+      summary('hidden', 1),
+    ])
+    mount({
+      useSessions: hook(sessions),
+      useWorkspaces: hook(workspaceState([workspace('research', [...sessions.ids])])),
+    })
+    const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话…')
+    fireEvent.change(input, { target: { value: 'needle' } })
+    fireEvent.click(screen.getByRole('treeitem'))
+
+    expect(screen.getByText('Needle session')).toBeTruthy()
+    expect(screen.queryByText('hidden')).toBeNull()
+    expect(screen.getByRole('button', { name: '展开其余 1 个会话' })).toBeTruthy()
+    expect(scrollIntoView).toHaveBeenCalledOnce()
+  })
+
+  it('cancels a pending row reveal when a new search begins', () => {
+    const sessions = sessionState([summary('target', 1, { displayTitle: 'Needle session' })])
+    const pending = { ...workspaceState([]), phase: 'pending' as const, state: 'loading' as const }
+    const b = mount({ useSessions: hook(sessions), useWorkspaces: hook(pending) })
+    const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话…')
+    fireEvent.change(input, { target: { value: 'needle' } })
+    fireEvent.click(screen.getByRole('treeitem'))
+
+    fireEvent.change(input, { target: { value: 'another query' } })
+    fireEvent.change(input, { target: { value: '' } })
+    rerender(b, { useWorkspaces: hook(workspaceState([workspace('research', ['target'])])) })
+
+    expect(b.store.getSnapshot().groupExpansion).toEqual({})
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  it('returns search navigation to the flat list and scrolls to the selected row', () => {
+    const open = vi.fn()
+    const b = mount({
+      useSessions: hook(sessionState([
+        summary('target', 2, { displayTitle: 'Needle session' }),
+        summary('other', 1),
+      ])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['target', 'other'])])),
+      open,
+    })
+    fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
+    const input = screen.getByPlaceholderText<HTMLInputElement>('搜索会话…')
+    fireEvent.change(input, { target: { value: 'needle' } })
+    fireEvent.click(screen.getByRole('treeitem'))
+
+    expect(open).toHaveBeenCalledWith(sid('target'))
+    expect(input.value).toBe('')
+    expect(screen.queryByRole('tree', { name: '搜索结果' })).toBeNull()
+    const targetRow = screen.getByText('Needle session').closest('[role="treeitem"]')
+    expect(targetRow).toBeTruthy()
+    expect(screen.queryByText('alpha')).toBeNull()
+    expect(scrollIntoView.mock.instances.at(-1)).toBe(targetRow)
+    expect(b.store.getSnapshot().groupExpansion).toEqual({})
   })
 
   it('bounds programmatic search input to a schema-valid request without splitting an astral character', async () => {

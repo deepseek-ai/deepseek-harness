@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { apply as applySchedule } from '../src/index.ts'
@@ -10,7 +10,7 @@ import type { ScheduleRecord } from '../src/types.ts'
 
 const contexts: Context[] = []
 const RESTORE_HEADER: SessionHeader = {
-  version: 0,
+  version: SESSION_FORMAT_VERSION,
   id: SessionId('schedule-projection'),
   createdAt: 0,
   isSeeded: false,

@@ -22,7 +22,7 @@ kind: "package-library"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **路径解析仅处理字面值**——它识别 POSIX 绝对路径、Windows 盘符路径和 UNC 路径，但不访问文件系统，也不规范化 `.` 与 `..` 路径段。
+- **路径解析仅处理字面值**——它识别 POSIX 绝对路径、Windows 盘符路径和 UNC 路径，拼接相对路径时保留 Workspace 路径的分隔符，但不访问文件系统，也不规范化 `.` 与 `..` 路径段。
 - **主目录缩写仅支持 POSIX**——Windows 路径保持不变，因为可移植浏览器无法安全推断 Windows 主目录路径等价关系。
 
 

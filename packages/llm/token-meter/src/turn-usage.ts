@@ -1,3 +1,4 @@
+import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { AssistantMessage, TokenUsage } from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
@@ -71,6 +72,14 @@ function safeSum(values: readonly number[]): number | undefined {
 function messageRoute(message: AssistantMessage): TurnTokenUsageRoute | undefined {
   const { provider, model } = message.source
   return provider.length > 0 && model.length > 0 ? { provider, model } : undefined
+}
+
+function streamUsage(stream: SessionEvent<'assistant/message'>['data']['stream']): TokenUsage | undefined {
+  let sample: TokenUsage | undefined
+  for (const member of expandAssistantStream(stream)) {
+    if (member.chunk.type === 'usage') sample = member.chunk.usage
+  }
+  return sample
 }
 
 function normalizeUsage(usage: TokenUsage, route?: TurnTokenUsageRoute): NormalizedAttempt | undefined {
@@ -218,20 +227,20 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
       else state = { kind: 'open', turn, step: event.data.step }
       continue
     }
-    if (event.type === 'assistant/chunk') {
+    if (event.type === 'assistant/attempt') {
       if (event.data.turn !== turn
         || state.kind !== 'open'
         || !sameAttempt(state, event.data.turn, event.data.step)) {
         invalid = true
         continue
       }
-      if (event.data.chunk.type === 'usage') {
-        state = { ...state, sample: event.data.chunk.usage }
-      } else if (event.data.chunk.type === 'finish'
-        && (event.data.chunk.reason.kind === 'error' || event.data.chunk.reason.kind === 'aborted')) {
-        if (!closeOpen()) invalid = true
-        else state = { kind: 'finishClosed', turn, step: event.data.step }
+      let sample: TokenUsage | undefined = state.sample
+      for (const member of expandAssistantStream(event.data.stream)) {
+        if (member.chunk.type === 'usage') sample = member.chunk.usage
       }
+      state = { kind: 'open', turn, step: event.data.step, ...(sample === undefined ? {} : { sample }) }
+      if (!closeOpen()) invalid = true
+      else state = { kind: 'finishClosed', turn, step: event.data.step }
       continue
     }
     if (event.type === 'assistant/message') {
@@ -241,7 +250,8 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
         invalid = true
         continue
       }
-      if (event.data.usage !== undefined) state = { ...state, sample: event.data.usage }
+      const sample = event.data.usage ?? streamUsage(event.data.stream)
+      if (sample !== undefined) state = { ...state, sample }
       if (!closeOpen(messageRoute(event.data.message))) invalid = true
       else state = { kind: 'settled', turn, step: event.data.step, by: 'message' }
       continue

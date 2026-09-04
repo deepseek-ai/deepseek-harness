@@ -18,7 +18,7 @@ Status: implemented
 
 **可见性与新鲜度是显式的。**已创建的会话自 `create` 起即可在进程内被观察到；物理实体化（纯粹的优化）可以推迟到第一次 append 或 flush，其他进程只能看到已实体化的会话，实体化之前崩溃意味着该会话从未存在。一旦某次 append 或 flush 完成，其后在同一后端实例上开始的读取至少能观察到该前缀——这正是 `message-feedback` 持久目标检查所依赖的保证。
 
-**revision 简化为逐实例变更令牌。**令牌相等可视为日志未变；所有权变动绝不会改变令牌。JSONL 通过一次 `fs.stat` 派生尽力而为的令牌与 `sizeBytes`；存储介质能够廉价统计事件数的后端可以改为提供 `eventCount` 提示。会话列表的冷空白探测回归到这些元数据之上（`coldBlankProbeMaxEvents`/`coldBlankProbeMaxBytes`），恢复了随路径查询一起移除的能力。
+**revision 简化为逐实例变更令牌。**令牌相等可视为日志未变；所有权变动绝不会改变令牌。JSONL 通过一次 `fs.stat` 派生尽力而为的令牌与 `sizeBytes`；存储介质能够廉价统计事件数的后端可以改为提供 `eventCount` 提示。Session listing 保持零正文读取的 metadata/cache 操作：它信任缓存的非空 projection，只在当前 cache identity 匹配时保留缓存的空值，否则用 `blank: false` 表示可见的未知回退。冷空白探测及其探测限制配置均不再存在。
 
 ## 考虑过的替代方案
 
@@ -37,6 +37,6 @@ Status: implemented
 ## 相关
 
 - [作为抽象服务的会话持久化](2026-06-14-session-persistence.zh.md)——本 Note 重塑的 seam；其接口列表已反映句柄 API。
-- [持久化 export() 与预发布读取路径精简](../simplification/2026-08-27-persistence-export-and-pre-release-trims.zh.md)——预备性的移除，包括本 Note 的元数据所恢复的空白探测。
+- [持久化 export() 与预发布读取路径精简](../simplification/2026-08-27-persistence-export-and-pre-release-trims.zh.md)——预备性的移除，包括已退役的冷空白探测。
 - [保留可忽略的外部会话事件](2026-08-30-retain-ignorable-external-session-events.zh.md)——读取侧的拒绝约定，现经由 `storage-contract` 辅助函数共享。
 - [为会话持久化写入批处理设定上界](2026-08-08-bounded-session-persistence-write-batching.zh.md)——被路由写路径作为内部调度策略保留的批处理语义。

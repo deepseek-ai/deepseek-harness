@@ -12,6 +12,7 @@ import type {
   PromptContentPart,
   QueueAction,
   SessionAddress,
+  SessionAssistantStreamBaseline,
   SessionControlFrame,
   SessionProjectionBaseline,
   SessionQueuedItem,
@@ -35,6 +36,10 @@ import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
 import { SessionQueueMirror } from './queue-mirror.ts'
+import {
+  ClientAssistantStream,
+  type ClientAssistantStreamResult,
+} from './assistant-stream.ts'
 
 function projectionsBaseline(value: SessionProjectionBaseline): ProjectionsBaseline {
   return {
@@ -95,6 +100,7 @@ export class Session implements SessionFace {
   private jumpPromise: Promise<void> | null = null
   /** Authoritative stream-only inbox snapshot; pending work never hits history. */
   private readonly queueMirror = new SessionQueueMirror()
+  private readonly assistantStream = new ClientAssistantStream()
   private running = false
   private address: SubagentAddress | undefined
   private parentAvailable: boolean | undefined
@@ -620,25 +626,65 @@ export class Session implements SessionFace {
           change.entries,
           change.hasMore,
           change.page.projections === undefined ? undefined : projectionsBaseline(change.page.projections),
+          change.page.assistantStream,
         )
         return
       case 'prepend':
         this.prependWindow(change.entries, change.hasMore)
         return
       case 'append':
-        if (this.appendLive(change.entry)) this.notifier.markDirty()
+        this.publishAssistantEntry(this.assistantStream.acceptDurable(change.entry))
+        return
+      case 'assistant-stream':
+        this.publishAssistantEntry(this.assistantStream.acceptFrame(change.frame))
     }
   }
 
   /** Replace the complete contiguous window and apply page-owned projection metadata. */
-  private installWindow(entries: readonly SessionEventLikeEntry[], hasMore: boolean, projections?: ProjectionsBaseline): void {
+  private installWindow(
+    entries: readonly SessionEventLikeEntry[],
+    hasMore: boolean,
+    projections?: ProjectionsBaseline,
+    assistantStream?: SessionAssistantStreamBaseline,
+  ): void {
+    // A durable gap-repair page has no assistant baseline. Clearing transient
+    // attempts makes a held notification reopen follow once for an atomic
+    // page/baseline pair instead of applying it to an unrelated repair cut.
+    const visible = this.assistantStream.replace(entries, assistantStream)
     this.baseSeq = SessionLogOffset(entries[0]?.event.seq ?? 0)
     this.hasMore = hasMore
-    if (entries.some(entry => entry.event.type === 'turn/start')) this.firstPromptPendingTurn = false
+    if (visible.some(entry => entry.event.type === 'turn/start')) this.firstPromptPendingTurn = false
     if (projections !== undefined) this.projections.seed(projections)
-    this.eventSource.replace(entries, hasMore)
-    for (const entry of entries) this.observeSubmissionEvent(entry.event)
+    this.eventSource.replace(visible, hasMore)
+    for (const entry of visible) this.observeSubmissionEvent(entry.event)
     this.notifier.markDirty()
+  }
+
+  private publishAssistantEntry(result: ClientAssistantStreamResult): void {
+    if (result?.type === 'rebaseline') {
+      const events = this.events
+      queueMicrotask(() => {
+        if (events !== undefined && this.events === events) events.restart()
+      })
+      return
+    }
+    if (result?.type === 'settlement') {
+      this.eventSource.settleAssistant(result.attemptId, result.entry)
+      this.observeSubmissionEvent(result.entry.event)
+      this.notifier.markDirty()
+      return
+    }
+    if (result?.type === 'abandonment') {
+      this.eventSource.settleAssistant(result.attemptId)
+      this.notifier.markDirty()
+      return
+    }
+    if (result?.type === 'publish' && this.appendLive(result.entry)) {
+      this.notifier.markDirty()
+    } else if (result?.type === 'transient') {
+      this.eventSource.append(result.entry)
+      this.notifier.markDirty()
+    }
   }
 
   /** Prepend one stream-validated history page. */

@@ -1,4 +1,4 @@
-{"type":"session","version":0,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","delegationDepth":0}
+{"type":"session","version":2,"id":"{{sessionId}}","createdAt":0,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":0}
 {"type":"turn/start","data":{"turn":1}}
 {"type":"user/message","data":{"content":[{"type":"text","text":"Start a background job."}],"source":{"kind":"user"},"role":"user","id":"{{sessionId}}"},"surfaceOp":"append"}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}
@@ -15,21 +15,11 @@
 {"type":"session/title","data":{"title":"Start a background job.","messageSeqs":[1],"source":{"kind":"fallback"}}}
 {"type":"request/header","data":{"header":{"config":{"provider":"deepseek-official","model":"deepseek-v4-flash"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}
 {"type":"request/context","data":{"provider":"deepseek-official","model":"deepseek-v4-flash"}}
-{"type":"assistant/chunk","data":{"turn":2,"step":1,"chunk":{"type":"block-start","index":0,"blockType":"tool-call"}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":1,"chunk":{"type":"tool-call-delta","index":0,"id":"list-once","name":"list_agents","argumentsDelta":"{}"}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":1,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"list-once","name":"list_agents","arguments":"{}"}}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":1,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":1,"chunk":{"type":"finish","reason":{"kind":"tool-calls"}}}}
-{"type":"assistant/message","data":{"turn":2,"step":1,"message":{"role":"assistant","content":[{"type":"tool-call","id":"list-once","name":"list_agents","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-flash"},"id":"{{sessionId}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[16,17,18,19,20],"surfaceOp":"append"}
+{"type":"assistant/message","data":{"turn":2,"step":1,"message":{"role":"assistant","content":[{"type":"tool-call","id":"list-once","name":"list_agents","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-flash"},"id":"{{sessionId}}"},"usage":{"inputTokens":10,"outputTokens":5},"stream":[{"type":"chunk","time":0,"chunk":{"type":"block-start","index":0,"blockType":"tool-call"}},{"type":"tool-call-chunks","time0":0,"index":0,"dt":[],"id":"list-once","name":"list_agents","args":["{}"]},{"type":"chunk","time":0,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"list-once","name":"list_agents","arguments":"{}"}}},{"type":"chunk","time":0,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}},{"type":"chunk","time":0,"chunk":{"type":"finish","reason":{"kind":"tool-calls"}}}]},"surfaceOp":"append"}
 {"type":"tool/call","data":{"turn":2,"step":1,"callId":"list-once","name":"list_agents","arguments":"{}"}}
-{"type":"tool/result","data":{"turn":2,"step":1,"message":{"source":{"kind":"tool","callId":"list-once"},"content":[{"type":"tool-result","toolCallId":"list-once","content":[{"type":"text","text":"{{sessionId}} [diagnostic: corrupt]"}],"isError":false}],"role":"user","id":"{{sessionId}}"}},"sourceEventSeqs":[22],"surfaceOp":"append"}
+{"type":"tool/result","data":{"turn":2,"step":1,"message":{"source":{"kind":"tool","callId":"list-once"},"content":[{"type":"tool-result","toolCallId":"list-once","content":[{"type":"text","text":"{{sessionId}} [diagnostic: corrupt]"}],"isError":false}],"role":"user","id":"{{sessionId}}"}},"sourceEventSeqs":[17],"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":2,"step":1}}
 {"type":"step/start","data":{"turn":2,"step":2}}
-{"type":"assistant/chunk","data":{"turn":2,"step":2,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":2,"chunk":{"type":"text-delta","index":0,"text":"The stored subagent is unreadable. PARENT_DONE"}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":2,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"The stored subagent is unreadable. PARENT_DONE"}}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":2,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}}}
-{"type":"assistant/chunk","data":{"turn":2,"step":2,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}
-{"type":"assistant/message","data":{"turn":2,"step":2,"message":{"role":"assistant","content":[{"type":"text","text":"The stored subagent is unreadable. PARENT_DONE"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-flash"},"id":"{{sessionId}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[26,27,28,29,30],"surfaceOp":"append"}
+{"type":"assistant/message","data":{"turn":2,"step":2,"message":{"role":"assistant","content":[{"type":"text","text":"The stored subagent is unreadable. PARENT_DONE"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-flash"},"id":"{{sessionId}}"},"usage":{"inputTokens":10,"outputTokens":5},"stream":[{"type":"chunk","time":0,"chunk":{"type":"block-start","index":0,"blockType":"text"}},{"type":"text-chunks","time0":0,"index":0,"dt":[],"texts":["The stored subagent is unreadable. PARENT_DONE"]},{"type":"chunk","time":0,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"The stored subagent is unreadable. PARENT_DONE"}}},{"type":"chunk","time":0,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}},{"type":"chunk","time":0,"chunk":{"type":"finish","reason":{"kind":"stop"}}}]},"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":2,"step":2}}
 {"type":"turn/end","data":{"turn":2,"reason":{"kind":"completed"}}}

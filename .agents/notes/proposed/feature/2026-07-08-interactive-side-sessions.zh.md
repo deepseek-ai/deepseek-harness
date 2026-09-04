@@ -12,7 +12,7 @@ Status: proposed
 
 **侧会话（side session）**是一个普通的活跃会话，从源会话的最后一个已完成轮次 fork 而来，绑定到自己的 agent（智能体），定位为只读顾问，并能**合并回写**一条精简笔记。
 
-- **Fork 并绑定：**以父会话的平衡已完成轮次前缀创建子会话，并在其元数据中标记 `parentSession` 与 `seedLength`。这组合了 `ctx.agents.create({ seed, meta })`；不新增核心服务或会话存储方法。
+- **Fork 并绑定：**用 parent 的平衡 completed-turn prefix、`parentSession`、`meta.isSeeded: true` 与精确 sibling `inheritedEventCount` 创建 child。这组合 `ctx.agents.create({ seed, inheritedEventCount, meta })`；不新增 core service 或 Session-store method。
 - **顾问定位：**创建后注入一条插件来源的 `context/message`，告知子会话只做解释，不执行变更或继续任务。保持系统提示词逐字节一致，可在继承的历史上保留提供方的前缀缓存。
 - **合并回写：**向子会话请求一条有长度上限的 handback，然后向父会话注入一条插件来源的 `context/message`。父会话的下一次请求在日志所记录的位置看到该消息，保持回放与[请求可重建性](../../implemented/architecture/2026-07-05-reconstructable-requests.zh.md)，无需新增会话事件。
 - **呈现：**调用方式、会话切换与 handback 渲染属于首个客户端拥有的界面。本 Agent Note 仅规定与界面无关的机制。
@@ -28,7 +28,7 @@ Status: proposed
 
 ## 验收标准
 
-- Fork 不改变源会话，创建的子会话具有平衡的已完成轮次前缀、`parentSession`、`seedLength`，以及逐字节一致的系统提示词。
+- Fork 不改变 source Session，创建的 child 带有平衡 completed-turn prefix、`parentSession`、`isSeeded: true`、精确 `inheritedEventCount` 与逐字节相同 system prompt。
 - 顾问定位在子会话追加历史的头部恰好添加一条插件来源的 `context/message`，而非修改其系统提示词。
 - 合并回写恰好添加一条有长度上限的 `context/message`，来源为 `plugin: sidechat`；父会话的下一次请求与回放在相同位置看到它。
 - 父会话与子会话并发运行，日志和流之间无串扰。

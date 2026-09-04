@@ -2,8 +2,10 @@ import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { PromptContentPart as AttachmentPromptContentPart } from '@deepseek-ai/dsh-attachment/types'
 import { SessionSeq, type SessionSeqCursor } from '@deepseek-ai/dsh-session/types'
 import {
-  MutableSessionEventSource, type SessionLiveEventEntry,
+  MutableSessionEventSource, type SessionAssistantSettlementEntry,
+  type SessionLiveEventEntry, type SessionTransientEventEntry,
 } from '../src/client/contract/events.ts'
+import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type { ISession } from '../src/client/contract/session.ts'
 import type { ProjectionsBaseline } from '../src/client/sessions/projection-store.ts'
 import { ProjectionValueStore } from '../src/client/sessions/projection-store.ts'
@@ -20,6 +22,35 @@ function entry(seq: SessionSeq): SessionLiveEventEntry {
       seq,
       time: seq,
       data: { turn: seq },
+    },
+  }
+}
+
+function transient(attemptId: string, seq = 1.5): SessionTransientEventEntry {
+  return {
+    type: 'transient',
+    event: {
+      type: 'assistant/live-chunk',
+      seq,
+      time: 1,
+      data: {
+        attemptId: LlmAttemptId(attemptId),
+        turn: 1,
+        step: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'live' },
+      },
+    },
+  }
+}
+
+function assistantSettlement(seq: SessionSeq): SessionAssistantSettlementEntry {
+  return {
+    type: 'event',
+    event: {
+      type: 'assistant/attempt',
+      seq,
+      time: seq,
+      data: { turn: 1, step: 1, stream: [] },
     },
   }
 }
@@ -103,6 +134,36 @@ describe('Client Session contracts', () => {
     expect(after.entries).toEqual([first, live])
     expect(after.entries).toBe(after.entries)
     expect(iterate).toHaveBeenCalledOnce()
+  })
+
+  it('publishes one exact Assistant settlement delta after retiring its transient rows', () => {
+    const feed = new MutableSessionEventSource()
+    const opening = entry(SessionSeq(1))
+    const live = transient('attempt-one')
+    const settlement = assistantSettlement(SessionSeq(2))
+    const later = entry(SessionSeq(3))
+    feed.replace([opening, live, later], false)
+
+    feed.settleAssistant(LlmAttemptId('attempt-one'), settlement)
+
+    expect(feed.getSnapshot()).toEqual({
+      entries: [opening, settlement, later],
+      hasMore: false,
+      revision: 2,
+      change: {
+        kind: 'settle-assistant',
+        attemptId: 'attempt-one',
+        entry: settlement,
+      },
+    })
+
+    feed.append(transient('attempt-two', 3.5))
+    feed.settleAssistant(LlmAttemptId('attempt-two'))
+    expect(feed.getSnapshot().entries).toEqual([opening, settlement, later])
+    expect(feed.getSnapshot().change).toEqual({
+      kind: 'settle-assistant',
+      attemptId: 'attempt-two',
+    })
   })
 
 })

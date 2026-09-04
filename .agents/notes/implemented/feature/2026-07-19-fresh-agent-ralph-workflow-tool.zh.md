@@ -46,7 +46,7 @@ Ralph 插件的 `subagentProvider` 默认为 `spawn`。每次调用前，它要�
 
 单元测试覆盖配置与调用上限解析、提供方能力拒绝、固定启动请求路由与子 agent 上限、全部成功终止结果、普通子 agent 失败外层值、畸形及过大边界值、成功结果精确截断、中止时序、dispose（资源释放）、渲染意图、提示生命周期和命名空间插件形状，并达到逐文件 100% 覆盖率。工作流引擎测试证明提供方路由会同步验证、每次运行的子 agent 上限可低于部署上限，并且提供方覆盖会选择每个子 agent 且不改变配置默认值，其中包括普通 Node 下构建后的 `lib/worker.cjs`。
 
-一项无密钥真实栈集成测试通过实际工作线程引擎、spawn 提供方、结构化输出运行时和 agent loop 驱动固定脚本。它证明子 agent 标识不同、没有 `seedLength`、继承 cwd、两个子请求都不含父历史标记、上一份报告只精确出现在下一 Round 的交接中、只产生一个阶段事件、终止完成以及两个子 agent 都已 dispose。同一真实栈还覆盖阻塞与 Round 上限结果、未规范化及语义无效报告、过大交接、保留上一份有效交接的普通子 agent 失败，以及取消后子 agent 完全停稳。无密钥 [`ralph-loop` headless 快照](../../../../snapshots/session/ralph-loop/)会调用 `ralph`、固定父级流式 transcript，并检查持久化日志中存在两个不同且无种子的子会话，且 Round 1 的交接只出现在 Round 2。工具测试固定通用调用／结果展示，请求头快照固定发布的 schema 与提示指导 transcript 表面。
+一项无 key 真实栈 integration 通过实际 worker-thread engine、spawn provider、structured-output runtime 与 agent loop 驱动固定 script。它证明 child agent identity 不同、`isSeeded: false` 且 cut 为零、继承 cwd、两个 child request 都不含 parent-history marker、上一份 report 只精确出现在下一 Round handoff 中、只产生一个 phase event、terminal completion，以及两个 child agent 都已 dispose。同一真实栈还覆盖 blocker 与 Round-limit outcome、未规范化及语义无效 report、过大 handoff、保留上一份有效 handoff 的普通 child failure，以及取消后 child 完全停稳。无 key [`ralph-loop` headless snapshot](../../../../snapshots/session/ralph-loop/)调用 `ralph`、固定 parent stream transcript，并检查持久 log 中存在两个不同且 unseeded 的 child Session，且 Round 1 handoff 只出现在 Round 2。Tool test 固定通用 call/result presentation，request-header snapshot 固定已发布 schema 与 prompt-guidance transcript。
 
 ## 考虑过的替代方案
 

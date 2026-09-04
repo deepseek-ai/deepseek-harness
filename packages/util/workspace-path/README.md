@@ -22,7 +22,7 @@ Browser-safe path helpers shared by Workspace-facing client and controller packa
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Resolution is lexical** — it recognizes POSIX absolute paths, Windows drive paths, and UNC paths but does not access a filesystem or canonicalize `.` and `..` segments.
+- **Resolution is lexical** — it recognizes POSIX absolute paths, Windows drive paths, and UNC paths, preserves the Workspace path's separator when joining a relative path, and does not access a filesystem or canonicalize `.` and `..` segments.
 - **Home abbreviation is POSIX-only** — Windows paths remain unchanged because a portable browser cannot infer Windows home-path equivalence safely.
 
 

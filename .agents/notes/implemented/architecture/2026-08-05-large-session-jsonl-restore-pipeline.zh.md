@@ -30,7 +30,7 @@ Zstandard 结构扫描器会在解码前识别完整帧范围。系统单独解�
 
 ### 恢复准入
 
-持久化层把刚物化的 JSON 值转移给 `Session.fromRestore`。这些值是已分离且无环的树，打包的分片行也会展开成新分配的事件。因此，恢复专用路径使用一次 `for...in` 与 `switch` 校验固定事件信封，按事件判别字段执行当前数据形状检查，并通过显式 `pending` 数组迭代冻结所拥有的对象图，不使用循环跟踪集合。`surface` 校验会记录一次转换计划；当同一个候选事件进入日志时，系统直接提交该计划，不再对同一事件规划两次。
+持久化把刚物化的当前 JSON 值转移给 `Session.fromRestore`。这些值是已分离且无环的 tree；历史 packed row 与相邻 migration 已经生成新分配的 v2 settlement。restore-only path 使用一次 `for...in` 与 `switch` 校验固定 event envelope，按 event discriminant 执行当前表示检查，并通过显式 `pending` array 迭代冻结 owned object graph，不使用 cycle-tracking set。`surface` 校验记录一次 transition plan，并在同一个 candidate event 进入 log 时提交该 plan。
 
 普通创建与 fork 路径使用的借用 `seed` 仍会创建 JSON 快照，并使用支持循环检测的通用深度冻结。因此，这项特化仅改变持久恢复，不会放宽调用方所有值的准入要求。
 

@@ -1,4 +1,6 @@
 {"type":"session","version":0,"id":"subagent-settlement-child","createdAt":2,"delegationDepth":1}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"step/start","data":{"turn":1,"step":1}}
 {"type":"assistant/chunk","data":{"turn":1,"step":1,"chunk":{"type":"block-start","index":0,"blockType":"text"}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":1,"chunk":{"type":"text-delta","index":0,"text":"CHILD_RESULT"}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":1,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"CHILD_RESULT"}}}}

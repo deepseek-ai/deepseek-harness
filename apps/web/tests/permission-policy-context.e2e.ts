@@ -18,7 +18,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/permission-policy-context', import.meta.url))
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/permission-policy-context/session.jsonl', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/permission-policy-context/session.v2.jsonl', import.meta.url))
 const MODE = webSnapshotMode()
 
 const PROMPTS = [
@@ -168,6 +168,6 @@ describe('web e2e: current sandbox policy reaches the model before tools', () =>
   it.skipIf(MODE === 'record')('stays clean and keeps the fixture inventory closed', async () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['session.jsonl', 'workspace.expected'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v2.jsonl', 'workspace.expected'])
   })
 })

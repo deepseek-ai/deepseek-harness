@@ -31,7 +31,6 @@ export interface MessageFixture {
   readonly userMessageId: MessageId
   readonly assistantMessageIds: readonly [MessageId, MessageId]
   readonly emptyAssistantMessageId: MessageId
-  readonly replacementAssistantMessageId: MessageId
 }
 
 /** Append one deterministic transcript used by target-validation tests. */
@@ -48,7 +47,8 @@ export function appendMessageFixture(session: Session): Omit<MessageFixture, 'se
     content: [{ type: 'text', text: 'First answer' }],
     source: { provider: 'test', model: 'test' },
   })
-  const firstEvent = session.append('assistant/message', {
+  session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: first,
@@ -58,6 +58,7 @@ export function appendMessageFixture(session: Session): Omit<MessageFixture, 'se
     source: { provider: 'test', model: 'test' },
   })
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: second,
@@ -67,6 +68,7 @@ export function appendMessageFixture(session: Session): Omit<MessageFixture, 'se
     source: { provider: 'test', model: 'test' },
   })
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: empty,
@@ -74,24 +76,10 @@ export function appendMessageFixture(session: Session): Omit<MessageFixture, 'se
   session.append('step/end', { turn: 1, step: 1 })
   session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
 
-  const replacement = createAssistantMessage({
-    content: [{ type: 'text', text: 'Model-only replacement' }],
-    source: { provider: 'test', model: 'test' },
-  })
-  session.append('assistant/message', {
-    turn: 1,
-    step: 1,
-    message: replacement,
-  }, {
-    surfaceOp: { op: 'replace', start: firstEvent.seq, end: firstEvent.seq },
-    sourceEventSeqs: [firstEvent.seq],
-  })
-
   return {
     userMessageId: user.id,
     assistantMessageIds: [first.id, second.id],
     emptyAssistantMessageId: empty.id,
-    replacementAssistantMessageId: replacement.id,
   }
 }
 

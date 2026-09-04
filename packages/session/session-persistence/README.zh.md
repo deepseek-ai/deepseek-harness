@@ -62,7 +62,7 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 
 ### 失败与恢复
 
-当前构建无法忠实解读的存储日志会以方向感知的错误被拒绝，绝不错读。`SESSION_FORMAT_VERSION` 保持 v0，本构建不提供格式迁移路径；更高版本会要求操作者升级 harness。解码器只接受下文点名的有限同版本记录变体。本构建不认识的事件类型会被拒绝，除非其信封标记为 `ignorable`；已提交前缀中的损坏以 `SessionPersistenceCorruptionError` 拒绝。
+当前构建无法忠实解读的存储日志会以方向感知的错误被拒绝，绝不错读。`SessionHandle` 只暴露当前逻辑 v1 记录；provider 必须在返回句柄前转换任何受支持的历史存储，随产品交付的 JSONL provider 会通过静态 catalog 迁移已发布 v0。更高格式会要求操作者升级 harness。本构建不认识的事件类型会被拒绝，除非其信封标记为 `ignorable`；已提交前缀中的损坏以 `SessionPersistenceCorruptionError` 拒绝。
 
 -----
 
@@ -104,7 +104,7 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 
 ### 存储记录校验
 
-后端读取只校验当前 v0 记录且绝不重写它们；追加写入当前 v0（[理由](../../../.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.zh.md)）。每个后端在每条读取路径——句柄读取与写打开预热——上运行同一套 `storage-contract` 辅助函数，把未知事件类型作为 `SessionFormatUnsupportedError` 拒绝，把当前类型的已废弃载荷变体作为 `SessionPersistenceCorruptionError` 拒绝，并在后端为每个会话保留一份产物时附上原始日志的 `SessionLocation`。
+seam 的共享辅助函数校验当前逻辑 v1 记录，append 只写当前格式（[理由](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)）。历史解码与不可变后继发布属于各 provider 内部，并在其返回句柄前完成。每个后端都在句柄读取与写 open 预热时运行 `storage-contract` 校验，把未知事件类型作为 `SessionFormatUnsupportedError` 拒绝，把 malformed 当前记录作为 `SessionPersistenceCorruptionError` 拒绝，并在后端为每个会话保留一份产物时附上原始日志的 `SessionLocation`。
 
 </details>
 -----

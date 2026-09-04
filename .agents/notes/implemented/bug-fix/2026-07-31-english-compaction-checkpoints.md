@@ -25,4 +25,4 @@ The requirement is integrated into the first sentence of the trailing compaction
 
 - New checkpoints normalize narrative context into English while retaining the exact strings that future tool use and code work depend on.
 - Existing checkpoint structure, compaction routing, and cache alignment are unchanged; only the final user instruction is different.
-- The direct summarization call remains outside transcript snapshots because it emits no `assistant/chunk` events. The real-loop regression instead asserts the exact final instruction received by the summarization request.
+- The direct summarization call remains outside transcript snapshots because it emits no Agent-owned Assistant settlement. The real-loop regression instead asserts the exact final instruction received by the summarization request.

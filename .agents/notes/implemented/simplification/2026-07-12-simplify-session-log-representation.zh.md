@@ -20,7 +20,7 @@ Status: implemented
 
 请求头只使用规范的完整快照。初始与恢复锚点即使没有变化也仍是完整快照；实例内变化会追加另一个完整 `request/header`，reason 为 `change`；未变的信封显式开启消息序列或跟随 surface 替换时，会追加 reason 为 `series` 的完整快照。普通的仅追加后续 Turn、同一模型消息序列内的后续 Step 与重试沿用最新快照。delta 事件、codec 类型、diff/apply 辅助函数，以及仅供 codec 使用的 `fallback` reason 均已移除。请求重建选择最新快照。
 
-`SESSION_FORMAT_VERSION` 仍固定为 `0`，因此 seed、追加和持久化加载验证会显式拒绝旧 v0 `request/header-delta` 事件，以及携带已删除 `fallback` reason 的完整快照。不存在兼容性 fold 或迁移。JSONL 测试固定了这一失败即报错的边界；ACP（Agent Client Protocol）快照 harness 则把合法的会话中途变更表示为固定的完整请求头和完整可读提示词。
+当前 v1 的 seed 与追加校验只接受固定的完整请求头和当前 reason。冻结的 v0-to-v1 边会在构造当前 Session 前，独占负责对历史 `request/header-delta` 与 `fallback` 结构的显式拒绝；可接受的历史规范化仅限另行穷举的无损结构。ACP（Agent Client Protocol）快照 harness 会把合法的会话中途变更表示为固定的完整请求头和完整可读提示词。
 
 ## 曾考虑的替代方案
 
@@ -32,4 +32,4 @@ Status: implemented
 
 ## 后果
 
-完整请求头会增加日志体积，线性替换查找在极大 surface 上也可能较慢。由于先前实现调用 `indexOf`，替换原本就是线性的；benchmark 推迟到真实 trace 表明更简单的数组成为瓶颈时再进行。格式版本仍为 `0`，因此显式拒绝旧事件是预发布格式边界的永久组成部分。作为交换，surface 顺序和请求头状态现在各自只有一种表示，删除了链接维护、map、codec 分支、往返 fallback 和针对 delta 的快照规范化。
+完整请求头会增加日志体积，线性替换查找在极大 surface 上也可能较慢。由于先前实现调用 `indexOf`，替换原本就是线性的；benchmark 推迟到真实 trace 表明更简单的数组成为瓶颈时再进行。当前 v1 只保留一种表示，v0 边则是已发布旧结构的唯一拥有者。作为交换，surface 顺序和请求头状态现在各自只有一种当前表示，删除了链接维护、map、codec 分支、往返 fallback 和针对 delta 的快照规范化。

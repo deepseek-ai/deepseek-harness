@@ -7,10 +7,10 @@
  * are all exercised through the real `confine()` path.
  */
 
-import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { LAUNCHER_FAILURE_EXIT } from '@deepseek-ai/node-addon-landlock-run'
 import { SANDBOX_UNAVAILABLE, SandboxUnavailableError } from '@deepseek-ai/dsh-sandbox'
@@ -23,6 +23,12 @@ import { bwrapProfileArgs, landlockProfileArgs, seatbeltProfileArgs } from '../s
 
 const RO: SandboxPolicy = { mode: 'read-only', workspaceRoot: '/ws' }
 const WW: SandboxPolicy = { mode: 'workspace-write', workspaceRoot: '/ws' }
+
+/** Every temp dir created by this file (fake launchers and runner entries), removed after each test. */
+const tempDirs: string[] = []
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
 
 async function setup(config: Config = {}, internals: LocalSandboxProvider['internals'] = {}) {
   const ctx = new Context()
@@ -39,12 +45,15 @@ async function setup(config: Config = {}, internals: LocalSandboxProvider['inter
  * `sandbox-windows-acl/lib/runner.js`.
  */
 function absentRunnerEntry(): string {
-  return join(mkdtempSync(join(tmpdir(), 'dsh-absent-acl-entry-')), 'runner.js')
+  const dir = mkdtempSync(join(tmpdir(), 'dsh-absent-acl-entry-'))
+  tempDirs.push(dir)
+  return join(dir, 'runner.js')
 }
 
 /** Write an executable fake `landlock-run` that answers `--probe` with `report`. */
 function fakeLauncher(report = 'landlock: fully enforced'): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-fake-landlock-'))
+  tempDirs.push(dir)
   const launcher = join(dir, 'landlock-run')
   writeFileSync(launcher, `#!/bin/sh\nif [ "$1" = "--probe" ]; then echo "${report}"; exit 0; fi\nexit ${LAUNCHER_FAILURE_EXIT}\n`, { mode: 0o755 })
   return launcher
@@ -53,6 +62,7 @@ function fakeLauncher(report = 'landlock: fully enforced'): string {
 /** Write an executable fake `sandbox-exec` that exits `status` for any invocation. */
 function fakeSeatbeltExec(status: number): string {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-fake-seatbelt-'))
+  tempDirs.push(dir)
   const exec = join(dir, 'sandbox-exec')
   writeFileSync(exec, `#!/bin/sh\nexit ${status}\n`, { mode: 0o755 })
   return exec
@@ -316,6 +326,7 @@ describe('the default landlock probe (launcher CLI contract)', () => {
 
   it('reads a failing launcher as unusable: the chain ends and fails closed', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-fake-landlock-'))
+    tempDirs.push(dir)
     const launcher = join(dir, 'landlock-run')
     writeFileSync(launcher, `#!/bin/sh\nexit ${LAUNCHER_FAILURE_EXIT}\n`, { mode: 0o755 })
     const { sandbox } = await setup({}, { platform: 'linux', probeBwrap: () => false, landlockLauncher: launcher })
@@ -337,6 +348,7 @@ describe('probeTimeoutMs config', () => {
     // spawnSync blocks the worker and fork/exec latency inflates wall-clock)
     // cannot flip either verdict; the vitest timeout clears the patient budget.
     const dir = mkdtempSync(join(tmpdir(), 'dsh-slow-landlock-'))
+    tempDirs.push(dir)
     const launcher = join(dir, 'landlock-run')
     writeFileSync(launcher, '#!/bin/sh\nsleep 1\necho "landlock: fully enforced"\nexit 0\n', { mode: 0o755 })
 
@@ -440,6 +452,7 @@ describe('the windows-acl probe (runner invocation contract)', () => {
 
   it('prefers the built lib/runner.js entry when the resolved file exists', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-fake-acl-entry-'))
+    tempDirs.push(dir)
     const builtEntry = join(dir, 'runner.js')
     writeFileSync(builtEntry, '')
     const { sandbox } = await setup({}, {

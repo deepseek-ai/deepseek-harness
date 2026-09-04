@@ -5,20 +5,21 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { SessionLogOffset,
-  SESSION_FORMAT_VERSION, SessionId as sessionId, type SessionEvent, type SessionHeader, type SessionId,
+import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
+import {
+  SESSION_FORMAT_VERSION, SessionId as sessionId, SessionLogOffset, type SessionEvent, type SessionHeader, type SessionId,
 } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import {
   acknowledgeReloadConnectionLoss, captureExpandedTurnProcessAria, captureStableAria,
   compareOrRefreshGolden,
-  launchWebScaffold, readPersistedEvents, watchConsole,
+  launchWebScaffold, readPersistedEvents, selectedSessionFixture, watchConsole,
   webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
-const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.jsonl', import.meta.url))
+const BASE_FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v2.jsonl', import.meta.url))
 const AVAILABLE_CHILD_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/subagent-conversation/ui.expected.md', import.meta.url))
 const AVAILABLE_CHILD_EXPANDED_EXPECTED = fileURLToPath(
   new URL('../../../snapshots/web/subagent-conversation/ui-expanded.expected.md', import.meta.url),
@@ -43,14 +44,28 @@ const POST_FORK_FOLLOWUP = 'Continue the original conversation after the fork.'
 function childFixture(source: string, fixtureId: string, withContinuation: boolean): string {
   const [header, ...eventLines] = source.trimEnd().split('\n')
   if (header === undefined) throw new Error('base replay fixture has no header')
-  const childHeader = header
-    .replace('"id":"{{sessionId}}"', `"id":"${fixtureId}"`)
-    .replace(/"createdAt":\d+/, '"createdAt":1784998084442')
+  const childHeaderValue = JSON.parse(header) as Record<string, unknown>
+  childHeaderValue.id = fixtureId
+  childHeaderValue.createdAt = 1784998084442
+  const childHeader = JSON.stringify(childHeaderValue)
   if (!withContinuation) return [childHeader, ...eventLines, ''].join('\n')
-  const continued = eventLines.map(line => line
-    .replace(/"seq":(\d+)/g, (_match, seq: string) => `"seq":${String(Number(seq) + 100)}`)
-    .replace(/"seq0":(\d+)/g, (_match, seq: string) => `"seq0":${String(Number(seq) + 100)}`)
-    .replaceAll('"turn":1', '"turn":2'))
+  const seqOffset = eventLines.length
+  const continued = eventLines.map((line) => {
+    const event = JSON.parse(line) as {
+      type: string
+      seq: number
+      data: Record<string, unknown>
+    }
+    const data = { ...event.data }
+    if (data.turn === 1) data.turn = 2
+    if (event.type === 'session/title' && Array.isArray(data.messageSeqs)) {
+      data.messageSeqs = data.messageSeqs.map((seq: unknown) => {
+        if (typeof seq !== 'number') throw new Error('base replay fixture title has a non-numeric message seq')
+        return seq + seqOffset
+      })
+    }
+    return JSON.stringify({ ...event, seq: event.seq + seqOffset, data })
+  })
   return [childHeader, ...eventLines, ...continued, ''].join('\n')
 }
 
@@ -87,12 +102,15 @@ describe('web e2e: persisted subagent conversation and human continuation', () =
 
   beforeAll(async () => {
     if (MODE === 'record') throw new Error('subagent conversation is a keyless assembled snapshot')
-    const baseFixture = await readFile(BASE_FIXTURE, 'utf8')
+    const selectedBaseFixture = await selectedSessionFixture(BASE_FIXTURE)
+    const baseFixture = prepareSessionSnapshotFixtureForComparison(
+      await readFile(selectedBaseFixture, 'utf8'),
+    )
     sidecarRoot = await mkdtemp(join(tmpdir(), 'dsh-web-subagent-'))
     const childFixturePath = join(sidecarRoot, 'child.jsonl')
     await writeFile(childFixturePath, childFixture(baseFixture, 'recorded-subagent', true))
     scaffold = await launchWebScaffold({
-      replayFixture: BASE_FIXTURE,
+      replayFixture: selectedBaseFixture,
       compareReplaySession: false,
       replayChildFixtures: [childFixturePath],
       paceMs: 25,

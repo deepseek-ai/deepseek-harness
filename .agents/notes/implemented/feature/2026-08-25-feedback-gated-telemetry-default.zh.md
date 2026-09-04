@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决定
 
-共享 dsh 基础配置把未设置或为空的 `DSH_TELEMETRY_MODE` 解析为 `FEEDBACK_ONLY` 而不是 `DISABLED`。用户记录 `/feedback` 之前不上传任何数据；每条已记录的反馈把尚未共享的会话日志记录——自上次交接至该事件为止——上传到已配置的 OTLP 端点，恢复的会话只共享当前生命周期，确认信息中的共享声明会说明记录反馈将上传尚未共享的记录。`FULL` 和 `DISABLED` 仍是显式的 `DSH_TELEMETRY_MODE` 覆盖值，任何非空的 `DSH_TELEMETRY_DISABLED` 仍是加载前的强制关闭开关，插件自身省略 `mode` 的默认值仍是 `DISABLED`：默认值只在共享基础配置的配置表达式中改变，部署本来就在那里覆盖它。
+共享 dsh 基础配置把未设置或为空的 `DSH_TELEMETRY_MODE` 解析为 `FEEDBACK_ONLY` 而不是 `DISABLED`。用户记录 `/feedback` 之前不上传任何数据。对于已经捕获的 Session 对象，每条反馈会上传从上次交接之后至该事件的后缀。新对象从 constructor boundary 开始：全新 Session 从 seq 0 开始，而 fork、resume 或迁移 Session 排除 constructor seed，从本生命周期的 `session/end-seed` 开始。因此，确认信息中的共享声明与所释放的生命周期本地前缀一致。`FULL` 和 `DISABLED` 仍是显式的 `DSH_TELEMETRY_MODE` 覆盖值，任何非空的 `DSH_TELEMETRY_DISABLED` 仍是加载前的强制关闭开关，插件自身省略 `mode` 的默认值仍是 `DISABLED`：默认值只在共享基础配置的配置表达式中改变，部署本来就在那里覆盖它。
 
 本决定取代[默认关闭决定](2026-08-10-telemetry-default-off.zh.md)中会话后端的默认值，把用户显式的反馈动作接受为该决定原本要求由部署设置提供的释放授权。该决定的强制关闭开关和 launcher 上报历史仍然有效，端点、批处理节奏和退出排空设置仍由[默认挂载决定](2026-07-31-web-telemetry-default-mount.zh.md)持有。
 

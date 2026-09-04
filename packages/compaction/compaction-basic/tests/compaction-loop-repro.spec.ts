@@ -201,6 +201,7 @@ function overflowHistorySeed(): readonly SessionEvent[] {
     }), { surfaceOp: 'append' })
     session.append('step/start', { turn, step: 1 })
     session.append('assistant/message', {
+      stream: [],
       turn,
       step: 1,
       message: createMessage({

@@ -28,4 +28,4 @@ Status: implemented
 
 ## 后果
 
-会话格式保持 `SESSION_FORMAT_VERSION` 为 0（预发布阶段的变动不递增版本号；携带 `resultSummary` 的旧日志只是多出一个不被读取的字段并缺少 `content`；v0 不作任何兼容性承诺）。既有的 PTC mode 快照 fixture（测试前置数据）已重新录制。模型可见范围扩大了：`run_code` 的 schema（新增一个必填参数）以及每一份 PTC mode 系统提示词／工具 schema 快照都发生了变化。Web UI 工作直接构建在新的事件载荷之上；每个子调用的实时运行状态已把本事件重塑为一对分发 start/end 事件（[实时并行分发](2026-07-26-ptc-live-parallel-dispatch.zh.md)）。
+该 UI 变更本身不要求结构性 Session 格式递增。已发布 v0 边现在冻结可接受的历史分发 payload 并将其保留到 v1；畸形混合结构会在发布前被拒绝。既有的 PTC mode 快照 fixture（测试前置数据）已重新录制。模型可见范围扩大了：`run_code` 的 schema（新增一个必填参数）以及每一份 PTC mode 系统提示词／工具 schema 快照都发生了变化。Web UI 工作直接构建在新的事件载荷之上；每个子调用的实时运行状态已把本事件重塑为一对分发 start/end 事件（[实时并行分发](2026-07-26-ptc-live-parallel-dispatch.zh.md)）。

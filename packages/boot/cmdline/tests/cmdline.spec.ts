@@ -4,7 +4,7 @@
  * active, then resolves that row's config against its injection-ready context.
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -34,6 +34,9 @@ interface Fixture {
 
 const disposers: (() => Promise<void>)[] = []
 
+/** Fixture tree roots, removed after their booted tree has been disposed. */
+const tempDirs: string[] = []
+
 const readyApp: AppReady = {
   onReady(listener) {
     listener()
@@ -59,6 +62,7 @@ function controlledAppReady(): { service: AppReady; commit(): void } {
 
 afterEach(async () => {
   for (const dispose of disposers.splice(0)) await dispose()
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
   internals.stdin = process.stdin
   internals.stdout = process.stdout
   internals.stderr = process.stderr
@@ -103,6 +107,7 @@ async function bootFixture(
   options: { objectInject?: boolean; withoutProvider?: boolean } = {},
 ): Promise<Fixture> {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-cmdline-'))
+  tempDirs.push(dir)
   const observed: Observed = { exits: [], out: '' }
   writeFileSync(join(dir, 'reader.mjs'), `
 export const name = 'reader'

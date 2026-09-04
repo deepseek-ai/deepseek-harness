@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-persistence-jsonl` stores each session in its own append-only JSONL log — checksummed Zstandard frames by default, raw newline-delimited lines when compression is disabled. It serves the same logical `SessionEvent` stream as any persistence backend, so choosing it changes nothing for the agent loop, the model, or replay; compression, packing, and crash recovery are storage-internal details. Choose it when consumers need a per-session file on disk; the logs are readable as plain lines when `compression: 'none'` is selected. A root directory is the one required configuration; durability, lazy materialization, and torn-tail crash recovery come with the backend.
+`dsh-session-persistence-jsonl` stores each session in a current append-only JSONL log and retains immutable historical format generations — checksummed Zstandard frames by default, raw newline-delimited lines when compression is disabled. It serves the current logical `SessionEvent` stream through persistence handles, so format migration, compression, historical decoding, and crash recovery remain storage-internal details. Choose it when consumers need a per-session file on disk; the logs are readable as plain lines when `compression: 'none'` is selected. A root directory is the one required configuration; durability, lazy materialization, released-v0/v1 migration, and torn-tail crash recovery come with the backend.
 
 ## Table of Contents
 
@@ -45,7 +45,6 @@ Choose this backend when consumers benefit from one artifact per session — nav
 | Field | Default | Meaning |
 |---|---|---|
 | `root` | required | Root directory for all session files |
-| `packChunks` | `true` | Write eligible `assistant/chunk` runs as packed rows; `false` keeps one event per line for diagnostics |
 | `compression` | `'zstd'` | Physical encoding: `'zstd'` checksummed frames, or `'none'` newline-delimited UTF-8 text |
 
 Live-event write batching is not configuration: the batching window is the seam's internal scheduling policy inside each write handle.
@@ -54,17 +53,21 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### On-disk layout
 
-Each session gets a session-owned directory under a readable project directory; the first logical line is the private v0 physical header, followed by one storage record per logical event (or one packed chunk row per eligible run). Its optional numeric `seedLength` remains byte-compatible: absence decodes to `SessionHeader.isSeeded: false`, while zero or a positive value decodes to `isSeeded: true` plus the exact `inheritedEventCount`. Storage records use the lossless provenance representation described below:
+Each session gets a session-owned directory under a readable project directory. Every canonical generation starts with a physical header whose version equals its filename. Current v2 stores one physical row per durable event; the frozen v0 and v1 readers also understand their historical packed Assistant-delta rows. V2 stores `isSeeded` in the header and derives the inherited cut from the last tagged `session/end-seed` marker, while historical codecs translate their numeric `seedLength`. The format catalog completes that translation before a handle exposes current logical values. Current storage records use the lossless provenance representation described below:
 
 ```text
 <root>/
   --<normalized-cwd>--/          # readable project directory (or _no-cwd/)
     <encoded-id>/                # session-owned directory
-      session.jsonl.zstd         # default: checksummed header frame + append frames
-      session.jsonl              # only with compression: 'none'
+      session.jsonl.zstd         # released v0, compressed root
+      session.v1.jsonl.zstd      # released v1, compressed root
+      session.v2.jsonl.zstd      # released v2, compressed root
+      session.jsonl              # released v0, raw root
+      session.v1.jsonl           # released v1, raw root
+      session.v2.jsonl           # released v2, raw root; later versions use vN
 ```
 
-Session ids are injectively escaped to one safe path segment before use (no traversal, no collision). The normalized cwd keeps the project directory readable for navigation; cwd strings that normalize alike share a project directory while session ids still select distinct session directories. Format-refusal diagnostics name the absolute path of the fixed transcript inside the resolved directories, so an operator can find the raw log a build refused to interpret.
+Session ids are injectively escaped to one safe path segment before use (no traversal, no collision). The normalized cwd keeps the project directory readable for navigation; cwd strings that normalize alike share a project directory while session ids still select distinct session directories. Runtime operations select the numerically highest canonical generation, and format-refusal diagnostics name that absolute path so an operator can find the raw log a build refused to interpret.
 
 ### Durability and crash semantics
 
@@ -72,7 +75,7 @@ A session is materialized lazily: `create(header)` writes nothing and returns th
 
 ### Reading the logs
 
-`open(id, 'read')` returns a handle whose `read(offset?, length?)` serves validated contiguous slices; the artifact is re-scanned on demand under a bounded stable read, so a slice never contains a torn tail. A torn final Zstandard frame is partially decoded: complete JSONL records already flushed into it are recovered into the logical log, and the write handle's first mutation truncates the torn bytes and durably rewrites the recovered records ahead of its own batch. `open(id, 'write')` primes the handle with the validated stored prefix, so resume's whole-log read costs no second parse before the first append. A bounded memo keyed by session id and the stat-derived revision lets an immediately following open reuse the parsed log — the cold observe-then-resume handoff parses once — and every local mutation invalidates its id. `stat(id)` and `list()` read only the header line and one `fs.stat`, carrying `sizeBytes` and a best-effort stat-derived revision (device, inode, size, nanosecond timestamps) without parsing the log. With `compression: 'none'`, the log is newline-delimited text an external reader can consume directly; the compressed default must be read through the backend.
+`open(id, 'read'|'write')` selects the highest canonical generation and publishes a current successor beside a supported historical source before returning the handle; the source remains byte-identical. The handle's `read(offset?, length?)` then serves validated contiguous slices, never a torn tail. A torn final Zstandard frame is partially decoded: complete JSONL records already flushed into it are recovered into the logical log, and the write handle's first mutation truncates current-generation torn bytes and durably rewrites the recovered records ahead of its own batch. A write open primes the handle with the validated stored prefix, and a bounded revision-keyed memo lets an immediate observe-to-resume handoff reuse that parse. `stat(id)` and `list()` select and translate only the highest generation header without reading event rows or publishing migration output; snapshots carry `sizeBytes` and a best-effort stat-derived revision for the selected file. With `compression: 'none'`, the log is newline-delimited text an external reader can consume directly; the compressed default must be read through the backend.
 
 -----
 
@@ -90,7 +93,7 @@ The backend owns its complete storage runtime (`src/storage.ts`): `JsonlSessionH
 
 ### Physical encoding
 
-The default artifact is a standard concatenation of independent [Zstandard frames](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.md): one checksummed frame containing only the header line, then one checksummed frame per durable append batch, using Node's built-in Zstandard API at its default compression level (no level knob). `sourceEventSeqs` uses a lossless storage representation: consecutive runs of at least three sequence numbers become `[start, end]` pairs, any other list stays verbatim, and reading expands the exact in-memory array. Listing reads and validates only the header frame. `compression: 'none'` keeps the same storage-form logical lines without frame compression. A root belongs to one encoding: startup discovery and targeted lookup reject the opposite suffix, and there is no format or compression migration, mixed-root fallback, or dual write. When `packChunks` is enabled, an eligible run of ≥3 consecutive same-block `assistant/chunk` delta events becomes one packed row (`text-chunks`/`reasoning-chunks`/`tool-call-chunks`) whose `seq0`/`time0` and per-member `dt` gaps reconstruct every member exactly; the lossless codec lives in `dsh-session` and reading is layout-blind, so packed, unpacked, and mixed files load identically.
+The default artifact is a standard concatenation of independent [Zstandard frames](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.md): one checksummed frame containing only the header line, then one checksummed frame per durable append batch, using Node's built-in Zstandard API at its default compression level (no level knob). Current v2 writes one event per row; `sourceEventSeqs` uses a lossless storage representation in which consecutive runs of at least three sequence numbers become `[start, end]` pairs, any other list stays verbatim, and reading expands the exact in-memory array. Listing reads and validates only the header frame. `compression: 'none'` keeps the same storage-form logical lines without frame compression. A root belongs to one encoding: startup discovery and targeted lookup reject generations with the other suffix; format migration preserves the configured encoding, while compression conversion, mixed-root fallback, and dual write remain unsupported. Frozen v0 and v1 codecs retain their packed-row decoders solely for historical generations.
 
 ### Source map
 
@@ -98,7 +101,8 @@ The default artifact is a standard concatenation of independent [Zstandard frame
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, the backend service class, and file storage primitives |
 | [`src/storage.ts`](src/storage.ts) | The JSONL handle, routed live-event buffer, in-process writer bookkeeping, listeners, teardown |
-| [`src/format.ts`](src/format.ts) | Log path derivation, header encoding, record scanning, packed-row layout |
+| [`src/format.ts`](src/format.ts) | Log path derivation, header encoding, and current record scanning |
+| [`src/generation.ts`](src/generation.ts) | Stable generation reads, format-adapter invocation, exclusive successor publication, committed reopen |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard frame compression, decoding, and frame scanning |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through publish and directory creation |
 | — | No runtime invariant companion is published; persistence correctness requires backend round-trip and crash-tail tests; this package exposes no continuously observable in-process relation. |
@@ -116,6 +120,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Session persistence seam](../session-persistence/README.md) — the service contract this backend implements.
 - [Project-session directory decision](../../../.agents/notes/implemented/architecture/2026-07-24-project-session-directories.md) — the layout tradeoff behind project and session directories.
 - [Zstandard JSONL session logs](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.md) — the checksummed-frame encoding rationale.
+- [Released Session format migrations](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md) — immutable generations, adjacent migration edges, and publication rules.
 
 -----
 
@@ -126,7 +131,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-JSONL storage contributes no live prompt or schema. Loading restores stored surface history and preserves prior request headers for reconstruction; the new loop composes its current envelope. Recovery balances an assistant request without a durable call with `TOOL_NOT_STARTED`; a durable call without a result becomes `TOOL_OUTCOME_UNKNOWN`, which tells the model to retry only read-only or idempotent work and to verify possible side effects or ask the user. Raw `assistant/chunk` records do not duplicate messages.
+JSONL storage contributes no live prompt or schema. Loading restores stored surface history and preserves prior request headers for reconstruction; the new loop composes its current envelope. Recovery balances an assistant request without a durable call with `TOOL_NOT_STARTED`; a durable call without a result becomes `TOOL_OUTCOME_UNKNOWN`, which tells the model to retry only read-only or idempotent work and to verify possible side effects or ask the user. Embedded Assistant streams and log-only attempts do not duplicate messages.
 
 #### Token effect
 
@@ -143,7 +148,7 @@ JSONL storage does not mutate live request prefixes. A resumed loop can reuse pr
 
 These limits define when this backend is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
-- **Only the configured encoding and current `SESSION_FORMAT_VERSION` (v0) load** — changing compression requires a separate or fresh root, or selecting raw mode; the pre-release format has no migration.
+- **Format migration preserves the configured encoding and supports only the catalogued chain** — this build migrates released v0 or v1 to current v2; changing compression requires a separate root, and retained predecessors do not provide automatic fallback or downgrade support.
 - **The flat-file storage layout does not load** — use a separate root or move pre-release artifacts into the project/session directory layout before loading.
 - **Compressed files are not directly line-readable** — use the backend to load them, or select `compression: 'none'` before writing a fresh root when external line readers are required.
 - **Nothing deletes session files** — logs accumulate under `root` until removed externally; the seam has no deletion API.

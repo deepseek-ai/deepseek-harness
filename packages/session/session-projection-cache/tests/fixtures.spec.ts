@@ -5,10 +5,11 @@
  * rename): the v3 whole-unit file (published 0.1.1-rc.2), a v4 per-record
  * document (published 0.1.2-alpha.3), a published v5 document, and the
  * v5-stamped lineage-less document reproducing byte-for-byte what the
- * formerly unguarded legacy bootstrap wrote over v3 records. Each must
- * recover through the real storage stack — the domain opens and the listing
- * read serves the archived title — and a record that fails schema validation
- * anyway is backed up and skipped instead of failing the boot.
+ * formerly unguarded legacy bootstrap wrote over v3 records. Each must open
+ * through the real storage stack without becoming a fold shortcut for the
+ * current Session format, then accept a current checkpoint rewrite. A record
+ * that fails schema validation is backed up and skipped instead of failing the
+ * boot.
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,7 +19,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { z } from 'zod'
-import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -83,7 +84,7 @@ async function fixtureJson<T>(name: string): Promise<T> {
 /** Header for the session a fixture record is bound to (identity witness). */
 function headerFor(id: SessionId, identity: FixtureDoc['record']['identity']): SessionHeader {
   return {
-    version: 0,
+    version: SESSION_FORMAT_VERSION,
     id,
     createdAt: identity.createdAt,
     isSeeded: false,
@@ -118,8 +119,8 @@ async function placeDoc(root: string, id: string, name: string): Promise<Fixture
 
 /**
  * Drive a live write over a recovered session id and assert the archived
- * document is replaced by a current-version one: v6 stamp, lineage present,
- * and the freshly folded title — the write path never keeps the old format.
+ * document is replaced by a current-version one: current domain and Session
+ * format stamps, lineage, and the freshly folded title.
  */
 async function assertRewrite(ctx: Context, root: string, id: SessionId): Promise<void> {
   const session = ctx.sessions.create(id)
@@ -129,7 +130,11 @@ async function assertRewrite(ctx: Context, root: string, id: SessionId): Promise
   await vi.waitFor(async () => {
     const doc = JSON.parse(await readFile(path, 'utf8')) as FixtureDoc
     expect(doc.version).toBe(projectionCacheDomainSpec.version)
-    expect(doc.record.identity).toMatchObject({ isSeeded: false, inheritedEventCount: 0 })
+    expect(doc.record.identity).toMatchObject({
+      formatVersion: SESSION_FORMAT_VERSION,
+      isSeeded: false,
+      inheritedEventCount: 0,
+    })
     expect(doc.record.rows['title']?.val).toBe('重写标题')
   }, { timeout: 5_000 })
 }
@@ -152,8 +157,18 @@ describe('archived version recovery', () => {
     const [sid, record] = Object.entries(archive.tables.sessions)[0]!
 
     const { ctx, cache } = await harness(root)
-    const snapshot = cache.cachedSnapshot(headerFor(SessionId(sid), record.identity), SessionLogOffset(0), ['title'])
-    expect(snapshot?.values.title).toBe(record.rows['title']!.val)
+    expect(cache.cachedSnapshot(
+      headerFor(SessionId(sid), record.identity),
+      SessionLogOffset(0),
+      ['title'],
+    )).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(
+      headerFor(SessionId(sid), record.identity),
+      SessionLogOffset(0),
+    )).toEqual({
+      asOfSeq: -1,
+      values: { title: record.rows.title?.val },
+    })
 
     // The one-time bootstrap materialized a current-version document.
     const migrated = JSON.parse(
@@ -169,19 +184,71 @@ describe('archived version recovery', () => {
     ['v5-session-doc.json', 5],
     ['v5-lineageless-doc.json', 5],
   ] as const) {
-    it(`serves the archived title from ${fixture}, then rewrites it current`, async () => {
+    it(`opens ${fixture} without serving its unbound fold, then rewrites it current`, async () => {
       const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
       const id = SessionId('fixture-session')
       const doc = await placeDoc(root, id, fixture)
       expect(doc.version).toBe(storedVersion)
 
       const { ctx, cache } = await harness(root)
-      const snapshot = cache.cachedSnapshot(headerFor(id, doc.record.identity), SessionLogOffset(0), ['title'])
-      expect(snapshot?.values.title).toBe(doc.record.rows['title']!.val)
+      expect(cache.cachedSnapshot(
+        headerFor(id, doc.record.identity),
+        SessionLogOffset(0),
+        ['title'],
+      )).toBeUndefined()
+      expect(cache.cachedPredecessorTitle(
+        headerFor(id, doc.record.identity),
+        SessionLogOffset(0),
+      )).toEqual({
+        asOfSeq: -1,
+        values: { title: doc.record.rows.title?.val },
+      })
 
       await assertRewrite(ctx, root, id)
     })
   }
+
+  it('serves an explicitly older format title but never a current or newer one through the predecessor path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
+    const sessionsDir = join(root, projectionCacheDomainSpec.name, 'sessions')
+    await mkdir(sessionsDir, { recursive: true })
+    const write = async (id: string, formatVersion: number, rowVersion = 1): Promise<void> => {
+      await writeFile(join(sessionsDir, `${id}.json`), JSON.stringify({
+        version: projectionCacheDomainSpec.version,
+        record: {
+          identity: {
+            formatVersion,
+            createdAt: 10,
+            cwd: '/work',
+            isSeeded: false,
+            inheritedEventCount: 0,
+          },
+          rows: { title: { ver: rowVersion, seq: 2, val: `${id} title` } },
+        },
+      }))
+    }
+    await write('older', SESSION_FORMAT_VERSION - 1)
+    await write('current', SESSION_FORMAT_VERSION)
+    await write('newer', SESSION_FORMAT_VERSION + 1)
+    await write('stale-title', SESSION_FORMAT_VERSION - 1, 2)
+
+    const { cache } = await harness(root)
+    const listed = (id: string): SessionHeader => ({
+      version: SESSION_FORMAT_VERSION,
+      id: SessionId(id),
+      createdAt: 10,
+      cwd: '/work',
+      isSeeded: false,
+    })
+    expect(cache.cachedPredecessorTitle(listed('older'), SessionLogOffset(0))).toEqual({
+      asOfSeq: -1,
+      values: { title: 'older title' },
+    })
+    expect(cache.cachedPredecessorTitle(listed('current'), SessionLogOffset(0))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('newer'), SessionLogOffset(0))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('stale-title'), SessionLogOffset(0))).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(listed('missing'), SessionLogOffset(0))).toBeUndefined()
+  })
 
   it('refuses a lineage-less archive for a seeded caller (identity mismatch, cold rebuild)', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-projcache-fx-'))
@@ -191,6 +258,7 @@ describe('archived version recovery', () => {
     const { cache } = await harness(root)
     const seeded = { ...headerFor(id, doc.record.identity), isSeeded: true }
     expect(cache.cachedSnapshot(seeded, SessionLogOffset(2), ['title'])).toBeUndefined()
+    expect(cache.cachedPredecessorTitle(seeded, SessionLogOffset(2))).toBeUndefined()
   })
 
   it('backs up and skips a record that fails schema validation instead of failing the boot', async () => {
@@ -229,7 +297,8 @@ describe('archived version recovery', () => {
     expect(JSON.parse(await readFile(join(sessionsDir, backup!), 'utf8')))
       .toMatchObject({ record: { rows: 'not-an-object' } })
 
-    // The broken record reads as absent; its neighbors still serve.
+    // The broken record reads as absent; its predecessor-stamped neighbor
+    // remains available for a safe current rewrite.
     const cache = ctx.sessionProjectionCache
     expect(cache.cachedSnapshot(headerFor(SessionId('broken'), { createdAt: 0 }), SessionLogOffset(0)))
       .toBeUndefined()
@@ -237,6 +306,7 @@ describe('archived version recovery', () => {
       headerFor(SessionId('survivor'), good.record.identity),
       SessionLogOffset(0),
       ['title'],
-    )?.values.title).toBe(good.record.rows['title']!.val)
+    )).toBeUndefined()
+    await assertRewrite(ctx, root, SessionId('survivor'))
   })
 })

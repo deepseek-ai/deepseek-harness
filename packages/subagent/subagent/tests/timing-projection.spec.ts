@@ -53,7 +53,7 @@ describe('subagent timing projection', () => {
       event('subagent/descriptor', 1, 1_100),
       event('turn/end', 2, 900),
       event('turn/start', 3, 2_000),
-      event('assistant/chunk', 4, 2_500),
+      event('assistant/attempt', 4, 2_500),
     ])).toEqual({ settledMs: 0, active: { since: 2_000, through: 2_500 } })
   })
 
@@ -61,7 +61,7 @@ describe('subagent timing projection', () => {
     const initial = subagentTimingProjectionDefinition.init()
     expect(subagentTimingProjectionDefinition.apply(
       initial,
-      event('assistant/chunk', 0, 1),
+      event('assistant/attempt', 0, 1),
     )).toBe(initial)
     expect(subagentTimingProjectionDefinition.apply(
       initial,

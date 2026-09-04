@@ -6,7 +6,7 @@
  * stays read-only.
  */
 
-import { chmod, mkdtemp, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -15,13 +15,19 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import AgentPresets, {
   COMPOSITION_FILE, copyComposition, METADATA_FILE, type Config,
 } from '@deepseek-ai/dsh-agent-presets'
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures')
 const VALID = '- id: tool-alpha\n  name: ../../plugins/contribute.js\n  config:\n    tool: alpha\n'
+
+/** Every temp root created by this file, removed after each test. */
+const roots: string[] = []
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+})
 
 let ctx: Context
 let userRoot: string
@@ -49,6 +55,7 @@ async function seedPreset(
 
 beforeEach(async () => {
   userRoot = await mkdtemp(join(tmpdir(), 'dsh-preset-authoring-'))
+  roots.push(userRoot)
   ctx = new Context()
   ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
   await ctx.plugin(Loader)
@@ -201,6 +208,7 @@ describe('deleting a preset', () => {
 describe('a deployment with more than one user root', () => {
   it('refuses to delete a preset the writable root does not own', async () => {
     const second = await mkdtemp(join(tmpdir(), 'dsh-preset-second-'))
+    roots.push(second)
     await seedPreset(second, 'elsewhere')
     const layered = new Context()
     layered.baseUrl = pathToFileURL(FIXTURES).href + '/'
@@ -246,7 +254,9 @@ describe('a deployment with no writable root', () => {
 
 describe('a user root that does not exist yet', () => {
   it('is created by the first copy', async () => {
-    const absent = join(await mkdtemp(join(tmpdir(), 'dsh-preset-absent-')), 'nested', 'preset')
+    const absentRoot = await mkdtemp(join(tmpdir(), 'dsh-preset-absent-'))
+    roots.push(absentRoot)
+    const absent = join(absentRoot, 'nested', 'preset')
     const fresh = new Context()
     fresh.baseUrl = pathToFileURL(FIXTURES).href + '/'
     await fresh.plugin(Loader)

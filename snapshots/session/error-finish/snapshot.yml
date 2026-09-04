@@ -3,6 +3,9 @@ scenario: error-finish
 profile: headless
 composition: default
 recording: authored
+sessionFormat:
+  version: 0
+  coverage: [retry-failure]
 header:
   class: default
 replay:

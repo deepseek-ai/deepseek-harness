@@ -3,6 +3,8 @@ import type {
   ConversationMatch, ConversationNodeContext, ConversationNodeDefinition, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
+import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { deriveTurnTokenUsage } from '@deepseek-ai/dsh-token-meter/client'
@@ -38,9 +40,7 @@ interface StepEvidence {
 }
 
 function isSessionEvent(event: ConversationMatch['event']): event is SessionEvent {
-  return event.type !== 'chunkrow/text-chunks'
-    && event.type !== 'chunkrow/reasoning-chunks'
-    && event.type !== 'chunkrow/tool-call-chunks'
+  return event.type !== 'assistant/live-chunk'
 }
 
 function hasTextAssistant(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
@@ -50,18 +50,17 @@ function hasTextAssistant(event: Parameters<ConversationNodeDefinition['match']>
       .some(block => block.kind === 'text' && block.text.trim() !== '')
 }
 
-function chunkHasText(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
-  if (event.type === 'chunkrow/text-chunks') {
-    return event.data.texts.some(text => text.trim() !== '')
-  }
-  if (event.type === 'chunkrow/reasoning-chunks'
-    || event.type === 'chunkrow/tool-call-chunks') return false
-  if (event.type !== 'assistant/chunk') return false
-  const chunk = event.data.chunk
+function chunkHasText(chunk: StreamChunk): boolean {
   if (chunk.type === 'text-delta') return chunk.text.trim() !== ''
   return chunk.type === 'block-end'
     && chunk.block.type === 'text'
     && chunk.block.text.trim() !== ''
+}
+
+function eventStreamHasText(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
+  if (event.type === 'assistant/live-chunk') return chunkHasText(event.data.chunk)
+  if (event.type !== 'assistant/attempt') return false
+  return expandAssistantStream(event.data.stream).some(member => chunkHasText(member.chunk))
 }
 
 function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[0]): {
@@ -69,11 +68,9 @@ function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[
   readonly step?: number
 } | undefined {
   if (event.type === 'assistant/message'
-    || event.type === 'assistant/chunk'
+    || event.type === 'assistant/attempt'
+    || event.type === 'assistant/live-chunk'
     || event.type === 'step/start'
-    || event.type === 'chunkrow/text-chunks'
-    || event.type === 'chunkrow/reasoning-chunks'
-    || event.type === 'chunkrow/tool-call-chunks'
     || event.type === 'step/end') {
     return { turn: event.data.turn, step: event.data.step }
   }
@@ -95,13 +92,10 @@ function closingAnchor(context: ConversationNodeContext<TurnTailState>): number 
     const coordinates = turnCoordinates(event)
     if (coordinates?.step === undefined) continue
     const previous = steps.get(coordinates.step) ?? { streamedText: false, finalized: false }
-    if (event.type === 'assistant/chunk'
-      || event.type === 'chunkrow/text-chunks'
-      || event.type === 'chunkrow/reasoning-chunks'
-      || event.type === 'chunkrow/tool-call-chunks') {
+    if (event.type === 'assistant/live-chunk' || event.type === 'assistant/attempt') {
       steps.set(coordinates.step, {
         ...previous,
-        streamedText: previous.streamedText || chunkHasText(event),
+        streamedText: previous.streamedText || eventStreamHasText(event),
       })
       continue
     }

@@ -10,7 +10,7 @@ JSONL 查找会根据请求的会话 id 在各个项目目录中选出物理日�
 
 ## 决策
 
-`loadStored(id)` 是协调器唯一的已存前缀查找操作。JSONL 后端扫描所有项目目录，要求名称与该 id 的编码值匹配且其中包含 transcript（文本记录）的会话目录至多有一个，解析其中的 transcript，然后验证 `header.id === id`，并验证选定路径要么等于 `logPath(root, header.cwd, header.id)`，要么经文件系统路径规范化后，两种写法解析为同一份 transcript。`list()` 执行相同的路径验证，并拒绝跨项目目录重复的 id。
+`findLog(id)` 是 JSONL provider 唯一的物理解析器。它扫描所有项目目录，并要求名称与该 id 的编码值匹配且其中包含 transcript（文本记录）的会话目录至多有一个。对于受支持的历史快照，generation 操作会在内存中转换其 header，然后验证 `header.id === id`，并验证选定路径要么等于 `logPath(root, header.cwd, header.id)`，要么经文件系统路径规范化后，两种写法解析为同一份 transcript；任何写入都必须在该检查之后。融合的 `loadCurrentStored(id)` 会在不再次读取文件的情况下解码所得当前前缀；已经是当前格式的快照采用无写入快速路径，并在该次解码中执行相同的身份检查。普通当前格式 `loadStored(id)` 钩子为协调器 fallback 保留身份校验。`list()` 执行相同的路径校验，并拒绝跨项目目录重复的 id。
 
 协调器会独立断言返回的 id，并在修复、发布状态或持久化后缀之前比较已存 cwd 和活动会话的 cwd。协调器保留一份已验证元数据的独立副本；JSONL 的追加和修复操作根据该副本派生路径。因此，`PersistenceBackend<TornMarker>` 接口既不需要限定范围的活动会话查找，也不需要存储定位器类型。
 

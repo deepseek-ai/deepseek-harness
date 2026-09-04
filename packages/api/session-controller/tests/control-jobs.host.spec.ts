@@ -3,7 +3,7 @@ import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { describe, expect, it } from 'vitest'
@@ -181,7 +181,7 @@ describe('Session control jobs updates', () => {
     const coldId = SessionId('session-cold-tasks')
     let loaded = false
     ctx.provide('sessionPersistence', {
-      list: async () => [{ version: 0, id: coldId, createdAt: 5, cwd: '/tmp' }],
+      list: async () => [{ version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 5, cwd: '/tmp' }],
       locate: () => undefined,
       load: () => { loaded = true; throw new Error('job projection must not load a cold log') },
     } as never)

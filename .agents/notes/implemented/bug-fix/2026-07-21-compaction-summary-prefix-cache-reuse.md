@@ -29,7 +29,7 @@ Auto-compaction always anchors at the surface head, so the shadowed region is th
 - **Keep the summarizer system prompt but reuse the rest** — rejected: the system slot is the very first token region a provider caches on, so a distinct summarizer system prompt invalidates the whole prefix regardless of what follows. Only moving the directive off the front recovers the cache.
 - **Send only the shadowed region without the `system`/`tools` head** — rejected: a differently-headed sequence still diverges from the cached request at the first token, so it caches no better while losing the framing the summary needs.
 - **Omit `tools` from the summarization request** (the model never calls one) — rejected: tool schemas are part of the cached token sequence; omitting them misaligns every following token and defeats reuse.
-- **A dedicated `assistant/chunk`-emitting summarization sub-session for snapshot replay** — rejected: the durable `compaction/summary` event records the successful local call's position and complete output, while its explicit call marker prevents replay from treating template or remote output as a local stream.
+- **A dedicated Agent-backed summarization sub-session for snapshot replay** — rejected: the durable `compaction/summary` event records the successful local call's position and complete output, while its explicit call marker prevents replay from treating template or remote output as a local stream. Creating a sub-session solely to obtain an Assistant settlement adds an unrelated lifecycle.
 
 ## Consequences
 

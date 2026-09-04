@@ -64,6 +64,7 @@ describe('web e2e: Agent Teams panel', () => {
     }), { surfaceOp: 'append' })
     agent.session.append('step/start', { turn: 1, step: 1 })
     agent.session.append('assistant/message', {
+      stream: [],
       turn: 1,
       step: 1,
       message: createMessage({

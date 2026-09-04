@@ -1,4 +1,4 @@
-/** Request-header canonicalization, equality, snapshot folding, and format rejection. */
+/** Request-header canonicalization, equality, and snapshot folding. */
 
 import { describe, expect, it } from 'vitest'
 import { Session, SessionId, SessionSeq, canonicalHeader, foldRequestHeader, headerEquals } from '@deepseek-ai/dsh-session'
@@ -83,35 +83,6 @@ describe('foldRequestHeader', () => {
     }), { surfaceOp: 'append' })
     session.append('request/header', { header: { config: { provider: 'mock', model: 'other' }, tools: [] }, reason: 'change' })
     expect(foldRequestHeader(session.snapshotEvents())).toEqual({ config: { provider: 'mock', model: 'other' } })
-  })
-})
-
-describe('legacy request-header format', () => {
-  it('rejects request/header-delta in seeds and untyped appends', () => {
-    const legacy = [{
-      type: 'request/header-delta', seq: 0, time: 1, data: { config: CONFIG },
-    }] as unknown as SessionEvent[]
-    expect(() => Session.create(SessionId('legacy'), legacy)).toThrow(/unsupported legacy request\/header-delta/)
-
-    const session = Session.create(SessionId('legacy-append-delta'))
-    const appendLegacy = session.append.bind(session) as (type: string, data: unknown) => SessionEvent
-    expect(() => appendLegacy('request/header-delta', { config: CONFIG }))
-      .toThrow(/unsupported legacy request\/header-delta/)
-    expect(session.snapshotEvents()).toHaveLength(0)
-  })
-
-  it('rejects the removed fallback reason in seeds and untyped appends', () => {
-    const legacy = [{
-      type: 'request/header', seq: 0, time: 1, data: { header: { config: CONFIG }, reason: 'fallback' },
-    }] as unknown as SessionEvent[]
-    expect(() => Session.create(SessionId('legacy-seed-reason'), legacy))
-      .toThrow('unsupported legacy request/header reason "fallback"')
-
-    const session = Session.create(SessionId('legacy-append-reason'))
-    const appendLegacy = session.append.bind(session) as (type: string, data: unknown) => SessionEvent
-    expect(() => appendLegacy('request/header', { header: { config: CONFIG }, reason: 'fallback' }))
-      .toThrow('unsupported legacy request/header reason "fallback"')
-    expect(session.snapshotEvents()).toHaveLength(0)
   })
 })
 

@@ -43,7 +43,10 @@ export function assertStoredId(id: SessionId, meta: SessionHeader): void {
  * @param meta - the stored header.
  * @param location - the backend's artifact location for the refusal, when one exists.
  */
-export function assertVersion(meta: SessionHeader, location?: SessionLocation): void {
+export function assertVersion(
+  meta: { readonly id: SessionId; readonly version: number },
+  location?: SessionLocation,
+): void {
   if (meta.version !== SESSION_FORMAT_VERSION) {
     throw unsupported(sessionFormatVersionRefusal(meta.id, meta.version), location)
   }

@@ -30,7 +30,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/live-interactions', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.jsonl')
+const FIXTURE = join(SNAPSHOT_DIR, 'session.v2.jsonl')
 // One golden pins the empty mid-turn loading state, one pins the sendable draft
 // state, and the other four capture what remains after cancel, after a
 // non-retryable failure, after retry recovery, and after retry exhaustion.
@@ -325,7 +325,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.jsonl', 'cancel.expected.md', 'cancel-expanded.expected.md',
+      'session.v2.jsonl', 'cancel.expected.md', 'cancel-expanded.expected.md',
       'loading.expected.md', 'running-draft.expected.md', 'error-auth.expected.md',
       'retry.expected.md', 'retry-expanded.expected.md', 'retry-exhausted.expected.md',
     ])

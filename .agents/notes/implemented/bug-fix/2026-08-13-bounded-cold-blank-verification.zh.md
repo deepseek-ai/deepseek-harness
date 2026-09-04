@@ -14,7 +14,7 @@ Web 会话树会隐藏空白 Session，并把当前选中的空白项复用为 N
 
 `dsh-api-session-controller` 注册 `sessionListMetadata` 投影，其中包含 `blank` 与 `lastPromptAt`。已附加摘要直接用同一组函数折叠实时日志。`blank` 只在 `turn/start` 时从 true 单调变为 false；`lastPromptAt` 只在来源 kind 为 `user` 的 `user/message` 上更新。
 
-冷摘要信任缓存的 `blank: false`，因为已包含 `turn/start` 的 checkpoint 前缀会始终保持非空。缓存的 `blank: true` 和 cache miss 都无法证明当前日志为空，因而按 `blank: false` 提供，让 Session 保持可见。早先的物理大小探测——`locate()` 路径加上门控一次精确 `readFrom(id, 0)` 折叠的 `coldBlankProbeMaxBytes` 资格阈值——随该 seam 的路径查询一并移除（[导出与预发布裁剪](../simplification/2026-08-27-persistence-export-and-pre-release-trims.zh.md)）；persistence 快照元数据（`stat()`/`list()` 上的 `eventCount`/`sizeBytes`）是重新引入精确冷验证的路径。
+冷摘要信任缓存的 `blank: false`，因为已包含 `turn/start` 的 checkpoint 前缀会始终保持非空。cache miss 无法证明当前日志为空，因而按 `blank: false` 提供，让 Session 保持可见。早先的物理大小探测——`locate()` 路径加上门控一次精确 `readFrom(id, 0)` 折叠的 `coldBlankProbeMaxBytes` 资格阈值——随该 seam 的路径查询一并移除（[导出与预发布裁剪](../simplification/2026-08-27-persistence-export-and-pre-release-trims.zh.md)）。Persistence 快照提示不会重新引入它：listing 保持 metadata/cache-only，绝不打开冷正文。
 
 `updatedAt` 取 `createdAt` 与 `lastPromptAt` 中较晚者。cache miss 或陈旧 checkpoint 只会让 Session 排得偏旧，而不会因无关的文件写入被提升。
 

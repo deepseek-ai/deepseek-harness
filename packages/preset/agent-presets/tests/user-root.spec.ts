@@ -10,7 +10,7 @@
  * temporary home, or it would reach the developer's real one.
  */
 
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -31,15 +31,20 @@ const VALID = '- id: tool-alpha\n  name: ../../plugins/contribute.js\n  config:\
 let home: string
 let previousHome: string | undefined
 
+/** Extra per-test roots, removed with the home directory. */
+const explicitRoots: string[] = []
+
 beforeEach(async () => {
   home = await mkdtemp(join(tmpdir(), 'dsh-preset-home-'))
   previousHome = process.env.DSH_HOME
   process.env.DSH_HOME = home
 })
 
-afterEach(() => {
+afterEach(async () => {
   if (previousHome === undefined) delete process.env.DSH_HOME
   else process.env.DSH_HOME = previousHome
+  await rm(home, { recursive: true, force: true })
+  for (const root of explicitRoots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
 /** Boot a roster over the fixture system root, with the derived root left to the plugin. */
@@ -120,6 +125,7 @@ describe('the harness-home preset root', () => {
 
   it('yields to a configured user root for authoring, which writableRoot takes first', async () => {
     const explicit = await mkdtemp(join(tmpdir(), 'dsh-preset-explicit-'))
+    explicitRoots.push(explicit)
     const ctx = await roster({
       roots: [
         { path: SYSTEM_ROOT, trust: 'system' as const },

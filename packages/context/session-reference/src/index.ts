@@ -75,6 +75,7 @@ interface PreparedSource {
 interface RenderedSource {
   data: ReferencedSessionData
   stats: ReferenceRetentionStats
+  capturedFormatVersion: number
 }
 
 /** Exact-read consumer that prepares immutable cross-session message context. */
@@ -306,6 +307,7 @@ export class SessionReferenceResolver extends TypertRemoteService {
       references: rendered.map((source, index) => ({
         sessionId: source.data.sessionId,
         label: source.data.label,
+        capturedFormatVersion: source.capturedFormatVersion,
         capturedThroughSeq: source.data.capturedThroughSeq,
         ...source.stats,
         inputIndex: index,
@@ -328,7 +330,10 @@ export class SessionReferenceResolver extends TypertRemoteService {
           'SESSION_REFERENCE_BUDGET_EXCEEDED',
         )
       }
-      rendered.push(retained)
+      rendered.push({
+        ...retained,
+        capturedFormatVersion: source.snapshot.session.version,
+      })
     }
     return rendered
   }

@@ -21,7 +21,7 @@ Status: implemented
 - ACP、headless、SDK 与 Web 会话都会发布缓存行，供后续消费方使用。确保日志领先的持久性屏障可能按缓存节奏 flush 已覆盖的前缀，并拆分原本会合并的物理 JSONL 行；各 profile 的录制快照会重新 pack 逻辑事件流，因此缓存时序不会决定 fixture 布局。
 - per-record 契约把故障范围缩小到单记录：畸形或过期版本的文档在打开时读作"无此记录"，单个坏文件不会拖垮整个缓存；检查点 schema 升级按会话丢弃过期行，而不是拒绝整个域。
 - json 后端仅在枚举时没有发现任何新布局文档路径、旧单元名称匹配，且其版本为当前版本或已声明兼容版本时，才从旧整单元缓存引导 per-record 目录树。接受集合之外的版本保持不变，新域为空；存储绝不把域 owner 未批准的版本改标为当前版本。只要存在任意新文档路径，即使文件不可读或版本陈旧，也会对整个单元禁用引导；缺失的会话行从日志重折叠。[跨版本读兼容决策](2026-09-02-projcache-cross-version-read-compat.zh.md)是版本策略的权威说明。
-- `session_projcache` 域使用版本 6，并声明版本 3、4、5 兼容。经背书的记录在升级后保留列表投影；缺失的 lineage 字段归一化为 unseeded 身份，seeded 调用方会拒绝该身份并回落冷折叠。仍然通不过 schema 校验的记录会被备份并跳过；后续每次写入都使用版本 6。
+- `session_projcache` 域使用版本 7，并声明版本 3 至 6 在结构上兼容。前代 identity 缺少 Session `formatVersion`，因此不能播种当前投影并会回落冷折叠；当前检查点会用完整 identity 重写它们。格式匹配后，缺失的 lineage 字段归一化为 unseeded 身份，seeded 调用方会拒绝该身份并回落冷折叠。仍然通不过 schema 校验的记录会被备份并跳过；后续每次写入都使用版本 7。
 - 缓存记录仍绑定同一日志生命周期：存储的 `{createdAt, cwd, isSeeded, inheritedEventCount}` 身份防止被重建的 id 或不匹配的继承前缀误导。
 
 ## Alternatives considered

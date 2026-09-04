@@ -1,0 +1,2 @@
+{"type":"session","version":2,"id":"{{session:1}}","createdAt":400,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":0}
+{"type":"hook/result","data":{"turn":1,"point":"Stop","handlerId":"fake:Stop:1","decision":"block","durationMs":37}}

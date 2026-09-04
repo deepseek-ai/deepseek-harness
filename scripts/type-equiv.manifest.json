@@ -738,6 +738,11 @@
     },
     {
       "doc": "docs/subsystems/session-reference.md",
+      "symbol": "SessionReferenceSource",
+      "source": "packages/context/session-reference/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-reference.md",
       "symbol": "PreparedReferencedMessage",
       "source": "packages/context/session-reference/src/types.ts"
     },
@@ -1904,6 +1909,11 @@
     {
       "doc": "docs/subsystems/core.md",
       "symbol": "AgentStatus",
+      "source": "packages/core/agent/src/runtime-types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
+      "symbol": "AssistantStreamFrame",
       "source": "packages/core/agent/src/runtime-types.ts"
     },
     {

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把提供方与它的消费方挂载在同一组合中，并完全按子进程服务的规定启动进程；本包只决定这些进程在宿主机上如何运行。
+把提供方与它的消费方挂载在同一组合中，并完全按子进程服务的规定启动进程；本包只决定这些进程在宿主机上如何运行。在 Windows 上，非终端子进程与 `taskkill` 辅助进程会隐藏窗口，因此后台操作不会抢占焦点。遵循进程启动可见性设置的 GUI 窗口也会被隐藏。
 
 ### 挂载提供方
 
@@ -50,7 +50,7 @@ kind: "package-reference"
 
 ### 关闭行为
 
-正常 dispose 会终止每棵仍在运行的进程树与终端并等待其退出。在 JavaScript 可观察的宿主退出期间——直接 `process.exit()`、默认未捕获异常、默认未处理 rejection——同步最终清理会强制终止所有仍归本包所有的对象（对进程组发送 SIGKILL，Windows 上运行 `taskkill /T /F`），且不创建任何 Promise 或定时器。未处理的 `SIGTERM`/`SIGINT`/`SIGHUP`、`SIGKILL`、fatal OOM、native crash 与断电则需要外部 supervisor。
+正常 dispose 会终止每棵仍在运行的进程树与终端并等待其退出。在 JavaScript 可观察的宿主退出期间——直接 `process.exit()`、默认未捕获异常、默认未处理 rejection——同步最终清理会强制终止所有仍归本包所有的对象（对进程组发送 SIGKILL，Windows 上运行 `taskkill /T /F`），且不创建任何 Promise 或定时器。同一退出阶段会删除每进程私有 spill 目录（仅当其未持有任何已完成的 spill 文件时；已完成的 spill 文件作为完整输出恢复产物保留，直到外部机制清理）。未处理的 `SIGTERM`/`SIGINT`/`SIGHUP`、`SIGKILL`、fatal OOM、native crash 与断电则需要外部 supervisor。
 
 ### 可能出错的地方
 
@@ -127,7 +127,7 @@ spill 文件以 `0600` 权限、`O_EXCL` 与随机名称在 `0700` 每进程目�
 - **守护化的终端后代仍可能逃出可观察边界**——在 macOS 上，子进程如果在任何前台检查快照之前重新设定父进程，将无法再从 PTY 根进程发现；在 Linux 上，调用 `setsid` 的子进程会同时离开进程树与自有终端会话；本提供方不新增持续进程表监视器。
 - **进程内清理要求退出阶段仍能执行 JavaScript**——直接 `process.exit()`、默认未捕获异常和默认未处理 rejection 会发出 Node 同步 `exit` 事件；未处理的 `SIGTERM`、`SIGINT` 或 `SIGHUP`、`SIGKILL`、fatal OOM、`process.abort()`、native crash 与断电，都需要外部 supervisor、容器 init 或等价的 OS 所有者负责。
 - **凭据清除依赖名称启发式规则**——只匹配 `*KEY*`/`*PASSWORD*`/`*SECRET*`/`*TOKEN*`；名称不同的 secret（例如 `*PASSPHRASE*`）会继续传递，对误删变量引入白名单属于已记录的后续工作。
-- **不会删除已完成的 spill 文件**——有界的完整输出恢复文件（以及每进程私有 spill 目录）会在 OS tmpdir 下累积，直到外部机制进行清理。
+- **不会删除已完成的 spill 文件**——有界的完整输出恢复文件会在 OS tmpdir 下累积，直到外部机制进行清理；每进程私有 spill 目录仅在未持有任何已完成 spill 文件时于 JavaScript 可观察的退出阶段删除。
 
 <a id="dev-note"></a>
 ### 开发备注

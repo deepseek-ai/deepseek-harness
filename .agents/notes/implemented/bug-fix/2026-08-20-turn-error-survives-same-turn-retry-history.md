@@ -28,4 +28,4 @@ The Definition suite drives the real assembler through a same-turn retry chain e
 
 ## Consequences
 
-Exhausted recovery now leaves durable, replayable feedback: the red terminal row with the display-safe message and code, plus the collapsed retry chain as recovery context. Session logs recorded under the retired new-turn retry model would render one `turn-error` row per failed turn on replay; the pre-release format stance accepts that, and no shipped log producer has emitted that shape since same-turn retries landed.
+Exhausted recovery now leaves durable, replayable feedback: the red terminal row with the display-safe message and code, plus the collapsed retry chain as recovery context. Session logs recorded under the retired new-turn retry model render one `turn-error` row per failed turn on replay; the v0-to-v1 edge preserves those terminal facts, and no shipped log producer has emitted that shape since same-turn retries landed.

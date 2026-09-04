@@ -947,24 +947,17 @@ describe('session-query exact reads', () => {
       }),
       { surfaceOp: 'append' },
     )
-    session.append('assistant/chunk', {
+    session.append('assistant/attempt', {
       turn: 1,
       step: 1,
-      chunk: { type: 'text-delta', index: 0, text: 'draft' },
+      stream: [{ type: 'text-chunks', time0: 0, index: 0, dt: [], texts: ['draft'] }],
     })
     session.append(
-      'assistant/message',
-      {
-        turn: 1, step: 1,
-        message: createMessage({
-          role: 'assistant',
-          content: [{ type: 'text', text: 'replacement' }],
-          source: {
-            kind: 'model',
-            ...{ provider: 'mock', model: 'mock' },
-          },
-        }),
-      },
+      'user/message',
+      createUserMessage({
+        content: [{ type: 'text', text: 'replacement' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      }),
       { surfaceOp: { op: 'replace', start: first.seq, end: first.seq }, sourceEventSeqs: [first.seq] },
     )
 
@@ -982,10 +975,10 @@ describe('session-query exact reads', () => {
       }),
       { surfaceOp: 'append' },
     )
-    session.append('assistant/chunk', {
+    session.append('assistant/attempt', {
       turn: 1,
       step: 1,
-      chunk: { type: 'text-delta', index: 0, text: 'draft' },
+      stream: [{ type: 'text-chunks', time0: 0, index: 0, dt: [], texts: ['draft'] }],
     })
     session.append(
       'user/message',
@@ -1011,6 +1004,7 @@ describe('session-query exact reads', () => {
     session.append(
       'assistant/message',
       {
+        stream: [],
         turn: 2, step: 1,
         message: createMessage({
           role: 'assistant',

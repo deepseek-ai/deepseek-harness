@@ -51,6 +51,7 @@ describe('session-query semantic extraction', () => {
         content: messageContent, source: { kind: 'user' },
       }), surfaceOp: 'append' },
       { type: 'assistant/message', seq: SessionSeq(1), time: 2, data: {
+        stream: [],
         turn: 1, step: 1,
         message: createMessage({
           role: 'assistant',
@@ -103,6 +104,7 @@ describe('session-query semantic extraction', () => {
       seq: SessionSeq(9),
       time: 10,
       data: {
+        stream: [],
         turn: 1,
         step: 1,
         message: createMessage({
@@ -137,7 +139,16 @@ describe('session-query semantic extraction', () => {
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
       { type: 'step/start', seq: SessionSeq(1), time: 1, data: { turn: 1, step: 1 } },
       { type: 'step/end', seq: SessionSeq(2), time: 1, data: { turn: 1, step: 1 } },
-      { type: 'assistant/chunk', seq: SessionSeq(3), time: 1, data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'raw' } } },
+      {
+        type: 'assistant/attempt',
+        seq: SessionSeq(3),
+        time: 1,
+        data: {
+          turn: 1,
+          step: 1,
+          stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['raw'] }],
+        },
+      },
       { type: 'request/header', seq: SessionSeq(4), time: 1, data: { header: { config: { provider: 'test', model: 'test' } }, reason: 'initial' } },
       { type: 'future/event', seq: SessionSeq(5), time: 1, data: { text: 'hidden' } } as never,
     ]
@@ -150,18 +161,23 @@ describe('session-query document and filter helpers', () => {
     { type: 'user/message', seq: SessionSeq(0), time: 10, data: createUserMessage({
       content: [{ type: 'text', text: 'Hello\n(AI)+' }], source: { kind: 'user' },
     }), surfaceOp: 'append' },
-    { type: 'assistant/chunk', seq: SessionSeq(1), time: 11, data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'raw' } } },
-    { type: 'assistant/message', seq: SessionSeq(2), time: 12, data: {
-      turn: 1, step: 1,
-      message: createMessage({
-        role: 'assistant',
+    {
+      type: 'assistant/attempt',
+      seq: SessionSeq(1),
+      time: 11,
+      data: {
+        turn: 1,
+        step: 1,
+        stream: [{ type: 'text-chunks', time0: 11, index: 0, dt: [], texts: ['raw'] }],
+      },
+    },
+    { type: 'user/message', seq: SessionSeq(2), time: 12, data:
+      createUserMessage({
         content: [{ type: 'text', text: 'replacement' }],
-        source: {
-          kind: 'model',
-          ...{ provider: 'mock', model: 'mock' },
-        },
+        source: { kind: 'plugin', plugin: 'test' },
       }),
-    }, surfaceOp: { op: 'replace', start: SessionSeq(0), end: SessionSeq(0) }, sourceEventSeqs: [SessionSeq(0)] },
+    surfaceOp: { op: 'replace', start: SessionSeq(0), end: SessionSeq(0) },
+    sourceEventSeqs: [SessionSeq(0)] },
     { type: 'turn/end', seq: SessionSeq(3), time: 13, data: { turn: 1, reason: { kind: 'interrupted' } } },
   ]
 
@@ -229,20 +245,13 @@ describe('session-query document and filter helpers', () => {
       { kind: 'created-at', from: Number.NaN },
     ])).toThrow(expectCode('SESSION_QUERY_INVALID_FILTER'))
     const malformed: SessionEvent[] = [{
-      type: 'assistant/message',
+      type: 'user/message',
       seq: SessionSeq(0),
       time: 1,
-      data: {
-        turn: 1, step: 1,
-        message: createMessage({
-          role: 'assistant',
-          content: [{ type: 'text', text: 'bad' }],
-          source: {
-            kind: 'model',
-            ...{ provider: 'mock', model: 'mock' },
-          },
-        }),
-      },
+      data: createUserMessage({
+        content: [{ type: 'text', text: 'bad' }],
+        source: { kind: 'plugin', plugin: 'test' },
+      }),
       surfaceOp: { op: 'replace', start: SessionSeq(9), end: SessionSeq(9) },
     }]
     expect(() => buildSessionEventRecords(id, malformed)).toThrow(expectCode('SESSION_QUERY_INVALID_SURFACE'))

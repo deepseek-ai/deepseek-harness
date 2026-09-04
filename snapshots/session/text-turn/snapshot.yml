@@ -3,6 +3,9 @@ scenario: text-turn
 profile: headless
 composition: default
 recording: live
+sessionFormat:
+  version: 1
+  coverage: [adjacent-migration]
 header:
   class: default
   pin: true

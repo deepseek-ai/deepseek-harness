@@ -9,11 +9,11 @@
  * writes CRLF on Windows, so exact text assertions normalize line endings.
  */
 
-import { mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { PwshLocalExecutor, ENCODING_PREAMBLE, candidatePwshPaths, resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
@@ -23,6 +23,16 @@ import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { ShellProcess } from '@deepseek-ai/dsh-shell'
 
 const spillDir = mkdtempSync(join(tmpdir(), 'dsh-pwsh-exec-spec-'))
+
+afterAll(() => {
+  rmSync(spillDir, { recursive: true, force: true })
+})
+
+/** Per-test temp dirs, removed after each test. */
+const tempDirs: string[] = []
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
 
 // The probe follows the executor's own resolution (Program Files installs on
 // Windows are found even when bare `pwsh` is not on PATH).
@@ -114,6 +124,7 @@ describe('resolvePwshPath and candidatePwshPaths (pure, every platform)', () => 
 
   it('returns the first EXISTING win32 candidate, else pwsh', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-pwsh-resolve-'))
+    tempDirs.push(dir)
     const store = join(dir, 'store')
     mkdirSync(store, { recursive: true })
     writeFileSync(join(store, 'pwsh.exe'), '')
@@ -131,6 +142,7 @@ describe('resolvePwshPath and candidatePwshPaths (pure, every platform)', () => 
     // Store app execution aliases stat as EACCES but lstat as a link; a
     // dangling symlink reproduces that split on every platform.
     const dir = mkdtempSync(join(tmpdir(), 'dsh-pwsh-resolve-link-'))
+    tempDirs.push(dir)
     const store = join(dir, 'store')
     mkdirSync(store, { recursive: true })
     const link = join(store, 'pwsh.exe')
@@ -141,6 +153,7 @@ describe('resolvePwshPath and candidatePwshPaths (pure, every platform)', () => 
 
   it('skips a directory candidate and falls through to the PATH-resolution default', () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-pwsh-resolve-dir-'))
+    tempDirs.push(dir)
     const store = join(dir, 'store')
     mkdirSync(join(store, 'pwsh.exe'), { recursive: true })
     expect(resolvePwshPath(undefined, {
@@ -201,6 +214,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.run', () => {
   it('uses config cwd, overridable per call', async () => {
     const first = mkdtempSync(join(tmpdir(), 'dsh-pwsh-cwd-a-'))
     const second = mkdtempSync(join(tmpdir(), 'dsh-pwsh-cwd-b-'))
+    tempDirs.push(first, second)
     const { bash } = await setup({ cwd: first })
     const fromConfig = await bash.run(bash.resolve({ command: '(Get-Location).Path' }))
     expect(samePath(fromConfig.stdout.text.trim(), first)).toBe(true)

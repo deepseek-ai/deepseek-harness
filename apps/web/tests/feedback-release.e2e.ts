@@ -18,7 +18,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
   compareOrRefreshGolden, fixtureUserPrompts,
-  launchWebScaffold, recordFixture, watchConsole, webSnapshotMode, type WebScaffold,
+  launchWebScaffold, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
@@ -26,7 +26,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/feedback-rele
 // The release path needs only a settled ordinary turn, so this lane replays
 // the feedback-command scenario's recorded session (declared as this
 // manifest's `session.source`) instead of recording a duplicate.
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/feedback-command/session.jsonl', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/feedback-command/session.v2.jsonl', import.meta.url))
 const ACK_EXPECTED = join(SNAPSHOT_DIR, 'ack.expected.md')
 const ACK_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'ack-expanded.expected.md')
 const MODE = webSnapshotMode()
@@ -58,7 +58,7 @@ describe('web e2e: feedback-gated release under the shipped default mode', () =>
     scaffold = await launchWebScaffold({
       telemetryUrl: `http://127.0.0.1:${address.port}/v1/logs`,
       telemetryMode: 'FEEDBACK_ONLY',
-      // The replayed session.jsonl belongs to the feedback-command scenario;
+      // The replayed session.v2.jsonl belongs to the feedback-command scenario;
       // comparing (or refreshing) the persisted session here would rewrite
       // that shared source with this lane's feedback events. The release
       // evidence lives in this lane's golden and collector assertions.
@@ -91,11 +91,7 @@ describe('web e2e: feedback-gated release under the shipped default mode', () =>
     const settled = scaffold.whenTurnSettled()
     await input.fill(PROMPT)
     await input.press('Enter')
-    const sessionId = await settled
-    if (MODE === 'record') {
-      // Re-records the SHARED feedback-command session this lane replays.
-      await recordFixture(scaffold, sessionId, FIXTURE)
-    }
+    await settled
   }, 60_000)
 
   it.skipIf(MODE === 'record')('releases the session records through the feedback and pins the disclosure', async () => {

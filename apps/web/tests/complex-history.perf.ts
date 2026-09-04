@@ -15,6 +15,7 @@ import {
   createAssistantMessage,
   createToolResultMessage,
   createUserMessage,
+  expandAssistantStream,
 } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -212,6 +213,7 @@ function appendAssistant(
   body: string,
 ): void {
   session.append('assistant/message', {
+    stream: [],
     turn,
     step,
     message: createAssistantMessage({
@@ -243,6 +245,7 @@ function appendToolStep(
   })
 
   session.append('assistant/message', {
+    stream: [],
     turn,
     step,
     message: createAssistantMessage({
@@ -310,6 +313,8 @@ function fixtureLog(session: Session): string {
     id: '{{sessionId}}',
     createdAt: Date.now() - 60_000,
     cwd: '{{cwd}}',
+    isSeeded: false,
+    delegationDepth: 0,
   }
   return [
     JSON.stringify(header),
@@ -977,7 +982,11 @@ async function continueConversation(
     const streamAfter = await chromiumMetrics(cdp)
     const mutations = await stopMutationProbe(world.page)
     const turnEvents = world.sessionEvents.slice(eventStart)
-    const chunks = turnEvents.filter(event => event.type === 'assistant/chunk')
+    const chunks = turnEvents.flatMap(event => (
+      event.type === 'assistant/message' || event.type === 'assistant/attempt'
+        ? expandAssistantStream(event.data.stream)
+        : []
+    ))
     const toolCalls = turnEvents.filter(event => event.type === 'tool/call')
     const toolResults = turnEvents.filter(event => event.type === 'tool/result')
     const toolTurn = spec.toolResultMarker !== undefined
@@ -1095,7 +1104,11 @@ async function measurePostSoakUserRender(
   const fullTurnMs = performance.now() - fullTurnStarted
 
   const turnEvents = world.sessionEvents.slice(eventStart)
-  const chunks = turnEvents.filter(event => event.type === 'assistant/chunk')
+  const chunks = turnEvents.flatMap(event => (
+    event.type === 'assistant/message' || event.type === 'assistant/attempt'
+      ? expandAssistantStream(event.data.stream)
+      : []
+  ))
   const user = turnEvents.find(
     event => event.type === 'user/message' && event.data.source.kind === 'user',
   )

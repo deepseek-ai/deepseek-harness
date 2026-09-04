@@ -135,6 +135,8 @@
     "verify-doc-graphs": "tsx scripts/gen-doc-graphs.ts --check",
     "gen-persistence-catalog": "tsx scripts/gen-persistence-catalog.ts",
     "verify-persistence-catalog": "tsx scripts/gen-persistence-catalog.ts --check",
+    "gen-session-format-catalog": "tsx scripts/gen-session-format-catalog.ts",
+    "verify-session-format-catalog": "tsx scripts/gen-session-format-catalog.ts --check",
     "gen-third-party-notices": "tsx scripts/gen-third-party-notices.ts",
     "verify-third-party-notices": "tsx scripts/gen-third-party-notices.ts --check",
     "gen-module-graph": "tsx scripts/gen-module-graph.ts",

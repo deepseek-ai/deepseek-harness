@@ -2,7 +2,12 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { normalizeSessionSnapshot, type NormalizeContext } from '@deepseek-ai/dsh-session-snapshot'
+import {
+  fixtureContext,
+  normalizeSessionSnapshot,
+  normalizeSessionSnapshots,
+  type NormalizeContext,
+} from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { createUserMessage, ToolCallId , createMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
@@ -20,6 +25,16 @@ const tsconfigPath = fileURLToPath(new URL('../../../../../../tsconfig.json', im
 const sessionId = SessionId('semantic-checkpoint-unknown-outcome')
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 const task = 'Continue safely from the interrupted operation.'
+
+/** Compare one current normalized Session with its generation-aware committed fixture. */
+async function expectSession(actual: string, expectedPath: string): Promise<void> {
+  const expected = await readFile(expectedPath, 'utf8')
+  const parse = (content: string): Record<string, unknown>[] => content.split('\n')
+    .filter(line => line.trim().length > 0)
+    .map(line => JSON.parse(line) as Record<string, unknown>)
+  expect(normalizeSessionSnapshots([actual], fixtureContext(actual)).map(parse))
+    .toEqual(normalizeSessionSnapshots([expected], fixtureContext(expected)).map(parse))
+}
 
 async function seedInterruptedSession(root: string, cwd: string): Promise<string> {
   const ctx = new Context()
@@ -45,6 +60,7 @@ async function seedInterruptedSession(root: string, cwd: string): Promise<string
       data: {
         turn: 1,
         step: 1,
+        stream: [],
         message: createMessage({
           role: 'assistant',
           content: [{ type: 'tool-call', id: ToolCallId('unknown-outcome-call'), name: 'write_remote', arguments: '{"value":1}' }],
@@ -103,7 +119,7 @@ describe('semantic checkpoint recovery snapshot', () => {
         const normalization: NormalizeContext = { sessionIds: [sessionId], cwd }
         const session = normalizeSessionSnapshot(await readFile(sessionPath, 'utf8'), normalization)
         if (refreshing) await writeFile(sessionExpected, session)
-        expect(session).toBe(await readFile(sessionExpected, 'utf8'))
+        await expectSession(session, sessionExpected)
         expect(session).toContain('TOOL_OUTCOME_UNKNOWN')
         expect(session).toContain('Do not retry blindly.')
       },

@@ -14,7 +14,7 @@ import { chromium } from 'playwright'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, type SessionEvent } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden, fixtureUserPrompts,
   launchWebScaffold, recordFixture, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
@@ -22,12 +22,13 @@ import {
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/navigation-panes', import.meta.url))
-const SEED = join(SNAPSHOT_DIR, 'session.jsonl')
+const SEED = join(SNAPSHOT_DIR, 'session.v2.jsonl')
 const TRAJECTORY_EXPECTED = join(SNAPSHOT_DIR, 'trajectory.expected.md')
 const SEARCH_EXPECTED = join(SNAPSHOT_DIR, 'search-results.expected.md')
 const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'navigation-panes-web-e2e'
+const EXPORTED_LOG_FILE = `session.v${SESSION_FORMAT_VERSION}.jsonl`
 
 // Turn 1 leads with a distinctive word: the session-title fallback takes the
 // first words of the first message, so the sidebar-search scenario has a
@@ -207,14 +208,12 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await compareOrRefreshGolden(SEARCH_EXPECTED, snapshot, MODE)
 
     await result.click()
-    // Search navigation addresses the session, not a specific event, and the
-    // query remains until the user explicitly clears it.
-    await expect.poll(() => search.inputValue(), { timeout: 5_000 }).toBe('WATERFALL')
+    // Search navigation returns to the browser with the opened Session row exposed.
+    await expect.poll(() => search.inputValue(), { timeout: 5_000 }).toBe('')
+    const selectedRow = page.locator('[role="tree"][aria-label="Sessions"] [role="treeitem"][aria-selected="true"]')
+    await expect.poll(() => selectedRow.count(), { timeout: 10_000 }).toBe(1)
     await expect.poll(() => page.getByText('FIRST_DONE', { exact: true }).count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(1)
     await expect.poll(() => page.getByRole('heading', { name: 'Navigation Summary' }).count(), { timeout: 15_000 }).toBe(1)
-    await page.getByRole('button', { name: 'Clear search' }).click()
-    await expect.poll(() => search.inputValue(), { timeout: 5_000 }).toBe('')
-    await expect.poll(() => page.locator('[role="treeitem"]').count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(1)
   }, 90_000)
 
   it.skipIf(MODE === 'record')('renders the trajectory ledger and opens its local record inspector', async () => {
@@ -309,8 +308,11 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     // The real host streamed the ZIP; its root entry is the persisted log
     // text verbatim (the assembled seam: real route, real persistence read).
     const files = unzipSync(await readFile(await download.path()))
-    expect(Object.keys(files)).toEqual(['session.jsonl'])
-    const content = strFromU8(files['session.jsonl'] as Uint8Array)
+    expect(Object.keys(files)).toEqual([EXPORTED_LOG_FILE])
+    const content = strFromU8(files[EXPORTED_LOG_FILE] as Uint8Array)
+    expect(JSON.parse(content.split('\n')[0] ?? '')).toMatchObject({
+      type: 'session', version: SESSION_FORMAT_VERSION,
+    })
     expect(content.split('\n')[0]).toContain(SEED_ID)
     expect(content).toContain('FIRST_DONE')
     await dialog.getByText('Close', { exact: true }).click()
@@ -343,7 +345,11 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
       const slashDownload = await slashDownloadPromise
       expect(slashDownload.suggestedFilename()).toBe(download.suggestedFilename())
       const slashFiles = unzipSync(await readFile(await slashDownload.path()))
-      const slashContent = strFromU8(slashFiles['session.jsonl'] as Uint8Array)
+      expect(Object.keys(slashFiles)).toEqual([EXPORTED_LOG_FILE])
+      const slashContent = strFromU8(slashFiles[EXPORTED_LOG_FILE] as Uint8Array)
+      expect(JSON.parse(slashContent.split('\n')[0] ?? '')).toMatchObject({
+        type: 'session', version: SESSION_FORMAT_VERSION,
+      })
       const slashEvents = parseSessionLog(slashContent)
       const exportRun = slashEvents.findLast(event => event.type === 'command/run' && event.data.name === 'export')
       if (exportRun?.type !== 'command/run') throw new Error('slash ZIP has no export command/run')
@@ -503,7 +509,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
 
   it.skipIf(MODE === 'record')('keeps the recorded fixture inventory exact', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
+      'session.v2.jsonl', 'search-results.expected.md', 'trajectory.expected.md',
       'terminal-card.expected.md',
     ])
   })

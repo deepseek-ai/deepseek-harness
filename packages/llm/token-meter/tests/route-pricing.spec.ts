@@ -84,6 +84,7 @@ function appendSuccessfulCall(session: Session, value: EpochHeader, usage?: Toke
   session.append('step/start', { turn: 1, step: 1 })
   session.append('request/header', { header: value, reason: 'initial' })
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: createMessage({

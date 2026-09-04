@@ -51,7 +51,7 @@ Each `(kind, id)` has at most one start Match. A second start fails immediately;
 
 #### `match(event)`
 
-`match(event)` reads only the current `SessionEventLike` and returns `{ id, role: 'start' | 'update' }` or `null`. It cannot access a Context, history, a Reader, a Location, or the view envelope. A `chunkrow/*` event can only be an update; the Assembler rejects it as a start, and `start()` receives a `ConversationStartMatch` containing a standard `SessionEvent`.
+`match(event)` reads only the current `SessionEventLike` and returns `{ id, role: 'start' | 'update' }` or `null`. It cannot access a Context, history, a Reader, a Location, or the view envelope. A Client-only `assistant/live-chunk` event can only be an update; the Assembler rejects every transient start, and `start()` receives a `ConversationStartMatch` containing a durable `SessionEvent`.
 
 This restriction makes one scalar event or packed run's routing cost depend only on the number of registered Definitions. The Assembler never scans a Definition's historical Contexts to decide which one owns an update.
 
@@ -110,7 +110,7 @@ Dependencies point strictly from earlier starts to later starts, so transitive r
 
 #### `update(context, match)`
 
-`update()` handles a post-start scalar or packed Match that `match()` has already routed exactly to the current `(kind, id)`. It does not decide which Context owns the input. A Definition that consumes Assistant deltas folds each matching `chunkrow/*` value as one batch without constructing member events.
+`update()` handles a post-start durable or transient Match that `match()` has already routed exactly to the current `(kind, id)`. It does not decide which Context owns the input. An Assistant Definition folds each `assistant/live-chunk` update directly and expands an embedded `assistant/message` or `assistant/attempt` stream during history replay.
 
 The Assembler invokes `update()` in ascending `seq` order. A live tail update can apply incrementally; any non-tail insertion, newly loaded start, or invalidated dependency causes a complete replay from `start()`.
 
@@ -262,7 +262,7 @@ Page size, record packing, the number of history loads, and RAF coalescing affec
 | Next-step Inbox / `inbox-next-step` | Splice Event seq | Each `agent/inbox/spliced` targeting next-step | None | Append message IDs to persistent splice state; materialize once per claim and expose the shared current claimed batch to Message |
 | Message / `input-message` | Message ID | Append-surface `user/message` | None | Use source for a context message, or read the nearest next-step Inbox to distinguish user from steering |
 | Request Prompt / `request-prompt` | Header Event seq | Each `request/header` | None | Read the preceding Request Prompt through Reader, retain the full prompt state, and classify system/tool changes |
-| Assistant / `assistant-step` | `turn:step` | `step/start` | Scalar or packed `assistant/chunk`, final `assistant/message`, and same-step Retry | Aggregate blocks, usage, first-token time, final evidence, and retry-hidden state, then publish same-key Step data |
+| Assistant / `assistant-step` | `turn:step` | `step/start` | Live `assistant/live-chunk`, durable `assistant/message` or `assistant/attempt`, and same-step Retry | Aggregate blocks, usage, first-token time, settlement evidence, and retry-hidden state, then publish same-key Step data |
 | Tool / `tool-call` | Root call ID | Root `tool/call` | Root result and Code Dispatch start/result | Aggregate the root, children, and parent Map; Dispatch Events route exactly through `rootCallId` |
 | Command / `command` | Command ID | `command/run` | `command/done` and compact lifecycle/checkpoint Events carrying a source command ID | Aggregate command outcome and manual-compaction evidence |
 | Automatic Compaction / `compaction` | Compaction ID | `compaction/start` without a source command ID | Summary, end, and replacement checkpoint | Aggregate summary/checkpoint; sufficient checkpoint evidence supports fallback without a start |
@@ -382,7 +382,7 @@ History-path tests cover complete replace, non-overlapping prepend, complete-ran
 
 **Define a reverse State fold for backward history scanning.** Rejected: every business would maintain two inverse algorithms, and deletion, non-invertible aggregation, and cross-Context dependencies would be difficult to keep equivalent. Ordered Matches followed by forward replay from start preserve one business meaning.
 
-**Add a separate chunk-run matcher and update lifecycle.** Rejected: a second Definition path would duplicate dispatch, replay, publication, and Context types. `ChunkRowEvent` uses the existing `match(event)` and `update(context, match)` lifecycle while making packed handling explicit through its `chunkrow/*` discriminant.
+**Add a separate live-stream matcher and update lifecycle.** Rejected: a second Definition path would duplicate dispatch, replay, publication, and Context types. Client-only `assistant/live-chunk` and durable settlements use the existing `match(event)` and `update(context, match)` lifecycle; only the event discriminator and stream expansion differ.
 
 **Make Inbox a first-class engine concept or one window-wide Context.** Rejected: Inbox is ordinary business State and does not belong in the generic engine. Per-splice instantaneous State plus a strictly backward Reader supports prepend, append, and Message lookup together.
 

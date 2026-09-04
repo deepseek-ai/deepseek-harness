@@ -4,6 +4,6 @@ profile: web
 composition: web-default
 recording: live
 session:
-  source: ../feedback-command/session.jsonl
+  source: ../feedback-command/session.v2.jsonl
 header:
   class: web-default

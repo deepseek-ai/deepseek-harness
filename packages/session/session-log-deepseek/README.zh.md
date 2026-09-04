@@ -34,12 +34,12 @@ kind: "package-reference"
 <a id="request-field"></a>
 ## 请求字段
 
-对于携带存活 `sessionId` 的请求，插件会折叠该确切会话身份的最大已接受水位，对 `Session.events` 取快照，并发送水位之后的连续后缀。进程内 fold 会让每条事件只被扫描一次并增量消费后续追加；重启与 HMR 会从持久日志重建它。版本 1 字段包含兼容 v0 的原始会话 header（仅 seeded Session 携带 `seedLength`）、数值型 `afterSeq` 与 `throughSeq`，以及把完整权威事件翻译为原始数值 envelope 字段后的数组元素。每个水位都会记录已接受请求发送的会话 id，因此 fork 会话会忽略从父会话继承的水位。
+对于携带存活 `sessionId` 的请求，插件会折叠该确切会话格式代的最大已接受水位，对 `Session.events` 取快照，并发送水位之后的连续后缀。进程内 fold 会让每条事件只被扫描一次并增量消费后续追加；重启与 HMR 会从持久日志重建它。版本 1 字段包含 `sessionFormatVersion`、原始会话 header（仅 seeded Session 携带 `seedLength`）、数值型 `afterSeq` 与 `throughSeq`，以及把完整权威事件翻译为原始数值 envelope 字段后的数组元素。只有记录的会话 id 与格式代均匹配请求来源时水位才生效，因此 fork 会话会忽略从父会话继承的水位。
 
 <a id="acceptance-and-retry"></a>
 ## 接受与重试
 
-DeepSeek 适配器会在 HTTP 2xx 后、消费 SSE（Server-Sent Events）正文前调用已准备贡献的 `accept()`。接受操作会追加 `session-log-deepseek/delivery-accepted` 及已上传的 `throughSeq`；下一次请求再把该事件作为新后缀的一部分上传。传输失败与非 2xx 失败不会追加接受记录，因此后续请求会重发不确定范围。并发交付可能乱序得到接受；折叠匹配记录中最大的 `throughSeq` 可以防止游标回退。
+DeepSeek 适配器会在 HTTP 2xx 后、消费 SSE（Server-Sent Events）正文前调用已准备贡献的 `accept()`。接受操作会追加 `session-log-deepseek/delivery-accepted`、已上传的 `throughSeq` 与 `sessionFormatVersion`；省略格式字段的记录表示 v0。下一次请求再把该事件作为新后缀的一部分上传。传输失败与非 2xx 失败不会追加接受记录，因此后续请求会重发不确定范围。并发交付可能乱序得到接受；折叠匹配记录中最大的 `throughSeq` 可以防止游标回退。
 
 服务端接受后、持久化水位前发生崩溃，可能让恢复后的进程重放已经接受的范围。这是至少一次交付的失败方向：不确定性会制造重复，绝不会跳过序列。普通会话检查点策略会在下一个语义检查点持久化水位；本插件不执行独立 I/O。
 

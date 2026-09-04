@@ -10,7 +10,7 @@
  * @module @deepseek-ai/dsh-subagent/assistant-output
  */
 
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import { expandAssistantStream, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 
 /**
@@ -25,16 +25,19 @@ export class AssistantOutputFold {
 
   /**
    * Fold one session event: a non-empty assistant message becomes the
-   * candidate final answer, and a `text-delta` chunk extends the streamed
-   * fallback; every other event contributes nothing.
+   * candidate final answer, while its embedded stream and any log-only attempt
+   * extend the streamed fallback; every other event contributes nothing.
    * @param event - the next observed session event.
    */
   push(event: SessionEvent): void {
     if (event.type === 'assistant/message') {
       const content = event.data.message.content
       if (content.length > 0) this.message = content
-    } else if (event.type === 'assistant/chunk' && event.data.chunk.type === 'text-delta') {
-      this.pushText(event.data.chunk.text)
+    }
+    if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
+      for (const { chunk } of expandAssistantStream(event.data.stream)) {
+        if (chunk.type === 'text-delta') this.pushText(chunk.text)
+      }
     }
   }
 

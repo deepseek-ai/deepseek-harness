@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, expandAssistantStream, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { ReplayEntry, ReplayOverrideDoc } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -276,7 +276,11 @@ describe('web e2e: continuous conversation grown through the composer', () => {
       const turnEnds = turnEvents.filter((event): event is SessionEvent<'turn/end'> => (
         event.type === 'turn/end'
       ))
-      const chunks = turnEvents.filter(event => event.type === 'assistant/chunk')
+      const chunks = turnEvents.flatMap(event => (
+        event.type === 'assistant/message' || event.type === 'assistant/attempt'
+          ? expandAssistantStream(event.data.stream)
+          : []
+      ))
 
       expect(turnStarts).toHaveLength(1)
       expect(turnStarts[0]?.data.turn).toBe(spec.index)
@@ -340,8 +344,11 @@ describe('web e2e: continuous conversation grown through the composer', () => {
       '[data-chat-flow-kind="system-prompt"][hidden="until-found"]',
     ).count()).toBe(0)
     expect(specs.at(-1)?.prompt.length).toBeGreaterThan(4_000)
-    expect(sessionEvents.filter(event => (
-      event.type === 'assistant/chunk' && event.data.turn === TURN_COUNT
+    expect(sessionEvents.flatMap(event => (
+      (event.type === 'assistant/message' || event.type === 'assistant/attempt')
+        && event.data.turn === TURN_COUNT
+        ? expandAssistantStream(event.data.stream)
+        : []
     )).length).toBeGreaterThan(30)
     expect(consoleWarnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])

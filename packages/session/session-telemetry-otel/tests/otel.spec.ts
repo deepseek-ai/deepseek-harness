@@ -16,7 +16,8 @@ import { Context } from '@deepseek-ai/cordis'
 import { getOrCreateAnonymousUserId } from '@deepseek-ai/dsh-anonymous-user-id'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { recordFeedback } from '@deepseek-ai/dsh-command-feedback'
-import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import OpenTelemetrySessionBackend, { Config, DEFAULT_TELEMETRY_MODE, SessionTelemetryMode } from '../src/index.ts'
 
 interface Capture {
@@ -124,6 +125,24 @@ describe('OpenTelemetrySessionBackend wire', () => {
     const { ctx, fiber } = await boot(url)
     const session = ctx.sessions.create(SessionId('wire'), { meta: { cwd: '/tmp/w' } })
     session.append('turn/start', { turn: 1 })
+    session.append('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: 'first complete chunksecond complete chunk' }],
+        source: { provider: 'mock', model: 'mock' },
+      }),
+      stream: [
+        {
+          type: 'text-chunks',
+          time0: 1_000,
+          index: 0,
+          dt: [7],
+          texts: ['first complete chunk', 'second complete chunk'],
+        },
+        { type: 'chunk', time: 1_007, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+      ],
+    }, { surfaceOp: 'append' })
     session.append('turn/end', { turn: 1, reason: { kind: 'error', error: { message: 'boom', code: 'UNKNOWN' } } })
     ctx.sessionTelemetry.emit({
       channel: 'ledger',
@@ -151,11 +170,69 @@ describe('OpenTelemetrySessionBackend wire', () => {
     expect(start).toBeDefined()
     expect(start?.record.severityNumber).toBe(9)
     expect(BigInt(start!.record.timeUnixNano)).toBe(BigInt(session.snapshotEvents()[0]!.time) * 1_000_000n)
+    expect(start?.record.attributes).toContainEqual({
+      key: 'session.format_version',
+      value: { intValue: SESSION_FORMAT_VERSION },
+    })
     expect(start?.record.attributes).toContainEqual({ key: 'session.cwd', value: { stringValue: '/tmp/w' } })
 
     const end = ledger.find(r => r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'turn/end'))
     expect(end?.record.severityNumber).toBe(17)
     expect(end?.record.severityText).toBe('ERROR')
+    const assistant = ledger.find(r =>
+      r.record.attributes?.some(a => a.key === 'event.type' && a.value.stringValue === 'assistant/message'))
+    const body = assistant?.record.body as {
+      kvlistValue: { values: { key: string; value: unknown }[] }
+    }
+    expect(body.kvlistValue.values.find(value => value.key === 'stream')?.value).toEqual({
+      arrayValue: {
+        values: [
+          {
+            kvlistValue: {
+              values: [
+                { key: 'type', value: { stringValue: 'text-chunks' } },
+                { key: 'time0', value: { intValue: 1_000 } },
+                { key: 'index', value: { intValue: 0 } },
+                { key: 'dt', value: { arrayValue: { values: [{ intValue: 7 }] } } },
+                {
+                  key: 'texts',
+                  value: {
+                    arrayValue: {
+                      values: [
+                        { stringValue: 'first complete chunk' },
+                        { stringValue: 'second complete chunk' },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          {
+            kvlistValue: {
+              values: [
+                { key: 'type', value: { stringValue: 'chunk' } },
+                { key: 'time', value: { intValue: 1_007 } },
+                {
+                  key: 'chunk',
+                  value: {
+                    kvlistValue: {
+                      values: [
+                        { key: 'type', value: { stringValue: 'finish' } },
+                        {
+                          key: 'reason',
+                          value: { kvlistValue: { values: [{ key: 'kind', value: { stringValue: 'stop' } }] } },
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    })
     expect(eventTypes(captures)).toContain('manual')
 
     expect(ops).toHaveLength(1)

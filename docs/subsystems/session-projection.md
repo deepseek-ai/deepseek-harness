@@ -138,6 +138,25 @@ The persisted projection cache service. Opens the `session_projcache` domain at 
 cachedSnapshot( meta: SessionHeader, inheritedEventCount: SessionLogOffset, keys?: readonly Extract<keyof SessionProjectionMap, string>[], ): ProjectionSnapshot | undefined
 
 /**
+ * Read only a predecessor checkpoint's title as a zero-I/O listing hint.
+ *
+ * The authoritative Session header supplies the lifecycle identity. A cache
+ * checkpoint can lag that log but cannot lead it because writes flush the
+ * log first, so a matching predecessor title is a genuine (possibly stale)
+ * fact from this Session. The registry still requires the current title
+ * projection's row version and schema. No other predecessor projection is
+ * exposed: format normalization can change their current meaning, and the
+ * strict {@link cachedSnapshot} / hydration paths continue to reject them.
+ * @param meta - authoritative listed Session header.
+ * @param inheritedEventCount - exact inherited cut completing the lifecycle identity.
+ * @returns a title-only checkpoint view with `asOfSeq: -1`, or `undefined`
+ *   when the record is current, newer, unrelated, missing, or incompatible
+ *   with the title unit. The sentinel avoids reusing a sequence that a
+ *   cardinality-changing Session migration may have remapped.
+ */
+cachedPredecessorTitle( meta: SessionHeader, inheritedEventCount: SessionLogOffset, ): ProjectionSnapshot | undefined
+
+/**
  * Hydrate projection cells for an already-prepared Session without another
  * persistence read. The cache seeds matching rows; the supplied exact log
  * advances every unit to the observation cut. No checkpoint is written

@@ -50,7 +50,7 @@ describe('preview example overlays', () => {
       .toContain("previewStatus = 'ready'")
     expect(new TextDecoder().decode(result.files['workspace/.agents/skills/preview-tour/SKILL.md']))
       .toContain('name: preview-tour')
-    expect(Object.keys(result.files).filter(path => path.endsWith('/session.jsonl'))).toHaveLength(3)
+    expect(Object.keys(result.files).filter(path => path.endsWith('/session.v2.jsonl'))).toHaveLength(3)
   })
 
   it('fails loud when a declared seed tree is absent', () => {

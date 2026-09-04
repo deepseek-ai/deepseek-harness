@@ -18,7 +18,6 @@ import type {
 import { Inbox, agentEvents, assembleContextFor } from '@deepseek-ai/dsh-agent'
 import type { GenerateOptions, LlmCallConfig, Message, PreparedLlmCall } from '@deepseek-ai/dsh-llm'
 import {
-  BlockAssembler,
   LlmError,
   createAssistantMessage,
   errorChain,
@@ -27,13 +26,14 @@ import {
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type { Scope } from '@deepseek-ai/dsh-scope'
 import { createScope } from '@deepseek-ai/dsh-scope'
-import type { EpochHeader, RequestContext, Session, SessionId, SessionSeq, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
+import type { EpochHeader, RequestContext, Session, SessionId, TurnEndReason, UserMessage } from '@deepseek-ai/dsh-session'
 import { canonicalHeader, headerEquals } from '@deepseek-ai/dsh-session'
 import { joinContextSections, renderContextSections, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import type { PromptAssembly } from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Context } from '@deepseek-ai/cordis'
 import { RuntimeContextProjection } from './runtime-context.ts'
+import { AssistantStreamAttempt } from './assistant-stream.ts'
 import { executeToolCalls } from './tool-calls.ts'
 
 type Phase =
@@ -84,6 +84,9 @@ export class ReactLoopAgent implements Agent {
   /** Surface generation of the preceding built request. */
   private requestSurfaceGeneration: number | undefined
   private readonly runtimeContext: RuntimeContextProjection
+  /** Process-local revision of assistant frames for this attached Session. */
+  private assistantStreamRevision = 0
+  private assistantAttemptCounter = 0
 
   constructor(
     private loopCtx: Context,
@@ -358,82 +361,123 @@ export class ReactLoopAgent implements Agent {
         signal,
       )
       startsRequestSeries = false
-      const assembler = new BlockAssembler()
-      const chunkSeqs: SessionSeq[] = []
+      const live = new AssistantStreamAttempt(
+        this.session.id,
+        ++this.assistantAttemptCounter,
+        () => ++this.assistantStreamRevision,
+        turn,
+        step,
+        (frame) => { this.dispatch.emit('agent/assistant-stream', { frame }) },
+      )
+      let started = false
       try {
         const stream = preparedCall?.stream(request) ?? this.loopCtx.llm.stream(request)
         signal.throwIfAborted()
+        live.start()
+        started = true
         for await (const chunk of stream) {
           signal.throwIfAborted()
-          chunkSeqs.push(this.session.append('assistant/chunk', { turn, step, chunk }).seq)
-          assembler.push(chunk)
+          live.push(chunk)
         }
         signal.throwIfAborted()
       } catch (error: unknown) {
-        if (signal.aborted) {
-          const content = assembler.interruptedBlocks()
-          if (content.length > 0) {
-            this.session.append('assistant/message', {
-              turn,
-              step,
-              message: createAssistantMessage({
-                content,
-                source: { provider: request.provider, model: request.model },
-              }),
-              interrupted: true,
-              ...assembler.usage === undefined ? {} : { usage: assembler.usage },
-            }, { surfaceOp: 'append', sourceEventSeqs: chunkSeqs })
+        if (!started) throw error
+        try {
+          if (signal.aborted) {
+            const content = live.interruptedBlocks()
+            if (content.length > 0) {
+              live.settle('assistant/message', () => this.session.append('assistant/message', {
+                turn,
+                step,
+                message: createAssistantMessage({
+                  content,
+                  source: {
+                    provider: request.provider,
+                    model: request.model,
+                    ...live.replayState === undefined ? {} : { replayState: live.replayState },
+                  },
+                }),
+                interrupted: true,
+                ...live.usage === undefined ? {} : { usage: live.usage },
+                stream: live.stream,
+              }, { surfaceOp: 'append' }).seq)
+            } else {
+              live.settle(
+                'assistant/attempt',
+                () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
+              )
+            }
+          } else {
+            live.settle(
+              'assistant/attempt',
+              () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
+            )
           }
+        } catch (settlementError: unknown) {
+          throw new AggregateError(
+            [error, settlementError],
+            'Assistant stream failed and its durable settlement was rejected',
+            { cause: error },
+          )
         }
         throw error
       }
-      const finish = assembler.finish
-      if (finish.kind === 'error' || finish.kind === 'aborted') {
-        const action = await this.dispatch.waterfall(
-          'agent/request-error', {
+      try {
+        const finish = live.finish
+        if (finish.kind === 'error' || finish.kind === 'aborted') {
+          live.settle(
+            'assistant/attempt',
+            () => this.session.append('assistant/attempt', { turn, step, stream: live.stream }).seq,
+          )
+          const action = await this.dispatch.waterfall(
+            'agent/request-error', {
+              turn,
+              step,
+              provider: request.provider,
+              failure: finish.failure,
+              retryPolicy: preparedCall?.retryPolicy,
+              signal,
+            },
+            () => Promise.resolve<RequestErrorAction>(undefined),
+          )
+          signal.throwIfAborted()
+          if (action?.kind !== 'retry') {
+            throw new LlmError(finish.failure.message, finish.failure.code, finish.failure)
+          }
+          continue
+        }
+
+        const message = createAssistantMessage({
+          content: live.blocks(),
+          source: {
+            provider: request.provider,
+            model: request.model,
+            ...live.replayState !== undefined ? { replayState: live.replayState } : {},
+          },
+        })
+        live.settle(
+          'assistant/message',
+          () => this.session.append('assistant/message', {
             turn,
             step,
-            provider: request.provider,
-            failure: finish.failure,
-            retryPolicy: preparedCall?.retryPolicy,
-            signal,
-          },
-          () => Promise.resolve<RequestErrorAction>(undefined),
+            message,
+            ...live.usage === undefined ? {} : { usage: live.usage },
+            stream: live.stream,
+          }, { surfaceOp: 'append' }).seq,
         )
-        signal.throwIfAborted()
-        if (action?.kind !== 'retry') {
-          throw new LlmError(finish.failure.message, finish.failure.code, finish.failure)
-        }
-        continue
+        if (finish.kind === 'max-tokens') return { kind: 'max-tokens' }
+
+        const toolCalls = message.content.filter(block => block.type === 'tool-call')
+        if (toolCalls.length === 0) return { kind: 'completed' }
+        const { concluded } = await executeToolCalls(
+          this.loopCtx, turn, step, toolCalls, signal,
+          context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
+        )
+        return concluded ? { kind: 'completed' } : null
+      } catch (error: unknown) {
+        if (!live.ended) live.abandon()
+        throw error
       }
-
-      const message = createAssistantMessage({
-        content: assembler.blocks(),
-        source: {
-          provider: request.provider,
-          model: request.model,
-          ...assembler.replayState !== undefined ? { replayState: assembler.replayState } : {},
-        },
-      })
-      this.session.append(
-        'assistant/message',
-        {
-          turn,
-          step,
-          message,
-          ...assembler.usage === undefined ? {} : { usage: assembler.usage },
-        },
-        { surfaceOp: 'append', sourceEventSeqs: chunkSeqs },
-      )
-      if (finish.kind === 'max-tokens') return { kind: 'max-tokens' }
-
-      const toolCalls = message.content.filter(block => block.type === 'tool-call')
-      if (toolCalls.length === 0) return { kind: 'completed' }
-      const { concluded } = await executeToolCalls(
-        this.loopCtx, turn, step, toolCalls, signal,
-        context => this.inbox.splice('next-step', this.inbox.nextStep.length, 0, [context]),
-      )
-      return concluded ? { kind: 'completed' } : null
     }
   }
 

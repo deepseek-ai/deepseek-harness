@@ -6,7 +6,7 @@ English | [中文](2026-08-30-jsonl-only-session-persistence.zh.md)
 
 ## Problem
 
-The product ships and exercises JSONL as its authoritative Session store, while the optional SQLite Session-persistence provider duplicates the same logical service over a second physical format. Every Session contract, event-envelope change, recovery rule, package graph, platform lane, and format transition therefore carries a second implementation and test matrix even though shipped profiles do not select it. Released Session-format migration also needs an exact per-Session source artifact that can be archived before replacement; the single-database provider would require a separate publication design without serving a current deployment.
+The product ships and exercises JSONL as its authoritative Session store, while the optional SQLite Session-persistence provider duplicates the same logical service over a second physical format. Every Session contract, event-envelope change, recovery rule, package graph, platform lane, and format transition therefore carries a second implementation and test matrix even though shipped profiles do not select it. Released Session-format migration also needs an exact per-Session source generation that remains untouched while a version-named successor is published; the single-database provider would require a separate immutable-generation transaction design without serving a current deployment.
 
 The SQLite full-text Session-query provider is not an alternative authoritative store. It observes persistence through `ctx.sessionPersistence` and maintains a separate disposable derived index. The generic SQLite domain-KV provider is also independent of Session logs.
 
@@ -26,6 +26,6 @@ Existing databases written by the removed provider are not opened or migrated by
 
 ## Consequences
 
-Session persistence has one first-party physical format and one first-party durability path. The migration stack can archive and atomically replace one per-Session JSONL artifact without implementing a parallel database transaction protocol. SQLite search remains available and its integration tests now prove that it observes JSONL rather than sharing an authoritative database.
+Session persistence has one first-party physical format and one first-party durability path. The migration stack can keep one per-Session JSONL generation path, bytes, and inode unchanged while exclusively publishing a final successor, without implementing a parallel database transaction protocol. SQLite search remains available and its integration tests prove that it observes JSONL rather than sharing an authoritative database.
 
 Removing the provider is a deliberate compatibility cut for its opt-in database files. The change reduces implementation and CI surface but also removes the stronger database/WAL storage option; a future provider needs a current owner, deployment need, complete shared-contract evidence, and its own format-transition policy.

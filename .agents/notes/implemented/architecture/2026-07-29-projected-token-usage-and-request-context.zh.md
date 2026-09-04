@@ -14,7 +14,7 @@ Web 统计行原先从当前已加载的会话节点推导 token 总量。该窗
 
 这两个值都是普通的持久会话投影状态。当 `ctx.sessionProjections` 存在时，`@deepseek-ai/dsh-token-meter` 会注册两个单元。
 
-`tokenUsage` 将完整持久日志归并为未缓存输入、输出、缓存读取和缓存写入四类计数项。即使后续请求失败，`assistant/chunk` 用量样本仍会保留；`assistant/message` 用量值会替换同一次模型 attempt 的先前样本，不会重复计数。匹配的 `llm/retry-started` 边界会结束该替换作用域，因此复用同一 `(turn, step)` 的重试会贡献一次新的 attempt。推理（reasoning）仍是输出的细分项。压缩和表层替换不会抹除先前的计费用量。
+`tokenUsage` 将完整持久日志归并为未缓存输入、输出、缓存读取和缓存写入四类计数项。它会展开每个 `assistant/message` 或 `assistant/attempt` stream 并采用最后一个 usage sample；message 顶层 usage 优先于其嵌入式 sample，因此不会重复计数。`assistant/attempt` 由此保留失败请求的 usage。匹配的 `llm/retry-started` 边界会打开新 attempt，因此复用同一 `(turn, step)` 的重试会单独贡献用量。推理（reasoning）仍是输出的细分项。compaction 和 surface replacement 不会抹除先前计费。
 
 token-meter 还拥有在持久事件上运行的共享纯 attempt／Turn fold。它采用相同的重试边界，并增加精确单轮次 disclosure 所需的更严格完整性与精确总量检查。展示消费方可以选择完整 Turn 窗口并调用该 fold，但不拥有或复制记账语义。
 

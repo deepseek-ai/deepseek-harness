@@ -1,0 +1,5 @@
+{"type":"session","version":2,"id":"{{session:1}}","createdAt":200,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":0}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}
+{"type":"step/start","data":{"turn":1,"step":1}}
+{"type":"assistant/attempt","data":{"turn":1,"step":1,"stream":[{"type":"text-chunks","time0":5,"index":0,"dt":[],"texts":["hi"]}]}}

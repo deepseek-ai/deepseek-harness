@@ -10,6 +10,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import {
   assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
   compareOrRefreshGolden, fixtureUserPrompts,
@@ -18,7 +19,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/steering', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.jsonl')
+const FIXTURE = join(SNAPSHOT_DIR, 'session.v2.jsonl')
 // Two goldens pin the transient Host projection and its durable handoff: the
 // mid-turn state renders accepted steering from the Session control queue while the
 // question blocks admission, then the settled state renders the same message
@@ -52,11 +53,10 @@ const STEER_TWO = 'Interjection: include the word ORANGE in your final reply.'
 /** Concatenated assistant text deltas — the model-visible reply body. */
 function assistantText(events: SessionEvent[]): string {
   return events
-    .filter(e => e.type === 'assistant/chunk')
-    .map((e) => {
-      const chunk = (e as SessionEvent & { data: { chunk: { type: string; text?: string } } }).data.chunk
-      return chunk.type === 'text-delta' ? chunk.text ?? '' : ''
-    })
+    .flatMap(e => e.type === 'assistant/message' || e.type === 'assistant/attempt'
+      ? expandAssistantStream(e.data.stream)
+      : [])
+    .map(({ chunk }) => chunk.type === 'text-delta' ? chunk.text : '')
     .join('')
 }
 
@@ -186,7 +186,7 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.jsonl', 'mid-steer.expected.md', 'settled.expected.md', 'settled-expanded.expected.md',
+      'session.v2.jsonl', 'mid-steer.expected.md', 'settled.expected.md', 'settled-expanded.expected.md',
     ])
   })
 })

@@ -27,7 +27,7 @@ Status: implemented
 
 ## 验证
 
-`SessionEventMap` 不再包含独立的 `usage` 或 `error`；agent loop（智能体循环）不再追加独立的 usage 事件，并通过 `turn/end { kind: 'error', step, message, code? }` 持久记录失败；ACP 快照和持久化测试断言不存在仅用于追踪的行；已录制的 fixture（测试前置数据）使用新事件形状，会话格式版本固定为 `0`（后端按预发布格式策略拒绝任何版本非 `0` 的已存储日志）；文档说明了 token 用量和运行错误的观测位置。
+`SessionEventMap` 不再包含独立的 `usage` 或 `error`；agent loop（智能体循环）不再追加独立的 usage 事件，并通过 `turn/end { kind: 'error', step, message, code? }` 持久记录失败；ACP 快照和持久化测试断言不存在仅用于追踪的行；冻结的 v0 codec 与恒等迁移会把该已发布表示保留到当前 v1；文档说明了 token 用量和运行错误的观测位置。
 
 ## 后果
 
@@ -35,6 +35,6 @@ Status: implemented
 
 ## 实现说明
 
-**格式版本。** 此变更影响已持久化的事件，但预发布会话格式仍固定为 `0`，拒绝任何其他版本且不做迁移。`dsh-session` 拥有写入方和加载校验使用的常量。单调递增的格式版本从首次正式发布开始。
+**格式版本。** 该事件简化早于已发布 v0 基线。`dsh-session` 拥有当前写入方常量，静态目录与相邻包则拥有受支持历史版本的解码和迁移。恒等的 v0-to-v1 边在不改变该事件表示的情况下证明整套生命周期。
 
 Usage 现在通过 `assistant/message.usage` 观测；运行错误的步骤编号通过 `turn/end.reason`（当 `kind: 'error'` 时）观测。`agent/error` 与日志用于实时诊断，保持不变。

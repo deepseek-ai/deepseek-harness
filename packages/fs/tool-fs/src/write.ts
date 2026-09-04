@@ -115,7 +115,7 @@ export function applyWriteTool(ctx: Context, sandbox: FsSandboxController): void
         // A sandbox denial becomes the shared [sandbox: …] marker (the model
         // recognizes it from bash); stale/not-observed failures gain their
         // model-facing remedy; anything else passes through.
-        throw remediateFsError(sandbox.mapError(error, sandboxPolicy))
+        throw remediateFsError(sandbox.mapError(error, sandboxPolicy), target.displayPath)
       }
       ctx.emit('fs/observed', target, { kind: 'present', version: outcome.version }, exec)
       return {

@@ -8,6 +8,7 @@
 type ScopedSubjectResolver = (args: readonly unknown[]) => unknown
 
 const scopedSubjectResolvers: Readonly<Record<string, ScopedSubjectResolver | null>> = Object.freeze({
+  'agent/assistant-stream': args => (args[0] as Record<string, unknown>)['agent'],
   'agent/created': args => (args[0] as Record<string, unknown>)['agent'],
   'agent/disposed': args => (args[0] as Record<string, unknown>)['agent'],
   'agent/error': args => (args[0] as Record<string, unknown>)['agent'],

@@ -13,7 +13,7 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry, { assembleContextFor, type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentPresets, {
   COMPOSITION_FILE, leakedServices, livePresetMounts, mountPreset, serviceForAgent,
 } from '@deepseek-ai/dsh-agent-presets'
@@ -86,6 +86,13 @@ function rootResolves(ctx: Context, name: string): boolean {
 }
 
 let ctx: Context
+
+/** Every temp preset root created by this file, removed after each test. */
+const roots: string[] = []
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+})
+
 beforeEach(async () => {
   ctx = await harness()
 })
@@ -93,6 +100,7 @@ beforeEach(async () => {
 describe('composing an agent from a preset', () => {
   it('hands an absolute plugin path to Node as a file URL', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-absolute-plugin-'))
+    roots.push(root)
     const presetDir = join(root, 'absolute')
     const plugin = join(FIXTURES, 'plugins', 'contribute.js')
     await mkdir(presetDir)
@@ -360,6 +368,7 @@ describe('composing from a broken preset', () => {
   /** A roster whose only user preset carries `composition`. */
   async function rosterWith(composition: string): Promise<Context> {
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-broken-'))
+    roots.push(root)
     await mkdir(join(root, 'damaged'))
     await writeFile(join(root, 'damaged', COMPOSITION_FILE), composition)
     return await harness({ default: 'damaged', roots: [{ path: root, trust: 'user' as const }], includeShippedRoot: false, includeUserRoot: false })
@@ -428,6 +437,7 @@ describe('the preset file is an input, never a persistence target', () => {
     // committed fixture would be mutated by the very run that proves the bug
     // and every later run would compare against the damaged file and pass.
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-write-'))
+    roots.push(root)
     const dir = join(root, 'self-disposing')
     await mkdir(dir)
     const path = join(dir, COMPOSITION_FILE)
@@ -625,6 +635,7 @@ describe('replacing a composition', () => {
     // A preset root this test owns, so removing the composition mid-flight
     // cannot disturb the shipped fixtures.
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-restore-'))
+    roots.push(root)
     const seeded: [string, string][] = [['first', `- id: only\n  name: ${join(FIXTURES, 'plugins', 'contribute.js')}\n  config:\n    tool: only\n`], ['broken', `- id: nope\n  name: ${join(FIXTURES, 'plugins', 'throws.js')}\n  config:\n    message: refuses\n`]]
     for (const [id, body] of seeded) {
       await mkdir(join(root, id))
@@ -679,6 +690,7 @@ describe('editing a composition file', () => {
    */
   async function editable(id: string): Promise<{ scoped: Context; path: string }> {
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-edit-'))
+    roots.push(root)
     await mkdir(join(root, id))
     const path = join(root, id, COMPOSITION_FILE)
     await writeFile(path, rowFor('before'))

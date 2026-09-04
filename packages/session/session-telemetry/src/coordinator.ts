@@ -1,8 +1,8 @@
 /**
  * Capture coordinator for the telemetry capability. Live capture subscribes to
  * the session firehose plus the one live-bus relay (`agent/error`). Both
- * capture paths apply the fixed chunk projection, build logical records, and
- * run each through the
+ * capture paths build one logical record per canonical Session event and run
+ * each through the
  * `session-telemetry/record` waterfall (deployment-mounted redaction rules;
  * pass-through when none), then hands the result to the backend. Live capture
  * follows the session firehose; on-demand capture replays the canonical log
@@ -15,16 +15,21 @@
  */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { SessionSeq } from '@deepseek-ai/dsh-session'
-import type { Session, SessionEvent, SessionSeq as SessionSeqType, SessionSeqCursor } from '@deepseek-ai/dsh-session'
+import {
+  SessionSeq,
+  type Session,
+  type SessionEvent,
+  type SessionSeq as SessionSeqType,
+  type SessionSeqCursor,
+} from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionTelemetrySink, SessionTelemetryRecord, SessionTelemetrySeverity } from './index.ts'
 
 /** Whether capture follows live events or reads the canonical log only when requested. */
 export type SessionTelemetryCapture = 'live' | 'on-demand'
 
-/** One projected record ready for backend handoff. */
-interface ProjectedRecord {
+/** One record ready for backend handoff. */
+interface PendingRecord {
   readonly record: SessionTelemetryRecord
   /** Ledger cursor advanced only after the backend accepts this record. */
   readonly seq?: SessionSeqType
@@ -65,8 +70,6 @@ export class SessionTelemetryCoordinator {
    * `session/disposed` marks and retires entries.
    */
   private readonly adopted = new Set<Session>()
-  /** Per session, the `turn:step` keys whose first chunk already shipped; rebuilt from the log on re-adoption. */
-  private readonly chunkSeen = new WeakMap<Session, Set<string>>()
   /**
    * @param ctx - the composing backend's context; listeners bind to its fiber.
    * @param backend - the backend receiving records; owned elsewhere, never disposed here beyond `shutdown()` forwarding.
@@ -127,7 +130,7 @@ export class SessionTelemetryCoordinator {
   }
 
   /**
-   * Project and hand over the canonical session-log suffix after the handoff
+   * Copy, redact, and hand over the canonical session-log suffix after the handoff
    * cursor, optionally stopping at an inclusive sequence boundary. Redaction
    * runs during this call, so an on-demand caller retains no copied records
    * before requesting capture and uses the policy mounted at that time.
@@ -143,26 +146,19 @@ export class SessionTelemetryCoordinator {
     // while the rest of the historical replay proceeds.
     for (const event of session.snapshotEvents()) {
       if (throughSeq !== undefined && event.seq > throughSeq) break
+      if (event.seq <= cursor) continue
       this.contain(() => {
-        if (event.seq <= cursor) this.track(session, event)
-        else this.captureEvent(session, event)
+        this.captureEvent(session, event)
       })
     }
   }
 
   /**
-   * Adopt a session: replay its log THROUGH the projection from the handoff
-   * cursor, then rely on the firehose for everything after. When no cursor
-   * survived, replay starts at the session's construction boundary
-   * (`firstLiveSeq`), not seq 0: constructor seeds never publish on the
-   * firehose, and their content already left the process under another
-   * identity — the same id in a previous process (resume) or the parent's
-   * stream (fork, stitched by receivers via `session.seed_length`). Events
-   * at or below the start still feed the projection state (first-chunk
-   * tracking) without being re-handed, so a resumed fiber drops mid-step
-   * chunk continuations exactly like the fiber that saw the step begin. The
-   * cost, accepted with the capture contract's at-most-once stance: a resume
-   * does not backfill records a previous process failed to deliver.
+   * Adopt a session: replay this lifecycle's log suffix after the same-object
+   * handoff cursor, then rely on the firehose for everything after. A newly
+   * constructed Session object starts at its constructor boundary, so inherited
+   * or restored seed history is not attributed to this lifecycle. Re-adopting
+   * the same object resumes after its cursor.
    * @param session - the live session to adopt; a second adoption is a no-op.
    */
   private adopt(session: Session): void {
@@ -171,25 +167,8 @@ export class SessionTelemetryCoordinator {
     this.captureSession(session)
   }
 
-  /** Feed the chunk projection without handing off — the ≤cursor half of re-adoption. */
-  private track(session: Session, event: SessionEvent): void {
-    if (event.type === 'assistant/chunk') {
-      this.seen(session).add(`${event.data.turn}:${event.data.step}`)
-    }
-  }
-
-  /** Project, redact, and hand one event to the backend. */
+  /** Copy, redact, and hand one canonical event to the backend. */
   private captureEvent(session: Session, event: SessionEvent): void {
-    if (event.type === 'assistant/chunk') {
-      const key = `${event.data.turn}:${event.data.step}`
-      const seen = this.seen(session)
-      // Fixed chunk projection: only the first chunk of each (turn, step)
-      // ships — the stream-started signal; content is byte-complete in the
-      // step's assembled assistant/message. Dropped chunks do not advance
-      // the cursor, so re-adoption re-drops them deterministically.
-      if (seen.has(key)) return
-      seen.add(key)
-    }
     this.deliver(session, {
       record: this.redact({
         channel: 'ledger',
@@ -217,7 +196,7 @@ export class SessionTelemetryCoordinator {
   }
 
   /** Hand one redacted record to the backend, then advance its ledger cursor. */
-  private deliver(session: Session, pending: ProjectedRecord): void {
+  private deliver(session: Session, pending: PendingRecord): void {
     this.backend.emit(pending.record)
     if (pending.seq !== undefined) handoffCursor.set(session, pending.seq)
   }
@@ -246,13 +225,6 @@ export class SessionTelemetryCoordinator {
         body: detail,
       }),
     })
-  }
-
-  /** Lazily create the per-session first-chunk tracking set. */
-  private seen(session: Session): Set<string> {
-    let set = this.chunkSeen.get(session)
-    if (!set) this.chunkSeen.set(session, set = new Set())
-    return set
   }
 
   /**
@@ -308,14 +280,15 @@ function errorDetail(error: unknown): { name: string; message: string } {
 function identityOf(session: Session, event: SessionEvent): Record<string, string | number> {
   const attributes: Record<string, string | number> = {
     'session.id': String(session.id),
+    'session.format_version': session.header.version,
     'event.type': event.type,
     'event.seq': event.seq,
   }
   const { cwd, parentSession, isSeeded } = session.header
   if (cwd !== undefined) attributes['session.cwd'] = cwd
   if (parentSession !== undefined) attributes['session.parent_id'] = String(parentSession)
-  // The durable fork boundary: a forked stream starts here, and its prefix
-  // lives in the parent's stream — receivers stitch on (parent_id, seed_length).
+  // The durable fork boundary and lineage: the child ledger is complete;
+  // parent_id and seed_length identify which leading events were inherited.
   if (isSeeded) attributes['session.seed_length'] = session.inheritedEventCount
   return attributes
 }

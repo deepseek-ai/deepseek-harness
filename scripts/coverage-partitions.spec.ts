@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -22,7 +22,12 @@ import {
 
 const passed: CoverageCommandResult = { exitCode: 0, signalCode: null }
 
-afterEach(() => vi.restoreAllMocks())
+/** Every temporary root created by this file, removed after each test. */
+const roots: string[] = []
+afterEach(async () => {
+  vi.restoreAllMocks()
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
+})
 
 async function writeBlob(command: CoverageCommand): Promise<void> {
   if (command.blobPath === undefined) return
@@ -31,7 +36,9 @@ async function writeBlob(command: CoverageCommand): Promise<void> {
 }
 
 async function temporaryRoot(): Promise<string> {
-  return await mkdtemp(join(tmpdir(), 'dsh-coverage-partitions-'))
+  const root = await mkdtemp(join(tmpdir(), 'dsh-coverage-partitions-'))
+  roots.push(root)
+  return root
 }
 
 /** Write a Vitest results cache under a temporary root. */

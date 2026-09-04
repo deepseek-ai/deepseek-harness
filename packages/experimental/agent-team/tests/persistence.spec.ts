@@ -12,7 +12,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SubagentService, { seedDescriptorTurn, snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import SubagentService, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import TeamService, { TeamId, TeamMessageId } from '../src/index.ts'
@@ -135,17 +135,17 @@ async function persistedChild(
   childId: SessionId,
   message: ReturnType<typeof createUserMessage>,
 ) {
-  const seed = seedDescriptorTurn(childId, undefined, snapshotSubagentDescriptor({
+  const descriptor = snapshotSubagentDescriptor({
     mode: 'continuable',
     provider: 'spawn',
     label: 'persisted child fixture',
     agentProvider: 'mock',
     agentModel: 'mock',
-  }))
+  })
   const child = ctx.sessions.create(childId, {
-    seed,
     meta: { parentSession: rootId, origin: 'subagent' },
   })
+  child.append('subagent/descriptor', descriptor)
   child.append('agent/inbox/spliced', {
     target: 'next-turn',
     start: 0,

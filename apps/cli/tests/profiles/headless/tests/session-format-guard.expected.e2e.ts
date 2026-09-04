@@ -1,12 +1,12 @@
 /**
- * Assembled-app regression for the session-format refusal surface: resuming a
- * log written by a "newer" harness (format version ahead, or an unknown
- * required event type) fails loud through the real Loader composition, and the
- * error the product user sees names the direction and the raw log path.
+ * Assembled-app regressions for Session-format lifecycle behavior: released v0
+ * migrates before resume without changing its source, while a future format or
+ * unknown required event fails loud through the real Loader composition.
  * @module session-format-guard-snapshot
  */
 
 import { join, dirname } from 'node:path'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
@@ -18,7 +18,11 @@ import {
   type SessionHeader,
 } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import { logPath } from '../../../../../../packages/session/session-persistence-jsonl/src/format.ts'
+import {
+  generationLogFilename,
+  generationLogPath,
+  logPath,
+} from '../../../../../../packages/session/session-persistence-jsonl/src/format.ts'
 import { describe, expect, it } from 'vitest'
 
 const fixtureDir = join(dirname(fileURLToPath(import.meta.url)), 'expected/workspace-context-resume/offline-edit')
@@ -31,9 +35,25 @@ const sessionId = SessionId('workspace-context-resume')
 
 /** Persist one session with the given header version and events, returning its log path. */
 async function seedSession(root: string, cwd: string, version: number, events: SessionEvent[]): Promise<string> {
+  if (version !== SESSION_FORMAT_VERSION) {
+    const path = generationLogPath(root, cwd, sessionId, version, 'none')
+    await mkdir(dirname(path), { recursive: true })
+    await writeFile(path, [
+      JSON.stringify({ type: 'session', version, id: sessionId, createdAt: 1, cwd, delegationDepth: 0 }),
+      ...events.map(event => JSON.stringify(event)),
+      '',
+    ].join('\n'))
+    return path
+  }
   const ctx = new Context()
   await ctx.plugin(JsonlSessionPersistence, { root, compression: 'none' })
-  const meta: SessionHeader = { version, id: sessionId, createdAt: 1, cwd, isSeeded: false }
+  const meta: SessionHeader = {
+    version: SESSION_FORMAT_VERSION,
+    id: sessionId,
+    createdAt: 1,
+    cwd,
+    isSeeded: false,
+  }
   try {
     const handle = await ctx.sessionPersistence.create(meta)
     await handle.append(events)
@@ -52,6 +72,46 @@ function closedTurn(): SessionEvent[] {
 }
 
 describe('session format guard through the assembled app', () => {
+  it('migrates v0 before resume, preserves its source, and appends only to the current generation', async () => {
+    let sourcePath = ''
+    let source = Buffer.alloc(0)
+    let sourceIdentity: { readonly dev: bigint; readonly ino: bigint } | undefined
+    await runLoaderSmoke({
+      label: 'v0 migration before resume',
+      tempDirPrefix: 'dsh-format-migrate-v0-',
+      binScript,
+      libBinScript: binScript,
+      configPath,
+      binArgs: [configPath, 'Continue the migrated session.'],
+      tsconfigPath,
+      env: { DSH_SNAPSHOT_FILE: replayFixture },
+      prepare: async (runCwd) => {
+        sourcePath = await seedSession(join(runCwd, '.sessions'), runCwd, 0, closedTurn())
+        source = await readFile(sourcePath)
+        const identity = await stat(sourcePath, { bigint: true })
+        sourceIdentity = { dev: identity.dev, ino: identity.ino }
+      },
+      inspect: async () => {
+        const currentPath = join(
+          dirname(sourcePath),
+          generationLogFilename(SESSION_FORMAT_VERSION, 'none'),
+        )
+        const current = await readFile(currentPath, 'utf8')
+        const sourceAfter = await stat(sourcePath, { bigint: true })
+        const currentIdentity = await stat(currentPath, { bigint: true })
+        expect(await readFile(sourcePath)).toEqual(source)
+        expect({ dev: sourceAfter.dev, ino: sourceAfter.ino }).toEqual(sourceIdentity)
+        expect({ dev: currentIdentity.dev, ino: currentIdentity.ino }).not.toEqual(sourceIdentity)
+        expect(JSON.parse(current.split('\n')[0] as string)).toMatchObject({
+          version: SESSION_FORMAT_VERSION,
+        })
+        expect(current.trimEnd().split('\n').length).toBeGreaterThan(closedTurn().length + 1)
+        expect((await readdir(dirname(sourcePath))).sort())
+          .toEqual(['session.jsonl', generationLogFilename(SESSION_FORMAT_VERSION, 'none')])
+      },
+    })
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
   it('refuses to resume a newer-format log, naming the upgrade direction and the raw log path', async () => {
     let sessionPath = ''
     const result = await runLoaderSmoke({

@@ -6,4 +6,4 @@ recording: authored
 header:
   class: web-default
 session:
-  source: ../live-interactions/session.jsonl
+  source: ../live-interactions/session.v2.jsonl

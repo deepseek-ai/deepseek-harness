@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-31-alpha-historical-unknown-event-refusal.md
+2026-08-31-alpha-historical-unknown-event-refusal.md: 58690e30281c1f5e10f85726c1f1e50fd4664fe9
+2026-08-31-alpha-historical-unknown-event-refusal.zh.md: 73ab2ca47ab3f68b11e71ffec09287253215aa53

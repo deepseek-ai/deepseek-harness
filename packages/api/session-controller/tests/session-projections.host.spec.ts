@@ -18,7 +18,7 @@ import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import { agentPresetProjectionDefinition } from '@deepseek-ai/dsh-agent-presets'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
@@ -154,14 +154,14 @@ describe('session.history projections block', () => {
     const snapshot = await opening(remote(ctx), child.id)
 
     expect(snapshot.header).toEqual({
-      version: 0,
+      version: SESSION_FORMAT_VERSION,
       id: child.id,
       createdAt: child.header.createdAt,
       cwd: '/workspace',
       parentSession: parent.id,
-      seedLength: inheritedEventCount,
+      isSeeded: true,
     })
-    expect(snapshot.header).not.toHaveProperty('isSeeded')
+    expect(snapshot.header).not.toHaveProperty('seedLength')
   })
 
   it('tracks pending and used model selections across repeated request headers', async () => {
@@ -435,7 +435,7 @@ describe('session.list projections column', () => {
     const coldId = SessionId('session-cold-listing')
     const load = () => { throw new Error('list must not load event logs') }
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
-      list: async () => [{ version: 0, id: coldId, createdAt: 5, isSeeded: false, cwd: '/tmp' }],
+      list: async () => [{ version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 5, isSeeded: false, cwd: '/tmp' }],
       inspect: load,
       open: load,
     }) as never)
@@ -524,7 +524,7 @@ describe('session.list projections column', () => {
     const { ctx } = await harness(true)
     const coldId = SessionId('session-cold-uncached')
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
-      list: async () => [{ version: 0, id: coldId, createdAt: 5, isSeeded: false, cwd: '/tmp' }],
+      list: async () => [{ version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 5, isSeeded: false, cwd: '/tmp' }],
     }) as never)
     const response = await remote(ctx).list(request({}))
     if (!response.ok) throw new Error('unreachable')

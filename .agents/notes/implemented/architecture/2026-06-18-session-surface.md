@@ -16,7 +16,7 @@ Add a **surface** — a derived, cached order of event sequences (the subset of 
 
 Every `SessionEvent` gains two optional fields (structural metadata, like `seq`/`time`):
 
-- **`sourceEventSeqs?: number[]`** — seq numbers of earlier events cited as sources (e.g., the `assistant/chunk` seqs that built an `assistant/message`, or the surface nodes shadowed by a compaction marker). A present `[]` is valid only on `assistant/message` and records a known empty provider stream; when the field is absent, a legacy or foreign event does not record which earlier events produced the message. Other surface events require a non-empty list when the field is present. Without these cited seqs, replay cannot validate that a replace-range operation names every event it removed.
+- **`sourceEventSeqs?: number[]`** — seq numbers of earlier events cited as sources, such as a `tool/call` cited by its result or surface nodes shadowed by a compaction marker. A present list is non-empty, unique, earlier, and known. V2 `assistant/message` embeds its provider stream and cannot carry this field. Without cited seqs, replay cannot validate that a replace-range operation names every event it removed.
 - **`surfaceOp?: SurfaceOp`** — how this event entered the surface. Absent for non-surface events.
 
 ### SurfaceOp: two operations
@@ -27,7 +27,7 @@ export type SurfaceOp =
   | { op: 'replace'; start: number; end: number }  // shadow [start, end] inclusive
 ```
 
-1. **Append** — add the new event seq to the tail. Used by `user/message`, `assistant/message`, `tool/result`, `context/message`. The loop passes `surfaceOp: 'append'` on all such appends and records `sourceEventSeqs` where applicable: every successful `assistant/message` records its complete `assistant/chunk` source set, including `[]`, while `tool/result` records its `tool/call` source.
+1. **Append** — add the new event seq to the tail. Used by `user/message`, `assistant/message`, `tool/result`, `context/message`. The loop passes `surfaceOp: 'append'` on all such appends and records `sourceEventSeqs` where applicable: `tool/result` records its `tool/call` source, while `assistant/message` owns its embedded stream directly.
 
 2. **Replace** — remove entries from `start` through `end` (both inclusive) and insert the new event seq in their place. Both `start` and `end` must be present in the current surface; `start === end` replaces one entry. The event's `sourceEventSeqs` must contain every shadowed surface seq. The shadowed events remain in the log but are no longer on the surface.
 
@@ -41,7 +41,7 @@ Delta processing is O(1) when no new events and O(new events) when new events ar
 
 ### Persistence
 
-The new fields are serialized as top-level JSON properties. JSONL storage requires no separate column mapping: its lossless JSON boundary preserves both values. The session format `version` is pinned at `SESSION_FORMAT_VERSION = 0`; the optional surface fields are absorbed without bumping it.
+The new fields are serialized as top-level JSON properties. JSONL storage requires no separate column mapping: its lossless JSON boundary preserves both values. Released v0 and v1 share this surface representation, and the identity v0-to-v1 edge preserves it exactly; a future structural representation change increments `SESSION_FORMAT_VERSION` and owns an adjacent migration.
 
 ### Crash recovery
 
@@ -49,9 +49,9 @@ The `repair.ts` module synthesizes `tool/result` closers for orphaned tool calls
 
 ### Invariants
 
-`Session` validates `sourceEventSeqs` and `surfaceOp` at the always-on seed/append boundary: only `assistant/message` may use an empty source-event list; references are unique, earlier, and known; replacement endpoints exist in surface order; and `sourceEventSeqs` covers every shadowed node. These are single-record acceptance and storage-projection rules, not optional invariant-service contributions.
+`Session` validates `sourceEventSeqs` and `surfaceOp` at the always-on seed/append boundary: source lists are non-empty, unique, earlier, and known; `assistant/message` carries no source list; replacement endpoints exist in surface order; and `sourceEventSeqs` covers every shadowed node. These are single-record acceptance and storage-projection rules, not optional invariant-service contributions.
 
-Every surface-eligible event must carry `surfaceOp` or it would disappear from derived history. Typed `append` overloads enforce this for literal event types; runtime checks in `append` and the seed constructor cover widened unions and loaded logs. Invalid seeds are rejected rather than upgraded under the pre-release format policy.
+Every surface-eligible event must carry `surfaceOp` or it would disappear from derived history. Typed `append` overloads enforce this for literal event types; runtime checks in `append` and the seed constructor cover widened unions and current loaded logs. Historical v0 validation and normalization belong to the v0-to-v1 edge rather than generic Session code.
 
 ## Alternatives considered
 

@@ -721,19 +721,19 @@ describe('request stability across the loop', () => {
 
     adapter.requests.forEach((request, index) => {
       const stepStart = stepStarts[index]!
-      const firstChunk = events.find(e =>
-        e.type === 'assistant/chunk'
+      const settlement = events.find(e =>
+        (e.type === 'assistant/message' || e.type === 'assistant/attempt')
         && e.data.turn === stepStart.data.turn
         && e.data.step === stepStart.data.step,
       )!
       // Messages: the entered batch is logged after step/start, so rebuild the
       // complete dispatch prefix through a completely fresh Session.
-      const rebuilt = Session.create(SessionId(`rebuild-${index}`), structuredClone(events.slice(0, firstChunk.seq)))
+      const rebuilt = Session.create(SessionId(`rebuild-${index}`), structuredClone(events.slice(0, settlement.seq)))
       expect(structuredClone(request.messages)).toEqual(rebuilt.deriveMessages())
 
       // Header: the latest request/header snapshot up to this step's dispatch
-      // (its header event sits between step/start and the first chunk).
-      const header = foldRequestHeader(events.slice(0, firstChunk.seq))!
+      // (its header event sits between step/start and the Assistant settlement).
+      const header = foldRequestHeader(events.slice(0, settlement.seq))!
       expect(request.model).toBe(header.config.model)
       expect(request.reasoningEffort).toBe(header.config.reasoningEffort)
       expect(request.system).toEqual(header.system)

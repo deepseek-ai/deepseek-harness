@@ -16,7 +16,7 @@ Status: implemented
 
 - `DSH_SESSION_JSONL` 不复存在；shell-env 不再注册持久化贡献方。该变量只有在 `compression: 'none'` 时才是诚实的——默认的 `.jsonl.zstd` 产物无法从 bash 读取。
 - Claude Code／Codex 钩子桥接层为保持协议格式，仍在线上 payload 中保留 `transcript_path`，但始终发送 `''`／`null`。钩子脚本同样无法解析压缩产物。
-- session-controller 冷空白探测中基于 `locate` 的大小门槛被删除。探测本身运行在 stat 元数据之上：[基于句柄的 seam](../architecture/2026-08-27-handle-based-session-persistence.zh.md) 的 `stat()`/`list()` 快照携带可选的 `eventCount`/`sizeBytes`，session-controller 以 `coldBlankProbeMaxEvents`/`coldBlankProbeMaxBytes` 限定探测；超过两个阈值的冷会话，或位于两种提示都不提供的后端上的冷会话，报告 `blank: false`（未知）。
+- session-controller 中基于 `locate` 的大小门槛和冷空白探测都被删除。[基于句柄的 seam](../architecture/2026-08-27-handle-based-session-persistence.zh.md) 的 `stat()`/`list()` 快照仍可携带 `eventCount`/`sizeBytes`，但 listing 不会根据这些提示打开正文，也没有 `coldBlankProbeMaxEvents`/`coldBlankProbeMaxBytes` 配置。没有当前 cache 答案的冷 row 报告 `blank: false`（未知）。
 
 **删除 legacy 事件形态迁移。**读取只校验当前 v0 记录。已废弃的事件类型（`steering/message`、`mode/set`、`request/header-delta`）经由读取侧词汇门禁以 `SessionFormatUnsupportedError` 拒绝。消息标识机制之前的消息 payload 与 `request/header` 的 `fallback` 原因经由会话校验拒绝——在 load/inspect 路径上表现为 `SessionPersistenceCorruptionError`，在 `readFrom` 上表现为普通校验错误。react-loop 重构之前的轮次 envelope 没有校验器：过时的 `turn/start.trigger` 字段与粗粒度的 `aborted`/`disposed` 轮次结束原因会作为扩展形态数据不经投影地加载，这正是约定测试 "preserves extension turn/end reasons outside the closed reason set" 所钉住的、有文档记载的可合并扩展 fall-through。此举合并并取代了 pre-identity-message 与 pre-react-loop 两份导入 Note；其记录保存在下文。
 

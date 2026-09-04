@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime, { createUserMessage, ToolCallId, LlmError, ReasoningEffortId, StreamChunk } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, LlmError, ReasoningEffortId, StreamChunk, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, TurnEndReason } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
-import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { type Agent, type AssistantStreamFrame } from '@deepseek-ai/dsh-agent'
 
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -52,6 +52,205 @@ function userTexts(agent: Agent): string[] {
 }
 
 describe('agent loop', () => {
+  it('publishes one dense live attempt and commits one v2 message with the exact embedded stream', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('live')]))
+    const agent = await ctx.agentLoop.create(SessionId('live-assistant-attempt'), {
+      provider: 'mock',
+      model: 'mock',
+    })
+    const frames: AssistantStreamFrame[] = []
+    let committedAfterMessage = false
+    ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+      if (subject !== agent) return
+      frames.push(frame)
+      if (frame.type === 'end' && frame.outcome.kind === 'committed') {
+        committedAfterMessage = agent.session.snapshotEvents().at(-1)?.type === 'assistant/message'
+      }
+    })
+
+    send(agent, 'stream this')
+    await waitForIdle(ctx, agent)
+
+    expect(frames.at(0)?.type).toBe('start')
+    const start = frames.at(0)
+    if (start?.type === 'start') {
+    }
+    expect(frames.at(-1)?.type).toBe('end')
+    expect(frames.map(frame => frame.revision)).toEqual(
+      frames.map((_frame, index) => index + 1),
+    )
+    const chunks = frames.filter(
+      (frame): frame is Extract<AssistantStreamFrame, { type: 'chunk' }> => frame.type === 'chunk',
+    )
+    expect(chunks.map(frame => frame.index)).toEqual(chunks.map((_frame, index) => index))
+    expect(agent.session.snapshotEvents().some(event => (event.type as string) === 'assistant/chunk')).toBe(false)
+    const message = agent.session.snapshotEvents().findLast(event => event.type === 'assistant/message')
+    expect(message?.type === 'assistant/message'
+      ? expandAssistantStream(message.data.stream).map(member => member.chunk)
+      : undefined).toStrictEqual(chunks.map(frame => frame.chunk))
+    const end = frames.at(-1)
+    expect(end).toMatchObject({
+      type: 'end',
+      index: chunks.length,
+      outcome: { kind: 'committed', eventType: 'assistant/message', seq: message?.seq },
+    })
+    if (end?.type === 'end') {
+      expect(committedAfterMessage).toBe(true)
+    }
+  })
+
+  it('abandons the live row when durable Assistant settlement is rejected', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('cannot commit')]))
+    const agent = await ctx.agentLoop.create(SessionId('abandoned-assistant-attempt'), {
+      provider: 'mock',
+      model: 'mock',
+    })
+    const frames: AssistantStreamFrame[] = []
+    ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+      if (subject === agent) frames.push(frame)
+    })
+    const append = agent.session.append.bind(agent.session)
+    Object.defineProperty(agent.session, 'append', {
+      configurable: true,
+      value: (...args: Parameters<typeof agent.session.append>): ReturnType<typeof agent.session.append> => {
+        if (args[0] === 'assistant/message') throw new Error('settlement rejected')
+        return Reflect.apply(append, agent.session, args) as ReturnType<typeof agent.session.append>
+      },
+    })
+
+    send(agent, 'stream this')
+    await waitForIdle(ctx, agent)
+
+    expect(frames.at(-1)).toMatchObject({
+      type: 'end',
+      outcome: { kind: 'abandoned' },
+    })
+    expect(agent.session.snapshotEvents().some(event => event.type === 'assistant/message')).toBe(false)
+  })
+
+  it('abandons a started live attempt when final block assembly fails', async () => {
+    const chunks: StreamChunk[] = [
+      { type: 'block-start', index: 0, blockType: 'external-block' } as unknown as StreamChunk,
+      { type: 'finish', reason: { kind: 'stop' } },
+    ]
+    const ctx = await harness(new MockAdapter([chunks]))
+    const agent = await ctx.agentLoop.create(SessionId('assistant-assembly-failure'), {
+      provider: 'mock',
+      model: 'mock',
+    })
+    const frames: AssistantStreamFrame[] = []
+    ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+      if (subject === agent) frames.push(frame)
+    })
+
+    send(agent, 'produce an incomplete external block')
+    await waitForIdle(ctx, agent)
+
+    expect(frames.map(frame => frame.revision)).toEqual([1, 2, 3, 4])
+    expect(frames.at(-1)).toMatchObject({
+      type: 'end',
+      index: 2,
+      outcome: { kind: 'abandoned' },
+    })
+    expect(agent.session.snapshotEvents().some(event => (
+      event.type === 'assistant/message' || event.type === 'assistant/attempt'
+    ))).toBe(false)
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+      type: 'turn/end',
+      data: { reason: { kind: 'error' } },
+    })
+  })
+
+  it('settles a failed attempt before retrying with a new dense attempt', async () => {
+    const failed: StreamChunk[] = [
+      { type: 'usage', usage: { inputTokens: 1, outputTokens: 0 } },
+      { type: 'finish', reason: { kind: 'error', failure: { message: 'retry', code: 'SERVER' } } },
+    ]
+    const ctx = await harness(new MockAdapter([failed, textResponse('recovered')]))
+    const agent = await ctx.agentLoop.create(SessionId('assistant-retry-attempt'), {
+      provider: 'mock',
+      model: 'mock',
+    })
+    const frames: AssistantStreamFrame[] = []
+    ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+      if (subject === agent) frames.push(frame)
+    })
+    ctx.on('agent/request-error', async () => ({ kind: 'retry' as const }))
+
+    send(agent, 'retry once')
+    await waitForIdle(ctx, agent)
+
+    expect(frames.map(frame => frame.revision)).toEqual(frames.map((_frame, index) => index + 1))
+    expect(frames.filter(frame => frame.type === 'start')).toHaveLength(2)
+    expect(frames.filter(frame => frame.type === 'end').map(frame => (
+      frame.outcome.kind === 'committed' ? frame.outcome.eventType : frame.outcome.kind
+    ))).toEqual(['assistant/attempt', 'assistant/message'])
+  })
+
+  it('does not emit an end frame when prepared dispatch throws before start', async () => {
+    const ctx = await harness(new MockAdapter([]))
+    const agent = await ctx.agentLoop.create(SessionId('assistant-dispatch-throw'), {
+      provider: 'mock',
+      model: 'mock',
+    })
+    const frames: AssistantStreamFrame[] = []
+    ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+      if (subject === agent) frames.push(frame)
+    })
+    const prepareCall = ctx.llm.prepareCall.bind(ctx.llm)
+    vi.spyOn(ctx.llm, 'prepareCall').mockImplementation(async (config, signal) => {
+      const prepared = await prepareCall(config, signal)
+      return {
+        ...prepared,
+        stream: () => { throw new Error('dispatch failed before start') },
+      }
+    })
+
+    send(agent, 'fail before streaming')
+    await waitForIdle(ctx, agent)
+
+    expect(frames).toEqual([])
+    expect(agent.session.snapshotEvents().at(-1)).toMatchObject({
+      type: 'turn/end',
+      data: { reason: { kind: 'error' } },
+    })
+  })
+
+  it('preserves the stream failure when its durable attempt settlement is also rejected', async () => {
+    const streamFailure = new Error('provider transport failed')
+    const settlementFailure = new Error('attempt settlement rejected')
+    const ctx = await harness(new MockAdapter([textResponse('partial')]))
+    const agent = await ctx.agentLoop.create(SessionId('double-assistant-failure'), {
+      provider: 'mock',
+      model: 'mock',
+    })
+    ctx.on('llm/stream', async function* (_options, next) {
+      for await (const chunk of next()) {
+        yield chunk
+        if (chunk.type === 'text-delta') throw streamFailure
+      }
+    })
+    const append = agent.session.append.bind(agent.session)
+    Object.defineProperty(agent.session, 'append', {
+      configurable: true,
+      value: (...args: Parameters<typeof agent.session.append>): ReturnType<typeof agent.session.append> => {
+        if (args[0] === 'assistant/attempt') throw settlementFailure
+        return Reflect.apply(append, agent.session, args) as ReturnType<typeof agent.session.append>
+      },
+    })
+    const errors: unknown[] = []
+    ctx.on('agent/error', ({ agent: subject, error }) => {
+      if (subject === agent) errors.push(error)
+    })
+
+    send(agent, 'stream this')
+    await waitForIdle(ctx, agent)
+
+    const combined = errors.find((error): error is AggregateError => error instanceof AggregateError)
+    expect(combined?.errors).toEqual([streamFailure, settlementFailure])
+    expect(combined?.cause).toBe(streamFailure)
+  })
+
   it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
     'rejects invalid AgentOptions.maxTokens %s before publication',
     async (maxTokens) => {
@@ -105,6 +304,25 @@ describe('agent loop', () => {
     expect(() => AgentLoop.Config({
       agents: [{ id: 'configured-agent', reasoningEffort: ReasoningEffortId('') }],
     })).toThrow()
+  })
+
+  it('rejects concurrent maintenance while one job owns the Agent', async () => {
+    const ctx = await harness(new MockAdapter([textResponse('unused')]))
+    const agent = await ctx.agentLoop.create(SessionId('concurrent-maintenance'), {
+      provider: 'mock', model: 'mock',
+    })
+    const started = Promise.withResolvers<undefined>()
+    const finish = Promise.withResolvers<undefined>()
+    const active = agent.runMaintenance(async () => {
+      started.resolve(undefined)
+      await finish.promise
+    })
+    await started.promise
+
+    expect(() => agent.runMaintenance(async () => {})).toThrow('already has active work')
+
+    finish.resolve(undefined)
+    await active
   })
 
   it('cancels queued wakeup work together with an active maintenance task', async () => {
@@ -578,7 +796,7 @@ describe('agent loop', () => {
     }])
   })
 
-  it('records raw chunks for replay as assistant/chunk session events', async () => {
+  it('records exact replay chunks inside the durable assistant message', async () => {
     const adapter = new MockAdapter([textResponse('abc')])
     const ctx = await harness(adapter)
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
@@ -586,12 +804,12 @@ describe('agent loop', () => {
     send(agent, 'hi')
     await waitForIdle(ctx, agent)
 
-    const chunkEvents = agent.session.snapshotEvents().filter(e => e.type === 'assistant/chunk')
+    const message = agent.session.snapshotEvents().find(e => e.type === 'assistant/message')
+    const chunks = message?.type === 'assistant/message' ? expandAssistantStream(message.data.stream) : []
     // textResponse('abc') = block-start + 3 deltas + block-end + usage + finish = 7
-    expect(chunkEvents).toHaveLength(7)
-    // replay: chunk events alone re-assemble to the recorded assistant message
-    const deltaText = chunkEvents
-      .flatMap(e => e.type === 'assistant/chunk' ? [e.data.chunk] : [])
+    expect(chunks).toHaveLength(7)
+    const deltaText = chunks
+      .map(member => member.chunk)
       .filter((c: StreamChunk): c is Extract<StreamChunk, { type: 'text-delta' }> => c.type === 'text-delta')
       .map(c => c.text)
       .join('')
@@ -1000,7 +1218,9 @@ describe('agent loop', () => {
     const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
 
     const reasons: TurnEndReason[] = []
+    const frames: AssistantStreamFrame[] = []
     ctx.on('session/event', (_s, event) => { if (event.type === 'turn/end') reasons.push(event.data.reason) })
+    ctx.on('agent/assistant-stream', ({ frame }) => { frames.push(frame) })
 
     send(agent, 'go')
     // wait until the stream is hanging, then cancel
@@ -1010,6 +1230,12 @@ describe('agent loop', () => {
     await waitForIdle(ctx, agent)
 
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'user' } }])
+    const chunks = frames.filter(frame => frame.type === 'chunk')
+    expect(frames.at(-1)).toMatchObject({
+      type: 'end',
+      index: chunks.length,
+      outcome: { kind: 'committed', eventType: 'assistant/message' },
+    })
   })
 
   it('surfaces max-tokens as the turn-end reason when the last step is cut off', async () => {
@@ -1143,7 +1369,7 @@ describe('agent loop', () => {
     // Empty content still needs an assistant/message to carry usage; derivation
     // skips that host so it does not create a spurious assistant turn.
     const assistantMessage = agent.session.snapshotEvents().find(e => e.type === 'assistant/message')
-    expect(assistantMessage?.type === 'assistant/message' && assistantMessage.data).toEqual({
+    expect(assistantMessage?.type === 'assistant/message' && assistantMessage.data).toMatchObject({
       turn: 1,
       step: 1,
       message: {
@@ -1183,7 +1409,7 @@ describe('agent loop', () => {
 
     expect(reasons).toEqual([{ kind: 'max-tokens' }])
     const assistant = agent.session.snapshotEvents().find(e => e.type === 'assistant/message')!
-    expect(assistant.type === 'assistant/message' && assistant.data).toEqual({
+    expect(assistant.type === 'assistant/message' && assistant.data).toMatchObject({
       turn: 1,
       step: 1,
       message: {
@@ -1193,7 +1419,8 @@ describe('agent loop', () => {
         source: { kind: 'model', provider: 'mock', model: 'mock' },
       },
     })
-    expect(assistant.sourceEventSeqs?.length).toBeGreaterThan(0)
+    expect(assistant.sourceEventSeqs).toBeUndefined()
+    expect(assistant.type === 'assistant/message' ? assistant.data.stream.length : 0).toBeGreaterThan(0)
     expect(agent.session.deriveMessages()).toEqual([{
       id: expect.any(String) as unknown,
       role: 'user',
@@ -1217,7 +1444,7 @@ describe('agent loop', () => {
 
     expect(reasons).toEqual([{ kind: 'completed' }])
     const assistant = agent.session.snapshotEvents().find(e => e.type === 'assistant/message')!
-    expect(assistant.type === 'assistant/message' && assistant.data).toEqual({
+    expect(assistant.type === 'assistant/message' && assistant.data).toMatchObject({
       turn: 1,
       step: 1,
       message: {
@@ -1227,7 +1454,8 @@ describe('agent loop', () => {
         source: { kind: 'model', provider: 'mock', model: 'mock' },
       },
     })
-    expect(assistant.sourceEventSeqs?.length).toBe(1)
+    expect(assistant.sourceEventSeqs).toBeUndefined()
+    expect(assistant.type === 'assistant/message' ? assistant.data.stream.length : 0).toBe(1)
     expect(agent.session.deriveMessages()).toEqual([{
       id: expect.any(String) as unknown,
       role: 'user',
@@ -1385,11 +1613,10 @@ describe('agent loop', () => {
     const turns: number[] = []
     ctx.on('session/event', (_s, event) => { if (event.type === 'turn/start') turns.push(event.data.turn) })
 
-    // queue two messages while idle — first starts turn 1 immediately;
-    // queue the second during turn 1 when the first assistant chunk streams
+    // Queue the second from the first turn's durable Assistant settlement.
     let queued = false
     ctx.on('session/event', (_s, event) => {
-      if (event.type === 'assistant/chunk' && !queued) {
+      if (event.type === 'assistant/message' && !queued) {
         queued = true
         queueMicrotask(() => { send(agent, 'second message') })
       }
@@ -1547,7 +1774,7 @@ describe('agent loop', () => {
     send(agent, 'run')
     await waitForIdle(ctx, agent)
 
-    const replayed = ctx.sessions.create(SessionId('replayed'), { seed: agent.session.snapshotEvents() })
+    const replayed = ctx.sessions.create(SessionId('replayed'), { seed: [...agent.session.snapshotEvents()] })
     expect(replayed.deriveMessages()).toEqual(agent.session.deriveMessages())
     // event-by-event identity of types over the inherited prefix
     expect(replayed.snapshotEvents().slice(0, agent.session.seq).map(e => e.type)).toEqual(

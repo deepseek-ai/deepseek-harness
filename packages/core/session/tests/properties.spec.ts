@@ -35,6 +35,7 @@ const messageEventArb: fc.Arbitrary<Appendable> = fc.oneof(
     data: {
       turn: 1,
       step: 1,
+      stream: [],
       message: createMessage({
         role: 'assistant',
         content,
@@ -48,6 +49,7 @@ const messageEventArb: fc.Arbitrary<Appendable> = fc.oneof(
     data: {
       turn: 1,
       step: 1,
+      stream: [],
       message: createMessage({
         role: 'assistant',
         content,
@@ -74,7 +76,10 @@ const nonMessageEventArb: fc.Arbitrary<Appendable> = fc.oneof(
   fc.constant<Appendable>({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }),
   fc.constant<Appendable>({ type: 'step/start', data: { turn: 1, step: 1 } }),
   fc.constant<Appendable>({ type: 'step/end', data: { turn: 1, step: 1 } }),
-  fc.string().map((text): Appendable => ({ type: 'assistant/chunk', data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text } } })),
+  fc.string().map((text): Appendable => ({
+    type: 'assistant/attempt',
+    data: { turn: 1, step: 1, stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: [text] }] },
+  })),
 )
 
 const anyEventArb = fc.oneof(messageEventArb, nonMessageEventArb)

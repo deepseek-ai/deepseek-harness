@@ -29,18 +29,18 @@
  *   (`1`), an aborted reason without its cause (`aborted`), an unknown abort
  *   cause (`abort-unknown`), a hook cause without its reason (`hook`), or no
  *   data member (`no-data`) for wire-validation probes.
- * - `FAKE_EMPTY_MESSAGE`: the turn streams a text chunk, then records an empty
- *   assistant/message for a usage-only max-tokens step.
+ * - `FAKE_EMPTY_MESSAGE`: record an empty assistant/message whose embedded
+ *   stream contains only usage and max-tokens settlement.
  * - `FAKE_HANG_INIT`: never answer `initialize` (mid-handshake cancel probe).
  * - `FAKE_INIT_READY` + `FAKE_INIT_GO`: touch the READY file when `initialize`
  *   arrives, then poll for the GO file before answering (deterministic
  *   cancel-during-handshake window).
  * - `FAKE_HANG_PROMPT`: never answer `session/prompt` (for timeout/dispose tests).
- * - `FAKE_EXIT_DURING_PROMPT`: stream one partial chunk, then exit 17 while
- *   the owned session run is waiting for its terminal state.
- * - `FAKE_STREAM_THEN_MALFORMED`: stream a text chunk for the prompt, then
- *   answer `{}` (no accepted) — same-pipe ordering makes the chunk arrive
- *   before the protocol failure (partial-output retention probe).
+ * - `FAKE_EXIT_DURING_PROMPT`: commit one interrupted assistant message, then
+ *   exit 17 while the owned session run is waiting for its terminal state.
+ * - `FAKE_STREAM_THEN_MALFORMED`: commit a partial assistant attempt for the
+ *   prompt, then answer `{}` (no accepted) — same-pipe ordering makes the
+ *   attempt arrive before the protocol failure (partial-output retention probe).
  * - `FAKE_IGNORE_EOF` + `FAKE_SIGTERM_FILE`: keep running after stdin EOF; touch the file on SIGTERM (ladder probe).
  * - `FAKE_TRAP_SIGTERM`: with `FAKE_IGNORE_EOF`, survive SIGTERM too (SIGKILL-rung probe).
  * - `FAKE_EXIT_BEFORE_INIT`: exit 3 immediately (spawn-then-die probe).
@@ -93,6 +93,26 @@ function assistantText(): string {
   return parts.join('\n')
 }
 
+function textStream(text: string): object[] {
+  return [
+    { type: 'chunk', time: 0, chunk: { type: 'block-start', index: 0, blockType: 'text' } },
+    { type: 'text-chunks', time0: 0, index: 0, dt: [], texts: [text] },
+    { type: 'chunk', time: 0, chunk: { type: 'block-end', index: 0, block: { type: 'text', text } } },
+    { type: 'chunk', time: 0, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+  ]
+}
+
+function usageOnlyStream(): object[] {
+  return [
+    {
+      type: 'chunk',
+      time: 0,
+      chunk: { type: 'usage', usage: { inputTokens: 1, outputTokens: 0, totalTokens: 1 } },
+    },
+    { type: 'chunk', time: 0, chunk: { type: 'finish', reason: { kind: 'max-tokens' } } },
+  ]
+}
+
 function runTurn(sessionId: string): void {
   const text = assistantText()
   if (env.FAKE_MALFORMED_EVENT !== undefined) {
@@ -100,8 +120,12 @@ function runTurn(sessionId: string): void {
     return
   }
   event(sessionId, 'turn/start', { turn: 0 })
-  event(sessionId, 'assistant/chunk', { turn: 0, step: 0, chunk: { type: 'text-delta', index: 0, text } })
   if (env.FAKE_MALFORMED_MESSAGE !== undefined) {
+    event(sessionId, 'assistant/attempt', {
+      turn: 0,
+      step: 0,
+      stream: textStream(text),
+    })
     event(sessionId, 'assistant/message', {
       turn: 0,
       step: 0,
@@ -111,12 +135,20 @@ function runTurn(sessionId: string): void {
         content: 'not-an-array',
         source: { kind: 'model', provider: 'fake', model: 'fake' },
       },
+      stream: textStream(text),
     })
     return
   }
   if (env.FAKE_MESSAGE_WITHOUT_DATA !== undefined) {
     notify('session.event', { sessionId, event: { type: 'assistant/message', seq: seq++, time: 0 } })
     return
+  }
+  if (env.FAKE_EMPTY_MESSAGE !== undefined) {
+    event(sessionId, 'assistant/attempt', {
+      turn: 0,
+      step: 0,
+      stream: textStream(text),
+    })
   }
   event(sessionId, 'assistant/message', {
     turn: 0,
@@ -129,6 +161,7 @@ function runTurn(sessionId: string): void {
       content: env.FAKE_EMPTY_MESSAGE !== undefined ? [] : [{ type: 'text', text }],
       source: { kind: 'model', provider: 'fake', model: 'fake' },
     },
+    stream: env.FAKE_EMPTY_MESSAGE !== undefined ? usageOnlyStream() : textStream(text),
   })
   const reasonKind = env.FAKE_REASON_KIND ?? 'completed'
   if (reasonKind !== 'none') {
@@ -162,8 +195,13 @@ function runTurn(sessionId: string): void {
     event(childId, 'assistant/message', {
       turn: 0,
       step: 0,
-      content: [{ type: 'text', text: 'child says hi' }],
-      provenance: { provider: 'fake', model: 'fake' },
+      message: {
+        id: `fake-child-${seq}`,
+        role: 'assistant',
+        content: [{ type: 'text', text: 'child says hi' }],
+        source: { kind: 'model', provider: 'fake', model: 'fake' },
+      },
+      stream: textStream('child says hi'),
     })
     notify('subagent.finished', {
       provider: 'spawn',
@@ -237,18 +275,17 @@ reader.on('line', (line) => {
       })
       notify('session.status', { sessionId, status: 'running' })
       if (env.FAKE_STREAM_THEN_MALFORMED !== undefined) {
-        event(sessionId, 'assistant/chunk', { turn: 0, step: 0, chunk: { type: 'text-delta', index: 0, text: 'streamed then cut short' } })
+        event(sessionId, 'assistant/attempt', {
+          turn: 0,
+          step: 0,
+          stream: textStream('streamed then cut short'),
+        })
         respond({})
         return
       }
       if (env.FAKE_EXIT_DURING_PROMPT !== undefined) {
         const partial = env.FAKE_TEXT ?? 'partial before exit'
         respond({ messageId })
-        event(sessionId, 'assistant/chunk', {
-          turn: 0,
-          step: 0,
-          chunk: { type: 'text-delta', index: 0, text: partial },
-        })
         event(sessionId, 'assistant/message', {
           turn: 0,
           step: 0,
@@ -258,6 +295,8 @@ reader.on('line', (line) => {
             content: [{ type: 'text', text: partial }],
             source: { kind: 'model', provider: 'fake', model: 'fake' },
           },
+          stream: textStream(partial),
+          interrupted: true,
         })
         setImmediate(() => { process.exit(17) })
         return

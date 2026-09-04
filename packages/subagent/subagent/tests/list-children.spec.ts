@@ -108,13 +108,25 @@ async function authorChild(
   inheritedEventCount?: number,
 ): Promise<SessionId> {
   const sessionId = SessionId(id)
+  const committed = inheritedEventCount === undefined
+    ? events
+    : [
+      ...events.slice(0, inheritedEventCount),
+      {
+        type: 'session/end-seed',
+        seq: SessionSeq(inheritedEventCount),
+        time: events[inheritedEventCount]?.time ?? events[inheritedEventCount - 1]?.time ?? 1,
+        data: { inherited: true },
+      } as SessionEvent,
+      ...events.slice(inheritedEventCount),
+    ].map((event, seq) => ({ ...event, seq: SessionSeq(seq) }))
   await seedStoredSession(ctx.sessionPersistence, {
     version: SESSION_FORMAT_VERSION,
     id: sessionId,
     createdAt: 1,
     isSeeded: inheritedEventCount !== undefined,
     ...header,
-  }, events, inheritedEventCount === undefined ? undefined : SessionLogOffset(inheritedEventCount))
+  }, committed, inheritedEventCount === undefined ? undefined : SessionLogOffset(inheritedEventCount))
   return sessionId
 }
 
@@ -597,7 +609,6 @@ describe('SubagentRuntime.listChildren', () => {
   })
 
   it.each([
-    ['version', (meta: SessionHeader): SessionHeader => ({ ...meta, version: meta.version + 1 })],
     ['id', (meta: SessionHeader): SessionHeader => ({ ...meta, id: SessionId('another-lifecycle') })],
     ['createdAt', (meta: SessionHeader): SessionHeader => ({ ...meta, createdAt: meta.createdAt + 1 })],
     ['cwd', (meta: SessionHeader): SessionHeader => ({ ...meta, cwd: '/elsewhere' })],

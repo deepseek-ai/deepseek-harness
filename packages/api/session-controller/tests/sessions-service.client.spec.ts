@@ -10,6 +10,9 @@ import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
+import { LlmAttemptId } from '@deepseek-ai/dsh-llm'
+import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
+import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { ClientSessions, SessionCreateError } from '../src/client/sessions/service.ts'
 import { scopeOf } from '../src/client/scope.ts'
 import type { SessionFollowFrame } from '../src/types.ts'
@@ -132,6 +135,282 @@ describe('search', () => {
 })
 
 describe('scope tree', () => {
+  it('publishes transient Assistant chunks and the named durable v2 settlement through one event source', async () => {
+    const b = bench()
+    await feedList(b, [{ id: 's1' }])
+    b.svc.open(sid('s1'))
+    const binding = b.svc.binding(sid('s1'))
+    if (binding === undefined) throw new Error('expected Session binding')
+    await vi.waitFor(() => {
+      expect(binding.session.getSnapshot().openState).toBe('open')
+    })
+    const attemptId = LlmAttemptId('web-live-attempt')
+    const durableMessage = {
+      type: 'event' as const,
+      event: {
+        type: 'assistant/message', seq: 0, time: 2,
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'live' }],
+            source: { kind: 'model', provider: 'p', model: 'm' },
+            id: 'message-1',
+          },
+          stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['live'] }],
+        },
+        surfaceOp: 'append' as const,
+      },
+    }
+    const publications: string[][] = []
+    const dispose = binding.eventSource.subscribe(() => {
+      publications.push(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+    })
+
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'start', attemptId, revision: 1, startedAfterSeq: -1,
+        turn: 1, step: 1,
+      },
+    })
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'chunk', attemptId, revision: 2, index: 0,
+        time: 1,
+        chunk: { type: 'text-delta', index: 0, text: 'live' },
+      },
+    })
+    await vi.waitFor(() => {
+      expect(binding.eventSource.getSnapshot().entries).toHaveLength(1)
+    })
+    await b.api.pushFollow(sid('s1'), durableMessage)
+    await Promise.resolve()
+    expect(binding.eventSource.getSnapshot().entries).toHaveLength(1)
+
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'end', attemptId, revision: 3, index: 1,
+        outcome: { kind: 'committed', eventType: 'assistant/message', seq: 0 },
+      },
+    })
+    await vi.waitFor(() => {
+      expect(binding.eventSource.getSnapshot().entries).toHaveLength(1)
+    })
+
+    expect(publications).toEqual([
+      ['assistant/live-chunk'],
+      ['assistant/message'],
+    ])
+    dispose()
+  })
+
+  it('replaces an active assistant baseline on reconnect without duplicate chunks', async () => {
+    const b = bench()
+    const attemptId = LlmAttemptId('reconnect-attempt')
+    let records: never[] = []
+    b.api.onHistory = () => Promise.resolve(ok({ records, hasMore: false }))
+    b.api.assistantStreamBaseline = {
+      revision: 2,
+      activeAttempt: {
+        attemptId, startedAfterSeq: -1, turn: 1, step: 1,
+        nextIndex: 1,
+        stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['a'] }],
+      },
+    }
+    await feedList(b, [{ id: 's1' }])
+    b.svc.open(sid('s1'))
+    const binding = b.svc.binding(sid('s1'))
+    if (binding === undefined) throw new Error('expected Session binding')
+    await vi.waitFor(() => {
+      expect(binding.eventSource.getSnapshot().entries).toHaveLength(1)
+    })
+
+    records = []
+    b.api.assistantStreamBaseline = {
+      revision: 3,
+      activeAttempt: {
+        attemptId, startedAfterSeq: -1, turn: 1, step: 1,
+        nextIndex: 2,
+        stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [1], texts: ['a', 'b'] }],
+      },
+    }
+    b.api.failStreams(new RemoteStreamCarrierError('lost'))
+    await vi.waitFor(() => {
+      expect(b.api.followStarts.filter(id => id === sid('s1'))).toHaveLength(2)
+      expect(binding.eventSource.getSnapshot().entries).toHaveLength(2)
+    })
+
+    expect(binding.eventSource.getSnapshot().entries.map(entry => (
+      entry.event.type === 'assistant/live-chunk' && entry.event.data.chunk.type === 'text-delta'
+        ? entry.event.data.chunk.text
+        : undefined
+    ))).toEqual(['a', 'b'])
+  })
+
+  it('stages a post-opening assistant settlement behind its exact active attempt', async () => {
+    const b = bench()
+    const attemptId = LlmAttemptId('reconnect-settlement-attempt')
+    const priorMessage = {
+      type: 'event' as const,
+      event: {
+        type: 'assistant/message', seq: 0, time: 30,
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'retry ' }],
+            source: { kind: 'model', provider: 'p', model: 'm' },
+            id: 'prior-attempt-message',
+          },
+          stream: [{ type: 'text-chunks', time0: 10, index: 0, dt: [], texts: ['retry '] }],
+        },
+        surfaceOp: 'append' as const,
+      },
+    }
+    const currentMessage = {
+      type: 'event' as const,
+      event: {
+        type: 'assistant/message', seq: 1, time: 19,
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'settled' }],
+            source: { kind: 'model', provider: 'p', model: 'm' },
+            id: 'current-attempt-message',
+          },
+          stream: [{ type: 'text-chunks', time0: 20, index: 0, dt: [], texts: ['settled'] }],
+        },
+        surfaceOp: 'append' as const,
+      },
+    }
+    b.api.onHistory = () => Promise.resolve(ok({
+      records: [priorMessage] as never[],
+      hasMore: false,
+    }))
+    b.api.assistantStreamBaseline = {
+      revision: 2,
+      activeAttempt: {
+        attemptId,
+        startedAfterSeq: SessionSeq(0),
+        turn: 1,
+        step: 1,
+        nextIndex: 1,
+        stream: currentMessage.event.data.stream,
+      },
+    }
+    await feedList(b, [{ id: 's1' }])
+    b.svc.open(sid('s1'))
+    const binding = b.svc.binding(sid('s1'))
+    if (binding === undefined) throw new Error('expected Session binding')
+    await vi.waitFor(() => {
+      expect(binding.session.getSnapshot().openState).toBe('open')
+    })
+
+    expect(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+      .toEqual(['assistant/message', 'assistant/live-chunk'])
+    expect(binding.eventSource.getSnapshot().entries[0]?.event).toBe(priorMessage.event)
+
+    await b.api.pushFollow(sid('s1'), currentMessage)
+    await Promise.resolve()
+    expect(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+      .toEqual(['assistant/message', 'assistant/live-chunk'])
+
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'end', attemptId, revision: 3, index: 1,
+        outcome: { kind: 'committed', eventType: 'assistant/message', seq: 1 },
+      },
+    })
+    await vi.waitFor(() => {
+      expect(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+        .toEqual(['assistant/message', 'assistant/message'])
+    })
+    expect(binding.eventSource.getSnapshot().change).toEqual({
+      kind: 'settle-assistant', attemptId: String(attemptId), entry: currentMessage,
+    })
+  })
+
+  it('replaces an invalid settlement with the authoritative post-end baseline', async () => {
+    const b = bench()
+    const attemptId = LlmAttemptId('reconnect-end-index-attempt')
+    const prior = {
+      type: 'event' as const,
+      event: { type: 'turn/start', seq: 0, time: 19, data: { turn: 1 } },
+    }
+    const message = {
+      type: 'event' as const,
+      event: {
+        type: 'assistant/message', seq: 1, time: 21,
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            role: 'assistant',
+            content: [{ type: 'text', text: 'settled' }],
+            source: { kind: 'model', provider: 'p', model: 'm' },
+            id: 'current-attempt-message',
+          },
+          stream: [{ type: 'text-chunks', time0: 20, index: 0, dt: [], texts: ['settled'] }],
+        },
+        surfaceOp: 'append' as const,
+      },
+    }
+    let records = [prior] as never[]
+    b.api.onHistory = () => Promise.resolve(ok({
+      records,
+      hasMore: false,
+    }))
+    b.api.assistantStreamBaseline = {
+      revision: 2,
+      activeAttempt: {
+        attemptId,
+        startedAfterSeq: SessionSeq(0),
+        turn: 1,
+        step: 1,
+        nextIndex: 1,
+        stream: message.event.data.stream,
+      },
+    }
+    await feedList(b, [{ id: 's1' }])
+    b.svc.open(sid('s1'))
+    const binding = b.svc.binding(sid('s1'))
+    if (binding === undefined) throw new Error('expected Session binding')
+    await vi.waitFor(() => {
+      expect(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+        .toEqual(['turn/start', 'assistant/live-chunk'])
+    })
+    const openingRevision = binding.eventSource.getSnapshot().revision
+
+    await b.api.pushFollow(sid('s1'), message)
+    await Promise.resolve()
+    expect(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+      .toEqual(['turn/start', 'assistant/live-chunk'])
+    records = [prior, message] as never[]
+    b.api.assistantStreamBaseline = { revision: 3 }
+    await b.api.pushFollow(sid('s1'), {
+      type: 'assistant-stream',
+      frame: {
+        type: 'end', attemptId, revision: 3, index: 0,
+        outcome: { kind: 'committed', eventType: 'assistant/message', seq: 0 },
+      },
+    })
+    await vi.waitFor(() => {
+      expect(b.api.followStarts.filter(id => id === sid('s1'))).toHaveLength(2)
+      expect(b.api.activeFollows(sid('s1'))).toBe(1)
+      expect(binding.eventSource.getSnapshot().revision).toBeGreaterThan(openingRevision)
+      expect(binding.eventSource.getSnapshot().entries.map(entry => entry.event.type))
+        .toEqual(['turn/start', 'assistant/message'])
+    })
+  })
+
   it('retains a Host-addressed scope until the first Session baseline owns pruning', async () => {
     const b = bench()
     const scoped = b.svc.resolveAgentScope(sid('s-early'))
@@ -268,16 +547,18 @@ describe('Agent scope disposal lifecycle', () => {
                     value: {
                       type: 'snapshot',
                       header: {
-                        version: 0,
+                        version: SESSION_FORMAT_VERSION,
                         id: request.address.kind === 'session'
                           ? request.address.sessionId
                           : request.address.childSessionId,
                         createdAt: 0,
+                        isSeeded: false,
                       },
                       cursor: -1,
                       records: [],
                       hasMore: false,
                       projections: { asOfSeq: -1, values: {} },
+                      assistantStream: { revision: 0 },
                     } as const,
                   })
                 }
@@ -342,11 +623,12 @@ describe('Agent scope disposal lifecycle', () => {
                     done: false,
                     value: {
                       type: 'snapshot',
-                      header: { version: 0, id: sessionId, createdAt: 0 },
+                      header: { version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 0, isSeeded: false },
                       cursor: -1,
                       records: [],
                       hasMore: false,
                       projections: { asOfSeq: -1, values: {} },
+                      assistantStream: { revision: 0 },
                     } as const,
                   })
                 }

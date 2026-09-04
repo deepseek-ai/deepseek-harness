@@ -77,7 +77,7 @@ kind: "package-reference"
 
 ### 主要流程
 
-外层 `agent/pre-step` 监听器接受步骤，从直接用户消息中解析规范 mention，再调用 `prepare`：规范化引用（保持首次 mention 顺序、去重、拒绝自引用与超限数量），并行读取每个表层，在 `maxReferenceBytes` 下逐源保留，并渲染聚合提示词。每份快照都插入到引用它的消息紧后，目标日志先记录可读的直接消息、再记录其带来源上下文，因此捕获后的源变更无法改变目标回放。
+外层 `agent/pre-step` 监听器接受步骤，从直接用户消息中解析规范 mention，再调用 `prepare`：规范化引用（保持首次 mention 顺序、去重、拒绝自引用与超限数量），并行读取每个表层，在 `maxReferenceBytes` 下逐源保留，并渲染聚合提示词。每条持久来源记录保留冻结的 `capturedThroughSeq` 并记录非零 `capturedFormatVersion`；字段缺失表示格式 v0。每份快照都插入到引用它的消息紧后，目标日志先记录可读的直接消息、再记录其带来源上下文，因此捕获后的源变更无法改变目标回放。
 
 </details>
 

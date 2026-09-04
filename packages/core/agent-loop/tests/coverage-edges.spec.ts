@@ -296,13 +296,13 @@ describe('stream failure edges', () => {
     const agent = await ctx.agentLoop.create(SessionId('stream-no-facts'), { provider: 'mock', model: 'mock' })
     let recoveries = 0
     ctx.on('agent/request-error', async () => { recoveries += 1 })
-    // A pre-commit chunk veto throws INSIDE the stream-consumption try, but it
-    // is not an adapter-boundary failure, so llmFailureOf yields no facts.
+    // A pre-commit durable-settlement veto is not an adapter-boundary failure,
+    // so it is not offered to request recovery.
     let vetoed = false
     ctx.on('internal/dispatch', (_mode, name, args) => {
       if (name !== 'session/event') return
       const event = args[1] as SessionEvent
-      if (event.type === 'assistant/chunk' && !vetoed) {
+      if (event.type === 'assistant/message' && !vetoed) {
         vetoed = true
         throw new Error('reject the first chunk')
       }

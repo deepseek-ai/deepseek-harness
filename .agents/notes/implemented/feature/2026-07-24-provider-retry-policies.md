@@ -40,7 +40,7 @@ Always mode asks downstream recovery first so a specialized policy such as conte
 
 Both modes use exponential local delays from `initialDelayMs` to `maxDelayMs`. `jitterRatio` multiplies each target by a uniform sample in `[1 - jitterRatio, 1 + jitterRatio]`, then applies the cap. A positive provider `Retry-After` within the cap remains exact and unjittered. An over-cap provider delay makes normal mode delegate; always mode retains its guarantee by using the configured local backoff.
 
-Each scheduled retry appends a non-surface `llm/retry` event with the failed provider, policy mode, canonical resolved-policy key, provider-policy retry number, delay, and failure facts. Normal events carry finite `maxRetries`; always events omit it, and UIs render the limit as `∞`. The event and failed `assistant/chunk` records do not contribute surface messages, so the next request contains the same derived context as the failed request unless another recovery policy deliberately changes the surface.
+Each scheduled retry appends a non-surface `llm/retry` event with the failed provider, policy mode, canonical resolved-policy key, provider-policy retry number, delay, and failure facts. Normal events carry finite `maxRetries`; always events omit it, and UIs render the limit as `∞`. Neither that event nor the failed attempt's `assistant/attempt` settlement contributes a surface message, so the next request contains the same derived context as the failed request unless another recovery policy deliberately changes the surface.
 
 ## Alternatives considered
 

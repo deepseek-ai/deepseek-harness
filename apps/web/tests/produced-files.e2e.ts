@@ -53,6 +53,7 @@ function producedFixture(): string {
     args: JSON.stringify({ file_path: path, content: `content of ${path}\n` }),
   }))
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: createAssistantMessage({
@@ -79,8 +80,10 @@ function producedFixture(): string {
       }),
     }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
   }
+  session.append('step/end', { turn: 1, step: 1 })
   session.append('step/start', { turn: 1, step: 2 })
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 2,
     message: createAssistantMessage({
@@ -94,7 +97,7 @@ function producedFixture(): string {
   return [
     JSON.stringify({
       type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}',
-      createdAt: 0, cwd: '{{cwd}}',
+      createdAt: 0, cwd: '{{cwd}}', isSeeded: false, delegationDepth: 0,
     }),
     ...session.snapshotEvents().map(event => JSON.stringify({
       ...event, time: eventTimeOrigin + event.seq * 1_000,

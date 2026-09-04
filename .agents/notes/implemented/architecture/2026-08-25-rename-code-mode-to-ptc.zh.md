@@ -21,7 +21,7 @@ Status: implemented
 - 提示词规则 `tools:code-only` → `tools:ptc-only`
 - 文档、README 与八个以该功能命名的 implemented Agent Note 中的文案 "Code Mode" → "PTC mode"／"PTC 模式"（这些 Note 文件一并就地改名）
 
-延后到堆叠的持久化 PR：会话持久词汇——持久事件类型 `tool/code-dispatch`／`tool/code-dispatch-start`、日志中的插件名 `tools-code-mode`、子调用 id 段 `:code:`。该 PR 被阻塞，直到 `SESSION_FORMAT_VERSION` v0→v1 迁移与其一同落地。
+会话持久词汇继续延后处理：持久事件类型 `tool/code-dispatch`／`tool/code-dispatch-start`、日志中的插件名 `tools-code-mode`、子调用 id 段 `:code:`。重命名这些值属于结构性 Session 格式变更，必须在恒等 v0-to-v1 基础之后拥有自己的相邻迁移边。
 
 保持不变：`run_code` 及其 `code` 参数（它们描述程序载荷，而非模式）、`CodeSdkLanguage`、`CodeRunFailedError`、`dsh-code-runtime*` 包族、第三方二进制名 `codex-code-mode-host`，以及所有冻结的 archived Note。
 
@@ -30,8 +30,8 @@ Status: implemented
 - **使用 `ptc-mode` 标识符**——否决：PTC 是工具呈现传输层，不是 plan-mode 意义上的模式，标识符不应宣示这种亲缘关系。
 - **仅重命名表面**——否决：预发布立场要求一次性更新所有引用。
 - **连 `run_code` 一起改名**——否决：该工具名描述的是运行程序，不是模式，而且是对模型可见的 API 表面。
-- **在本 PR 中一并重命名持久事件词汇**——否决：在没有格式版本提升的情况下重命名 `tool/code-dispatch*` 会让更名前的会话日志无法读取；该重命名属于与 v0→v1 迁移一同落地的堆叠持久化 PR。
+- **不提供相邻迁移边就重命名持久事件词汇**——否决：就地重命名 `tool/code-dispatch*` 会让更名前的 Session 日志无法读取；该重命名需要后续结构格式版本与显式迁移。
 
 ## 后果
 
-配置中写 `mode: code`、预设 id 为 `code`，在本构建上不再受支持。会话持久词汇仍为 `tool/code-dispatch*`、`tools-code-mode` 与 `:code:`，因此既有会话日志照常读取，无需 `SESSION_FORMAT_VERSION` 提升。堆叠的持久化 PR 负责重命名该词汇，并被阻塞到 v0→v1 迁移与其一同落地（版本机制见 [Session log 版本 Note](2026-08-10-session-log-version-mechanism.zh.md)）。无密钥的 snapshot refresh 携带本 PR 的词汇；持久化 PR 刷新包含分发的夹具。本 Note 所更名的已发布决策是 [PTC 基础 Note](../feature/2026-06-15-ptc.zh.md)。
+配置中写 `mode: code`、预设 id 为 `code`，在本构建上不再受支持。会话持久词汇仍为 `tool/code-dispatch*`、`tools-code-mode` 与 `:code:`；恒等 v0-to-v1 迁移边会保留这些值，因此本次更名不包含结构版本变更。后续相邻迁移边必须重命名该词汇并刷新包含分发的 fixture（参见[版本机制](2026-08-10-session-log-version-mechanism.zh.md)）。本 Note 所更名的已发布决策是 [PTC 基础 Note](../feature/2026-06-15-ptc.zh.md)。

@@ -1,8 +1,8 @@
 /**
  * SessionTelemetryBackend Service Definition for the DeepSeek Harness.
  *
- * This package owns the CAPTURE side of session-event reporting — which records
- * exist (the chunk projection), what they carry (the logical record), when
+ * This package owns the CAPTURE side of session-event reporting — the complete
+ * one-record-per-event ledger mirror, what records carry, when
  * they are captured (adoption, the per-append firehose, lifecycle
  * forwarding), live versus on-demand canonical-log capture, and the HMR
  * cursor. Everything downstream of
@@ -70,8 +70,9 @@ export interface SessionTelemetryRecord {
   severity: SessionTelemetrySeverity
   /**
    * Identity attributes, deliberately minimal: ledger records carry
-   * `session.id`, `event.type`, `event.seq`, plus `session.cwd` /
-   * `session.parent_id` / `session.seed_length` when the header has them;
+   * `session.id`, `session.format_version`, `event.type`, `event.seq`, plus optional
+   * `session.cwd` / `session.parent_id`; a seeded Session also carries
+   * `session.seed_length` from its exact inherited event count;
    * ops records carry `telemetry.op`, `session.id`, and (for `agent-error`)
    * `agent.id`, `turn`, `step`, `error.name`. Anything recoverable from the
    * body is intentionally NOT duplicated here.

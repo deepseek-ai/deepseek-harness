@@ -3,9 +3,9 @@
  * sessions' logical session logs plus every referenced media object. Each log
  * is read through a persistence read handle and serialized here as canonical
  * JSONL — one header line, then one line per validated event — so every
- * backend (JSONL, SQLite, future) exports identically. The root log sits at
- * `session.jsonl`; each subagent descendant under
- * `subagents/<id>/session.jsonl`; each image referenced by any included log
+ * backend (JSONL, SQLite, future) exports identically. The root log uses the
+ * current generation's canonical `session[.vN].jsonl` name; each subagent
+ * descendant uses `subagents/<id>/session[.vN].jsonl`; each image referenced by any included log
  * under `media/<attachmentId>.<ext>` (content-addressed, so one archive never
  * duplicates a shared image). No manifest is written — every file is
  * self-describing through its own header line or media type. Before each live
@@ -25,6 +25,8 @@ import { Zip, ZipDeflate } from 'fflate'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionLineageNode, SessionQueryEngine } from '@deepseek-ai/dsh-session-query'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { sessionFormatLogFilename } from '@deepseek-ai/dsh-session-format'
 import type { SessionEvent, SessionHeader, SessionId, SessionStore } from '@deepseek-ai/dsh-session'
 import type { SessionHandle, SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
@@ -67,7 +69,7 @@ export function sessionLogExportDeps(ctx: Context): SessionLogExportDeps {
 
 /**
  * Flush one currently live session through the store's authoritative durability
- * barrier immediately before its raw artifact is read. A cold or absent id has
+ * barrier immediately before its logical log is read. A cold or absent id has
  * no in-memory work to flush.
  * @param deps - export services, including the optional live-session store.
  * @param id - the session whose artifact is about to be read.
@@ -92,29 +94,25 @@ export type SessionLogZipEntry =
   | { readonly path: string; readonly content: string }
   | { readonly path: string; readonly data: Uint8Array }
 
-/** The zip base filename for every exported session log. */
-export const SESSION_LOG_FILENAME = 'session.jsonl'
+/** The current generation's canonical base filename for every exported session log. */
+export const SESSION_LOG_FILENAME = sessionFormatLogFilename(SESSION_FORMAT_VERSION)
 
 /**
  * Serialize one session's logical log as canonical JSONL text: the header
  * line, then one line per event, with a trailing newline.
  * @param header - the session's immutable header.
- * @param inheritedEventCount - the exact fork-inherited prefix length stored
- *   beside the header (`0` when `header.isSeeded` is false).
  * @param events - the validated committed events in seq order.
  * @returns the JSONL text.
  */
 export function serializeSessionLog(
   header: SessionHeader,
-  inheritedEventCount: number,
   events: readonly SessionEvent[],
 ): string {
-  // Match the JSONL backend's canonical header line: lineage is the physical
-  // `seedLength`, and `delegationDepth` is required-on-read there, so an
-  // omitted top-level depth serializes as 0 and the exported log parses as a
-  // valid log.
+  // Match the current v2 physical header. The inherited cut is already
+  // represented by the tagged session/end-seed event in `events`;
+  // `delegationDepth` is required on disk, so an omitted top-level depth is 0.
   /* jscpd:ignore-start -- deliberately mirrors the JSONL backend's
-     `toHeaderLine`: the exported text is the canonical v0 physical header
+     `toHeaderLine`: the exported text is the canonical v2 physical header
      line, and this backend-agnostic package must not depend on one backend
      implementation. */
   const lines = [JSON.stringify({
@@ -124,7 +122,7 @@ export function serializeSessionLog(
     createdAt: header.createdAt,
     ...header.cwd !== undefined ? { cwd: header.cwd } : {},
     ...header.parentSession !== undefined ? { parentSession: header.parentSession } : {},
-    ...header.isSeeded ? { seedLength: inheritedEventCount } : {},
+    isSeeded: header.isSeeded,
     ...header.origin !== undefined ? { origin: header.origin } : {},
     delegationDepth: header.delegationDepth ?? 0,
     ...header.agentPreset !== undefined ? { agentPreset: header.agentPreset } : {},
@@ -161,7 +159,7 @@ export async function readSessionLogText(
   }
   try {
     const events = await handle.read(0, undefined, options)
-    return serializeSessionLog(handle.header, Number(handle.inheritedEventCount), events)
+    return serializeSessionLog(handle.header, events)
   } finally {
     await handle.close()
   }
@@ -213,7 +211,7 @@ function collectImageRefs(content: unknown, refs: Map<string, ImageAttachmentRef
 /**
  * Collect every image reference one session event carries, across the same
  * carriers the live attachment route scans (direct content, message content,
- * inserted messages, and completed assistant chunk blocks).
+ * inserted messages, and completed blocks in embedded Assistant streams).
  * @param event - one parsed JSONL event object.
  * @param refs - the dedupe map being filled (keyed by attachment id).
  */
@@ -224,21 +222,27 @@ function collectEventImageRefs(event: unknown, refs: Map<string, ImageAttachment
     content?: unknown
     message?: { content?: unknown }
     inserted?: Array<{ content?: unknown }>
-    chunk?: { type?: unknown; block?: unknown }
+    stream?: Array<{ type?: unknown; chunk?: { type?: unknown; block?: unknown } }>
   }
   collectImageRefs(carrier.content, refs)
   if (carrier.message !== undefined) collectImageRefs(carrier.message.content, refs)
   if (carrier.inserted !== undefined) {
     for (const message of carrier.inserted) collectImageRefs(message.content, refs)
   }
-  if (carrier.chunk?.type === 'block-end') collectImageRefs([carrier.chunk.block], refs)
+  if (carrier.stream !== undefined) {
+    for (const record of carrier.stream) {
+      if (record.type === 'chunk' && record.chunk?.type === 'block-end') {
+        collectImageRefs([record.chunk.block], refs)
+      }
+    }
+  }
 }
 
 /**
- * Collect the distinct media references one stored artifact text names.
+ * Collect the distinct media references one canonical Session-log text names.
  * Lines that fail to parse cannot reference media and are skipped (the
- * artifact text itself is exported verbatim regardless).
- * @param content - the stored artifact text.
+ * log text itself is exported regardless).
+ * @param content - the canonical Session-log text.
  * @returns the dedupe map keyed by attachment id.
  */
 function imageRefsInArtifact(content: string): Map<string, ImageAttachmentRef> {
@@ -343,7 +347,7 @@ export async function* sessionLogZipEntries(
   }
 }
 
-/** How many code units of artifact text one zip push carries (bounded encode memory). */
+/** How many code units of Session-log text one zip push carries (bounded encode memory). */
 const PUSH_CHUNK_CODE_UNITS = 1 << 16
 
 /** How many bytes of media one zip push carries (bounded memory; images are already size-capped). */
@@ -417,7 +421,7 @@ async function pushBinaryChunks(
  * splitting a surrogate pair across a chunk boundary (a lone high surrogate
  * re-encodes as U+FFFD and would silently corrupt the exported artifact).
  * @param deflate - the zip entry's deflate stream.
- * @param content - the artifact text verbatim.
+ * @param content - the canonical Session-log text.
  * @param controller - response queue controller.
  * @param capacity - pull-driven response-capacity gate.
  * @param signal - cancellation; throws when aborted.

@@ -2,7 +2,7 @@ import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import { describe, expect, it, vi } from 'vitest'
@@ -26,7 +26,7 @@ describe('SessionController facade', () => {
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('controller-session')
     const header: SessionHeader = {
-      version: 0,
+      version: SESSION_FORMAT_VERSION,
       id: sessionId,
       createdAt: 1,
       cwd: '/workspace',
@@ -122,7 +122,7 @@ describe('SessionController facade', () => {
       await ctx.plugin(AgentRegistry)
       const sessionId = SessionId(`background-${outcome}`)
       const header: SessionHeader = {
-        version: 0, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
+        version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
       }
       ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
         list: () => Promise.resolve([header]),
@@ -178,7 +178,7 @@ describe('SessionController facade', () => {
     await ctx.plugin(AgentRegistry)
     const sessionId = SessionId('background-disposal')
     const header: SessionHeader = {
-      version: 0, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
+      version: SESSION_FORMAT_VERSION, id: sessionId, createdAt: 1, cwd: '/workspace', isSeeded: false,
     }
     ctx.provide('sessionPersistence', testSessionPersistence(ctx, {
       list: () => Promise.resolve([header]),

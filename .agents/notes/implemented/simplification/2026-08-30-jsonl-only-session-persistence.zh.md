@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-产品交付并实际使用 JSONL 作为权威 Session store，而可选的 SQLite Session persistence provider 用第二种物理格式重复实现同一逻辑服务。因此，每项 Session 约定、event envelope 变更、恢复规则、package graph、平台测试与格式迁移都要承担第二套实现和测试矩阵，即使交付 profile 并不选择它。已发布 Session 格式的迁移还需要一份可在替换前归档的精确逐 Session 源产物；单数据库 provider 需要另一套发布设计，却没有服务当前部署。
+产品交付并实际使用 JSONL 作为权威 Session store，而可选的 SQLite Session persistence provider 用第二种物理格式重复实现同一逻辑服务。因此，每项 Session 约定、event envelope 变更、恢复规则、package graph、平台测试与格式迁移都要承担第二套实现和测试矩阵，即使交付 profile 并不选择它。已发布 Session 格式迁移还需要保持精确逐 Session 源 generation 不变，同时发布具名版本后继；单数据库 provider 需要另一套不可变 generation transaction 设计，却没有服务当前部署。
 
 SQLite 全文 Session-query provider 不是另一种权威 store。它通过 `ctx.sessionPersistence` 观察持久化，并维护独立、可丢弃的派生索引。通用 SQLite domain-KV provider 也与 Session 日志无关。
 
@@ -26,6 +26,6 @@ SQLite 全文 Session-query provider 不是另一种权威 store。它通过 `ct
 
 ## Consequences
 
-Session persistence 只有一种 first-party 物理格式和一条 first-party durability path。迁移 stack 可以归档并原子替换逐 Session JSONL 产物，而无需实现并行的数据库 transaction protocol。SQLite search 保持可用，其 integration test 现在证明它观察 JSONL，而不是共享权威数据库。
+Session persistence 只有一种 first-party 物理格式和一条 first-party durability path。迁移 stack 可以保持逐 Session JSONL generation 的路径、字节与 inode 不变，同时排他发布最终后继，而无需实现并行的数据库 transaction protocol。SQLite search 保持可用，其 integration test 证明它观察 JSONL，而不是共享权威数据库。
 
 删除 provider 是针对其可选数据库文件的明确 compatibility cut。该变更缩小实现与 CI surface，但也移除更强的 database/WAL 存储选项；未来 provider 需要当前 owner、部署需求、完整 shared-contract evidence，以及自身的 format-transition policy。

@@ -76,6 +76,7 @@ describe('web e2e: agent-preset authoring is a host-side copy', () => {
   afterAll(async () => {
     await browser?.close()
     await scaffold?.close()
+    await rm(userRoot, { recursive: true, force: true })
   })
 
   it('offers the roster with copy as the only way to create', async () => {

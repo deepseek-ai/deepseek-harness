@@ -9,7 +9,7 @@
 //
 // Zero model calls: no replay fixture mounts, so a stray stream fails loud.
 import { fileURLToPath } from 'node:url'
-import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
@@ -232,6 +232,7 @@ describe('web e2e: agent-preset selection', () => {
   afterAll(async () => {
     await browser?.close()
     await scaffold?.close()
+    await rm(presetRoot, { recursive: true, force: true })
   })
 
   it('offers the chip on the new-session screen, beside the workspace picker', async () => {

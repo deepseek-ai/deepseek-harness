@@ -119,6 +119,7 @@ function wideTableFixture(): string {
   })
   session.append('step/start', { turn: 1, step: 1 })
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: createMessage({
@@ -135,6 +136,8 @@ function wideTableFixture(): string {
     id: '{{sessionId}}',
     createdAt: 0,
     cwd: '{{cwd}}',
+    isSeeded: false,
+    delegationDepth: 0,
   }
   return [
     JSON.stringify(header),

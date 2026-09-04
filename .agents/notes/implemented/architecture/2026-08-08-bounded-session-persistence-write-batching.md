@@ -6,13 +6,13 @@ English | [中文](2026-08-08-bounded-session-persistence-write-batching.zh.md)
 
 ## Problem
 
-Streaming responses can emit many `assistant/chunk` events in a short interval. The persistence coordinator previously scheduled a provider append as soon as an idle queue received one event. Events arriving while that append was active shared a follow-up batch, but a fast provider could still produce many small durable appends. Each JSONL append creates and syncs a Zstandard frame or raw suffix.
+One agent step can emit several durable events in a short interval: request metadata, one Assistant settlement, tool lifecycles, plugin facts, and execution boundaries. Scheduling a provider append as soon as an idle queue receives one event can therefore produce many small durable appends. Each JSONL append creates and syncs a Zstandard frame or raw suffix.
 
-Dropping chunk events or replacing them with assembled messages would reduce logical storage, but it would also change the event log, replay, sequence numbers, timestamps, and the chunk seqs cited by assistant messages. The write-amplification problem does not require that larger semantic change.
+Assistant stream embedding reduces one high-volume event family, but write cadence remains a provider-neutral lifecycle concern for every other burst and for historical generations. The batching decision does not change event semantics or storage encoding.
 
 ### Quantified baseline
 
-Repository fixtures make the logical volume concrete. Decoding the current packed rows in [`goal-multi-turn-actions`](../../../../snapshots/web/goal-multi-turn-actions/session.jsonl) yields 2,098 events: 2,017 chunks (96.1%). Their unpacked JSONL lines occupy 332,647 of 379,225 event bytes (87.7%), while chunk packing reduces the committed file to 89,176 bytes and 182 storage rows, including 23 packed chunk rows. [`permission-policy-context`](../../../../snapshots/web/permission-policy-context/session.jsonl) yields 813 events: 746 chunks (91.8%) and 118,935 of 184,821 unpacked event bytes (64.4%); its packed file is 84,917 bytes and 123 storage rows, including 14 packed rows. These are tracked deterministic fixtures, not a production workload distribution, but they demonstrate why deleting chunks would reduce logical volume and why the existing packed-row layout already removes much of their JSON envelope cost.
+Released-v1 repository fixtures established the original logical volume. Decoding the packed `goal-multi-turn-actions` generation yielded 2,098 events, including 2,017 chunks (96.1%); unpacked chunk lines occupied 332,647 of 379,225 event bytes, while the packed file used 89,176 bytes and 182 rows. The packed `permission-policy-context` generation yielded 813 events, including 746 chunks (91.8%); unpacked chunk lines occupied 118,935 of 184,821 event bytes, while the packed file used 84,917 bytes and 123 rows. These deterministic historical measurements explain why v2 embeds streams, but they are not a production workload distribution or a current-format size claim.
 
 JSONL writes one Zstandard frame and fsync per durable append batch. Runtime files do not record former append boundaries, so fixture row counts cannot honestly be presented as fsync counts.
 
@@ -28,7 +28,7 @@ The window bounds only the controller's intentional batching wait. Event-loop sc
 
 `session/flush` cancels any remaining wait and becomes a shared quiescence barrier. It drains the active attempt and every event admitted while the barrier is running before it resolves. Session retirement (`session/disposed`), the handle's close, and backend teardown's close sweep use that same barrier, so lifecycle teardown never waits for the batching timer. The checkpoint policy continues to place mandatory barriers before model requests and top-level tool side effects.
 
-Every event remains durable in its original order and shape. The controller copies each event on admission; no `assistant/chunk`, `seq`, `time`, surface metadata, or storage record is removed or rewritten. JSONL can therefore encode more events in one append frame without changing its on-disk format.
+Every admitted event remains durable in its original order and representation. The controller copies each event on admission; batching removes or rewrites no sequence, timestamp, surface metadata, embedded Assistant stream, or storage record. JSONL can therefore encode more events in one append frame without changing the Session format.
 
 A failed background drain retains its complete batch in order ahead of newer pending events, reports the failure once, and pauses the automatic timer. The next explicit drain — a `session/flush` barrier, service-level `flush()`, or close — retries immediately and surfaces a repeated failure to its caller. This avoids a timer-driven failure loop while preserving the existing recoverable flush boundary.
 
@@ -36,7 +36,7 @@ This decision supersedes only the immediate scheduling cadence in [Collapse live
 
 ## Alternatives considered
 
-**Do not persist streaming chunk events.** Rejected here: it changes the event-sourced authority and recovery semantics rather than only physical write cadence. The existing [assembled-message rejection](../../rejected/simplification/2026-06-20-assembled-assistant-messages-only.md) remains the guardrail until a no-information-loss replacement defines replay, fork, cited source-event links, sequence, and crash behavior independently. The [packed-row decision](2026-07-26-packed-chunk-rows-by-default.md) remains the complementary JSONL storage-size optimization.
+**Use one settlement per Assistant attempt instead of batching writes.** The [v2 Assistant stream decision](2026-09-01-v2-embedded-assistant-streams.md) provides that no-information-loss event model and reduces Assistant event cardinality. It does not replace bounded batching for other adjacent events, historical-generation publication, or providers with the same append interface.
 
 **Write only at semantic checkpoints.** Rejected: it maximizes batching but makes the ordinary crash-loss window depend on a separately mounted policy. Bounded background writes preserve progress between checkpoints while mandatory flushes keep their stronger ordering contract.
 
@@ -50,10 +50,10 @@ The shared live-write contract suite (`runLiveWritePathContract`) uses a fake cl
 
 ## Consequences
 
-High-frequency event bursts normally produce fewer durable append operations while preserving the exact logical event count. The reduction depends on arrival rate and backend latency: a burst inside one 200 ms window becomes one batch, while mandatory flushes and sparse events can still produce small batches.
+High-frequency event bursts normally produce fewer durable append operations while preserving the exact admitted event sequence. The reduction depends on arrival rate and backend latency: a burst inside one 200 ms window becomes one batch, while mandatory flushes and sparse events can still produce small batches.
 
 This decision does not cap pending event count or bytes behind a slow provider, and it does not reduce the decoded logical log. A demonstrated memory bound or logical-retention policy would require its own failure and replay contract rather than another hidden timer rule.
 
 An admitted event can remain only in memory during the fixed window, and then while scheduling or backend work is outstanding. Explicit durability boundaries remain unchanged and bypass the wait.
 
-The handle gives the timer, active drain, pending prefix, retry pause, and barrier one owner; the backend's listeners own routing and lifecycle-driven drains. `SESSION_FORMAT_VERSION` remains unchanged.
+The handle gives the timer, active drain, pending prefix, retry pause, and barrier one owner; the backend's listeners own routing and lifecycle-driven drains. Batching itself never changes `SESSION_FORMAT_VERSION`.

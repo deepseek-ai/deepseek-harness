@@ -10,6 +10,7 @@ import importlib.metadata
 import json
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -124,7 +125,9 @@ SNAPSHOT_WORKFLOW_SCRIPT = (
 ADVANCED_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "advanced"
 )
-ADVANCED_SNAPSHOT_FILENAMES = ("result.json", "session.jsonl", "session.1.jsonl", "session.2.jsonl")
+ADVANCED_SNAPSHOT_FILENAMES = (
+    "result.json", "session.v2.jsonl", "session.1.v2.jsonl", "session.2.v2.jsonl",
+)
 MINIMAL_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "minimal"
 )
@@ -134,7 +137,9 @@ MINIMAL_SNAPSHOT_FILENAMES = ("model-visible.json",)
 RESTART_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "restart"
 )
-RESTART_SNAPSHOT_FILENAMES = ("result.json", "requests.json", "session.1.jsonl", "session.2.jsonl")
+RESTART_SNAPSHOT_FILENAMES = (
+    "result.json", "requests.json", "session.1.v2.jsonl", "session.2.v2.jsonl",
+)
 MCP_SERVER_SCRIPT = """\
 import json
 import os
@@ -1357,7 +1362,14 @@ def smoke_sdk_restart_snapshot(base_url: str, executable: Path, update_snapshots
             if expected not in render_jsonl(records):
                 raise AssertionError(f"restart snapshot durable log has no {expected}")
 
-        files = build_restart_snapshot_files(first, second, requests, logs, root, sessions)
+        files = build_restart_snapshot_files(
+            first,
+            second,
+            requests,
+            logs,
+            root,
+            sessions,
+        )
         compare_snapshot_files(
             files, update_snapshots, RESTART_SNAPSHOT_DIRECTORY, RESTART_SNAPSHOT_FILENAMES,
         )
@@ -1479,11 +1491,108 @@ class RuntimePeer:
         self.stderr.extend(self.process.stderr)
 
 
+PERSISTED_SESSION_FILENAME = re.compile(r"^session(?:\.v([1-9]\d*))?\.jsonl(\.zstd)?$")
+SNAPSHOT_SESSION_FILENAME = re.compile(
+    r"^session(?:\.([1-9]\d*))?(?:\.v([1-9]\d*))?\.jsonl$",
+)
+
+
+def persisted_session_filename_version(path: Path, compressed: bool = False) -> int | None:
+    """Return one canonical persistence basename's generation for the selected encoding."""
+    match = PERSISTED_SESSION_FILENAME.fullmatch(path.name)
+    if match is None or (match.group(2) is not None) != compressed:
+        return None
+    return int(match.group(1) or 0)
+
+
+def latest_persisted_session_paths(sessions: Path, compressed: bool = False) -> list[Path]:
+    """Select the numeric-highest immutable generation in each physical Session directory."""
+    pattern = "*.jsonl.zstd" if compressed else "*.jsonl"
+    selected: dict[Path, tuple[int, Path]] = {}
+    for path in sessions.rglob(pattern):
+        version = persisted_session_filename_version(path, compressed)
+        if version is None:
+            continue
+        previous = selected.get(path.parent)
+        if previous is None or version > previous[0]:
+            selected[path.parent] = (version, path)
+    return sorted((entry[1] for entry in selected.values()), key=lambda path: str(path))
+
+
+def session_header_version(content: str, label: str) -> int:
+    """Read a non-negative physical Session generation from the first JSONL record."""
+    first = next((line for line in content.splitlines() if line), None)
+    if first is None:
+        raise AssertionError(f"{label}: Session log is empty")
+    header = json.loads(first)
+    version = header.get("version") if isinstance(header, dict) and header.get("type") == "session" else None
+    if not isinstance(version, int) or isinstance(version, bool) or version < 0:
+        raise AssertionError(f"{label}: Session header has no non-negative integer version")
+    return version
+
+
+def assert_persisted_session_version(path: Path, content: str) -> int:
+    """Require a raw persistence basename and header to name the same generation."""
+    filename_version = persisted_session_filename_version(path)
+    if filename_version is None:
+        raise AssertionError(f"non-canonical Session persistence filename: {path.name}")
+    header_version = session_header_version(content, path.name)
+    if filename_version != header_version:
+        raise AssertionError(
+            f"{path.name}: filename declares Session format v{filename_version}, "
+            f"header declares v{header_version}",
+        )
+    return header_version
+
+
+def snapshot_session_filename(index: int, version: int) -> str:
+    """Render parent/ordinal snapshot role plus an omitted-v0 generation."""
+    if index < 0 or version < 0:
+        raise ValueError("snapshot Session index and version must be non-negative")
+    ordinal = "" if index == 0 else f".{index}"
+    generation = "" if version == 0 else f".v{version}"
+    return f"session{ordinal}{generation}.jsonl"
+
+
+def parse_snapshot_session_filename(name: str) -> tuple[int, int] | None:
+    """Parse one canonical parent/ordinal snapshot filename."""
+    match = SNAPSHOT_SESSION_FILENAME.fullmatch(name)
+    if match is None:
+        if name.startswith("session") and name.endswith(".jsonl"):
+            raise AssertionError(f"invalid snapshot Session filename: {name}")
+        return None
+    return int(match.group(1) or 0), int(match.group(2) or 0)
+
+
+def selected_snapshot_session_files(directory: Path) -> dict[int, Path]:
+    """Select one highest-generation expected file per parent/ordinal role."""
+    selected: dict[int, tuple[int, Path]] = {}
+    for path in directory.iterdir():
+        if not path.is_file():
+            continue
+        parsed = parse_snapshot_session_filename(path.name)
+        if parsed is None:
+            continue
+        index, version = parsed
+        content = path.read_text(encoding="utf-8")
+        header_version = session_header_version(content, path.name)
+        if header_version != version:
+            raise AssertionError(
+                f"{path.name}: filename declares Session format v{version}, header declares v{header_version}",
+            )
+        previous = selected.get(index)
+        if previous is None or version > previous[0]:
+            selected[index] = (version, path)
+    return {index: value[1] for index, value in selected.items()}
+
+
 def assert_session_log(sessions: Path, cwd: Path, *expected_texts: str) -> None:
-    logs = list(sessions.rglob("*.jsonl"))
+    logs = latest_persisted_session_paths(sessions)
     if len(logs) != 1:
         raise AssertionError(f"expected one JSONL session log under {sessions}, found {logs}")
-    lines = logs[0].read_text().splitlines()
+    content = logs[0].read_text()
+    assert_persisted_session_version(logs[0], content)
+    lines = content.splitlines()
     header = json.loads(lines[0])
     if header.get("cwd") != str(cwd):
         raise AssertionError(f"session header cwd is not absolute/canonical: {header}")
@@ -1494,7 +1603,7 @@ def assert_session_log(sessions: Path, cwd: Path, *expected_texts: str) -> None:
 
 
 def assert_zstd_session_log(sessions: Path) -> None:
-    logs = list(sessions.rglob("*.jsonl.zstd"))
+    logs = latest_persisted_session_paths(sessions, compressed=True)
     if len(logs) != 1:
         raise AssertionError(f"expected one Zstandard JSONL session log under {sessions}, found {logs}")
     if not logs[0].read_bytes().startswith(bytes.fromhex("28b52ffd")):
@@ -1504,10 +1613,12 @@ def assert_zstd_session_log(sessions: Path) -> None:
 def read_session_logs(sessions: Path) -> dict[str, list[dict[str, object]]]:
     """Parse every persisted JSONL session into a map keyed by header id."""
     logs: dict[str, list[dict[str, object]]] = {}
-    for path in sorted(sessions.rglob("*.jsonl")):
+    for path in latest_persisted_session_paths(sessions):
+        content = path.read_text(encoding="utf-8")
+        assert_persisted_session_version(path, content)
         records = [
             json.loads(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
+            for line in content.splitlines()
             if line
         ]
         if not records or records[0].get("type") != "session":
@@ -1626,20 +1737,23 @@ def build_snapshot_files(
         ],
     }
     normalized_result = normalize_snapshot_value(result_value, replacements)
+    parent_records = project_session_snapshot([
+        normalize_snapshot_value(record, replacements) for record in logs[SNAPSHOT_SESSION_ID]
+    ])
     files = {
         "result.json": json.dumps(normalized_result, indent=2, ensure_ascii=False) + "\n",
-        "session.jsonl": render_jsonl(
-            project_session_snapshot([
-                normalize_snapshot_value(record, replacements) for record in logs[SNAPSHOT_SESSION_ID]
-            ])
-        ),
+        snapshot_session_filename(
+            0, session_header_version(render_jsonl(parent_records), "advanced parent"),
+        ): render_jsonl(parent_records),
     }
     for index, child_id in enumerate(child_ids, start=1):
-        files[f"session.{index}.jsonl"] = render_jsonl(
-            project_session_snapshot([
-                normalize_snapshot_value(record, replacements) for record in logs[child_id]
-            ])
-        )
+        child_records = project_session_snapshot([
+            normalize_snapshot_value(record, replacements) for record in logs[child_id]
+        ])
+        child_content = render_jsonl(child_records)
+        files[snapshot_session_filename(
+            index, session_header_version(child_content, f"advanced child {index}"),
+        )] = child_content
     return files
 
 
@@ -1663,8 +1777,14 @@ def build_restart_snapshot_files(
             "session_id": result.session_id,
             "final_response": result.final_response,
             "finish_reason": result.finish_reason,
-            "eventTypes": [event.get("type") for event in result.events],
-            "notificationMethods": [notification.method for notification in result.notifications],
+            "eventTypes": [
+                event.get("type")
+                for event in result.events
+            ],
+            "notificationMethods": [
+                notification.method
+                for notification in result.notifications
+            ],
         }
         for result in (first, second)
     ]
@@ -1676,6 +1796,14 @@ def build_restart_snapshot_files(
         }
         for request in requests
     ]
+    first_records = project_session_snapshot([
+        normalize_snapshot_value(record, replacements) for record in logs[RESTART_FIRST_SESSION_ID]
+    ])
+    second_records = project_session_snapshot([
+        normalize_snapshot_value(record, replacements) for record in logs[RESTART_SECOND_SESSION_ID]
+    ])
+    first_content = render_jsonl(first_records)
+    second_content = render_jsonl(second_records)
     return {
         "result.json": json.dumps(
             normalize_snapshot_value(result_value, replacements), indent=2, ensure_ascii=False,
@@ -1683,12 +1811,12 @@ def build_restart_snapshot_files(
         "requests.json": json.dumps(
             normalize_snapshot_value(request_value, replacements), indent=2, ensure_ascii=False,
         ) + "\n",
-        "session.1.jsonl": render_jsonl(project_session_snapshot([
-            normalize_snapshot_value(record, replacements) for record in logs[RESTART_FIRST_SESSION_ID]
-        ])),
-        "session.2.jsonl": render_jsonl(project_session_snapshot([
-            normalize_snapshot_value(record, replacements) for record in logs[RESTART_SECOND_SESSION_ID]
-        ])),
+        snapshot_session_filename(
+            1, session_header_version(first_content, "restart Session 1"),
+        ): first_content,
+        snapshot_session_filename(
+            2, session_header_version(second_content, "restart Session 2"),
+        ): second_content,
     }
 
 
@@ -1759,6 +1887,20 @@ def normalize_snapshot_value(
         normalized["createdAt"] = 0
     if "seq" in normalized and "time" in normalized:
         normalized["time"] = 0
+    if normalized.get("type") in ("assistant/message", "assistant/attempt"):
+        data = normalized.get("data")
+        stream = data.get("stream") if isinstance(data, dict) else None
+        if isinstance(stream, list):
+            for member in stream:
+                if not isinstance(member, dict):
+                    continue
+                if isinstance(member.get("time"), (int, float)):
+                    member["time"] = 0
+                if isinstance(member.get("time0"), (int, float)):
+                    member["time0"] = 0
+                dt = member.get("dt")
+                if isinstance(dt, list):
+                    member["dt"] = [0] * len(dt)
     if isinstance(normalized.get("id"), str) and normalized.get("role") in ("assistant", "user"):
         normalized["id"] = "{{messageId}}"
     scrub_snapshot_header(normalized)
@@ -1801,6 +1943,165 @@ def project_session_snapshot(records: list[dict[str, object]]) -> list[dict[str,
     return projected
 
 
+SESSION_FORMAT_PROVENANCE = "{{sessionFormatVersion}}"
+
+
+def expand_snapshot_stream_member(member: object) -> list[dict[str, object]]:
+    """Expand one compact Assistant stream member into logical provider chunks."""
+    if not isinstance(member, dict):
+        raise AssertionError(f"snapshot Assistant stream member is not an object: {member!r}")
+    member_type = member.get("type")
+    if member_type == "chunk":
+        chunk = member.get("chunk")
+        if not isinstance(chunk, dict):
+            raise AssertionError(f"snapshot Assistant chunk member has no chunk: {member!r}")
+        return [chunk]
+    packed_kinds = {
+        "text-chunks": ("texts", "text-delta", "text"),
+        "reasoning-chunks": ("texts", "reasoning-delta", "text"),
+        "tool-call-chunks": ("args", "tool-call-delta", "argumentsDelta"),
+    }
+    packed = packed_kinds.get(member_type)
+    if packed is None:
+        raise AssertionError(f"snapshot Assistant stream has unknown member type: {member_type!r}")
+    values_key, chunk_type, value_key = packed
+    values = member.get(values_key)
+    if not isinstance(values, list):
+        raise AssertionError(f"snapshot Assistant stream member has no {values_key}: {member!r}")
+    shared = {
+        key: member[key]
+        for key in ("index", "id", "name")
+        if key in member
+    }
+    return [
+        {"type": chunk_type, **shared, value_key: value}
+        for value in values
+    ]
+
+
+def expand_snapshot_assistant_event(value: object) -> list[object]:
+    """Expand one direct or SDK-wrapped v2 settlement for generation-neutral comparison."""
+    if not isinstance(value, dict):
+        return [value]
+    event = value
+    wrapper_key: str | None = None
+    wrapper: dict[str, object] | None = None
+    if value.get("method") == "session.event":
+        for candidate in ("payload", "params"):
+            container = value.get(candidate)
+            nested = container.get("event") if isinstance(container, dict) else None
+            if isinstance(nested, dict):
+                event = nested
+                wrapper_key = candidate
+                wrapper = container
+                break
+    if event.get("type") not in ("assistant/message", "assistant/attempt"):
+        return [value]
+    data = event.get("data")
+    stream = data.get("stream") if isinstance(data, dict) else None
+    if not isinstance(stream, list):
+        return [value]
+
+    def wrap(expanded: dict[str, object]) -> object:
+        if wrapper_key is None or wrapper is None:
+            return expanded
+        return {**value, wrapper_key: {**wrapper, "event": expanded}}
+
+    common = {
+        key: data[key]
+        for key in ("turn", "step")
+        if key in data
+    }
+    expanded = [
+        wrap({
+            "type": "assistant/chunk",
+            "data": {**common, "chunk": chunk},
+        })
+        for member in stream
+        for chunk in expand_snapshot_stream_member(member)
+    ]
+    if event.get("type") == "assistant/message":
+        expanded.append(wrap({
+            **event,
+            "data": {key: item for key, item in data.items() if key != "stream"},
+        }))
+    return expanded
+
+
+def normalize_session_format_comparison(
+    value: object,
+    source_session_version: int | None = None,
+) -> object:
+    """Canonicalize only generation provenance that differs across immutable Session files."""
+    if isinstance(value, list):
+        return [
+            normalize_session_format_comparison(expanded, source_session_version)
+            for item in value
+            for expanded in expand_snapshot_assistant_event(item)
+        ]
+    if not isinstance(value, dict):
+        return value
+
+    normalized = {
+        key: normalize_session_format_comparison(item, source_session_version)
+        for key, item in value.items()
+    }
+    if normalized.get("type") == "session" and "version" in normalized:
+        normalized["version"] = SESSION_FORMAT_PROVENANCE
+        normalized.setdefault("isSeeded", False)
+        ordered_header = {
+            key: normalized[key]
+            for key in ("type", "version", "id", "createdAt", "cwd", "isSeeded", "delegationDepth")
+            if key in normalized
+        }
+        normalized = {
+            **ordered_header,
+            **{key: item for key, item in normalized.items() if key not in ordered_header},
+        }
+    if isinstance(normalized.get("type"), str) and "data" in normalized:
+        normalized.pop("seq", None)
+        normalized.pop("time", None)
+    if source_session_version == 1 and normalized.get("type") == "assistant/message":
+        normalized.pop("sourceEventSeqs", None)
+    if normalized.get("type") == "session-log-deepseek/delivery-accepted":
+        data = normalized.get("data")
+        if isinstance(data, dict):
+            data.pop("throughSeq", None)
+            data.pop("sessionFormatVersion", None)
+            data["sessionFormatVersion"] = SESSION_FORMAT_PROVENANCE
+    if normalized.get("kind") == "session-reference":
+        references = normalized.get("references")
+        if isinstance(references, list):
+            for reference in references:
+                if isinstance(reference, dict):
+                    reference.pop("capturedFormatVersion", None)
+                    reference["capturedFormatVersion"] = SESSION_FORMAT_PROVENANCE
+    return normalized
+
+
+def normalize_snapshot_comparison_text(name: str, content: str) -> str:
+    """Normalize Session generation provenance only while comparing committed expected outputs."""
+    if name.startswith("session") and name.endswith(".jsonl"):
+        parsed = [json.loads(line) for line in content.splitlines() if line]
+        header = parsed[0] if parsed else None
+        source_version = header.get("version") if isinstance(header, dict) else None
+        if not isinstance(source_version, int):
+            raise AssertionError(f"{name}: snapshot Session header has no integer format version")
+        records = [
+            normalize_session_format_comparison(expanded, source_version)
+            for record in parsed
+            for expanded in expand_snapshot_assistant_event(record)
+        ]
+        return render_jsonl(records)
+    if name.endswith(".json"):
+        return json.dumps(
+            normalize_session_format_comparison(json.loads(content)),
+            indent=2,
+            ensure_ascii=False,
+        ) + "\n"
+    return content
+
+
 def compare_snapshot_files(
     files: dict[str, str],
     update: bool,
@@ -1817,25 +2118,52 @@ def compare_snapshot_files(
             (directory / name).write_text(content, encoding="utf-8", newline="\n")
         print(f"smoke-python-runtime: updated snapshots in {directory}")
 
-    existing = {
-        path.name
-        for path in directory.iterdir()
-        if path.is_file()
-    } if directory.is_dir() else set()
-    expected = set(filenames)
-    if existing != expected:
+    existing = [path for path in directory.iterdir() if path.is_file()] if directory.is_dir() else []
+    expected_non_session = {
+        name for name in filenames if parse_snapshot_session_filename(name) is None
+    }
+    existing_non_session = {
+        path.name for path in existing if parse_snapshot_session_filename(path.name) is None
+    }
+    if existing_non_session != expected_non_session:
         raise AssertionError(
             f"{scenario} snapshot files differ: "
-            f"missing={sorted(expected - existing)}, unexpected={sorted(existing - expected)}"
+            f"missing={sorted(expected_non_session - existing_non_session)}, "
+            f"unexpected={sorted(existing_non_session - expected_non_session)}"
+        )
+    selected_expected = selected_snapshot_session_files(directory)
+    actual_sessions: dict[int, tuple[str, str]] = {}
+    for name, content in files.items():
+        parsed = parse_snapshot_session_filename(name)
+        if parsed is None:
+            continue
+        index, filename_version = parsed
+        header_version = session_header_version(content, name)
+        if filename_version != header_version:
+            raise AssertionError(
+                f"{name}: filename declares Session format v{filename_version}, "
+                f"header declares v{header_version}",
+            )
+        if index in actual_sessions:
+            raise AssertionError(f"{scenario} snapshot builder produced duplicate Session role {index}")
+        actual_sessions[index] = (name, content)
+    if set(selected_expected) != set(actual_sessions):
+        raise AssertionError(
+            f"{scenario} snapshot Session roles differ: "
+            f"expected={sorted(selected_expected)}, actual={sorted(actual_sessions)}",
         )
     for name, actual in files.items():
-        expected_text = (directory / name).read_text(encoding="utf-8")
-        if actual == expected_text:
+        parsed = parse_snapshot_session_filename(name)
+        expected_path = directory / name if parsed is None else selected_expected[parsed[0]]
+        expected_text = expected_path.read_text(encoding="utf-8")
+        compared_actual = normalize_snapshot_comparison_text(name, actual)
+        compared_expected = normalize_snapshot_comparison_text(expected_path.name, expected_text)
+        if compared_actual == compared_expected:
             continue
         diff = "".join(difflib.unified_diff(
-            expected_text.splitlines(keepends=True),
-            actual.splitlines(keepends=True),
-            fromfile=f"expected/{name}",
+            compared_expected.splitlines(keepends=True),
+            compared_actual.splitlines(keepends=True),
+            fromfile=f"expected/{expected_path.name}",
             tofile=f"actual/{name}",
         ))
         raise AssertionError(

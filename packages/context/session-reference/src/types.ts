@@ -18,6 +18,8 @@ export interface SessionReferenceSource {
   references: {
     sessionId: string
     label: string
+    /** Source Session format generation; absence identifies version 0. */
+    capturedFormatVersion?: number
     capturedThroughSeq: OptionalSessionSeq
     compacted: boolean
     originalMessages: number

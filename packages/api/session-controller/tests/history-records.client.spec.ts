@@ -1,4 +1,4 @@
-/** Packed history records become one event-shaped Client value per wire record. */
+/** V2 history records become one event-shaped Client value per wire record. */
 
 import { describe, expect, it } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm/brand'
@@ -26,53 +26,69 @@ describe('Session history record projection', () => {
     expect(historyRecordLastSeq(ordinary)).toBe(7)
   })
 
-  it('retains one packed text row without copying or reshaping it', () => {
-    const packed: SessionHistoryRecord = {
-      type: 'chunks',
+  it('retains one message with an embedded compact text stream', () => {
+    const message: SessionHistoryRecord = {
+      type: 'event',
       event: {
-        type: 'chunkrow/text-chunks',
+        type: 'assistant/message',
         seq: 11,
         time: 20,
-        data: { turn: 1, step: 2, index: 0, dt: [1, 2, 3], texts: ['a', 'b', 'c', 'd'] },
+        data: {
+          turn: 1,
+          step: 2,
+          message: {
+            id: 'message-1',
+            role: 'assistant',
+            content: [{ type: 'text', text: 'abcd' }],
+            source: { kind: 'model', provider: 'fixture', model: 'fixture-v2' },
+          },
+          stream: [{ type: 'text-chunks', time0: 20, index: 0, dt: [1, 2, 3], texts: ['a', 'b', 'c', 'd'] }],
+        },
       },
     }
 
-    const [entry] = historyEntries([packed])
-    if (entry?.type !== 'chunks') throw new Error('expected packed history entry')
+    const [entry] = historyEntries([message])
+    if (entry?.type !== 'event') throw new Error('expected v2 history entry')
     const { event } = entry
 
-    expect(entry).toBe(packed)
-    expect(event).toBe(packed.event)
-    expect(historyRecordFirstSeq(packed)).toBe(11)
+    expect(entry).toBe(message)
+    expect(event).toBe(message.event)
+    expect(historyRecordFirstSeq(message)).toBe(11)
     expect(event.time).toBe(20)
-    expect(historyRecordLastSeq(packed)).toBe(14)
+    expect(historyRecordLastSeq(message)).toBe(11)
   })
 
-  it('preserves a packed tool-call row and optional-name absence', () => {
-    const packed: SessionHistoryRecord = {
-      type: 'chunks',
+  it('preserves an attempt stream and optional tool-name absence', () => {
+    const attempt: SessionHistoryRecord = {
+      type: 'event',
       event: {
-        type: 'chunkrow/tool-call-chunks',
+        type: 'assistant/attempt',
         seq: 20,
         time: 200,
         data: {
           turn: 2,
           step: 4,
-          index: 1,
-          id: ToolCallId('call-1'),
-          dt: [2, 3],
-          args: ['', '{"x":', '1}'],
+          stream: [{
+            type: 'tool-call-chunks',
+            time0: 200,
+            index: 1,
+            id: ToolCallId('call-1'),
+            dt: [2, 3],
+            args: ['', '{"x":', '1}'],
+          }],
         },
       },
     }
 
-    const [entry] = historyEntries([packed])
-    if (entry?.type !== 'chunks') throw new Error('expected packed history entry')
+    const [entry] = historyEntries([attempt])
+    if (entry?.type !== 'event') throw new Error('expected v2 history entry')
     const { event } = entry
 
-    if (event.type !== 'chunkrow/tool-call-chunks') throw new Error('expected packed history event')
-    expect(event).toBe(packed.event)
-    expect(Object.hasOwn(event.data, 'name')).toBe(false)
-    expect(historyRecordLastSeq(packed)).toBe(22)
+    if (event.type !== 'assistant/attempt') throw new Error('expected Assistant attempt event')
+    expect(event).toBe(attempt.event)
+    const [record] = event.data.stream
+    expect(record).toMatchObject({ type: 'tool-call-chunks', id: 'call-1' })
+    expect(Object.hasOwn(record as object, 'name')).toBe(false)
+    expect(historyRecordLastSeq(attempt)).toBe(20)
   })
 })

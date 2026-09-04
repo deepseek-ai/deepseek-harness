@@ -6,11 +6,11 @@ English | [中文](2026-07-31-same-basename-workspace-adoption.zh.md)
 
 ## Problem
 
-A Workspace is identified by its stable id and canonical directory path, while its title is mutable display metadata. The registry nevertheless rejected a new canonical path when its basename-derived title matched another Workspace. Common directory layouts such as `/a/xx` and `/b/xx` therefore could not coexist in the Web UI, even though the [domain design](../../proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md) already permits duplicate titles and every client operation addresses a Workspace by id.
+A Workspace is identified by its stable id and canonical directory path, while its title is mutable display metadata. The registry nevertheless rejected a new canonical path when its directory-derived title matched another Workspace. Common directory layouts such as `/a/xx` and `/b/xx` therefore could not coexist in the Web UI, even though the [domain design](../../proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.md) already permits duplicate titles and every client operation addresses a Workspace by id.
 
 ## Decision
 
-`ctx.workspaceRegistry.create(path, title?)` treats canonical path as the only uniqueness key. Repeating the same path remains idempotent and preserves the registered title. Different canonical paths create different Workspace records and may share a title; when no title is supplied, each record still derives its title from `basename(path)` without suffixing or rewriting it.
+`ctx.workspaceRegistry.create(path, title?)` treats canonical path as the only uniqueness key. Repeating the same path remains idempotent and preserves the registered title. Different canonical paths create different Workspace records and may share a title; when no title is supplied, each record derives its title from the final path segment, falling back to the root spelling when that segment is empty. The [fully qualified Workspace path decision](2026-09-03-fully-qualified-workspace-paths.md) owns path admission and the title fallback.
 
 The Host's `workspace.create({ path })` adoption route inherits that rule. The Workspace manager, picker, grouping tree, selection, rename, deletion, and Session creation continue to use `WorkspaceId`, so equal labels neither merge records nor redirect an operation. The sidebar hover card exposes each canonical path when the labels need disambiguation.
 

@@ -28,8 +28,12 @@ describe('Session', () => {
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'hello' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    session.append('assistant/chunk', { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'hi' } })
+    session.append('assistant/attempt', {
+      turn: 1, step: 1,
+      stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['hi'] }],
+    })
     session.append('assistant/message', {
+      stream: [],
       turn: 1, step: 1,
       message: createMessage({
         role: 'assistant',
@@ -122,6 +126,7 @@ describe('Session', () => {
       content: [{ type: 'text', text: 'q' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     original.append('assistant/message', {
+      stream: [],
       turn: 1, step: 1,
       message: createMessage({
         role: 'assistant',
@@ -185,6 +190,119 @@ describe('Session', () => {
     } as unknown as SessionEvent
     expect(Session.create(SessionId('primitive-plugin-data'), [unrelatedPrimitiveData]).snapshotEvents().slice(0, 1))
       .toEqual([unrelatedPrimitiveData])
+  })
+
+  it('rejects malformed current Assistant streams at the restore boundary', () => {
+    const id = SessionId('invalid-restored-assistant-stream')
+    const header = {
+      version: SESSION_FORMAT_VERSION,
+      id,
+      createdAt: 1,
+      isSeeded: false,
+      delegationDepth: 0,
+    } as const
+    const invalidAttempt = {
+      type: 'assistant/attempt',
+      seq: 0,
+      time: 1,
+      data: {
+        turn: 1,
+        step: 1,
+        stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [1], texts: ['only'] }],
+      },
+    } as unknown as SessionEvent
+    expect(() => Session.fromRestore(id, [invalidAttempt], header, SessionLogOffset(0)))
+      .toThrow(/invalid embedded stream/)
+
+    const mismatchedMessage = {
+      type: 'assistant/message',
+      seq: 0,
+      time: 1,
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'different' }],
+          source: { kind: 'model', provider: 'mock', model: 'mock' },
+        },
+        stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['streamed'] }],
+      },
+      surfaceOp: 'append',
+    } as unknown as SessionEvent
+    expect(() => Session.fromRestore(id, [mismatchedMessage], header, SessionLogOffset(0)))
+      .toThrow(/disagrees with its embedded stream/)
+
+    const mismatchedUsage = {
+      type: 'assistant/message',
+      seq: 0,
+      time: 1,
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'usage-message',
+          role: 'assistant',
+          content: [],
+          source: { kind: 'model', provider: 'mock', model: 'mock' },
+        },
+        stream: [{
+          type: 'chunk', time: 1,
+          chunk: { type: 'usage', usage: { inputTokens: 3, outputTokens: 2 } },
+        }],
+        usage: { inputTokens: 4, outputTokens: 2 },
+      },
+      surfaceOp: 'append',
+    } as unknown as SessionEvent
+    expect(() => Session.fromRestore(id, [mismatchedUsage], header, SessionLogOffset(0)))
+      .toThrow(/usage disagrees with its embedded stream/)
+
+    const mismatchedReplayState = {
+      type: 'assistant/message',
+      seq: 0,
+      time: 1,
+      data: {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'replay-state-message',
+          role: 'assistant',
+          content: [],
+          source: {
+            kind: 'model', provider: 'mock', model: 'mock', replayState: { response: { id: 'stored' } },
+          },
+        },
+        stream: [{
+          type: 'chunk', time: 1,
+          chunk: { type: 'finish', reason: { kind: 'stop' }, replayState: { response: { id: 'streamed' } } },
+        }],
+      },
+      surfaceOp: 'append',
+    } as unknown as SessionEvent
+    expect(() => Session.fromRestore(id, [mismatchedReplayState], header, SessionLogOffset(0)))
+      .toThrow(/replay state disagrees with its embedded stream/)
+  })
+
+  it('rejects historical or malformed request-header lifecycle markers on seed/load', () => {
+    const base = {
+      type: 'request/header', seq: SessionSeq(0), time: 1,
+      data: { header: { config: { provider: 'mock', model: 'model' } }, reason: 'initial' },
+    } as const
+    for (const reason of ['fallback', 'unknown', null]) {
+      const invalid = structuredClone(base) as unknown as SessionEvent
+      if (invalid.type !== 'request/header') throw new Error('test fixture must be a request header')
+      invalid.data.reason = reason as never
+      expect(() => Session.create(SessionId('invalid-header-reason'), [invalid]))
+        .toThrow('seed request/header at index 0 has an invalid reason')
+    }
+    for (const startsSeries of [false, 1, 'true']) {
+      const invalid = structuredClone(base) as unknown as SessionEvent
+      if (invalid.type !== 'request/header') throw new Error('test fixture must be a request header')
+      invalid.data.startsSeries = startsSeries as never
+      expect(() => Session.create(SessionId('invalid-series-marker'), [invalid]))
+        .toThrow('seed request/header at index 0 has an invalid startsSeries marker')
+    }
   })
 
   it('rejects event-specific malformed message shapes on seed/load', () => {
@@ -1002,7 +1120,7 @@ describe('Session', () => {
       cwd: '/accepted',
       parentSession: SessionId('parent'),
       isSeeded: true,
-    }
+    } satisfies SessionHeader
 
     const session = Session.create(SessionId('header-owned'), [], input, SessionLogOffset(0))
     input.cwd = '/caller-mutated'
@@ -1067,7 +1185,7 @@ describe('Session', () => {
     const cases: Array<{ header: unknown; error: RegExp }> = [
       { header: 1, error: /not a plain JSON record/ },
       { header: null, error: /not a plain JSON record/ },
-      { header: { ...base, version: 1 }, error: /header version/ },
+      { header: { ...base, version: SESSION_FORMAT_VERSION + 1 }, error: /header version/ },
       { header: { ...base, createdAt: '123' }, error: /createdAt must be a non-negative safe integer/ },
       { header: { ...base, cwd: 1 }, error: /header cwd must be a string/ },
       { header: { ...base, cwd: 'relative' }, error: /header cwd must be an absolute path/ },
@@ -1515,18 +1633,10 @@ describe('SessionStore', () => {
       }
     })
 
-    expect(() => session.append('assistant/message', {
-      turn: 1,
-      step: 1,
-      message: createMessage({
-        role: 'assistant',
-        content: [{ type: 'text', text: 'replacement' }],
-        source: {
-          kind: 'model',
-          ...{ provider: 'mock', model: 'mock' },
-        },
-      }),
-    }, {
+    expect(() => session.append('user/message', createUserMessage({
+      content: [{ type: 'text', text: 'replacement' }],
+      source: { kind: 'plugin', plugin: 'test' },
+    }), {
       surfaceOp: { op: 'replace', start: SessionSeq(2), end: SessionSeq(2) },
       sourceEventSeqs: [SessionSeq(2)],
     })).toThrow('reject surface candidate')

@@ -17,15 +17,25 @@
  * @module @deepseek-ai/dsh-session-snapshot/suite
  */
 
-import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { isSurfaceEligibleType } from '@deepseek-ai/dsh-session/surface'
 import { describe, expect, it } from 'vitest'
 import { type AgentUnderTest, type HarvestedLog, type InputScript, runScenario } from './harness.ts'
-import { parseSnapshotManifest } from './manifest.ts'
+import {
+  parseSnapshotManifest,
+  writesCurrentSessionFixtures,
+  type SnapshotSessionFormatManifest,
+} from './manifest.ts'
 import { redactSessionSnapshotIds } from './identity.ts'
 import { captureExpectedWorkspaceSnapshot } from './workspace.ts'
+import {
+  assertSessionFixtureVersion,
+  sessionFixtureName,
+  sessionFixtureNames,
+  sessionHeaderVersion,
+} from './session-files.ts'
 import {
   type CwdPathMode,
   type NormalizeContext,
@@ -76,24 +86,26 @@ export interface Scenario {
   hasModelTurn: boolean
   /**
    * Whether the run persists a comparable session log to diff against the
-   * `session.jsonl` fixture. Defaults to {@link hasModelTurn} (a model turn
+   * selected parent Session fixture. Defaults to {@link hasModelTurn} (a model turn
    * always produces a log worth comparing). Set it independently for a scenario
    * that produces a non-trivial durable log without calling the model.
    */
   comparesLog?: boolean
   /**
-   * Whether `test:snapshot:record` regenerates this scenario's `session.jsonl`
-   * from the LIVE API. `recorded` scenarios are model-driven and reproducible;
+   * Whether `test:snapshot:record` regenerates this scenario's current-version
+   * Session fixtures from the LIVE API. `recorded` scenarios are model-driven and reproducible;
    * `authored` scenarios (fixtures hand-written or hand-harvested — e.g. a
    * provider error or a cancel the live API can't be coaxed into
    * deterministically, a deterministic hook scenario, or a scripted repetition
    * a live model won't reproduce) are NEVER re-recorded.
    */
   recorded: boolean
+  /** Historical generation retained as a read-only migration fixture. */
+  sessionFormat?: SnapshotSessionFormatManifest
   /**
    * Whether replay is driven by a hand-written `replay.override.json` sidecar
    * (a `ReplayOverrideDoc` that replaces or patches the script derived from
-   * `session.jsonl`) — the throw/hang cases chunks cannot express. The fixture
+   * selected parent Session fixture) — the throw/hang cases chunks cannot express. The fixture
    * guard requires the sidecar exactly when this is set: the harness forwards
    * the file purely on existence, so an unregistered stray sidecar would
    * silently alter the derived script. The guard fails loud on either
@@ -192,9 +204,10 @@ export interface Scenario {
 
 /**
  * Whether a scenario's run test is skipped for this mode and host: record mode
- * skips authored (non-`recorded`) scenarios, {@link Scenario.posixOnly}
- * scenarios skip on Windows, and {@link Scenario.pwshOnly} scenarios skip
- * when the caller's `hasPwsh` probe is false.
+ * skips authored (non-`recorded`) scenarios and explicit historical Session
+ * generations, {@link Scenario.posixOnly} scenarios skip on Windows, and
+ * {@link Scenario.pwshOnly} scenarios skip when the caller's `hasPwsh` probe
+ * is false.
  *
  * @param scenario The scenario whose run test is being registered.
  * @param recording Whether the suite runs in record mode.
@@ -209,7 +222,7 @@ export function scenarioSkipped(
   platform: NodeJS.Platform = process.platform,
   hasPwsh?: boolean,
 ): boolean {
-  if (recording && !scenario.recorded) return true
+  if (recording && (!scenario.recorded || scenario.sessionFormat !== undefined)) return true
   if (scenario.posixOnly === true && platform === 'win32') return true
   return scenario.pwshOnly === true && hasPwsh !== true
 }
@@ -324,41 +337,14 @@ export function assertUniqueSnapshotContents(
   }
 }
 
-/**
- * Validate and order a scenario directory's session-fixture filenames.
- *
- * The primary fixture is always `session.jsonl`; child sessions are discovered
- * from contiguous `session.1.jsonl` … filenames. The directory is the source of
- * truth, so scenario tables do not duplicate a child count that can drift from
- * the files. A session-like JSONL with any other suffix fails loud.
- *
- * @param names File names in one scenario directory.
- * @returns The primary and child fixture names in replay/harvest order.
- */
-export function sessionFixtureNames(names: readonly string[]): string[] {
-  if (!names.includes('session.jsonl')) throw new Error('missing session.jsonl')
-  const children: { name: string; index: number }[] = []
-  for (const name of names) {
-    if (name === 'session.jsonl') continue
-    if (!name.startsWith('session.') || !name.endsWith('.jsonl')) continue
-    const match = /^session\.([1-9]\d*)\.jsonl$/.exec(name)
-    if (match === null) throw new Error(`invalid child session fixture name: ${name}`)
-    children.push({ name, index: Number(match[1]) })
-  }
-  children.sort((a, b) => a.index - b.index)
-  for (const [offset, child] of children.entries()) {
-    const expected = offset + 1
-    if (child.index !== expected) {
-      throw new Error(`child session fixtures must be contiguous: expected session.${expected}.jsonl, found ${child.name}`)
-    }
-  }
-  return ['session.jsonl', ...children.map(child => child.name)]
-}
-
 /** Read one scenario directory's validated session-fixture inventory. */
 async function sessionFixtures(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true })
-  return sessionFixtureNames(entries.filter(entry => entry.isFile()).map(entry => entry.name))
+  const names = sessionFixtureNames(entries.filter(entry => entry.isFile()).map(entry => entry.name))
+  await Promise.all(names.map(async (name) => {
+    assertSessionFixtureVersion(name, await readFile(join(dir, name), 'utf8'))
+  }))
+  return names
 }
 
 /**
@@ -366,7 +352,7 @@ async function sessionFixtures(dir: string): Promise<string[]> {
  * from the live replay run; the non-empty sentinel for missing cwd avoids accidental empty-
  * string replacement.
  *
- * @param fixture The committed `session.jsonl` content.
+ * @param fixture The selected committed parent Session fixture content.
  * @returns The fixture's own volatile values, ready for {@link normalizeSessionLog}.
  */
 export function fixtureContext(fixture: string): NormalizeContext {
@@ -1218,14 +1204,15 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         // Replay/refresh need the committed inventory up front because those
         // files drive the model scripts. Record mode creates that inventory
         // from the harvested live logs, so it must also work for a brand-new
-        // scenario with no session.jsonl yet.
+        // scenario with no Session fixture yet.
         let fixtureFiles = RECORDING ? [] : await sessionFixtures(dir)
         const childFixtureFiles = fixtureFiles.slice(1)
+        const primaryFixtureFile = fixtureFiles[0] ?? sessionFixtureName(0, 0)
         const comparesLog = scenario.comparesLog ?? scenario.hasModelTurn
         const result = await runScenario(input, {
           agent,
           mode: childMode,
-          fixtureFile: join(dir, 'session.jsonl'),
+          fixtureFile: join(dir, primaryFixtureFile),
           ...scenario.env !== undefined ? { env: scenario.env } : {},
           ...existsSync(overrideFile) ? { overrideFile } : {},
           // In REPLAY, forward the recorded child fixtures so each subagent session
@@ -1264,21 +1251,22 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         const portableFixture = scenario.workspaceParent === undefined
           ? tokenizeSessionFixtureCwd
           : (log: string): string => log
-        const writesSessionFixtures = (RECORDING && scenario.recorded && scenario.hasModelTurn)
-          || (REFRESHING && comparesLog)
+        const writesSessionFixtures = writesCurrentSessionFixtures(manifest, mode)
+          && ((RECORDING && scenario.recorded && scenario.hasModelTurn) || (REFRESHING && comparesLog))
         if (writesSessionFixtures) {
           expect(result.sessionLogs.length, `${mode} produced no session log to harvest`).toBeGreaterThan(0)
           if (REFRESHING) {
             expect(result.sessionLogs.length, `expected ${fixtureFiles.length} session logs (parent + children)`)
               .toBe(fixtureFiles.length)
           }
-          const outputFixtureFiles = [
-            'session.jsonl',
-            ...Array.from({ length: result.sessionLogs.length - 1 }, (_, i) => `session.${i + 1}.jsonl`),
-          ]
-          const existingFixtures = await Promise.all(outputFixtureFiles.map(async (file) => {
-            const path = join(dir, file)
-            return existsSync(path) ? readFile(path, 'utf8') : ''
+          const outputFixtureFiles = result.sessionLogs.map((log, index) => sessionFixtureName(
+            index,
+            sessionHeaderVersion(log.content, `harvested Session ${index}`),
+          ))
+          const existingFixtures = await Promise.all(outputFixtureFiles.map(async (_file, index) => {
+            const file = fixtureFiles[index]
+            if (file === undefined) return ''
+            return readFile(join(dir, file), 'utf8')
           }))
           const refreshReplacements = REFRESHING
             ? refreshFixtureReplacements(result.sessionLogs, existingFixtures)
@@ -1294,19 +1282,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           const outputFixtures = redactSessionSnapshotIds(stabilizeFixtureMessageIds(freshFixtures, existingFixtures))
           await Promise.all(outputFixtures.map((fixture, index) =>
             writeFile(join(dir, outputFixtureFiles[index] as string), fixture)))
-          if (RECORDING) {
-            const outputNames = new Set(outputFixtureFiles)
-            const entries = await readdir(dir, { withFileTypes: true })
-            await Promise.all(entries
-              .filter(entry => entry.isFile()
-                // Only valid numbered children are record-owned stale output.
-                // Malformed session-like names stay for the inventory guard to
-                // reject instead of being silently deleted during mutation.
-                && /^session\.[1-9]\d*\.jsonl$/.test(entry.name)
-                && !outputNames.has(entry.name))
-              .map(entry => rm(join(dir, entry.name))))
-            fixtureFiles = outputFixtureFiles
-          }
+          fixtureFiles = outputFixtureFiles
           if (scenario.pinsHeader === true) {
             const primary = result.sessionLogs[0] as HarvestedLog
             const pinningHeaders = pinningHeaderPayloads(primary.content, ctx)
@@ -1401,7 +1377,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
         const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? pinningScenario
         const pinningDir = join(snapshotsDir, pinningScenario.name)
-        const pinnedFixture = await readFile(join(pinningDir, 'session.jsonl'), 'utf8')
+        const [pinningFixtureFile] = await sessionFixtures(pinningDir)
+        const pinnedFixture = await readFile(join(pinningDir, pinningFixtureFile as string), 'utf8')
         const pinned = pinningHeaderPayloads(pinnedFixture, fixtureContext(pinnedFixture))
         const promptSnapshot = await readFile(
           join(snapshotsDir, promptSource.name, SYSTEM_PROMPT_SNAPSHOT),
@@ -1539,7 +1516,6 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           existsSync(join(dir, WINDOWS_STDOUT_SNAPSHOT)),
           `${name}/${WINDOWS_STDOUT_SNAPSHOT} presence must match \`pinsNativeWindowsStdout\``,
         ).toBe(pinsNativeWindowsStdout === true)
-        expect(existsSync(join(dir, 'session.jsonl')), `${name}/session.jsonl`).toBe(true)
         expect(existsSync(join(dir, 'replay.override.json')), `${name}/replay.override.json presence must match \`overridden\``)
           .toBe(overridden === true)
         expect(existsSync(join(dir, SYSTEM_PROMPT_SNAPSHOT)), `${name}/${SYSTEM_PROMPT_SNAPSHOT} presence must match snapshot-source ownership`)
@@ -1573,7 +1549,9 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         const promptSource = promptSourceByClass.get(classOf(scenario)) ?? scenario
         /* v8 ignore next -- registration guarantees every pin has resolved sources. */
         const schemaSource = schemaSourceByClass.get(classOf(scenario)) ?? scenario
-        const fixture = await readFile(join(snapshotsDir, scenario.name, 'session.jsonl'), 'utf8')
+        const fixtureDir = join(snapshotsDir, scenario.name)
+        const [fixtureFile] = await sessionFixtures(fixtureDir)
+        const fixture = await readFile(join(fixtureDir, fixtureFile as string), 'utf8')
         const headers = pinningHeaderPayloads(fixture, fixtureContext(fixture))
         const promptSnapshot = await readFile(
           join(snapshotsDir, promptSource.name, SYSTEM_PROMPT_SNAPSHOT),

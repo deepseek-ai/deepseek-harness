@@ -4,9 +4,9 @@
 // or the live adapter (record). Drive steps run in every mode and wait only
 // on generic completion (whenTurnSettled — never model-content selectors, so
 // record cannot hang on a live model answering differently); assertion steps
-// run in replay/refresh only. Settled states only — streaming incrementality
-// is asserted from the persisted assistant/chunk events, not transient DOM.
-// Record: DSH_SNAPSHOT=record rewrites session.jsonl, then a keyless
+// run in replay/refresh only. Settled states only — streaming fidelity is
+// asserted from the durable embedded Assistant stream, not transient DOM.
+// Record: DSH_SNAPSHOT=record writes session.v2.jsonl, then a keyless
 // DSH_SNAPSHOT=refresh regenerates ui.expected.md.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory, captureExpandedTurnProcessAria, captureStableAria,
@@ -26,7 +26,7 @@ import {
 } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip', import.meta.url))
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.jsonl', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.v2.jsonl', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/ui.expected.md', import.meta.url))
 const ECHO_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/submission-echo.expected.md', import.meta.url))
 const UI_EXPANDED_EXPECTED = fileURLToPath(
@@ -154,8 +154,10 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     const turnEnds = sessionEvents.filter(e => e.type === 'turn/end')
     expect(turnEnds.length).toBe(1)
     expect((turnEnds[0] as SessionEvent & { data: { reason: { kind: string } } }).data.reason.kind).toBe('completed')
-    // The persisted chunk events are the authoritative incrementality proof.
-    expect(sessionEvents.filter(e => e.type === 'assistant/chunk').length).toBeGreaterThan(10)
+    // Embedded stream members are the authoritative incrementality proof.
+    expect(sessionEvents.flatMap(e => e.type === 'assistant/message' || e.type === 'assistant/attempt'
+      ? expandAssistantStream(e.data.stream)
+      : []).length).toBeGreaterThan(10)
   }, 60_000)
 
   it.skipIf(MODE === 'record')('matches the conversation aria golden with stable anchors', async () => {
@@ -216,7 +218,7 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.jsonl',
+      'session.v2.jsonl',
       'submission-echo.expected.md',
       'system-prompt.expected.md',
       'tool-schemas.expected.json',

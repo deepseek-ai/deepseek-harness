@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { spawnSync as nodeSpawnSync } from 'node:child_process'
+import { describe, expect, it, vi } from 'vitest'
 import {
   createWindowsProcessInspector,
   isInvalidHandle,
@@ -11,6 +12,11 @@ import type {
   WindowsProcessInspectorInternals,
   WindowsProcessState,
 } from '@deepseek-ai/dsh-subprocess-local/src/windows-inspector.ts'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) }
+})
 
 function fakeInternals() {
   const entries: ProcessEntry[] = []
@@ -86,6 +92,26 @@ describe('windowsProcessTree', () => {
 })
 
 describe('WindowsProcessInspector (injected internals)', () => {
+  it('hides the default taskkill helper window for both termination tiers', () => {
+    const taskkill = vi.mocked(nodeSpawnSync)
+    taskkill.mockReturnValueOnce({} as never).mockReturnValueOnce({} as never)
+    const inspector = createWindowsProcessInspector()
+    inspector.signalGroup(77, 'SIGKILL')
+    inspector.signalGroup(78, 'SIGTERM')
+    expect(taskkill).toHaveBeenNthCalledWith(
+      1,
+      'taskkill',
+      ['/PID', '77', '/T', '/F'],
+      { stdio: 'ignore', windowsHide: true },
+    )
+    expect(taskkill).toHaveBeenNthCalledWith(
+      2,
+      'taskkill',
+      ['/PID', '78', '/T'],
+      { stdio: 'ignore', windowsHide: true },
+    )
+  })
+
   it('exposes the shell pid as the pseudo foreground group and never proves stdin waits', () => {
     const fake = fakeInternals()
     const inspector = new WindowsProcessInspector(fake.internals)

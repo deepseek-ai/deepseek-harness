@@ -18,7 +18,7 @@ The previous persistence seam owned far more than storage. A shared coordinator 
 
 **Visibility and freshness are explicit.** A created session is observable in-process from `create`; physical materialization may be deferred (a pure optimization) until the first append or flush, other processes see only materialized sessions, and a crash before materialization means the session never existed. Once an append or flush resolves, reads started afterwards on the same backend instance observe at least that prefix — the guarantee `message-feedback`'s durable-target check rides on.
 
-**Revision simplifies to a per-instance change token.** Equal tokens may be treated as an unchanged log; ownership churn never changes one. JSONL derives a best-effort token and `sizeBytes` from one `fs.stat`; a backend whose medium can count events cheaply may supply the `eventCount` hint instead. The session-list cold blank probe returns on this metadata (`coldBlankProbeMaxEvents`/`coldBlankProbeMaxBytes`), restoring the capability removed with the path query.
+**Revision simplifies to a per-instance change token.** Equal tokens may be treated as an unchanged log; ownership churn never changes one. JSONL derives a best-effort token and `sizeBytes` from one `fs.stat`; a backend whose medium can count events cheaply may supply the `eventCount` hint instead. Session listing remains a zero-body-read metadata/cache operation: it trusts a cached nonblank projection, keeps a cached blank value only when the current cache identity matches, and otherwise reports `blank: false` as the visible unknown fallback. No cold blank probe or probe-limit configuration remains.
 
 ## Alternatives considered
 
@@ -37,6 +37,6 @@ Resume, fork, subagent, ACP, webhook, and SDK sessions all persist through one e
 ## Related
 
 - [Session persistence as an abstract service](2026-06-14-session-persistence.md) — the seam this reshapes; its interface list reflects the handle API.
-- [Persistence export() and pre-release trims](../simplification/2026-08-27-persistence-export-and-pre-release-trims.md) — the preparatory removals, including the blank probe this note's metadata restores.
+- [Persistence export() and pre-release trims](../simplification/2026-08-27-persistence-export-and-pre-release-trims.md) — the preparatory removals, including the retired cold blank probe.
 - [Retain ignorable external session events](2026-08-30-retain-ignorable-external-session-events.md) — the read-side refusal contract, now shared through `storage-contract` helpers.
 - [Bounded session-persistence write batching](2026-08-08-bounded-session-persistence-write-batching.md) — the batching semantics the routed write path preserves as internal scheduling policy.

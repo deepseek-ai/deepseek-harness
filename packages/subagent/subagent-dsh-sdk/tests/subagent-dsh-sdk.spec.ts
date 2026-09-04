@@ -330,7 +330,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     await ctx.fiber.dispose()
   })
 
-  it('keeps streamed text when a malformed final message prevents completion', async () => {
+  it('keeps durable attempt text when a malformed final message prevents completion', async () => {
     const ctx = await setup({ FAKE_MALFORMED_MESSAGE: '1', FAKE_TEXT: 'stream-only answer' })
     const run = await ctx.subagents.start('dsh-sdk', request())
     const result = await run.result
@@ -355,11 +355,10 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     await ctx.fiber.dispose()
   })
 
-  it('keeps streamed text when the terminal message is an empty usage-only step', async () => {
-    // The child streams its answer, then emits an empty-content
-    // assistant/message (the harness loop appends one to host usage on a
-    // max-tokens step that assembled no text blocks). The empty message is
-    // not assistant output and must not erase the streamed answer.
+  it('keeps durable attempt text when the terminal message is an empty usage-only step', async () => {
+    // A prior attempt retained its text without a surface message; the next
+    // max-tokens attempt commits only an empty usage anchor. The empty message
+    // is not Assistant output and must not erase the durable attempt fallback.
     const ctx = await setup({ FAKE_EMPTY_MESSAGE: '1', FAKE_REASON_KIND: 'max-tokens' })
     const run = await ctx.subagents.start('dsh-sdk', request())
     const result = await run.result

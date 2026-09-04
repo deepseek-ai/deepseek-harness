@@ -1127,7 +1127,7 @@ describe('dsh-subagent-acp', () => {
     expect(errors).toEqual([rawMessage])
   })
 
-  it('plugin-config dispose graces reach the run (SIGKILL escalation through the provider)', async () => {
+  it.skipIf(process.platform === 'win32')('plugin-config dispose graces reach the run (SIGKILL escalation through the provider)', async () => {
     // Same trap scenario as the direct startAcpRun escalation test, but the
     // graces arrive via the PLUGIN CONFIG through the registered provider — so a
     // regression that stops threading config into AcpRunSpec (falling back to

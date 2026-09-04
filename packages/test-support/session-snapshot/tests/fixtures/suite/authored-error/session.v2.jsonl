@@ -1,0 +1,3 @@
+{"type":"session","version":2,"id":"{{session:1}}","createdAt":500,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":0}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"turn/end","data":{"turn":1,"reason":{"kind":"error","error":{"message":"model exploded","code":"UNKNOWN"}}}}

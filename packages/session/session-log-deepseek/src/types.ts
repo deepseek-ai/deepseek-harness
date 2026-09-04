@@ -3,7 +3,7 @@
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
-/** Version-0 Session header fields serialized on the external request wire. */
+/** Session header fields serialized as raw JSON primitives on the external request wire. */
 export interface DeepSeekSessionLogWireHeader {
   readonly version: number
   readonly id: string
@@ -36,6 +36,8 @@ export interface DeepSeekSessionLogWireEvent {
 /** Versioned incremental session-log field carried by an official DeepSeek request. */
 export interface DeepSeekSessionLogExtension {
   readonly version: 1
+  /** Session format generation represented by this suffix. */
+  readonly sessionFormatVersion: number
   readonly session: DeepSeekSessionLogWireHeader
   /** Highest sequence durably recorded as accepted before this request, or `-1`. */
   readonly afterSeq: number
@@ -57,6 +59,8 @@ declare module '@deepseek-ai/dsh-session/types' {
     'session-log-deepseek/delivery-accepted': {
       /** Session identity the accepted delivery carried; inherited fork markers retain the parent's id. */
       sessionId: import('@deepseek-ai/dsh-session/types').SessionId
+      /** Accepted Session format generation; absence identifies version 0. */
+      sessionFormatVersion?: number
       /** Last canonical event included in the accepted request. */
       throughSeq: import('@deepseek-ai/dsh-session/types').SessionSeq
     }

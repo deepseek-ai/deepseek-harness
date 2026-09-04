@@ -26,13 +26,15 @@ Web GUI 以一条真实组装链交付——chromium 页面 → client 插件 bu
 
 回放模式下浏览器断言的屏障栈，按序：（1）host 侧 `await agent.whenIdle()` 加超时，以进程内 `turn/end` 为锚——空闲翻转发生在持久化落盘之后，一次等待同时覆盖轮次完成与持久性；（2）浏览器安定轮询（流式输出节点已卸载、最终文本可见）。录制模式下，日志采收在 `whenIdle()` 之后、scaffold 释放之前进行，此时运行中的会话仍然可用。单独监听进程内 `turn/end` 是错误屏障（它先于 SSE 帧到达浏览器、先于 fsync 触发）；禁止轮询持久化文件来充当轮次完成或持久性屏障（NFS 上慢，且被 `whenIdle` 取代），但工具控制的临时就绪标记可以仅作为该完成屏障之前的交互门控进行轮询；`networkidle` 被彻底禁止（SSE 流保持打开时它永不解析）。导航断言会在页面加载前同时监听 `session.list` 和 `workspace.list` 的初始响应，随后等待播种数据投影到 DOM；仅凭 shell 已挂载不能判定就绪，因为较晚完成的 bootstrap 可能替换受控状态。
 
-不做单次瞬态 DOM 断言：从回放产出到 React 提交的每一跳都可能合并分片，采样 `[data-streaming]` 天然就是竞态。流式输出的增量性由持久化的 `assistant/chunk` 事件断言（模型可见 ⟺ 已记录，使日志成为权威证据）。`dsh-llm-replay` 的可选 `paceMs`（默认缺省 = 突发）只是让浏览器观察到真正增量 SSE 的真实感旋钮；正确性绝不依赖它，且节奏等待期间中止会即时取消。
+不做单次瞬态 DOM 断言：从 replay yield 到 React commit 的每一跳都可能合并 chunk，采样 `[data-streaming]` 天然就是竞态。流式增量性通过有序 `agent/assistant-stream` follow path 断言，最终持久 `assistant/message` 或 `assistant/attempt` 则嵌入 replay 使用的精确 stream。`dsh-llm-replay` 的可选 `paceMs`（默认缺省 = burst）只是让浏览器观察到真正增量 SSE 的真实感旋钮；正确性绝不依赖它，且 pace wait 期间 abort 会即时取消。
+
+分页驱动会等待交互式加载行退出 pending 状态，并在滚动前记录请求前的行数。因此，即时提交的常驻页仍然可观测，不会变成一次滚动手势不会重复触发的请求基线。
 
 每个场景都会因任何 pageerror 或客户端的连接丢失/间隙修复控制台警告而失败：否则重连机制加历史重同步会把一条死掉的 SSE 通路自愈掉，套件反而认证了坏 wire。Scaffold 的 `close()` 调用 `ReplayHandle.assertConsumed()` 收尾检查（每个已录脚本都被绑定、每个游标都耗尽），把静默的少放与错绑变成清晰诊断。车道不设 vitest 重试；每文件一个 chromium、每场景一个新 context、每场景一个 host；视口固定；交互选择器锚定 role、`data-*` 属性和可见文本，而 frame 与会话区采集则使用既有的 CSS 模块局部类名锚点。常规场景开启 `en-US` 浏览器，使本地化的 role 定位器和预期输出统一采用明确指定的语言；断言中文文案的场景则开启 `zh-CN` 浏览器，因为 Host settings 文档没有显式偏好时，客户端的暂定 locale 由 `navigator` 推导（[由浏览器推导初始 locale](../feature/2026-07-31-browser-derived-initial-locale.zh.md)）。`settings-chrome.e2e.ts` 还额外覆盖双向切换、全新英文浏览器默认态，以及共享同一 DSH home 的不同端口之间的偏好持久化。
 
 ### 预期输出
 
-具有稳定所属区域的场景会为每个不同的用户可见状态提交一份规范化的 `ariaSnapshot()`；跨区域的工作区管理状态则使用语义 DOM 断言和权威的 host 状态检查。UUID、cwd、工作区目录名与时长等易变内容会归一为稳定 token；采集过程持续轮询，直到连续两次规范化读取结果相同。Role 与文本锚点继续充当可评审预期输出周围的语义防线，并直接覆盖跨区域状态。拥有录制会话的场景默认将规范化后的重新持久化根会话与同一份 `session.jsonl` 比较；借用或派生 fixture 的场景显式关闭该比较。世界状态断言仍使用权威 host 状态或独立、完整的 `workspace.expected/`，因为 transcript 匹配不能证明外部效果。`refresh` 是 ARIA 预期输出的唯一写入者；回放模式下缺少预期输出时，测试会连同重新生成命令一起失败。
+具有稳定所属区域的场景会为每个不同的用户可见状态提交一份规范化的 `ariaSnapshot()`；跨区域的 workspace 管理状态则使用语义 DOM 断言与权威 host 状态检查。UUID、cwd、workspace basename 与时长等易变内容会归一为稳定 token；采集过程持续轮询，直到连续两次规范化读取结果相同。Role 与文本锚点继续充当可评审预期输出周围的语义防线，并直接覆盖跨区域状态。拥有录制 Session 的场景默认将规范化后的重新持久化根 generation 与选定的最高 parent fixture 比较（v0 为 `session.jsonl`，正 generation 为 `session.vN.jsonl`）；借用或派生 fixture 的场景显式关闭该比较。世界状态断言仍使用权威 host 状态或独立、完整的 `workspace.expected/`，因为 transcript 匹配不能证明外部效果。`refresh` 是 ARIA 预期输出的唯一 writer；replay 模式下缺少预期输出时，测试会连同重新生成命令一起失败。
 
 类型检查平面切分是结构性的：host scaffold、其支持模块，以及每个启动或检查 host 组合的 web spec 都会从注册在 client 侧的 `apps/web` 工程中排除，并逐文件纳入 `tsconfig.host.json`。一个程序不能同时持有 Cordis `Context` 合并的两侧。
 
@@ -66,7 +68,7 @@ Web GUI 以一条真实组装链交付——chromium 页面 → client 插件 bu
 
 **`packages/test-support/web-snapshot` 包 + `defineWebSnapshotSuite` 工厂。** 已否决：驱动 chromium 的源码在无浏览器的覆盖率 runner 上无法诚实保持逐文件 100%，且除受门禁的包已导出的辅助工具与本地 scaffold 外，这些场景专用交互尚未形成稳定的无浏览器约定。出现第二个 web 形态消费方，或被证实重复的生命周期代码确立该约定后，再重新考虑。
 
-**单独维护第二份规范化会话日志预期输出。** 已否决：把录制 fixture 再复制成另一个文件会使刷新成本翻倍，却不会增加独立 oracle。语料改为将规范化持久化结果与驱动回放的同一份 `session.jsonl` 比较，同时以 host 状态和完整 workspace 断言保留独立的世界验证义务。
+**单独维护第二份规范化 Session 日志预期输出。** 不予采用：把选定的录制 generation 再复制成另一个文件会使 refresh 成本翻倍，却不会增加独立 oracle。语料改为将规范化持久化结果与驱动 replay 的同一份最高 generation parent fixture 比较，同时以 host 状态和完整 workspace 断言保留独立的世界验证义务。
 
 **以 `DSH_SNAPSHOT` 回放分支拉起 `dsh web` bin。** 已否决：它需要在交付的 CLI 中增加测试专用回放分支和环境变量管道。进程内 scaffold 已加载同一份 `apps/cli/config/base.cordis.yml` 与 `apps/cli/config/web.cordis.yml`；只剩 argv、profile JSON 和 `AppCLIEntry` 胶水不在其覆盖范围内，而这些路径已由无密钥 CLI 冒烟覆盖。
 

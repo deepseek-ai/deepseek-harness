@@ -1,8 +1,0 @@
-{"type":"session","version":0,"id":"preview-follow-up-builder","createdAt":1787472200000,"cwd":"/dsh/workspace","parentSession":"preview-showcase","origin":"subagent","delegationDepth":1,"agentPreset":"standard"}
-{"type":"turn/start","data":{"turn":1},"seq":0,"time":1787472200000}
-{"type":"user/message","data":{"id":"preview-builder-user","role":"user","content":[{"type":"text","text":"Check that the Preview workspace can support follow-up tasks."}],"source":{"kind":"user"}},"surfaceOp":"append","seq":1,"time":1787472200001}
-{"type":"subagent/descriptor","data":{"version":3,"mode":"continuable","provider":"spawn","label":"Continue preview verification"},"seq":2,"time":1787472200002}
-{"type":"step/start","data":{"turn":1,"step":1},"seq":3,"time":1787472200003}
-{"type":"assistant/message","data":{"turn":1,"step":1,"message":{"id":"preview-builder-assistant","role":"assistant","content":[{"type":"text","text":"This child is continuable and ready for another verification turn."}],"source":{"kind":"model","provider":"preview-fixture","model":"deterministic"}}},"sourceEventSeqs":[],"surfaceOp":"append","seq":4,"time":1787472200004}
-{"type":"step/end","data":{"turn":1,"step":1},"seq":5,"time":1787472200005}
-{"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}},"seq":6,"time":1787472200006}

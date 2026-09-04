@@ -1,4 +1,4 @@
-/** Opt-in synthetic benchmark for packed session-history transport and exact replay. */
+/** Opt-in synthetic benchmark for v2 embedded Assistant stream history. */
 
 import { createHash } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
@@ -6,13 +6,15 @@ import { performance } from 'node:perf_hooks'
 import { brotliCompressSync, gzipSync } from 'node:zlib'
 import { expect, it } from 'vitest'
 import { z } from 'zod'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { isChunkRow, packChunkRuns } from '@deepseek-ai/dsh-session/chunk-rows'
-import type { ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
+import {
+  createAssistantMessage,
+  createUserMessage,
+  expandAssistantStream,
+} from '@deepseek-ai/dsh-llm'
+import type { AssistantStreamRecord } from '@deepseek-ai/dsh-llm'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session/types'
 import type {
-  ChunkRowEvent,
   SessionEventEntry,
   SessionHistoryRecord,
   SessionWireEvent,
@@ -26,10 +28,10 @@ import type {
   ConversationViewNode,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
-const LOGICAL_EVENTS = 416_756
-const DELTA_EVENTS = 416_176
-const ORDINARY_EVENTS = LOGICAL_EVENTS - DELTA_EVENTS
-const DELTA_RUNS = 116
+const LOGICAL_ITEMS = 416_756
+const STREAM_MEMBERS = 416_176
+const DURABLE_EVENTS = LOGICAL_ITEMS - STREAM_MEMBERS
+const COMPACT_RECORDS = 116
 const TIME_ZERO = 1_700_000_000_000
 
 interface Timed<T> {
@@ -58,10 +60,10 @@ interface TransferTimings {
 
 interface FoldState {
   readonly blocks: readonly string[]
-  readonly deltaCount: number
-  readonly lastDeltaSeq?: number
+  readonly memberCount: number
+  readonly lastMemberIndex?: number
   readonly firstTokenTime?: number
-  readonly firstVisibleSeq?: number
+  readonly firstVisibleIndex?: number
   readonly firstVisibleTime?: number
 }
 
@@ -70,14 +72,16 @@ interface FoldSnapshots {
   readonly trajectory: unknown
 }
 
-interface RawHistoryValue {
-  readonly events: SessionEventEntry[]
+interface HistoryValue {
+  readonly records: SessionHistoryRecord[]
   readonly hasMore: boolean
 }
 
-interface PackedHistoryValue {
-  readonly records: SessionHistoryRecord[]
-  readonly hasMore: boolean
+interface HistoryFixture {
+  readonly rawEvents: readonly SessionEvent[]
+  readonly compactEvents: readonly SessionEvent[]
+  readonly rawRecordCount: number
+  readonly compactRecordCount: number
 }
 
 const safeIntegerSchema = z.number().int().min(Number.MIN_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER)
@@ -94,70 +98,10 @@ const historyEntrySchema = z.object({
   type: z.literal('event'),
   event: sessionWireEventSchema,
 }).strict()
-const chunkRunBaseSchema = {
-  turn: z.number(),
-  step: z.number(),
-  index: z.number(),
-  dt: z.array(safeIntegerSchema),
-}
-const textChunkEventSchema = z.object({
-  type: z.enum(['chunkrow/text-chunks', 'chunkrow/reasoning-chunks']),
-  seq: safeIntegerSchema.nonnegative(),
-  time: safeIntegerSchema,
-  data: z.object({
-    ...chunkRunBaseSchema,
-    texts: z.array(z.string()).min(1),
-  }).strict(),
-}).strict()
-const toolCallChunkEventSchema = z.object({
-  type: z.literal('chunkrow/tool-call-chunks'),
-  seq: safeIntegerSchema.nonnegative(),
-  time: safeIntegerSchema,
-  data: z.object({
-    ...chunkRunBaseSchema,
-    id: z.string(),
-    name: z.string().optional(),
-    args: z.array(z.string()).min(1),
-  }).strict(),
-}).strict()
-const chunkEventSchema: z.ZodType<ChunkRowEvent> = z.discriminatedUnion('type', [
-  textChunkEventSchema,
-  toolCallChunkEventSchema,
-]).superRefine((event, context) => {
-  const members = event.type === 'chunkrow/tool-call-chunks' ? event.data.args : event.data.texts
-  if (event.data.dt.length !== members.length - 1) {
-    context.addIssue({
-      code: 'custom',
-      message: 'packed chunk dt length must be one less than member count',
-      path: ['data', 'dt'],
-    })
-  }
-  if (members.length - 1 > Number.MAX_SAFE_INTEGER - event.seq) {
-    context.addIssue({ code: 'custom', message: 'packed chunk seqs must stay safe integers', path: ['seq'] })
-  }
-  let time = event.time
-  for (let index = 0; index < event.data.dt.length; index++) {
-    time += event.data.dt[index] as number
-    if (Number.isSafeInteger(time)) continue
-    context.addIssue({
-      code: 'custom',
-      message: 'packed chunk times must stay safe integers',
-      path: ['data', 'dt', index],
-    })
-    break
-  }
-}) as z.ZodType<ChunkRowEvent>
-const packedHistoryValueSchema: z.ZodType<PackedHistoryValue> = z.object({
-  records: z.array(z.union([
-    historyEntrySchema,
-    z.object({ type: z.literal('chunks'), event: chunkEventSchema }).strict(),
-  ])),
+const historyValueSchema: z.ZodType<HistoryValue> = z.object({
+  records: z.array(historyEntrySchema),
   hasMore: z.boolean(),
-}) as z.ZodType<PackedHistoryValue>
-const rawSessionHistoryValueSchema: z.ZodType<RawHistoryValue> = z.object({
-  events: z.array(historyEntrySchema),
-  hasMore: z.boolean(),
-}) as z.ZodType<RawHistoryValue>
+}) as z.ZodType<HistoryValue>
 
 function timed<T>(run: () => T): Timed<T> {
   const start = performance.now()
@@ -188,7 +132,9 @@ async function listen(server: Server): Promise<number> {
     })
   })
   const address = server.address()
-  if (address === null || typeof address === 'string') throw new Error('history transport benchmark server has no TCP port')
+  if (address === null || typeof address === 'string') {
+    throw new Error('history transport benchmark server has no TCP port')
+  }
   return address.port
 }
 
@@ -274,13 +220,13 @@ function append<Type extends keyof SessionEventMap>(
   events.push({ type, seq, time: TIME_ZERO + seq, data, ...options } as SessionEvent<Type>)
 }
 
-function appendSeparator(events: SessionEvent[], run: number, separator: number): void {
+function appendSeparator(events: SessionEvent[], separator: number): void {
   const seq = events.length
   events.push({
     type: 'benchmark/separator',
     seq,
     time: TIME_ZERO + seq,
-    data: { run, separator },
+    data: { separator },
     ignorable: true,
   } as SessionEvent)
 }
@@ -290,43 +236,62 @@ function fragment(run: number, index: number): string {
   return value.toString(36).padStart(7, '0').slice(-2)
 }
 
-/** Build the private sample's event/run cardinality from deterministic synthetic content. */
-function buildEvents(): SessionEvent[] {
-  const events: SessionEvent[] = []
-  append(events, 'turn/start', { turn: 1 })
-  append(events, 'user/message', createUserMessage({
+/** Build equal v2 histories whose single Assistant row uses raw or compact stream records. */
+function buildFixture(): HistoryFixture {
+  const rawStream: AssistantStreamRecord[] = []
+  const compactStream: AssistantStreamRecord[] = []
+  const blocks: { readonly type: 'reasoning'; readonly text: string }[] = []
+  const baseRunLength = Math.floor(STREAM_MEMBERS / COMPACT_RECORDS)
+  const longerRuns = STREAM_MEMBERS % COMPACT_RECORDS
+  let member = 0
+  for (let run = 0; run < COMPACT_RECORDS; run++) {
+    const runLength = baseRunLength + (run < longerRuns ? 1 : 0)
+    const texts = Array.from({ length: runLength }, (_, index) => fragment(run, index))
+    compactStream.push({
+      type: 'reasoning-chunks',
+      time0: TIME_ZERO + member,
+      index: run,
+      dt: Array.from({ length: runLength - 1 }, () => 1),
+      texts,
+    })
+    for (const text of texts) {
+      rawStream.push({
+        type: 'chunk',
+        time: TIME_ZERO + member,
+        chunk: { type: 'reasoning-delta', index: run, text },
+      })
+      member += 1
+    }
+    blocks.push({ type: 'reasoning', text: texts.join('') })
+  }
+
+  const message = createAssistantMessage({
+    content: blocks,
+    source: { provider: 'benchmark', model: 'synthetic-v2' },
+  })
+  const prefix: SessionEvent[] = []
+  append(prefix, 'turn/start', { turn: 1 })
+  append(prefix, 'user/message', createUserMessage({
     content: [{ type: 'text', text: 'synthetic history transport benchmark' }],
     source: { kind: 'user' },
   }), { surfaceOp: 'append' })
-  append(events, 'step/start', { turn: 1, step: 1 })
-
-  const baseRunLength = Math.floor(DELTA_EVENTS / DELTA_RUNS)
-  const longerRuns = DELTA_EVENTS % DELTA_RUNS
-  for (let run = 0; run < DELTA_RUNS; run++) {
-    const runLength = baseRunLength + (run < longerRuns ? 1 : 0)
-    for (let index = 0; index < runLength; index++) {
-      append(events, 'assistant/chunk', {
-        turn: 1,
-        step: 1,
-        chunk: {
-          type: 'reasoning-delta',
-          index: run,
-          text: fragment(run, index),
-        },
-      })
-    }
-    const separators = run < 3 ? 4 : 5
-    for (let separator = 0; separator < separators; separator++) {
-      appendSeparator(events, run, separator)
-    }
+  append(prefix, 'step/start', { turn: 1, step: 1 })
+  for (let separator = 0; separator < DURABLE_EVENTS - 4; separator++) {
+    appendSeparator(prefix, separator)
   }
-  return events
-}
 
-function memberTime(event: ChunkRowEvent, index: number): number {
-  let time = event.time
-  for (let cursor = 0; cursor < index; cursor++) time += event.data.dt[cursor] as number
-  return time
+  const rawEvents = [...prefix]
+  const compactEvents = [...prefix]
+  append(rawEvents, 'assistant/message', { turn: 1, step: 1, message, stream: rawStream }, { surfaceOp: 'append' })
+  append(compactEvents, 'assistant/message', {
+    turn: 1, step: 1, message, stream: compactStream,
+  }, { surfaceOp: 'append' })
+  return {
+    rawEvents,
+    compactEvents,
+    rawRecordCount: rawStream.length,
+    compactRecordCount: compactStream.length,
+  }
 }
 
 function foldDefinition(kind: string, target: string): ConversationNodeDefinition<FoldState> {
@@ -334,55 +299,40 @@ function foldDefinition(kind: string, target: string): ConversationNodeDefinitio
     kind,
     target,
     match: (event) => {
-      if (event.type === 'step/start') return { id: `${String(event.data.turn)}:${String(event.data.step)}`, role: 'start' }
-      if (event.type === 'assistant/chunk' && event.data.chunk.type === 'reasoning-delta') {
-        return { id: `${String(event.data.turn)}:${String(event.data.step)}`, role: 'update' }
+      if (event.type === 'step/start') {
+        return { id: `${String(event.data.turn)}:${String(event.data.step)}`, role: 'start' }
       }
-      if (event.type === 'chunkrow/reasoning-chunks') {
+      if (event.type === 'assistant/message') {
         return { id: `${String(event.data.turn)}:${String(event.data.step)}`, role: 'update' }
       }
       return null
     },
-    start: () => ({ blocks: [], deltaCount: 0 }),
+    start: () => ({ blocks: [], memberCount: 0 }),
     update: (context, match) => {
-      if (match.event.type === 'chunkrow/reasoning-chunks') {
-        const event = match.event
-        const blocks = [...context.state.blocks]
-        blocks[event.data.index] = (blocks[event.data.index] ?? '') + event.data.texts.join('')
-        const firstToken = event.data.texts.findIndex(text => text !== '')
-        const firstVisible = event.data.texts.findIndex(text => text.trim() !== '')
-        return {
-          ...context.state,
-          blocks,
-          deltaCount: context.state.deltaCount + event.data.texts.length,
-          lastDeltaSeq: event.seq + event.data.texts.length - 1,
-          ...context.state.firstTokenTime === undefined && firstToken >= 0
-            ? { firstTokenTime: memberTime(event, firstToken) }
-            : {},
-          ...context.state.firstVisibleSeq === undefined && firstVisible >= 0
-            ? {
-              firstVisibleSeq: event.seq + firstVisible,
-              firstVisibleTime: memberTime(event, firstVisible),
-            }
-            : {},
+      if (match.event.type !== 'assistant/message') return context.state
+      const blocks = [...context.state.blocks]
+      let memberCount = context.state.memberCount
+      let firstTokenTime = context.state.firstTokenTime
+      let firstVisibleIndex = context.state.firstVisibleIndex
+      let firstVisibleTime = context.state.firstVisibleTime
+      for (const timedChunk of expandAssistantStream(match.event.data.stream)) {
+        if (timedChunk.chunk.type !== 'reasoning-delta') continue
+        const chunk = timedChunk.chunk
+        blocks[chunk.index] = (blocks[chunk.index] ?? '') + chunk.text
+        memberCount += 1
+        firstTokenTime ??= timedChunk.time
+        if (firstVisibleIndex === undefined && blocks.some(block => block.trim() !== '')) {
+          firstVisibleIndex = memberCount
+          firstVisibleTime = timedChunk.time
         }
       }
-      if (match.event.type !== 'assistant/chunk' || match.event.data.chunk.type !== 'reasoning-delta') {
-        return context.state
-      }
-      const chunk = match.event.data.chunk
-      const blocks = [...context.state.blocks]
-      blocks[chunk.index] = (blocks[chunk.index] ?? '') + chunk.text
-      const visible = blocks.some(block => block.trim() !== '')
       return {
-        ...context.state,
         blocks,
-        deltaCount: context.state.deltaCount + 1,
-        lastDeltaSeq: match.event.seq,
-        ...context.state.firstTokenTime === undefined ? { firstTokenTime: match.event.time } : {},
-        ...visible && context.state.firstVisibleSeq === undefined
-          ? { firstVisibleSeq: match.event.seq, firstVisibleTime: match.event.time }
-          : {},
+        memberCount,
+        lastMemberIndex: memberCount,
+        ...(firstTokenTime === undefined ? {} : { firstTokenTime }),
+        ...(firstVisibleIndex === undefined ? {} : { firstVisibleIndex }),
+        ...(firstVisibleTime === undefined ? {} : { firstVisibleTime }),
       }
     },
     buildViewNode: context => context.state === undefined
@@ -416,22 +366,6 @@ function wireEntries(events: readonly SessionEvent[]): SessionEventEntry[] {
   return events.map(wireEntry)
 }
 
-function chunkEntry(row: ChunkRow): SessionHistoryRecord {
-  return {
-    type: 'chunks',
-    event: {
-      type: `chunkrow/${row.type}`,
-      seq: row.seq0,
-      time: row.time0,
-      data: row.data,
-    } as ChunkRowEvent,
-  }
-}
-
-function historyRecord(record: SessionEvent | ChunkRow): SessionHistoryRecord {
-  return isChunkRow(record) ? chunkEntry(record) : wireEntry(record)
-}
-
 function assemble(entries: readonly SessionEventLikeEntry[]): FoldSnapshots {
   const definitions = [
     foldDefinition('benchmark-chat-assistant', 'chat'),
@@ -454,63 +388,53 @@ function digest(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex')
 }
 
-it('reports packed history transport and exact replay costs', async () => {
-  const fixture = timed(buildEvents)
+it('reports v2 embedded stream compaction and exact replay costs', async () => {
+  const fixture = timed(buildFixture)
+  assemble(historyEntries(wireEntries(fixture.value.compactEvents.slice(0, 100))))
 
-  assemble(historyEntries(wireEntries(fixture.value.slice(0, 1_000))))
   const rawHostHeap = sampledPeakHeap((sample) => {
-    const entries = wireEntries(fixture.value)
+    const records = wireEntries(fixture.value.rawEvents)
     sample()
-    const json = JSON.stringify({ events: entries, hasMore: false } satisfies RawHistoryValue)
+    const json = JSON.stringify({ records, hasMore: false } satisfies HistoryValue)
     sample()
     return Buffer.byteLength(json)
   })
-  const packedHostHeap = sampledPeakHeap((sample) => {
-    const packedEvents = packChunkRuns(fixture.value)
+  const compactHostHeap = sampledPeakHeap((sample) => {
+    const records = wireEntries(fixture.value.compactEvents)
     sample()
-    const records = packedEvents.map(historyRecord)
-    sample()
-    const json = JSON.stringify({
-      records,
-      hasMore: false,
-    } satisfies PackedHistoryValue)
+    const json = JSON.stringify({ records, hasMore: false } satisfies HistoryValue)
     sample()
     return Buffer.byteLength(json)
   })
 
-  const rawEntries = timed(() => wireEntries(fixture.value))
-  const packed = timed(() => packChunkRuns(fixture.value))
-  const packedRecords = timed(() => packed.value.map(historyRecord))
-  const rawValue: RawHistoryValue = { events: rawEntries.value, hasMore: false }
-  const packedValue: PackedHistoryValue = {
-    records: packedRecords.value,
-    hasMore: false,
-  }
-
+  const rawEntries = timed(() => wireEntries(fixture.value.rawEvents))
+  const compactEntries = timed(() => wireEntries(fixture.value.compactEvents))
+  const rawValue: HistoryValue = { records: rawEntries.value, hasMore: false }
+  const compactValue: HistoryValue = { records: compactEntries.value, hasMore: false }
   const rawJson = timed(() => JSON.stringify(rawValue))
-  const packedJson = timed(() => JSON.stringify(packedValue))
+  const compactJson = timed(() => JSON.stringify(compactValue))
   const rawGzip = timed(() => gzipSync(rawJson.value).byteLength)
-  const packedGzip = timed(() => gzipSync(packedJson.value).byteLength)
+  const compactGzip = timed(() => gzipSync(compactJson.value).byteLength)
   const rawBrotli = timed(() => brotliCompressSync(rawJson.value).byteLength)
-  const packedBrotli = timed(() => brotliCompressSync(packedJson.value).byteLength)
+  const compactBrotli = timed(() => brotliCompressSync(compactJson.value).byteLength)
   const rawTransfer = await loopbackTransfer(rawJson.value)
-  const packedTransfer = await loopbackTransfer(packedJson.value)
+  const compactTransfer = await loopbackTransfer(compactJson.value)
 
   const rawClientHeap = sampledPeakHeap((sample) => {
     const wire: unknown = JSON.parse(rawJson.value)
     sample()
-    const parsed = rawSessionHistoryValueSchema.parse(wire)
+    const parsed = historyValueSchema.parse(wire)
     sample()
-    const prepared = historyEntries(parsed.events)
+    const prepared = historyEntries(parsed.records)
     sample()
     const folded = assemble(prepared)
     sample()
     return digest(folded)
   })
-  const packedClientHeap = sampledPeakHeap((sample) => {
-    const wire: unknown = JSON.parse(packedJson.value)
+  const compactClientHeap = sampledPeakHeap((sample) => {
+    const wire: unknown = JSON.parse(compactJson.value)
     sample()
-    const parsed = packedHistoryValueSchema.parse(wire)
+    const parsed = historyValueSchema.parse(wire)
     sample()
     const prepared = historyEntries(parsed.records)
     sample()
@@ -520,102 +444,102 @@ it('reports packed history transport and exact replay costs', async () => {
   })
 
   const parsedRaw = timed((): unknown => JSON.parse(rawJson.value))
-  const parsedPacked = timed((): unknown => JSON.parse(packedJson.value))
-  const rawValidation = timed(() => rawSessionHistoryValueSchema.parse(parsedRaw.value))
-  const packedValidation = timed(() => packedHistoryValueSchema.parse(parsedPacked.value))
-  const rawPreparation = timed(() => historyEntries(rawValidation.value.events))
-  const packedPreparation = timed(() => historyEntries(packedValidation.value.records))
+  const parsedCompact = timed((): unknown => JSON.parse(compactJson.value))
+  const rawValidation = timed(() => historyValueSchema.parse(parsedRaw.value))
+  const compactValidation = timed(() => historyValueSchema.parse(parsedCompact.value))
+  const rawPreparation = timed(() => historyEntries(rawValidation.value.records))
+  const compactPreparation = timed(() => historyEntries(compactValidation.value.records))
 
-  assemble(rawPreparation.value.slice(0, 1_000))
-  assemble(packedPreparation.value)
+  assemble(rawPreparation.value.slice(0, 100))
+  assemble(compactPreparation.value)
   const rawFold = timed(() => assemble(rawPreparation.value))
-  const packedFold = timed(() => assemble(packedPreparation.value))
+  const compactFold = timed(() => assemble(compactPreparation.value))
 
   const rawBytes = Buffer.byteLength(rawJson.value)
-  const packedBytes = Buffer.byteLength(packedJson.value)
-  const packedRows = packed.value.filter(isChunkRow)
-  expect(fixture.value).toHaveLength(LOGICAL_EVENTS)
-  expect(fixture.value.filter(event => event.type !== 'assistant/chunk')).toHaveLength(ORDINARY_EVENTS)
-  expect(packedRows).toHaveLength(DELTA_RUNS)
-  expect(packed.value).toHaveLength(696)
-  expect(packedPreparation.value).toHaveLength(696)
-  expect(digest(packedFold.value)).toBe(digest(rawFold.value))
-  expect(packedClientHeap.value).toBe(rawClientHeap.value)
+  const compactBytes = Buffer.byteLength(compactJson.value)
+  expect(fixture.value.rawEvents).toHaveLength(DURABLE_EVENTS)
+  expect(fixture.value.compactEvents).toHaveLength(DURABLE_EVENTS)
+  expect(fixture.value.rawRecordCount).toBe(STREAM_MEMBERS)
+  expect(fixture.value.compactRecordCount).toBe(COMPACT_RECORDS)
+  expect(rawPreparation.value).toHaveLength(DURABLE_EVENTS)
+  expect(compactPreparation.value).toHaveLength(DURABLE_EVENTS)
+  expect(digest(compactFold.value)).toBe(digest(rawFold.value))
+  expect(compactClientHeap.value).toBe(rawClientHeap.value)
   expect(rawHostHeap.value).toBe(rawBytes)
-  expect(packedHostHeap.value).toBe(packedBytes)
-  expect(packedBytes).toBeLessThan(rawBytes)
+  expect(compactHostHeap.value).toBe(compactBytes)
+  expect(compactBytes).toBeLessThan(rawBytes)
 
   const rawResponseMs = rawEntries.ms + rawJson.ms
-  const packedResponseMs = packed.ms + packedRecords.ms + packedJson.ms
+  const compactResponseMs = compactEntries.ms + compactJson.ms
   const rawClientMs = parsedRaw.ms + rawValidation.ms + rawPreparation.ms + rawFold.ms
-  const packedClientMs = parsedPacked.ms + packedValidation.ms + packedPreparation.ms + packedFold.ms
+  const compactClientMs = parsedCompact.ms + compactValidation.ms + compactPreparation.ms + compactFold.ms
   const rawSyntheticApiWaitMs = rawResponseMs + rawTransfer.totalMs + parsedRaw.ms + rawValidation.ms
-  const packedSyntheticApiWaitMs = packedResponseMs + packedTransfer.totalMs + parsedPacked.ms + packedValidation.ms
+  const compactSyntheticApiWaitMs = compactResponseMs + compactTransfer.totalMs
+    + parsedCompact.ms + compactValidation.ms
   const rawSyntheticReadyMs = rawResponseMs + rawTransfer.totalMs + rawClientMs
-  const packedSyntheticReadyMs = packedResponseMs + packedTransfer.totalMs + packedClientMs
+  const compactSyntheticReadyMs = compactResponseMs + compactTransfer.totalMs + compactClientMs
   process.stdout.write(`HISTORY_TRANSPORT_PERF_RESULT ${JSON.stringify({
     fixture: {
       buildMs: rounded(fixture.ms),
-      logicalEvents: fixture.value.length,
-      ordinaryEvents: ORDINARY_EVENTS,
-      deltaEvents: DELTA_EVENTS,
-      deltaRuns: packedRows.length,
-      packedRecords: packed.value.length,
-      conversationInputs: packedPreparation.value.length,
+      logicalItems: LOGICAL_ITEMS,
+      durableEvents: DURABLE_EVENTS,
+      streamMembers: STREAM_MEMBERS,
+      rawStreamRecords: fixture.value.rawRecordCount,
+      compactStreamRecords: fixture.value.compactRecordCount,
+      historyRecords: compactPreparation.value.length,
     },
     bytes: {
       rawJson: rawBytes,
-      packedJson: packedBytes,
-      jsonReductionPct: reduction(rawBytes, packedBytes),
+      compactJson: compactBytes,
+      jsonReductionPct: reduction(rawBytes, compactBytes),
       rawGzip: rawGzip.value,
-      packedGzip: packedGzip.value,
-      gzipReductionPct: reduction(rawGzip.value, packedGzip.value),
+      compactGzip: compactGzip.value,
+      gzipReductionPct: reduction(rawGzip.value, compactGzip.value),
       rawBrotli: rawBrotli.value,
-      packedBrotli: packedBrotli.value,
-      brotliReductionPct: reduction(rawBrotli.value, packedBrotli.value),
+      compactBrotli: compactBrotli.value,
+      brotliReductionPct: reduction(rawBrotli.value, compactBrotli.value),
     },
     memory: {
       samples: 3,
       rawHostAdditionalHeapPeakBytes: rawHostHeap.medianPeakBytes,
-      packedHostAdditionalHeapPeakBytes: packedHostHeap.medianPeakBytes,
-      hostReductionPct: reduction(rawHostHeap.medianPeakBytes, packedHostHeap.medianPeakBytes),
+      compactHostAdditionalHeapPeakBytes: compactHostHeap.medianPeakBytes,
+      hostReductionPct: reduction(rawHostHeap.medianPeakBytes, compactHostHeap.medianPeakBytes),
       rawClientAdditionalHeapPeakBytes: rawClientHeap.medianPeakBytes,
-      packedClientAdditionalHeapPeakBytes: packedClientHeap.medianPeakBytes,
-      clientReductionPct: reduction(rawClientHeap.medianPeakBytes, packedClientHeap.medianPeakBytes),
+      compactClientAdditionalHeapPeakBytes: compactClientHeap.medianPeakBytes,
+      clientReductionPct: reduction(rawClientHeap.medianPeakBytes, compactClientHeap.medianPeakBytes),
       rawHostPeakSamples: rawHostHeap.peakBytes,
-      packedHostPeakSamples: packedHostHeap.peakBytes,
+      compactHostPeakSamples: compactHostHeap.peakBytes,
       rawClientPeakSamples: rawClientHeap.peakBytes,
-      packedClientPeakSamples: packedClientHeap.peakBytes,
+      compactClientPeakSamples: compactClientHeap.peakBytes,
     },
     host: {
       rawEntryWrapMs: rounded(rawEntries.ms),
-      packMs: rounded(packed.ms),
-      packedRecordWrapMs: rounded(packedRecords.ms),
+      compactEntryWrapMs: rounded(compactEntries.ms),
       rawStringifyMs: rounded(rawJson.ms),
-      packedStringifyMs: rounded(packedJson.ms),
+      compactStringifyMs: rounded(compactJson.ms),
       rawGzipMs: rounded(rawGzip.ms),
-      packedGzipMs: rounded(packedGzip.ms),
+      compactGzipMs: rounded(compactGzip.ms),
       rawBrotliMs: rounded(rawBrotli.ms),
-      packedBrotliMs: rounded(packedBrotli.ms),
+      compactBrotliMs: rounded(compactBrotli.ms),
       rawResponseMs: rounded(rawResponseMs),
-      packedResponseMs: rounded(packedResponseMs),
-      responseReductionPct: reduction(rawResponseMs, packedResponseMs),
+      compactResponseMs: rounded(compactResponseMs),
+      responseReductionPct: reduction(rawResponseMs, compactResponseMs),
     },
     transport: {
       samples: 5,
       rawHeadersMs: rounded(rawTransfer.headersMs),
-      packedHeadersMs: rounded(packedTransfer.headersMs),
+      compactHeadersMs: rounded(compactTransfer.headersMs),
       rawBodyMs: rounded(rawTransfer.bodyMs),
-      packedBodyMs: rounded(packedTransfer.bodyMs),
+      compactBodyMs: rounded(compactTransfer.bodyMs),
       rawTotalMs: rounded(rawTransfer.totalMs),
-      packedTotalMs: rounded(packedTransfer.totalMs),
-      totalReductionPct: reduction(rawTransfer.totalMs, packedTransfer.totalMs),
+      compactTotalMs: rounded(compactTransfer.totalMs),
+      totalReductionPct: reduction(rawTransfer.totalMs, compactTransfer.totalMs),
       rawSamples: rawTransfer.samples.map(sample => ({
         headersMs: rounded(sample.headersMs),
         bodyMs: rounded(sample.bodyMs),
         totalMs: rounded(sample.totalMs),
       })),
-      packedSamples: packedTransfer.samples.map(sample => ({
+      compactSamples: compactTransfer.samples.map(sample => ({
         headersMs: rounded(sample.headersMs),
         bodyMs: rounded(sample.bodyMs),
         totalMs: rounded(sample.totalMs),
@@ -623,67 +547,64 @@ it('reports packed history transport and exact replay costs', async () => {
     },
     client: {
       rawParseMs: rounded(parsedRaw.ms),
-      packedParseMs: rounded(parsedPacked.ms),
+      compactParseMs: rounded(parsedCompact.ms),
       rawValidationMs: rounded(rawValidation.ms),
-      packedValidationMs: rounded(packedValidation.ms),
+      compactValidationMs: rounded(compactValidation.ms),
       rawPrepareMs: rounded(rawPreparation.ms),
-      packedPrepareMs: rounded(packedPreparation.ms),
+      compactPrepareMs: rounded(compactPreparation.ms),
       rawFoldMs: rounded(rawFold.ms),
-      packedFoldMs: rounded(packedFold.ms),
+      compactFoldMs: rounded(compactFold.ms),
       rawHistoryMs: rounded(rawClientMs),
-      packedHistoryMs: rounded(packedClientMs),
-      historyReductionPct: reduction(rawClientMs, packedClientMs),
+      compactHistoryMs: rounded(compactClientMs),
+      historyReductionPct: reduction(rawClientMs, compactClientMs),
     },
     combined: {
       rawSyntheticApiWaitMs: rounded(rawSyntheticApiWaitMs),
-      packedSyntheticApiWaitMs: rounded(packedSyntheticApiWaitMs),
-      syntheticApiWaitReductionPct: reduction(rawSyntheticApiWaitMs, packedSyntheticApiWaitMs),
+      compactSyntheticApiWaitMs: rounded(compactSyntheticApiWaitMs),
+      syntheticApiWaitReductionPct: reduction(rawSyntheticApiWaitMs, compactSyntheticApiWaitMs),
       rawSyntheticReadyMs: rounded(rawSyntheticReadyMs),
-      packedSyntheticReadyMs: rounded(packedSyntheticReadyMs),
-      syntheticReadyReductionPct: reduction(rawSyntheticReadyMs, packedSyntheticReadyMs),
+      compactSyntheticReadyMs: rounded(compactSyntheticReadyMs),
+      syntheticReadyReductionPct: reduction(rawSyntheticReadyMs, compactSyntheticReadyMs),
     },
   })}\n`)
 }, 600_000)
 
-it('reports compact folding cost for long whitespace-prefix runs', () => {
-  historyEntries([{
-    type: 'chunks',
-    event: {
-      type: 'chunkrow/reasoning-chunks',
-      seq: 0,
-      time: TIME_ZERO,
-      data: { turn: 1, step: 1, index: 0, dt: [], texts: ['x'] },
-    },
-  }])
+it('reports compact folding cost for long whitespace-prefix streams', () => {
   const results = [10_000, 20_000, 40_000].map((members) => {
-    const record: SessionHistoryRecord = {
-      type: 'chunks',
-      event: {
-        type: 'chunkrow/reasoning-chunks',
-        seq: 1,
-        time: TIME_ZERO + 1,
-        data: {
-          turn: 1,
-          step: 1,
-          index: 0,
-          dt: Array.from({ length: members - 1 }, () => 1),
-          texts: Array.from({ length: members }, (_, index) => index === members - 1 ? 'x' : ' '),
-        },
-      },
-    }
+    const stream: readonly AssistantStreamRecord[] = [{
+      type: 'reasoning-chunks',
+      time0: TIME_ZERO + 1,
+      index: 0,
+      dt: Array.from({ length: members - 1 }, () => 1),
+      texts: Array.from({ length: members }, (_, index) => index === members - 1 ? 'x' : ' '),
+    }]
     const start = wireEntry({
       type: 'step/start',
       seq: SessionSeq(0),
       time: TIME_ZERO,
       data: { turn: 1, step: 1 },
     })
-    const inputs = historyEntries([start, record])
+    const message = wireEntry({
+      type: 'assistant/message',
+      seq: SessionSeq(1),
+      time: TIME_ZERO + members,
+      data: {
+        turn: 1,
+        step: 1,
+        message: createAssistantMessage({
+          content: [{ type: 'reasoning', text: `${' '.repeat(members - 1)}x` }],
+          source: { provider: 'benchmark', model: 'synthetic-v2' },
+        }),
+        stream,
+      },
+    } as SessionEvent<'assistant/message'>)
+    const inputs = historyEntries([start, message])
     const folded = assemble(inputs)
     const samplesMs = Array.from({ length: 5 }, () => timed(() => assemble(inputs)).ms)
     expect((folded.chat as readonly { readonly data: FoldState }[])[0]?.data).toMatchObject({
-      deltaCount: members,
-      lastDeltaSeq: members,
-      firstVisibleSeq: members,
+      memberCount: members,
+      lastMemberIndex: members,
+      firstVisibleIndex: members,
       firstVisibleTime: TIME_ZERO + members,
     })
     return {

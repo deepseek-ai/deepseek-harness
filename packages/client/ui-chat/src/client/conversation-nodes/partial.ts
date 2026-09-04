@@ -15,7 +15,7 @@ export function isVisibleAssistantChunk(type: string): boolean {
     || type === 'block-end'
 }
 
-/** assistant/chunk accumulator: folds StreamChunks into AssistantBlock[] with block-level immutability. */
+/** Live Assistant-frame accumulator: folds StreamChunks into AssistantBlock[] with block-level immutability. */
 export class PartialAccumulator {
   // Sparse on purpose: block-start may arrive out of order, leaving holes until compaction.
   private blocks: (AssistantBlock | undefined)[] = []

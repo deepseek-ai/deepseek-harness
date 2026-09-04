@@ -17,9 +17,10 @@ function isWindowsStylePath(value: string): boolean {
 export function resolveWorkspacePath(cwd: string | undefined, path: string): string {
   if (path.startsWith('/') || isWindowsStylePath(path)) return path
   if (cwd === undefined || cwd === '') return path
+  const separator = isWindowsStylePath(cwd) && cwd.includes('\\') ? '\\' : '/'
   const base = cwd.replace(/[/\\]+$/, '')
   const relative = path.replace(/^[/\\]+/, '')
-  return `${base}/${relative}`
+  return `${base}${separator}${relative}`
 }
 
 /**

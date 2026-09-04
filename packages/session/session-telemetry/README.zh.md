@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-session-telemetry` 捕获会话活动用于对外上报：它把会话事件投影为遥测记录，允许部署方脱敏，再交给实现其约定的上报后端。部署方不直接加载本包——它们只加载一个后端（随附的 OpenTelemetry 后端是 `dsh-session-telemetry-otel`），由它注册 `ctx.sessionTelemetry` 并组装捕获协调器。seam 拥有捕获、脱敏与共享披露；批处理、重试、排队与丢失策略属于后端自身的 SDK，止于 `emit()`。每个已挂载后端都披露其部署级共享策略，使确认 surface 能够报告会话是否以及如何被共享。约定与捕获行为在前；实现内部细节放在下方可折叠的开发者章节中。
+`dsh-session-telemetry` 捕获会话活动用于对外上报：它把每个会话事件复制为一条遥测记录，允许部署方脱敏，再交给实现该约定的上报后端。部署方不直接加载本包——它们只加载一个后端（随附的 OpenTelemetry 后端是 `dsh-session-telemetry-otel`），由它注册 `ctx.sessionTelemetry` 并组装捕获协调器。seam 拥有捕获、脱敏与共享披露；批处理、重试、排队与丢失策略属于后端自身的 SDK，止于 `emit()`。每个已挂载后端都披露其部署级共享策略，使确认 surface 能够报告会话是否以及如何被共享。约定与捕获行为在前；实现内部细节放在下方可折叠的开发者章节中。
 
 ## 目录
 
@@ -37,7 +37,7 @@ kind: "package-library"
 
 ### 捕获内容
 
-捕获以两种模式之一运行。`live` 捕获在追加时跟随会话事件、在挂载时回放已存活会话并记录生命周期标记；`on-demand` 捕获只在后端通过 `captureSession(session, throughSeq?)` 请求前缀时读取权威会话日志。ledger 记录与会话事件一一对应，唯有一个投影例外：每个 `(turn, step)` 只发出第一条 `assistant/chunk`，因此导出流中的 `seq` 缺口是常态，绝不是丢失信号。每条记录携带事件的完整数据、最小身份属性与预先映射的严重级别（`tool/result.isError`、`turn/end` 的错误原因与 `agent-error` 映射为 `error`；其余为 `info`）。
+捕获以两种模式之一运行。`live` 捕获在追加时跟随会话事件、在挂载时回放已存活会话并记录生命周期标记；`on-demand` 捕获只在后端通过 `captureSession(session, throughSeq?)` 请求前缀时读取权威会话日志。每条权威会话事件都按顺序映射为一条 ledger 记录。`assistant/message` 或 `assistant/attempt` 记录会携带完整的嵌入式紧凑 stream，包括失败和重试输出。每条 ledger 记录还携带 `session.id`、`session.format_version`、数值事件身份、可选 header 事实与预先映射的严重级别（`tool/result.isError`、`turn/end` 的错误原因与 `agent-error` 映射为 `error`；其余为 `info`）。
 
 ### 共享披露
 
@@ -49,7 +49,7 @@ kind: "package-library"
 
 <a id="the-redact-waterfall"></a>
 
-每条外发记录在投影后立即经过 `sessionTelemetry/record` waterfall（瀑布式事件）。本包不带任何规则：未挂载监听器时，记录以捕获时的原样到达后端，因此导出数据能干净到什么程度，恰恰取决于部署方挂载了什么规则。监听器通过变换 `next()` 的返回值来堆叠；抛出异常的监听器以 fail-closed 方式拦下这一条记录。脱敏只作用于外发副本——权威会话日志永不改写。
+协调器复制权威事件后，每条外发记录都会立即经过 `sessionTelemetry/record` waterfall（瀑布式事件）。本包不带任何规则：未挂载监听器时，记录以捕获时的原样到达后端，因此导出数据能干净到什么程度，恰恰取决于部署方挂载了什么规则。监听器通过变换 `next()` 的返回值来堆叠；抛出异常的监听器以 fail-closed 方式拦下这一条记录。脱敏只作用于外发副本——权威会话日志永不改写。
 
 -----
 
@@ -63,22 +63,22 @@ kind: "package-library"
 
 ### 设计理念
 
-seam 建立在一个边界之上：harness 的职责止于 `emit()`。捕获、投影、脱敏与 handoff 游标都在这里；批处理、重试、排队与丢失策略属于上报 SDK，本包有意不建模也不包装。设计与被否决的替代方案见[复活 Agent Note](../../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.zh.md)。
+seam 建立在一个边界之上：harness 的职责止于 `emit()`。完整事件捕获、脱敏与 handoff 游标都在这里；批处理、重试、排队与丢失策略属于上报 SDK，本包有意不建模也不包装。设计与被否决的替代方案见[复活 Agent Note](../../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.zh.md)。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service Definition：`SessionTelemetryBackend`/`SessionTelemetrySink` 约定、记录词汇、`session-telemetry/record` waterfall 声明 |
-| [`src/coordinator.ts`](src/coordinator.ts) | 捕获：live 监听器、on-demand 回放、分片投影、脱敏、handoff 游标、异常隔离 |
+| [`src/coordinator.ts`](src/coordinator.ts) | 捕获：live 监听器、生命周期本地 on-demand 回放、脱敏、handoff 游标、异常隔离 |
 
 ### 捕获流程
 
-live 捕获通过组合方 fiber 的 effect 注册：`session/created` 收养会话并从 handoff 游标起回放其日志；`session/event` 投影、深拷贝、脱敏并交接，零 I/O；`session/flush` 转发可选的提示并返回 void，使循环所等待的并行任务绝不等待遥测；`session/disposed` 捕获会话的 `shutdown` 标记并退役它；`agent/error` 是唯一的实时总线转发，因为会话事件词汇有意不包含运维错误记录。dispose 会为仍存活的会话捕获 shutdown 标记，然后等待后端的 `shutdown()`。on-demand 捕获只注册 dispose effect，并在请求时读取权威日志。每个同步处理器都运行在异常隔离之内，使失败的后端或规则永远不会饿死其他监听器，也永远不会触及 agent loop。
+live 捕获通过组合方 fiber 的 effect 注册：`session/created` 收养会话并从 handoff 游标起回放其生命周期本地日志后缀；`session/event` 深拷贝、脱敏并交接每个事件，零 I/O；`session/flush` 转发可选的提示并返回 void，使循环所等待的并行任务绝不等待遥测；`session/disposed` 捕获会话的 `shutdown` 标记并退役它；`agent/error` 是唯一的实时总线转发，因为会话事件词汇有意不包含运维错误记录。dispose 会为仍存活的会话捕获 shutdown 标记，然后等待后端的 `shutdown()`。on-demand 捕获只注册 dispose effect，并在请求时读取所请求的生命周期本地权威日志前缀。每个同步处理器都运行在异常隔离之内，使失败的后端或规则永远不会饿死其他监听器，也永远不会触及 agent loop。
 
 ### handoff 游标
 
-一个模块作用域的 `WeakMap<Session, seq>` 按会话记录已交接（而非已投递）的最高 seq。live 捕获在追加时推进它；on-demand 捕获只在交接所请求的前缀时推进它。未捕获的前缀只留在权威日志中，因此协调器重载不会增加遥测自有的恢复状态；游标缺失时安全退化为从会话构造边界起重新交接，由接收端基于 `(session.id, event.seq)` 的去重吸收。这是对「注册即 effect」纪律的一次有意的、有文档说明的窄例外：条目随其会话消亡，值是单调水位线，丢失它绝不是错误。由此接受的代价与至多一次（at-most-once）投递一致：恢复的会话不会回填上一个进程未能投递的记录。
+一个模块作用域的 `WeakMap<Session, seq>` 按 Session 对象记录已交接（而非已投递）的最高 seq。live 捕获在追加时推进它；on-demand 捕获只在交接所请求的前缀时推进它。重新收养同一对象时会从该游标之后继续，且不会重复交接其 ledger 记录。新 Session 对象从 `firstLiveSeq` 之前开始：全新对象从 seq 0 开始，而 fork、resume 或迁移对象会跳过 constructor seed，从本生命周期的 `session/end-seed` 边界开始。这样，继承历史与此前持久化历史不会进入新生命周期的共享动作。接收端基于 `(session.id, session.format_version, event.seq)` 对 SDK 重试去重。这个以对象为键的 map 是对「注册即 effect」纪律的一次有意且有文档说明的窄例外：条目随其 Session 消亡；丢失条目最多只会回放当前生命周期后缀。
 
 </details>
 

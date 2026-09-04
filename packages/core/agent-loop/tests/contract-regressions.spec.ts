@@ -1200,7 +1200,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
     expect(e.some(x => x.type === 'step/end')).toBe(false)
-    expect(e.some(x => x.type === 'assistant/chunk')).toBe(false)
+    expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'disposed' } }])
   })
 
@@ -1248,7 +1248,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
     expect(e.some(x => x.type === 'step/end')).toBe(false)
-    expect(e.some(x => x.type === 'assistant/chunk')).toBe(false)
+    expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(e.some(x => x.type === 'assistant/message')).toBe(false)
     expect(adapter.requests).toHaveLength(0)
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'user' } }])
@@ -1297,7 +1297,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
-    expect(e.some(x => x.type === 'assistant/chunk')).toBe(false)
+    expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'disposed' } }])
   })
 
@@ -1344,13 +1344,13 @@ describe('disposal and cancellation during pre-step assembly', () => {
     expect(e.filter(x => x.type === 'turn/start' || x.type === 'turn/end').map(x => x.type))
       .toEqual(['turn/start', 'turn/end'])
     expect(e.some(x => x.type === 'step/start')).toBe(false)
-    expect(e.some(x => x.type === 'assistant/chunk')).toBe(false)
+    expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(reasons).toEqual([{ kind: 'aborted', reason: { kind: 'user' } }])
   })
 
-  it('disposal during assembly does not leak an LLM call or append assistant/chunk', { timeout: 15000 }, async () => {
+  it('disposal during assembly does not leak an LLM call or append an Assistant settlement', { timeout: 15000 }, async () => {
     // The key assertion from the original bug report: after disposal, no
-    // assistant/chunk or assistant/message appears — the turn ends disposed
+    // assistant/attempt or assistant/message appears — the turn ends disposed
     // before any model interaction.
     const adapter = new MockAdapter([textResponse('should not appear')])
     let releaseAssemble!: () => void
@@ -1390,7 +1390,7 @@ describe('disposal and cancellation during pre-step assembly', () => {
       .toEqual(['turn/start', 'turn/end'])
     expect(e.find(x => x.type === 'turn/end')?.data.reason)
       .toEqual({ kind: 'aborted', reason: { kind: 'disposed' } })
-    expect(e.some(x => x.type === 'assistant/chunk')).toBe(false)
+    expect(e.some(x => x.type === 'assistant/attempt')).toBe(false)
     expect(e.some(x => x.type === 'assistant/message')).toBe(false)
     expect(adapter.requests).toHaveLength(0)
   })

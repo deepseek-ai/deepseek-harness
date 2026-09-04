@@ -6,11 +6,11 @@ Status: implemented
 
 ## 问题
 
-Workspace 的身份由其稳定 id 和规范目录路径确定，标题则是可变的显示元数据。然而，只要新规范路径按 basename 派生出的标题与另一个 Workspace 相同，注册表就会拒绝该路径。因此，`/a/xx` 和 `/b/xx` 等常见目录布局无法同时出现在 Web UI 中，尽管[领域设计](../../proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)早已允许标题重复，而且每项客户端操作都通过 id 定位 Workspace。
+Workspace 的身份由其稳定 id 和规范目录路径确定，标题则是可变的显示元数据。然而，只要新规范路径按目录名称派生出的标题与另一个 Workspace 相同，注册表就会拒绝该路径。因此，`/a/xx` 和 `/b/xx` 等常见目录布局无法同时出现在 Web UI 中，尽管[领域设计](../../proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)早已允许标题重复，而且每项客户端操作都通过 id 定位 Workspace。
 
 ## 决策
 
-`ctx.workspaceRegistry.create(path, title?)` 仅以规范路径作为唯一性键。重复传入同一路径仍保持幂等，并保留已注册的标题。不同的规范路径会创建不同的 Workspace 记录，且可以共用标题；未提供标题时，每条记录仍从 `basename(path)` 派生标题，不添加后缀，也不改写标题。
+`ctx.workspaceRegistry.create(path, title?)` 仅以规范路径作为唯一性键。重复传入同一路径仍保持幂等，并保留已注册的标题。不同的规范路径会创建不同的 Workspace 记录，且可以共用标题；未提供标题时，每条记录从最终路径段派生标题，该路径段为空时回退到根路径拼写。[Workspace 完全限定路径决策](2026-09-03-fully-qualified-workspace-paths.zh.md)负责规定路径准入和标题回退。
 
 Host 的 `workspace.create({ path })` 接纳入口沿用该规则。Workspace 管理器、选择器、分组树、选择、重命名、删除和 Session 创建仍使用 `WorkspaceId`，因此相同标签既不会合并记录，也不会把操作指向其他记录。需要区分相同标签时，侧边栏悬停详情卡会显示各自的规范路径。
 

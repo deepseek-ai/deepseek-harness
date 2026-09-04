@@ -1,0 +1,52 @@
+{
+  "name": "@deepseek-ai/dsh-session-format-v0-to-v1",
+  "description": "Frozen released-v0 Session codec and identity migration to v1",
+  "version": "0.1.2-rc.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/session/session-format-v0-to-v1"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "sessionFormatMigration": {
+      "from": 0,
+      "to": 1,
+      "export": ".",
+      "migration": "sessionFormatV0ToV1",
+      "sourceCodec": "releasedV0SessionFormatCodec",
+      "targetCodec": "releasedV1SessionFormatCodec",
+      "targetHeaderValidator": "assertReleasedV1Header",
+      "targetRestorer": "restoreReleasedV1Artifact"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-session-format": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^"
+  }
+}

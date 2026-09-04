@@ -1,2 +1,2 @@
 {"type":"session","id":"{{session:2}}","createdAt":800,"cwd":"/var/folders/2g/b32ct0qn1d728l_v6tdkjytr0000gn/T/acp-snap-cwd-KBQJbW","parentSession":"f6fa7fcf-dd9c-4b39-8815-b25ddcebfd88"}
-{"type":"request/header","data":{"header":{"config":{"model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}

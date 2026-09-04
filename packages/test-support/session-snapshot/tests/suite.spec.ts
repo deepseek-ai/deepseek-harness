@@ -5,7 +5,16 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, describe, expect, it } from 'vitest'
 import {
+  assertPersistedSessionVersion,
+  assertSessionFixtureVersion,
   defineAcpSnapshotSuite,
+  latestPersistedSessionPaths,
+  parsePersistedSessionFilename,
+  parseSessionFixtureName,
+  persistedSessionFilename,
+  sessionFixtureName,
+  sessionFixtureNames,
+  sessionHeaderVersion,
   stabilizeFixtureMessageIds,
   tokenizeSessionFixtureCwd,
   type HarvestedLog,
@@ -25,7 +34,6 @@ import {
   parseToolSchemasSnapshot,
   refreshFixtureReplacements,
   scenarioSkipped,
-  sessionFixtureNames,
   restorePinnedToolSchemas,
   type SharedSnapshotClaim,
   stabilizeRefreshLog,
@@ -108,12 +116,13 @@ const RECORD_SCENARIOS: Scenario[] = [
 // committed record fixtures and expected outputs in place.
 const BOOTSTRAP = process.env.ACP_SNAPSHOT_SPEC_BOOTSTRAP === '1'
 const recordDir = BOOTSTRAP ? RECORD_SRC : mkdtempSync(join(tmpdir(), 'acp-snap-record-suite-'))
+const retiredChildFixture = readFileSync(join(RECORD_SRC, 'rec-child', 'session.1.jsonl'), 'utf8')
 if (!BOOTSTRAP) {
   cpSync(RECORD_SRC, recordDir, { recursive: true })
   // Record mode owns its output inventory: a new scenario has no primary yet,
   // while a changed child count can leave old numbered fixtures behind.
   rmSync(join(recordDir, 'rec-pin', 'session.jsonl'))
-  writeFileSync(join(recordDir, 'rec-child', 'session.2.jsonl'), 'stale child\n')
+  writeFileSync(join(recordDir, 'rec-child', 'session.2.jsonl'), retiredChildFixture)
 }
 const refreshDir = mkdtempSync(join(tmpdir(), 'acp-snap-refresh-suite-'))
 cpSync(REPLAY_DIR, refreshDir, { recursive: true })
@@ -137,12 +146,12 @@ function staleRefreshFixtures(dir: string): void {
 
   writeFileSync(join(dir, 'blocked-log', 'session.jsonl'), [
     '{"type":"session","id":"99999999-8888-4777-8666-555555555555","createdAt":13,"cwd":"/rec/blocked-cwd","delegationDepth":0}',
-    '{"type":"hook/result","seq":1,"time":13,"data":{"decision":"stale","durationMs":99}}',
+    '{"type":"hook/result","seq":0,"time":13,"data":{"decision":"stale","durationMs":99}}',
     '',
   ].join('\n'))
   writeFileSync(join(dir, 'authored-error', 'session.jsonl'), [
     '{"type":"session","id":"77777777-8888-4777-8666-555555555555","createdAt":13,"cwd":"/rec/error-cwd","delegationDepth":0}',
-    '{"type":"turn/end","seq":1,"time":9,"data":{"error":"stale"}}',
+    '{"type":"turn/end","seq":0,"time":9,"data":{"error":"stale"}}',
     '',
   ].join('\n'))
 }
@@ -170,12 +179,12 @@ describe('defineAcpSnapshotSuite: refresh write-back', () => {
     // The scenario's own env layer reached the subprocess.
     expect(stdout).toContain('\\"permissionMode\\":\\"never\\"')
 
-    const blocked = readFileSync(join(refreshDir, 'blocked-log', 'session.jsonl'), 'utf8')
+    const blocked = readFileSync(join(refreshDir, 'blocked-log', 'session.v2.jsonl'), 'utf8')
     expect(blocked).toContain('"decision":"block"')
     expect(blocked).not.toContain('"decision":"stale"')
 
-    const authored = readFileSync(join(refreshDir, 'authored-error', 'session.jsonl'), 'utf8')
-    expect(authored).toContain('"error":"model exploded"')
+    const authored = readFileSync(join(refreshDir, 'authored-error', 'session.v2.jsonl'), 'utf8')
+    expect(authored).toContain('"message":"model exploded"')
     expect(authored).not.toContain('"error":"stale"')
 
     expect(readFileSync(join(refreshDir, 'pin-turn', 'system-prompt.expected.md'), 'utf8')).toBe([
@@ -197,17 +206,21 @@ describe('defineAcpSnapshotSuite: refresh write-back', () => {
     const childPrompt = readFileSync(join(refreshDir, 'plain-turn', 'system-prompt.1.expected.md'), 'utf8')
     expect(childPrompt).toBe('SYS PROMPT\n\nCHILD GUIDANCE\n')
 
-    const pinSession = readFileSync(join(refreshDir, 'pin-turn', 'session.jsonl'), 'utf8')
+    const pinSession = readFileSync(join(refreshDir, 'pin-turn', 'session.v2.jsonl'), 'utf8')
     expect(pinSession).toContain('"cwd":"{{cwd}}"')
+    expect(readFileSync(join(refreshDir, 'pin-turn', 'session.jsonl'), 'utf8'))
+      .not.toContain('"version"')
   })
 })
 
 describe('defineAcpSnapshotSuite: record inventory write-back', () => {
-  it('creates a missing primary fixture and prunes stale child fixtures', () => {
-    const fixture = readFileSync(join(recordDir, 'rec-pin', 'session.jsonl'), 'utf8')
+  it('creates a missing primary fixture and preserves generations for a retired child role', () => {
+    const fixture = readFileSync(join(recordDir, 'rec-pin', 'session.v2.jsonl'), 'utf8')
     expect(fixture).toContain('"type":"session"')
     expect(fixture).toContain('"cwd":"{{cwd}}"')
-    expect(() => readFileSync(join(recordDir, 'rec-child', 'session.2.jsonl'), 'utf8')).toThrow()
+    if (!BOOTSTRAP) {
+      expect(readFileSync(join(recordDir, 'rec-child', 'session.2.jsonl'), 'utf8')).toBe(retiredChildFixture)
+    }
     expect(readFileSync(join(recordDir, 'rec-child', 'tool-schemas.1.expected.json'), 'utf8'))
       .toContain('"name": "t1"')
   })
@@ -215,7 +228,7 @@ describe('defineAcpSnapshotSuite: record inventory write-back', () => {
   it('retains an unchanged message relationship across the recorded parent and child fixtures', () => {
     const existingMessageId = '22222222-2222-4222-8222-222222222222'
     const freshMessageId = '11111111-1111-4111-8111-111111111111'
-    const fixtures = ['session.jsonl', 'session.1.jsonl']
+    const fixtures = ['session.v2.jsonl', 'session.1.v2.jsonl']
       .map(file => readFileSync(join(recordDir, 'rec-child', file), 'utf8'))
 
     for (const fixture of fixtures) {
@@ -418,14 +431,17 @@ describe('shared snapshot content', () => {
 })
 
 describe('sessionFixtureNames', () => {
-  it('orders the primary and contiguous child fixtures while ignoring other files', () => {
+  it('selects the highest generation for each contiguous role while ignoring other files', () => {
     expect(sessionFixtureNames([
       'stdout.expected.jsonl',
       'session.2.jsonl',
       'session.jsonl',
       'session.1.jsonl',
+      'session.v2.jsonl',
+      'session.v1.jsonl',
+      'session.1.v3.jsonl',
       'input.json',
-    ])).toEqual(['session.jsonl', 'session.1.jsonl', 'session.2.jsonl'])
+    ])).toEqual(['session.v2.jsonl', 'session.1.v3.jsonl', 'session.2.jsonl'])
   })
 
   it('accepts a primary-only scenario', () => {
@@ -433,25 +449,111 @@ describe('sessionFixtureNames', () => {
   })
 
   it('rejects a directory without the primary fixture', () => {
-    expect(() => sessionFixtureNames(['session.1.jsonl'])).toThrow('missing session.jsonl')
+    expect(() => sessionFixtureNames(['session.1.jsonl'])).toThrow('missing parent session fixture')
   })
 
   it('rejects gapped child fixtures', () => {
     expect(() => sessionFixtureNames(['session.jsonl', 'session.2.jsonl']))
-      .toThrow('expected session.1.jsonl, found session.2.jsonl')
+      .toThrow('expected index 1, found session.2.jsonl')
   })
 
-  it.each(['session.0.jsonl', 'session.child.jsonl', 'session.01.jsonl'])(
-    'rejects invalid child fixture name %s',
+  it.each([
+    'session.0.jsonl',
+    'session.child.jsonl',
+    'session.01.jsonl',
+    'session.v0.jsonl',
+    'session.V1.jsonl',
+    'session.v01.jsonl',
+    'session.1.v0.jsonl',
+  ])(
+    'rejects invalid fixture name %s',
     (name) => {
       expect(() => sessionFixtureNames(['session.jsonl', name]))
-        .toThrow(`invalid child session fixture name: ${name}`)
+        .toThrow(`invalid session fixture name: ${name}`)
     },
   )
 
-  it('rejects duplicate child indexes', () => {
+  it('rejects duplicate role generations', () => {
     expect(() => sessionFixtureNames(['session.jsonl', 'session.1.jsonl', 'session.1.jsonl']))
-      .toThrow('expected session.2.jsonl, found session.1.jsonl')
+      .toThrow('duplicate session fixture generation: session.1.jsonl')
+  })
+})
+
+describe('Session generation filename helpers', () => {
+  it('renders canonical parent, child, raw, and compressed names', () => {
+    expect(sessionFixtureName(0, 0)).toBe('session.jsonl')
+    expect(sessionFixtureName(0, 2)).toBe('session.v2.jsonl')
+    expect(sessionFixtureName(3, 0)).toBe('session.3.jsonl')
+    expect(sessionFixtureName(3, 2)).toBe('session.3.v2.jsonl')
+    expect(persistedSessionFilename(0)).toBe('session.jsonl')
+    expect(persistedSessionFilename(2, 'zstd')).toBe('session.v2.jsonl.zstd')
+  })
+
+  it.each([
+    () => sessionFixtureName(-1, 0),
+    () => sessionFixtureName(-0, 0),
+    () => sessionFixtureName(0.5, 0),
+    () => sessionFixtureName(0, -1),
+    () => persistedSessionFilename(Number.MAX_SAFE_INTEGER + 1),
+  ])('rejects invalid numeric filename components', (render) => {
+    expect(render).toThrow(/non-negative safe integer/)
+  })
+
+  it('parses canonical fixture and persistence names without admitting lookalikes', () => {
+    expect(parseSessionFixtureName('session.2.v3.jsonl')).toEqual({ index: 2, version: 3, name: 'session.2.v3.jsonl' })
+    expect(parseSessionFixtureName('notes.jsonl')).toBeUndefined()
+    expect(() => parseSessionFixtureName(`session.${'9'.repeat(400)}.jsonl`))
+      .toThrow('invalid session fixture name')
+    expect(parsePersistedSessionFilename('session.jsonl')).toEqual({ version: 0, compression: 'raw', name: 'session.jsonl' })
+    expect(parsePersistedSessionFilename('session.v4.jsonl.zstd')).toEqual({ version: 4, compression: 'zstd', name: 'session.v4.jsonl.zstd' })
+    expect(parsePersistedSessionFilename('session.1.jsonl')).toBeUndefined()
+    expect(parsePersistedSessionFilename(`session.v${'9'.repeat(400)}.jsonl`)).toBeUndefined()
+  })
+
+  it('selects one highest persisted generation per directory and compression', () => {
+    const paths = [
+      'b/session.v1.jsonl',
+      'b/session.jsonl',
+      'a/session.jsonl',
+      'a/session.v2.jsonl',
+      'a/session.v3.jsonl.zstd',
+      'a/session.v2.20260101.backup.jsonl',
+      'noise.jsonl',
+    ]
+    expect(latestPersistedSessionPaths(paths)).toEqual(['a/session.v2.jsonl', 'b/session.v1.jsonl'])
+    expect(latestPersistedSessionPaths(paths, 'zstd')).toEqual(['a/session.v3.jsonl.zstd'])
+  })
+
+  it('validates filename and header generation equality', () => {
+    const v0 = '{"type":"session","version":0}\n'
+    const v1 = '{"type":"session","version":1}\n'
+    expect(sessionHeaderVersion(v1, 'fixture')).toBe(1)
+    expect(assertSessionFixtureVersion('session.jsonl', v0)).toBe(0)
+    expect(assertPersistedSessionVersion('session.v1.jsonl', v1)).toBe(1)
+    expect(() => assertSessionFixtureVersion('notes.jsonl', v0)).toThrow('not a session fixture name')
+    expect(assertSessionFixtureVersion('session.jsonl', '{"type":"session"}\n')).toBe(0)
+    expect(() => assertSessionFixtureVersion('session.v1.jsonl', '{"type":"session"}\n'))
+      .toThrow('a versionless projected Session header is format v0')
+    expect(() => assertSessionFixtureVersion('session.jsonl', '')).toThrow('session fixture is empty')
+    expect(() => assertSessionFixtureVersion('session.jsonl', '{')).toThrow('session header contains invalid JSON')
+    expect(() => assertPersistedSessionVersion('session.1.jsonl', v0)).toThrow('not a canonical Session persistence filename')
+    expect(() => assertSessionFixtureVersion('session.v1.jsonl', v0))
+      .toThrow('filename declares Session format v1, header declares v0')
+    expect(() => assertPersistedSessionVersion('session.jsonl', v1))
+      .toThrow('filename declares Session format v0, header declares v1')
+  })
+
+  it.each([
+    ['', 'session fixture is empty'],
+    ['{', 'session header contains invalid JSON'],
+    ['[]', 'first record must be a Session header'],
+    ['{"type":"event","version":0}', 'first record must be a Session header'],
+    ['{"type":"session"}', 'version must be a non-negative safe integer'],
+    ['{"type":"session","version":-1}', 'version must be a non-negative safe integer'],
+    ['{"type":"session","version":-0}', 'version must be a non-negative safe integer'],
+    ['{"type":"session","version":1.5}', 'version must be a non-negative safe integer'],
+  ])('rejects malformed header %j', (content, message) => {
+    expect(() => sessionHeaderVersion(content, 'bad.jsonl')).toThrow(message)
   })
 })
 
@@ -484,10 +586,21 @@ describe('scenarioSkipped', () => {
   const authored: Scenario = { name: 'authored', hasModelTurn: true, recorded: false }
   const posix: Scenario = { name: 'posix-cancel', hasModelTurn: true, recorded: false, posixOnly: true }
   const pwsh: Scenario = { name: 'pwsh-tool', hasModelTurn: true, recorded: false, pwshOnly: true }
+  const retained: Scenario = {
+    name: 'retained-v0',
+    hasModelTurn: true,
+    recorded: true,
+    sessionFormat: { version: 0, coverage: ['multi-hop'] },
+  }
 
   it('skips authored scenarios only while recording', () => {
     expect(scenarioSkipped(authored, true, 'linux')).toBe(true)
     expect(scenarioSkipped(authored, false, 'linux')).toBe(false)
+  })
+
+  it('skips a retained historical generation while recording but replays and refreshes it', () => {
+    expect(scenarioSkipped(retained, true, 'linux')).toBe(true)
+    expect(scenarioSkipped(retained, false, 'linux')).toBe(false)
   })
 
   it('skips posixOnly scenarios on Windows and nowhere else', () => {

@@ -9,7 +9,7 @@
 
 英文源文件根据源码生成（`scripts/gen-persistence-catalog.ts`），并由 `pnpm run verify-persistence-catalog`（`doc-sync`（文档同步门禁）的一部分）验证新鲜度；本中文文件作为经评审对侧通过双语配对维护。声明块保留源码声明和嵌套属性的 JSDoc，只移除其所在接口／模块带来的缩进，并使用 `ts persistence-catalog` 围栏（doc-typecheck 会跳过这些围栏，因为声明引用了其所属模块中的类型）。payload 中的类型名称会链接到记录该类型的页面。参见 [persistence-log-catalog Agent Note](../.agents/notes/archived/process/2026-07-04-persistence-log-catalog.md)。
 
-以下信封声明组合了每个事件的 `type`、单调递增的 `seq`、以 epoch 毫秒表示的 `time`、`data`、可选的未知类型跳过标记 `ignorable`，以及条件字段 `surfaceOp`／`sourceEventSeqs`。**surface** 表示 `SurfaceEventType` 成员：它会生成一条 LLM（大语言模型）消息，并声明该事件如何加入 surface 列表。**log-only** 表示其他所有事件：这类记录可持久化、可回放，但不参与派生历史。每个 payload 均可进行 JSON 序列化（在 `Session.append` 处强制执行），整个格式固定为 `SESSION_FORMAT_VERSION = 0`：这是预发布格式，不暗示任何兼容性（参见[版本立场](subsystems/persistence.zh.md)）。范围仅限本仓库中的包；下游插件可以继续合并其他事件类型，而这些类型按设计不属于本目录。
+以下信封声明组合了每个事件的 `type`、单调递增的 `seq`、以 epoch 毫秒表示的 `time`、`data`、可选的未知类型跳过标记 `ignorable`，以及条件字段 `surfaceOp`／`sourceEventSeqs`。**surface** 表示 `SurfaceEventType` 成员：它会生成一条 LLM（大语言模型）消息，并声明该事件如何加入 surface 列表。**log-only** 表示其他所有事件：这类记录可持久化、可回放，但不参与派生历史。每个 payload 均可进行 JSON 序列化（在 `Session.append` 处强制执行）。当前 writer 会写入 `SESSION_FORMAT_VERSION`；受支持的历史产物通过构建期静态相邻迁移目录进入这套当前词汇（参见[版本生命周期](subsystems/persistence.zh.md)）。范围仅限本仓库中的包；下游插件可以继续合并其他当前版本事件类型，这些类型按设计不属于本目录，并且在后续格式迁移边中需要显式 disposition。
 
 ## 事件信封
 
@@ -20,7 +20,8 @@ export type SessionEventType = keyof SessionEventMap
 /**
  * The subset of {@link SessionEventType} values whose events produce LLM
  * messages and are eligible to appear on the ordered surface. Only these
- * event types may carry {@link SurfaceOp} and {@link SessionEvent.sourceEventSeqs}.
+ * event types may carry {@link SurfaceOp}; user and tool events may also cite
+ * earlier sources through {@link SessionEvent.sourceEventSeqs}.
  */
 export type SurfaceEventType =
   | 'user/message'
@@ -53,7 +54,7 @@ export type SurfaceOp =
  * The {@link sourceEventSeqs} and {@link surfaceOp} fields are conditional:
  * they only exist on {@link SurfaceEventType} variants (`user/message`,
  * `assistant/message`, `tool/result`).
- * Non-surface events (boundary markers, chunks, usage, errors) never carry
+ * Non-surface events (boundary markers, attempts, errors) never carry
  * surface metadata — the compiler enforces this at `Session.append()`
  * call sites.
  */
@@ -78,12 +79,9 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
     ignorable?: true
   } & (K extends SurfaceEventType ? {
     /**
-     * Seq numbers of earlier events that this event cites as sources
-     * (e.g. the `assistant/chunk` seqs that built an `assistant/message`,
-     * or the surface nodes shadowed by a compaction replace node). An
-     * `assistant/message` may carry a present empty array for a known empty
-     * provider stream; when the field is absent, the event does not record which
-     * earlier events produced the message.
+     * Seq numbers of earlier events that this event cites as sources, such as
+     * the surface nodes shadowed by a compaction replacement. A v2
+     * `assistant/message` embeds its provider stream and cannot carry this field.
      */
     sourceEventSeqs?: SessionSeq[]
     /** How this event entered the surface; absent for non-surface events. */
@@ -92,7 +90,7 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 }[T]
 ```
 
-来源：[`packages/core/session/src/types.ts:368`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:375`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:404`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:436`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:379`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:387`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:416`](../packages/core/session/src/types.ts) · [`packages/core/session/src/types.ts:447`](../packages/core/session/src/types.ts)
 
 ## 事件
 
@@ -206,18 +204,20 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ### `assistant/*`
 
-<a id="assistantchunk--log-only"></a>
+<a id="assistantattempt--log-only"></a>
 
-#### `assistant/chunk` — log-only
+#### `assistant/attempt` — log-only
 
 ```ts persistence-catalog
-/** Raw stream chunk — token-level replay fidelity. */
-'assistant/chunk': { turn: number; step: number; chunk: StreamChunk }
+/**
+ * One model attempt that committed no surface message. The embedded stream
+ * preserves a failed, retried, cancelled, or stream-error attempt that
+ * reached settlement without fabricating model-visible history.
+ */
+'assistant/attempt': { turn: number; step: number; stream: AssistantStreamRecord[] }
 ```
 
-类型：[StreamChunk](subsystems/llm-streaming.zh.md)
-
-来源：[`packages/core/session/src/types.ts:291`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:313`](../packages/core/session/src/types.ts)
 
 <a id="assistantmessage--surface"></a>
 
@@ -234,12 +234,20 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * marker distinguishes that prefix without re-deriving interruption from turn
  * boundaries. An aborted turn with no such event streamed no visible content.
  */
-'assistant/message': { turn: number; step: number; message: AssistantMessage; usage?: TokenUsage; interrupted?: true }
+'assistant/message': {
+  turn: number
+  step: number
+  message: AssistantMessage
+  /** Exact timed model stream, compacted without joining delta boundaries. */
+  stream: AssistantStreamRecord[]
+  usage?: TokenUsage
+  interrupted?: true
+}
 ```
 
 类型：[TokenUsage](subsystems/llm-streaming.zh.md)
 
-来源：[`packages/core/session/src/types.ts:302`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:299`](../packages/core/session/src/types.ts)
 
 ### `command/*`
 
@@ -638,12 +646,12 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * Marks the end of a constructor seed. Events before it have smaller seq
  * values and came from the seed (resume, fork, or replay); this lifecycle
  * produced none of them. This log-only event is the durable projection of
- * {@link Session.firstLiveSeq}. Its payload is empty — position and `time`
- * carry the meaning.
+ * {@link Session.firstLiveSeq}.
  *
- * Locate the LAST one in stored history. A seed already ending in one is not
- * re-marked, so reopening an untouched session does not grow its log per
- * pickup and the event need not be at the current `firstLiveSeq`.
+ * A fresh fork child owns one `{ inherited: true }` marker at its exact
+ * inherited-prefix cut, even when that prefix ends in an ancestor marker.
+ * The last tagged marker is the current Session's cut; untagged markers keep
+ * ordinary restore and replay lifecycle boundaries.
  *
  * `Session`'s constructor is the only legitimate writer. The invariant
  * companion deliberately constrains nothing here, so a plugin appending one
@@ -656,10 +664,10 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
  * writers — a concurrently live session holds its own boundary elsewhere,
  * so tolerating concurrent writers needs a signal beyond the log.
  */
-'session/end-seed': Record<string, never>
+'session/end-seed': { inherited?: true }
 ```
 
-来源：[`packages/core/session/src/types.ts:364`](../packages/core/session/src/types.ts)
+来源：[`packages/core/session/src/types.ts:375`](../packages/core/session/src/types.ts)
 
 <a id="sessiontitle--log-only"></a>
 
@@ -701,12 +709,14 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 'session-log-deepseek/delivery-accepted': {
   /** Session identity the accepted delivery carried; inherited fork markers retain the parent's id. */
   sessionId: import('@deepseek-ai/dsh-session/types').SessionId
+  /** Accepted Session format generation; absence identifies version 0. */
+  sessionFormatVersion?: number
   /** Last canonical event included in the accepted request. */
   throughSeq: import('@deepseek-ai/dsh-session/types').SessionSeq
 }
 ```
 
-来源：[`packages/session/session-log-deepseek/src/types.ts:57`](../packages/session/session-log-deepseek/src/types.ts)
+来源：[`packages/session/session-log-deepseek/src/types.ts:59`](../packages/session/session-log-deepseek/src/types.ts)
 
 ### `step/*`
 

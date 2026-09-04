@@ -83,6 +83,7 @@ function appendConversation(session: Session): void {
   const oldAssistant = session.append(
     'assistant/message',
     {
+      stream: [],
       turn: 1,
       step: 1,
       message: createMessage({
@@ -152,6 +153,7 @@ function appendConversation(session: Session): void {
   session.append(
     'assistant/message',
     {
+      stream: [],
       turn: 2,
       step: 1,
       message: createMessage({
@@ -190,6 +192,7 @@ function appendConversation(session: Session): void {
   session.append(
     'assistant/message',
     {
+      stream: [],
       turn: 2,
       step: 2,
       message: createMessage({
@@ -203,10 +206,16 @@ function appendConversation(session: Session): void {
     },
     { surfaceOp: 'append' },
   )
-  session.append('assistant/chunk', {
+  session.append('assistant/attempt', {
     turn: 2,
     step: 2,
-    chunk: { type: 'text-delta', index: 0, text: 'unfinished answer' },
+    stream: [{
+      type: 'text-chunks',
+      time0: 0,
+      index: 0,
+      dt: [],
+      texts: ['unfinished answer'],
+    }],
   })
 }
 
@@ -536,6 +545,31 @@ describe('session reference discovery and preparation', () => {
     expect(context.content[0].text).not.toContain('later source mutation')
   })
 
+  it('records the current source format generation without rebasing its frozen sequence', async () => {
+    const ctx = await harness()
+    const target = ctx.sessions.create(SessionId('target'))
+    const source = ctx.sessions.create(SessionId('source'))
+    appendConversation(source)
+    const snapshot = await ctx.sessionQuery.readSurface(source.id)
+    vi.spyOn(ctx.sessionQuery, 'readSurface').mockResolvedValue(snapshot)
+
+    const prepared = await ctx.sessionReferenceResolver.prepare(
+      fakeAgent(target),
+      [{ type: 'text', text: 'use @source' }],
+      [{ sessionId: source.id }],
+    )
+
+    const captured = prepared.additionalContext?.source
+    expect(captured).toMatchObject({
+      kind: 'session-reference',
+      references: [{
+        sessionId: source.id,
+        capturedFormatVersion: snapshot.session.version,
+        capturedThroughSeq: snapshot.capturedThroughSeq,
+      }],
+    })
+  })
+
   it('excludes injected context when projecting a referenced session', async () => {
     const ctx = await harness()
     const target = ctx.sessions.create(SessionId('target'))
@@ -679,6 +713,7 @@ describe('session reference discovery and preparation', () => {
     source.append(
       'assistant/message',
       {
+        stream: [],
         turn: 3,
         step: 1,
         message: createMessage({
@@ -780,6 +815,7 @@ describe('session reference discovery and preparation', () => {
     const later = source.append(
       'assistant/message',
       {
+        stream: [],
         turn: 1,
         step: 1,
         message: createMessage({

@@ -51,7 +51,7 @@ Assembler 使用 `conversationContextKey(kind, id)` 组合无碰撞 key；不同
 
 #### `match(event)`
 
-`match(event)` 只读取当前 `SessionEventLike`，返回 `{ id, role: 'start' | 'update' }` 或 `null`。它拿不到 Context、历史、Reader、Location 或 view envelope。`chunkrow/*` event 只能作为 update；Assembler 会拒绝 packed start，`start()` 接收的 `ConversationStartMatch` 只包含标准 `SessionEvent`。
+`match(event)` 只读取当前 `SessionEventLike`，返回 `{ id, role: 'start' | 'update' }` 或 `null`。它拿不到 Context、history、Reader、Location 或 view envelope。Client-only `assistant/live-chunk` event 只能作为 update；Assembler 会拒绝每个 transient start，`start()` 接收的 `ConversationStartMatch` 只包含持久 `SessionEvent`。
 
 这项限制使单条 scalar event 或 packed run 的路由成本只随已注册 Definition 数量增长。Assembler 不会为了判断一条 update 属于谁而遍历该 Definition 的历史 Context。
 
@@ -110,7 +110,7 @@ Reader 每次查询都记录 `{ key, revision, windowGap }` 依赖。命中前�
 
 #### `update(context, match)`
 
-`update()` 只处理已经由 `match()` 精确路由到当前 `(kind, id)` 的 post-start scalar 或 packed Match。它不判断 input 属于哪个 Context。消费 Assistant delta 的 Definition 会把每个匹配的 `chunkrow/*` 值作为一个 batch fold，而不构造成员 event。
+`update()` 只处理已由 `match()` 精确路由到当前 `(kind, id)` 的 post-start durable 或 transient Match。它不判断 input 属于哪个 Context。Assistant Definition 会直接 fold 每个 `assistant/live-chunk` update，并在 history replay 期间展开嵌入式 `assistant/message` 或 `assistant/attempt` stream。
 
 Assembler 按 `seq` 升序调用 `update()`。实时尾部 update 可以直接增量应用；任何非尾部证据插入、start 补齐或依赖失效都会从 `start()` 完整 replay。
 
@@ -262,7 +262,7 @@ Chat `order` 的结构性变化仍可能重排当前可见 key；纯 data 更新
 | Next-step Inbox / `inbox-next-step` | splice Event seq | 每条目标为 next-step 的 `agent/inbox/spliced` | 无 | 把消息 ID 追加到持久 splice state；每次 claim 只 materialize 一次，并向 Message 暴露共享的当前 claimed batch |
 | Message / `input-message` | message ID | append-surface `user/message` | 无 | 根据 source 生成 context message，或读取最近 next-step Inbox 判断 user/steering |
 | Request Prompt / `request-prompt` | header Event seq | 每条 `request/header` | 无 | 通过 Reader 读取前一条 Request Prompt，保留完整 prompt 状态，并判定 system/tool 变化 |
-| Assistant / `assistant-step` | `turn:step` | `step/start` | scalar 或 packed `assistant/chunk`、final `assistant/message`、同 step Retry | 聚合 blocks、usage、首 token 时间、final 和 retry 隐藏状态，并发布同 key Step data |
+| Assistant / `assistant-step` | `turn:step` | `step/start` | Live `assistant/live-chunk`、持久 `assistant/message` 或 `assistant/attempt`、同 step Retry | 聚合 block、usage、首 token 时间、settlement 证据与 retry-hidden state，再发布同 key Step data |
 | Tool / `tool-call` | root call ID | root `tool/call` | root result、Code Dispatch start/result | 聚合 root、children 和 parent Map；Dispatch Event 用 `rootCallId` 精确路由 |
 | Command / `command` | command ID | `command/run` | `command/done`、带 source command ID 的 compact lifecycle/checkpoint | 聚合 command outcome 和手动压缩证据 |
 | Automatic Compaction / `compaction` | compaction ID | 无 source command ID 的 `compaction/start` | summary、end、replacement checkpoint | 聚合 summary/checkpoint；checkpoint 足够时可在缺 start 下 fallback |
@@ -382,7 +382,7 @@ Assembled Web snapshot、GUI 和浏览器场景覆盖真实 plugin graph。浏�
 
 **为历史反扫定义逆向 State fold。** 拒绝：每个业务都要维护互为逆运算的两套逻辑，删除、非可逆聚合和跨 Context 依赖很难保持一致。统一 Matches 后从 start 正序 replay 只有一套业务语义。
 
-**增加独立的 chunk-run matcher 与 update lifecycle。** 拒绝：第二条 Definition 路径会重复 dispatch、replay、publication 与 Context 类型。`ChunkRowEvent` 使用既有 `match(event)` 与 `update(context, match)` lifecycle，并通过 `chunkrow/*` discriminator 明确标记 packed 处理。
+**增加独立 live-stream matcher 与 update lifecycle。** 拒绝：第二条 Definition path 会重复 dispatch、replay、publication 与 Context type。Client-only `assistant/live-chunk` 与持久 settlement 使用既有 `match(event)` 和 `update(context, match)` lifecycle；只有 event discriminator 与 stream expansion 不同。
 
 **把 Inbox 做成引擎一级公民或一个窗口级 Context。** 拒绝：Inbox 是普通业务状态，不应污染通用引擎；逐 splice 瞬间态加严格前序 Reader 同时支持 prepend、append 和 Message 查询。
 

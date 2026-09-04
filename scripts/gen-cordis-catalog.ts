@@ -248,6 +248,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   SubagentModelSelectionSettings: 'subagent.md',
   AgentOptions: 'core.md',
   AgentStatus: 'core.md',
+  AssistantStreamFrame: 'core.md',
   ContentBlock: 'llm-streaming.md',
   CreateAgentOptions: 'core.md',
   GenerateOptions: 'llm-streaming.md',

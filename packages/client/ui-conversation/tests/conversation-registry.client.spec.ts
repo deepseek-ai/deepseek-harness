@@ -1,13 +1,14 @@
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import { createAssistantMessage, LlmAttemptId } from '@deepseek-ai/dsh-llm'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
   createScope, MutableSessionEventSource,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  ISessions, SessionBinding, SessionFace, SessionListState, SessionSnapshot,
+  ISessions, SessionBinding, SessionEventLike, SessionFace, SessionListState, SessionSnapshot,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import {
   ConversationEventRegistry, ConversationNodeAssembler, ConversationViewRegistry, UiConversation,
@@ -156,12 +157,12 @@ describe('Conversation registries', () => {
       target: 'chat',
       match: event => event.type === 'turn/start'
         ? { id: String(event.data.turn), role: 'start' }
-        : event.type === 'assistant/chunk' || event.type === 'assistant/message'
+        : event.type === 'assistant/live-chunk' || event.type === 'assistant/message'
           ? { id: String(event.data.turn), role: 'update' }
           : null,
       start: () => 0,
       update: context => context.state + 1,
-      publication: match => match.event.type === 'assistant/chunk' ? 'animation-frame' : 'immediate',
+      publication: match => match.event.type === 'assistant/live-chunk' ? 'animation-frame' : 'immediate',
       buildViewNode: context => ({
         key: context.key,
         kind: 'frame-probe',
@@ -178,8 +179,10 @@ describe('Conversation registries', () => {
     const listener = vi.fn()
     const unsubscribe = conversation.snapshot.subscribe(listener)
     const source = binding.eventSource as MutableSessionEventSource
-    const append = (event: SessionEvent): void => {
-      source.append({ type: 'event', event })
+    const append = (event: SessionEventLike): void => {
+      source.append(event.type === 'assistant/live-chunk'
+        ? { type: 'transient', event }
+        : { type: 'event', event })
     }
 
     append({ seq: SessionSeq(1), time: 1, type: 'turn/start', data: { turn: 1 } })
@@ -187,14 +190,20 @@ describe('Conversation registries', () => {
     append({
       seq: SessionSeq(2),
       time: 2,
-      type: 'assistant/chunk',
-      data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'a' } },
+      type: 'assistant/live-chunk',
+      data: {
+        attemptId: LlmAttemptId('frame-probe'),
+        turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'a' },
+      },
     })
     append({
       seq: SessionSeq(3),
       time: 3,
-      type: 'assistant/chunk',
-      data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'b' } },
+      type: 'assistant/live-chunk',
+      data: {
+        attemptId: LlmAttemptId('frame-probe'),
+        turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'b' },
+      },
     })
     expect(requestFrame).toHaveBeenCalledOnce()
     expect(listener).not.toHaveBeenCalled()
@@ -222,15 +231,30 @@ describe('Conversation registries', () => {
     append({
       seq: SessionSeq(4),
       time: 4,
-      type: 'assistant/chunk',
-      data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'c' } },
+      type: 'assistant/live-chunk',
+      data: {
+        attemptId: LlmAttemptId('frame-probe'),
+        turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'c' },
+      },
     })
-    append({
-      seq: SessionSeq(5),
-      time: 5,
-      type: 'assistant/message',
-      data: { turn: 1, step: 1, message: { id: 'a1', role: 'assistant', content: [] } },
-    } as SessionEvent)
+    source.settleAssistant(LlmAttemptId('frame-probe'), {
+      type: 'event',
+      event: {
+        seq: SessionSeq(5),
+        time: 5,
+        type: 'assistant/message',
+        data: {
+          turn: 1,
+          step: 1,
+          message: createAssistantMessage({
+            content: [],
+            source: { provider: 'test', model: 'test' },
+          }),
+          stream: [],
+        },
+        surfaceOp: 'append',
+      },
+    })
     expect(cancelFrame).toHaveBeenCalledWith(4)
     expect(frames).toHaveLength(0)
     expect(listener).toHaveBeenCalledTimes(2)

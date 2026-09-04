@@ -73,7 +73,7 @@ Status: implemented
 
 ### 为什么不省略 assistant 分片或重叠事件数据？
 
-实测真实会话事件中约 98% 为 `assistant/chunk`。在引用编码后省略分片，会让完整未压缩 JSON 在延迟启用场景进一步减少 84.79%，在稳态场景进一步减少 6.49%，但这会阻止权威日志的无损重建，并让 `assistant/message.sourceEventSeqs` 指向缺失事件。模糊替换或规范化替换也存在同一重建缺陷。
+实测 v1 真实 Session event 中约 98% 为 `assistant/chunk`。在引用编码后省略它们，会让完整 identity JSON 在延迟启用场景进一步减少 84.79%，在稳态场景进一步减少 6.49%，但会阻止无损重建并让 message provenance 悬空。V2 把紧凑 stream 嵌入 attempt settlement；`dsh_session_log` 仍会完整发送每个当前规范 event，且不会省略这些嵌入式 record。模糊或规范化替换也有相同重建缺陷。
 
 **只在内存中保留上传游标。** 已否决，因为普通进程重启会重发完整会话。权威接受事件让重启恢复获得尽力而为的持久性，无需另一存储后端；剩余崩溃窗口只会产生允许的重复。
 

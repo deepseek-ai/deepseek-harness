@@ -69,8 +69,24 @@ export interface SnapshotInputManifest {
 
 /** Optional reference to another scenario's canonical session. */
 export interface SnapshotSessionReference {
-  /** Repository-relative POSIX path from this scenario directory to the owning `session.jsonl`. */
+  /** Repository-relative POSIX path to the owning scenario's selected parent Session fixture. */
   source: string
+}
+
+/** Historical-format behavior one retained scenario permanently exercises. */
+export type SnapshotSessionFormatCoverage =
+  | 'multi-hop'
+  | 'packed-row'
+  | 'retry-failure'
+  | 'shipped-profile'
+  | 'adjacent-migration'
+
+/** Explicit historical generation retained by an owning scenario. */
+export interface SnapshotSessionFormatManifest {
+  /** Selected fixture generation; absent manifest metadata tracks the current writer. */
+  readonly version: number
+  /** Migration behaviors that require this historical fixture. */
+  readonly coverage: readonly SnapshotSessionFormatCoverage[]
 }
 
 /** Declarative ownership metadata stored beside a recorded session. */
@@ -99,14 +115,42 @@ export interface SnapshotManifest {
   workspace?: SnapshotWorkspaceManifest
   /** Exceptional controller input absent for ordinary log-driven scenarios. */
   input?: SnapshotInputManifest
-  /** Absent when this directory owns `session.jsonl`; present for a read-only borrower. */
+  /** Absent when this directory owns its selected parent fixture; present for a read-only borrower. */
   session?: SnapshotSessionReference
+  /** Historical generation retained by an owner instead of tracking the current writer. */
+  sessionFormat?: SnapshotSessionFormatManifest
+}
+
+/** Snapshot execution modes that may read or replace committed fixture generations. */
+export type SnapshotSessionWriteMode = 'replay' | 'record' | 'refresh'
+
+/**
+ * Whether one run writes current-writer Session fixtures for this scenario.
+ * Explicit historical generations remain immutable replay inputs; record and
+ * refresh may still update their non-Session expected outputs.
+ *
+ * @param manifest - Parsed scenario ownership and retained-generation metadata.
+ * @param mode - Snapshot execution mode.
+ * @returns True only when a write-capable mode tracks the current writer.
+ */
+export function writesCurrentSessionFixtures(
+  manifest: SnapshotManifest,
+  mode: SnapshotSessionWriteMode,
+): boolean {
+  return mode !== 'replay' && manifest.session === undefined && manifest.sessionFormat === undefined
 }
 
 const PROFILES = new Set<SnapshotProfile>(['headless', 'sdk', 'acp', 'web'])
 const RECORDINGS = new Set<SnapshotRecording>(['live', 'authored'])
 const PLATFORMS = new Set<SnapshotPlatform>(['posix', 'pwsh'])
 const PERMISSIONS = new Set<SnapshotPermission>(['read-only', 'workspace-write', 'danger-full-access'])
+const SESSION_FORMAT_COVERAGE = new Set<SnapshotSessionFormatCoverage>([
+  'multi-hop',
+  'packed-row',
+  'retry-failure',
+  'shipped-profile',
+  'adjacent-migration',
+])
 const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 
 function record(value: unknown, label: string): Record<string, unknown> {
@@ -174,6 +218,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       'workspace',
       'input',
       'session',
+      'sessionFormat',
     ], 'manifest')
     if (root.version !== 1) throw new Error('manifest.version must equal 1')
     const scenario = root.scenario === undefined ? undefined : name(root.scenario, 'manifest.scenario')
@@ -332,6 +377,30 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       session = { source: value.source }
     }
 
+    let sessionFormat: SnapshotSessionFormatManifest | undefined
+    if (root.sessionFormat !== undefined) {
+      const value = record(root.sessionFormat, 'manifest.sessionFormat')
+      exactKeys(value, ['version', 'coverage'], 'manifest.sessionFormat')
+      if (!Number.isSafeInteger(value.version) || Number(value.version) < 0 || Object.is(value.version, -0)) {
+        throw new Error('manifest.sessionFormat.version must be a non-negative safe integer')
+      }
+      if (!Array.isArray(value.coverage) || value.coverage.length === 0
+        || value.coverage.some(item => typeof item !== 'string'
+          || !SESSION_FORMAT_COVERAGE.has(item as SnapshotSessionFormatCoverage))
+        || new Set(value.coverage).size !== value.coverage.length) {
+        throw new Error(
+          'manifest.sessionFormat.coverage must be a non-empty array of unique supported coverage names',
+        )
+      }
+      if (session !== undefined) {
+        throw new Error('manifest.sessionFormat is only valid when the scenario owns its Session fixtures')
+      }
+      sessionFormat = {
+        version: Number(value.version),
+        coverage: [...value.coverage as SnapshotSessionFormatCoverage[]],
+      }
+    }
+
     return {
       version: 1,
       ...(scenario === undefined ? {} : { scenario }),
@@ -346,6 +415,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       ...(workspace === undefined ? {} : { workspace }),
       ...(input === undefined ? {} : { input }),
       ...(session === undefined ? {} : { session }),
+      ...(sessionFormat === undefined ? {} : { sessionFormat }),
     }
   } catch (error) {
     /* v8 ignore next -- every parser and validator above throws Error instances. */

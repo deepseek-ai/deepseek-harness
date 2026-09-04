@@ -1,4 +1,0 @@
-{"type":"session","version":0,"id":"{{session:2}}","createdAt":1786358409171,"cwd":"{{cwd}}","parentSession":"{{session:1}}","origin":"subagent","delegationDepth":1}
-{"type":"sandbox/mode","data":{"mode":"danger-full-access","source":"delegation"}}
-{"type":"approval/policy","data":{"policy":"never","source":"delegation"}}
-{"type":"permission/preset","data":{"preset":"danger-full-access"}}

@@ -16,15 +16,20 @@ import type {
   ToolResultMessage,
   UserMessage,
 } from '@deepseek-ai/dsh-llm'
+import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
+import {
+  AssistantStreamAccumulator,
+  expandAssistantStream,
+  type AssistantStreamRecord,
+} from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { AttachmentIdType, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
   SessionEvent,
   SessionId,
+  SessionSeqCursor,
 } from '@deepseek-ai/dsh-session/types'
-import { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session/types'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
-import { isChunkRow, packChunkRuns } from '@deepseek-ai/dsh-session/chunk-rows'
-import type { ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
 import type { TodoItem } from '@deepseek-ai/dsh-tool-todo/client'
 // Type-only: the brand constructor is host-side; the fixture casts at its
 // wire-fabrication boundary (the schema layer's one-cast-point posture).
@@ -98,21 +103,7 @@ interface FixtureHistoryEntry {
   readonly event: SessionEvent
 }
 
-type FixtureChunkRowEvent = {
-  [Kind in ChunkRow['type']]: {
-    readonly type: `chunkrow/${Kind}`
-    readonly seq: number
-    readonly time: number
-    readonly data: Extract<ChunkRow, { readonly type: Kind }>['data']
-  }
-}[ChunkRow['type']]
-
-interface FixtureHistoryChunkRun {
-  readonly type: 'chunks'
-  readonly event: FixtureChunkRowEvent
-}
-
-type FixtureHistoryRecord = FixtureHistoryEntry | FixtureHistoryChunkRun
+type FixtureHistoryRecord = FixtureHistoryEntry
 
 type FixtureSessionAddress =
   | { readonly kind: 'session'; readonly sessionId: SessionId }
@@ -126,6 +117,7 @@ type FixtureSessionAddress =
 interface FixtureFollowRequest {
   readonly address: FixtureSessionAddress
   readonly maxMessages?: number
+  readonly assistantStream?: true
 }
 
 interface FixturePageRequest {
@@ -141,7 +133,7 @@ interface FixtureSessionWireHeader {
   readonly createdAt: number
   readonly cwd?: string
   readonly parentSession?: SessionId
-  readonly seedLength?: number
+  readonly isSeeded: boolean
   readonly origin?: 'subagent'
   readonly delegationDepth?: number
   readonly agentPreset?: string
@@ -155,10 +147,56 @@ type FixtureFollowFrame =
     readonly records: readonly FixtureHistoryRecord[]
     readonly hasMore: boolean
     readonly projections: FixtureProjectionsBlock
+    readonly assistantStream?: FixtureAssistantStreamBaseline
   }
   | FixtureHistoryEntry
+  | { readonly type: 'assistant-stream'; readonly frame: FixtureAssistantStreamFrame }
 
-type FixtureFollowEventFrame = Extract<FixtureFollowFrame, { type: 'event' }>
+type FixtureFollowEventFrame = Exclude<FixtureFollowFrame, { type: 'snapshot' }>
+
+interface FixtureAssistantStreamBaseline {
+  readonly revision: number
+  readonly activeAttempt?: {
+    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly startedAfterSeq: number
+    readonly turn: number
+    readonly step: number
+    readonly nextIndex: number
+    readonly stream: readonly AssistantStreamRecord[]
+  }
+}
+
+/** Assistant frame emitted by the standalone fixture; tests pin it to the controller wire type. */
+export type FixtureAssistantStreamFrame =
+  | {
+    readonly type: 'start'
+    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly revision: number
+    readonly startedAfterSeq: SessionSeqCursor
+    readonly turn: number
+    readonly step: number
+  }
+  | {
+    readonly type: 'chunk'
+    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly revision: number
+    readonly index: number
+    readonly time: number
+    readonly chunk: JsonValue
+  }
+  | {
+    readonly type: 'end'
+    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly revision: number
+    readonly index: number
+    readonly outcome:
+      | {
+        readonly kind: 'committed'
+        readonly eventType: 'assistant/message' | 'assistant/attempt'
+        readonly seq: number
+      }
+      | { readonly kind: 'abandoned' }
+  }
 
 interface FixtureRemoteEventNotificationFrame {
   readonly type: 'emit'
@@ -628,6 +666,26 @@ function fixtureUsage(turn: number, step: number): TokenUsage {
   }
 }
 
+/** Build a lossless settled stream for static fixture messages. */
+function fixtureSettledStream(
+  message: AssistantMessage,
+  usage: TokenUsage,
+  time: number,
+): AssistantStreamRecord[] {
+  const stream: AssistantStreamRecord[] = []
+  for (const [index, block] of message.content.entries()) {
+    stream.push(
+      { type: 'chunk', time, chunk: { type: 'block-start', index, blockType: block.type } },
+      { type: 'chunk', time, chunk: { type: 'block-end', index, block } },
+    )
+  }
+  stream.push(
+    { type: 'chunk', time, chunk: { type: 'usage', usage } },
+    { type: 'chunk', time, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+  )
+  return stream
+}
+
 /** fx-alpha history script: 75 turns (~150+ messages -> 4 pages at PAGE_MESSAGES=50),
  *  mixing reasoning blocks / tool call+result / context. */
 function buildAlphaLog(): SessionEvent[] {
@@ -636,16 +694,22 @@ function buildAlphaLog(): SessionEvent[] {
   const push = (e: Record<string, unknown>): number => {
     const seq = events.length
     const data = e['data'] as Record<string, unknown> | undefined
+    const nextTime = time + 800
     const authored = e['type'] === 'assistant/message' && data !== undefined
       ? {
         ...e,
         data: {
           ...data,
           usage: fixtureUsage(data['turn'] as number, data['step'] as number),
+          stream: fixtureSettledStream(
+            data['message'] as AssistantMessage,
+            fixtureUsage(data['turn'] as number, data['step'] as number),
+            nextTime,
+          ),
         },
       }
       : e
-    events.push({ seq, time: (time += 800), ...authored })
+    events.push({ seq, time: (time = nextTime), ...authored })
     return seq
   }
   // Completed fixture requests retain the route capacity recorded with them.
@@ -1036,23 +1100,14 @@ interface FixtureUsageSample {
 
 /** Read one provider usage sample from either durable carrier. */
 function usageSampleOf(event: SessionEvent): FixtureUsageSample | undefined {
-  const item = event as unknown as {
-    type: string
-    data: {
-      turn?: number
-      step?: number
-      usage?: TokenUsage
-      chunk?: { type?: string; usage?: TokenUsage }
-    }
+  if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return undefined
+  let usage = event.type === 'assistant/message' ? event.data.usage : undefined
+  for (const member of expandAssistantStream(event.data.stream)) {
+    if (member.chunk.type === 'usage') usage = member.chunk.usage
   }
-  const usage = item.type === 'assistant/chunk' && item.data.chunk?.type === 'usage'
-    ? item.data.chunk.usage
-    : item.type === 'assistant/message'
-      ? item.data.usage
-      : undefined
-  return usage === undefined || item.data.turn === undefined || item.data.step === undefined
+  return usage === undefined
     ? undefined
-    : { turn: item.data.turn, step: item.data.step, usage }
+    : { turn: event.data.turn, step: event.data.step, usage }
 }
 
 /** Fixture parallel of token-meter's last-sample-replacing usage projection. */
@@ -1109,14 +1164,18 @@ function sessionStatsOf(log: readonly SessionEvent[]): {
       case 'step/start':
         openStep = { turn: event.data.turn, step: event.data.step, startTime: event.time, firstTokenTime: null }
         break
-      case 'assistant/chunk':
-        if (openStep !== null && openStep.turn === event.data.turn && openStep.step === event.data.step
-          && openStep.firstTokenTime === null && isFixtureTokenDelta(event.data.chunk)) {
-          openStep.firstTokenTime = event.time
-        }
+      case 'assistant/attempt': {
+        if (openStep === null || openStep.turn !== event.data.turn || openStep.step !== event.data.step) break
+        const first = expandAssistantStream(event.data.stream)
+          .find(member => isFixtureTokenDelta(member.chunk))?.time
+        if (openStep.firstTokenTime === null && first !== undefined) openStep.firstTokenTime = first
         break
+      }
       case 'assistant/message': {
         if (openStep === null || openStep.turn !== event.data.turn || openStep.step !== event.data.step) break
+        const first = expandAssistantStream(event.data.stream)
+          .find(member => isFixtureTokenDelta(member.chunk))?.time
+        if (openStep.firstTokenTime === null && first !== undefined) openStep.firstTokenTime = first
         value.llmMs += Math.max(0, event.time - openStep.startTime)
         if (openStep.firstTokenTime !== null) {
           value.ttftMs += Math.max(0, openStep.firstTokenTime - openStep.startTime)
@@ -1452,26 +1511,7 @@ function pageOf(
       break
     }
   }
-  const records = packChunkRuns(log.slice(start, end)).map((record): FixtureHistoryRecord => {
-    if (!isChunkRow(record)) return { type: 'event', event: record }
-    switch (record.type) {
-      case 'text-chunks':
-        return {
-          type: 'chunks',
-          event: { type: 'chunkrow/text-chunks', seq: record.seq0, time: record.time0, data: record.data },
-        }
-      case 'reasoning-chunks':
-        return {
-          type: 'chunks',
-          event: { type: 'chunkrow/reasoning-chunks', seq: record.seq0, time: record.time0, data: record.data },
-        }
-      case 'tool-call-chunks':
-        return {
-          type: 'chunks',
-          event: { type: 'chunkrow/tool-call-chunks', seq: record.seq0, time: record.time0, data: record.data },
-        }
-    }
-  })
+  const records = log.slice(start, end).map((event): FixtureHistoryRecord => ({ type: 'event', event }))
   return { records, hasMore: start > 0 }
 }
 
@@ -2007,6 +2047,16 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
 
   const controlConns = new Set<StreamConn<FixtureControlFrame>>()
   const followConns = new Map<SessionId, Set<StreamConn<FixtureFollowEventFrame>>>()
+  interface FixtureAttemptState {
+    readonly attemptId: ReturnType<typeof LlmAttemptId>
+    readonly startedAfterSeq: number
+    readonly turn: number
+    readonly step: number
+    readonly stream: AssistantStreamAccumulator
+    index: number
+  }
+  const activeAttempts = new Map<SessionId, FixtureAttemptState>()
+  const assistantRevisions = new Map<SessionId, number>()
   const workspaceConns = new Set<StreamConn<WorkspaceFollowFrame>>()
   const remoteEventConns = new Map<string, StreamConn<FixtureRemoteEventFrame>>()
   const emitControl = (frame: FixtureControlFrame): void => {
@@ -2023,6 +2073,52 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   }
   const emitFollow = (sessionId: SessionId, entry: FixtureHistoryEntry): void => {
     for (const conn of followConns.get(sessionId) ?? []) conn.push(entry)
+  }
+  const emitAssistant = (sessionId: SessionId, frame: FixtureAssistantStreamFrame): void => {
+    for (const conn of followConns.get(sessionId) ?? []) conn.push({ type: 'assistant-stream', frame })
+  }
+  const nextAssistantRevision = (sessionId: SessionId): number => {
+    const revision = (assistantRevisions.get(sessionId) ?? 0) + 1
+    assistantRevisions.set(sessionId, revision)
+    return revision
+  }
+  const beginAssistant = (sessionId: SessionId, turn: number, step: number): FixtureAttemptState => {
+    const attemptId = LlmAttemptId(`${sessionId}:fixture:${String(nextAssistantRevision(sessionId))}`)
+    const lastSeq = logOf(sessionId).length - 1
+    const startedAfterSeq = lastSeq < 0 ? -1 : SessionSeq(lastSeq)
+    const attempt = {
+      attemptId, startedAfterSeq, turn, step,
+      stream: new AssistantStreamAccumulator(), index: 0,
+    }
+    activeAttempts.set(sessionId, attempt)
+    emitAssistant(sessionId, {
+      type: 'start', attemptId, revision: assistantRevisions.get(sessionId) as number,
+      startedAfterSeq, turn, step,
+    })
+    return attempt
+  }
+  const pushAssistant = (sessionId: SessionId, chunk: StreamChunk): void => {
+    const attempt = activeAttempts.get(sessionId)
+    if (attempt === undefined) throw new Error(`fixture: no active Assistant attempt for ${sessionId}`)
+    const timed = attempt.stream.push({ time: Date.now(), chunk })
+    emitAssistant(sessionId, {
+      type: 'chunk', attemptId: attempt.attemptId, revision: nextAssistantRevision(sessionId),
+      index: attempt.index++, time: timed.time, chunk: timed.chunk as unknown as JsonValue,
+    })
+  }
+  const commitAssistant = (sessionId: SessionId, event: SessionEvent): void => {
+    const attempt = activeAttempts.get(sessionId)
+    if (attempt === undefined) throw new Error(`fixture: no active Assistant attempt for ${sessionId}`)
+    activeAttempts.delete(sessionId)
+    emitAssistant(sessionId, {
+      type: 'end', attemptId: attempt.attemptId, revision: nextAssistantRevision(sessionId),
+      index: attempt.index,
+      outcome: {
+        kind: 'committed',
+        eventType: event.type === 'assistant/message' ? 'assistant/message' : 'assistant/attempt',
+        seq: event.seq,
+      },
+    })
   }
 
   function sessionOk<T>(value: T): Promise<ConnectionRpcResult<T>> {
@@ -2058,7 +2154,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     }
     return log
   }
-  const append = (id: SessionId, e: Record<string, unknown>): void => {
+  const append = (id: SessionId, e: Record<string, unknown>): SessionEvent => {
     const log = logOf(id)
     const event = { seq: SessionSeq(log.length), time: Date.now(), ...e } as unknown as SessionEvent
     log.push(event)
@@ -2070,6 +2166,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       if (summary !== undefined) summary.updatedAt = event.time
       emitRemote('api-session/activity', [id, event.time])
     }
+    return event
   }
 
   /** Append one durable goal/change (host GoalService parallel). */
@@ -2570,10 +2667,8 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         data: userMessage(text(`Reasoning chunk stress: ${String(chunkCount)} chunks.`)),
       })
       append(sessionId, { type: 'step/start', data: { turn, step: 0 } })
-      append(sessionId, {
-        type: 'assistant/chunk',
-        data: { turn, step: 0, chunk: { type: 'block-start', index: 0, blockType: 'reasoning' } },
-      })
+      beginAssistant(sessionId, turn, 0)
+      pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'reasoning' })
 
       const startedAt = Date.now()
       const pump = (): void => {
@@ -2584,10 +2679,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
           const chunkText = index === chunkCount - 1
             ? `\n${marker}`
             : index % 64 === 63 ? '推理\n' : '推理'
-          append(sessionId, {
-            type: 'assistant/chunk',
-            data: { turn, step: 0, chunk: { type: 'reasoning-delta', index: 0, text: chunkText } },
-          })
+          pushAssistant(sessionId, { type: 'reasoning-delta', index: 0, text: chunkText })
         }
         state.emitted = end
         if (end < chunkCount) {
@@ -2613,8 +2705,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       append(sessionId, { type: 'turn/start', data: { turn } })
       append(sessionId, { type: 'user/message', surfaceOp: 'append', data: { content: text('请重试这个请求'), source: { kind: 'user' } } })
       append(sessionId, { type: 'step/start', data: { turn, step: 1 } })
-      append(sessionId, { type: 'assistant/chunk', data: { turn, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } } })
-      append(sessionId, { type: 'assistant/chunk', data: { turn, step: 1, chunk: { type: 'text-delta', index: 0, text: '应撤回的半截回复' } } })
+      beginAssistant(sessionId, turn, 1)
+      pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'text' })
+      pushAssistant(sessionId, { type: 'text-delta', index: 0, text: '应撤回的半截回复' })
     },
     /** Record one retry decision; the next attempt remains in the same step. */
     scheduleModelRetry(id: string, retry = 1, delayMs = 450): void {
@@ -2622,11 +2715,18 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const scenario = retryScenarios.get(sessionId)
       if (scenario === undefined) throw new Error(`fixture: no model retry scenario for ${id}`)
       if (!scenario.stepStarted) {
-        append(sessionId, { type: 'assistant/chunk', data: { turn: scenario.turn, step: 1, chunk: { type: 'block-start', index: 0, blockType: 'text' } } })
-        append(sessionId, { type: 'assistant/chunk', data: { turn: scenario.turn, step: 1, chunk: { type: 'text-delta', index: 0, text: `第 ${String(retry)} 次应撤回的回复` } } })
+        beginAssistant(sessionId, scenario.turn, 1)
+        pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'text' })
+        pushAssistant(sessionId, { type: 'text-delta', index: 0, text: `第 ${String(retry)} 次应撤回的回复` })
         scenario.stepStarted = true
       }
       const failure = { code: 'TRANSPORT', message: '连接被重置' }
+      pushAssistant(sessionId, { type: 'finish', reason: { kind: 'error', failure } })
+      const attempt = activeAttempts.get(sessionId) as FixtureAttemptState
+      const attemptEvent = append(sessionId, {
+        type: 'assistant/attempt', data: { turn: scenario.turn, step: 1, stream: attempt.stream.snapshot() },
+      })
+      commitAssistant(sessionId, attemptEvent)
       append(sessionId, {
         type: 'llm/retry',
         data: {
@@ -2643,6 +2743,14 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const scenario = retryScenarios.get(sessionId)
       if (scenario === undefined) throw new Error(`fixture: no model retry scenario for ${id}`)
       const failure = { code: 'TRANSPORT', message: '连接被重置' }
+      const active = activeAttempts.get(sessionId)
+      if (active !== undefined) {
+        pushAssistant(sessionId, { type: 'finish', reason: { kind: 'error', failure } })
+        const attemptEvent = append(sessionId, {
+          type: 'assistant/attempt', data: { turn: scenario.turn, step: 1, stream: active.stream.snapshot() },
+        })
+        commitAssistant(sessionId, attemptEvent)
+      }
       append(sessionId, {
         type: 'llm/retry',
         data: {
@@ -2663,20 +2771,24 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       const scenario = retryScenarios.get(sessionId)
       if (scenario === undefined) throw new Error(`fixture: no model retry scenario for ${id}`)
       retryScenarios.delete(sessionId)
-      append(sessionId, { type: 'assistant/chunk', data: {
-        turn: scenario.turn,
-        step: 1,
-        chunk: { type: 'block-start', index: 0, blockType: 'text' },
-      } })
-      append(sessionId, {
+      const completed = '重试后的完整回复'
+      beginAssistant(sessionId, scenario.turn, 1)
+      pushAssistant(sessionId, { type: 'block-start', index: 0, blockType: 'text' })
+      pushAssistant(sessionId, { type: 'text-delta', index: 0, text: completed })
+      pushAssistant(sessionId, { type: 'block-end', index: 0, block: { type: 'text', text: completed } })
+      pushAssistant(sessionId, { type: 'finish', reason: { kind: 'stop' } })
+      const attempt = activeAttempts.get(sessionId) as FixtureAttemptState
+      const message = append(sessionId, {
         type: 'assistant/message',
         surfaceOp: 'append',
         data: {
           turn: scenario.turn,
           step: 1,
-          message: assistantMessage(text('重试后的完整回复')),
+          message: assistantMessage(text(completed)),
+          stream: attempt.stream.snapshot(),
         },
       })
+      commitAssistant(sessionId, message)
       append(sessionId, { type: 'step/end', data: { turn: scenario.turn, step: 1 } })
       append(sessionId, { type: 'turn/end', data: { turn: scenario.turn, reason: { kind: 'completed' } } })
       setRunning(sessionId, false)
@@ -2697,26 +2809,36 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
   const startReply = (id: SessionId, turn: number, replyText: string): void => {
     const step = 0
     append(id, { type: 'step/start', data: { turn, step } })
-    append(id, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'block-start', index: 0, blockType: 'text' } } })
+    beginAssistant(id, turn, step)
+    pushAssistant(id, { type: 'block-start', index: 0, blockType: 'text' })
     /* v8 ignore next -- the ?? arm needs a null match, but every fixture reply is non-empty. */
     const pieces = replyText.match(/[\s\S]{1,6}/gu) ?? [replyText]
     let i = 0
     const finish = (aborted: boolean): void => {
       replays.delete(id)
       const done = pieces.slice(0, i).join('')
-      append(id, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'block-end', index: 0, block: { type: 'text', text: done } } } })
-      append(id, {
+      pushAssistant(id, { type: 'block-end', index: 0, block: { type: 'text', text: done } })
+      pushAssistant(id, { type: 'usage', usage: fixtureUsage(turn, step) })
+      if (!aborted) pushAssistant(id, { type: 'finish', reason: { kind: 'stop' } })
+      const attempt = activeAttempts.get(id) as FixtureAttemptState
+      const message = append(id, {
         type: 'assistant/message',
         surfaceOp: 'append',
         data: {
           turn,
           step,
-          message: assistantMessage(text(aborted ? `${done}（已中断）` : done)),
+          message: assistantMessage(text(done)),
+          stream: attempt.stream.snapshot(),
           usage: fixtureUsage(turn, step),
+          ...(aborted ? { interrupted: true } : {}),
         },
       })
+      commitAssistant(id, message)
       append(id, { type: 'step/end', data: { turn, step } })
-      append(id, { type: 'turn/end', data: { turn, reason: { kind: aborted ? 'cancelled' : 'completed' } } })
+      append(id, { type: 'turn/end', data: {
+        turn,
+        reason: aborted ? { kind: 'aborted', reason: { kind: 'user' } } : { kind: 'completed' },
+      } })
       setRunning(id, false)
     }
     const tick = (): void => {
@@ -2726,7 +2848,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         return
       }
       i++
-      append(id, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'text-delta', index: 0, text: piece } } })
+      pushAssistant(id, { type: 'text-delta', index: 0, text: piece })
       replays.set(id, { timer: setTimeout(tick, 80), finish })
     }
     replays.set(id, { timer: setTimeout(tick, 80), finish })
@@ -3206,11 +3328,12 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       yield {
         type: 'snapshot',
         header: {
-          version: 0,
+          version: SESSION_FORMAT_VERSION,
           id: sessionId,
           createdAt: summary.updatedAt,
           ...(summary.cwd === undefined ? {} : { cwd: summary.cwd }),
           ...(summary.parentSessionId === undefined ? {} : { parentSession: summary.parentSessionId }),
+          isSeeded: summary.parentSessionId !== undefined,
           ...(summary.origin === undefined ? {} : { origin: summary.origin }),
           ...(summary.agentPreset === undefined ? {} : { agentPreset: summary.agentPreset }),
         },
@@ -3218,8 +3341,27 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         records: initial.records,
         hasMore: initial.hasMore,
         projections: { asOfSeq: cursor, values: projectionValuesOf(snapshot) },
+        ...(request.assistantStream === true ? {
+          assistantStream: {
+            revision: assistantRevisions.get(sessionId) ?? 0,
+            ...(activeAttempts.get(sessionId) === undefined
+              ? {}
+              : { activeAttempt: {
+                attemptId: (activeAttempts.get(sessionId) as FixtureAttemptState).attemptId,
+                startedAfterSeq: (activeAttempts.get(sessionId) as FixtureAttemptState).startedAfterSeq,
+                turn: (activeAttempts.get(sessionId) as FixtureAttemptState).turn,
+                step: (activeAttempts.get(sessionId) as FixtureAttemptState).step,
+                nextIndex: (activeAttempts.get(sessionId) as FixtureAttemptState).index,
+                stream: (activeAttempts.get(sessionId) as FixtureAttemptState).stream.snapshot(),
+              } }),
+          },
+        } : {}),
       }
       for await (const frame of conn.drain(signal)) {
+        if (frame.type === 'assistant-stream') {
+          yield frame
+          continue
+        }
         if (frame.event.seq < nextSeq) continue
         if (frame.event.seq !== nextSeq) {
           throw new Error(`fixture: session event stream skipped seq ${String(nextSeq)}`)

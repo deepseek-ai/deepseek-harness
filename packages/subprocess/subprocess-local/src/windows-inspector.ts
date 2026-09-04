@@ -145,7 +145,10 @@ function taskkillTree(pid: number, force: boolean): void {
   if (pid <= 0) return
   // Outcome deliberately unchecked: an already-absent tree, exit races, and a
   // missing taskkill binary are as tolerable here as ESRCH is for POSIX.
-  spawnSync('taskkill', ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])], { stdio: 'ignore' })
+  spawnSync('taskkill', ['/PID', String(pid), '/T', ...(force ? ['/F'] : [])], {
+    stdio: 'ignore',
+    windowsHide: true,
+  })
 }
 
 declare const nativePtr: unique symbol

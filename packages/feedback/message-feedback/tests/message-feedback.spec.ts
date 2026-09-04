@@ -216,14 +216,13 @@ describe('MessageFeedbackService public contract', () => {
     }))
   })
 
-  it('accepts only non-empty append-origin assistant projections as targets', async () => {
+  it('accepts only non-empty assistant projections as targets', async () => {
     const { ctx, persistence } = await harness()
     const fixture = messageFixture('targets')
     persistence.persist(fixture.session)
     const rejectedTargets: MessageId[] = [
       fixture.userMessageId,
       fixture.emptyAssistantMessageId,
-      fixture.replacementAssistantMessageId,
     ]
     for (const messageId of rejectedTargets) {
       await expect(ctx.messageFeedback.put({

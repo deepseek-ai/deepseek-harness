@@ -39,14 +39,15 @@ export const checkpointRow = z.object({
  * unrelated log. Reads validate this against the live header (listing) or
  * the stored header (cold read) before accepting any record.
  *
- * The lineage fields are optional because records admitted through
- * `compatibleVersions` predate them. The reader (`identityMatches`)
- * interprets their absence as the unseeded lineage — exact for an unseeded
- * session, while a seeded expectation fails the match and the record is
- * discarded to a cold rebuild. Current-version writes always store both
+ * The format and lineage fields are optional because records admitted through
+ * `compatibleVersions` predate them. The reader (`identityMatches`) refuses an
+ * absent format generation because no current Session log can prove that
+ * record's fold semantics. It interprets absent lineage as unseeded only after
+ * the format generation matches. Current-version writes always store all three
  * fields.
  */
 export const checkpointIdentity = z.object({
+  formatVersion: z.number().int().nonnegative().optional(),
   createdAt: z.number().int().nonnegative(),
   cwd: z.string().optional(),
   isSeeded: z.boolean().optional(),
@@ -76,14 +77,17 @@ export type CheckpointRecord = z.infer<typeof checkpointRecord>
  * open (cache semantics — a stale or unreadable cache costs a longer tail
  * replay, never a wrong value) while the rest of the domain stays usable,
  * instead of rejecting the whole medium. The `compatibleVersions` entries
- * are declared because those records differ from the current version only
- * by the absent optional lineage fields, so upgraded homes keep serving
- * their cached listing projections instead of dropping every title until
- * each session is reopened; the per-record version map lives in the
- * read-compat Agent Note
+ * keep structurally valid predecessor records available for a later current
+ * checkpoint rewrite. Records without `formatVersion` remain unusable as fold
+ * shortcuts because they cannot prove which Session event semantics produced
+ * their rows; the per-record version map and disposition live in the read-compat Agent Note
  * (.agents/notes/implemented/architecture/2026-09-02-projcache-cross-version-read-compat.md).
  * The per-row `ver` guard and the identity match still discard anything the
  * current fold semantics cannot vouch for.
+ *
+ * A lifecycle-matching predecessor may still expose its version-compatible
+ * title through the cache service's listing-only hint; this never relaxes the
+ * format requirement for hydration or another fold shortcut.
  *
  * `invalidRecords: 'backup-and-skip'`: a stored record that fails the schema
  * anyway is disposable derived data, so it must never cost the boot — the
@@ -93,8 +97,8 @@ export type CheckpointRecord = z.infer<typeof checkpointRecord>
  */
 export const projectionCacheDomainSpec = defineDomain({
   name: 'session_projcache',
-  version: 6,
-  compatibleVersions: [3, 4, 5],
+  version: 7,
+  compatibleVersions: [3, 4, 5, 6],
   invalidRecords: 'backup-and-skip',
   layout: 'per-record',
   tables: { sessions: domainTable<SessionId, CheckpointRecord>(checkpointRecord) },

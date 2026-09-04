@@ -1,5 +1,6 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import {
@@ -8,24 +9,48 @@ import {
   isPhysicalSessionFixture,
 } from './session-fixture-layout.ts'
 
-const HEADER = '  {"type":"session","version":0,"id":"fixture","createdAt":1,"delegationDepth":0}  '
+const HEADER = '  {"type":"session","version":2,"id":"fixture","createdAt":1,"isSeeded":false,"delegationDepth":0}  '
 const root = resolve(import.meta.dirname, '..')
+const FIXTURE_MESSAGE = createAssistantMessage({
+  content: [{ type: 'text', text: 'part-0part-1part-2part-3' }],
+  source: { provider: 'mock', model: 'mock' },
+})
+const FIXTURE_STREAM: SessionEvent<'assistant/message'>['data']['stream'] = [
+  {
+    type: 'text-chunks',
+    time0: 10,
+    index: 0,
+    dt: [1, 1, 1],
+    texts: ['part-0', 'part-1', 'part-2', 'part-3'],
+  },
+  { type: 'chunk', time: 14, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+]
 
-function chunkRun(): SessionEvent[] {
-  return Array.from({ length: 4 }, (_, index) => ({
-    type: 'assistant/chunk',
-    seq: SessionSeq(index),
-    time: 10 + index,
+function assistantMessage(): SessionEvent<'assistant/message'> {
+  return {
+    type: 'assistant/message',
+    seq: SessionSeq(2),
+    time: 14,
     data: {
       turn: 1,
       step: 1,
-      chunk: { type: 'text-delta', index: 0, text: `part-${index}` },
+      message: FIXTURE_MESSAGE,
+      stream: FIXTURE_STREAM,
     },
-  }))
+    surfaceOp: 'append',
+  }
+}
+
+function fixtureEvents(): SessionEvent[] {
+  return [
+    { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: SessionSeq(1), time: 2, data: { turn: 1, step: 1 } },
+    assistantMessage(),
+  ]
 }
 
 function unpackedFixture(): string {
-  return [HEADER, ...chunkRun().map(event => JSON.stringify(event)), ''].join('\n')
+  return [HEADER, ...fixtureEvents().map(event => JSON.stringify(event)), ''].join('\n')
 }
 
 function decodedBody(content: string): SessionEvent[] {
@@ -33,16 +58,23 @@ function decodedBody(content: string): SessionEvent[] {
 }
 
 describe('canonicalSessionFixture', () => {
-  it('preserves the header line and packs an unpacked event run losslessly', () => {
+  it('preserves the header line and nested compact stream losslessly', () => {
     const canonical = canonicalSessionFixture(unpackedFixture(), 'fixture.jsonl')
     expect(canonical).toBeDefined()
     expect(canonical?.split('\n')[0]).toBe(HEADER)
-    const packed = JSON.parse(canonical?.split('\n')[1] ?? '{}') as Record<string, unknown>
-    expect(packed).toMatchObject({ type: 'text-chunks' })
-    expect(packed).not.toHaveProperty('seq0')
-    expect(packed).not.toHaveProperty('time0')
+    const message = canonical?.split('\n')
+      .map(line => JSON.parse(line || '{}') as Record<string, unknown>)
+      .find(record => record.type === 'assistant/message')
+    expect(message).toMatchObject({
+      type: 'assistant/message',
+      data: {
+        stream: FIXTURE_STREAM,
+      },
+    })
+    expect(message).not.toHaveProperty('seq')
+    expect(message).not.toHaveProperty('time')
     expect(decodedBody(canonical ?? '').map(({ seq: _seq, time: _time, ...event }) => event))
-      .toStrictEqual(chunkRun().map(({ seq: _seq, time: _time, ...event }) => event))
+      .toStrictEqual(fixtureEvents().map(({ seq: _seq, time: _time, ...event }) => event))
   })
 
   it('ignores JSONL whose first record is not a session header', () => {
@@ -58,7 +90,17 @@ describe('canonicalSessionFixture', () => {
   it('is idempotent for an already projected fixture', () => {
     const projected = [
       HEADER,
-      '{"type":"turn/start","data":{"turn":1,"seq":99,"time":100}}',
+      '{"type":"turn/start","data":{"turn":1}}',
+      '',
+    ].join('\n')
+    expect(canonicalSessionFixture(projected)).toBe(projected)
+  })
+
+  it('preserves owner-restored request-header tokens in current projected fixtures', () => {
+    const projected = [
+      HEADER,
+      '{"type":"turn/start","data":{"turn":1}}',
+      '{"type":"request/header","data":{"header":{"config":{"provider":"mock","model":"mock"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}',
       '',
     ].join('\n')
     expect(canonicalSessionFixture(projected)).toBe(projected)
@@ -70,8 +112,9 @@ describe('canonicalSessionFixture', () => {
   })
 
   it('labels malformed packed rows with the fixture path and line', () => {
-    expect(() => canonicalSessionFixture(`${HEADER}\n{"type":"text-chunks"}\n`, 'broken.jsonl'))
-      .toThrow(/broken\.jsonl: session snapshot line 2: malformed text-chunks storage row/)
+    const releasedHeader = '{"type":"session","version":0,"id":"fixture","createdAt":1,"delegationDepth":0}'
+    expect(() => canonicalSessionFixture(`${releasedHeader}\n{"type":"text-chunks"}\n`, 'broken.jsonl'))
+      .toThrow(/broken\.jsonl: session snapshot line 2: released text-chunks row 0 lacks required member "data"/)
   })
 })
 
@@ -81,7 +124,13 @@ describe('isPhysicalSessionFixture', () => {
       'packages/experimental/webworker-runtime/tests/fixtures/vfs-example/home/sessions/--dsh-workspace--/main/session.jsonl',
     )).toBe(true)
     expect(isPhysicalSessionFixture(
+      'packages/experimental/webworker-runtime/tests/fixtures/vfs-example/home/sessions/--dsh-workspace--/main/session.v1.jsonl',
+    )).toBe(true)
+    expect(isPhysicalSessionFixture(
       'scripts/snapshots/python-sdk-single-exe/advanced/session.1.jsonl',
+    )).toBe(true)
+    expect(isPhysicalSessionFixture(
+      'scripts/snapshots/python-sdk-single-exe/advanced/session.1.v1.jsonl',
     )).toBe(true)
     expect(isPhysicalSessionFixture(
       'scripts/snapshots/python-sdk-single-exe/advanced/session.jsonl',
@@ -99,7 +148,7 @@ describe('isPhysicalSessionFixture', () => {
   })
 })
 
-it('keeps every session-format JSONL fixture projected into canonical packed layout', () => {
+it('keeps every session-format JSONL fixture projected into canonical event layout', () => {
   const nonCanonical = inspectSessionFixtureLayouts(root)
     .filter(fixture => fixture.source !== fixture.canonical)
     .map(fixture => fixture.path)

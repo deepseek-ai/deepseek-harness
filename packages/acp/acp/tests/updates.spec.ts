@@ -14,6 +14,7 @@ function assistantEvent(
     seq: SessionSeq(0),
     time: 0,
     data: {
+      stream: [],
       turn: 1,
       step: 1,
       message: {

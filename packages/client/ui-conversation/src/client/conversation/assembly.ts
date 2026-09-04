@@ -113,7 +113,14 @@ class BoundConversation implements ConversationBinding {
           if (next === 'immediate' || publication === 'none') publication = next
         }
         this.publish(publication)
+        return
       }
+      case 'settle-assistant':
+        this.publish(this.assembler.settleAssistant(
+          window.change.attemptId,
+          window.change.entry,
+        ))
+        return
     }
   }
 

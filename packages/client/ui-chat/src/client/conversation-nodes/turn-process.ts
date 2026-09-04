@@ -1,9 +1,10 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ChunkRowEvent } from '@deepseek-ai/dsh-api-session-controller/types'
 import type {
   ConversationLocation, ConversationNodeContext, ConversationNodeDefinition, TurnLocation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
+import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
 import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type {} from '@deepseek-ai/dsh-tools/types'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
@@ -41,31 +42,29 @@ interface TurnProcessState {
 
 type ConversationEvent = Parameters<ConversationNodeDefinition['match']>[0]
 
-function isChunkRunEvent(event: ConversationEvent): event is ChunkRowEvent {
-  return event.type === 'chunkrow/text-chunks'
-    || event.type === 'chunkrow/reasoning-chunks'
-    || event.type === 'chunkrow/tool-call-chunks'
-}
-
 function eventTurn(event: ConversationEvent): number | undefined {
   const data = event.data as unknown as { turn?: unknown }
   return typeof data.turn === 'number' ? data.turn : undefined
 }
 
-function visibleAssistantEvent(event: ConversationEvent): boolean {
-  if (event.type === 'assistant/chunk') {
-    const chunk = event.data.chunk
-    if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') return chunk.text.trim() !== ''
-    if (chunk.type === 'block-start') {
-      return chunk.blockType !== 'text'
+function visibleChunk(chunk: StreamChunk): boolean {
+  if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') return chunk.text.trim() !== ''
+  if (chunk.type === 'block-start') {
+    return chunk.blockType !== 'text'
         && chunk.blockType !== 'reasoning'
         && chunk.blockType !== 'tool-call'
-    }
-    if (chunk.type !== 'block-end') return false
-    const block = chunk.block
-    if (block.type === 'tool-call') return false
-    if (block.type === 'text' || block.type === 'reasoning') return block.text.trim() !== ''
-    return true
+  }
+  if (chunk.type !== 'block-end') return false
+  const block = chunk.block
+  if (block.type === 'tool-call') return false
+  if (block.type === 'text' || block.type === 'reasoning') return block.text.trim() !== ''
+  return true
+}
+
+function visibleAssistantEvent(event: ConversationEvent): boolean {
+  if (event.type === 'assistant/live-chunk') return visibleChunk(event.data.chunk)
+  if (event.type === 'assistant/attempt') {
+    return expandAssistantStream(event.data.stream).some(member => visibleChunk(member.chunk))
   }
   return event.type === 'assistant/message'
     && isAppendSurfaceEvent(event)
@@ -81,15 +80,10 @@ type ProcessEvidence =
   | { readonly kind: 'other'; readonly seq: number }
 
 function processEvidence(event: ConversationEvent): ProcessEvidence | undefined {
-  if (isChunkRunEvent(event)) {
-    if (event.type === 'chunkrow/tool-call-chunks') return undefined
-    const firstVisible = event.data.texts.findIndex(text => text.trim() !== '')
-    return firstVisible < 0
-      ? undefined
-      : { kind: 'assistant', seq: event.seq + firstVisible, step: event.data.step }
-  }
   if (visibleAssistantEvent(event)) {
-    if (event.type !== 'assistant/chunk' && event.type !== 'assistant/message') return undefined
+    if (event.type !== 'assistant/live-chunk'
+      && event.type !== 'assistant/message'
+      && event.type !== 'assistant/attempt') return undefined
     return { kind: 'assistant', seq: event.seq, step: event.data.step }
   }
   if (event.type === 'tool/call'
@@ -223,9 +217,9 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
     if (event.type === 'turn/start') return { id: String(event.data.turn), role: 'start' }
     const turn = eventTurn(event)
     if (turn === undefined) return null
-    if (event.type === 'assistant/chunk'
+    if (event.type === 'assistant/live-chunk'
       || event.type === 'assistant/message'
-      || isChunkRunEvent(event)
+      || event.type === 'assistant/attempt'
       || event.type === 'tool/call'
       || event.type === 'tool/result'
       || event.type === 'llm/retry'
@@ -249,8 +243,7 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
   },
   update: (context, match) => updateProcessState(context.state, match.event),
   publication: (match) => {
-    if (isChunkRunEvent(match.event)) return 'animation-frame'
-    if (match.event.type === 'assistant/chunk') {
+    if (match.event.type === 'assistant/live-chunk') {
       const type = match.event.data.chunk.type
       return type === 'usage' || type === 'finish' ? 'none' : 'animation-frame'
     }

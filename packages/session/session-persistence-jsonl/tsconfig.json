@@ -22,6 +22,12 @@
     },
     {
       "path": "../session-persistence"
+    },
+    {
+      "path": "../session-format"
+    },
+    {
+      "path": "../session-format-catalog"
     }
   ]
 }

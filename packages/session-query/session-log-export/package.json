@@ -36,12 +36,14 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@deepseek-ai/dsh-session-format": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "fflate": "^0.8.2",
     "@deepseek-ai/dsh-brand": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-persistence": "workspace:^"
   },
   "devDependencies": {

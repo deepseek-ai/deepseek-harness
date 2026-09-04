@@ -47,7 +47,7 @@ session.append('user/message', { role: 'user', content: [{ type: 'text', text: '
 session.deriveMessages()         // the derived model history
 ```
 
-表层事件（`user/message`、`assistant/message`、`tool/result`）必须声明如何进入有序 surface；原始分片、边界与其他仅日志事件从不产生消息。
+表层事件（`user/message`、`assistant/message`、`tool/result`）必须声明如何进入有序 surface。Assistant message 会嵌入产生它的精确紧凑 provider stream；`assistant/attempt`、边界与其他仅日志事件从不产生消息。
 
 ### 读取日志
 
@@ -77,7 +77,7 @@ session.deriveMessages()         // the derived model history
 
 ### 设计理念
 
-该包建立在事件溯源之上：`Session` 是类型化 `SessionEvent` 的仅追加日志，其他一切——模型历史、transcript、遥测、标题、持久化——都从这条流派生。surface 是派生投影：一个增量管理器校验追加候选、根据已提交事件推进有序视图，并跟踪每次已提交重写都会递增的 `replaceGeneration`。模型可见即已记录：任何到达模型请求的内容都必须能从日志重建。共享的[行编解码器](src/chunk-rows.ts)在事件序列与紧凑行之间无损转换，逐字保留无法识别的事件，并拒绝形态错误的行。持久化后端决定是否打包写入；有界历史传输可以使用同一种行，同时保留完整逻辑区间，并为需要 token 边界的消费方提供精确解码。
+该包建立在事件溯源之上：`Session` 是类型化 `SessionEvent` 的仅追加日志，其他一切——模型历史、transcript、遥测、标题、持久化——都从这条流派生。surface 是派生投影：一个增量管理器校验追加候选、根据已提交事件推进有序视图，并跟踪每次已提交重写都会递增的 `replaceGeneration`。模型可见即已记录：任何到达模型请求的内容都必须能从日志重建。每个到达 settlement 的模型 attempt 都会提交一个事件：`assistant/message` 携带组装后的模型可见 message 及其紧凑带时间 stream，`assistant/attempt` 则保留失败、重试、取消或 stream error attempt，且不添加模型历史。如果进程在 settlement 前硬中断，则不会留下持久 attempt stream。
 
 ### 请求 header
 
@@ -92,7 +92,6 @@ session.deriveMessages()         // the derived model history
 | [`src/surface.ts`](src/surface.ts) | 有序 surface 投影、替换校验、`deriveEventMessage` |
 | [`src/request-header.ts`](src/request-header.ts) | `request/header` 折叠与重建 |
 | [`dsh-util-values`](../../util/values/README.zh.md) | 共享无损 JSON 校验与分离式快照 |
-| [`src/chunk-rows.ts`](src/chunk-rows.ts) | 供持久化后端使用的共享紧凑行存储编解码器 |
 | [`src/repair.ts`](src/repair.ts) | 崩溃遗留日志的冷修复 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变式配套：序号、轮次／步骤闭合、工具调用／结果配对 |
 
@@ -102,7 +101,7 @@ session.deriveMessages()         // the derived model history
 
 ### 派生历史
 
-`deriveMessages()` 把每个 surface 节点的投影缓存一次，每次调用都返回共享、深度冻结消息之上的新数组；三种 surface 事件类型（`user/message`、`assistant/message`、`tool/result`）各自投影自己的消息种类——user 内容原样、带提供方与模型的组装 assistant 消息，或 user 角色的工具结果。surface 重写会重建投影——不存在原始日志回退，因此 surface 是派生历史的唯一来源。
+`deriveMessages()` 把每个 surface 节点的投影缓存一次，每次调用都返回共享、深度冻结消息之上的新数组；三种 surface 事件类型（`user/message`、`assistant/message`、`tool/result`）各自投影自己的消息种类——user 内容原样、带提供方与模型的组装 assistant 消息，或 user 角色的工具结果。嵌入式 Assistant stream 与 `assistant/attempt` 事件只保留重放和诊断数据。surface 重写会重建投影——不存在原始日志回退，因此 surface 是派生历史的唯一来源。
 
 ### 请求头
 
@@ -132,7 +131,7 @@ session.deriveMessages()         // the derived model history
 
 #### 模型看到什么
 
-模型会原样接收 `user/message`、`assistant/message` 与 `tool/result` surface 条目中的完整消息——标识、角色、来源与内容块都与创建时确定的值相同，投影从不生成标识。直接提示词与注入上下文仍是彼此独立的 `user/message` 事件，各事件的来源会保留其出处。分片、边界、用量与其他仅日志事件不会添加消息。
+模型会原样接收 `user/message`、`assistant/message` 与 `tool/result` surface 条目中的完整消息——标识、角色、来源与内容块都与创建时确定的值相同，投影从不生成标识。直接提示词与注入上下文仍是彼此独立的 `user/message` 事件，各事件的来源会保留其出处。嵌入式 stream、`assistant/attempt`、边界与其他仅日志事实不会添加消息。
 
 #### Token 影响
 
@@ -178,7 +177,7 @@ session.deriveMessages()         // the derived model history
 这些限制说明会话存储何时需要特别留意。它们是当前包约束，不是任务积压。
 
 - **`fork()` 仅在实时会话的稳定边界处切分**：所选前缀结束时不得有开放轮次，且源会话必须位于存储中；[fork API](../../../.agents/notes/implemented/feature/2026-06-30-session-store-fork-api.zh.md) 不支持对已持久化但未加载的会话进行 fork。
-- **`SESSION_FORMAT_VERSION` 固定为 `0`**：预发布阶段不承诺广泛兼容性；`Session` 只接受当前 seed 形状，后端拒绝任何其他版本，不认识的事件类型也会拒绝重建，除非信封带 `ignorable` 标记（[机制](../../../.agents/notes/implemented/architecture/2026-08-10-session-log-version-mechanism.zh.md)）。
+- **`SESSION_FORMAT_VERSION` 只命名当前逻辑表示**——历史 header 与事件位于相邻格式包中，持久化会在构造 `Session` 前发布完整受支持链；同版本未知事件仍要求信封显式带有 `ignorable` 标记（[机制](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.zh.md)）。
 - **`TurnEndReasonMap` 不含 ACP（Agent Client Protocol）命名的 `refusal`／`max_turn_requests` 变体**：受生产方约束；只有当适配器或循环首次产生这些变体时才加入。
 - **fork 之外没有会话树**：基于分支会话的 pi 风格条目树被推迟，除非消费方需要超越基于边界的 forking 的能力。
 

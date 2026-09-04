@@ -111,8 +111,8 @@ function validateEvent(
       nextStep += 1
       break
     }
-    case 'assistant/chunk': {
-      requireOpenStep(trace, 'assistant/chunk', event.data.turn, event.data.step, fail)
+    case 'assistant/attempt': {
+      requireOpenStep(trace, 'assistant/attempt', event.data.turn, event.data.step, fail)
       break
     }
     case 'assistant/message': {

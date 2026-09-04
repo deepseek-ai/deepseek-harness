@@ -100,9 +100,14 @@ describe('workspace-write containment', () => {
   })
 
   it('a write to the platform temp area lands (parity with the bash runner grant)', async () => {
-    const path = join(await mkdtemp(join(tmpdir(), 'dsh-fssbx-tmp-')), 'temp.txt')
-    await fs.writeText(await target(path), 'temp')
-    expect(await readFile(path, 'utf8')).toBe('temp')
+    const dir = await mkdtemp(join(tmpdir(), 'dsh-fssbx-tmp-'))
+    try {
+      const path = join(dir, 'temp.txt')
+      await fs.writeText(await target(path), 'temp')
+      expect(await readFile(path, 'utf8')).toBe('temp')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 
   it('an absolute path outside the workspace is denied, no file created', async () => {

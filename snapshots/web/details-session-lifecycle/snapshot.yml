@@ -6,4 +6,4 @@ recording: authored
 header:
   class: web-default
 session:
-  source: ../lifecycle-chrome/session.jsonl
+  source: ../lifecycle-chrome/session.v2.jsonl

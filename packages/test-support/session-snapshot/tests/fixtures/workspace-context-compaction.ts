@@ -24,13 +24,28 @@ export function apply(ctx: Context): void {
         && event.data.source.kind === 'agent-instructions'
         && event.data.source.baseline === true)
     if (baseline === undefined) throw new Error('workspace baseline missing before snapshot compaction')
+    const openTurn = agent.session.snapshotEvents().findLast(event => event.type === 'turn/start')
+    if (openTurn?.type !== 'turn/start') throw new Error('workspace snapshot compaction has no open turn')
+    const compactionId = CompactionId('workspace-context-fixture')
+    const content = [{ type: 'text' as const, text: 'Earlier context was compacted for this snapshot.' }]
+    agent.session.append('compaction/start', { compactionId, turn: openTurn.data.turn })
+    agent.session.append('compaction/summary', {
+      compactionId,
+      summary: content,
+      shadowedRange: { start: baseline.seq, end: baseline.seq },
+      shadowedSeqs: [baseline.seq],
+      shadowedTokenCount: 1,
+      provider: 'snapshot',
+      model: 'snapshot',
+    })
     agent.session.append('user/message', createUserMessage({
-      content: [{ type: 'text', text: 'Earlier context was compacted for this snapshot.' }],
-      source: compactCheckpointSource(CompactionId('workspace-context-fixture')),
+      content,
+      source: compactCheckpointSource(compactionId),
     }), {
       surfaceOp: { op: 'replace', start: baseline.seq, end: baseline.seq },
       sourceEventSeqs: [baseline.seq],
     })
+    agent.session.append('compaction/end', { compactionId, turn: openTurn.data.turn })
     return downstream
   })
 }

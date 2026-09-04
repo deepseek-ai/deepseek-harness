@@ -26,10 +26,6 @@
       "types": "./lib/types/types.d.ts",
       "default": "./lib/types/types.js"
     },
-    "./chunk-rows": {
-      "types": "./lib/types/chunk-rows.d.ts",
-      "default": "./lib/types/chunk-rows.js"
-    },
     "./src/*": "./src/*",
     "./package.json": "./package.json",
     "./surface": {

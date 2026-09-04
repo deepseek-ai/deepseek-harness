@@ -68,17 +68,17 @@ defineAcpSnapshotSuite({
 })
 ```
 
-每个已记录会话目录携带封闭的 `snapshot.yml` manifest，以及自身的 `session.jsonl` 与连续的 `session.<n>.jsonl` 子会话日志。manifest 指名场景、随附 profile、组合／header 类别、录制来源，以及已完成会话无法重建的 replay、平台、权限、环境、workspace 或输入事实。适配器注册预期输出、会话日志与可选 `workspace.expected/` 比较；保护会拒绝遗留目录、缺失文件、绝对路径、畸形 manifest 与平台专用分隔符。
+每个已记录 Session 目录携带封闭的 `snapshot.yml` manifest，以及规范 parent 与连续 child 角色。parent 文件名是 `session[.vN].jsonl`；child 是 `session.<ordinal>[.vN].jsonl`；v0 省略 `.v0`，正版本使用小写 `.vN`，且每个文件名与其 header 一致。一个角色可以保留旧 generation，但 harness 会选择数值最高的一项。拥有 fixture 的 manifest 可以声明 `sessionFormat.version` 与一个或多个封闭 `coverage` 名称，把该历史 generation 保留为显式迁移 fixture；省略此字段时跟随当前 writer。manifest 还会指名场景、随附 profile、组合／header 类别、录制来源，以及已完成 Session 无法重建的 replay、平台、权限、环境、workspace 或输入事实。适配器注册预期输出、Session 日志与可选 `workspace.expected/` 比较；保护会拒绝遗留目录、缺失角色、非规范名称、绝对路径、malformed manifest 与平台专用分隔符。
 
-`normalizeSessionSnapshot` 在规范化路径并清理 request header 后，会保留完整会话 header 与事件 payload，但从已提交 fixture 中省略普通行的 `seq`/`time` 和打包行的 `seq0`/`time0` envelope。回放只在内存中合成这些 envelope，而运行时持久化仍写入完整日志。fixture 使用规范打包行；[临时仓库迁移器](../../../scripts/migrate-packed-session-fixtures.ts)（`pnpm run migrate:packed-session-fixtures`）会改写较旧的布局，由其[移除提案](../../../.agents/notes/proposed/process/2026-07-26-remove-packed-session-fixture-migrator.zh.md)负责删除该迁移器。
+`normalizeSessionSnapshot` 在规范化路径并清理 request header 后，会保留完整 Session header 与事件 payload，但从已提交 fixture 中省略顶层 `seq`/`time` envelope；它还会规范化嵌入式 stream clock 与历史 packed-row 的 `seq0`/`time0` envelope。Replay 只在内存中合成顶层 envelope，而运行时持久化仍写入完整日志。多 Session 比较会先通过当前构建期静态 Session 格式目录恢复每个选定的持久化或投影 fixture，再进行身份脱敏与规范化，因此保留的 v0/v1 replay 输入与新生成的 `session.v2.jsonl` writer 输出会作为同一个 v2 logical Session 比较，且不会重写或重命名历史文件。预期日志与收集日志使用同一条严格恢复路径；来源文件名不能改变格式校验。无版本的协议适配器单元测试 fixture 不属于已发布 Session 格式语料。当前 v2 fixture 每个事件占一行；保留的 v0/v1 fixture 可以使用规范 packed row。[临时仓库迁移器](../../../scripts/migrate-packed-session-fixtures.ts)（`pnpm run migrate:packed-session-fixtures`）会改写更旧的历史布局，由其[移除提案](../../../.agents/notes/proposed/process/2026-07-26-remove-packed-session-fixture-migrator.zh.md)负责删除该迁移器。
 
 ### 录制、回放与刷新
 
-`pnpm run test:snapshot:record` 调用在线 LLM（大语言模型），并重写已录制的模型 fixture；`pnpm run test:snapshot:refresh` 保持无密钥，运行回放 overlay，并从已提交模型脚本重写 stdout、可比较会话日志预期输出，以及各 pin 自有的提示词与工具 schema 伴随文件。每个组合 owner 把 replay patch 放在 live patch 旁；顶层 `snapshots/` 拥有会话驱动场景，其他预期输出留在其包 owner 旁。[`dsh-llm-replay`](../llm-replay/README.zh.md) 提供通过 `DSH_SNAPSHOT_*` 环境值选择的已记录流。
+`pnpm run test:snapshot:record` 调用在线 LLM（大语言模型），并在规范具名版本文件下写入收集到的当前 generation。record 与 refresh 绝不重命名或删除已完成的 generation，即使后续运行不再产生某个 child 角色也一样；受审阅的源树整理只有在同角色存在已验证的当前替代文件后才移除前代。显式声明 `sessionFormat` 的场景在录制模式下保持只读。`pnpm run test:snapshot:refresh` 保持无密钥，运行选定的最高 replay 输入，并写入 stdout、各 pin 自有的 prompt 与工具 schema sidecar；只有 manifest 未保留历史 generation 时，才写入新鲜当前 generation 的可比较 Session 输出。每个组合 owner 把 replay patch 放在 live patch 旁；顶层 `snapshots/` 拥有 Session 驱动场景，其他预期输出留在其 package owner 旁。[`dsh-llm-replay`](../llm-replay/README.zh.md) 提供通过 `DSH_SNAPSHOT_*` 环境值选择的已记录流。
 
 ### 固定请求 header
 
-每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` 伴随文件；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。该 pin 的 `session.jsonl` 存储 `"system":"{{system}}","tools":"{{tools}}"`，同时保留配置、原因与任何模型可见前缀。自身作用域组合出不同请求的子会话按 fixture 索引以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`。
+每个 pin 默认拥有其生成的 `system-prompt.expected.md` 或 `tool-schemas.expected.json` sidecar；当完整的对应序列相同时，`systemPromptSource` 与 `toolSchemasSource` 指定另一个 pin 作为来源，因此每个不同版本只提交一次。选定的最高 parent fixture 存储 `"system":"{{system}}","tools":"{{tools}}"`，同时保留配置、原因与任何模型可见前缀。自身 scope 组合出不同请求的 child Session 按 fixture index 以 `pinsChildToolSchemas` 与 `pinsChildSystemPrompts` 单独声明。运行中改变请求 header 的场景声明 `expectedHeaderChanges`。
 
 ### 平台与组合变体
 
@@ -102,7 +102,7 @@ defineAcpSnapshotSuite({
 
 ### 设计
 
-共享核心拥有 manifest、workspace 设置／比较、类型化身份映射、规范化器与 fixture 不变式。ACP 适配器增加四个可组合层：启动器、场景 harness、规范化器与套件工厂。`launchAcpTestAgent` 在 tsx 下启动源码 profile，或在普通 Node 下启动已构建 `lib` profile，通过原始字节 stdout tee 连接 SDK 客户端，收集会话更新与 stderr，默认拒绝未处理的权限请求，并负责关闭。`runScenario` 驱动 ACP JSON-RPC stdio，并收集每个持久化原始 JSONL 会话日志。纯规范化器把 cwd 路径与类型化身份变为稳定 token，将时间归零、展开物理来源区间，并擦除请求 header bulk。`defineAcpSnapshotSuite` 注册比较、fixture 回写与实时一致性保护。
+共享核心拥有 manifest、generation 限定角色选择、workspace 设置／比较、类型化身份映射、normalizer 与 fixture 不变式。ACP 适配器增加四个可组合层：launcher、场景 harness、normalizer 与 suite factory。`launchAcpTestAgent` 在 tsx 下启动源码 profile，或在普通 Node 下启动已构建 `lib` profile，通过原始字节 stdout tee 连接 SDK client，收集 Session update 与 stderr，默认拒绝未处理的权限请求，并负责关闭。`runScenario` 驱动 ACP JSON-RPC stdio，并收集每个 Session 目录中数值最高的持久原始 JSONL generation。纯 normalizer 把 cwd 路径与类型化身份变为稳定 token，将时间归零、展开物理来源区间，并清理 request header bulk。`defineAcpSnapshotSuite` 注册比较、generation 限定 fixture 回写与实时一致性保护。
 
 ### 源码地图
 
@@ -111,6 +111,7 @@ defineAcpSnapshotSuite({
 | [`src/launcher.ts`](src/launcher.ts) | 子进程/客户端启动器与关闭所有权 |
 | [`src/harness.ts`](src/harness.ts) | 脚本化场景驱动与会话日志收集 |
 | [`src/manifest.ts`](src/manifest.ts) | 封闭 `snapshot.yml` schema、收集与归属规则 |
+| [`src/session-files.ts`](src/session-files.ts) | 规范 parent/child generation grammar、header 一致性与最高角色选择 |
 | [`src/identity.ts`](src/identity.ts) | 跨父子日志的类型化首次出现身份 token 化 |
 | [`src/normalize.ts`](src/normalize.ts) | 纯规范化器与擦除辅助 |
 | [`src/workspace.ts`](src/workspace.ts) | 场景 workspace 设置与完整预期状态比较 |

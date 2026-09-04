@@ -6,11 +6,11 @@ Status: implemented
 
 ## 问题
 
-当 `max-tokens` 步骤只组装了工具调用块时，agent loop（智能体循环）会追加一条空内容的 `assistant/message`，因为 `BlockAssembler.blocks()` 会丢弃被截断的工具调用；这条消息仅记录 usage。三个消费方独立选取子 agent 的输出，并把这条 usage 记录当成输出。进程内驱动的 `readResult` 与 continuable Activation 的 `subagent/end` capture 不加过滤地选取最后一条 `assistant/message`，SDK 后端的观察器则让任何 `assistant/message` 优先于累积的文本。在被 max-tokens 截断的多步轮次中，最后那条空消息导致 `SubagentResult.output`、工具结果、遥测与 `subagent/end.lastAssistantMessage` 都漏掉真实的部分回答。进程内驱动也没有流式文本兜底，因此被取消的子 agent 若其唯一文本只存在于 `assistant/chunk` 事件中，也会报告 `[]`。
+当 `max-tokens` step 只组装出 tool-call block 时，agent loop 会追加空 content `assistant/message`，因为 `BlockAssembler.blocks()` 会丢弃被截断的 tool call；该 message 保留 stream 与 usage，但不贡献 output block。三个消费方独立选取 child agent 输出，并把该 record 当成输出。进程内 driver 的 `readResult` 与 continuable Activation 的 `subagent/end` capture 不加过滤地选取最后一条 `assistant/message`，SDK backend observer 则让任何 `assistant/message` 优先于累计 text。在被 max-tokens 截断的多 step turn 中，最后的空 message 导致 `SubagentResult.output`、tool result、telemetry 与 `subagent/end.lastAssistantMessage` 漏掉真实 partial answer。进程内 driver 也缺少 streamed-text fallback，因此被取消 child 的唯一 text 若只存在于嵌入式 Assistant stream 中，也会报告 `[]`。
 
 ## 决策
 
-`dsh-subagent` 在 `src/assistant-output.ts` 中拥有唯一的规范选取规则：选取最后一条非空 assistant 消息；没有时选取累积的 `text-delta` 流；忽略空内容消息。增量的 `AssistantOutputFold` 通过 `push(event)` 处理会话事件传输，通过 `pushText(text)` 处理仅分片传输，并通过 `collect()` 完成选取。`finalAssistantOutput(events)` 把规则应用于完整的事件后缀，供进程内 `readResult` 与 Activation capture 使用。SDK 后端折叠通知事件；ACP 后端不暴露完整的 assistant 消息，而是折叠原始分片文本。`SubagentResult.output` 定义结果约定，`subagent/end.lastAssistantMessage` 使用同一规则。子 agent 不产生这两种输出中的任何一种时，一次性与 continuable 运行的生命周期字段都会缺省，而不是空数组。`max-tokens` 或 `aborted` 结果保留实际的终止原因。
+`dsh-subagent` 在 `src/assistant-output.ts` 中拥有唯一规范选取规则：选取最后一条非空 Assistant message；没有时，从嵌入式 `assistant/message` 与 `assistant/attempt` stream 或 chunk-only transport 选取累计 `text-delta` content；忽略空 content message。增量 `AssistantOutputFold` 通过 `push(event)`、`pushText(text)` 与 `collect()` 实现该规则。`finalAssistantOutput(events)` 把规则应用于完整 event suffix，供进程内 `readResult` 与 Activation capture 使用。SDK backend 折叠 notification event；ACP backend 不公开完整 Assistant message，并折叠 raw chunk text。`SubagentResult.output` 定义 result contract，`subagent/end.lastAssistantMessage` 使用同一规则。child 不产生任一种输出时，一次性与 continuable run 的 lifecycle field 都缺省，而不是空 array。`max-tokens` 或 `aborted` result 保留实际 stop reason。
 
 前台委派工具使用同一选取规则。非 `completed` 的结果仍是 `isError` 工具结果，但其消息会在终止原因标题之后呈现由[非交互权限决策](../feature/2026-08-15-product-subagent-noninteractive-permissions.zh.md)负责的可选安全提供方诊断，再附上子 agent 的部分文本。父模型会同时收到失败、独立的基础设施说明与已有 assistant 输出，而且不会把它们混为一体。
 

@@ -16,7 +16,7 @@ Status: implemented
 - `FEEDBACK_ONLY` 在追加 `feedback/record` 时读取权威会话日志，并交接截至该事件的未释放前缀。该边界后追加的记录会留在本地，直到另一个反馈事件。
 - `DISABLED` 是[默认值](2026-08-10-telemetry-default-off.zh.md)，不构造导出器、处理器或日志提供方，并在观察到 `feedback/record` 时输出警告，说明什么都不会共享，且反馈仍留在本地。
 
-通用遥测协调器拥有 `live` 与 `on-demand` 捕获。实时捕获在会话 firehose 上投影、深拷贝、脱敏每个事件，并将其交给后端。按需捕获不注册持续捕获监听器；`captureSession(session, throughSeq)` 从 handoff 游标起读取权威日志，直至含边界的指定序列号，然后投影、深拷贝、脱敏并交接该前缀。游标只为已交接记录推进。[无缓冲回放决策](../simplification/2026-08-06-buffer-free-feedback-telemetry.zh.md)说明了按需路径为何使用权威日志而非记录副本。
+通用遥测协调器拥有 `live` 与 `on-demand` 捕获。实时捕获在会话 firehose 上深拷贝、脱敏并向后端交接每个权威事件。按需捕获不注册持续捕获监听器；`captureSession(session, throughSeq)` 从同一对象 handoff 游标之后读取权威日志，直至包含式边界，然后深拷贝、脱敏并交接该前缀中的每个事件。新 Session 对象从 `firstLiveSeq` 之前开始：全新对象从 seq 0 开始，而 fork、resume 或迁移对象跳过 constructor seed，从本生命周期边界开始；重新收养或再次捕获同一对象时，则从其已交接的最高 seq 之后开始。[无缓冲回放决策](../simplification/2026-08-06-buffer-free-feedback-telemetry.zh.md)说明了按需路径为何使用权威日志而非记录副本。
 
 模式解析采用封闭式检查，并在设置前失败：通过直接构造传入未知值时，会在读取传输配置前失败。只有 `FULL` 向 SDK 流水线开放公共服务的 `emit()` 路径。`FEEDBACK_ONLY` 向其按需协调器提供私有后端能力；其监听器向 `captureSession()` 传递事件的唯一条件，是 `session.eventAt(event.seq)` 返回完全相同的 `feedback/record` 对象。`Session.append` 在发布 `session/event` 前已提交该对象，因此回放包含该反馈，但不会越过其边界。`DISABLED` 既不创建该能力，也不创建 SDK 流水线，并且不检查导出器配置。
 
@@ -32,4 +32,4 @@ Status: implemented
 
 ## 后果
 
-`FULL` 作为显式启用模式保留原有的源码与协议行为。`FEEDBACK_ONLY` 在反馈前不增加遥测自有的逐事件缓冲；直接服务调用与非权威反馈事件均不上传任何内容，且反馈前发生崩溃时，该前缀也不上传任何内容。回放使用记录反馈时挂载的脱敏策略，并排除权威日志中不存在的运维记录。因此，仅反馈的流既不携带 `agent-error` 记录，也不携带 `shutdown` 记录，而缺少 shutdown 不是崩溃信号。每个后续反馈都会捕获从上一个边界起累积的后缀。`DISABLED` 可省略 `exporter.url`，不执行任何上报工作，并仅在权威会话日志中保留反馈。
+`FULL` 作为显式启用模式交接本生命周期的每个权威事件。`FEEDBACK_ONLY` 在反馈前不增加遥测自有的逐事件缓冲；直接服务调用与非权威反馈事件均不上传任何内容，反馈前发生崩溃时也不上传任何内容。新的 resume 或迁移对象上的首次反馈会排除已恢复的 constructor 历史，只包含本生命周期边界及截至该反馈的后缀；同一对象上的后续反馈只捕获游标之后的后缀。回放使用记录反馈时挂载的脱敏策略，并排除权威日志中不存在的运维记录，因此仅反馈的流既不携带 `agent-error` 也不携带 `shutdown`，且缺少 shutdown 不是崩溃信号。同一对象丢失游标状态后的回放与后端重试可能重复生命周期本地 ledger 行；接收端基于 `(session.id, session.format_version, event.seq)` 去重。`DISABLED` 可省略 `exporter.url`，不执行任何上报工作，并仅在权威会话日志中保留反馈。

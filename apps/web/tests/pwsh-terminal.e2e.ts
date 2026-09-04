@@ -25,7 +25,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/pwsh-terminal', import.meta.url))
-const SEED = join(SNAPSHOT_DIR, 'session.jsonl')
+const SEED = join(SNAPSHOT_DIR, 'session.v2.jsonl')
 const TERMINAL_EXPECTED = join(SNAPSHOT_DIR, 'terminal-card.expected.md')
 const OVERLAY = fileURLToPath(new URL('./pwsh-terminal.overlay.yml', import.meta.url))
 const PROMPT = 'Run a PowerShell command that fails, then stop.'
@@ -101,6 +101,6 @@ describe.skipIf(MODE === 'record' || !HAS_PWSH)('web e2e: pwsh calls use the bas
   }, 60_000)
 
   it('guards the lane fixture inventory', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['session.jsonl', 'terminal-card.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['session.v2.jsonl', 'terminal-card.expected.md'])
   })
 })

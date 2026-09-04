@@ -126,7 +126,18 @@ describe('DeepSeekHarness', () => {
     const first = await harness.run('say hi')
     expect(first.finalResponse).toBe('turn answer')
     expect(first.events.map(event => event.type)).toEqual([
-      'agent/inbox/spliced', 'turn/start', 'assistant/chunk', 'assistant/message', 'turn/end',
+      'agent/inbox/spliced', 'turn/start', 'assistant/message', 'turn/end',
+    ])
+    const message = first.events.find(event => event.type === 'assistant/message')
+    expect(message?.data.stream).toEqual([
+      { type: 'chunk', time: 0, chunk: { type: 'block-start', index: 0, blockType: 'text' } },
+      { type: 'text-chunks', time0: 0, index: 0, dt: [], texts: ['turn answer'] },
+      {
+        type: 'chunk',
+        time: 0,
+        chunk: { type: 'block-end', index: 0, block: { type: 'text', text: 'turn answer' } },
+      },
+      { type: 'chunk', time: 0, chunk: { type: 'finish', reason: { kind: 'stop' } } },
     ])
 
     // Same subprocess, second session: ids differ, protocol state is reusable.

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-21-local-instruction-overlay.md
-2026-07-21-local-instruction-overlay.md: 9706285f4e699bfb6db9591f9850e4f95f1d2a15
-2026-07-21-local-instruction-overlay.zh.md: b375455dcb1f7e5c157907501f342cbd29a51667
+2026-07-21-local-instruction-overlay.md: 0574cb3568ce1dc41f49f9de2b76131ce75c409b
+2026-07-21-local-instruction-overlay.zh.md: cd7406374cb6f39ff3c24fb95fee5f53410e11a0

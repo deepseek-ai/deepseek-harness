@@ -27,7 +27,7 @@ The user conversation log contains what is needed to render, resume, audit, and 
 
 ## Verification
 
-`SessionEventMap` carries no standalone `usage` or `error`; the loop appends no separate usage event and records durable failures through `turn/end { kind: 'error', step, message, code? }`; ACP snapshots and persistence tests assert no trace-only lines; recorded fixtures are on the new event shape with the session format version pinned at `0` (backends reject any non-`0` stored log per the pre-release format policy); and the docs state where token usage and operational errors are observed.
+`SessionEventMap` carries no standalone `usage` or `error`; the loop appends no separate usage event and records durable failures through `turn/end { kind: 'error', step, message, code? }`; ACP snapshots and persistence tests assert no trace-only lines; the frozen v0 codec and identity migration preserve this released representation into current v1; and the docs state where token usage and operational errors are observed.
 
 ## Consequences
 
@@ -35,6 +35,6 @@ A consumer can no longer filter the canonical log for standalone `usage` or step
 
 ## Implementation note
 
-**Format version.** This changes persisted events, but the pre-release session format remains pinned at `0` and rejects any other version without migration. `dsh-session` owns the constant used by writers and load validation. Monotonic format versions begin at the first release.
+**Format version.** This event simplification predates the released v0 baseline. `dsh-session` owns the current writer constant, while the static catalog and adjacent packages now own supported historical decoding and migration. The identity v0-to-v1 edge proves that lifecycle without changing this event representation.
 
 Usage is now observed on `assistant/message.usage`; an operational error's step on `turn/end.reason` for `kind: 'error'`. `agent/error` + logging are unchanged for live diagnostics.

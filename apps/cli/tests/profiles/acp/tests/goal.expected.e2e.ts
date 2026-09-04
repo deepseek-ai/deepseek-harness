@@ -2,7 +2,9 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  fixtureContext,
   normalizeSessionSnapshot,
+  normalizeSessionSnapshots,
   normalizeStdout,
   runScenario,
   type AgentUnderTest,
@@ -62,6 +64,13 @@ function normalizeGoalLog(content: string, context: NormalizeContext): string {
   return normalizeGoalTimestamps(normalizeSessionSnapshot(content, context)) as string
 }
 
+/** Compare one current normalized goal log with its generation-aware committed fixture. */
+async function expectGoalLog(actual: string, expectedPath: string): Promise<void> {
+  const expected = await readFile(expectedPath, 'utf8')
+  expect(normalizeSessionSnapshots([actual], fixtureContext(actual)).map(parseJsonl))
+    .toEqual(normalizeSessionSnapshots([expected], fixtureContext(expected)).map(parseJsonl))
+}
+
 describe('same-session goal snapshot through the ACP automation driver', () => {
   it('runs exact automatic rounds in the shipped application and persists cancellation', async () => {
     const input = JSON.parse(await readFile(join(scenarioDir, 'input.json'), 'utf8')) as InputScript
@@ -109,7 +118,7 @@ describe('same-session goal snapshot through the ACP automation driver', () => {
       ])
     }
     expect(stdout).toBe(await readFile(stdoutExpected, 'utf8'))
-    expect(session).toBe(await readFile(sessionExpected, 'utf8'))
+    await expectGoalLog(session, sessionExpected)
   })
 
   it('injects the wrap-up instruction after an autonomous completion and delivers a closing message', async () => {
@@ -168,6 +177,6 @@ describe('same-session goal snapshot through the ACP automation driver', () => {
       ])
     }
     expect(stdout).toBe(await readFile(wrapupStdoutExpected, 'utf8'))
-    expect(session).toBe(await readFile(wrapupSessionExpected, 'utf8'))
+    await expectGoalLog(session, wrapupSessionExpected)
   })
 })

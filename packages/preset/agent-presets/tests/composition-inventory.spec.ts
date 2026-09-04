@@ -5,7 +5,7 @@
  * read reported broken by reason instead of dropped.
  */
 
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -33,6 +33,9 @@ const VALID = '- id: prompt\n  name: \'@deepseek-ai/dsh-system-prompt\'\n'
 
 const contexts: Context[] = []
 
+/** Every temp root created by this file, removed after its contexts settle. */
+const roots: string[] = []
+
 /** A Loader-context evaluator over an empty scope, enough for literal gates. */
 const evaluateExpression = (expression: string): unknown => evaluate({}, expression)
 /** An evaluator that refuses every expression, leaving rows conditional. */
@@ -41,6 +44,7 @@ const refuseExpression = (): never => { throw new Error('no loader context') }
 afterEach(async () => {
   vi.restoreAllMocks()
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true })
 })
 
 async function harness(roster: Config): Promise<Context> {
@@ -63,6 +67,7 @@ async function harness(roster: Config): Promise<Context> {
 describe('fileComposition', () => {
   it('flattens groups and keeps refused expressions conditional', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-composition-'))
+    roots.push(dir)
     const path = join(dir, COMPOSITION_FILE)
     await writeFile(path, [
       '- id: alpha',
@@ -124,6 +129,7 @@ describe('fileComposition', () => {
 
   it('evaluates decidable gates the way a mount would', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-composition-'))
+    roots.push(dir)
     const path = join(dir, COMPOSITION_FILE)
     await writeFile(path, [
       '- id: off',
@@ -144,6 +150,7 @@ describe('fileComposition', () => {
 
   it('answers broken for a file that stopped reading as a composition', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'dsh-composition-'))
+    roots.push(dir)
 
     const missing = await fileComposition(join(dir, COMPOSITION_FILE), refuseExpression)
     expect(missing).toHaveProperty('broken')
@@ -201,6 +208,7 @@ describe('mountedCompositionRows', () => {
 describe('AgentPresets.compositionInventory', () => {
   it('reads unmounted presets from their files, marking the default and metadata', async () => {
     const userRoot = await mkdtemp(join(tmpdir(), 'dsh-composition-roster-'))
+    roots.push(userRoot)
     await mkdir(join(userRoot, 'documented'))
     await writeFile(join(userRoot, 'documented', COMPOSITION_FILE), [
       VALID.trimEnd(),
@@ -287,6 +295,7 @@ describe('AgentPresets.compositionInventory', () => {
 
   it('prefers the standing mount over a file that broke after mounting', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-composition-volatile-'))
+    roots.push(root)
     await mkdir(join(root, 'volatile'))
     const plugin = join(FIXTURES, 'plugins', 'contribute.js')
     await writeFile(
@@ -344,6 +353,7 @@ describe('AgentPresets.compositionInventory', () => {
 
   it('keeps a broken preset on the inventory with its discovery reason', async () => {
     const userRoot = await mkdtemp(join(tmpdir(), 'dsh-composition-roster-'))
+    roots.push(userRoot)
     await mkdir(join(userRoot, 'damaged'))
     const ctx = await harness({
       default: 'minimal',

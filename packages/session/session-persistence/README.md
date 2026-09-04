@@ -62,7 +62,7 @@ Persistence returns the physically valid log; semantic repair belongs to the rea
 
 ### Failures and recovery
 
-A stored log the current build cannot faithfully interpret is refused with a direction-aware error, never misread. `SESSION_FORMAT_VERSION` remains v0 and this build provides no format-migration path; a newer version instructs the operator to upgrade the harness. The decoder accepts only the bounded same-version record variants named below. An event type unknown to this build refuses unless its envelope marks it `ignorable`, and committed-prefix corruption rejects as `SessionPersistenceCorruptionError`.
+A stored log the current build cannot faithfully interpret is refused with a direction-aware error, never misread. `SessionHandle` exposes only current logical v1 records; a provider must convert any supported historical storage before returning a handle, and the shipped JSONL provider migrates released v0 through its static catalog. A newer format instructs the operator to upgrade the harness. An event type unknown to this build refuses unless its envelope marks it `ignorable`, and committed-prefix corruption rejects as `SessionPersistenceCorruptionError`.
 
 -----
 
@@ -104,7 +104,7 @@ Each `session/event` for the writer's session copies into that handle's internal
 
 ### Stored-record validation
 
-Backend reads validate current v0 records only and never rewrite them; appends write current v0 ([rationale](../../../.agents/notes/implemented/architecture/2026-08-30-retain-ignorable-external-session-events.md)). Every backend runs the same `storage-contract` helpers on every read path — handle reads and write-open priming — refusing an unknown event type as `SessionFormatUnsupportedError` and a retired payload variant of a current type as `SessionPersistenceCorruptionError`, with the raw-log `SessionLocation` attached when the backend keeps one artifact per session.
+The seam's shared helpers validate current logical v1 records, and appends write only the current format ([rationale](../../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md)). Historical decoding and immutable successor publication belong inside each provider before it returns a handle. Every backend runs `storage-contract` validation on handle reads and write-open priming, refusing an unknown event type as `SessionFormatUnsupportedError` and a malformed current record as `SessionPersistenceCorruptionError`, with the raw-log `SessionLocation` attached when the backend keeps one artifact per session.
 
 </details>
 -----

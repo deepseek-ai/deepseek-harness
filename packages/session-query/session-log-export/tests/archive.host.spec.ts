@@ -6,7 +6,7 @@
  * 404, missing descendant → errored stream).
  */
 
-import { SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionSeq } from '@deepseek-ai/dsh-session'
 import { randomBytes } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
@@ -21,10 +21,15 @@ import type { BrowserAuth } from '@deepseek-ai/dsh-client-connection/src/browser
 import * as SessionLogExport from '../src/index.ts'
 
 const sid = (id: string): SessionId => id as SessionId
+const exportLogName = SessionLogExport.SESSION_LOG_FILENAME
+const subagentLogName = (id: string): string => `subagents/${id}/${exportLogName}`
+const generationLogName = (version: number): string => version === 0
+  ? 'session.jsonl'
+  : `session.v${version}.jsonl`
 
 function header(id: string, parentSession?: SessionId): SessionHeader {
   return {
-    version: 0,
+    version: SESSION_FORMAT_VERSION,
     id: sid(id),
     createdAt: 1000,
     isSeeded: false,
@@ -48,7 +53,7 @@ function log(id: string, parentSession?: SessionId, events: readonly SessionEven
 
 /** The expected zip text for one stored log: the canonical JSONL serialization. */
 function logText(stored: StoredLog): string {
-  return SessionLogExport.serializeSessionLog(stored.header, 0, stored.events)
+  return SessionLogExport.serializeSessionLog(stored.header, stored.events)
 }
 
 function node(id: string, ...descendants: SessionLineageNode[]): SessionLineageNode {
@@ -214,18 +219,23 @@ describe('session export compression config', () => {
 })
 
 describe('serializeSessionLog', () => {
+  it('uses the canonical current-generation export filename', () => {
+    expect(SessionLogExport.SESSION_LOG_FILENAME).toBe(generationLogName(SESSION_FORMAT_VERSION))
+  })
+
   it('writes the physical header line, one line per event, and a trailing newline', () => {
     const stored = log('session-root')
     expect(logText(stored)).toBe(
       `${JSON.stringify({
-        type: 'session', version: 0, id: sid('session-root'), createdAt: 1000, cwd: '/proj', delegationDepth: 0,
+        type: 'session', version: SESSION_FORMAT_VERSION, id: sid('session-root'), createdAt: 1000,
+        cwd: '/proj', isSeeded: false, delegationDepth: 0,
       })}\n${JSON.stringify(turnStart)}\n`,
     )
   })
 
-  it('serializes lineage as the physical seedLength and an omitted delegationDepth as 0', () => {
+  it('serializes v2 lineage through the tagged marker and defaults delegationDepth to 0', () => {
     const seeded: SessionHeader = {
-      version: 0,
+      version: SESSION_FORMAT_VERSION,
       id: sid('seeded'),
       createdAt: 1000,
       isSeeded: true,
@@ -233,17 +243,22 @@ describe('serializeSessionLog', () => {
       origin: 'subagent',
       agentPreset: 'minimal',
     }
-    expect(SessionLogExport.serializeSessionLog(seeded, 3, [])).toBe(`${JSON.stringify({
+    const events: SessionEvent[] = [
+      { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
+      { type: 'turn/end', seq: SessionSeq(1), time: 2, data: { turn: 1, reason: { kind: 'completed' } } },
+      { type: 'session/end-seed', seq: SessionSeq(2), time: 2, data: { inherited: true } },
+    ]
+    expect(SessionLogExport.serializeSessionLog(seeded, events)).toBe(`${JSON.stringify({
       type: 'session',
-      version: 0,
+      version: SESSION_FORMAT_VERSION,
       id: sid('seeded'),
       createdAt: 1000,
       parentSession: sid('parent'),
-      seedLength: 3,
+      isSeeded: true,
       origin: 'subagent',
       delegationDepth: 0,
       agentPreset: 'minimal',
-    })}\n`)
+    })}\n${events.map(event => JSON.stringify(event)).join('\n')}\n`)
   })
 })
 
@@ -282,8 +297,8 @@ describe('session.export download endpoint', () => {
     expect(response.headers.get('content-type')).toBe('application/zip')
     expect(response.headers.get('content-disposition')).toContain('dsh-session-session-root.zip')
     const files = unzipSync(await responseBytes(response))
-    expect(Object.keys(files)).toEqual(['session.jsonl'])
-    expect(strFromU8(files['session.jsonl'] as Uint8Array)).toBe(logText(stored))
+    expect(Object.keys(files)).toEqual([exportLogName])
+    expect(strFromU8(files[exportLogName] as Uint8Array)).toBe(logText(stored))
   })
 
   it('preflights root preparation through HEAD without streaming a body', async () => {
@@ -329,7 +344,7 @@ describe('session.export download endpoint', () => {
     const storedBytes = await responseBytes(uncompressed)
     const compressedBytes = await responseBytes(compressed)
     expect(compressedBytes.byteLength).toBeLessThan(storedBytes.byteLength)
-    expect(strFromU8(unzipSync(compressedBytes)['session.jsonl'] as Uint8Array)).toBe(logText(stored))
+    expect(strFromU8(unzipSync(compressedBytes)[exportLogName] as Uint8Array)).toBe(logText(stored))
   })
 
   it('includes descendant logs under subagents/<id>/ when requested', async () => {
@@ -347,11 +362,11 @@ describe('session.export download endpoint', () => {
     expect(response.status).toBe(200)
     const files = unzipSync(await responseBytes(response))
     expect(Object.keys(files).sort()).toEqual([
-      'session.jsonl',
-      'subagents/child-a/session.jsonl',
-      'subagents/grandchild-a/session.jsonl',
+      exportLogName,
+      subagentLogName('child-a'),
+      subagentLogName('grandchild-a'),
     ])
-    expect(strFromU8(files['subagents/child-a/session.jsonl'] as Uint8Array))
+    expect(strFromU8(files[subagentLogName('child-a')] as Uint8Array))
       .toBe(logText(child))
   })
 
@@ -384,8 +399,8 @@ describe('session.export download endpoint', () => {
     )
     const files = unzipSync(await responseBytes(response))
     expect(flushed).toEqual([sid('session-root'), sid('child-a')])
-    expect(strFromU8(files['session.jsonl'] as Uint8Array)).toBe(logText(durable['session-root'] as StoredLog))
-    expect(strFromU8(files['subagents/child-a/session.jsonl'] as Uint8Array)).toBe(logText(durable['child-a'] as StoredLog))
+    expect(strFromU8(files[exportLogName] as Uint8Array)).toBe(logText(durable['session-root'] as StoredLog))
+    expect(strFromU8(files[subagentLogName('child-a')] as Uint8Array)).toBe(logText(durable['child-a'] as StoredLog))
   })
 
   it('reads a cold log without asking the live-session store to flush', async () => {
@@ -403,7 +418,7 @@ describe('session.export download endpoint', () => {
     )
     const files = unzipSync(await responseBytes(response))
     expect(flush).not.toHaveBeenCalled()
-    expect(strFromU8(files['session.jsonl'] as Uint8Array)).toBe(logText(stored))
+    expect(strFromU8(files[exportLogName] as Uint8Array)).toBe(logText(stored))
   })
 
   it('answers 404 for a session the backend does not store', async () => {
@@ -459,7 +474,7 @@ describe('session.export download endpoint', () => {
     // as U+FFFD and the exported log is silently corrupted.
     const content = `${'a'.repeat((1 << 16) - 1)}😀tail`
     const files = await directZipFiles(content)
-    expect(strFromU8(files['session.jsonl'] as Uint8Array)).toBe(content)
+    expect(strFromU8(files[exportLogName] as Uint8Array)).toBe(content)
   })
 
   it('splits a long log on a plain code-unit boundary without backoff', async () => {
@@ -467,13 +482,13 @@ describe('session.export download endpoint', () => {
     // round trip must still be byte-identical across the multi-chunk push.
     const content = 'z'.repeat((1 << 16) + 4096)
     const files = await directZipFiles(content)
-    expect(strFromU8(files['session.jsonl'] as Uint8Array)).toBe(content)
+    expect(strFromU8(files[exportLogName] as Uint8Array)).toBe(content)
   })
 
   it('streams an empty root text as an empty zip entry', async () => {
     const files = await directZipFiles('')
-    expect(Object.keys(files)).toEqual(['session.jsonl'])
-    expect(strFromU8(files['session.jsonl'] as Uint8Array)).toBe('')
+    expect(Object.keys(files)).toEqual([exportLogName])
+    expect(strFromU8(files[exportLogName] as Uint8Array)).toBe('')
   })
 
   it('waits for response pull capacity before reading the next archive entry', async () => {
@@ -523,10 +538,10 @@ describe('session.export download endpoint', () => {
     )
     const files = unzipSync(await responseBytes(response))
     expect(Object.keys(files).sort()).toEqual([
-      'session.jsonl',
-      'subagents/child-a/session.jsonl',
-      'subagents/child-b/session.jsonl',
-      'subagents/shared/session.jsonl',
+      exportLogName,
+      subagentLogName('child-a'),
+      subagentLogName('child-b'),
+      subagentLogName('shared'),
     ])
   })
 
@@ -721,7 +736,7 @@ describe('session.export download endpoint', () => {
     )
     expect(response.status).toBe(200)
     const files = unzipSync(await responseBytes(response))
-    expect(Object.keys(files).sort()).toEqual(['media/img-1.png', 'session.jsonl'])
+    expect(Object.keys(files).sort()).toEqual(['media/img-1.png', exportLogName].sort())
     expect(files['media/img-1.png']).toEqual(storedImage('img-1').data)
   })
 
@@ -735,10 +750,10 @@ describe('session.export download endpoint', () => {
       new Request('http://host/api/session.export?sessionId=session-root'),
     )
     const files = unzipSync(await responseBytes(response))
-    expect(Object.keys(files).sort()).toEqual(['media/nested-1.webp', 'session.jsonl'])
+    expect(Object.keys(files).sort()).toEqual(['media/nested-1.webp', exportLogName].sort())
   })
 
-  it('scans the wrapped, inserted, and chunk carriers plus non-object content items', async () => {
+  it('scans wrapped, inserted, and embedded-stream carriers plus non-object content items', async () => {
     const block = (id: string, mediaType: string): unknown =>
       ({ type: 'image', attachment: { attachmentId: id, mediaType, bytes: 4, width: 2, height: 2 } })
     const wrapped = {
@@ -749,20 +764,29 @@ describe('session.export download endpoint', () => {
       type: 'context/inserted', seq: SessionSeq(3), time: 3000,
       data: { inserted: [{ content: [block('inserted-1', 'image/gif')] }] },
     } as unknown as SessionEvent
-    const chunk = {
-      type: 'assistant/chunk', seq: SessionSeq(4), time: 4000,
-      data: { chunk: { type: 'block-end', block: block('chunk-1', 'image/png') } },
+    const attempt = {
+      type: 'assistant/attempt', seq: SessionSeq(4), time: 4000,
+      data: {
+        stream: [
+          { type: 'text-chunks', time0: 3999, index: 0, dt: [], texts: ['ignored'] },
+          { type: 'chunk', time: 4000, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+          {
+            type: 'chunk', time: 4000,
+            chunk: { type: 'block-end', block: block('stream-1', 'image/png') },
+          },
+        ],
+      },
     } as unknown as SessionEvent
-    const api = await buildApi({ 'session-root': log('session-root', undefined, [wrapped, inserted, chunk]) })
+    const api = await buildApi({ 'session-root': log('session-root', undefined, [wrapped, inserted, attempt]) })
     const response = await toFetchHandler(api).fetch(
       new Request('http://host/api/session.export?sessionId=session-root'),
     )
     const files = unzipSync(await responseBytes(response))
     expect(Object.keys(files).sort()).toEqual([
-      'media/chunk-1.png',
       'media/inserted-1.gif',
+      'media/stream-1.png',
       'media/wrapped-1.jpg',
-      'session.jsonl',
+      exportLogName,
     ])
   })
 
@@ -784,14 +808,14 @@ describe('session.export download endpoint', () => {
     const without = await toFetchHandler(api).fetch(
       new Request('http://host/api/session.export?sessionId=session-root'),
     )
-    expect(Object.keys(unzipSync(await responseBytes(without)))).toEqual(['session.jsonl'])
+    expect(Object.keys(unzipSync(await responseBytes(without)))).toEqual([exportLogName])
     const withDescendants = await toFetchHandler(api).fetch(
       new Request('http://host/api/session.export?sessionId=session-root&includeDescendants=true'),
     )
     expect(Object.keys(unzipSync(await responseBytes(withDescendants))).sort()).toEqual([
       'media/child-img.png',
-      'session.jsonl',
-      'subagents/child-a/session.jsonl',
+      exportLogName,
+      subagentLogName('child-a'),
     ])
   })
 

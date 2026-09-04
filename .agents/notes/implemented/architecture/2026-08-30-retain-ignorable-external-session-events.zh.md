@@ -16,6 +16,8 @@ Status: implemented
 
 只有替代机制在事件生产、持久化、重新加载与传输中都支持当前第三方插件，并为已包含该标记的会话提供显式切换方案后，才能删除此字段。[Session log 版本决策](2026-08-10-session-log-version-mechanism.zh.md)继续定义默认读取必需的安全规则与格式版本策略。
 
+Alpha 实现中的历史格式迁移有意更严格。v0-to-v1 迁移边会拒绝每个未知 v0 类型，包括 ignorable 类型，因为不透明 payload 可能包含格式迁移边无法校验的引用。[Alpha 历史事件决策](2026-08-31-alpha-historical-unknown-event-refusal.zh.md)定义该有限例外；同版本 append 与 reload 继续遵循本记录。
+
 ## 曾考虑的替代方案
 
 **要求读取所有未知事件。** 不予采用，因为当前第三方插件会发出仓库生成词汇之外的信息性事件。即使省略该事件是安全的，第一方重新加载仍会拒绝该会话。

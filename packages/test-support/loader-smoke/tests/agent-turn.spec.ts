@@ -86,7 +86,7 @@ describe('runFixtureTurn', () => {
     const observed: SessionEvent[] = []
     harness.setFollowup((message) => {
       harness.emit(harness.foreignSession, {
-        type: 'assistant/message', seq: 0, time: 0, data: { message: { content: [] } },
+        type: 'assistant/message', seq: 0, time: 0, data: { stream: [], message: { content: [] } },
       })
       harness.emit(harness.session, {
         type: 'step/start', seq: 0, time: 0, data: { turn: 1, step: 1 },
@@ -98,40 +98,62 @@ describe('runFixtureTurn', () => {
         type: 'agent/inbox/spliced', seq: 2, time: 2, data: { inserted: [message] },
       })
       harness.emit(harness.session, {
-        type: 'assistant/chunk', seq: 3, time: 3,
-        data: { turn: 1, step: 1, chunk: { type: 'text-delta', text: 'partial' } },
-      })
-      harness.emit(harness.session, {
-        type: 'assistant/chunk', seq: 4, time: 4,
+        type: 'assistant/attempt', seq: 3, time: 3,
         data: {
           turn: 1,
           step: 1,
-          chunk: { type: 'usage', usage: { inputTokens: 2, outputTokens: 3, reasoningTokens: 1 } },
+          stream: [
+            { type: 'text-chunks', time0: 3, index: 0, dt: [], texts: ['partial'] },
+            {
+              type: 'chunk', time: 4,
+              chunk: {
+                type: 'usage', usage: { inputTokens: 2, outputTokens: 3, reasoningTokens: 1 },
+              },
+            },
+          ],
         },
+      })
+      harness.emit(harness.session, {
+        type: 'feedback/record', seq: 4, time: 4, data: { text: 'interleaved' },
       })
       harness.emit(harness.session, {
         type: 'assistant/message', seq: 5, time: 5,
         data: {
           turn: 1,
           step: 1,
+          stream: [],
           message: { content: [{ type: 'text', text: 'final answer' }] },
           usage: { inputTokens: 4, outputTokens: 5, cacheReadTokens: 6 },
         },
       })
       harness.emit(harness.session, {
-        type: 'assistant/chunk', seq: 6, time: 6,
+        type: 'assistant/attempt', seq: 6, time: 6,
         data: {
           turn: 1,
           step: 2,
-          chunk: { type: 'usage', usage: { inputTokens: 1, outputTokens: 2, cacheWriteTokens: 7, reasoningTokens: 2 } },
+          stream: [{
+            type: 'chunk', time: 6,
+            chunk: {
+              type: 'usage',
+              usage: { inputTokens: 1, outputTokens: 2, cacheWriteTokens: 7, reasoningTokens: 2 },
+            },
+          }],
         },
       })
       harness.emit(harness.session, {
         type: 'assistant/message', seq: 7, time: 7,
-        data: { turn: 1, step: 2, message: { content: [{ type: 'tool-call' }] } },
+        data: { turn: 1, step: 2, stream: [], message: { content: [{ type: 'tool-call' }] } },
+      })
+      harness.emit(harness.session, {
+        type: 'assistant/attempt', seq: 8, time: 8,
+        data: {
+          turn: 1,
+          step: 3,
+          stream: [{ type: 'text-chunks', time0: 8, index: 0, dt: [], texts: ['no usage'] }],
+        },
       })
       harness.emit(harness.foreignSession, {
-        type: 'assistant/message', seq: 8, time: 8, data: { message: { content: [] } },
+        type: 'assistant/message', seq: 9, time: 9, data: { stream: [], message: { content: [] } },
       })
     })
 
@@ -150,7 +172,7 @@ describe('runFixtureTurn', () => {
         reasoningTokens: 2,
       },
     })
-    expect(observed.map(current => current.seq)).toEqual([2, 3, 4, 5, 6, 7])
+    expect(observed.map(current => current.seq)).toEqual([2, 3, 4, 5, 6, 7, 8])
     expect(harness.whenIdle).toHaveBeenCalledTimes(2)
     expect(harness.flush).toHaveBeenCalledWith(harness.session)
     expect(harness.disposeListener).toHaveBeenCalledOnce()

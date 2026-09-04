@@ -49,12 +49,15 @@ export type {
 export type { ISessions } from './contract/sessions.ts'
 export { MutableSessionEventSource } from './contract/events.ts'
 export type {
+  AssistantLiveChunkEvent,
+  SessionAssistantSettlementEntry,
   SessionEventChange,
   SessionEventLike,
   SessionEventLikeEntry,
   SessionEventSource,
   SessionEventWindow,
   SessionLiveEventEntry,
+  SessionTransientEventEntry,
 } from './contract/events.ts'
 export type {
   OpenState,

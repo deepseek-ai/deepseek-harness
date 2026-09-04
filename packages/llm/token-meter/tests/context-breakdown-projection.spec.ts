@@ -107,6 +107,7 @@ describe('contextBreakdown session projection', () => {
     appendUser(session, 'abcd')
     session.append('step/start', { turn: 1, step: 1 })
     session.append('assistant/message', {
+      stream: [],
       turn: 1,
       step: 1,
       message: createMessage({
@@ -115,7 +116,7 @@ describe('contextBreakdown session projection', () => {
         source: { kind: 'model', provider: 'mock', model: 'mock' },
       }),
       usage: { inputTokens: 9, outputTokens: 0 },
-    }, { surfaceOp: 'append', sourceEventSeqs: [] })
+    }, { surfaceOp: 'append' })
     session.append('step/end', { turn: 1, step: 1 })
     // 'abcd' prices to 9 (1 text + 4 block + 4 role); the usage-only assistant
     // message derives to no transcript entry and adds nothing.
@@ -156,6 +157,7 @@ describe('contextBreakdown session projection', () => {
     const question = appendUser(session, 'a first question, long enough to price above zero')
     session.append('step/start', { turn: 1, step: 1 })
     const answer = session.append('assistant/message', {
+      stream: [],
       turn: 1,
       step: 1,
       message: createMessage({
@@ -164,7 +166,7 @@ describe('contextBreakdown session projection', () => {
         source: { kind: 'model', provider: 'mock', model: 'mock' },
       }),
       usage: { inputTokens: 40, outputTokens: 7 },
-    }, { surfaceOp: 'append', sourceEventSeqs: [] }).seq
+    }, { surfaceOp: 'append' }).seq
     session.append('step/end', { turn: 1, step: 1 })
     const grown = agree()
     expect(grown).toBeGreaterThan(0)

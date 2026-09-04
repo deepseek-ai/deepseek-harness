@@ -73,7 +73,7 @@ The receiver would also need to traverse the tagged tree, resolve paths into the
 
 ### Why not omit assistant chunks or overlapping event data?
 
-About 98% of the measured real-session events were `assistant/chunk`. Omitting chunks after reference encoding reduced the complete identity JSON by another 84.79% for late enable and 6.49% for steady state, but it prevents lossless canonical-log reconstruction and leaves `assistant/message.sourceEventSeqs` pointing to absent events. Fuzzy or normalized substitutions have the same reconstruction defect.
+About 98% of the measured v1 real-session events were `assistant/chunk`. Omitting them after reference encoding reduced the complete identity JSON by another 84.79% for late enable and 6.49% for steady state, but prevented lossless reconstruction and left message provenance dangling. V2 embeds compact streams in attempt settlements; `dsh_session_log` still sends every current canonical event whole and does not omit those embedded records. Fuzzy or normalized substitutions have the same reconstruction defect.
 
 **Keep the upload cursor only in memory.** Rejected because a normal process restart would resend the entire Session. A canonical acceptance event makes restart recovery best-effort durable without another storage backend; the remaining crash window produces allowed duplicates.
 

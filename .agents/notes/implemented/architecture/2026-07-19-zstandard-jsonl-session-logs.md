@@ -6,7 +6,7 @@ English | [中文](2026-07-19-zstandard-jsonl-session-logs.zh.md)
 
 ## Problem
 
-The JSONL persistence backend keeps every `SessionEvent` verbatim, including high-volume `assistant/chunk` records. Raw text makes logs inspectable but spends storage and I/O on repeated JSON keys and model text. Compression must retain the existing append/fsync commit boundary, collision-safe first materialization, crash repair, and metadata-only listing; rewriting a whole compressed file after every turn would discard those properties.
+The JSONL persistence backend keeps every `SessionEvent` verbatim, including Assistant settlements with embedded model streams. Raw text makes logs inspectable but spends storage and I/O on repeated JSON keys and model text. Compression must retain the existing append/fsync commit boundary, collision-safe first materialization, crash repair, and metadata-only listing; rewriting a whole compressed file after every turn would discard those properties.
 
 The encoding also has to remain explicit at the deployment boundary. Snapshot fixtures and external line readers require raw JSONL, while a backend cannot safely guess between compressed and raw artifacts in one root or silently migrate pre-release session data.
 
@@ -14,9 +14,9 @@ The encoding also has to remain explicit at the deployment boundary. Snapshot fi
 
 ### Configuration and suffix ownership
 
-`dsh-session-persistence-jsonl` accepts `compression?: 'zstd' | 'none'` and explicitly resolves omission to `'zstd'`. Zstandard artifacts end in `.jsonl.zstd`; `'none'` retains the original newline-delimited UTF-8 `.jsonl` representation. `SessionLocation.kind` remains `'jsonl'`, because both encodings carry the same logical record format, and `SESSION_FORMAT_VERSION` remains `0` under the repository's pre-release reject-without-migration policy.
+`dsh-session-persistence-jsonl` accepts `compression?: 'zstd' | 'none'` and explicitly resolves omission to `'zstd'`. Zstandard artifacts end in `.jsonl.zstd`; `'none'` retains the newline-delimited UTF-8 `.jsonl` representation. Within either configured suffix, v0 uses suffixless `session.jsonl[.zstd]` and every positive format generation uses lowercase `session.vN.jsonl[.zstd]`. `SessionLocation.kind` remains `'jsonl'`, because both encodings carry the same logical record format. Session-format migration uses the configured full suffix and one shared logical chain, so compression does not branch generation selection or publication.
 
-Each persistence root belongs to one encoding. A one-time discovery preflight rejects any opposite suffix, and targeted load, live-adoption, listing, and materialization paths repeat the relevant suffix check after an initially empty preflight. The error names the incompatible artifact and directs the deployment to the matching configuration or a separate root. There is no migration, dual read, dual write, or extension-based fallback.
+Each persistence root belongs to one encoding. A one-time discovery preflight rejects any opposite suffix, and targeted load, live-adoption, listing, and materialization paths repeat the relevant suffix check after an initially empty preflight. The error names the incompatible artifact and directs the deployment to the matching configuration or a separate root. There is no compression conversion, dual read, dual write, or extension-based fallback; logical version migration stays within the configured suffix, preserves the source generation, and exclusively publishes the final version-named successor.
 
 ### Frame and write path
 

@@ -1,7 +1,8 @@
-import { mkdtempSync, readFileSync, statSync, unlinkSync } from 'node:fs'
+import { spawn as nodeSpawn, spawnSync as nodeSpawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   childEnv,
   killGroup,
@@ -11,6 +12,11 @@ import {
 } from '../src/spawn.ts'
 import type { SubprocessHandle, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  return { ...actual, spawnSync: vi.fn(actual.spawnSync) }
+})
 
 /**
  * Translate the suite's POSIX command strings into node one-liners on Windows,
@@ -81,6 +87,14 @@ vi.mock('node:fs', async (importOriginal) => {
 })
 
 const spillDir = mkdtempSync(join(tmpdir(), 'dsh-subprocess-spec-'))
+
+/** The per-process default spill dir captured by the default-spill test. */
+let defaultSpillDir: string | undefined
+
+afterAll(() => {
+  rmSync(spillDir, { recursive: true, force: true })
+  if (defaultSpillDir !== undefined) rmSync(defaultSpillDir, { recursive: true, force: true })
+})
 
 type SpecOverrides = Partial<Parameters<typeof spawnSubprocess>[0]> & {
   stdoutMaxBytes?: number
@@ -631,6 +645,30 @@ describe('stdio dispositions', () => {
 })
 
 describe('windows tree semantics (injected platform)', () => {
+  it('hides the child window without changing output, exit, stdio, or tree-root options', async () => {
+    let options: Parameters<typeof nodeSpawn>[2]
+    const result = await finish(spawnSubprocess(spec('echo hello'), {
+      spillDir,
+      platform: 'win32',
+      spawn: (program, args, spawnOptions) => {
+        options = spawnOptions
+        return nodeSpawn(program, args, spawnOptions)
+      },
+    }))
+
+    expect(options!).toMatchObject({
+      windowsHide: true,
+      detached: false,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    expect(result).toMatchObject({
+      exitCode: 0,
+      signal: null,
+      stdout: { text: 'hello\n', truncated: false },
+      stderr: { text: '', truncated: false },
+    })
+  })
+
   it('host-exit termination routes through taskkill immediately', async () => {
     const killed: number[] = []
     const running = spawnSubprocess(spec('exec sleep 60', { graceMs: 60_000 }), {
@@ -773,6 +811,17 @@ describe.skipIf(process.platform === 'win32')('tree-survivor escalation (termina
 })
 
 describe('coverage seams', () => {
+  it('hides the taskkill helper window', () => {
+    const taskkill = vi.mocked(nodeSpawnSync)
+    taskkill.mockReturnValueOnce({} as never)
+    taskkillProcessTree(77)
+    expect(taskkill).toHaveBeenLastCalledWith(
+      'taskkill',
+      ['/PID', '77', '/T', '/F'],
+      { stdio: 'ignore', windowsHide: true },
+    )
+  })
+
   it('taskkillProcessTree ignores non-positive pids and contains a missing binary', () => {
     expect(() => { taskkillProcessTree(-1) }).not.toThrow()
     expect(() => { taskkillProcessTree(0) }).not.toThrow()
@@ -1086,6 +1135,7 @@ describe('environment and spill-file hardening', () => {
       spec('for i in $(seq 1 200); do printf "line-%04d\\n" $i; done', { stdoutMaxBytes: 500, stderrMaxBytes: 500 }),
     ))
     const dir = dirname(result.stdout.spillPath!)
+    defaultSpillDir = dir
     expect(dir).toMatch(/dsh-subprocess-/)
     const mode = statSync(dir).mode & 0o777
     expect(mode).toBe(0o700)

@@ -16,6 +16,16 @@ export const inject = ['invariants']
 /** Validate one acceptance watermark against its containing event and session. */
 function validateDeliveryAccepted(session: Session, event: SessionEvent<'session-log-deepseek/delivery-accepted'>, fail: InvariantFailure): void {
   const { sessionId, throughSeq } = event.data
+  const acceptedFormatVersion = event.data.sessionFormatVersion ?? 0
+  if (!Number.isSafeInteger(acceptedFormatVersion)
+    || acceptedFormatVersion < 0
+    || Object.is(acceptedFormatVersion, -0)) {
+    fail(
+      'session-log-deepseek/delivery-accepted sessionFormatVersion must be a non-negative safe integer'
+      + `, got ${String(acceptedFormatVersion)}`,
+    )
+  }
+  if (acceptedFormatVersion !== session.header.version) return
   const inherited = session.header.parentSession !== undefined
     && !session.isOwnSeq(event.seq)
   if (sessionId !== session.id && !inherited) {

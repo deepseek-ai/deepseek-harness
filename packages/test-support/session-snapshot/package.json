@@ -29,7 +29,9 @@
   "dependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
     "@deepseek-ai/cordis-plugin-include": "workspace:*",
+    "@deepseek-ai/dsh-llm-replay": "workspace:^",
     "@deepseek-ai/dsh-loader-smoke": "workspace:*",
+    "@deepseek-ai/dsh-session-format": "workspace:^",
     "js-yaml": "^4.2.0",
     "vitest": "^4.1.8"
   },

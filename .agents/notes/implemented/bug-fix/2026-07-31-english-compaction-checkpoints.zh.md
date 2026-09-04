@@ -25,4 +25,4 @@ Status: implemented
 
 - 新检查点会将叙述性上下文规范化为英语，同时保留未来工具使用和代码工作所依赖的精确字符串。
 - 既有检查点结构、压缩路由和缓存对齐保持不变；只有最后一条 user 指令不同。
-- 直接摘要调用仍不纳入 transcript（文本记录）快照，因为它不会发出 `assistant/chunk` 事件。真实循环回归改为断言摘要请求收到的精确最终指令。
+- 直接 summarization call 仍不纳入 transcript snapshot，因为它不会发出 Agent-owned Assistant settlement。真实 loop regression 改为断言 summarization request 收到的精确最终 instruction。

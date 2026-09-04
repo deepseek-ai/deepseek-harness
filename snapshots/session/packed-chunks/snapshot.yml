@@ -3,5 +3,8 @@ scenario: packed-chunks
 profile: headless
 composition: default
 recording: authored
+sessionFormat:
+  version: 0
+  coverage: [packed-row]
 header:
   class: default

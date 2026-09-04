@@ -4,10 +4,10 @@
  * previous generation has been retained or restored.
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { afterAll, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { Include } from '@deepseek-ai/cordis-plugin-include'
 import { boot } from '../src/index.ts'
@@ -15,6 +15,11 @@ import { boot } from '../src/index.ts'
 const NAME = 'dsh-test-bin'
 
 const NOOP_PLUGIN = 'export const name = "noop"\nexport function apply() {}\n'
+
+const tempRoots: string[] = []
+afterAll(() => {
+  for (const root of tempRoots.splice(0)) rmSync(root, { recursive: true, force: true })
+})
 
 interface TreeFixture {
   ctx: Context
@@ -24,6 +29,7 @@ interface TreeFixture {
 
 async function bootTree(configBody: string, files: Record<string, string> = {}): Promise<TreeFixture> {
   const dir = mkdtempSync(join(tmpdir(), 'dsh-config-reload-'))
+  tempRoots.push(dir)
   writeFileSync(join(dir, 'noop.mjs'), NOOP_PLUGIN)
   for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content)
   writeFileSync(join(dir, 'cordis.yml'), configBody)
@@ -282,6 +288,7 @@ describe('loader tree replacement', () => {
 describe('include refresh with overlay patches', () => {
   it('re-applies entry patches and inserted entries on every re-read (parity with initial load)', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'dsh-config-reload-overlay-'))
+    tempRoots.push(dir)
     writeFileSync(join(dir, 'noop.mjs'), NOOP_PLUGIN)
     writeFileSync(join(dir, 'base.yml'), '- id: noop\n  name: ./noop.mjs\n  config:\n    value: base\n')
     writeFileSync(join(dir, 'cordis.yml'), [
@@ -347,6 +354,7 @@ describe('include patches layered over one base', () => {
     // must therefore be able to reach a row an earlier layer inserted, or
     // bundle-only rows would be invisible to the user's patch layer.
     const dir = mkdtempSync(join(tmpdir(), 'dsh-config-layered-'))
+    tempRoots.push(dir)
     writeFileSync(join(dir, 'noop.mjs'), NOOP_PLUGIN)
     writeFileSync(join(dir, 'base.yml'), '- id: shared\n  name: ./noop.mjs\n  config:\n    value: base\n')
     writeFileSync(join(dir, 'cordis.yml'), [

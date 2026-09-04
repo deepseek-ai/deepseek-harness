@@ -40,7 +40,7 @@ always 模式先请求下游恢复，使上下文溢出压缩（compaction）之
 
 两种模式的本地延迟都按指数增长，从 `initialDelayMs` 增至 `maxDelayMs`。`jitterRatio` 用 `[1 - jitterRatio, 1 + jitterRatio]` 区间内的均匀随机样本乘以每次目标值，再应用上限。提供方给出的正数 `Retry-After` 若未超过上限，则保持精确且不加抖动。若提供方延迟超过上限，normal 模式会委托后续处理；always 模式则改用配置的本地退避，以维持无限重试保证。
 
-每次安排重试都会追加一条不进入表层的 `llm/retry` 事件，其中包含失败的提供方、策略模式、已解析策略的规范键、提供方策略内的重试编号、延迟和失败事实。normal 事件包含有限的 `maxRetries`；always 事件省略该字段，UI 将上限渲染为 `∞`。该事件与失败的 `assistant/chunk` 记录都不会生成表层消息，因此除非其他恢复策略有意改变表层，否则下一次请求包含的派生上下文与失败请求相同。
+每次安排 retry 都会追加一条不进入 surface 的 `llm/retry` event，其中包含失败 provider、policy mode、resolved policy 的规范 key、provider-policy retry number、delay 与 failure facts。normal event 包含有限 `maxRetries`；always event 省略该字段，UI 把上限渲染为 `∞`。该 event 与失败 attempt 的 `assistant/attempt` settlement 都不产生 surface message，因此除非其他 recovery policy 有意改变 surface，否则下一次请求包含与失败请求相同的派生 context。
 
 ## 曾考虑的替代方案
 

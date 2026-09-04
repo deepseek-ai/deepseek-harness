@@ -8,12 +8,8 @@
 
 import {
   decodeSeqRanges,
-  decodeStorageRecord,
-  packChunkRuns,
-  SessionLogOffset,
-  SessionSeq,
-  type SessionEvent,
 } from '@deepseek-ai/dsh-session'
+import { prepareSessionSnapshotFixtureForComparison } from '@deepseek-ai/dsh-llm-replay'
 import { redactSessionSnapshotIds } from './identity.ts'
 
 const SESSION_ID = '{{sessionId}}'
@@ -327,9 +323,9 @@ export function normalizeStdout(
 
 /**
  * Normalize a session JSONL log into a stable expected output: the header line's
- * volatile fields (`createdAt`, `id`, `cwd`) are zeroed/scrubbed, ordinary
- * event `time`, packed-row `time0`, and goal-change lifecycle clock values are
- * zeroed, and all volatile strings are scrubbed. Projected inputs remain
+ * volatile fields (`createdAt`, `id`, `cwd`) are zeroed/scrubbed; event,
+ * historical packed-row, embedded Assistant-stream, and goal lifecycle clocks
+ * are zeroed; and all volatile strings are scrubbed. Projected inputs remain
  * projected. Packed `data.dt` gaps are normalized even when the projected row
  * omits its `time0` anchor.
  * Output is JSONL in the same shape as the input — one compact record per
@@ -361,6 +357,19 @@ export function normalizeSessionLog(
     } else if ('time' in record) {
       record.time = 0
     }
+    if ((record.type === 'assistant/message' || record.type === 'assistant/attempt')
+      && record.data !== null && typeof record.data === 'object') {
+      const stream = (record.data as { stream?: unknown }).stream
+      if (Array.isArray(stream)) {
+        for (const member of stream) {
+          if (member === null || typeof member !== 'object') continue
+          const timed = member as { time?: unknown; time0?: unknown; dt?: unknown }
+          if (typeof timed.time === 'number') timed.time = 0
+          if (typeof timed.time0 === 'number') timed.time0 = 0
+          if (Array.isArray(timed.dt)) timed.dt = timed.dt.map(() => 0)
+        }
+      }
+    }
     if (record.type === 'hook/result' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if ('durationMs' in data) data.durationMs = 0
@@ -379,28 +388,16 @@ export function normalizeSessionLog(
 }
 
 /**
- * Repack projected body records so persistence flush boundaries do not affect
- * committed snapshots. Synthetic envelopes exist only while the storage codec
- * reconstructs and packs the logical event stream; returned rows stay projected.
+ * Canonicalize projected v2 body records. Compact streams are nested event data,
+ * so persistence flush boundaries cannot change the row layout.
  */
-function repackSessionSnapshot(rawLog: string): string {
+function projectSessionSnapshot(rawLog: string): string {
   const lines = rawLog.split('\n').filter(line => line.trim().length > 0)
   const header = lines.shift() as string
 
-  let nextSeq = SessionLogOffset(0)
-  const events = lines.flatMap((line) => {
+  const body = lines.map((line) => {
     const record = JSON.parse(line) as Record<string, unknown>
-    if (isPackedFixtureRow(record)) {
-      const decoded = decodeStorageRecord({ ...record, seq0: nextSeq, time0: 0 })
-      nextSeq = SessionLogOffset(nextSeq + decoded.length)
-      return decoded
-    }
-    const event = { ...record, seq: SessionSeq(nextSeq), time: 0 } as SessionEvent
-    nextSeq = SessionLogOffset(nextSeq + 1)
-    return [event]
-  })
-  const body = packChunkRuns(events).map((stored) => {
-    const projected = { ...stored } as Record<string, unknown>
+    const projected = { ...record }
     omitFixtureEnvelope(projected)
     return JSON.stringify(projected)
   })
@@ -410,8 +407,8 @@ function repackSessionSnapshot(rawLog: string): string {
 /**
  * Normalize and project persisted session JSONL for a committed fixture.
  * This composes ordinary log normalization with request-header scrubbing and
- * persistence-envelope projection, then packs the logical event stream into a
- * canonical layout independent of persistence flush boundaries.
+ * persistence-envelope projection, then writes the v2 logical event stream as
+ * one record per event, independent of persistence flush boundaries.
  *
  * @param rawLog - persisted or already-projected session JSONL.
  * @param ctx - the run's volatile values to scrub.
@@ -423,7 +420,7 @@ export function normalizeSessionSnapshot(
   ctx: NormalizeContext,
   options: NormalizeOptions = {},
 ): string {
-  return repackSessionSnapshot(scrubSessionSnapshot(normalizeSessionLog(rawLog, ctx, options)))
+  return projectSessionSnapshot(scrubSessionSnapshot(normalizeSessionLog(rawLog, ctx, options)))
 }
 
 /**
@@ -438,13 +435,83 @@ export function normalizeSessionSnapshots(
   ctx: NormalizeContext,
   options: Omit<NormalizeOptions, 'identityMode'> = {},
 ): string[] {
-  return redactSessionSnapshotIds(rawLogs).map(log => repackSessionSnapshot(
+  const currentLogs = rawLogs.map(log => hasSessionFormatVersion(log)
+    ? prepareSessionSnapshotFixtureForComparison(log)
+    : log)
+  const comparableLogs = currentLogs.map(normalizeSessionFormatProvenance)
+  return redactSessionSnapshotIds(comparableLogs).map(log => projectSessionSnapshot(
     scrubSessionSnapshot(normalizeSessionLog(
       log,
       { ...ctx, sessionIds: [] },
       { ...options, identityMode: 'preserve' },
     )),
   ))
+}
+
+/**
+ * Omit only generation-qualified operational provenance from expected-output comparison.
+ * @param rawLog - Session records or events as compact JSON lines.
+ * @returns the same records without delivery or captured-source generation qualifiers.
+ */
+export function normalizeSessionFormatProvenance(rawLog: string): string {
+  return rawLog.split('\n').map((line) => {
+    if (line.trim().length === 0) return line
+    const record = JSON.parse(line) as Record<string, unknown>
+    let changed = normalizeCapturedFormatProvenance(record)
+    if (record.type === 'session' && Object.hasOwn(record, 'version')) {
+      delete record.version
+      changed = true
+    }
+    if (record.type === 'session-log-deepseek/delivery-accepted'
+      && record.data !== null && typeof record.data === 'object' && !Array.isArray(record.data)) {
+      const data = { ...record.data as Record<string, unknown> }
+      if (Object.hasOwn(data, 'sessionFormatVersion')) {
+        delete data.sessionFormatVersion
+        record.data = data
+        changed = true
+      }
+    }
+    return changed ? JSON.stringify(record) : line
+  }).join('\n')
+}
+
+/** Omit captured generations only from an actual current Message source position. */
+function normalizeCapturedFormatProvenance(event: Record<string, unknown>): boolean {
+  if (event.data === null || typeof event.data !== 'object' || Array.isArray(event.data)) return false
+  const data = event.data as Record<string, unknown>
+  const message = event.type === 'user/message'
+    ? data
+    : event.type === 'assistant/message' || event.type === 'tool/result'
+      ? data.message
+      : undefined
+  if (message === null || typeof message !== 'object' || Array.isArray(message)) return false
+  const source = (message as Record<string, unknown>).source
+  if (source === null || typeof source !== 'object' || Array.isArray(source)) return false
+  const record = source as Record<string, unknown>
+  if (record.kind !== 'session-reference' || record.form !== 'recall' || record.version !== 1
+    || !Array.isArray(record.references)) return false
+  let changed = false
+  for (const reference of record.references) {
+    if (reference === null || typeof reference !== 'object' || Array.isArray(reference)) continue
+    const captured = reference as Record<string, unknown>
+    if (Object.hasOwn(captured, 'capturedFormatVersion')) {
+      delete captured.capturedFormatVersion
+      changed = true
+    }
+  }
+  return changed
+}
+
+/** Whether a fixture declares a released Session format and therefore participates in migration burn-in. */
+function hasSessionFormatVersion(rawLog: string): boolean {
+  const firstLine = rawLog.split(/\r?\n/).find(line => line.trim().length > 0)
+  if (firstLine === undefined) throw new Error('session snapshot must start with a session header')
+  const header = JSON.parse(firstLine) as unknown
+  if (header === null || typeof header !== 'object' || Array.isArray(header)
+    || (header as Record<string, unknown>)['type'] !== 'session') {
+    throw new Error('session snapshot must start with a session header')
+  }
+  return Object.hasOwn(header, 'version')
 }
 
 /**

@@ -26,7 +26,7 @@ interface PageRequest {
   readonly limit?: number
 }
 
-type JournalFrame = RemoteJournalFrame<Entry, number, Page>
+type JournalFrame = RemoteJournalFrame<Entry, number, Page, string>
 type ScriptedFrame = JournalFrame
 
 interface Generation {
@@ -70,7 +70,7 @@ const STREAM_FACTORY = {
   },
 }
 
-class FixtureJournal extends RemoteJournalStream<Page, Entry, number, PageRequest> {
+class FixtureJournal extends RemoteJournalStream<Page, Entry, number, PageRequest, string> {
   constructor(
     private readonly generations: Generation[],
     private readonly pages: PageSource[],
@@ -78,7 +78,7 @@ class FixtureJournal extends RemoteJournalStream<Page, Entry, number, PageReques
     private readonly pageRequests: PageRequest[],
     private readonly pageCursors: number[],
     private readonly followRequests: PageRequest[],
-    changes: RemoteJournalChange<Page, Entry>[],
+    changes: RemoteJournalChange<Page, Entry, string>[],
     failed: (error: unknown) => void,
     factory: RemoteStreamFactory = STREAM_FACTORY,
   ) {
@@ -143,8 +143,8 @@ function journalFixture(
   pages: PageSource[],
   factory: RemoteStreamFactory = STREAM_FACTORY,
 ): {
-  readonly journal: RemoteJournalStream<Page, Entry, number, PageRequest>
-  readonly changes: RemoteJournalChange<Page, Entry>[]
+  readonly journal: RemoteJournalStream<Page, Entry, number, PageRequest, string>
+  readonly changes: RemoteJournalChange<Page, Entry, string>[]
   readonly failed: ReturnType<typeof vi.fn>
   readonly calls: string[]
   readonly pageRequests: PageRequest[]
@@ -155,7 +155,7 @@ function journalFixture(
   const pageRequests: PageRequest[] = []
   const pageCursors: number[] = []
   const followRequests: PageRequest[] = []
-  const changes: RemoteJournalChange<Page, Entry>[] = []
+  const changes: RemoteJournalChange<Page, Entry, string>[] = []
   const failed = vi.fn()
   const journal = new FixtureJournal(
     generations,
@@ -204,6 +204,52 @@ function controlledFactory(
 }
 
 describe('RemoteJournalStream', () => {
+  it('publishes cursorless notifications without advancing the durable page cursor', async () => {
+    const live = Promise.withResolvers<ScriptedFrame>()
+    const fixture = journalFixture(
+      [{ frames: [opened(-1, page('empty', [])), { type: 'notification', notification: 'partial' }, live.promise], hold: true }],
+      [page('older', [])],
+    )
+
+    await fixture.journal.open({})
+    await vi.waitFor(() => { expect(fixture.changes).toHaveLength(2) })
+    await fixture.journal.prepend({})
+    live.resolve({ type: 'entry', entry: { seq: 0 } })
+    await vi.waitFor(() => { expect(fixture.changes).toHaveLength(4) })
+
+    expect(fixture.pageCursors).toEqual([-1])
+    expect(fixture.changes.map(change => change.type)).toEqual([
+      'replace', 'notification', 'prepend', 'append',
+    ])
+    await fixture.journal.dispose()
+  })
+
+  it('defers notifications behind a durable gap until replacement commits', async () => {
+    const repair = Promise.withResolvers<Page>()
+    const fixture = journalFixture(
+      [{
+        frames: [
+          opened(0, page('initial', [0])),
+          { type: 'entry', entry: { seq: 2 } },
+          { type: 'notification', notification: 'after-gap' },
+        ],
+        hold: true,
+      }],
+      [repair.promise],
+    )
+
+    await fixture.journal.open({})
+    await vi.waitFor(() => { expect(fixture.pageCursors).toEqual([2]) })
+    expect(fixture.changes.map(change => change.type)).toEqual(['replace'])
+    repair.resolve(page('repair', [0, 1, 2]))
+    await vi.waitFor(() => { expect(fixture.changes).toHaveLength(3) })
+
+    expect(fixture.changes.map(change => change.type)).toEqual([
+      'replace', 'replace', 'notification',
+    ])
+    await fixture.journal.dispose()
+  })
+
   it('replaces from pages whose entries cover contiguous cursor ranges', async () => {
     const snapshot = rangedPage(
       'ranged',

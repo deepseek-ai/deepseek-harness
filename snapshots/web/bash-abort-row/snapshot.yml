@@ -6,4 +6,4 @@ recording: authored
 header:
   class: acp-default
 session:
-  source: ../../acp/cancel-tool-calls/session.jsonl
+  source: ../../acp/cancel-tool-calls/session.v2.jsonl

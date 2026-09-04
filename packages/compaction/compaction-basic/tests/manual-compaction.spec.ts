@@ -186,6 +186,7 @@ function closedConversation(turns = 2, lastTurnNumber = turns): Session {
       })
     }
     session.append('assistant/message', {
+      stream: [],
       turn,
       step: 1,
       message: createAssistantMessage({

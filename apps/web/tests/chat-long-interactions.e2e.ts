@@ -90,7 +90,6 @@ async function openSeed(page: Page): Promise<void> {
   const resultCount = await results.count()
   if (resultCount !== 1) throw new Error(`expected one seeded search result, received ${String(resultCount)}`)
   await results.click()
-  await results.click()
   await page.getByText(FIXTURE.markers.assistant(FIXTURE.turns), { exact: false })
     .last().waitFor({ timeout: 30_000 })
   await nextPaint(page)

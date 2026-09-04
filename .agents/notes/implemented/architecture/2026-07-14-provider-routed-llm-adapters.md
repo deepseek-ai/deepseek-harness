@@ -54,7 +54,7 @@ Compaction configuration gains `summarizationProvider` beside `summarizationMode
 
 The JSON-RPC runtime receives provider and model explicitly. Its convenience fallback mounts `dsh-llm-deepseek` only for provider `deepseek` when that provider has no registered owner; other missing providers fail without guessing an adapter.
 
-The on-disk session format remains the pre-release pinned version `0`, with no compatibility promise. Seed/load validation rejects request headers and assistant messages that omit required provider/model fields instead of accepting an old shape that can no longer reconstruct the request.
+Current v1 seed/load validation rejects request headers and assistant messages that omit required provider/model fields. The frozen v0-to-v1 edge requires the same reconstructable routing identity before migration; it never guesses a missing provider or model, and malformed shapes refuse before publication.
 
 ## Alternatives considered
 
@@ -78,7 +78,7 @@ The on-disk session format remains the pre-release pinned version `0`, with no c
 - pi-ai credentials, transport knobs, SDK timeouts, and the five-minute-default `streamIdleTimeoutMs` watchdog are scoped per provider profile. Hidden provider retries are disabled; bounded retries belong to the separately composed agent recovery policy.
 - `dsh-llm-pi-ai` rejects stop sequences because pi-ai's common stream API cannot express them; the native DeepSeek adapter retains its stop support.
 - Replay state is portable only within the adapter instance that owns both the historical and target providers. Cross-provider and cross-model restoration is an adapter responsibility, and another adapter receives provider-neutral history without the opaque state.
-- Current pre-release session JSONL requires provider/model on request headers and assistant messages. Older shapes remain version `0` but are rejected rather than migrated.
+- Current v1 Session JSONL requires provider/model on request headers and assistant messages. The v0 edge migrates only frozen shapes that already carry reconstructable request identity.
 
 ## Testing
 
@@ -88,4 +88,4 @@ The on-disk session format remains the pre-release pinned version `0`, with no c
 
 ## Risks
 
-This is a repo-wide pre-release API break: model-only request construction, adapter registration, app protocols, fixtures, and persisted version-0 event shapes all change together, with no compatibility aliases. The provider exclusivity rule deliberately prevents two implementations of the same upstream from coexisting in one context. A pi-ai dependency update can change the accepted provider/model catalog, so the lockfile and adapter e2e matrix define the tested set. Custom `baseURL` endpoints inherit the chosen catalog model's protocol assumptions and cannot repair an incompatible proxy. Catalog-external model descriptors and multimodal content remain unsupported. pi-ai replay state may contain opaque encrypted reasoning signatures; it is persisted because the provider requires it for continuity, but it is never rendered or logged outside the existing session record.
+This was a repo-wide API break when introduced: model-only request construction, adapter registration, app protocols, fixtures, and persisted v0 event shapes changed together, with no compatibility aliases. Released historical recovery now belongs to the adjacent Session-format edge. The provider exclusivity rule deliberately prevents two implementations of the same upstream from coexisting in one context. A pi-ai dependency update can change the accepted provider/model catalog, so the lockfile and adapter e2e matrix define the tested set. Custom `baseURL` endpoints inherit the chosen catalog model's protocol assumptions and cannot repair an incompatible proxy. Catalog-external model descriptors and multimodal content remain unsupported. pi-ai replay state may contain opaque encrypted reasoning signatures; it is persisted because the provider requires it for continuity, but it is never rendered or logged outside the existing session record.

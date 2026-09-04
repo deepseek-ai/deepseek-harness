@@ -6,4 +6,4 @@ recording: authored
 header:
   class: web-default
 session:
-  source: ../fresh-round-trip/session.jsonl
+  source: ../fresh-round-trip/session.v2.jsonl

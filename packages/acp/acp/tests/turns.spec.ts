@@ -203,8 +203,8 @@ describe('ACP prompt lifecycle', () => {
     const agent = harness.ctx.agents.get(SessionId(sessionId))!
     let autonomousStarted!: () => void
     const started = new Promise<void>((resolve) => { autonomousStarted = resolve })
-    harness.ctx.on('session/event', (session, event) => {
-      if (session === agent.session && event.type === 'assistant/chunk') autonomousStarted()
+    harness.ctx.on('agent/assistant-stream', ({ agent: subject, frame }) => {
+      if (subject === agent && frame.type === 'chunk') autonomousStarted()
     })
     agent.followup(createUserMessage({
       content: [{ type: 'text', text: 'autonomous work' }],

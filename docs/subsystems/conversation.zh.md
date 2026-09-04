@@ -8,12 +8,12 @@ Conversation 是 Client `SessionEventLikeEntry` window 与浏览器 view 之间�
 
 ## 数据模型与所有权
 
-Session Controller 拥有连续的已加载逻辑 event window。每个 `SessionEventLikeEntry` 都是 `{ type: 'event', event: SessionEvent }` 或 `{ type: 'chunks', event: ChunkRowEvent }`；两种内部 event 都公开 `type`、`seq`、`time` 与 `data`。`ui-conversation` 把这些 entry 直接交给 assembler，不另开 history stream、不转换 record，也不展开 packed member。每个 Session 对应一个 `ConversationNodeAssembler`，它应用所有已注册 Definition，并为每个已注册 view target 发布独立 source。
+Session Controller 拥有连续的已加载逻辑 event window。每个 `SessionEventLikeEntry` 要么是表示一个持久事件的 `{ type: 'event', event: SessionEvent }`，要么是表示一个 Client-only `assistant/live-chunk` 呈现的 `{ type: 'transient', event: AssistantLiveChunkEvent }`；两种内部 event 都公开 `type`、`seq`、`time` 与 `data`。`ui-conversation` 把这些 entry 直接交给 assembler，不另开 history stream。每个 Session 对应一个 `ConversationNodeAssembler`，它应用所有已注册 Definition，并为每个已注册 view target 发布独立 source。
 
 | 概念 | Owner 与用途 |
 |---|---|
-| Event Definition | 业务包一次匹配一条标准 event 或一个 packed Assistant run，以稳定 `(kind, id)` 关联输入、折叠确定性 State，并可选择 materialize 一个 target node。 |
-| Context | Engine 为一个 `(kind, id)` 拥有的有序 Match 与当前 State。一个 packed run 只占一个 update Match；只有 update 的证据可以保持 pending，直到分页补齐其唯一 scalar start。 |
+| Event Definition | 业务包一次匹配一个持久 event 或 Client-only 瞬态 event，以稳定 `(kind, id)` 关联输入、折叠确定性 State，并可选择 materialize 一个 target node。 |
+| Context | Engine 为一个 `(kind, id)` 拥有的有序 Match 与当前 State。一个瞬态 event 只占一个 update Match；只有 update 的证据可以保持 pending，直到分页补齐其唯一持久 start。 |
 | Location | Engine 根据持久 boundary event 推导的 Session、Turn 或 Step 坐标。Definition 可以向一个 Turn 或 Step 发布类型化数据。 |
 | View Definition | Target 包为每个 Session 创建一个增量 builder，并拥有该 target 的最终 snapshot 类型。 |
 | View | Chat 或 Trajectory 等 Slot entry 只读取自身 target snapshot，并渲染 target 自有 node。 |
@@ -42,7 +42,7 @@ shell 拥有 View 选择，并在 binding 创建、被选为 current 或 View ro
 
 系统支持增量事件。如果生产方能以较低成本发出 whole-value checkpoint，应优先采用，因为 start 位于已加载窗口之外时它仍可直接使用。每条 delta 都必须携带稳定 id，并且按照日志 `seq` 升序回放时能够确定性地产生 State；它不能依赖只存在于实时内存中的状态。如果当前历史窗口只有 update，Assembler 会保留一个 pending Context，并在更早分页补齐 start 前不构造 State。如果产品必须在 start 尚未加载时渲染，terminal 或 checkpoint 事件就必须携带足够的完整 fallback 状态，让 Definition 能直接构造结果；不要通过扫描无关事件恢复它。
 
-连续且属于同一 block 的历史 `assistant/chunk` delta 会以 `chunkrow/text-chunks`、`chunkrow/reasoning-chunks` 或 `chunkrow/tool-call-chunks` 到达。顶层 `seq` 与 `time` 表示首个逻辑成员，`data` 保留每个 fragment 与 timestamp gap。这些 Client-only event 只能充当 update；`start()` 只接收标准 `SessionEvent`。消费 Assistant delta 的 Definition 在同一组 `match()` 与 `update()` 方法里处理相关 packed tag，其他 Definition 直接返回 `null`，无需展开该 run。
+实时 Assistant delta 作为 Client-only `assistant/live-chunk` update 到达。重连 baseline 会把活跃的进程内紧凑 stream 展开为相同的瞬态 event，持久 `assistant/message` 与 `assistant/attempt` event 则嵌入完整紧凑 stream 供历史回放。瞬态 event 只能充当 update；`start()` 只接收标准 `SessionEvent`。消费 Assistant 输出的 Definition 在同一组 `match()` 与 `update()` 方法里处理 live chunk 与持久 settlement，其他 Definition 直接返回 `null`，无需展开 stream。
 
 ## Definition 与类型化 Chat payload
 

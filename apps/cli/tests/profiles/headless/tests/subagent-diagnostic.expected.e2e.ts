@@ -8,7 +8,12 @@ import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
-import { normalizeSessionSnapshot, type NormalizeContext } from '@deepseek-ai/dsh-session-snapshot'
+import {
+  fixtureContext,
+  normalizeSessionSnapshot,
+  normalizeSessionSnapshots,
+  type NormalizeContext,
+} from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
@@ -25,6 +30,16 @@ const parentId = SessionId('subagent-diagnostic-parent')
 const childId = SessionId('subagent-diagnostic-child')
 const refreshing = process.env.DSH_SNAPSHOT === 'refresh'
 const task = 'Call list_agents once and report what it shows.'
+
+/** Compare one current normalized Session with its generation-aware committed fixture. */
+async function expectSession(actual: string, expectedPath: string): Promise<void> {
+  const expected = await readFile(expectedPath, 'utf8')
+  const parse = (content: string): Record<string, unknown>[] => content.split('\n')
+    .filter(line => line.trim().length > 0)
+    .map(line => JSON.parse(line) as Record<string, unknown>)
+  expect(normalizeSessionSnapshots([actual], fixtureContext(actual)).map(parse))
+    .toEqual(normalizeSessionSnapshots([expected], fixtureContext(expected)).map(parse))
+}
 
 /**
  * Seed a completed parent turn plus one cold child that durably classifies
@@ -108,7 +123,7 @@ describe('descriptor-less cold child diagnostic snapshot', () => {
         if (refreshing) {
           await writeFile(parentExpected, normalizedParent)
         }
-        expect(normalizedParent).toBe(await readFile(parentExpected, 'utf8'))
+        await expectSession(normalizedParent, parentExpected)
       },
     })
 

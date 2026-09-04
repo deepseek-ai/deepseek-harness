@@ -1,15 +1,17 @@
 {
   "prompt": "respond",
   "logs": [
-    { "file": "b/parent/session.jsonl", "lines": [
-      { "type": "session", "id": "{{SID}}", "createdAt": 700, "cwd": "{{CWD}}", "delegationDepth": 0 },
-      { "type": "request/header", "seq": 0, "time": 3, "data": { "header": { "config": { "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
-      { "type": "user/message", "seq": 1, "time": 5, "data": { "role": "user", "content": [{ "type": "text", "text": "same inherited message" }], "source": { "kind": "user" }, "id": "11111111-1111-4111-8111-111111111111" }, "surfaceOp": "append" }
+    { "file": "b/parent/session.v2.jsonl", "lines": [
+      { "type": "session", "version": 2, "id": "{{SID}}", "createdAt": 700, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
+      { "type": "turn/start", "seq": 0, "time": 2, "data": { "turn": 1 } },
+      { "type": "request/header", "seq": 1, "time": 3, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
+      { "type": "user/message", "seq": 2, "time": 5, "data": { "role": "user", "content": [{ "type": "text", "text": "same inherited message" }], "source": { "kind": "user" }, "id": "11111111-1111-4111-8111-111111111111" }, "surfaceOp": "append" }
     ]},
-    { "file": "b/child/session.jsonl", "lines": [
-      { "type": "session", "id": "abababab-cdcd-4efe-8ada-badabadabada", "createdAt": 800, "cwd": "{{CWD}}", "parentSession": "{{SID}}", "delegationDepth": 1 },
-      { "type": "request/header", "seq": 0, "time": 2, "data": { "header": { "config": { "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
-      { "type": "user/message", "seq": 1, "time": 5, "data": { "role": "user", "content": [{ "type": "text", "text": "same inherited message" }], "source": { "kind": "user" }, "id": "11111111-1111-4111-8111-111111111111" }, "surfaceOp": "append" }
+    { "file": "b/child/session.v2.jsonl", "lines": [
+      { "type": "session", "version": 2, "id": "abababab-cdcd-4efe-8ada-badabadabada", "createdAt": 800, "cwd": "{{CWD}}", "parentSession": "{{SID}}", "isSeeded": false, "delegationDepth": 1 },
+      { "type": "turn/start", "seq": 0, "time": 1, "data": { "turn": 1 } },
+      { "type": "request/header", "seq": 1, "time": 2, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
+      { "type": "user/message", "seq": 2, "time": 5, "data": { "role": "user", "content": [{ "type": "text", "text": "same inherited message" }], "source": { "kind": "user" }, "id": "11111111-1111-4111-8111-111111111111" }, "surfaceOp": "append" }
     ]}
   ]
 }

@@ -10,9 +10,9 @@
  * is pinned separately in integration.spec.ts.
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtempSync, realpathSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve as resolvePath } from 'node:path'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
@@ -22,7 +22,7 @@ import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
-import { SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import { ShellExecutor } from '@deepseek-ai/dsh-shell'
@@ -37,6 +37,12 @@ import { processOutcome } from '../src/background.ts'
 import { renderPwshProcessRead, renderPwshResult } from '../src/render.ts'
 
 const testToolSignal = new AbortController().signal
+
+/** Per-test temp dirs (session cwd/home fixtures), removed after each test. */
+const tempDirs: string[] = []
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
 
 /**
  * A scriptable fake executor: `resolve()` mirrors the real defaulting, `run()`
@@ -253,7 +259,7 @@ function sandboxAgent(
     ...ctx === undefined ? {} : { ctx: ctx.plugin(() => {}).ctx },
     session: {
       id,
-      header: { version: 0, id, createdAt: 0, isSeeded: false },
+      header: { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false },
       inheritedEventCount: SessionLogOffset(0),
       firstLiveSeq: SessionLogOffset(0),
       get seq() { return SessionLogOffset(events.length) },
@@ -291,7 +297,7 @@ function registerFakeAgent(ctx: Context, sessionId: string): Agent {
     ctx: scopeFiber.ctx,
     session: {
       id,
-      header: { version: 0, id, createdAt: 0, isSeeded: false },
+      header: { version: SESSION_FORMAT_VERSION, id, createdAt: 0, isSeeded: false },
       inheritedEventCount: SessionLogOffset(0),
       firstLiveSeq: SessionLogOffset(0),
       seq: SessionLogOffset(0),
@@ -388,6 +394,7 @@ describe('argument validation', () => {
 describe('execution through the bash seam', () => {
   it('forwards command, session cwd, timeout, and managed DSH_* environment', async () => {
     const dshHome = mkdtempSync(join(tmpdir(), 'dsh-tool-pwsh-home-'))
+    tempDirs.push(dshHome)
     const { ctx, bash } = await setup({}, dshHome)
     bash.handler = () => runResult('hi\n')
     const agent = registerFakeAgent(ctx, 'session-1')
@@ -538,6 +545,7 @@ describe('per-call sandbox policy resolution', () => {
   it('stamps the CALLING SESSION\'s resolved policy onto the request (session cwd, not the server launch dir)', async () => {
     const { ctx, bash } = await setupSandboxed()
     const sessionCwd = mkdtempSync(join(tmpdir(), 'dsh-tool-pwsh-policy-'))
+    tempDirs.push(sessionCwd)
     const agent = registerFakeAgent(ctx, 'policy-session')
     Object.assign(agent.session.header, { cwd: sessionCwd })
     const result = await call(ctx, 'pwsh', { command: 'Write-Output hi', description: 'say hi' }, agent)

@@ -15,7 +15,13 @@
       "path": "../loader-smoke"
     },
     {
+      "path": "../llm-replay"
+    },
+    {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-format"
     },
     {
       "path": "../../util/http-proxy"

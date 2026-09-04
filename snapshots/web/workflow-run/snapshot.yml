@@ -6,4 +6,4 @@ recording: authored
 header:
   class: default
 session:
-  source: ../../session/workflow-run/session.jsonl
+  source: ../../session/workflow-run/session.v2.jsonl

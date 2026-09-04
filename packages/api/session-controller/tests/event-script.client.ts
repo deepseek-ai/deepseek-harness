@@ -27,13 +27,18 @@ export const ev = {
     }) }),
   stepStart: (seq: SessionSeq, turn: number, step = 0): SessionEvent =>
     at(seq, { type: 'step/start', data: { turn, step } }),
-  chunkStart: (seq: SessionSeq, turn: number, step = 0, index = 0): SessionEvent =>
-    at(seq, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'block-start', index, blockType: 'text' } } }),
-  chunkText: (seq: SessionSeq, turn: number, piece: string, step = 0, index = 0): SessionEvent =>
-    at(seq, { type: 'assistant/chunk', data: { turn, step, chunk: { type: 'text-delta', index, text: piece } } }),
   assistant: (seq: SessionSeq, turn: number, body: string, step = 0): SessionEvent =>
     at(seq, { type: 'assistant/message', surfaceOp: 'append', data: {
       turn, step,
+      stream: [
+        { type: 'chunk', time: 1_700_000_000_000 + seq, chunk: { type: 'block-start', index: 0, blockType: 'text' } },
+        { type: 'text-chunks', time0: 1_700_000_000_000 + seq, index: 0, dt: [], texts: [body] },
+        {
+          type: 'chunk', time: 1_700_000_000_000 + seq,
+          chunk: { type: 'block-end', index: 0, block: { type: 'text', text: body } },
+        },
+        { type: 'chunk', time: 1_700_000_000_000 + seq, chunk: { type: 'finish', reason: { kind: 'stop' } } },
+      ],
       message: createMessage({
         role: 'assistant',
         content: text(body),

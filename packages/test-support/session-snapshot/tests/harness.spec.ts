@@ -495,7 +495,7 @@ describe('runScenario', () => {
       logs: [{
         file: 'project/main/session.jsonl',
         lines: [
-          { type: 'session', id: '{{SID}}', createdAt: 42, cwd: '{{CWD}}' },
+          { type: 'session', version: 0, id: '{{SID}}', createdAt: 42, cwd: '{{CWD}}' },
           { type: 'turn/start', seq: 1, time: 9, data: { turn: 1 } },
         ],
       }],
@@ -1264,11 +1264,12 @@ describe('runScenario', () => {
         // File names chosen so readdir feeds the sort children-first AND
         // parent-in-the-middle: the comparator then sees a parent on both
         // sides of a pair, plus the same-createdAt (localeCompare) tiebreak.
-        { file: 'b1/aa-child-c/session.jsonl', lines: [{ type: 'session', id: 'cccccccc-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
-        { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', id: '{{SID}}', createdAt: 900 }] },
-        { file: 'b1/cc-child-a/session.jsonl', lines: [{ type: 'session', id: 'aaaaaaaa-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
+        { file: 'b1/aa-child-c/session.jsonl', lines: [{ type: 'session', version: 0, id: 'cccccccc-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
+        { file: 'b1/bb-parent/session.jsonl', lines: [{ type: 'session', version: 0, id: 'superseded-parent', createdAt: 1 }] },
+        { file: 'b1/bb-parent/session.v1.jsonl', lines: [{ type: 'session', version: 1, id: '{{SID}}', createdAt: 900 }] },
+        { file: 'b1/cc-child-a/session.jsonl', lines: [{ type: 'session', version: 0, id: 'aaaaaaaa-0000-4000-8000-000000000000', createdAt: 500, parentSession: '{{SID}}' }] },
         // Missing id/createdAt fall back to ''/0; earliest child by createdAt.
-        { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', parentSession: '{{SID}}' }] },
+        { file: 'b2/orphan/session.jsonl', lines: [{ type: 'session', version: 0, parentSession: '{{SID}}' }] },
       ],
     })
     const result = await runScenario(
@@ -1284,13 +1285,22 @@ describe('runScenario', () => {
     expect(result.sessionLogs[1]?.parentSession).toBe(result.sessionId)
   })
 
-  it('treats an empty log file as a header-less primary with default fields', { timeout: 20_000 }, async () => {
+  it('rejects an empty persisted generation', { timeout: 20_000 }, async () => {
     const { fixtureFile } = await scenario({ logs: [{ file: 'b/empty/session.jsonl', lines: [] }] })
-    const result = await runScenario(
+    await expect(runScenario(
       { steps: boot },
       { agent: AGENT, mode: 'replay', fixtureFile },
-    )
-    expect(result.sessionLogs.map(l => [l.id, l.createdAt, l.parentSession])).toEqual([['', 0, undefined]])
+    )).rejects.toThrow('session.jsonl: session fixture is empty')
+  })
+
+  it('rejects a persisted filename/header generation mismatch', { timeout: 20_000 }, async () => {
+    const { fixtureFile } = await scenario({
+      logs: [{ file: 'b/mismatch/session.v1.jsonl', lines: [{ type: 'session', version: 0 }] }],
+    })
+    await expect(runScenario(
+      { steps: boot },
+      { agent: AGENT, mode: 'replay', fixtureFile },
+    )).rejects.toThrow('filename declares Session format v1, header declares v0')
   })
 
   it('yields no logs when the sessions root vanished', { timeout: 20_000 }, async () => {

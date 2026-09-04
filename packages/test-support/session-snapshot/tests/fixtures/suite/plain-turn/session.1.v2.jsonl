@@ -1,0 +1,3 @@
+{"type":"session","version":2,"id":"{{session:2}}","createdAt":300,"cwd":"{{cwd}}","parentSession":"{{session:1}}","isSeeded":false,"delegationDepth":1}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}

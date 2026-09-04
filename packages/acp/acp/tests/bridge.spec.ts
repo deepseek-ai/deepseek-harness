@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import { ToolCallId, type StreamChunk } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { SESSION_FORMAT_VERSION, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionHeader } from '@deepseek-ai/dsh-session'
 import { SessionPersistenceRevision, type SessionPersistenceSnapshot } from '@deepseek-ai/dsh-session-persistence'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
@@ -262,7 +262,7 @@ describe('automation-only ACP bridge', () => {
     const sessionId = SessionId('other-frontend-live')
     harness.ctx.sessions.create(sessionId, { meta: { cwd: process.cwd() } })
     vi.spyOn(harness.ctx.sessionPersistence, 'list').mockResolvedValue([snapshotOf({
-      version: 0,
+      version: SESSION_FORMAT_VERSION,
       id: sessionId,
       createdAt: 1,
       isSeeded: false,
@@ -376,18 +376,18 @@ describe('automation-only ACP bridge', () => {
     const active = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
     const persistence = harness.ctx.get('sessionPersistence')!
     vi.spyOn(persistence, 'list').mockResolvedValue(([
-      { version: 0, id: SessionId(active.sessionId), createdAt: 9, isSeeded: false, cwd: process.cwd() },
-      { version: 0, id: SessionId('subagent'), createdAt: 8, isSeeded: false, cwd: '/missing/filter', origin: 'subagent' },
-      { version: 0, id: SessionId('fork'), createdAt: 7, isSeeded: false, cwd: '/missing/filter', parentSession: SessionId('parent') },
-      { version: 0, id: SessionId('no-cwd'), createdAt: 6, isSeeded: false },
-      { version: 0, id: SessionId('relative'), createdAt: 5, isSeeded: false, cwd: 'relative' },
-      { version: 0, id: SessionId('other'), createdAt: 4, isSeeded: false, cwd: '/missing/other' },
-      { version: 0, id: SessionId('valid-b'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
-      { version: 0, id: SessionId('valid-a'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
+      { version: SESSION_FORMAT_VERSION, id: SessionId(active.sessionId), createdAt: 9, isSeeded: false, cwd: process.cwd() },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('subagent'), createdAt: 8, isSeeded: false, cwd: '/missing/filter', origin: 'subagent' },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('fork'), createdAt: 7, isSeeded: false, cwd: '/missing/filter', parentSession: SessionId('parent') },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('no-cwd'), createdAt: 6, isSeeded: false },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('relative'), createdAt: 5, isSeeded: false, cwd: 'relative' },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('other'), createdAt: 4, isSeeded: false, cwd: '/missing/other' },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('valid-b'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
+      { version: SESSION_FORMAT_VERSION, id: SessionId('valid-a'), createdAt: 3, isSeeded: false, cwd: '/missing/filter' },
     ] satisfies SessionHeader[]).map(snapshotOf))
     // Resume authorizes through a point stat, not the list scan mocked above.
     vi.spyOn(persistence, 'stat').mockImplementation(async id => (id === SessionId('no-cwd')
-      ? snapshotOf({ version: 0, id: SessionId('no-cwd'), createdAt: 6, isSeeded: false })
+      ? snapshotOf({ version: SESSION_FORMAT_VERSION, id: SessionId('no-cwd'), createdAt: 6, isSeeded: false })
       : undefined))
 
     await expect(harness.client.listSessions({ cwd: 'relative' })).rejects.toThrow(/absolute path/)

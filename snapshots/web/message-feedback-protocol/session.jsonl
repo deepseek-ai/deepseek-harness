@@ -1,7 +1,0 @@
-{"type":"session","version":0,"id":"{{session:1}}","createdAt":1786406400000,"cwd":"{{cwd}}"}
-{"type":"turn/start","data":{"turn":1}}
-{"type":"user/message","data":{"role":"user","content":[{"type":"text","text":"Give one useful answer."}],"source":{"kind":"user"},"id":"{{message:1}}"},"surfaceOp":"append"}
-{"type":"step/start","data":{"turn":1,"step":1}}
-{"type":"assistant/message","data":{"turn":1,"step":1,"message":{"role":"assistant","content":[{"type":"text","text":"A useful answer."}],"source":{"kind":"model","provider":"fixture","model":"fixture"},"id":"{{message:2}}"},"usage":{"inputTokens":4,"outputTokens":4}},"surfaceOp":"append"}
-{"type":"step/end","data":{"turn":1,"step":1}}
-{"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}

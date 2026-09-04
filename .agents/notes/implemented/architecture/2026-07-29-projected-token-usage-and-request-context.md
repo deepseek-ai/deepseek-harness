@@ -14,7 +14,7 @@ Context occupancy needs a numerator and a denominator that no existing surface c
 
 Both values are ordinary durable session-projection state. `@deepseek-ai/dsh-token-meter` registers two units when `ctx.sessionProjections` is present.
 
-`tokenUsage` folds the complete durable log into uncached input, output, cache-read, and cache-write buckets. An `assistant/chunk` usage sample survives a later failed request; an `assistant/message` usage value replaces the earlier sample from the same model attempt instead of double-counting it. A matching `llm/retry-started` boundary ends that replacement scope, so a retry with the same `(turn, step)` contributes a new attempt. Reasoning stays an output subdivision. Compaction and surface replacement do not erase earlier billing.
+`tokenUsage` folds the complete durable log into uncached input, output, cache-read, and cache-write buckets. It expands each `assistant/message` or `assistant/attempt` stream and takes the last usage sample; a message's top-level usage takes precedence over its embedded sample instead of double-counting it. `assistant/attempt` therefore preserves usage from failed requests. A matching `llm/retry-started` boundary opens a new attempt, so a retry with the same `(turn, step)` contributes separately. Reasoning stays an output subdivision. Compaction and surface replacement do not erase earlier billing.
 
 Token-meter also owns the shared pure attempt/Turn fold over durable events. It applies the same retry boundary while adding the stricter completeness and exact-total checks required by an exact per-Turn disclosure. A presentation consumer may select a complete Turn window and invoke that fold, but does not own or duplicate the accounting semantics.
 

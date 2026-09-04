@@ -22,7 +22,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/feedback-command', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.jsonl')
+const FIXTURE = join(SNAPSHOT_DIR, 'session.v2.jsonl')
 const ACK_EXPECTED = join(SNAPSHOT_DIR, 'ack.expected.md')
 const ACK_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'ack-expanded.expected.md')
 const MODE = webSnapshotMode()
@@ -42,7 +42,7 @@ describe('web e2e: /feedback command acknowledgement', () => {
     scaffold = await launchWebScaffold({
       telemetryUrl: TELEMETRY_URL,
       compareReplaySession: true,
-      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE }),
+      ...(MODE === 'record' ? {} : { replayFixture: FIXTURE, paceMs: 5 }),
     })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -106,7 +106,7 @@ describe('web e2e: /feedback command acknowledgement', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.jsonl', 'ack.expected.md', 'ack-expanded.expected.md',
+      'session.v2.jsonl', 'ack.expected.md', 'ack-expanded.expected.md',
     ])
   })
 })

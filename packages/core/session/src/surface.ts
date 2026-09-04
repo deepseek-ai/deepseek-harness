@@ -76,7 +76,7 @@ export function isReplacementSurfaceEvent(
 
 /**
  * Project a single event into the LLM message it derives to, or null when it
- * produces none — a non-surface event (chunk, boundary, log-only record) or an
+ * produces none — a non-surface event (attempt, boundary, log-only record) or an
  * empty-content assistant/message (which exists only to host usage). This is
  * THE per-node projection rule: `Session.deriveMessages` folds it over the
  * live surface, external reconstructors and pure projections fold the same
@@ -89,7 +89,7 @@ export function isReplacementSurfaceEvent(
  */
 export function deriveEventMessage(event: SessionEvent): Message | null {
   // Intentionally non-exhaustive: only message-producing events derive
-  // history; turn/step boundaries, chunks, usage, and errors are trace/replay
+  // history; turn/step boundaries, failed attempts, and errors are trace/replay
   // data.
   switch (event.type) {
     // Ordinary prompts and injected context project in user role: the event's
@@ -114,7 +114,7 @@ export function deriveEventMessage(event: SessionEvent): Message | null {
       return event.data.message
     }
     default:
-      // A non-surface event (boundary, chunk, log-only record) projects to
+      // A non-surface event (boundary, attempt, log-only record) projects to
       // no message. Merge-extensible union: no assertNever here.
       return null
   }
@@ -223,13 +223,16 @@ function assertProvenance(
   shadowedSeqs: readonly SessionSeq[],
 ): void {
   const raw = (event as SessionEvent & { sourceEventSeqs?: unknown }).sourceEventSeqs
+  if (event.type === 'assistant/message' && raw !== undefined) {
+    throw new Error('assistant/message embeds its source stream and cannot carry sourceEventSeqs')
+  }
   const sources = new Set<SessionSeq>()
   if (raw !== undefined) {
     if (!Array.isArray(raw)) {
       throw new Error(`sourceEventSeqs on event at seq ${event.seq} must be an array when present`)
     }
-    if (raw.length === 0 && event.type !== 'assistant/message') {
-      throw new Error('sourceEventSeqs must not be empty except on assistant/message')
+    if (raw.length === 0) {
+      throw new Error('sourceEventSeqs must not be empty')
     }
     let nonEarlierSource: SessionSeq | undefined
     for (const source of raw) {

@@ -46,6 +46,7 @@
     "@deepseek-ai/dsh-session": "workspace:^"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-session-format-catalog": "workspace:^",
     "@deepseek-ai/dsh-util-values": "workspace:^"
   }
 }

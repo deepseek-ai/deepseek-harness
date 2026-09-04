@@ -9,9 +9,10 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { isAbsolute } from 'node:path'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { deepFreeze, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
+import { deepEqualJson, deepFreeze, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { scopeOf, scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
+import { BlockAssembler, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from './types.ts'
 import type { TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
@@ -25,8 +26,6 @@ export { SessionPreparation } from './preparation.ts'
 export type { SessionPreparationOptions } from './preparation.ts'
 export type { AssistantMessage, ToolResultMessage, UserMessage } from '@deepseek-ai/dsh-llm'
 export { interruptedTurnClosers, TOOL_NOT_STARTED, TOOL_OUTCOME_UNKNOWN } from './repair.ts'
-export { decodeStorageRecord, packChunkRuns } from './chunk-rows.ts'
-export type { ChunkRow, StorageRecord } from './chunk-rows.ts'
 export type { SessionSurface, SurfaceFoldReplacement, SurfaceFoldResult } from './surface.ts'
 export { deriveEventMessage, foldSurface, isAppendSurfaceEvent, isReplacementSurfaceEvent, isSurfaceEvent, isSurfaceEligibleType } from './surface.ts'
 export { canonicalHeader, foldRequestHeader, headerEquals } from './request-header.ts'
@@ -212,9 +211,6 @@ function freezeRestoredObject<T extends object>(value: T): T {
 /** Validate the fixed event envelope after one-pass JSON materialization. */
 function assertSessionEventEnvelope(value: Record<string, unknown>, index: number): asserts value is SessionEvent {
   const event = value
-  if (event['type'] === 'request/header-delta') {
-    throw new Error(`seed event at index ${index} uses unsupported legacy request/header-delta format`)
-  }
   for (const key in event) {
     switch (key) {
       case 'type':
@@ -242,6 +238,7 @@ function assertSessionEventEnvelope(value: Record<string, unknown>, index: numbe
   switch (type) {
     case 'request/header':
     case 'user/message':
+    case 'assistant/attempt':
     case 'assistant/message':
     case 'tool/result':
       assertCurrentLlmShape(event, index)
@@ -269,11 +266,52 @@ function assertCurrentLlmShape(event: Record<string, unknown>, index: number): v
       throw new Error(`seed request/header at index ${index} has an invalid reasoningEffort`)
     }
     assertAdapterDefaults(headerRecord?.['adapterDefaults'], configRecord, index)
+    const reason = record?.['reason']
+    if (reason !== 'initial' && reason !== 'resume' && reason !== 'change' && reason !== 'series') {
+      throw new Error(`seed request/header at index ${index} has an invalid reason`)
+    }
+    if (record?.['startsSeries'] !== undefined && record['startsSeries'] !== true) {
+      throw new Error(`seed request/header at index ${index} has an invalid startsSeries marker`)
+    }
   }
   const type = event['type']
+  if (type === 'assistant/attempt') {
+    assertCurrentAssistantStream(record, type, index)
+    return
+  }
   if (type !== 'user/message' && type !== 'assistant/message'
     && type !== 'tool/result') return
   assertMessageEventShape(event, `seed ${type} at index ${index}`)
+  if (type === 'assistant/message') assertCurrentAssistantStream(record, type, index)
+}
+
+/** Validate the current settlement stream and its duplicated message fields at a durable restore boundary. */
+function assertCurrentAssistantStream(
+  data: Record<string, unknown> | undefined,
+  type: 'assistant/attempt' | 'assistant/message',
+  index: number,
+): void {
+  const assembler = new BlockAssembler()
+  let timed: ReturnType<typeof expandAssistantStream>
+  try {
+    timed = expandAssistantStream(data?.['stream'] as never)
+    for (const member of timed) assembler.push(member.chunk)
+  } catch (error: unknown) {
+    throw new Error(`seed ${type} at index ${index} has an invalid embedded stream`, { cause: error })
+  }
+  if (type === 'assistant/attempt' || timed.length === 0) return
+  const message = data?.['message'] as Record<string, unknown>
+  const content = data?.['interrupted'] === true ? assembler.interruptedBlocks() : assembler.blocks()
+  if (!deepEqualJson(message['content'], content)) {
+    throw new Error(`seed assistant/message at index ${index} content disagrees with its embedded stream`)
+  }
+  if (!deepEqualJson(data?.['usage'], assembler.usage)) {
+    throw new Error(`seed assistant/message at index ${index} usage disagrees with its embedded stream`)
+  }
+  const source = message['source'] as Record<string, unknown>
+  if (!deepEqualJson(source['replayState'], assembler.replayState)) {
+    throw new Error(`seed assistant/message at index ${index} replay state disagrees with its embedded stream`)
+  }
 }
 
 const allowedAdapterKeys = new Set(['reasoningEffort', 'maxTokens'])
@@ -359,18 +397,6 @@ function hasProviderModel(value: unknown): boolean {
     && typeof pair['model'] === 'string' && pair['model'].length > 0
 }
 
-/** Reject request-header vocabulary removed with the legacy delta codec. */
-function assertSupportedRequestHeader(type: string, data: unknown, location: string): void {
-  if (type === 'request/header-delta') {
-    throw new Error(`${location} uses unsupported legacy request/header-delta format`)
-  }
-  if (type === 'request/header'
-    && data !== null && typeof data === 'object' && !Array.isArray(data)
-    && (data as Record<string, unknown>)['reason'] === 'fallback') {
-    throw new Error(`${location} uses unsupported legacy request/header reason "fallback"`)
-  }
-}
-
 type SessionCallback = (...args: unknown[]) => unknown
 
 /** Resolve one listener snapshot, including Cordis's internal dispatch checks. */
@@ -454,9 +480,10 @@ export class Session {
    * The first seq appended IN THIS PROCESS: the length of the constructor
    * seed (0 without one). Events with smaller seq values entered through
    * construction — replay, fork, or resume — and were never published on the
-   * `session/event` firehose (constructor seeds do not emit), so consumers
-   * that replay the log as a publication substitute (telemetry adoption)
-   * start here. Distinct from {@link inheritedEventCount}, the DURABLE
+   * `session/event` firehose (constructor seeds do not emit). This offset marks
+   * the constructor-input boundary for lifecycle ownership and persistence
+   * adoption; consumers that need complete canonical history still start at
+   * seq 0. Distinct from {@link inheritedEventCount}, the DURABLE
    * fork-lineage cut: a resumed session's constructor seed is its full stored
    * log, while the inherited count keeps the original fork value — this field is the
    * in-process construction fact.
@@ -537,7 +564,6 @@ export class Session {
           throw new Error(`seed event at index ${index} is not losslessly JSON-serializable`)
         }
         assertSessionEventEnvelope(snapshot, index)
-        assertSupportedRequestHeader(snapshot.type, snapshot.data, `seed event at index ${index}`)
         if (snapshot.seq !== index) {
           throw new Error(`seed event at index ${index} has seq ${snapshot.seq} (expected ${index}); seed must be contiguous from 0`)
         }
@@ -567,12 +593,16 @@ export class Session {
     if (inheritedEventCount > this.log.length) {
       throw new Error('session inherited event count exceeds its event log')
     }
+    if (mode === 'snapshot' && this.header.isSeeded && inheritedEventCount !== this.log.length) {
+      throw new Error('seeded session constructor seed must equal its inherited prefix')
+    }
     this.inheritedEventCount = inheritedEventCount
-    // Appended here so the marker is already in `events` when a backend
-    // captures the creation seed: no load-time write. Re-marking is skipped
-    // because a cold session is resumed on first touch, so repeatedly opening
-    // one must not grow its log per open.
-    if (seed !== undefined && this.log.at(-1)?.type !== 'session/end-seed') {
+    // A fresh seeded child always owns one tagged marker at its inherited cut,
+    // even when the copied prefix already ends in an ancestor marker. Restore
+    // retains that durable marker and appends only the ordinary resume marker.
+    if (seed !== undefined && mode === 'snapshot' && this.header.isSeeded) {
+      this.append('session/end-seed', { inherited: true })
+    } else if (seed !== undefined && this.log.at(-1)?.type !== 'session/end-seed') {
       this.append('session/end-seed', {})
     }
   }
@@ -647,7 +677,8 @@ export class Session {
    *   declare how it joins the surface, the sole source of derived model
    *   history) and
    *   rejected by the compiler for non-surface types like `turn/start` or
-   *   `assistant/chunk`.
+   *   `assistant/attempt`. Assistant messages embed their exact provider
+   *   stream and cannot cite top-level source events.
    * @returns the logged event — its assigned `seq`/`time` plus the SNAPSHOT of
    *   `data` that entered the log, so reading `event.data` back sees the logged
    *   value, never the caller's still-mutable input.
@@ -668,7 +699,7 @@ export class Session {
   append<T extends SessionEventType>(
     type: T,
     data: SessionEventMap[T],
-    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent] : []
+    ...opts: T extends SurfaceEventType ? [opts: SurfaceIntent<T>] : []
   ): SessionEvent<T> {
     const surfaceOpts: SurfaceIntent | undefined = opts[0]
     const surfaceMetadata = {
@@ -679,7 +710,6 @@ export class Session {
     if (dataSnapshot === undefined) {
       throw new Error(`session event "${type}" carries non-JSON-serializable data`)
     }
-    assertSupportedRequestHeader(type, dataSnapshot, `session event "${type}"`)
     const surfaceMetadataSnapshot = snapshotJsonValue(surfaceMetadata)
     if (surfaceMetadataSnapshot === undefined) {
       throw new Error(`session event "${type}" carries non-JSON-serializable surface metadata`)

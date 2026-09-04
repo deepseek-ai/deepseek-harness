@@ -2,14 +2,17 @@
   "prompt": "respond",
   "echoWorkspace": true,
   "logs": [
-    { "file": "b/parent/session.jsonl", "lines": [
-      { "type": "session", "id": "{{SID}}", "createdAt": 200, "cwd": "{{CWD}}", "delegationDepth": 0 },
-      { "type": "request/header", "seq": 0, "time": 5, "data": { "header": { "config": { "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
-      { "type": "assistant/chunk", "seq": 1, "time": 5, "data": { "turn": 1, "step": 1, "chunk": { "type": "text-delta", "index": 0, "text": "hi" } } }
+    { "file": "b/parent/session.v2.jsonl", "lines": [
+      { "type": "session", "version": 2, "id": "{{SID}}", "createdAt": 200, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
+      { "type": "turn/start", "seq": 0, "time": 4, "data": { "turn": 1 } },
+      { "type": "request/header", "seq": 1, "time": 5, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
+      { "type": "step/start", "seq": 2, "time": 5, "data": { "turn": 1, "step": 1 } },
+      { "type": "assistant/attempt", "seq": 3, "time": 5, "data": { "turn": 1, "step": 1, "stream": [{ "type": "text-chunks", "time0": 5, "index": 0, "dt": [], "texts": ["hi"] }] } }
     ]},
-    { "file": "b/child/session.jsonl", "lines": [
-      { "type": "session", "id": "eeeeeeee-1111-4222-8333-444444444444", "createdAt": 300, "cwd": "{{CWD}}", "parentSession": "{{SID}}", "delegationDepth": 1 },
-      { "type": "request/header", "seq": 0, "time": 6, "data": { "header": { "config": { "model": "fake" }, "system": "SYS PROMPT\n\nCHILD GUIDANCE", "tools": [{ "name": "child-only", "description": "Child D", "parameters": { "type": "object" } }] }, "reason": "initial" } }
+    { "file": "b/child/session.v2.jsonl", "lines": [
+      { "type": "session", "version": 2, "id": "eeeeeeee-1111-4222-8333-444444444444", "createdAt": 300, "cwd": "{{CWD}}", "parentSession": "{{SID}}", "isSeeded": false, "delegationDepth": 1 },
+      { "type": "turn/start", "seq": 0, "time": 5, "data": { "turn": 1 } },
+      { "type": "request/header", "seq": 1, "time": 6, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT\n\nCHILD GUIDANCE", "tools": [{ "name": "child-only", "description": "Child D", "parameters": { "type": "object" } }] }, "reason": "initial" } }
     ]}
   ]
 }

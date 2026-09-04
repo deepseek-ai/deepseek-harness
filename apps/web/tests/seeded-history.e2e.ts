@@ -9,7 +9,7 @@
 // `/feedback` pins its expandable correlation ids. The seed is a recorded
 // fixture under the same record discipline as every other: DSH_SNAPSHOT=record drives the turn
 // live through the composer (real read tool against seeded workspace files)
-// and harvests session.jsonl; replay/refresh seed it cold and only render.
+// and harvests session.v2.jsonl; replay/refresh seed it cold and only render.
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
@@ -30,7 +30,7 @@ import {
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/seeded-history', import.meta.url))
-const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.jsonl', import.meta.url))
+const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v2.jsonl', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/ui.expected.md', import.meta.url))
 const UI_EXPANDED_EXPECTED = fileURLToPath(
   new URL('../../../snapshots/web/seeded-history/ui-expanded.expected.md', import.meta.url),
@@ -148,9 +148,7 @@ function withCompaction(raw: string, meter: TokenMeter): string {
   })
   at({
     type: 'user/message',
-    data: {
-      id: '00000000-0000-4000-8000-00000000c0de',
-      role: 'user',
+    data: createUserMessage({
       content: [{
         type: 'text',
         text: '<context_checkpoint>Model-only compact checkpoint.</context_checkpoint>',
@@ -158,7 +156,7 @@ function withCompaction(raw: string, meter: TokenMeter): string {
       source: {
         kind: 'plugin', plugin: 'compact', compactionId, sourceCommandId: commandId,
       },
-    },
+    }),
     surfaceOp: { op: 'replace', start: first, end: last },
     sourceEventSeqs: [startSeq, summarySeq, ...surfaceSeqs],
   })
@@ -566,7 +564,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'command-row.expected.md', 'feedback-row.expected.md', 'file-open-failure.expected.md',
-      'session.jsonl', 'ui.expected.md', 'ui-expanded.expected.md',
+      'session.v2.jsonl', 'ui.expected.md', 'ui-expanded.expected.md',
     ])
   })
 })

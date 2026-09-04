@@ -10,6 +10,7 @@
     "src/types.ts",
     "src/remote-events.ts",
     "src/agent.ts",
+    "src/assistant-stream.ts",
     "src/catalog.ts",
     "src/commands.ts",
     "src/control.ts",

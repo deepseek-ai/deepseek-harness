@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-telemetry` captures session activity for outbound reporting: it projects session events into telemetry records, lets a deployment redact them, and hands them to a reporting backend that implements its contract. Deployments do not load this package directly — they load exactly one backend (the shipped OpenTelemetry backend is `dsh-session-telemetry-otel`), which registers `ctx.sessionTelemetry` and composes the capture coordinator. The seam owns capture, redaction, and the sharing disclosure; batching, retry, queueing, and loss policy belong to the backend's SDK and stop at `emit()`. Every mounted backend discloses its deployment-selected sharing policy so acknowledgement surfaces can report whether and how a session is shared. The contract and capture behavior come first; the implementation internals live in a collapsible developer section below.
+`dsh-session-telemetry` captures session activity for outbound reporting: it copies each session event into a telemetry record, lets a deployment redact it, and hands it to a reporting backend that implements the contract. Deployments do not load this package directly — they load exactly one backend (the shipped OpenTelemetry backend is `dsh-session-telemetry-otel`), which registers `ctx.sessionTelemetry` and composes the capture coordinator. The seam owns capture, redaction, and the sharing disclosure; batching, retry, queueing, and loss policy belong to the backend's SDK and stop at `emit()`. Every mounted backend discloses its deployment-selected sharing policy so acknowledgement surfaces can report whether and how a session is shared. The contract and capture behavior come first; the implementation internals live in a collapsible developer section below.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ A backend implements three members: `emit(record)` must be a non-blocking enqueu
 
 ### What gets captured
 
-Capture runs in one of two modes. `live` capture follows session events as they are appended, replays already-live sessions at mount time, and records lifecycle markers; `on-demand` capture reads the canonical session log only when the backend requests a prefix through `captureSession(session, throughSeq?)`. Ledger records mirror session events one to one except for one projection: only the first `assistant/chunk` of each `(turn, step)` ships, so `seq` gaps on the wire are routine and never a loss signal. Each record carries the event's complete data, minimal identity attributes, and a pre-mapped severity (`error` for `tool/result.isError`, `turn/end` error reasons, and `agent-error`; `info` otherwise).
+Capture runs in one of two modes. `live` capture follows session events as they are appended, replays already-live sessions at mount time, and records lifecycle markers; `on-demand` capture reads the canonical session log only when the backend requests a prefix through `captureSession(session, throughSeq?)`. Every canonical session event maps to one ledger record in order. An `assistant/message` or `assistant/attempt` record carries its complete embedded compact stream, including failed and retried output. Each ledger record also carries `session.id`, `session.format_version`, the numeric event identity, optional header facts, and a pre-mapped severity (`error` for `tool/result.isError`, `turn/end` error reasons, and `agent-error`; `info` otherwise).
 
 ### The sharing disclosure
 
@@ -49,7 +49,7 @@ Every backend discloses its deployment-selected sharing policy through the seam'
 
 <a id="the-redact-waterfall"></a>
 
-Every outbound record passes the `sessionTelemetry/record` waterfall immediately after projection. This package ships no rules: with no listener mounted, records reach the backend exactly as captured, so exported data is as clean as the rules a deployment mounts. Listeners stack by transforming `next()`'s return value; a throwing listener withholds that one record fail-closed. Redaction applies to the outbound copy only — the canonical session log is never rewritten.
+Every outbound record passes the `sessionTelemetry/record` waterfall after the coordinator copies its canonical event. This package ships no rules: with no listener mounted, records reach the backend exactly as captured, so exported data is as clean as the rules a deployment mounts. Listeners stack by transforming `next()`'s return value; a throwing listener withholds that one record fail-closed. Redaction applies to the outbound copy only — the canonical session log is never rewritten.
 
 -----
 
@@ -63,22 +63,22 @@ This section explains the capture design; the observable behavior is fully cover
 
 ### Design concept
 
-The seam is built on one boundary: the harness's aspect ends at `emit()`. Capture, projection, redaction, and the handoff cursor live here; batching, retry, queueing, and loss policy are the reporting SDK's, deliberately not modelled or wrapped. The design and rejected alternatives are pinned in the [revival Agent Note](../../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.md).
+The seam is built on one boundary: the harness's aspect ends at `emit()`. Complete event capture, redaction, and the handoff cursor live here; batching, retry, queueing, and loss policy are the reporting SDK's, deliberately not modelled or wrapped. The design and rejected alternatives are pinned in the [revival Agent Note](../../../.agents/notes/implemented/feature/2026-07-23-session-telemetry-otel-revival.md).
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service Definition: `SessionTelemetryBackend`/`SessionTelemetrySink` contract, record vocabulary, `session-telemetry/record` waterfall declaration |
-| [`src/coordinator.ts`](src/coordinator.ts) | Capture: live listeners, on-demand replay, chunk projection, redaction, handoff cursor, containment |
+| [`src/coordinator.ts`](src/coordinator.ts) | Capture: live listeners, lifecycle-local on-demand replay, redaction, handoff cursor, containment |
 
 ### Capture flow
 
-Live capture registers, through the composing fiber's effects: `session/created` adopts the session and replays its log from the handoff cursor; `session/event` projects, deep-copies, redacts, and hands off with zero I/O; `session/flush` forwards the optional hint and returns void so the loop's awaited parallel never waits on telemetry; `session/disposed` captures the session's `shutdown` marker and retires it; `agent/error` is the one live-bus relay, because the session-event vocabulary intentionally has no operational-error record. Disposal captures shutdown markers for still-live sessions, then awaits the backend's `shutdown()`. On-demand capture registers only the disposal effect and reads the canonical log on request. Every synchronous handler runs inside containment so a failing backend or rule can never starve other listeners or reach the agent loop.
+Live capture registers, through the composing fiber's effects: `session/created` adopts the session and replays its lifecycle-local log suffix from the handoff cursor; `session/event` deep-copies, redacts, and hands off each event with zero I/O; `session/flush` forwards the optional hint and returns void so the loop's awaited parallel never waits on telemetry; `session/disposed` captures the session's `shutdown` marker and retires it; `agent/error` is the one live-bus relay, because the session-event vocabulary intentionally has no operational-error record. Disposal captures shutdown markers for still-live sessions, then awaits the backend's `shutdown()`. On-demand capture registers only the disposal effect and reads the requested lifecycle-local canonical-log prefix on request. Every synchronous handler runs inside containment so a failing backend or rule can never starve other listeners or reach the agent loop.
 
 ### The handoff cursor
 
-A module-scope `WeakMap<Session, seq>` records, per session, the highest seq handed off (not delivered). Live capture advances it at append time; on-demand capture advances it only while handing a requested prefix. An uncaptured prefix remains solely in the canonical log, so a coordinator reload adds no telemetry-owned recovery state; a missing cursor safely degrades to re-handing from the session's construction boundary, absorbed by receiver-side dedupe on `(session.id, event.seq)`. This is a narrow, documented exception to the registrations-are-effects discipline: entries die with their sessions, the value is a monotonic watermark, and losing it is never an error. The accepted cost matches at-most-once delivery: a resumed session does not backfill records a previous process failed to deliver.
+A module-scope `WeakMap<Session, seq>` records, per Session object, the highest seq handed off (not delivered). Live capture advances it at append time; on-demand capture advances it only while handing a requested prefix. Re-adopting the same object resumes after that cursor and does not duplicate its handed-off ledger records. A new Session object starts immediately before `firstLiveSeq`: a fresh object starts at seq 0, while a forked, resumed, or migrated object skips its constructor seed and starts with this lifecycle's `session/end-seed` boundary. This keeps inherited and previously persisted history outside a new lifecycle's sharing act. Receivers absorb SDK retries by deduplicating on `(session.id, session.format_version, event.seq)`. The object-keyed map is a narrow, documented exception to the registrations-are-effects discipline: entries die with their sessions, and losing one can replay only the current lifecycle suffix.
 
 </details>
 

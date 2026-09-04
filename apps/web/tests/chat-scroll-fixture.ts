@@ -76,6 +76,7 @@ function appendRequestHeader(session: Session, turn: number, step: number): void
 
 function appendAssistant(session: Session, turn: number, step: number, body: string): void {
   session.append('assistant/message', {
+    stream: [],
     turn,
     step,
     message: createAssistantMessage({
@@ -114,6 +115,7 @@ function appendToolStep(
   })
 
   session.append('assistant/message', {
+    stream: [],
     turn,
     step: 1,
     message: createAssistantMessage({
@@ -162,6 +164,7 @@ function fixtureLog(session: Session): string {
       id: '{{sessionId}}',
       createdAt: Date.now() - 60_000,
       cwd: '{{cwd}}',
+      isSeeded: false,
       delegationDepth: 0,
     }),
     ...session.snapshotEvents().map(event => JSON.stringify(event)),

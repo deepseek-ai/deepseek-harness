@@ -493,6 +493,7 @@ describe('the session-persistence Agent Note: AgentLoop factory create/resume', 
       { type: 'step/start', seq: SessionSeq(1), time: 1, data: { turn: 1, step: 1 } },
       { type: 'assistant/message', seq: SessionSeq(2), time: 2, surfaceOp: 'append', data: {
         turn: 1, step: 1,
+        stream: [],
         message: createMessage({
           role: 'assistant',
           content: [{ type: 'tool-call', id: ToolCallId('call-1'), name: 'bash', arguments: '{}' }],

@@ -58,13 +58,13 @@ kind: "package-reference"
 
 ### 读取缓存值
 
-`cachedSnapshot(meta, inheritedEventCount)` 以零 I/O 从存储域的内存表同步提供客户端值。它只接受身份匹配的记录以及版本和 schema 均匹配的 key，再按所服务行的最低水位返回 `{ asOfSeq, values }` 切面。未 seeded 的列表知道切点为零；仅 header 的 seeded 列表不知道数字切点，必须跳过该快速路径，直到权威正文读取提供它。`coldSnapshot(meta, inheritedEventCount, events)` 接受精确切点与完整有序日志，在折叠时跳过已检查点化的前缀，并在自身不读取持久化层的情况下刷新记录。
+`cachedSnapshot(meta, inheritedEventCount)` 以零 I/O 从存储域的内存表同步提供客户端值。它只接受身份匹配的记录以及版本和 schema 均匹配的 key，再按所服务行的最低水位返回 `{ asOfSeq, values }` 切面。`cachedPredecessorTitle(meta, inheritedEventCount)` 是更窄的列表专用例外：生命周期匹配且已通过结构准入的 predecessor record 只能公开与当前版本兼容的 `title` row。该 title 是 durable prefix 中可能过时的事实，而不是 fold seed；它携带 sentinel `asOfSeq: -1`，因为改变事件数量的 Session 迁移会使 predecessor row 的数字序号失效。其他 predecessor row 仍不可用。未 seeded 的列表知道切点为零；仅 header 的 seeded 列表不知道数字切点，因此两条快速路径都要跳过，直到权威正文读取提供它。`coldSnapshot(meta, inheritedEventCount, events)` 接受精确切点与完整有序日志，在折叠时跳过已检查点化的前缀，并在自身不读取持久化层的情况下刷新记录。
 
 ### 缓存保证什么
 
-日志领先，缓存跟随：实时检查点先把会话的缓冲事件持久化，然后才保存缓存记录。因此崩溃可能让缓存落后于日志，但绝不会让缓存领先。读取和写入共享存储域内一致的内存状态；逐单元写入链只在持久化成功后修改内存。每个带版本戳的记录必须匹配实时单元 schema 与完整生命周期身份（`createdAt`、`cwd`、`isSeeded` 和 `inheritedEventCount`），因此在一个 fork 切点下初始化的行不能播种另一个切点。JSON 后端把每条记录存于仅所有者可访问的 `<root>/session_projcache/sessions/<id>.json` 目录树中。
+日志领先，缓存跟随：实时检查点先把会话的缓冲事件持久化，然后才保存缓存记录。因此崩溃可能让缓存落后于日志，但绝不会让缓存领先。读取和写入共享存储域内一致的内存状态；逐单元写入链只在持久化成功后修改内存。每个带版本戳的记录必须匹配实时单元 schema 与完整生命周期身份（`formatVersion`、`createdAt`、`cwd`、`isSeeded` 和 `inheritedEventCount`），因此从另一会话格式代或 fork 切点折叠出的行不能播种调用方。JSON 后端把每条记录存于仅所有者可访问的 `<root>/session_projcache/sessions/<id>.json` 目录树中。
 
-升级绝不拖垮启动或列表：版本戳落在 spec `compatibleVersions` 集合内的记录保持可读（缺失的 lineage 字段解码为 unseeded lineage——对非 fork 会话精确无误，seeded 调用方则通不过身份比对、回落冷折叠），而仍然通不过 schema 校验的存量记录会按域的 `invalidRecords: 'backup-and-skip'` 策略移出为 `<id>.json.bak.<时间戳>`、连同原因写入日志，并由下一次检查点重建。
+升级绝不拖垮启动，也不会暴露未经证明的折叠结果。版本戳落在 spec `compatibleVersions` 集合内的记录仍可被结构化读取并等待当前检查点重写，但缺失或更旧的 `formatVersion` 绝不匹配当前 Session，因此不能作为 hydrate seed。生命周期匹配的 predecessor title 只能通过上述列表 hint 读取，因为 title 文本在相邻 Session format edge 之间保持不变，并且该 row 仍须通过当前 projection `stateVersion` 与 schema。格式匹配后，缺失的 lineage 字段解码为 unseeded lineage——对非 fork 会话精确无误，seeded 调用方则通不过身份比对、回落冷折叠。仍然通不过 schema 校验的存量记录会按域的 `invalidRecords: 'backup-and-skip'` 策略移出为 `<id>.json.bak.<时间戳>`、连同原因写入日志，并由下一次检查点重建。
 
 -----
 

@@ -1,9 +1,13 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
-import { scanLog } from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
+import { SESSION_FORMAT_VERSION, Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
+import {
+  generationLogFilename,
+  scanLog,
+} from '@deepseek-ai/dsh-session-persistence-jsonl/src/format.ts'
 import { foldSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
+import { projectionCacheDomainSpec } from '@deepseek-ai/dsh-session-projection-cache'
 import {
   buildVfsExampleFiles,
   VFS_EXAMPLE_OLDEST_MESSAGE,
@@ -27,9 +31,10 @@ function filesUnder(root: string): string[] {
 }
 
 function readSession(id: string): ReturnType<typeof scanLog> {
-  return scanLog(readFileSync(
-    join(VFS_EXAMPLE_ROOT, 'home/sessions/--dsh-workspace--', id, 'session.jsonl'),
-  ))
+  const path = `home/sessions/--dsh-workspace--/${id}/${generationLogFilename(SESSION_FORMAT_VERSION, 'none')}`
+  const generated = buildVfsExampleFiles().get(path)
+  if (generated === undefined) throw new Error(`missing generated VFS example Session ${path}`)
+  return scanLog(Buffer.from(generated))
 }
 
 function textOf(event: SessionEvent): string {
@@ -51,22 +56,38 @@ describe('WebWorker preview VFS example', () => {
     }
   })
 
-  it('seeds the cold-list title cache against the main log identity', () => {
-    const cache = JSON.parse(readFileSync(
+  it('keeps the committed cache on the current generated projection', () => {
+    const committed = JSON.parse(readFileSync(
       join(VFS_EXAMPLE_ROOT, 'home/storages/session_projcache.json'),
       'utf8',
     )) as {
       unit: { name: string; version: number }
       tables: {
         sessions: Record<string, {
-          identity: { createdAt: number; cwd: string; isSeeded: boolean; inheritedEventCount: number }
+          identity: {
+            formatVersion: number
+            createdAt: number
+            cwd: string
+            isSeeded: boolean
+            inheritedEventCount: number
+          }
           rows: { title: unknown }
         }>
       }
     }
-    expect(cache.unit).toEqual({ name: 'session_projcache', version: 6 })
-    expect(cache.tables.sessions[VFS_EXAMPLE_SESSION_IDS.main]).toMatchObject({
+    const generatedText = buildVfsExampleFiles().get('home/storages/session_projcache.json')
+    if (generatedText === undefined) throw new Error('missing generated VFS example projection cache')
+    const generated = JSON.parse(generatedText) as typeof committed
+    expect(committed).toEqual(generated)
+    expect(committed.tables.sessions[VFS_EXAMPLE_SESSION_IDS.main]?.identity.formatVersion)
+      .toBe(SESSION_FORMAT_VERSION)
+    expect(generated.unit).toEqual({
+      name: projectionCacheDomainSpec.name,
+      version: projectionCacheDomainSpec.version,
+    })
+    expect(generated.tables.sessions[VFS_EXAMPLE_SESSION_IDS.main]).toMatchObject({
       identity: {
+        formatVersion: SESSION_FORMAT_VERSION,
         createdAt: 1_787_472_000_000,
         cwd: '/dsh/workspace',
         isSeeded: false,

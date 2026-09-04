@@ -8,9 +8,9 @@ Status: implemented
 
 [逐会话快照回放 Agent Note](2026-06-22-subagent-snapshot-replay.zh.md)使快照层能够表达嵌套 agent（智能体）形状：一个父项加上每个进程内 subagent 的一份记录日志，每份日志都按调用会话作为键，以独立脚本回放。它曾指出（§ 范围，最后一个项目符号），fork 快照「只是未来很容易添加的一项，并非键控缺口」。这一判断对 fork 子会话而言是错误的——问题不在键控，而在*脚本派生*。
 
-subagent 脚本由 [`deriveReplayScript`](../../../../packages/test-support/llm-replay) 从已录制的会话日志推导：它按 `(turn, step)` 对日志中的 `assistant/chunk` 事件分组，每次 `stream()` 调用对应一条回放条目。对 **spawn** 子会话而言这是正确的，因为其日志只包含自身的模型调用。
+subagent 脚本由 [`deriveReplayScript`](../../../../packages/test-support/llm-replay) 从已录制 Session log 推导：它把每个持久 `assistant/message` 或 `assistant/attempt` settlement 展开为每次 `stream()` 调用对应的一条 replay entry。对 **spawn** 子 Session 而言这是正确的，因为其 log 只包含自身模型调用。
 
-**fork** 子会话不同。fork 后端用*父日志的一段平衡的已完成轮次前缀*（[`dsh-subagent-in-process-driver`](../../../../packages/subagent/subagent-in-process-driver)）来播种子会话，而该 seed 会成为子会话持久化的 `log`（`Session` 构造函数将 seed 复制进 `this.log`）。因此 fork 子会话的 `.jsonl` 以**父会话**的事件开头——包括父会话的 `assistant/chunk` 事件——之后才是子会话自身的轮次。
+**fork** 子 Session 不同。fork backend 用*父 log 的一段平衡已完成 turn 前缀*（[`dsh-subagent-in-process-driver`](../../../../packages/subagent/subagent-in-process-driver)）播种子 Session，该 seed 会成为子 Session 持久化的 `log`（`Session` 构造函数把 seed 复制进 `this.log`）。因此 fork 子 Session 的 `.jsonl` 以**父 Session** event 开头——包括其 Assistant settlement——之后才是子 Session 自己的 turn。
 
 从 fork 子会话的完整日志推导脚本，会把**父会话**的已录制响应当作**子会话**的模型调用来回放：实际运行的 fork 子会话第一次调用 `stream()` 时，会收到父会话的第一段分片序列而非自身的。所有已录制场景都使用 spawn，所以这从未触发——但 fork 快照会静默地错误路由，恰好属于快照层存在的意义所要捕获的那类 bug。
 
@@ -26,11 +26,11 @@ subagent 脚本由 [`deriveReplayScript`](../../../../packages/test-support/llm-
 
 ### 2. JSONL 完整往返
 
-v0 JSONL header 为保持字节兼容而继续携带可选数值 `seedLength`。`toHeaderLine`／`fromHeaderLine` 在它与 logical `isSeeded` 加精确 `inheritedEventCount` 之间转换，共享的含正文持久化值再单独返回该 cut。
+v2 JSONL header 携带 `isSeeded`，而 `session/end-seed { inherited: true }` 会在正文中标记精确 cut；解码使用最后一个 tagged marker。冻结的 v0 header 为保持字节兼容而继续携带可选数值 `seedLength`，其 codec 会把该历史字段转换为相同的逻辑值对。
 
 ### 3. 回放从边界之后推导子会话脚本
 
-`dsh-llm-replay` 的私有 v0 parser 把物理 `seedLength` 读入 `inheritedEventCount`（缺失则为 0），`loadSessionScripts` 从 `parseSessionLog(text).slice(inheritedEventCount)` 推导子会话条目——即边界及之后的事件，也就是子会话自身的模型调用。对 spawn 子会话而言 cut 为 0，此操作是空操作，spawn 场景逐字节不变。
+`dsh-llm-replay` 通过静态格式 catalog 解析选定 generation，并保留解码后的 `inheritedEventCount`。`loadSessionScripts` 从 `fixture.events.slice(inheritedEventCount)` 推导子 Session entry——即 boundary 及之后的 event，也就是子 Session 自己的模型调用。对 spawn 子 Session 而言 cut 为 0，因此此操作为空操作。
 
 这弥补了路由正确性的缺口，两个已录制的 fork 场景对其进行端到端验证——见[记录 fork 与混合 spawn+fork 快照场景](../../archived/testing/2026-06-22-fork-snapshot-scenarios.md)。
 

@@ -1,3 +1,3 @@
 {"type":"session","id":"{{session:1}}","createdAt":700,"cwd":"/var/folders/2g/b32ct0qn1d728l_v6tdkjytr0000gn/T/acp-snap-cwd-KBQJbW","delegationDepth":0}
-{"type":"request/header","data":{"header":{"config":{"model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}
 {"type":"user/message","data":{"role":"user","content":[{"type":"text","text":"same inherited message"}],"source":{"kind":"user"},"id":"{{message:1}}"},"surfaceOp":"append"}

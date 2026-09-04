@@ -30,7 +30,7 @@ The scanner stops retaining events at the first unparsable row or sequence gap b
 
 ### Restore admission
 
-Persistence transfers freshly materialized JSON values to `Session.fromRestore`. These values are detached, acyclic trees, and packed chunk rows expand into newly allocated events, so the restore-only path validates the fixed event envelope with one `for...in` and `switch`, dispatches current-shape checks by event discriminant, and iteratively freezes the owned graph with an explicit `pending` array and no cycle-tracking set. Surface validation records one transition plan and commits that plan when the exact candidate enters the log instead of planning the same event twice.
+Persistence transfers freshly materialized current JSON values to `Session.fromRestore`. These values are detached, acyclic trees; historical packed rows and adjacent migrations have already produced newly allocated v2 settlements. The restore-only path validates the fixed event envelope with one `for...in` and `switch`, dispatches current-shape checks by event discriminant, and iteratively freezes the owned graph with an explicit `pending` array and no cycle-tracking set. Surface validation records one transition plan and commits that plan when the exact candidate enters the log instead of planning the same event twice.
 
 Borrowed seeds used by ordinary creation and fork paths still take a JSON snapshot and use the generic cycle-safe deep freeze. The specialization therefore changes only durable restoration; it does not weaken acceptance for caller-owned values.
 

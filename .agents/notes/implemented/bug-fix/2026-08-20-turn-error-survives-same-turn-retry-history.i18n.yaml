@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-turn-error-survives-same-turn-retry-history.md
-2026-08-20-turn-error-survives-same-turn-retry-history.md: 68b09fc32f2d409a9060bb8e53f11837dd365657
-2026-08-20-turn-error-survives-same-turn-retry-history.zh.md: 1aa78aa405113fecc890fb2213f41cf41afec6b4
+2026-08-20-turn-error-survives-same-turn-retry-history.md: 9280d59d020a88d0f0f703d2e2adc54656687b16
+2026-08-20-turn-error-survives-same-turn-retry-history.zh.md: 1856d72e05c6261535df5f94c41cb3ff86c69362

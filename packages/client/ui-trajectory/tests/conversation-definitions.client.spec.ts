@@ -4,14 +4,12 @@ import type {
   SessionEventLikeEntry, SessionLiveEventEntry,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
-  ChunkRowEvent,
-} from '@deepseek-ai/dsh-api-session-controller/types'
-import type {
   ConversationNodeDefinition, ConversationViewDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { ConversationNodeAssembler, inspectRequestPrompt } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { isChunkRow, packChunkRuns, type ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
+import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
+import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { registerTrajectoryAssistantDefinition } from '../src/client/trajectory-assistant-definition.ts'
 import { registerTrajectoryCompactionDefinitions } from '../src/client/trajectory-compaction-definition.ts'
 import type { TrajectorySnapshot } from '../src/client/trajectory-contract.ts'
@@ -61,34 +59,80 @@ function at(
   data: unknown,
   extra: Record<string, unknown> = {},
 ): SessionLiveEventEntry {
+  const payload = type === 'assistant/message' && typeof data === 'object' && data !== null
+    ? { ...(data as Record<string, unknown>), stream: (data as { stream?: unknown }).stream ?? [] }
+    : data
   return {
     type: 'event',
     event: {
       seq,
       time: 1_700_000_000_000 + seq,
       type,
-      data,
+      data: payload,
       ...extra,
     } as unknown as SessionEvent,
   }
 }
 
-function chunkEntry(row: ChunkRow): SessionEventLikeEntry {
-  return {
-    type: 'chunks',
-    event: {
-      type: `chunkrow/${row.type}`,
-      seq: row.seq0,
-      time: row.time0,
-      data: row.data,
-    } as ChunkRowEvent,
-  }
-}
-
 function packedInputs(entries: readonly SessionLiveEventEntry[]): SessionEventLikeEntry[] {
-  return packChunkRuns(entries.map(entry => entry.event)).map((record) => {
-    return isChunkRow(record) ? chunkEntry(record) : { type: 'event', event: record }
-  })
+  const output: SessionEventLikeEntry[] = []
+  let active: {
+    readonly turn: number
+    readonly step: number
+    readonly stream: AssistantStreamAccumulator
+    last: SessionLiveEventEntry
+  } | undefined
+  const flush = (): void => {
+    if (active === undefined) return
+    output.push(at(active.last.event.seq, 'assistant/attempt', {
+      turn: active.turn,
+      step: active.step,
+      stream: active.stream.snapshot(),
+    }, { time: active.last.event.time }))
+    active = undefined
+  }
+  for (const entry of entries) {
+    const event = entry.event as unknown as {
+      readonly type: string
+      readonly time: number
+      readonly data: { readonly turn?: number; readonly step?: number; readonly chunk?: StreamChunk }
+    }
+    if (event.type === 'assistant/live-chunk'
+      && event.data.turn !== undefined
+      && event.data.step !== undefined
+      && event.data.chunk !== undefined) {
+      if (active !== undefined && (active.turn !== event.data.turn || active.step !== event.data.step)) flush()
+      const current = active ?? {
+        turn: event.data.turn,
+        step: event.data.step,
+        stream: new AssistantStreamAccumulator(),
+        last: entry,
+      }
+      active = current
+      current.stream.push({ time: event.time, chunk: event.data.chunk })
+      current.last = entry
+      continue
+    }
+    const current = active
+    if (event.type === 'assistant/message'
+      && current !== undefined
+      && current.turn === event.data.turn
+      && current.step === event.data.step) {
+      output.push({
+        ...entry,
+        event: {
+          ...entry.event,
+          data: { ...entry.event.data, stream: current.stream.snapshot() },
+        } as SessionEvent,
+      })
+      active = undefined
+      continue
+    }
+    flush()
+    output.push(entry)
+  }
+  flush()
+  return output
 }
 
 function assembler(events: readonly SessionEventLikeEntry[]): ConversationNodeAssembler {
@@ -121,12 +165,12 @@ describe('Trajectory conversation Definitions', () => {
     const value = assembler([
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
-      at(3, 'assistant/chunk', {
+      at(3, 'assistant/live-chunk', {
         turn: 1,
         step: 1,
         chunk: { type: 'text-delta', index: 0, text: 'first attempt' },
       }),
-      at(4, 'assistant/chunk', {
+      at(4, 'assistant/live-chunk', {
         turn: 1,
         step: 1,
         chunk: { type: 'usage', usage: { inputTokens: 10, outputTokens: 3 } },
@@ -152,7 +196,7 @@ describe('Trajectory conversation Definitions', () => {
       delayMs: 25,
       failure: { code: 'TRANSPORT', message: 'temporary failure' },
     }))
-    value.append(at(6, 'assistant/chunk', {
+    value.append(at(6, 'assistant/live-chunk', {
       turn: 1,
       step: 1,
       chunk: { type: 'text-delta', index: 0, text: 'second attempt' },
@@ -184,40 +228,44 @@ describe('Trajectory conversation Definitions', () => {
     const runningHistory = [
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
-      at(3, 'assistant/chunk', {
+      at(3, 'assistant/live-chunk', {
         turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: '' },
       }),
-      at(4, 'assistant/chunk', {
+      at(4, 'assistant/live-chunk', {
         turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: '  ' },
       }),
-      at(5, 'assistant/chunk', {
+      at(5, 'assistant/live-chunk', {
         turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'answer' },
       }),
-      at(6, 'assistant/chunk', {
+      at(6, 'assistant/live-chunk', {
         turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 1, text: '' },
       }),
-      at(7, 'assistant/chunk', {
+      at(7, 'assistant/live-chunk', {
         turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 1, text: 'think' },
       }),
-      at(8, 'assistant/chunk', {
+      at(8, 'assistant/live-chunk', {
         turn: 1, step: 1, chunk: { type: 'reasoning-delta', index: 1, text: 'ing' },
       }),
-      at(9, 'assistant/chunk', {
+      at(9, 'assistant/live-chunk', {
         turn: 1, step: 1,
         chunk: { type: 'tool-call-delta', index: 2, id: 'call-1', argumentsDelta: '' },
       }),
-      at(10, 'assistant/chunk', {
+      at(10, 'assistant/live-chunk', {
         turn: 1, step: 1,
         chunk: { type: 'tool-call-delta', index: 2, id: 'call-1', argumentsDelta: '{"x":' },
       }),
-      at(11, 'assistant/chunk', {
+      at(11, 'assistant/live-chunk', {
         turn: 1, step: 1,
         chunk: { type: 'tool-call-delta', index: 2, id: 'call-1', argumentsDelta: '1}' },
       }),
     ]
     const runningScalar = snapshot(assembler(runningHistory))
     const packedHistory = packedInputs(runningHistory)
-    expect(packedHistory.filter(input => input.event.type.startsWith('chunkrow/'))).toHaveLength(3)
+    expect(packedHistory).toHaveLength(3)
+    const runningAttempt = packedHistory.at(-1)?.event
+    expect(runningAttempt?.type).toBe('assistant/attempt')
+    if (runningAttempt?.type !== 'assistant/attempt') throw new Error('expected packed running attempt')
+    expect(runningAttempt.data.stream.length).toBeGreaterThan(0)
     const runningPacked = snapshot(assembler(packedHistory))
     expect(runningPacked).toEqual(runningScalar)
     expect(runningPacked.partial?.blocks).toEqual([
@@ -246,16 +294,16 @@ describe('Trajectory conversation Definitions', () => {
     const finalizedHistory = [
       at(20, 'turn/start', { turn: 2 }),
       at(21, 'step/start', { turn: 2, step: 1 }),
-      at(22, 'assistant/chunk', {
+      at(22, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: '' },
       }, { time: 3_000 }),
-      at(23, 'assistant/chunk', {
+      at(23, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: ' ' },
       }, { time: 3_000 }),
-      at(24, 'assistant/chunk', {
+      at(24, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'first' },
       }, { time: 2_998 }),
-      at(25, 'assistant/chunk', {
+      at(25, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'usage', usage: { inputTokens: 10, outputTokens: 3 } },
       }),
       at(26, 'llm/retry', {
@@ -263,13 +311,13 @@ describe('Trajectory conversation Definitions', () => {
         policyKey: 'test-normal', retry: 1, maxRetries: 2, delayMs: 25,
         failure: { code: 'TRANSPORT', message: 'temporary failure' },
       }),
-      at(27, 'assistant/chunk', {
+      at(27, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: '' },
       }),
-      at(28, 'assistant/chunk', {
+      at(28, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: 'second' },
       }),
-      at(29, 'assistant/chunk', {
+      at(29, 'assistant/live-chunk', {
         turn: 2, step: 1, chunk: { type: 'text-delta', index: 0, text: ' attempt' },
       }),
       at(30, 'assistant/message', {
@@ -278,7 +326,12 @@ describe('Trajectory conversation Definitions', () => {
       at(31, 'step/end', { turn: 2, step: 1 }),
     ]
     const finalizedScalar = snapshot(assembler(finalizedHistory))
-    const finalizedPacked = snapshot(assembler(packedInputs(finalizedHistory)))
+    const finalizedInputs = packedInputs(finalizedHistory)
+    expect(finalizedInputs.filter(input => input.event.type === 'assistant/attempt')).toHaveLength(1)
+    const finalizedMessage = finalizedInputs.find(input => input.event.type === 'assistant/message')?.event
+    if (finalizedMessage?.type !== 'assistant/message') throw new Error('expected packed final message')
+    expect(finalizedMessage.data.stream.length).toBeGreaterThan(0)
+    const finalizedPacked = snapshot(assembler(finalizedInputs))
     expect(finalizedPacked).toEqual(finalizedScalar)
     expect(finalizedPacked.eventNodes.find(node => node.kind === 'assistant')).toMatchObject({
       timing: { firstTokenTime: 3_000 },
@@ -292,7 +345,7 @@ describe('Trajectory conversation Definitions', () => {
     const namedToolHistory = [
       at(40, 'turn/start', { turn: 3 }),
       at(41, 'step/start', { turn: 3, step: 1 }),
-      ...[42, 43, 44].map(seq => at(seq, 'assistant/chunk', {
+      ...[42, 43, 44].map(seq => at(seq, 'assistant/live-chunk', {
         turn: 3, step: 1,
         chunk: { type: 'tool-call-delta', index: 0, id: 'call-2', name: 'read', argumentsDelta: '' },
       }, { time: 4_000 + seq - 42 })),
@@ -306,7 +359,11 @@ describe('Trajectory conversation Definitions', () => {
       }),
     ]
     const namedToolScalar = snapshot(assembler(namedToolHistory))
-    const namedToolPacked = snapshot(assembler(packedInputs(namedToolHistory)))
+    const namedToolInputs = packedInputs(namedToolHistory)
+    const namedToolMessage = namedToolInputs.find(input => input.event.type === 'assistant/message')?.event
+    if (namedToolMessage?.type !== 'assistant/message') throw new Error('expected packed named-tool message')
+    expect(namedToolMessage.data.stream.length).toBeGreaterThan(0)
+    const namedToolPacked = snapshot(assembler(namedToolInputs))
     expect(namedToolPacked).toEqual(namedToolScalar)
     expect(namedToolPacked.eventNodes.find(node => node.kind === 'assistant')).toMatchObject({
       timing: { firstTokenTime: 4_000 },

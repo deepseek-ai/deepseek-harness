@@ -25,6 +25,9 @@
     },
     {
       "path": "../../core/session"
+    },
+    {
+      "path": "../../session/session-format-catalog"
     }
   ]
 }
