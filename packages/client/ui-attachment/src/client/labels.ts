@@ -1,6 +1,7 @@
 import type { TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { AttachmentRailLabels } from '../AttachmentRail.tsx'
 import type { DropOverlayLabels } from '../DropOverlay.tsx'
+import type { FileCardLabels } from '../FileCard.tsx'
 import type { ImageLightboxLabels } from '../ImageLightbox.tsx'
 import type { MessageImageLabels } from '../MessageImage.tsx'
 
@@ -41,23 +42,38 @@ export function dropOverlayLabels(
   accepting: boolean,
   limits?: { readonly count: number; readonly size: string },
 ): DropOverlayLabels {
-  if (!accepting) return { title: t('image.dropBlocked') }
+  if (!accepting) return { title: t('attachment.dropBlocked') }
   return {
-    title: t('image.dropTitle'),
-    desc: limits === undefined ? undefined : t('image.dropDesc', limits),
+    title: t('attachment.dropTitle'),
+    desc: limits === undefined ? undefined : t('attachment.dropDesc', limits),
   }
 }
 
 /**
- * Resolve draft-image rail strings from the conversation namespace.
+ * Resolve pending-file card strings from the conversation namespace.
+ * @param t - conversation namespace translator.
+ * @param name - browser file name interpolated into remove/retry labels.
+ * @returns translated file-card labels.
+ */
+export function fileCardLabels(t: TranslateNS<'conversation'>, name: string): FileCardLabels {
+  return {
+    label: t('file.pending'),
+    remove: t('file.remove', { name }),
+    uploading: t('file.uploading'),
+    failed: t('file.uploadFailed'),
+    retry: t('file.retry', { name }),
+  }
+}
+
+/**
+ * Resolve the mixed draft-attachment rail strings from the conversation namespace.
  * @param t - conversation namespace translator.
  * @returns translated attachment-rail labels.
  */
 export function attachmentRailLabels(t: TranslateNS<'conversation'>): AttachmentRailLabels {
   return {
-    group: t('image.pending'),
-    open: t('image.openOriginal'),
-    scrollLeft: t('image.scrollLeft'),
-    scrollRight: t('image.scrollRight'),
+    group: t('attachment.pending'),
+    scrollLeft: t('attachment.scrollLeft'),
+    scrollRight: t('attachment.scrollRight'),
   }
 }

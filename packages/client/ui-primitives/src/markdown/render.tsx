@@ -24,6 +24,7 @@ import type {} from 'mdast-util-math'
 import { normalizeUri } from 'micromark-util-sanitize-uri'
 import { CodeBlock } from './CodeBlock.tsx'
 import { renderTexToReact } from './katex.tsx'
+import { LinkIcon, classifyLinkPath } from '../LinkIcon.tsx'
 import type { PositionedBlock } from './incremental.ts'
 import css from './MarkdownText.module.css'
 
@@ -263,6 +264,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
               aria-label={mention.label}
               onClick={mention.open}
             >
+              <LinkIcon kind={classifyLinkPath(value)} className={css.linkIcon} />
               {value}
             </button>
           </code>
@@ -287,7 +289,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     case 'table':
       return renderTable(node, key, context)
     case 'link':
-      return renderAnchor(node.url, renderChildren(node.children, { ...context, inLink: true }), key)
+      return renderAnchor(node.url, renderChildren(node.children, { ...context, inLink: true }), key, !anchorWrapsOnlyImages(node.children))
     case 'linkReference':
       return renderLinkReference(node, key, context)
     case 'image':
@@ -465,8 +467,17 @@ function renderTableRow(
   return <tr key={key}>{cells}</tr>
 }
 
+/**
+ * True when an anchor's markdown children are all images, so the anchor is a
+ * clickable picture (badge, thumbnail): the leading URL glyph would dangle
+ * beside the image instead of leading link text, so those anchors skip it.
+ */
+function anchorWrapsOnlyImages(children: Md.PhrasingContent[]): boolean {
+  return children.length > 0 && children.every(child => child.type === 'image' || child.type === 'imageReference')
+}
+
 /** Anchor over an already-authored href: allowlisted or unwrapped, external links get the safe attributes. */
-function renderSafeLink(href: string, children: ReactNode[], key: Key): ReactNode {
+function renderSafeLink(href: string, children: ReactNode[], key: Key, glyph = true): ReactNode {
   const safeHref = sanitizeUrl(href)
   if (safeHref === '') return <Fragment key={key}>{children}</Fragment>
   const external = ['http:', 'https:'].includes(new URL(safeHref).protocol)
@@ -476,14 +487,15 @@ function renderSafeLink(href: string, children: ReactNode[], key: Key): ReactNod
       href={safeHref}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
     >
+      {glyph && <LinkIcon kind="url" className={css.linkIcon} />}
       {children}
     </a>
   )
 }
 
 /** Anchor over a parsed markdown destination, which hast normalized before the allowlist saw it. */
-function renderAnchor(url: string, children: ReactNode[], key: Key): ReactNode {
-  return renderSafeLink(normalizeUri(url), children, key)
+function renderAnchor(url: string, children: ReactNode[], key: Key, glyph = true): ReactNode {
+  return renderSafeLink(normalizeUri(url), children, key, glyph)
 }
 
 /**
@@ -539,7 +551,8 @@ function renderLinkReference(
     // not an anchor, so mentions inside it stay live.
     return <Fragment key={key}>{'['}{renderChildren(node.children, context)}{referenceSuffix(node)}</Fragment>
   }
-  return renderAnchor(definition.url, renderChildren(node.children, { ...context, inLink: true }), key)
+  const rendered = renderChildren(node.children, { ...context, inLink: true })
+  return renderAnchor(definition.url, rendered, key, !anchorWrapsOnlyImages(node.children))
 }
 
 function renderImageReference(

@@ -29,6 +29,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`web/`](web/README.md) | Boots the browser shell | — |
 | [`modules/`](modules/README.md) | Loads browser-side client modules | `ctx.clientModules` / `ctx.modules` |
 | [`connection/`](connection/README.md) | Maintains browser-host RPC communication and event delivery | `ctx.connection` |
+| [`file-upload/`](file-upload/README.md) | Sends raw Blob and byte-stream request bodies outside the page thread | `ctx.fileUpload` |
 | [`store/`](store/README.md) | Provides React-free observable and snapshot-store primitives | — |
 | [`hmr/`](hmr/README.md) | Refreshes client plugins during development | — |
 | [`locale/`](locale/README.md) | Provides localization preferences and message dictionaries | `ctx.locale` |

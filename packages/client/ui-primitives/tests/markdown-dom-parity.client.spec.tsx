@@ -172,6 +172,8 @@ const CORPUS: Record<string, string> = {
     '<https://deepseek.com> and bare autolink https://autolink.example.com literal.',
     '',
     '[spaces encoded](https://example.com/a b)',
+    '',
+    '[![linked badge](https://example.com/badge.png)](https://example.com/target) image-only anchors carry no leading glyph.',
   ].join('\n'),
   'images': [
     '![https image](https://example.com/secure.png "img title")',

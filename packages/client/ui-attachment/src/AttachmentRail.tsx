@@ -1,31 +1,23 @@
-/** Draft-attachment thumbnail rail: scrollbar-less horizontal overflow paged
- * by edge arrows, hover-revealed per-item remove, single-click open. */
+/** Draft-attachment rail: scrollbar-less horizontal overflow paged by edge arrows. */
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronLeftOutline14, IconChevronRightOutline14, IconCloseFill14,
+  IconChevronLeftOutline14, IconChevronRightOutline14,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './AttachmentRail.module.css'
 
-/** One rail thumbnail; strings arrive resolved (zero-cordis atom). */
+/** One ordered draft attachment rendered by the rail owner. */
 export interface AttachmentRailItem {
   /** Stable identity for the React key. */
   id: string
-  /** Object or data URL rendered as the thumbnail. */
-  previewUrl: string
-  /** Image alt text (display name with the owner's fallback applied). */
-  alt: string
-  /** Accessible label of the item's remove control. */
-  removeLabel: string
 }
 
 /** Rail-level strings the owner resolves from its own locale namespace. */
 export interface AttachmentRailLabels {
   /** Accessible name of the rail group. */
   group: string
-  /** Thumbnail tooltip inviting the original-image preview. */
-  open: string
   /** Accessible label of the left paging arrow. */
   scrollLeft: string
   /** Accessible label of the right paging arrow. */
@@ -40,12 +32,12 @@ const WHEEL_LINE_PX = 16
 function pageBehavior(): ScrollBehavior {
   // jsdom (the unit lane) implements no matchMedia despite lib.dom's
   // non-optional typing; the optional call keeps that lane on the default.
-  // oxlint-disable-next-line typescript/no-unnecessary-condition
-  return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+  const matchMedia = (window as unknown as { matchMedia?: Window['matchMedia'] }).matchMedia
+  return matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
 }
 
 /**
- * Horizontal thumbnail rail over the caller's draft attachments.
+ * Horizontal rail over the caller's ordered draft attachments.
  *
  * The rail scrolls with its scrollbar hidden; overflow is announced by edge
  * arrows recomputed from scroll geometry on scroll, item-count changes, and
@@ -53,22 +45,18 @@ function pageBehavior(): ScrollBehavior {
  * panel resizes count, not only window resizes). A vertical wheel pans the
  * rail horizontally and is consumed exclusively (non-passive listener), a
  * newly added item is revealed at the rail's end while a rail that mounts
- * over an existing draft keeps its start position, and each thumbnail opens
- * on a single click while its remove control sits inside the card and
- * reveals on hover or focus. The owner decides mounting; it renders the rail
- * only while items exist.
+ * over an existing draft keeps its start position. The owner renders each
+ * item and decides mounting; it renders the rail only while items exist.
  *
- * @param props.items - resolved thumbnails in draft order.
- * @param props.labels - rail-level strings (group name, open tooltip, arrows).
- * @param props.onOpen - single-click open of one item's original image.
- * @param props.onRemove - remove one item from the draft.
+ * @param props.items - attachments in draft order.
+ * @param props.labels - rail-level strings (group name and paging arrows).
+ * @param props.renderItem - render one attachment card in draft order.
  * @returns the rail group with its paging arrows.
  */
-export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, onOpen, onRemove }: {
+export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, renderItem }: {
   items: readonly T[]
   labels: AttachmentRailLabels
-  onOpen: (item: T) => void
-  onRemove: (item: T) => void
+  renderItem: (item: T) => ReactNode
 }) {
   const railRef = useRef<HTMLDivElement | null>(null)
   // null marks the first layout pass: a rail that MOUNTS over an existing
@@ -165,24 +153,7 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, on
         onScroll={updateEdges}
       >
         {items.map(item => (
-          <div key={item.id} className={css.item}>
-            <button
-              type="button"
-              className={css.thumbnail}
-              title={labels.open}
-              onClick={() => { onOpen(item) }}
-            >
-              <img src={item.previewUrl} alt={item.alt} />
-            </button>
-            <button
-              type="button"
-              className={css.remove}
-              aria-label={item.removeLabel}
-              onClick={() => { onRemove(item) }}
-            >
-              <IconCloseFill14 size={12} />
-            </button>
-          </div>
+          <div key={item.id} className={css.item}>{renderItem(item)}</div>
         ))}
       </div>
       {edges.right && (

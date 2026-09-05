@@ -158,6 +158,8 @@
       "@deepseek-ai/dsh-client-ui-session": ["./packages/client/ui-session/src"],
       "@deepseek-ai/dsh-client-ui-session/client": ["./packages/client/ui-session/src/client"],
       "@deepseek-ai/dsh-client-connection": ["./packages/client/connection/src"],
+      "@deepseek-ai/dsh-client-file-upload": ["./packages/client/file-upload/src"],
+      "@deepseek-ai/dsh-client-file-upload/client": ["./packages/client/file-upload/src/client/index.ts"],
       "@deepseek-ai/dsh-api-remotes": ["./packages/api/remotes/src"],
       "@deepseek-ai/dsh-api-remotes/client": ["./packages/api/remotes/src/client/index.ts"],
       "@deepseek-ai/dsh-client-hmr": ["./packages/client/hmr/src"],

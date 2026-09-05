@@ -1,0 +1,3 @@
+- row "USER, Files ×1 · Read the attached file with the read tool, reply with exactly the single word it contains, and stop.":
+  - cell "Turn 1 USER": USER
+  - cell "Files ×1 · Read the attached file with the read tool, reply with exactly the single word it contains, and stop."

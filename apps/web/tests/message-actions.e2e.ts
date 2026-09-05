@@ -1,7 +1,8 @@
 // Web e2e scenario: message IconActions + clocks. Cold-seeds a deterministic
-// completed-turn-tail fork case (zero model calls) and pins the settled
-// conversation aria after the footers are focus-revealed — the surface package
-// jsdom tests cannot substitute for (docs/testing.md snapshot rule).
+// completed-turn-tail fork case with an unchanged resume header (zero model
+// calls) and pins the settled conversation aria after the footers are
+// focus-revealed — the surface package jsdom tests cannot substitute for
+// (docs/testing.md snapshot rule).
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -70,6 +71,10 @@ function completedTailFixture(raw: string): string {
       },
     }
   })
+  const inheritedHeader = kept.findLast(event => event.type === 'request/header')
+  if (inheritedHeader?.type !== 'request/header') {
+    throw new Error('borrowed recording has no request header')
+  }
   let seq = (kept.at(-1)?.seq ?? -1) + 1
   let time = (kept.at(-1)?.time ?? -1) + 1
   const at = (event: Record<string, unknown>): { seq: number; time: number } & Record<string, unknown> => ({
@@ -109,6 +114,7 @@ function completedTailFixture(raw: string): string {
       surfaceOp: 'append',
     }),
     at({ type: 'step/start', data: { turn: 2, step: 1 } }),
+    at({ type: 'request/header', data: { header: inheritedHeader.data.header, reason: 'resume' } }),
     at({
       type: 'assistant/message',
       data: {
@@ -149,6 +155,9 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     await writeFile(join(sessionCwd, 'b.txt'), 'beta\n')
     const raw = completedTailFixture(await readFile(SEED, 'utf8'))
     expect(fixtureUserPrompts(raw), 'adapted seed must carry both prompts').toEqual([PROMPT, SECOND_PROMPT])
+    expect(parseSeedFixture(raw).events.flatMap(event => event.type === 'request/header'
+      ? [event.data.reason]
+      : []), 'adapted seed must carry an unchanged resume header').toEqual(['initial', 'resume'])
     await seedSession(scaffold, raw, SEED_ID)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -172,6 +181,10 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     await sessionRow.click()
     await expect.poll(() => page.getByText(MID_TURN_TEXT, { exact: true }).count(), { timeout: 15_000 }).toBe(1)
     await expect.poll(() => page.getByText('DONE', { exact: true }).count(), { timeout: 15_000 }).toBe(1)
+    await expect.poll(
+      () => page.getByRole('button', { name: 'System prompt', exact: true }).count(),
+      { timeout: 10_000 },
+    ).toBe(1)
 
     // Focus-reveal the footers (hover:hover keeps them opacity-hidden until
     // hover/focus-within). Branch renders only under assistant answers — user

@@ -11,7 +11,7 @@ import { randomBytes } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { unzipSync, strFromU8 } from 'fflate'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionLineageNode } from '@deepseek-ai/dsh-session-query'
 import { SessionPersistenceNotFoundError } from '@deepseek-ai/dsh-session-persistence'
@@ -88,6 +88,14 @@ function readHandle(stored: StoredLog): SessionHandle {
   } as unknown as SessionHandle
 }
 
+/** A user/message event carrying one generic-file reference. */
+function fileEvent(id: string, name = 'notes.txt', bytes = 5, seq = SessionSeq(1)): SessionEvent {
+  return {
+    type: 'user/message', seq, time: 1000,
+    data: { content: [{ type: 'file', attachment: { attachmentId: id, name, bytes } }] },
+  } as unknown as SessionEvent
+}
+
 async function buildApi(
   logs: Record<string, StoredLog>,
   descendants: SessionLineageNode[] = [],
@@ -95,6 +103,7 @@ async function buildApi(
     query?: boolean
     persistence?: boolean | 'throw'
     attachments?: boolean | ((ref: ImageAttachmentRef, signal?: AbortSignal) => Promise<ReturnType<typeof storedImage>>)
+    readFileStream?: (ref: FileAttachmentRef, signal?: AbortSignal) => AsyncIterable<Uint8Array>
     sessions?: {
       get(id: SessionId): { readonly id: SessionId } | undefined
       flush(session: { readonly id: SessionId }): Promise<boolean>
@@ -150,6 +159,9 @@ async function buildApi(
       validateImage: async () => {},
       saveImage: async () => { throw new Error('export never saves images') },
       readImage,
+      readFileStream: services.readFileStream ?? (async function* () {
+        throw new Error('fixture has no files')
+      }),
     } as never)
   }
   if (services.sessions !== undefined) ctx.provide('sessions', services.sessions as never)
@@ -738,6 +750,51 @@ describe('session.export download endpoint', () => {
     const files = unzipSync(await responseBytes(response))
     expect(Object.keys(files).sort()).toEqual(['media/img-1.png', exportLogName].sort())
     expect(files['media/img-1.png']).toEqual(storedImage('img-1').data)
+  })
+
+  it('streams generic files under their content-addressed archive paths', async () => {
+    const digest = 'a'.repeat(64)
+    const id = `sha256:${digest}`
+    const fallbackDigest = 'c'.repeat(64)
+    const fallbackId = `sha256:${fallbackDigest}`
+    const root = log('session-root', undefined, [
+      fileEvent(id, 'notes.txt', 5),
+      fileEvent(fallbackId, '.', 5, SessionSeq(2)),
+    ])
+    const reads: Array<{ ref: FileAttachmentRef; signal: AbortSignal | undefined }> = []
+    const api = await buildApi({ 'session-root': root }, [], {
+      readFileStream: (ref, signal) => (async function* (): AsyncIterable<Uint8Array> {
+        reads.push({ ref, signal })
+        yield new Uint8Array()
+        yield Uint8Array.of(1, 2)
+        yield Uint8Array.of(3, 4, 5)
+      })(),
+    })
+    const response = await toFetchHandler(api).fetch(
+      new Request('http://host/api/session.export?sessionId=session-root'),
+    )
+    const files = unzipSync(await responseBytes(response))
+    expect(files[`files/aa/${digest}/notes.txt`]).toEqual(Uint8Array.of(1, 2, 3, 4, 5))
+    expect(files[`files/cc/${fallbackDigest}/file`]).toEqual(Uint8Array.of(1, 2, 3, 4, 5))
+    expect(reads).toHaveLength(2)
+    expect(reads[0]?.ref).toMatchObject({ attachmentId: id, name: 'notes.txt', bytes: 5 })
+    expect(reads[0]?.signal).toBeInstanceOf(AbortSignal)
+  })
+
+  it('fails the whole export when a referenced file stream fails', async () => {
+    const digest = 'b'.repeat(64)
+    const id = `sha256:${digest}`
+    const root = log('session-root', undefined, [fileEvent(id)])
+    const api = await buildApi({ 'session-root': root }, [], {
+      readFileStream: () => (async function* (): AsyncIterable<Uint8Array> {
+        yield Uint8Array.of(1)
+        throw new Error('file bytes missing')
+      })(),
+    })
+    const response = await toFetchHandler(api).fetch(
+      new Request('http://host/api/session.export?sessionId=session-root'),
+    )
+    await expect(response.arrayBuffer()).rejects.toThrow('file bytes missing')
   })
 
   it('collects media referenced from nested tool results', async () => {

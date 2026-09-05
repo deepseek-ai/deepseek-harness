@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-settings-controller",
   "description": "Remote owner for the configuration surfaces over the settings-domain seams",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },

@@ -18,10 +18,11 @@ import {
   webSnapshotMode,
   type WebScaffold,
 } from './scaffold.ts'
-import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
+import { connectFreshWorkspace, newEnglishPage, saveFailureShot, writeComposerDraft } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/skill-invocation-policy', import.meta.url))
 const MENU_EXPECTED = join(SNAPSHOT_DIR, 'menu.expected.md')
+const FUZZY_MENU_EXPECTED = join(SNAPSHOT_DIR, 'menu-fuzzy.expected.md')
 const MODE = webSnapshotMode()
 
 interface SeedSkill {
@@ -111,8 +112,16 @@ describe('web e2e: skill invocation policy through the real host', () => {
 
     const snapshot = await captureStableAria(page, '[role="listbox"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(MENU_EXPECTED, snapshot, MODE)
+
+    // Discovery needs no prefix: an in-order subsequence of one skill name
+    // ranks that skill alone, through the ranker the command group uses.
+    await writeComposerDraft(page, input, '/plcyusr')
+    await expect.poll(() => menu.getByRole('option').count(), { timeout: 10_000 }).toBe(1)
+    expect(await menu.getByRole('option', { name: /policy-user-only/ }).count()).toBe(1)
+    const fuzzySnapshot = await captureStableAria(page, '[role="listbox"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(FUZZY_MENU_EXPECTED, fuzzySnapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['menu.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['menu-fuzzy.expected.md', 'menu.expected.md'])
   })
 })

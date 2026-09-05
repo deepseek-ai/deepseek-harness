@@ -1,4 +1,4 @@
-import type { AssistantBlock } from './snapshot.ts'
+import type { AssistantBlock } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /**
  * Test whether Assistant blocks contain a user-facing reply rather than only

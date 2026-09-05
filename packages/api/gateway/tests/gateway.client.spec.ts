@@ -604,6 +604,54 @@ describe('Client Remote transport readiness', () => {
     })
   })
 
+  it.each([false, true])('replaces a stalled carrier and restores events (socket opened: %s)', async (autoOpen) => {
+    await withFakeWebSocket('https://harness.example', async () => {
+      vi.useFakeTimers()
+      vi.stubGlobal('__DSH_CONNECTION_RECOVERY__', {
+        backoffBaseMs: 10, backoffMaxMs: 10, generationReadyTimeoutMs: 100,
+      })
+      Object.assign(globalThis.location, { hostname: 'harness.example', search: '' })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+      FakeWebSocket.autoOpen = autoOpen
+      const ctx = new Context()
+      const reset = vi.fn()
+      ctx.on('connection/reset', reset)
+      try {
+        await ctx.plugin(TypertRegistry)
+        await ctx.plugin({ inject: [], apply: applyConnection })
+        await ctx.plugin({ inject, apply })
+        await vi.advanceTimersByTimeAsync(0)
+        const connection = ctx.get('connection') as ConnectionHandle
+        expect(FakeWebSocket.sockets).toHaveLength(1)
+        expect(connection.generation.getSnapshot()).toBeUndefined()
+        await vi.advanceTimersByTimeAsync(110)
+        expect(FakeWebSocket.sockets).toHaveLength(2)
+        expect(FakeWebSocket.sockets[0]?.readyState).toBe(FakeWebSocket.CLOSED)
+        expect(FakeWebSocket.sockets[0]?.closedWith).toHaveLength(1)
+        expect(reset).not.toHaveBeenCalled()
+        const replacement = FakeWebSocket.sockets[1]!
+        replacement.open()
+        await vi.advanceTimersByTimeAsync(0)
+        const opening = JSON.parse(replacement.sent[0]!) as { streamId: string }
+        replacement.receive({
+          type: 'item', streamId: opening.streamId,
+          value: { type: 'ready', clientId: 'recovered-client', host: { home: '/recovered' } },
+        })
+        await vi.advanceTimersByTimeAsync(0)
+        expect(connection.state.getSnapshot()).toBe('connected')
+        expect(connection.generation.getSnapshot()?.host.home).toBe('/recovered')
+        expect(reset).toHaveBeenCalledOnce()
+        expect(vi.getTimerCount()).toBe(0)
+      } finally {
+        await ctx.fiber.dispose()
+        await vi.advanceTimersByTimeAsync(0)
+        warnSpy.mockRestore()
+        vi.unstubAllGlobals()
+        vi.useRealTimers()
+      }
+    })
+  })
+
   it('does not replace an in-process carrier when Connection retries', async () => {
     const { client, start } = await benchFiber(
       vi.fn<ConnectionHandle['rpc']['call']>(),

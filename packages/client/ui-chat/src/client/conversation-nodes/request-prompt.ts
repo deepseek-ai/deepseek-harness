@@ -78,7 +78,7 @@ export function requestPromptDefinition(inspect: RequestPromptInspector): Conver
           match.event.data.reason === 'initial',
         ),
         showsPrompt: previous === undefined
-          || match.event.data.reason !== 'change'
+          || match.event.data.reason === 'series'
           || match.event.data.startsSeries === true
           || change === 'system'
           || change === 'system-and-tools',
@@ -89,8 +89,17 @@ export function requestPromptDefinition(inspect: RequestPromptInspector): Conver
     update: context => context.state,
     buildViewNode: (context) => {
       const state = context.state
-      if (state === undefined || !state.showsPrompt || state.prompt.system === '') return null
-      return chatNode(context, 'system-prompt', state.anchorSeq, { text: state.prompt.system })
+      if (state === undefined) return null
+      const current = context.current.get('chat') as ChatNode | null | undefined
+      const visible = state.showsPrompt && state.prompt.system !== ''
+      if (!visible && current?.kind !== 'system-prompt') return null
+      return chatNode(
+        context,
+        'system-prompt',
+        state.anchorSeq,
+        { text: state.prompt.system },
+        { visibility: visible ? 'visible' : 'hidden' },
+      )
     },
   }
 }

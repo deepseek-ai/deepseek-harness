@@ -55,7 +55,7 @@ export class SubmitMachine {
           claim: {
             token: c.token,
             ...(c.hint !== undefined ? { hint: c.hint } : {}),
-            ...(c.images === true ? { images: true } : {}),
+            ...(c.attachments === true ? { attachments: true } : {}),
           },
         }
         : {}),
@@ -216,7 +216,7 @@ export class SubmitMachine {
     return [{ type: 'notice', level: ev.ok && ev.outcome?.kind !== 'error' ? 'info' : 'error', text }]
   }
 
-  /** Clear after an accepted image-only send; it has no text suffix to retain. */
+  /** Clear after an accepted attachment-only send; it has no text suffix to retain. */
   private onSendCommitted(): readonly InputEffect[] {
     if (this.phase !== 'plain') return []
     this.claim = undefined

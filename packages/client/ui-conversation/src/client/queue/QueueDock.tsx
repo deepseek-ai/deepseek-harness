@@ -1,11 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { useEffect, useId, useMemo, useState } from 'react'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronUpOutline14, IconCloseOutline16,
-  IconEditOutline16, IconQueueOutline14, IconSendOutline14, IconTrashOutline16, projectUserText, Tooltip,
+  DocumentFileIcon, fileSizeText, IconEditOutline16, IconQueueOutline14, IconSendOutline14,
+  IconTrashOutline16, projectUserText, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { QueueAction, QueueItemId, QueueRow } from '../contract/queue.ts'
 import { NS } from '../locales.ts'
@@ -26,12 +27,36 @@ export interface QueueDockInjected {
  * @param content - the row's wire content blocks.
  * @returns the row's durable image references in block order.
  */
-function queueImageRefs(content: QueueRow['content']): ImageAttachmentRef[] {
-  return content.flatMap((block) => {
-    if (block.type !== 'image') return []
-    const { attachment } = block as { attachment?: ImageAttachmentRef }
-    return attachment === undefined ? [] : [attachment]
-  })
+function queueAttachments(content: QueueRow['content']): Array<
+  | { readonly type: 'image'; readonly attachment: ImageAttachmentRef }
+  | { readonly type: 'file'; readonly attachment: FileAttachmentRef }
+> {
+  const attachments: Array<
+    | { readonly type: 'image'; readonly attachment: ImageAttachmentRef }
+    | { readonly type: 'file'; readonly attachment: FileAttachmentRef }
+  > = []
+  for (const block of content) {
+    if (block.type === 'image') {
+      const { attachment } = block as { attachment?: ImageAttachmentRef }
+      if (attachment !== undefined) attachments.push({ type: 'image', attachment })
+    }
+    if (block.type === 'file') {
+      const { attachment } = block as { attachment?: FileAttachmentRef }
+      if (attachment !== undefined) attachments.push({ type: 'file', attachment })
+    }
+  }
+  return attachments
+}
+
+/** Compact file identity used beside queue thumbnails. */
+function QueueFile({ attachment, label }: { attachment: FileAttachmentRef; label: string }) {
+  return (
+    <span className={css.file} aria-label={label} title={attachment.name}>
+      <span className={css.fileIcon} aria-hidden><DocumentFileIcon /></span>
+      <span className={css.fileName}>{attachment.name}</span>
+      <span className={css.fileSize}>{fileSizeText(attachment.bytes)}</span>
+    </span>
+  )
 }
 
 /** One durable queued image as a fixed-size thumbnail; a load failure keeps the empty placeholder. */
@@ -59,7 +84,8 @@ export type QueueDockProps = PropsRuntime<'conversation.input.dock'> & QueueDock
 
 /**
  * Queue strip: one item renders directly; multiple items default to a
- * collapsible count header; an empty queue renders nothing.
+ * collapsible count header; an empty queue renders nothing. Local submissions
+ * show sending status and disabled actions until their Host queue rows arrive.
  */
 export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: QueueDockProps) {
   const inbox = useSession(s => s.queue)
@@ -130,6 +156,9 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
           >
             <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>
             <span className={css.count}>{t('queue.count', { n: rowCount })}</span>
+            {!listVisible && pendingQueue.length > 0 && (
+              <span className={css.status} role="status">{t('queue.sending')}</span>
+            )}
             <span className={css.chevron} aria-hidden>
               {expanded ? <IconChevronDownOutline14 /> : <IconChevronUpOutline14 />}
             </span>
@@ -137,7 +166,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
         )}
         <ul id={listId} className={css.list} hidden={!listVisible}>
           {listVisible && queue.map((row) => {
-            const imageRefs = queueImageRefs(row.content)
+            const attachments = queueAttachments(row.content)
             return (
               <li key={row.id} className={css.row}>
                 {/* Single-item strip has no count header, so the row itself carries the queue glyph. */}
@@ -164,16 +193,24 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
                   )
                   : (
                     <>
-                      {imageRefs.length > 0 && (
-                        <span className={css.thumbs}>
-                          {imageRefs.map((attachment, index) => (
-                            <QueueThumb
-                              key={`${attachment.attachmentId}:${index}`}
-                              attachment={attachment}
-                              loadImage={loadImage}
-                              label={t('queue.image')}
-                            />
-                          ))}
+                      {attachments.length > 0 && (
+                        <span className={css.attachments}>
+                          {attachments.map((item, index) => item.type === 'image'
+                            ? (
+                              <QueueThumb
+                                key={`${item.attachment.attachmentId}:${index}`}
+                                attachment={item.attachment}
+                                loadImage={loadImage}
+                                label={t('queue.image')}
+                              />
+                            )
+                            : (
+                              <QueueFile
+                                key={`${item.attachment.attachmentId}:${item.attachment.name}:${index}`}
+                                attachment={item.attachment}
+                                label={t('queue.file', { name: item.attachment.name })}
+                              />
+                            ))}
                         </span>
                       )}
                       <span className={css.preview}>{projectUserText(row.preview, [])}</span>
@@ -266,24 +303,64 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
               </li>
             )
           })}
-          {listVisible && pendingQueue.map(submission => (
-            <li key={submission.requestId} className={css.row} data-submission-echo="">
-              {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
-              {submission.images.length > 0 && (
-                <span className={css.thumbs}>
-                  {submission.images.map((image, index) => (
-                    <img
-                      key={`${image.previewUrl}:${index}`}
-                      className={css.thumb}
-                      src={image.previewUrl}
-                      alt={t('queue.image')}
-                    />
-                  ))}
-                </span>
-              )}
-              <span className={css.preview}>{projectUserText(submission.text, [])}</span>
-            </li>
-          ))}
+          {listVisible && pendingQueue.map((submission) => {
+            return (
+              <li key={submission.requestId} className={`${css.row} ${css.pendingRow}`} data-submission-echo="">
+                {rowCount === 1 && <span className={css.lead} aria-hidden><IconQueueOutline14 /></span>}
+                {submission.attachments.length > 0 && (
+                  <span className={css.attachments}>
+                    {submission.attachments.map((attachment, index) => attachment.type === 'image'
+                      ? (
+                        <img
+                          key={`${attachment.value.previewUrl}:${index}`}
+                          className={css.thumb}
+                          src={attachment.value.previewUrl}
+                          alt={t('queue.image')}
+                        />
+                      )
+                      : (
+                        <QueueFile
+                          key={`${attachment.value.attachmentId}:${attachment.value.name}:${index}`}
+                          attachment={attachment.value}
+                          label={t('queue.file', { name: attachment.value.name })}
+                        />
+                      ))}
+                  </span>
+                )}
+                <span className={css.preview}>{projectUserText(submission.text, [])}</span>
+                <span className={css.status} role="status">{t('queue.sending')}</span>
+                {queueMutable && <div className={css.actions}>
+                  <button
+                    type="button"
+                    className={css.action}
+                    aria-label={t('queue.edit')}
+                    title={t('queue.sending')}
+                    disabled
+                  >
+                    <IconEditOutline16 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={css.action}
+                    aria-label={t('queue.remove')}
+                    title={t('queue.sending')}
+                    disabled
+                  >
+                    <IconTrashOutline16 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className={css.action}
+                    aria-label={t('queue.steer')}
+                    title={t('queue.sending')}
+                    disabled
+                  >
+                    <IconSendOutline14 />
+                  </button>
+                </div>}
+              </li>
+            )
+          })}
         </ul>
       </div>
     </div>

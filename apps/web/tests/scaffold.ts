@@ -192,7 +192,18 @@ const INSTALL_ANCHOR = join(REPO_ROOT, 'apps/cli/package.json')
 const REPLAY_PROVIDERS = [{
   id: 'deepseek-official',
   name: 'DeepSeek',
-  models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: 128_000 }],
+  models: [
+    { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', contextWindow: 128_000 },
+    {
+      id: 'deepseek-v4-flash-vision-exp',
+      name: 'DeepSeek-V4-Flash-Vision-Exp',
+      contextWindow: 1_000_000,
+      inputModalities: ['text', 'image'] as const,
+      defaultMaxTokens: 256_000,
+      reasoningEfforts: ['off', 'low', 'high', 'max'],
+      defaultReasoningEffort: 'high',
+    },
+  ],
 }]
 
 /**
@@ -819,6 +830,7 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
             replayFixture,
             mode,
             `http://${browserHost}:${port}`,
+            harnessHome,
           )
         } catch (error) {
           failures.push(error)
@@ -953,6 +965,7 @@ function stableSessionFixture(
   session: Session,
   existing: string,
   workspaceCwd: string,
+  harnessHome: string,
 ): string {
   const prepared = prepareSessionSnapshotFixtureForComparison(
     normalizeWebSessionVolatiles(rawSessionLog(session), workspaceCwd),
@@ -965,6 +978,7 @@ function stableSessionFixture(
     })
   const fresh = scrubSessionSnapshot(stabilized)
     .split(session.id).join('{{sessionId}}')
+    .split(harnessHome).join('{{harnessHome}}')
   const stable = redactSessionSnapshotIds(stabilizeFixtureMessageIds([fresh], [existing]))[0]
   if (stable === undefined) throw new Error('session harvest produced no stabilized fixture')
   return stable
@@ -975,6 +989,7 @@ async function assertReplaySession(
   fixturePath: string,
   mode: WebSnapshotMode,
   webUrl: string,
+  harnessHome: string,
 ): Promise<void> {
   let expected = await readFile(fixturePath, 'utf8')
   const fixtureDir = dirname(fixturePath)
@@ -997,7 +1012,7 @@ async function assertReplaySession(
   if (sessionCwd === undefined) throw new Error(`${fixturePath}: replayed session has no cwd`)
   const actual = rawSessionLog(session)
   if (mode === 'refresh' && writesCurrentSessionFixtures(manifest, mode)) {
-    expected = stableSessionFixture(session, expected, sessionCwd)
+    expected = stableSessionFixture(session, expected, sessionCwd, harnessHome)
     expectedPath = recordedSessionFixturePath(fixturePath, session.header.version)
     await writeFile(expectedPath, expected)
   }
@@ -1010,8 +1025,11 @@ async function assertReplaySession(
     sessionIds: typeof expectedHeader.id === 'string' ? [expectedHeader.id] : [],
     cwd: typeof expectedHeader.cwd === 'string' ? expectedHeader.cwd : '\0no-cwd\0',
   }
-  expect(normalizeSessionSnapshots([normalizeWebSessionVolatiles(actual)], actualContext)[0], `${fixturePath}: persisted replay`)
-    .toBe(normalizeSessionSnapshots([normalizeWebSessionVolatiles(expected)], expectedContext)[0])
+  const actualSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(actual)], actualContext)[0]
+    ?.split(harnessHome).join('{{harnessHome}}')
+  const expectedSnapshot = normalizeSessionSnapshots([normalizeWebSessionVolatiles(expected)], expectedContext)[0]
+    ?.split(harnessHome).join('{{harnessHome}}')
+  expect(actualSnapshot, `${fixturePath}: persisted replay`).toBe(expectedSnapshot)
 
   if (manifest.header?.pin !== true) return
   const normalizePrompt = (value: string): string => value
@@ -1032,7 +1050,7 @@ async function assertReplaySession(
 
 /**
  * Record-mode fixture write-back: harvest the live session, scrub request
- * headers to {{system}}/{{tools}}, tokenize the run-local cwd, redact opaque
+ * headers to {{system}}/{{tools}}, tokenize the run-local cwd and Harness Home, redact opaque
  * identities with typed relationship-preserving tokens, and write the fixture.
  * A manifest-retained historical generation makes the write-back a no-op.
  * @param scaffold - the record-mode scaffold.
@@ -1048,7 +1066,12 @@ export async function recordFixture(scaffold: WebScaffold, sessionId: SessionId,
   const target = recordedSessionFixturePath(fixturePath, agent.session.header.version)
   const existingPath = existsSync(target) ? target : fixturePath
   const existing = existsSync(existingPath) ? await readFile(existingPath, 'utf8') : ''
-  await writeFile(target, stableSessionFixture(agent.session, existing, scaffold.workspaceCwd))
+  await writeFile(target, stableSessionFixture(
+    agent.session,
+    existing,
+    scaffold.workspaceCwd,
+    scaffold.harnessHome,
+  ))
 }
 
 /**
@@ -1078,8 +1101,8 @@ export function fixtureIdentity(
 
 /**
  * Realize a recorded seed fixture against one scaffold: substitute the
- * `{{sessionId}}`/`{{cwd}}` placeholders and rewrite the recorded cwd to the
- * scaffold's workspace. Idempotent, so a caller may realize early (e.g. to
+ * `{{sessionId}}`/`{{cwd}}`/`{{harnessHome}}` placeholders and rewrite the
+ * recorded cwd to the scaffold's workspace. Idempotent, so a caller may realize early (e.g. to
  * price content exactly as the host will fold it) and still pass the result
  * through {@link seedSession}.
  * @param scaffold - the booted scaffold whose workspace the seed targets.
@@ -1104,6 +1127,7 @@ export function realizeSeedFixture(scaffold: WebScaffold, fixtureText: string, i
         .replace(/\{\{session:([2-9]\d*)\}\}/g, (_token, ordinal: string) => `${id}-child-${ordinal}`)
         .replace(/\{\{(message|approval|workflow|command|rpc|retry|id):([1-9]\d*)\}\}/g, (_token, kind: string, ordinal: string) =>
           fixtureIdentity(kind as 'message' | 'approval' | 'workflow' | 'command' | 'rpc' | 'retry' | 'id', Number(ordinal)))
+        .split('{{harnessHome}}').join(scaffold.harnessHome)
         .split('{{cwd}}').join(scaffold.workspaceCwd)
       return result
     })
@@ -1373,20 +1397,30 @@ function normalizeAria(snapshot: string, workspaceCwd: string, age: boolean): st
  * @param selector - the region locator selector.
  * @param workspaceCwd - normalization input.
  * @param options - `normalizeAge` collapses relative-time buckets to `{{age}}`
- *   for a region whose rows are dated from live wall-clock state.
+ *   for a region whose rows are dated from live wall-clock state;
+ *   `replacements` tokenizes scenario-owned values before generic normalization.
  * @returns the stable normalized snapshot.
  */
 export async function captureStableAria(
   page: Page,
   selector: string,
   workspaceCwd: string,
-  options: { normalizeAge?: boolean } = {},
+  options: {
+    normalizeAge?: boolean
+    replacements?: readonly (readonly [value: string, token: string])[]
+  } = {},
 ): Promise<string> {
   const region = page.locator(selector).first()
   const age = options.normalizeAge === true
-  let previous = normalizeAria(await region.ariaSnapshot(), workspaceCwd, age)
+  const normalize = (snapshot: string): string => {
+    for (const [value, token] of options.replacements ?? []) {
+      snapshot = snapshot.split(value).join(token)
+    }
+    return normalizeAria(snapshot, workspaceCwd, age)
+  }
+  let previous = normalize(await region.ariaSnapshot())
   await expect.poll(async () => {
-    const current = normalizeAria(await region.ariaSnapshot(), workspaceCwd, age)
+    const current = normalize(await region.ariaSnapshot())
     const stable = current === previous
     previous = current
     return stable

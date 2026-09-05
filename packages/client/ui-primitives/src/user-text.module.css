@@ -20,6 +20,14 @@
   white-space: nowrap;
 }
 
+/* Skill and command tokens read as code: the theme's code family at the
+   consumer's own size and line height, so the chip sits on the bubble line
+   like the plain runs around it. `@` chips keep the body face — a file or
+   session name is a label, not code. */
+.slashChip {
+  font-family: var(--dsw-font-markdown-code-font-family);
+}
+
 /* Inline reference glyphs (always ReferenceIcon svgs) ride the consumer's own
    font: 1em keeps the glyph at the text's size in the bubble (14px + user
    setting), the queue preview's fixed 13px line, and any future consumer — a

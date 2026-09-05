@@ -1,0 +1,43 @@
+{
+  "patches": [
+    {
+      "at": 0,
+      "entry": {
+        "kind": "chunks",
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "tool-call"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "tool-call",
+              "id": "call_00_ET_x83IHPfS8ouwILXe8u729956",
+              "name": "read",
+              "arguments": "{\"file_path\": \"{{fromRequest:saved at \\\"([^\\\"]+)\\\"}}\"}"
+            }
+          },
+          {
+            "type": "usage",
+            "usage": {
+              "inputTokens": 8243,
+              "outputTokens": 147,
+              "totalTokens": 8390,
+              "cacheReadTokens": 0,
+              "reasoningTokens": 0
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "tool-calls"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

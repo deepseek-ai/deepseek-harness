@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-team-web-profile",
   "description": "Private Web profile layer for Agent Teams Remote and UI plugins",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3-alpha.1",
   "private": true,
   "repository": {
     "type": "git",

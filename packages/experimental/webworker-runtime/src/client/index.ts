@@ -9,6 +9,7 @@
  * @module @deepseek-ai/dsh-experimental-webworker-runtime/client
  */
 import { IMAGE_FILE_NAME } from '../image-layout.ts'
+import type { ClientFileUploadHooks } from '@deepseek-ai/dsh-client-file-upload/types'
 import { PREVIEW_FIXTURE_MANIFEST_FILE } from '../fixture-manifest.ts'
 import { WorkerTunnel, type TunnelFetch } from './client.ts'
 import { applyIndexInjections } from './apply-injections.ts'
@@ -31,6 +32,11 @@ interface ClientTransportGlobal {
     /** The page spawned the worker the Host runs in, so the page owns it. */
     ownsHost: boolean
   }
+}
+
+/** Upload hook consumed by the independent Client file-upload service. */
+interface ClientFileUploadGlobal {
+  __DSH_FILE_UPLOAD__?: ClientFileUploadHooks
 }
 
 /** Inputs for {@link connectWorkerHost}. */
@@ -150,6 +156,9 @@ export async function connectWorkerHost(worker: Worker, options?: WorkerHostConn
       // The host lives in a worker this page spawned: the page owns it, so
       // the privileged surface stays reachable off loopback authorities.
       ownsHost: true,
+    }
+    ;(globalThis as ClientFileUploadGlobal).__DSH_FILE_UPLOAD__ = {
+      fetch: (input, init) => tunnel.fetch(input, init),
     }
     await applyIndexInjections(payload.injections, src => tunnel.loadBundle(src))
     ready.resolve()

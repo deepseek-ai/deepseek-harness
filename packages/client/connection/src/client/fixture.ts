@@ -2208,13 +2208,13 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         value: [
           { name: 'compact', description: 'fixture：压缩当前会话上下文' },
           { name: 'echo', description: 'fixture：回显参数', input: { hint: 'text to echo' } },
-          { name: 'goal', description: 'set or view the goal for a long-running task', input: { hint: '<objective>', images: true } },
+          { name: 'goal', description: 'set or view the goal for a long-running task', input: { hint: '<objective>', attachments: true } },
           { name: 'permission', description: 'Switch the permission preset (sandbox mode + approval policy)', input: { hint: '<preset>' } },
-          { name: 'plan', description: 'Enter or leave plan mode', input: { hint: '[off|message]', images: true } },
+          { name: 'plan', description: 'Enter or leave plan mode', input: { hint: '[off|message]', attachments: true } },
         ],
       }
     },
-    execute(id: SessionId, line: string, images: readonly unknown[] = []): RpcResult<CommandExecution | undefined> {
+    execute(id: SessionId, line: string, attachments: readonly unknown[] = []): RpcResult<CommandExecution | undefined> {
       const missing = requireGoalSession(id)
       if (missing !== undefined) return missing
       // Structured split mirroring the Host parser: name + verbatim rawInput
@@ -2225,17 +2225,17 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
       // Mirror the Host image policy AFTER command resolution, matching the
       // executor's order (an unknown name answers undefined and logs no
       // lifecycle): the declaration rejection covers every known command
-      // without `input.images`, and the two producer grammar rejections cover
+      // without `input.attachments`, and the two producer grammar rejections cover
       // the declaring commands' control-only lines. The fixture stores no
       // bytes, so an accepted batch is acknowledged and dropped.
       const known = ['permission', 'goal', 'compact', 'echo', 'plan']
-      if (images.length > 0 && name !== undefined && known.includes(name)) {
+      if (attachments.length > 0 && name !== undefined && known.includes(name)) {
         const rejection = name !== 'goal' && name !== 'plan'
-          ? `/${name} does not accept image attachments`
+          ? `/${name} does not accept attachments`
           : name === 'goal' && args.trim() === ''
-            ? 'Image attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.'
+            ? 'Attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.'
             : name === 'plan' && args.trim() === 'off'
-              ? 'Image attachments cannot accompany /plan off.'
+              ? 'Attachments cannot accompany /plan off.'
               : undefined
         if (rejection !== undefined) {
           const commandId = `fx-cmd-${logOf(id).length}` as CommandId

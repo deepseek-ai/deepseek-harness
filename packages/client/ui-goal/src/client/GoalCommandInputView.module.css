@@ -23,10 +23,10 @@
   border-radius: 22px;
   background: var(--dsw-specific-bubble);
   color: var(--dsw-alias-label-primary);
-  font: var(--dsw-font-markdown-code);
-  /* The command echo is a user message, not dense code-in-prose: keep the
-     code family from the token but read at the body size, riding the
-     Settings font-size axis like the user bubble (14/22 at the default). */
+  /* The command echo is a user message: it inherits the body face like the
+     user bubble and rides the same Settings font-size axis (14/22 at the
+     default); the `/goal` command chip, set in the code face by the shared
+     projection, is what marks the line as a command. */
   font-size: var(--dsh-content-font-size, 14px);
   line-height: calc(22px + var(--dsh-content-font-delta, 0px));
   white-space: pre-wrap;

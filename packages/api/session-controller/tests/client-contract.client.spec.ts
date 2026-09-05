@@ -73,8 +73,9 @@ describe('Client Session contracts', () => {
     expectTypeOf<SessionPageRequest['throughSeq']>().toEqualTypeOf<number>()
   })
 
-  it('keeps its catalog-visible prompt parts identical to attachment intake', () => {
-    expectTypeOf<SessionPromptContentPart>().toEqualTypeOf<AttachmentPromptContentPart>()
+  it('keeps its text and image prompt parts identical to attachment intake', () => {
+    expectTypeOf<Exclude<SessionPromptContentPart, { type: 'file' }>>()
+      .toEqualTypeOf<AttachmentPromptContentPart>()
   })
 
   it('publishes exact replace, prepend, and append event-window changes', () => {

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-command-goal` 为用户提供基于持久 goal 服务的 `/goal` 命令：用户可以直接在 UI 中创建、编辑、暂停、恢复、清除并查看当前 goal，无需模型参与。命令在其 Cordis scope 中注册，因此读取该 scope 的命令适配器能发现并执行它；命令文本与输出都留在 UI 中——绝不进入模型请求。每项被接受的变更都会通过 goal 服务的持久 `goal/change` 事件落盘。图片附件可以随 create 或 edit 一起提交，并以一条普通用户消息发出，供后续 Goal Round 读取。为挂载了命令适配器的交互式部署选择它；没有适配器的无头与自动化应用不需要它。
+`dsh-command-goal` 为用户提供基于持久 goal 服务的 `/goal` 命令：用户可以直接在 UI 中创建、编辑、暂停、恢复、清除并查看当前 goal，无需模型参与。命令在其 Cordis scope 中注册，因此读取该 scope 的命令适配器能发现并执行它；命令文本与输出都留在 UI 中，绝不进入模型请求。每项被接受的变更都会通过 goal 服务的持久 `goal/change` 事件落盘。有序的图片与文件附件可以随 create 或 edit 一起提交，并以一条普通用户消息发出，供后续 Goal Round 读取。为挂载了命令适配器的交互式部署选择它；没有适配器的无头与自动化应用不需要它。
 
 ## 目录
 
@@ -44,9 +44,9 @@ kind: "package-reference"
 
 只有控制词（`clear`、`pause`、`resume`、`edit`）占据完整输入时才被识别；其他任何非空后缀都是目标，因此 `/goal pause after verification` 会创建该字面目标。`edit` 内联接收替换内容，并拒绝直接替换未完成的 goal。可预期的领域拒绝会变成稳定的直接命令错误，不暴露带品牌类型的 id 或 revision；意外实现失败仍会让分发失败，使适配器能将其报告为命令失败。
 
-### 图片附件
+### 附件
 
-`/goal` 声明了图片支持，因此 composer 可以随调用附加图片。附件只随目标本身：create 或 edit 成功时，命令提交一条用户 followup 消息，携带已准入的图片块加固定文本 `Reference images for the goal objective.`，后续 Goal Round 从普通会话历史读取它们，goal 领域不存储附件状态。其他任何子命令、以及被拒绝的 create 或 edit，都直接返回错误且不提交任何消息，分发方 composer 保留图片。
+`/goal` 声明附件支持。附件只随目标本身：create 或 edit 成功后，命令提交一条用户 followup 消息，按选择顺序携带已准入的图片块与文件块，再附加固定文本 `Reference attachments for the goal objective.`。后续 Goal Round 从普通会话历史读取这些内容，goal 领域不存储附件状态。其他任何子命令以及被拒绝的 create 或 edit，都会在领域变更前返回直接错误，并保留 composer 的草稿和附件卡。
 
 ### 组合方式
 
@@ -77,7 +77,7 @@ kind: "package-reference"
 
 - **语法，而非自由文本。** 解析器只在控制词（`clear`、`pause`、`resume`、`edit`）填满整个输入时识别它们；其他任何非空后缀都是目标。单独的 `edit` 无效，且 `edit` 拒绝直接替换未完成的 goal。
 - **领域拒绝变成稳定错误。** `GoalError` 结果会转换为带固定消息的直接命令错误；意外失败会重新抛出，使适配器报告命令失败而非领域结果。渲染输出绝不暴露带品牌类型的 id 或 revision。
-- **附件随目标而行。** create 或 edit 成功时，命令提交一条用户 followup 消息，携带已准入的图片块加固定文本 `Reference images for the goal objective.`；其他路径都不提交任何消息，因此分发方 composer 保留图片。
+- **附件随目标提交。** create 或 edit 成功时，命令提交一条用户 followup 消息，按选择顺序携带已准入的图片块与文件块，再附加固定文本 `Reference attachments for the goal objective.`。其他路径不提交消息，因此分发方 composer 保留草稿和附件卡。
 
 ### 源码地图
 
@@ -108,11 +108,11 @@ kind: "package-reference"
 
 #### 模型看到的内容
 
-斜杠输入、变更以及直接状态／错误输出不会进入模型请求。goal 领域把变更记录为 `goal/change`；已启用的同会话驱动器可以在后续续行提示词中暴露结果状态。呈现文本绝不会记录到日志中。当 create 或 edit 携带图片附件时，模型会看到一条普通用户消息：图片块后跟文本 `Reference images for the goal objective.`，在会话历史中位于下一个 Goal Round 之前。
+斜杠输入、变更以及直接状态或错误输出不会进入模型请求。goal 领域把变更记录为 `goal/change`；已启用的同会话驱动器可以在后续续行提示词中暴露结果状态。呈现文本不会记录到日志中。当 create 或 edit 携带附件时，模型会看到一条普通用户消息：有序的图片块与文件块后跟文本 `Reference attachments for the goal objective.`。它在会话历史中位于下一个 Goal Round 之前。
 
 #### Token 影响
 
-读取状态、变更 goal 或收到直接命令错误不会增加模型 token。已启用的同会话驱动器可能增加后续 Goal Round 提示词。目标携带的图片附件会增加一条用户消息，其计费与任何图片提示词相同。
+读取状态、变更 goal 或收到直接命令错误不会增加模型 token。已启用的同会话驱动器可能增加后续 Goal Round 提示词。目标携带的附件会增加一条普通用户消息，产生常规文本、图片和文件句柄成本。
 
 #### KV Cache 影响
 

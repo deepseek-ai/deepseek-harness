@@ -2,8 +2,9 @@
  * CommandUiRuntime (`ctx.commandUi`): the '/' command source over the
  * session-keyed directory, the client-contribution registry, and the
  * per-session popupSelect controllers. Candidate synthesis merges the host
- * catalog with contributions by availability, then fuzzy query/position
- * filtering; a host/contribution name collision fails loud. Every execute
+ * catalog with contributions by availability, then position filtering and
+ * the `/` menu's shared name ranking (ui-primitives `rankByName`); a
+ * host/contribution name collision fails loud. Every execute
  * addresses the session's agent by sessionId — sessions are always
  * agent-backed.
  */
@@ -17,9 +18,10 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TranslateNS } from '@deepseek-ai/dsh-client-locale/client'
+import { rankByName } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   CandidateRequest, ClientSessionContext, CommandClaim, PickOutcome, InputTriggerCandidate, InputTriggerPick,
-  SubmitEnvelope, SubmitImageAttachment, SubmitOutcome,
+  SubmitAttachment, SubmitEnvelope, SubmitOutcome,
 } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { CommandContribution, CommandDecoration, CommandUiContract } from './contract.ts'
 import type { CommandDescriptor } from './directory.ts'
@@ -54,69 +56,6 @@ interface LiveState {
   readonly contributions: Map<string, CommandContribution>
   readonly decorations: Map<string, CommandDecoration>
   readonly popups: Map<SessionId, PopupSelectController<ClientSessionContext>>
-}
-
-/** One fuzzy match with its stable source position. */
-interface RankedCandidate {
-  readonly candidate: InputTriggerCandidate
-  readonly index: number
-  readonly prefix: boolean
-  readonly score: number
-}
-
-/** Extra weight for command-name starts and separator boundaries. */
-function boundaryBonus(name: string, index: number): number {
-  return index === 0 || name.charAt(index - 1) === '-' || name.charAt(index - 1) === '_' ? 8 : 0
-}
-
-/**
- * Score the strongest ordered-subsequence alignment in O(name × query).
- * Boundary and adjacent matches earn weight; skipped and leading characters
- * cost weight.
- */
-function fuzzyScore(name: string, query: string): number | undefined {
-  if (query === '') return 0
-  if (query.length > name.length) return undefined
-  const noMatch = Number.NEGATIVE_INFINITY
-  let previous = Array<number>(name.length).fill(noMatch)
-  for (let index = 0; index < name.length; index++) {
-    if (name.charAt(index) === query.charAt(0)) previous[index] = 1 + boundaryBonus(name, index) - index
-  }
-  for (let queryIndex = 1; queryIndex < query.length; queryIndex++) {
-    const current = Array<number>(name.length).fill(noMatch)
-    let bestGapped = noMatch
-    for (let index = 0; index < name.length; index++) {
-      const gappedIndex = index - 2
-      if (gappedIndex >= 0) {
-        const prior = previous[gappedIndex] ?? noMatch
-        if (prior !== noMatch) bestGapped = Math.max(bestGapped, prior + gappedIndex)
-      }
-      if (name.charAt(index) !== query.charAt(queryIndex)) continue
-      const bonus = 1 + boundaryBonus(name, index)
-      const adjacent = index > 0 ? previous[index - 1] ?? noMatch : noMatch
-      if (adjacent !== noMatch) current[index] = adjacent + bonus + 4
-      if (bestGapped !== noMatch) current[index] = Math.max(current[index] ?? noMatch, bestGapped + bonus + 1 - index)
-    }
-    previous = current
-  }
-  let best = noMatch
-  for (const score of previous) best = Math.max(best, score)
-  return best === noMatch ? undefined : best
-}
-
-/** Case-insensitive fuzzy filtering with stable ordering for equal matches. */
-function fuzzyCandidates(candidates: readonly InputTriggerCandidate[], rawQuery: string): readonly InputTriggerCandidate[] {
-  const query = rawQuery.toLowerCase()
-  if (query === '') return candidates
-  const ranked: RankedCandidate[] = []
-  candidates.forEach((candidate, index) => {
-    const name = candidate.name.toLowerCase()
-    const score = fuzzyScore(name, query)
-    if (score !== undefined) ranked.push({ candidate, index, prefix: name.startsWith(query), score })
-  })
-  ranked.sort((left, right) =>
-    Number(right.prefix) - Number(left.prefix) || right.score - left.score || left.index - right.index)
-  return ranked.map(match => match.candidate)
 }
 
 /** Command surface: session-keyed directory + '/' source + contribution registry + per-session popups. */
@@ -246,7 +185,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     }
   }
 
-  /** Menu candidates: host catalog + contribution availability, then position filtering and fuzzy name ranking. */
+  /** Menu candidates: host catalog + contribution availability, then position filtering and the shared name ranking. */
   private async candidates(session: ClientSessionContext, req: CandidateRequest): Promise<readonly InputTriggerCandidate[]> {
     const list = await this.directory.ensureReady(session.sessionId, req.signal)
     const rows: InputTriggerCandidate[] = []
@@ -262,7 +201,7 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
       }
       rows.push({ name: contribution.name, description: contribution.description })
     }
-    return fuzzyCandidates(
+    return rankByName(
       rows.filter(c => req.position === 'leading' || c.hint === undefined),
       req.query,
     )
@@ -310,10 +249,10 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * bare host commands act on the bare token only; leadingInput claims
    * args-tolerant.
    *
-   * Envelope policy: an enter submission carrying images resolves only
-   * through a command declaring image acceptance. Every other command route —
+   * Envelope policy: an enter submission carrying attachments resolves only
+   * through a command declaring attachment acceptance. Every other command route —
    * popup, non-accepting claim, bare detached execute — throws the refusal
-   * so the machine surfaces one composer notice and the draft and images
+   * so the machine surfaces one composer notice and the draft and attachments
    * stay in place; nothing executes and nothing is dropped.
    */
   private async matchEnter(
@@ -329,13 +268,13 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     const bare = ws === -1
     const name = token.slice(1)
     if (name === '') return undefined
-    const refuseImages = (): never => {
-      throw new Error(this.t('notice.imagesUnsupported', { command: name }))
+    const refuseAttachments = (): never => {
+      throw new Error(this.t('notice.attachmentsUnsupported', { command: name }))
     }
     const contribution = this.live.contributions.get(name)
     if (contribution !== undefined && contribution.available(session)) {
       if (!bare) return undefined
-      if (envelope.images > 0) refuseImages()
+      if (envelope.attachments > 0) refuseAttachments()
       this.openPopup(name, contribution.ui, session, { via: 'enter', token })
       return 'handled'
     }
@@ -347,17 +286,17 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     if (bare) {
       const decoration = this.live.decorations.get(name)
       if (decoration !== undefined && decoration.available(session)) {
-        if (envelope.images > 0) refuseImages()
+        if (envelope.attachments > 0) refuseAttachments()
         this.openPopup(name, decoration.ui, session, { via: 'enter', token })
         return 'handled'
       }
     }
     if (desc.input !== undefined) {
-      if (envelope.images > 0 && desc.input.images !== true) refuseImages()
+      if (envelope.attachments > 0 && desc.input.attachments !== true) refuseAttachments()
       return { claim: this.leadingClaim(desc, session) }
     }
     if (!bare) return undefined
-    if (envelope.images > 0) refuseImages()
+    if (envelope.attachments > 0) refuseAttachments()
     this.consumeVia(session.sessionId, { via: 'enter', token })
     this.runDetached(desc, session, trimmed)
     return 'handled'
@@ -381,8 +320,8 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
     return {
       token,
       ...(desc.input !== undefined ? { hint: desc.input.hint } : {}),
-      ...(desc.input?.images === true ? { images: true } : {}),
-      submit: (args, _actx, images) => this.execute(session, token + args, images),
+      ...(desc.input?.attachments === true ? { attachments: true } : {}),
+      submit: (args, _actx, attachments) => this.execute(session, token + args, attachments),
     }
   }
 
@@ -394,21 +333,21 @@ export class CommandUiRuntime extends Service implements CommandUiContract {
    * executor durably logged the lifecycle (`command/run`/`command/done`) and
    * the outcome renders as a persistent flow node — the composer never
    * echoes it. A handler error result reports an error outcome so the
-   * composer keeps the submission (draft and images) for correction.
+   * composer keeps the draft and attachments for correction.
    * A refused call throws.
    */
   private async execute(
     session: ClientSessionContext,
     line: string,
-    images: readonly SubmitImageAttachment[] = [],
+    attachments: readonly SubmitAttachment[] = [],
   ): Promise<SubmitOutcome> {
-    const result = await this.ctx.remote.commands.execute(session.sessionId, line, images)
+    const result = await this.ctx.remote.commands.execute(session.sessionId, line, attachments)
     if (!result.ok) throw new Error(`command.execute failed: ${result.error.code}: ${result.error.message}`)
     if (result.value === undefined) return { kind: 'error', text: `unknown or malformed command: ${line}` }
     this.notifyExecuted(session.sessionId, submittedCommandName(line), result.value.result)
-    // An image-carrying submission consumed its images only on handler
-    // success; an error outcome keeps draft and images in the composer.
-    if (images.length > 0 && result.value.result.kind === 'error') {
+    // A submission consumes its attachments only after handler success; an
+    // error outcome keeps the draft and attachments in the composer.
+    if (attachments.length > 0 && result.value.result.kind === 'error') {
       return { kind: 'error', text: result.value.result.text }
     }
     return { kind: 'success' }

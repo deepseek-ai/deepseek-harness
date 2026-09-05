@@ -48,10 +48,11 @@ interface MessageItemProps {
   readonly node: ConversationNode
   readonly t: ChatNodeViewProps['t']
   readonly referenceLabels?: readonly string[]
+  readonly skillNames?: readonly string[]
 }
 
 /** Legacy-node fixture adapter for the independently registered renderers. */
-function MessageItem({ node, t: translate, referenceLabels }: MessageItemProps) {
+function MessageItem({ node, t: translate, referenceLabels, skillNames }: MessageItemProps) {
   const kind = node.kind === 'assistant' ? 'assistant-step' : node.kind
   const viewNode: ChatConversationViewNode = {
     key: `fixture:${node.kind}:${node.seq}`,
@@ -63,8 +64,12 @@ function MessageItem({ node, t: translate, referenceLabels }: MessageItemProps) 
     visibility: 'visible',
     data: node.kind === 'model-retry'
       ? { attempts: [node], current: node }
-      : (node.kind === 'user' || node.kind === 'steering') && referenceLabels !== undefined
-        ? { ...node, referenceLabels }
+      : (node.kind === 'user' || node.kind === 'steering') && (referenceLabels !== undefined || skillNames !== undefined)
+        ? {
+          ...node,
+          ...(referenceLabels === undefined ? {} : { referenceLabels }),
+          ...(skillNames === undefined ? {} : { skillNames }),
+        }
         : node,
   }
   const props = { node: viewNode, t: translate, renderMessageImages, useChat: useDetachedChat } as ChatNodeViewProps
@@ -139,6 +144,22 @@ describe('MessageItem arms', () => {
     expect(files.map(file => file.textContent)).toEqual(['Dockerfile', 'README.md'])
     expect(files.every(file => file.querySelector('svg') !== null)).toBe(true)
     expect(view.container.textContent).toContain('README.md, please.')
+  })
+
+  it('decorates a slash token as a skill chip only when the step resolved that skill', () => {
+    const message = {
+      kind: 'user' as const,
+      seq: 1,
+      time: 1_000,
+      content: [{ type: 'text', text: '/123 then /demo-skill go' }] as never,
+      source: null,
+    }
+    const plain = render(<MessageItem t={t} node={message} />)
+    expect(plain.container.querySelectorAll('[data-ref-chip]').length).toBe(0)
+    const resolved = render(<MessageItem t={t} node={message} skillNames={['demo-skill']} />)
+    const chips = [...resolved.container.querySelectorAll('[data-ref-chip="skill"]')]
+    expect(chips.map(chip => chip.textContent)).toEqual(['/demo-skill'])
+    expect(resolved.container.textContent).toContain('/123 then ')
   })
 
   it('user bubbles expose clock / copy and neither branch nor edit; copy writes the text', () => {
@@ -1039,5 +1060,31 @@ describe('small branch tails', () => {
       />,
     )
     expect(view.container.textContent).toBe('1 轮 · 1 步| 输入 0 tok · 输出 10 tok')
+  })
+})
+
+describe('user file attachments', () => {
+  it('renders one card per durable file block with its name and compact size', () => {
+    const view = render(
+      <MessageItem
+        t={t}
+        node={{
+          kind: 'user',
+          seq: 1,
+          time: 1_000,
+          content: [
+            { type: 'file', attachment: { attachmentId: 'sha256:cd', name: 'notes.pdf', bytes: 3 * 1024 * 1024 + 200 * 1024 } },
+            { type: 'file', attachment: { attachmentId: 'sha256:ef', name: 'tiny.txt', bytes: 12 } },
+            { type: 'file', attachment: { attachmentId: 'sha256:aa', name: 'mid.csv', bytes: 500 * 1024 } },
+            { type: 'text', text: 'summarize these' },
+          ] as never,
+          source: null,
+        }}
+      />,
+    )
+    expect(view.getByTitle('notes.pdf').textContent).toContain('3.2MB')
+    expect(view.getByTitle('tiny.txt').textContent).toContain('12B')
+    expect(view.getByTitle('mid.csv').textContent).toContain('500KB')
+    expect(view.getByText('summarize these')).toBeTruthy()
   })
 })

@@ -30,6 +30,9 @@
       "path": "../../client/connection/tsconfig.host.json"
     },
     {
+      "path": "../../client/file-upload/tsconfig.host.json"
+    },
+    {
       "path": "../../host/webserver"
     },
     {

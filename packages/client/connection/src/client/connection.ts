@@ -1,3 +1,8 @@
+/** Connection generation readiness, cancellation, and continuous recovery. */
+import { resolveConnectionConfig, type ConnectionRecoveryConfig } from '../recovery-config.ts'
+
+export type { ConnectionRecoveryConfig } from '../recovery-config.ts'
+
 /** Stable Host facts delivered by one established Remote event generation. */
 export interface ConnectionHostInfo {
   /** Host account home used only to abbreviate displayed filesystem paths. */
@@ -10,25 +15,6 @@ export interface ConnectionGeneration {
   readonly id: number
   /** Host facts carried by this generation's opening frame. */
   readonly host: ConnectionHostInfo
-}
-
-/** Reconnect/backoff tunables. All fields are optional; defaults are below. */
-export interface ConnectionConfig {
-  /** First-retry backoff cap in ms (jittered: actual delay is cap/2..cap). */
-  backoffBaseMs?: number
-  /** Exponential growth factor per failed attempt; values at or below 1 make the base tier final. */
-  backoffFactor?: number
-  /** Upper bound for the backoff cap in ms. */
-  backoffMaxMs?: number
-  /** Maximum wait for the registered generation source's ready signal. */
-  generationReadyTimeoutMs?: number
-}
-
-const CONNECTION_DEFAULTS: Required<ConnectionConfig> = {
-  backoffBaseMs: 500,
-  backoffFactor: 2,
-  backoffMaxMs: 10_000,
-  generationReadyTimeoutMs: 3_000,
 }
 
 const MANUAL_RECONNECT = new Error('connection: manual reconnect requested')
@@ -72,7 +58,8 @@ export interface ConnectionSinks {
 /**
  * One long-lived source defining a Connection generation. The source must
  * attach its incremental listeners before calling `ready`, then remain pending
- * until the generation is lost or `signal` aborts.
+ * until the generation is lost or `signal` aborts. On abort it must stop
+ * delivery, release its resources, and settle before a replacement can start.
  * @param signal - cancellation for the current generation.
  * @param ready - one-shot report that incremental delivery is attached.
  * @returns a promise settling only when this generation ends or fails.
@@ -96,14 +83,14 @@ export class ConnectionController {
   private immediateRetry = false
   private networkAvailable = true
   private lastState: ConnectionState | undefined
-  private readonly config: Required<ConnectionConfig>
+  private readonly config: Required<ConnectionRecoveryConfig>
 
   constructor(
     private readonly source: ConnectionGenerationSource,
     private readonly sinks: ConnectionSinks = {},
-    config: ConnectionConfig = {},
+    config: ConnectionRecoveryConfig = {},
   ) {
-    this.config = { ...CONNECTION_DEFAULTS, ...config }
+    this.config = resolveConnectionConfig(config)
   }
 
   /** Idempotent: begin the connect/pump/reconnect loop. */
@@ -159,10 +146,9 @@ export class ConnectionController {
     return cap / 2 + Math.random() * (cap / 2)
   }
 
-  private isFinalBackoffTier(attempt: number): boolean {
-    const cap = this.backoffCap(attempt)
-    const nextCap = this.backoffCap(attempt + 1)
-    return cap >= this.config.backoffMaxMs || !Number.isFinite(nextCap) || nextCap <= cap
+  /** Re-read retry inputs after a potentially reentrant state sink. */
+  private isRetryInterrupted(immediate: boolean): boolean {
+    return this.immediateRetry || (!this.networkAvailable && !immediate)
   }
 
   /** Read through a method: stop() flips the flag across awaits, so narrowing from the loop condition must not stick. */
@@ -195,17 +181,10 @@ export class ConnectionController {
         this.immediateRetry = false
         if (immediate) this.attempt = 0
         manualAttempt = immediate
-        if (!immediate && this.attempt > 0 && this.isFinalBackoffTier(this.attempt)) {
-          const retryDelay = new AbortController()
-          this.retryDelay = retryDelay
-          this.emitState('disconnected')
-          await waitForAbort(retryDelay.signal)
-          if (this.retryDelay === retryDelay) this.retryDelay = null
-          continue
-        }
         const attempt = ++this.attempt
         this.emitState('connecting')
         if (!this.isRunning()) return
+        if (this.isRetryInterrupted(immediate)) continue
         if (!immediate) {
           const retryDelay = new AbortController()
           this.retryDelay = retryDelay
@@ -235,7 +214,7 @@ export class ConnectionController {
         rejectSourceLost = reject
       })
       const reportReady = (host: ConnectionHostInfo): void => {
-        if (sourceReady) return
+        if (sourceReady || gen !== this.generation || !this.isGenerationActive(ac)) return
         sourceReady = true
         resolveReady(host)
       }
@@ -267,7 +246,7 @@ export class ConnectionController {
 
       try {
         const host = await Promise.race([
-          waitForReady(ready, this.config.generationReadyTimeoutMs, ac.signal),
+          waitForReady(ready, this.config, ac.signal),
           sourceLost,
         ])
         if (ac.signal.aborted) throw new Error('generation aborted during readiness handshake')
@@ -277,8 +256,8 @@ export class ConnectionController {
         if (this.isGenerationActive(ac)) {
           this.callSink(() => { this.sinks.onConnected?.(host) })
         }
-      } catch {
-        // Source settlement and controller cancellation already abort the generation.
+      } catch (error) {
+        if (!ac.signal.aborted) ac.abort(error)
       }
 
       await failed
@@ -305,19 +284,29 @@ export class ConnectionController {
   }
 }
 
-/** Await source readiness while reporting, but not cancelling, a slow Host. */
-function waitForReady<T>(ready: Promise<T>, timeoutMs: number, signal: AbortSignal): Promise<T> {
+/** Report a slow handshake before the hard deadline ends its generation. */
+function waitForReady<T>(
+  ready: Promise<T>,
+  config: Required<ConnectionRecoveryConfig>,
+  signal: AbortSignal,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false
+    const warning = setTimeout(() => {
+      console.warn(`[connection] generation is still not ready after ${String(config.generationReadyWarnMs)}ms`)
+    }, config.generationReadyWarnMs)
     const timeout = setTimeout(() => {
-      console.warn(`[connection] generation is still not ready after ${String(timeoutMs)}ms`)
-    }, timeoutMs)
+      const error = new Error(`connection generation was not ready within ${String(config.generationReadyTimeoutMs)}ms`)
+      console.warn(`[connection] ${error.message}; cancelling generation`)
+      finish({ error })
+    }, config.generationReadyTimeoutMs)
     const aborted = (): void => {
       finish({ error: new Error('connection generation aborted', { cause: signal.reason }) })
     }
     const finish = (outcome: { readonly value: T } | { readonly error: Error }): void => {
       if (settled) return
       settled = true
+      clearTimeout(warning)
       clearTimeout(timeout)
       signal.removeEventListener('abort', aborted)
       if ('error' in outcome) reject(outcome.error)

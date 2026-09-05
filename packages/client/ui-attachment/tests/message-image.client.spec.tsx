@@ -219,11 +219,16 @@ describe('ImageGallery', () => {
     expect(view.getByAltText('echo.png')).toBeTruthy()
   })
 
-  it('renders a lone image large and several images as square tiles', () => {
+  it('renders a lone image large and compact or grouped images as square tiles', () => {
     const load = vi.fn(() => new Promise<string>(() => {}))
     const lone = render(<ImageGallery images={[{ attachment }]} load={load} align="start" labels={labels} />)
     expect(lone.container.querySelectorAll('[data-variant="single"]')).toHaveLength(1)
     lone.unmount()
+    const compact = render(
+      <ImageGallery images={[{ attachment }]} load={load} align="end" compact labels={labels} />,
+    )
+    expect(compact.container.querySelectorAll('[data-variant="tile"]')).toHaveLength(1)
+    compact.unmount()
     const several = render(
       <ImageGallery images={[{ attachment }, { attachment }, { attachment }]} load={load} align="end" labels={labels} />,
     )
@@ -272,9 +277,9 @@ describe('ImageGallery', () => {
       useInput,
       inputActions: {
         setDraft: vi.fn(),
-        addImages: vi.fn(() => true),
-        removeImage: vi.fn(),
-        pruneImages: vi.fn(),
+        addAttachments: vi.fn(() => true),
+        removeAttachment: vi.fn(),
+        pruneAttachments: vi.fn(),
         submit: vi.fn(),
       },
       images: [{ attachment }],

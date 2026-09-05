@@ -139,15 +139,16 @@ export function MessageImage({ image, load, variant, labels }: {
 }
 
 /** Wrapping image group shared by user and assistant history: a lone image
- * renders large, several render as 64px square tiles (DeepSeek Chat rule). */
-export function ImageGallery({ images, load, align, labels }: {
+ * renders large unless its owning mixed-attachment row requests compact tiles. */
+export function ImageGallery({ images, load, align, compact = false, labels }: {
   images: readonly MessageImageSpec[]
   load: ImageLoader
   align: 'start' | 'end'
+  compact?: boolean
   labels: MessageImageLabels
 }) {
   if (images.length === 0) return null
-  const variant = images.length === 1 ? 'single' : 'tile'
+  const variant = compact || images.length > 1 ? 'tile' : 'single'
   return (
     <div className={css.gallery} data-align={align}>
       {images.map((image, index) => (

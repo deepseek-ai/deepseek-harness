@@ -33,6 +33,20 @@ function sessionFakeFor() {
 
 async function bench() {
   const runtime = await SlotTestRuntime.create()
+  const rootUpload = vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: {
+      receiptId: 'root-receipt' as never,
+      file: { attachmentId: 'root-file' as never, name: 'draft.pdf', bytes: 1 },
+    },
+  }))
+  const uploads = new Map<SessionId, (...args: unknown[]) => Promise<unknown>>([[ROOT, rootUpload]])
+  runtime.fileUpload.available = true
+  runtime.fileUpload.upload = (sessionId: SessionId, ...args: unknown[]) => {
+    const upload = uploads.get(sessionId)
+    if (upload === undefined) throw new Error('test file upload has no Session fixture')
+    return upload(...args)
+  }
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const connectWorkspace = vi.fn(async () => ROOT)
   runtime.ctx.provide('uiWorkspace', { connectWorkspace } as never)
@@ -87,7 +101,7 @@ async function bench() {
     conversationApi(id).injected.hooks.conversationViews
   return {
     runtime, feature, slots: runtime.slots, entryOf, conversationApi, headerApi, residentApi, composerApi,
-    inputApi, viewSource, sessionFake, connectWorkspace,
+    inputApi, viewSource, sessionFake, connectWorkspace, rootUpload, uploads,
   }
 }
 
@@ -213,6 +227,31 @@ describe('Conversation inject API', () => {
     await b.runtime.dispose()
   })
 
+  it('releases a draft attachment only after the input shell accepts its removal', async () => {
+    const b = await bench()
+    const composer = b.composerApi(ROOT)
+    expect(composer.addFiles?.([
+      new File([Uint8Array.of(1)], 'draft.pdf', { type: 'application/pdf' }),
+    ])).toBeNull()
+    const controller = b.runtime.ctx.get('conversation') as unknown as {
+      releaseDraftAttachment(id: string): void
+    }
+    const release = vi.spyOn(controller, 'releaseDraftAttachment')
+    const input = b.inputApi(ROOT).actions
+    const remove = vi.spyOn(input, 'removeAttachment').mockReturnValue(false)
+    const draft = composer.resolveDraftAttachments?.(
+      b.inputApi(ROOT).state.getSnapshot().attachmentIds,
+    )[0]
+    if (draft === undefined) throw new Error('missing draft attachment')
+
+    composer.removeAttachment?.(draft.id)
+    expect(release).not.toHaveBeenCalled()
+    remove.mockReturnValueOnce(true)
+    composer.removeAttachment?.(draft.id)
+    expect(release).toHaveBeenCalledWith(draft.id)
+    await b.runtime.dispose()
+  })
+
   it('fails loud for an unknown binding or an unloaded scoped service', async () => {
     const b = await bench()
     const entry = b.entryOf('conversation.composer.bar')
@@ -240,6 +279,10 @@ describe('Conversation inject API', () => {
     const resident = b.residentApi(ROOT)
     const { state, actions } = b.inputApi(ROOT)
     actions.setDraft('carry me')
+    expect(b.composerApi(ROOT).addFiles?.([
+      new File([Uint8Array.of(1)], 'draft.pdf', { type: 'application/pdf' }),
+    ])).toBeNull()
+    await vi.waitFor(() => { expect(b.rootUpload).toHaveBeenCalledOnce() })
 
     b.connectWorkspace.mockResolvedValueOnce(ROOT)
     await resident.selectWorkspace('workspace-1' as WorkspaceId)
@@ -247,12 +290,22 @@ describe('Conversation inject API', () => {
     expect(state.getSnapshot().draft).toBe('carry me')
 
     const other = 'other-1' as SessionId
-    await b.runtime.sessions.add({ id: other }, { current: false })
+    const targetUpload = vi.fn(() => Promise.resolve({
+      ok: true,
+      value: {
+        receiptId: 'target-receipt' as never,
+        file: { attachmentId: 'target-file' as never, name: 'draft.pdf', bytes: 1 },
+      },
+    }))
+    b.uploads.set(other, targetUpload)
+    await b.runtime.sessions.add({ id: other, session: {} }, { current: false })
     b.connectWorkspace.mockResolvedValueOnce(other)
     await resident.selectWorkspace('workspace-2' as WorkspaceId)
     expect(b.runtime.sessions.calls).toContainEqual({ method: 'open', args: [other] })
     expect(state.getSnapshot().draft).toBe('')
     expect(b.inputApi(other).state.getSnapshot().draft).toBe('carry me')
+    await vi.waitFor(() => { expect(targetUpload).toHaveBeenCalledOnce() })
+    expect(b.inputApi(other).state.getSnapshot().attachmentIds).toHaveLength(1)
     await b.runtime.dispose()
   })
 

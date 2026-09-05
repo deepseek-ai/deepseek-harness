@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-commands` lets a user type `/command [input]` in an interactive Harness UI and run it directly against the receiving agent without creating a model message. Plugins register commands with a name, description, optional input hint and image-acceptance flag, and an abortable handler; interactive adapters discover and dispatch them per agent. A command-producing plugin mounted under an agent's context can register an exact agent-scoped command that shadows the global one of the same name. Each command run is recorded in the session log, and its result is rendered by the adapter, never entering model history. Slash commands ship with the `dsh` CLI and the Web client.
+`dsh-commands` lets a user type `/command [input]` in an interactive Harness UI and run it directly against the receiving agent without creating a model message. Plugins register commands with a name, description, optional input hint and attachment-acceptance flag, and an abortable handler; interactive adapters discover and dispatch them per agent. A command-producing plugin mounted under an agent's context can register an exact agent-scoped command that shadows the global one of the same name. Each command run is recorded in the session log, and its result is rendered by the adapter, never entering model history. Slash commands ship with the `dsh` CLI and the Web client.
 
 ## Table of Contents
 
@@ -53,13 +53,13 @@ A command line starts with a slash at byte zero, a lowercase name containing let
 
 A plain registration is global. A command-producing plugin mounted beneath an agent's own context declares its `commands` injection and registers an exact agent-scoped command, which shadows the global definition of the same name for that agent only.
 
-### Image attachments
+### Attachments
 
-A command may declare `input.images` to accept composer image attachments. The executor enforces the declaration: images sent to a non-declaring command, an absent attachment store, or an over-limit batch each settle as an error before the handler runs. Admitted images reach the handler as frozen ordered `ImageBlock`s on `invocation.attachments`, and the handler owns their model-visible use — the registry never schedules them itself.
+A command may declare `input.attachments` to accept composer images and generic files. The executor enforces the declaration: attachments sent to a non-declaring command, an absent attachment store, an unknown Session-scoped file-upload receipt, or an over-limit image batch each settle as an error before the handler runs. Images cross the command wire as base64 input; generic files cite receipts from their completed background uploads, so command submission never reads their bytes again. Admitted `ImageBlock`s and `FileBlock`s reach the handler as one frozen `invocation.attachments` array in the user's selection order, and the handler owns their model-visible use.
 
 ### Dispatching from an adapter
 
-An interactive adapter calls `execute(agent, line, images, signal)` with the exact receiving agent, the full command line, and the submission's images. It returns the settled `CommandExecution` — the normalized result plus its lifecycle `commandId` — or `undefined` for invalid syntax or an unknown name. `list(agent)` and `find(agent, name)` serve discovery after agent-scoped shadowing.
+An interactive adapter calls `execute(agent, line, attachments, signal)` with the exact receiving agent, the full command line, and the submission's ordered attachments. It returns the settled `CommandExecution` — the normalized result plus its lifecycle `commandId` — or `undefined` for invalid syntax or an unknown name. `list(agent)` and `find(agent, name)` serve discovery after agent-scoped shadowing.
 
 ### Cancellation
 
@@ -92,9 +92,9 @@ The observable behavior is covered in [Use this package](#use-this-package); thi
 
 Registrations live in global and agent-scoped layers merged per agent via `ScopedLayers`. The child-injection shape — a command-producing plugin mounted beneath `agent.ctx` declares its own `commands` injection — preserves agent scope without making the core agent loop depend on a UI service. Duplicate names within one layer fail during registration, and registration or removal notifies every `commands/change` observer so live adapters can refresh discovery; observer failures are logged and cannot veto the mutation or starve later observers.
 
-### Image admission
+### Attachment admission
 
-Image enforcement happens in the executor, not the composer: an admitted batch is committed through `admitEncodedImages` against the `attachments` store, a rejected batch publishes no durable object, and cancellation is honored before the handler runs so a retrying caller never duplicates state. Handlers that cannot use the images return an error, so the dispatching composer keeps the originals.
+Attachment enforcement happens in the executor: images are committed through `admitEncodedImages`, files are resolved through the single Session-aware receipt provider, and the executor restores their original mixed order before calling the handler. Validation rejection starts no attachment writes. An image-storage failure can leave unreachable content-addressed objects for deferred collection, but publishes no model-visible message. Cancellation is honored before the handler runs. Command errors leave the dispatching composer's draft and attachment cards intact.
 
 </details>
 
@@ -119,7 +119,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 #### What the model sees
 
-The registry itself submits nothing. Known slash commands execute in the UI command plane, and their `CommandResult` text is not submitted as a user message. Unknown slash-command input is rejected by shipped adapters instead of becoming a model prompt. A command producer may explicitly use the receiving `Agent`; for example, [`dsh-plan-mode`](../../plan/plan-mode/README.md#model-and-human-interactions) submits the optional message in `/plan [message]` after selecting plan mode. Image attachments follow the same rule: the executor only admits them into durable attachment objects, and a declaring producer decides whether and how they become model-visible message content.
+The registry itself submits nothing. Known slash commands execute in the UI command plane, and their `CommandResult` text is not submitted as a user message. Unknown slash-command input is rejected by shipped adapters instead of becoming a model prompt. A command producer may explicitly use the receiving `Agent`; for example, [`dsh-plan-mode`](../../plan/plan-mode/README.md#model-and-human-interactions) submits the optional message and ordered attachments in `/plan [message]` after selecting plan mode. The executor only admits attachments into durable objects; the declaring producer decides whether and how they become model-visible message content.
 
 #### Token effect
 

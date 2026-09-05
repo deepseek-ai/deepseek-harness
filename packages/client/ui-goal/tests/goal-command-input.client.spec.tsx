@@ -133,5 +133,39 @@ describe('goal command input projection', () => {
 
     expect(bubble.textContent).toBe('/goal ship it')
     expect(within(bubble).queryByRole('button')).toBeNull()
+    // The executed command token reads as a reference chip; the objective stays plain text.
+    const chips = [...bubble.querySelectorAll('[data-ref-chip]')]
+    expect(chips.map(chip => [chip.getAttribute('data-ref-chip'), chip.textContent])).toEqual([['command', '/goal']])
+  })
+
+  it('renders a bare /goal as one command chip and nothing else', () => {
+    const t = makeTranslate(zh, commonZh)
+    const props = {
+      node: {
+        key: 'goal-command-input:bare',
+        data: { commandId: 'command-goal', text: '/goal', time: 1_700_000_000_000 },
+      },
+      t,
+    } as unknown as Parameters<typeof GoalCommandInputView>[0]
+    const view = render(<GoalCommandInputView {...props} />)
+    const bubble = view.getByRole('group', { name: '指令输入' })
+    expect(bubble.textContent).toBe('/goal')
+    expect([...bubble.querySelectorAll('[data-ref-chip]')].map(chip => chip.textContent)).toEqual(['/goal'])
+  })
+
+  it('decorates only the leading command token: a /goal inside the objective stays plain', () => {
+    const t = makeTranslate(zh, commonZh)
+    const props = {
+      node: {
+        key: 'goal-command-input:two',
+        data: { commandId: 'command-goal', text: '/goal 检查 /goal 的语法', time: 1_700_000_000_000 },
+      },
+      t,
+    } as unknown as Parameters<typeof GoalCommandInputView>[0]
+    const view = render(<GoalCommandInputView {...props} />)
+    const bubble = view.getByRole('group', { name: '指令输入' })
+    expect(bubble.textContent).toBe('/goal 检查 /goal 的语法')
+    const chips = [...bubble.querySelectorAll('[data-ref-chip]')]
+    expect(chips.map(chip => chip.textContent)).toEqual(['/goal'])
   })
 })

@@ -268,7 +268,7 @@ Source: [`packages/core/session/src/types.ts:299`](../packages/core/session/src/
 }
 ```
 
-Source: [`packages/interaction/commands/src/types.ts:104`](../packages/interaction/commands/src/types.ts)
+Source: [`packages/interaction/commands/src/types.ts:110`](../packages/interaction/commands/src/types.ts)
 
 <a id="commandrun--log-only"></a>
 
@@ -288,7 +288,7 @@ Source: [`packages/interaction/commands/src/types.ts:104`](../packages/interacti
 'command/run': { commandId: CommandId; name: string; args?: string; source: CommandSource }
 ```
 
-Source: [`packages/interaction/commands/src/types.ts:97`](../packages/interaction/commands/src/types.ts)
+Source: [`packages/interaction/commands/src/types.ts:103`](../packages/interaction/commands/src/types.ts)
 
 ### `compaction/*`
 

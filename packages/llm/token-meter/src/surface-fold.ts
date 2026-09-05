@@ -10,8 +10,8 @@
  * fallible step read-only and {@link commitSurfaceTokens} mutates in place,
  * so a throw leaves the caller's state untouched and the same malformed
  * event fails identically on every retry.
- * Nodes also carry their durable image occurrences and image-free heuristic
- * price, so `measure()` can reprice image content for the routed model.
+ * Nodes also carry durable attachment occurrences and their structural prices,
+ * so `measure()` can price the request representation sent to the model.
  *
  * @module @deepseek-ai/dsh-token-meter/surface-fold
  */
@@ -22,16 +22,22 @@ import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { estimateMessage, estimateStructuralBlock } from './estimate.ts'
 
+type FileAttachmentRef = Extract<ContentBlock, { type: 'file' }>['attachment']
+
 /** One priced surface node with the image occurrences route pricing replaces. */
 export interface MeterSurfaceNode {
   /** Durable sequence number of the surface event. */
   readonly seq: SessionSeq
   /** Fixed-heuristic price of the node's exact message. */
   readonly heuristicTokens: number
-  /** Fixed-heuristic price with every image occurrence's structural price removed. */
-  readonly imageFreeTokens: number
+  /** Structural JSON price replaced when the routed request projects images. */
+  readonly imageStructuralTokens: number
+  /** Structural JSON price replaced when request assembly projects files to text. */
+  readonly fileStructuralTokens: number
   /** Durable image occurrences in message order; empty for image-free nodes. */
   readonly images: readonly ImageAttachmentRef[]
+  /** Durable file occurrences in message order; empty for file-free nodes. */
+  readonly files: readonly FileAttachmentRef[]
 }
 
 /** One validated surface transition that has not mutated the priced surface yet. */
@@ -46,31 +52,53 @@ export interface SurfaceTokenPlan {
   readonly target: 'append' | { readonly startIdx: number; readonly endIdx: number }
 }
 
-/** Collect image occurrences recursively and total their structural prices. */
-function collectImages(blocks: readonly ContentBlock[], images: ImageAttachmentRef[]): number {
-  let structuralTokens = 0
+/** Collect projected attachment occurrences and their structural prices. */
+function collectProjectedAttachments(
+  blocks: readonly ContentBlock[],
+  images: ImageAttachmentRef[],
+  files: FileAttachmentRef[],
+): { readonly imageTokens: number; readonly fileTokens: number } {
+  let imageTokens = 0
+  let fileTokens = 0
   for (const block of blocks) {
     if (block.type === 'image') {
       images.push(block.attachment)
-      structuralTokens += estimateStructuralBlock(block)
+      imageTokens += estimateStructuralBlock(block)
+    } else if (block.type === 'file') {
+      files.push(block.attachment)
+      fileTokens += estimateStructuralBlock(block)
     } else if (block.type === 'tool-result') {
-      structuralTokens += collectImages(block.content, images)
+      const nested = collectProjectedAttachments(block.content, images, files)
+      imageTokens += nested.imageTokens
+      fileTokens += nested.fileTokens
     }
   }
-  return structuralTokens
+  return { imageTokens, fileTokens }
 }
 
 /** Build one priced node from a surface event's derived message. */
 function analyzeNode(seq: SessionSeq, message: Message | null): MeterSurfaceNode {
-  if (message === null) return { seq, heuristicTokens: 0, imageFreeTokens: 0, images: [] }
+  if (message === null) {
+    return {
+      seq,
+      heuristicTokens: 0,
+      imageStructuralTokens: 0,
+      fileStructuralTokens: 0,
+      images: [],
+      files: [],
+    }
+  }
   const heuristicTokens = estimateMessage(message)
   const images: ImageAttachmentRef[] = []
-  const imageStructuralTokens = collectImages(message.content, images)
+  const files: FileAttachmentRef[] = []
+  const structural = collectProjectedAttachments(message.content, images, files)
   return {
     seq,
     heuristicTokens,
-    imageFreeTokens: heuristicTokens - imageStructuralTokens,
+    imageStructuralTokens: structural.imageTokens,
+    fileStructuralTokens: structural.fileTokens,
     images,
+    files,
   }
 }
 

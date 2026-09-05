@@ -2,6 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 import type { TunnelOutboundFrame } from '../../src/transport/frames.ts'
 import { TunnelServer, type TunnelSeams } from '../../src/transport/tunnel.ts'
 
+function bytes(...values: number[]): Uint8Array<ArrayBuffer> {
+  const data = new Uint8Array(new ArrayBuffer(values.length))
+  data.set(values)
+  return data
+}
+
 function harness(): { server: TunnelServer; frames: TunnelOutboundFrame[] } {
   const frames: TunnelOutboundFrame[] = []
   const server = new TunnelServer({
@@ -57,6 +63,68 @@ describe('worker tunnel unary authentication', () => {
     if (frame?.t !== 'res' || frame.body === undefined) throw new Error('direct retry did not return one body')
     expect(new TextDecoder().decode(frame.body)).toBe('direct answer')
     expect(directFetch).toHaveBeenCalledOnce()
+  })
+})
+
+describe('worker tunnel Blob requests', () => {
+  it('streams an opaque Blob in bounded chunks inside the Host Worker route', async () => {
+    const frames: TunnelOutboundFrame[] = []
+    const seen: Uint8Array[] = []
+    const body = new Blob(['unused'])
+    body.arrayBuffer = () => Promise.reject(new Error('route must not aggregate the Blob'))
+    body.stream = () => new ReadableStream<Uint8Array<ArrayBuffer>>({
+      start(controller) {
+        controller.enqueue(bytes(108, 97, 114))
+        controller.enqueue(bytes(103, 101))
+        controller.close()
+      },
+    })
+    const server = new TunnelServer({
+      port: { postMessage: (frame) => { frames.push(frame) } },
+      requestListener: () => Promise.resolve(async (request, response) => {
+        for await (const chunk of request as AsyncIterable<Uint8Array>) seen.push(chunk)
+        const res = response as { writeHead(status: number): void; end(body: string): void }
+        res.writeHead(200)
+        res.end('stored')
+      }),
+    })
+    server.serve(seams(async () => (async function *(): AsyncGenerator { yield undefined })()))
+    server.handleMessage({
+      t: 'req', id: 9, method: 'POST', url: 'http://localhost/upload', headers: {}, body,
+    })
+    await vi.waitFor(() => { expect(frames).toHaveLength(1) })
+    expect(seen.map(chunk => new TextDecoder().decode(chunk))).toEqual(['lar', 'ge'])
+    expect(frames[0]).toMatchObject({ t: 'res', id: 9, status: 200 })
+  })
+})
+
+describe('worker tunnel ReadableStream requests', () => {
+  it('streams transferred chunks through the Host Worker route', async () => {
+    const frames: TunnelOutboundFrame[] = []
+    const seen: Uint8Array[] = []
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(bytes(111, 110, 101))
+        controller.enqueue(bytes(116, 119, 111))
+        controller.close()
+      },
+    })
+    const server = new TunnelServer({
+      port: { postMessage: (frame) => { frames.push(frame) } },
+      requestListener: () => Promise.resolve(async (request, response) => {
+        for await (const chunk of request as AsyncIterable<Uint8Array>) seen.push(chunk)
+        const res = response as { writeHead(status: number): void; end(body: string): void }
+        res.writeHead(200)
+        res.end('stored')
+      }),
+    })
+    server.serve(seams(async () => (async function *(): AsyncGenerator { yield undefined })()))
+    server.handleMessage({
+      t: 'req', id: 10, method: 'POST', url: 'http://localhost/upload', headers: {}, body,
+    })
+    await vi.waitFor(() => { expect(frames).toHaveLength(1) })
+    expect(seen.map(chunk => new TextDecoder().decode(chunk))).toEqual(['one', 'two'])
+    expect(frames[0]).toMatchObject({ t: 'res', id: 10, status: 200 })
   })
 })
 

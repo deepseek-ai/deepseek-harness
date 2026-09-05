@@ -1,7 +1,7 @@
 /**
  * jsdom slot test runtime: a real small runtime — Cordis `Context`, the
  * renderer-owned `SlotRegistry`, the `ui-session` adapter, and the UI renderer — assembled around
- * test-owned session/workspace doubles, so feature specs exercise
+ * test-owned session/workspace doubles and a fail-loud file-upload stub, so feature specs exercise
  * declaration, registration, scope, store, inject, rendering, updates, and
  * disposal without hand-building the machinery per suite.
  *
@@ -28,6 +28,7 @@ import { createSlotRenderer as createRenderer } from '@deepseek-ai/dsh-client-ui
 import {
   apply as applyUiSession, inject as uiSessionInject,
 } from '@deepseek-ai/dsh-client-ui-session/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   ChildrenDecl, ComposedProps, HostObservable, OwnerOf, SlotComponent, SlotMap, SlotRenderer,
   SlotRendererHost, SnapshotSelectorHook, StoreInstanceLike,
@@ -108,6 +109,14 @@ export interface FeatureHandle {
    * @returns completion of the unload cascade.
    */
   dispose(): Promise<void>
+}
+
+/** Mutable fail-loud file-upload stub installed by {@link SlotTestRuntime}. */
+export interface TestFileUpload {
+  /** Availability reported to the feature under test. */
+  available: boolean
+  /** Test-supplied upload behavior; the default rejects every call. */
+  upload: (sessionId: SessionId, ...args: unknown[]) => Promise<unknown>
 }
 
 /**
@@ -208,6 +217,8 @@ export class SlotTestRuntime {
   readonly sessions: TestSessions
   /** Workspaces double (list observable, recorded intent actions). */
   readonly workspaces: TestWorkspaces
+  /** Mutable file-upload stub; replace `upload` in suites that exercise the capability. */
+  readonly fileUpload: TestFileUpload
 
   private readonly stabilizer: Stabilizer = async (fn) => {
     await act(async () => { await fn() })
@@ -229,8 +240,13 @@ export class SlotTestRuntime {
     this.root = new TestRoot(slots, this.stabilizer)
     this.sessions = new TestSessions(this.stabilizer, ctx)
     this.workspaces = new TestWorkspaces(this.stabilizer)
+    this.fileUpload = {
+      available: false,
+      upload: () => Promise.reject(new Error('client test runtime: file upload is not stubbed')),
+    }
     ctx.provide('sessions', this.sessions)
     ctx.provide('workspaces', this.workspaces)
+    ctx.provide('fileUpload', this.fileUpload as never)
     this.disposeWorkspaceSource = slots.provideRoot({ hooks: { workspaces: this.workspaces.list } })
     // Capturing install: the production renderer does the rendering; the
     // wrapper only takes the host face for storeOf (no machinery copied).

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-trajectory` is the Trajectory view of the dsh web client: it renders a turn-aware event ledger with selectable User, Assistant, Tool, and nested Subtool records, plus an interactive timing overview. Thick rules mark Turn boundaries, compact inline markers identify Steps, and selecting a record opens a local inspector for token usage, duration, Input, Output, Timing, and durable images from user, assistant, or tool content. The view is a pure consumer: it registers target-specific Event Definitions, a Trajectory view builder, and one tab in the conversation's `conversation.view` slot ring, and provides no service and declares no Context merge. Its typed `trajectory` locale namespace owns every product-authored ledger, timeline, inspector, tooltip, and accessibility phrase; event content, tool names, identifiers, and provider diagnostics remain verbatim data. Long ledgers open at the current tail, page older history on demand, and mount only the visible row window.
+`dsh-client-ui-trajectory` is the Trajectory view of the dsh web client: it renders a turn-aware event ledger with selectable User, Assistant, Tool, and nested Subtool records, plus an interactive timing overview. Thick rules mark Turn boundaries, compact inline markers identify Steps, and selecting a record opens a local inspector for token usage, duration, Input, Output, Timing, durable images, and file-attachment summaries from user, assistant, or tool content. The view is a pure consumer: it registers target-specific Event Definitions, a Trajectory view builder, and one tab in the conversation's `conversation.view` slot ring, and provides no service and declares no Context merge. Its typed `trajectory` locale namespace owns every product-authored ledger, timeline, inspector, tooltip, and accessibility phrase; event content, tool names, identifiers, and provider diagnostics remain verbatim data. Long ledgers open at the current tail, page older history on demand, and mount only the visible row window.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ Open the Trajectory tab in the conversation's view ring to inspect agent activit
 
 ### Inspecting records
 
-Selection, timeline navigation, folding, and search cover the React-visible window. Request numbers and cumulative usage cover the complete resident snapshot. Selecting a record opens a local inspector for token usage, duration, Input, Output, Timing, and durable images. Image URLs use the Conversation-owned per-session cache, so Chat and Trajectory share one authorized read per attachment. A record without text labels its row with the image count. A standalone compaction request appears chronologically in its own `Between turns` section, while a numbered compaction remains inside its owning turn.
+Selection, timeline navigation, folding, and search cover the React-visible window. Request numbers and cumulative usage cover the complete resident snapshot. Selecting a record opens a local inspector for token usage, duration, Input, Output, Timing, and durable images. Image URLs use the Conversation-owned per-session cache, so Chat and Trajectory share one authorized read per attachment. A user record shows the generic-file count beside its text, while a record without text shows its image and file counts. A standalone compaction request appears chronologically in its own `Between turns` section, while a numbered compaction remains inside its owning turn.
 
 ### The timing overview
 

@@ -170,9 +170,9 @@ describe('submit-machine: adjudication outcomes', () => {
 describe('submit-machine: claimed lifecycle', () => {
   it('the claim event enters claimed and snapshots hint and images bits', () => {
     const m = new SubmitMachine()
-    m.dispatch({ type: 'claim', claim: { ...claimOf('goal', 'set a goal'), images: true } })
+    m.dispatch({ type: 'claim', claim: { ...claimOf('goal', 'set a goal'), attachments: true } })
     expect(m.state.phase).toBe('claimed')
-    expect(m.state.claim).toMatchObject({ token: '/goal ', hint: 'set a goal', images: true })
+    expect(m.state.claim).toMatchObject({ token: '/goal ', hint: 'set a goal', attachments: true })
   })
 
   it('claimed overwrites in place — no stack', () => {
@@ -345,6 +345,14 @@ describe('decorations: scanTextRefs', () => {
 
   it('names off the lexicon do not match; triggers are routed per lexicon list', () => {
     expect(scanTextRefs('/research @goal', lexicon)).toEqual([])
+  })
+
+  it('a "/" token continued by a path never matches, even when the name is on the lexicon', () => {
+    expect(scanTextRefs('/goal/x /goal/ /goal.md', lexicon)).toEqual([])
+  })
+
+  it('a "/" token glued to punctuation is not a reference: the host gesture is whitespace-bounded', () => {
+    expect(scanTextRefs('/goal。 then /goal, now', lexicon)).toEqual([])
   })
 
   it('word boundary: a trigger glued to text never matches', () => {

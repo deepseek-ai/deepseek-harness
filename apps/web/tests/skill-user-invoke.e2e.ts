@@ -130,6 +130,10 @@ describe.skipIf(MODE === 'record')('web e2e: user-explicit skill invocation thro
     await settled
     const process = page.getByRole('button', { name: 'Thought for a while', exact: true })
     await process.waitFor({ state: 'visible', timeout: 10_000 })
+    // The chip derives from the step's logged injection, so it must survive
+    // every later Node rebuild of the Turn (process publication, turn close).
+    expect(await bubble.count()).toBe(1)
+    expect(await bubble.textContent()).toBe(`/${SKILL_NAME}`)
     await expandOwningTurnProcess(page, injectionFlow)
     const injectionRow = page.getByRole('button', { name: `Context injection ${SKILL_NAME}` })
     await injectionRow.click()

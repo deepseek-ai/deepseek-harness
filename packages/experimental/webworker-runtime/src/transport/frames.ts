@@ -7,14 +7,14 @@
 /** Request identifier minted by the page. */
 export type TunnelRequestId = string | number
 
-/** One request; `body` carries the raw bytes for methods that have one. */
+/** One request; `body` carries cloneable or transferable raw bytes. */
 export interface TunnelRequestFrame {
   readonly t: 'req'
   readonly id: TunnelRequestId
   readonly method: string
   readonly url: string
   readonly headers: Readonly<Record<string, string>>
-  readonly body?: ArrayBuffer | undefined
+  readonly body?: ArrayBuffer | Blob | ReadableStream<Uint8Array> | undefined
 }
 
 /** Open one Gateway Remote stream over the worker-local carrier. */
@@ -171,8 +171,11 @@ export function parseInboundFrame(data: unknown): TunnelInboundFrame {
     if (typeof value === 'string') headers[key.toLowerCase()] = value
   }
   const body = frame.body
-  if (body !== undefined && !(body instanceof ArrayBuffer)) {
-    throw new Error(`webworker tunnel: request ${String(id)} body must be an ArrayBuffer`)
+  if (body !== undefined
+    && !(body instanceof ArrayBuffer)
+    && !(body instanceof Blob)
+    && !(body instanceof ReadableStream)) {
+    throw new Error(`webworker tunnel: request ${String(id)} body must be an ArrayBuffer, Blob, or ReadableStream`)
   }
   return { t: 'req', id, method: frame.method, url: frame.url, headers, body }
 }

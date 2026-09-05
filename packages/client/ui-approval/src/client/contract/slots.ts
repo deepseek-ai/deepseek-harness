@@ -68,7 +68,7 @@ let nextApprovalKey = 0
 /** One answerable Client presentation of a pending Host waterfall. */
 export class PendingApproval {
   /** Domain discriminator used by Session pending-interaction consumers. */
-  readonly kind = 'approval' as const
+  readonly kind: 'approval'
   /** Opaque render identity and one-shot remount axis. */
   readonly key: string
   /** Tool requesting the decision. */
@@ -92,6 +92,7 @@ export class PendingApproval {
    * @param request - Host approval request projected through the Remote Event.
    */
   constructor(readonly sessionId: SessionId, request: ApprovalPresentationRequest) {
+    this.kind = 'approval'
     nextApprovalKey += 1
     this.key = `approval:${String(nextApprovalKey)}`
     this.toolName = request.toolName

@@ -53,7 +53,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) {
     await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
   }
-})
+}, 30_000)
 
 interface RealHarness {
   readonly ctx: Context

@@ -25,7 +25,7 @@ The browser Chat target for Conversation assembly. It registers Chat event defin
 <a id="system-prompt-row"></a>
 ## System prompt row
 
-Chat shows a collapsed `System prompt` row for each non-empty initial or resumed request, explicit message-series start, or real system-field change. It does not repeat the row for same-series config-only or tool-only changes, tool steps, or retries. The row appears before that request's user messages, matching the provider envelope, and expands to the exact model-visible text with its original line breaks. A partial history window renders a non-initial header conservatively until the preceding page arrives; a header without a system prompt creates no row.
+Chat shows a collapsed `System prompt` row for a non-empty initial request, explicit message-series start, real system-field change, or non-initial request whose preceding header is outside the loaded history window. Once that predecessor is available, an unchanged resume does not repeat the row; same-series config-only or tool-only changes, tool steps, and retries also create no repetition. The row appears before that request's user messages, matching the provider envelope, and expands to the exact model-visible text with its original line breaks. A header without a system prompt creates no row.
 
 -----
 

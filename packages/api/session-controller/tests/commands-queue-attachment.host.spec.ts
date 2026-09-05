@@ -112,6 +112,23 @@ describe('Session queue commands', () => {
     })).toEqual({ accepted: true })
     expect(steer).toHaveBeenCalledWith(steered)
 
+    const queuedFile = createUserMessage({
+      content: [{
+        type: 'file',
+        attachment: { attachmentId: AttachmentId('file-queued'), name: 'queued.txt', bytes: 6 },
+      }],
+      source: { kind: 'user', rpcId: 'file-rpc' as never },
+    })
+    inbox.append('next-turn', queuedFile)
+    expect(controller.updateQueue({
+      sessionId: agent.id, itemId: queuedFile.id, action: { kind: 'steer' },
+    })).toEqual({ accepted: true })
+    expect(steer).toHaveBeenLastCalledWith(queuedFile)
+    expect(queuedFile).toMatchObject({
+      source: { kind: 'user', rpcId: 'file-rpc' },
+      content: [{ type: 'file', attachment: { name: 'queued.txt', bytes: 6 } }],
+    })
+
     await expectFailure(Promise.resolve().then(() => controller.cancel({
       sessionId: SessionId('missing'),
     })), 'session/not-found')

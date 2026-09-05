@@ -15,7 +15,7 @@ import {
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { SubmitImageAttachment, SubmitOutcome } from '../src/client/contract/input.ts'
+import type { SubmitAttachment, SubmitOutcome } from '../src/client/contract/input.ts'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { DraftAttachmentId } from '../src/client/contract/input.ts'
@@ -63,10 +63,12 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     useInput: bindSnapshotSelector(shell.state),
     inputActions: shell.actions,
     keyboard: shell,
-    addImages: () => null,
-    removeImage: () => {},
+    addFiles: () => null,
+    useFileUploads: bindSnapshotSelector(createSnapshotStore({})),
+    retryFileUpload: undefined,
+    removeAttachment: () => {},
     // Every id resolves so the bar's registry prune never drops a test image.
-    draftImages: ids => ids.map(id => ({
+    resolveDraftAttachments: ids => ids.map(id => ({
       kind: 'image' as const, id,
       file: new File([Uint8Array.of(1)], `${id}.png`, { type: 'image/png' }),
       previewUrl: `blob:${id}`,
@@ -89,22 +91,22 @@ function bench(over?: {
   running?: boolean
   disabled?: boolean
   submit?: (args: string) => Promise<SubmitOutcome>
-  serialize?: (ids: readonly DraftAttachmentId[]) => Promise<readonly SubmitImageAttachment[]>
+  serialize?: (ids: readonly DraftAttachmentId[]) => Promise<readonly SubmitAttachment[]>
 }) {
   const sink = vi.fn(() => Promise.resolve<SubmitOutcome>({ kind: 'success' }))
-  const serialize = vi.fn(over?.serialize ?? (() => Promise.resolve<readonly SubmitImageAttachment[]>([])))
+  const serialize = vi.fn(over?.serialize ?? (() => Promise.resolve<readonly SubmitAttachment[]>([])))
   const release = vi.fn()
-  const shell = new SessionInputShell({ actx: SCTX, defaultSink: sink, commandImages: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
+  const shell = new SessionInputShell({ actx: SCTX, defaultSink: sink, commandAttachments: { serialize, release, unsupportedNotice: (token: string) => `${token.trim()} attachments-unsupported` } })
   const wiring = shell
   const view = mountBar(shell, over)
   const textarea = view.container.querySelector<HTMLDivElement>('[data-composer-input]')!
-  const claim = (token = '/goal ', hint = '目标', images?: true) => {
+  const claim = (token = '/goal ', hint = '目标', attachments?: true) => {
     act(() => {
       shell.setDraft(token)
       shell.beginCommand(
         {
           token, hint,
-          ...(images === true ? { images: true } : {}),
+          ...(attachments === true ? { attachments: true } : {}),
           submit: over?.submit ?? (() => Promise.resolve({ kind: 'success' as const, source: 'command', name: 'goal' })),
         },
         { start: 0, end: token.length, draftRev: shell.snapshot.draftRev },
@@ -168,50 +170,52 @@ describe('matrix row: claimed', () => {
   })
 })
 
-describe('matrix row: claimed with images', () => {
+describe('matrix row: claimed with attachments', () => {
   const img = 'img-1' as DraftAttachmentId
 
-  it('a claim without image acceptance blocks enter: one notice, draft/images/claim retained', async () => {
+  it('a claim without attachment acceptance blocks enter: one notice and the full draft retained', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const }))
     const { view, textarea, shell, sink, claim } = bench({ submit })
     claim()
-    act(() => { shell.addImages([img]) })
+    act(() => { shell.addAttachments([img]) })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     await Promise.resolve()
     expect(shell.snapshot.phase).toBe('claimed')
     expect(submit).not.toHaveBeenCalled()
     expect(sink).not.toHaveBeenCalled()
-    expect(view.getByText('/goal images-unsupported')).toBeTruthy()
-    expect(shell.snapshot.imageIds).toEqual([img])
+    expect(view.getByText('/goal attachments-unsupported')).toBeTruthy()
+    expect(shell.snapshot.attachmentIds).toEqual([img])
     expect(shell.snapshot.draft).toBe('/goal ')
   })
 
-  it('an accepting claim serializes and forwards the images; success consumes and clears', async () => {
+  it('an accepting claim serializes and forwards a mixed batch; success consumes and clears', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const }))
-    const png: SubmitImageAttachment = { mediaType: 'image/png', data: 'AA==' }
-    const { textarea, shell, claim, serialize, release } = bench({ submit, serialize: () => Promise.resolve([png]) })
+    const png: SubmitAttachment = { type: 'image', mediaType: 'image/png', data: 'AA==' }
+    const file: SubmitAttachment = { type: 'file', receiptId: 'receipt-x' }
+    const { textarea, shell, claim, serialize, release } = bench({ submit, serialize: () => Promise.resolve([png, file]) })
     claim('/goal ', '目标', true)
     // The claim currency carries the acceptance flag the pre-gate reads.
-    expect(shell.snapshot.claim).toEqual({ token: '/goal ', hint: '目标', images: true })
-    act(() => { shell.addImages([img]) })
+    expect(shell.snapshot.claim).toEqual({ token: '/goal ', hint: '目标', attachments: true })
+    act(() => { shell.addAttachments([img]) })
     fireEvent.keyDown(textarea, { key: 'Enter' })
-    await vi.waitFor(() => { expect(submit).toHaveBeenCalledWith('', SCTX, [png]) })
+    await vi.waitFor(() => { expect(submit).toHaveBeenCalledWith('', SCTX, [png, file]) })
     expect(serialize).toHaveBeenCalledWith([img])
     await vi.waitFor(() => { expect(shell.snapshot.draft).toBe('') })
     expect(release).toHaveBeenCalledWith([img])
-    expect(shell.snapshot.imageIds).toEqual([])
+    expect(shell.snapshot.attachmentIds).toEqual([])
     expect(shell.snapshot.phase).toBe('plain')
   })
 
-  it('a handler error outcome keeps the images unreleased beside the notice and the draft', async () => {
+  it('a handler error keeps a serialized file unreleased beside the notice and draft', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'error' as const, text: '处理失败' }))
-    const { view, textarea, shell, claim, release } = bench({ submit })
+    const file: SubmitAttachment = { type: 'file', receiptId: 'receipt-x' }
+    const { view, textarea, shell, claim, release } = bench({ submit, serialize: () => Promise.resolve([file]) })
     claim('/goal ', '目标', true)
-    act(() => { shell.addImages([img]) })
+    act(() => { shell.addAttachments([img]) })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(view.getByText('处理失败')).toBeTruthy() })
     expect(shell.snapshot.phase).toBe('claimed')
-    expect(shell.snapshot.imageIds).toEqual([img])
+    expect(shell.snapshot.attachmentIds).toEqual([img])
     expect(release).not.toHaveBeenCalled()
     expect(shell.snapshot.draft).toBe('/goal ')
   })
@@ -220,28 +224,28 @@ describe('matrix row: claimed with images', () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const }))
     const { view, textarea, shell, claim, release } = bench({ submit, serialize: () => Promise.reject(new Error('附件已失效')) })
     claim('/goal ', '目标', true)
-    act(() => { shell.addImages([img]) })
+    act(() => { shell.addAttachments([img]) })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(view.getByText('附件已失效')).toBeTruthy() })
     expect(submit).not.toHaveBeenCalled()
-    expect(shell.snapshot.imageIds).toEqual([img])
+    expect(shell.snapshot.attachmentIds).toEqual([img])
     expect(release).not.toHaveBeenCalled()
     expect(shell.snapshot.phase).toBe('claimed')
   })
 
   it('a disposed shell never lets a pending serialization reach claim.submit', async () => {
     const submit = vi.fn(() => Promise.resolve({ kind: 'success' as const }))
-    let resolveSerialize!: (images: readonly SubmitImageAttachment[]) => void
+    let resolveSerialize!: (images: readonly SubmitAttachment[]) => void
     const { shell, textarea, claim } = bench({
       submit,
       serialize: () => new Promise((resolve) => { resolveSerialize = resolve }),
     })
     claim('/goal ', '目标', true)
-    act(() => { shell.addImages([img]) })
+    act(() => { shell.addAttachments([img]) })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     await vi.waitFor(() => { expect(resolveSerialize).toBeDefined() })
     shell.dispose()
-    resolveSerialize([{ mediaType: 'image/png', data: 'AA==' }])
+    resolveSerialize([{ type: 'image', mediaType: 'image/png', data: 'AA==' }])
     await Promise.resolve()
     await Promise.resolve()
     expect(submit).not.toHaveBeenCalled()
@@ -251,11 +255,13 @@ describe('matrix row: claimed with images', () => {
     const submit = vi.fn(() => new Promise<SubmitOutcome>(() => {})) // never settles
     const { shell, textarea, claim } = bench({ submit, serialize: () => Promise.resolve([]) })
     claim('/goal ', '目标', true)
-    act(() => { shell.addImages([img]) })
+    act(() => { shell.addAttachments([img]) })
     fireEvent.keyDown(textarea, { key: 'Enter' })
     expect(shell.snapshot.phase).toBe('submitting')
-    act(() => { shell.removeImage(img) })
-    expect(shell.snapshot.imageIds).toEqual([img])
+    let removed = true
+    act(() => { removed = shell.removeAttachment(img) })
+    expect(removed).toBe(false)
+    expect(shell.snapshot.attachmentIds).toEqual([img])
   })
 })
 

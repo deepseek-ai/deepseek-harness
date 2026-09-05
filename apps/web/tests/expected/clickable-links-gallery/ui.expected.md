@@ -1,0 +1,204 @@
+- banner:
+  - navigation "Session hierarchy":
+    - button "Clickable links gallery" [disabled]
+  - button "Session log":
+    - text: Session log
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- text: "Assemble the link gallery: write the report and styles, inspect the sources, and summarize. {{clock}}"
+- button "Copy":
+  - img
+- button "16 tool calls" [expanded]:
+  - text: 16 tool calls
+  - img
+- button "Write site/report.html +1 -0":
+  - img
+  - img
+  - text: Write
+  - button "site/report.html"
+  - text: +1 -0
+- button "Write a/style.css +1 -0":
+  - img
+  - img
+  - text: Write
+  - button "a/style.css"
+  - text: +1 -0
+- button "Write b/style.css +1 -0":
+  - img
+  - img
+  - text: Write
+  - button "b/style.css"
+  - text: +1 -0
+- button "Write site/index.html +1 -0":
+  - img
+  - img
+  - text: Write
+  - button "site/index.html"
+  - text: +1 -0
+- button "Write site/app.js +1 -0":
+  - img
+  - img
+  - text: Write
+  - button "site/app.js"
+  - text: +1 -0
+- button "Edit src/tokens.css +1 -1" [expanded]:
+  - img
+  - text: Edit
+  - button "src/tokens.css"
+  - text: +1 -1
+- button "Copy"
+- text: "src/tokens.css - --inline-code: #EBEEF2; + --inline-code: #F5F5F5; └ +1 -1 · 1 file"
+- button "Inspect"
+- button "Tool call str_replace_editor · create" [expanded]:
+  - img
+  - text: Tool call str_replace_editor · create
+- text: "IN { \"command\": \"create\", \"path\": \"docs/press.md\", \"file_text\": \"# Press kit\\n\" } OUT Created docs/press.md"
+- button "Inspect"
+- text: Failed
+- 'button "Write permission denied: c/broken.css"':
+  - img
+  - text: "Write permission denied: c/broken.css"
+- button "Read docs/guide.md" [expanded]:
+  - img
+  - text: Read
+  - button "docs/guide.md"
+- text: docs/guide.md
+- button "Copy"
+- text: "# Link style guide guide line 2 guide line 3 guide line 4"
+- button "Expand 4 more lines": … 4 more lines
+- text: guide line 9 guide line 10 guide line 11 guide line 12
+- button "Inspect"
+- button "Grep linkColor" [expanded]:
+  - img
+  - text: Grep linkColor
+- text: 9 matches · 3 files
+- button "Copy"
+- button "a/style.css 3" [expanded]
+- text: "3: color: var(--linkColor); 7: color: var(--linkColor); 11: color: var(--linkColor);"
+- button "Expand 4 more result lines": … 4 more lines
+- button "src/tokens.css 3" [expanded]
+- text: "3: color: var(--linkColor); 7: color: var(--linkColor); 11: color: var(--linkColor);"
+- button "Inspect"
+- button "Glob **/*.css":
+  - img
+  - img
+  - text: Glob **/*.css
+- button "Bash List the built site":
+  - img
+  - img
+  - text: Bash List the built site
+- button "Failed Bash Run the lint gate" [expanded]:
+  - img
+  - text: Failed Bash Run the lint gate
+- text: Failed site pnpm run lint exit code 1
+- button "Copy"
+- text: "style.css: unexpected hex literal"
+- button "Inspect"
+- button "Search clickable link styles, produced files ui" [expanded]:
+  - img
+  - text: Search clickable link styles, produced files ui
+- paragraph:
+  - text: Unify links per
+  - link "the guide":
+    - /url: https://docs.example.test/guide
+  - text: .
+- list:
+  - listitem:
+    - link "Link styles reference":
+      - /url: https://docs.example.test/links
+    - text: One cursor token, one focus ring.
+  - listitem: Mirror spec (non-http) A non-http source renders inert.
+- button "Inspect"
+- button "Fetch https://docs.example.test/tokens" [expanded]:
+  - img
+  - text: Fetch https://docs.example.test/tokens
+- link "https://docs.example.test/tokens":
+  - /url: https://docs.example.test/tokens
+- text: HTTP 200
+- button "Inspect"
+- button "Tool call design_tokens_sync · design-platform.css" [expanded]:
+  - img
+  - text: Tool call design_tokens_sync · design-platform.css
+- text: "IN { \"source\": \"design-platform.css\", \"dryRun\": false } OUT {\"synced\":true,\"tokens\":12}"
+- button "Inspect"
+- heading "Link gallery" [level=2]
+- paragraph:
+  - text: "Docs:"
+  - link "style guide":
+    - /url: https://docs.example.test/guide
+  - text: and
+  - code:
+    - link "https://docs.example.test/api":
+      - /url: https://docs.example.test/api
+  - text: ; see
+  - link "the release notes":
+    - /url: https://docs.example.test/releases
+  - text: ", contact"
+  - link "the maintainer":
+    - /url: mailto:owner@example.test
+  - text: ", and check the fine print"
+  - superscript: "1"
+  - text: .
+- paragraph:
+  - text: "Inert contrasts:"
+  - code: curl https://docs.example.test/api
+  - text: ","
+  - code: javascript:alert(1)
+  - text: ", and"
+  - code: pnpm run build
+  - text: .
+- paragraph:
+  - text: Wrote
+  - code:
+    - button "Open site/report.html": report.html
+  - text: plus two
+  - code: style.css
+  - text: copies;
+  - code: notes.md
+  - text: untouched.
+- paragraph:
+  - img "Token preview"
+- text: css
+- button "Copy"
+- code: "--inline-code: #F5F5F5;"
+- paragraph: LINK_GALLERY_DONE
+- heading "Footnotes" [level=2]
+- list:
+  - listitem:
+    - paragraph: Footnote references stay inert superscripts. ↩
+- text: Produced
+- button "Open site/report.html": report.html
+- button "Open a/style.css": style.css
+- button "Open b/style.css": style.css
+- button "Open site/index.html": index.html
+- button "Open site/app.js": app.js
+- button "Open src/tokens.css": tokens.css
+- text: + 1 file
+- button "Show in folder"
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: {{clock}}
+- button "Back to bottom":
+  - img
+- textbox "Message or run a task... / commands, @ files or sessions"
+- button "Commands":
+  - img
+- button "Add attachment":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "Send message" [disabled]
+- text: 1 turns · 1 steps LLM {{duration}} · Tool call {{duration}}

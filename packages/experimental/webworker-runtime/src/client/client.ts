@@ -119,10 +119,14 @@ async function localizeSourceMap(source: string, bundleUrl: string, fetch: Tunne
   }
 }
 
-/** Normalize a RequestInit body to a transferable ArrayBuffer. */
-function toBodyBuffer(body: RequestInit['body']): ArrayBuffer | undefined {
+/** Keep opaque Blobs and transferable streams intact; normalize other bodies to bytes. */
+function toTunnelBody(
+  body: RequestInit['body'],
+): ArrayBuffer | Blob | ReadableStream<Uint8Array> | undefined {
   if (body === undefined || body === null) return undefined
   if (typeof body === 'string') return encoder.encode(body).buffer
+  if (body instanceof Blob) return body
+  if (body instanceof ReadableStream) return body as ReadableStream<Uint8Array>
   if (body instanceof ArrayBuffer) return body
   if (ArrayBuffer.isView(body)) {
     return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength)
@@ -197,21 +201,21 @@ export class WorkerTunnel {
     // must not reach the worker, where a write-shaped route would still run.
     if (signal?.aborted === true) throw new DOMException('The operation was aborted.', 'AbortError')
     const id = this.nextId++
+    const body = init?.body === undefined || init.body === null ? undefined : toTunnelBody(init.body)
     const frame: RequestFrame = {
       t: 'req',
       id,
       method: init?.method ?? 'GET',
       url: new URL(input, globalThis.location.origin).toString(),
       headers: Object.fromEntries(new Headers(init?.headers).entries()),
-      ...(init?.body === undefined || init.body === null
-        ? {}
-        : { body: toBodyBuffer(init.body) }),
+      ...(body === undefined ? {} : { body }),
     }
     const response = new Promise<Response>((resolve, reject) => {
       this.unary.set(id, { resolve, reject })
     })
     this.inFlight.set(id, `${frame.method} ${frame.url}`)
-    this.worker.postMessage(frame)
+    if (body instanceof ReadableStream) this.worker.postMessage(frame, [body])
+    else this.worker.postMessage(frame)
     if (signal === undefined || signal === null) return await response
     const raced = this.rejectOnAbort(id, signal)
     try {

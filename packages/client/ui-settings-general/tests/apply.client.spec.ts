@@ -128,11 +128,12 @@ describe('ui-settings-general apply', () => {
     await fiber.await()
     expect(b.locale.bind('settings')('title')).toBe('设置')
     expect(b.locale.bind('settings')('connection.error')).toBe('连接异常')
-    expect(b.locale.bind('settings')('connection.connecting')).toBe('连接中')
+    expect(b.locale.bind('settings')('connection.connecting')).toBe('自动重连中')
     expect(b.locale.bind('settings')('connection.connected')).toBe('连接成功')
     b.locale.setLocale('en')
     expect(b.locale.bind('settings')('close')).toBe('Close')
     expect(b.locale.bind('settings')('connection.reconnect')).toBe('Disconnected, reconnect now')
+    expect(b.locale.bind('settings')('connection.connecting')).toBe('Reconnecting')
     b.locale.setLocale('zh')
     await fiber.dispose()
     // The (ns, locale) seats are free again — the dictionary disposer ran.

@@ -105,7 +105,7 @@ describe('web e2e: queued image submission', () => {
     await dockThumb.waitFor({ timeout: 15_000 })
     await expect.poll(() => dockThumb.getAttribute('src')).toMatch(/^blob:/)
     await page.getByText(QUEUED_TEXT, { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Remove queued message' }).waitFor({ timeout: 15_000 })
+    await page.getByRole('button', { name: 'Remove queued message', disabled: false }).waitFor({ timeout: 15_000 })
     const queuedSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(QUEUED_EXPECTED, queuedSnapshot, MODE)
 

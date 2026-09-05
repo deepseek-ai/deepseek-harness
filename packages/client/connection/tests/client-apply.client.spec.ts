@@ -71,6 +71,51 @@ async function mount(): Promise<ConnectionHandle> {
 }
 
 describe('connection client apply', () => {
+  it('uses Host bootstrap timing when Gateway starts without overrides', async () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('__DSH_CONNECTION_RECOVERY__', {
+      backoffBaseMs: 10, backoffMaxMs: 10, generationReadyTimeoutMs: 20,
+    })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const handle = await mount()
+    const signals: AbortSignal[] = []
+    handle.registerGenerationSource(signal => new Promise<void>((resolve) => {
+      signals.push(signal)
+      signal.addEventListener('abort', () => { resolve() }, { once: true })
+    }))
+    const loop = handle.start({})
+    try {
+      await vi.advanceTimersByTimeAsync(20)
+      expect(signals[0]?.aborted).toBe(true)
+      expect(handle.state.getSnapshot()).toBe('connecting')
+      await vi.advanceTimersByTimeAsync(10)
+      expect(signals).toHaveLength(2)
+    } finally {
+      loop.stop()
+      await vi.advanceTimersByTimeAsync(0)
+      warnSpy.mockRestore()
+    }
+  })
+
+  it.each([{ generationReadyTimeoutMs: 0 }, { backoffFactor: NaN }])('rejects malformed bootstrap recovery before publishing the service: %j', (recovery) => {
+    vi.stubGlobal('__DSH_CONNECTION_RECOVERY__', recovery)
+    const ctx = new Context()
+    expect(() => { apply(ctx) }).toThrow()
+    expect(ctx.get('connection')).toBeUndefined()
+  })
+
+  it('rejects a NaN start override without acquiring the generation source', async () => {
+    const handle = await mount()
+    const source = vi.fn<ConnectionGenerationSource>()
+    const unregister = handle.registerGenerationSource(source)
+    try {
+      expect(() => handle.start({}, { backoffFactor: NaN })).toThrow(/backoffFactor.*finite/)
+      expect(source).not.toHaveBeenCalled()
+    } finally {
+      unregister()
+    }
+  })
+
   it('treats a runtime without browser location as local', async () => {
     delete (globalThis as Win).location
     expect((await mount()).isLoopback).toBe(true)
@@ -128,7 +173,6 @@ describe('connection client apply', () => {
       generations.push(handle.generation.getSnapshot()?.host.home)
     })
     expect(handle.generation.getSnapshot()).toBeUndefined()
-    // config omitted: the `config ?? {}` default arm is part of the surface.
     let connected = 0
     const loop = handle.start({ onConnected: () => { connected++ } })
     expect(() => handle.start({})).toThrow(/already owned by another consumer/)

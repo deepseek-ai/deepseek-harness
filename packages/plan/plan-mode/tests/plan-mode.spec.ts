@@ -620,7 +620,7 @@ describe('/plan', () => {
     const plainSteer = vi.fn()
     ;(plainAgent as unknown as { steer: typeof plainSteer }).steer = plainSteer
     expect(ctx.commands.list(plainAgent)).toEqual([
-      { name: 'plan', description: 'Enter or leave plan mode', input: { hint: '[off|message]', images: true } },
+      { name: 'plan', description: 'Enter or leave plan mode', input: { hint: '[off|message]', attachments: true } },
     ])
 
     const signal = new AbortController().signal
@@ -704,7 +704,7 @@ describe('/plan', () => {
     expect(foldPlanMode(agent.session.snapshotEvents())).toBe(false)
   })
 
-  it('steers image attachments with or without text and refuses them on /plan off', async () => {
+  it('steers mixed attachments with or without text and refuses them on /plan off', async () => {
     const ctx = await setup()
     await ctx.plugin(CommandRuntime)
     await new Promise(resolve => setImmediate(resolve))
@@ -727,21 +727,34 @@ describe('/plan', () => {
         for (const input of inputs) refs.push(await saveImage(input))
         return refs
       },
+      saveFile(input: { data: Uint8Array; name?: string }) {
+        saved += 1
+        return Promise.resolve({
+          attachmentId: `att-${saved}`, bytes: input.data.byteLength, name: input.name ?? 'attachment',
+        })
+      },
     })
+    ctx.commands.registerFileReceiptResolver((agent, receiptId) => receiptId === 'receipt-notes'
+      ? { attachmentId: `file-${agent.id}` as never, bytes: 5, name: 'notes.txt' }
+      : undefined)
     const signal = new AbortController().signal
-    const images = [{ mediaType: 'image/png' as const, data: 'AAAA' }]
+    const attachments = [
+      { type: 'image' as const, mediaType: 'image/png' as const, data: 'AAAA', name: 'diagram.png' },
+      { type: 'file' as const, receiptId: 'receipt-notes' },
+    ]
 
     const agent = await agentWithSession(ctx, 'imaged-plan-command')
     openTurn(agent.session)
     const steer = vi.fn()
     ;(agent as unknown as { steer: typeof steer }).steer = steer
-    const withMessage = await ctx.commands.execute(agent, '/plan sketch the layout', images, signal)
+    const withMessage = await ctx.commands.execute(agent, '/plan sketch the layout', attachments, signal)
     expect(withMessage?.result.kind).toBe('success')
     expect(steer).toHaveBeenCalledExactlyOnceWith({
       id: expect.any(String) as unknown,
       role: 'user',
       content: [
         { type: 'image', attachment: expect.objectContaining({ attachmentId: 'att-1' }) as unknown },
+        { type: 'file', attachment: expect.objectContaining({ attachmentId: 'file-imaged-plan-command', name: 'notes.txt' }) as unknown },
         { type: 'text', text: 'sketch the layout' },
       ],
       source: { kind: 'user' },
@@ -751,12 +764,15 @@ describe('/plan', () => {
     openTurn(bareAgent.session)
     const bareSteer = vi.fn()
     ;(bareAgent as unknown as { steer: typeof bareSteer }).steer = bareSteer
-    expect((await ctx.commands.execute(bareAgent, '/plan', images, signal))?.result)
+    expect((await ctx.commands.execute(bareAgent, '/plan', attachments, signal))?.result)
       .toEqual({ kind: 'success', text: 'Entering plan mode (applies from the next step). Use /plan off to leave.' })
     expect(bareSteer).toHaveBeenCalledExactlyOnceWith({
       id: expect.any(String) as unknown,
       role: 'user',
-      content: [{ type: 'image', attachment: expect.objectContaining({ attachmentId: 'att-2' }) as unknown }],
+      content: [
+        { type: 'image', attachment: expect.objectContaining({ attachmentId: 'att-2' }) as unknown },
+        { type: 'file', attachment: expect.objectContaining({ attachmentId: 'file-imaged-bare-plan-command', name: 'notes.txt' }) as unknown },
+      ],
       source: { kind: 'user' },
     })
     expect(ctx.planMode.get(bareAgent)).toEqual({ active: false, pending: true })
@@ -764,8 +780,8 @@ describe('/plan', () => {
     const activeAgent = await agentWithSession(ctx, 'imaged-off-plan-command', { active: true })
     const offSteer = vi.fn()
     ;(activeAgent as unknown as { steer: typeof offSteer }).steer = offSteer
-    expect((await ctx.commands.execute(activeAgent, '/plan off', images, signal))?.result)
-      .toEqual({ kind: 'error', text: 'Image attachments cannot accompany /plan off.' })
+    expect((await ctx.commands.execute(activeAgent, '/plan off', attachments, signal))?.result)
+      .toEqual({ kind: 'error', text: 'Attachments cannot accompany /plan off.' })
     expect(offSteer).not.toHaveBeenCalled()
     expect(ctx.planMode.get(activeAgent)).toEqual({ active: true })
   })

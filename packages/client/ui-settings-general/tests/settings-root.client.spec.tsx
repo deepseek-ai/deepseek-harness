@@ -151,8 +151,8 @@ describe('SettingsRoot trigger', () => {
     expect(mounted.reconnect).toHaveBeenCalledOnce()
 
     mounted.setConnectionState('connecting')
-    expect(screen.getByRole('button', { name: 'Connecting, restart now' }).textContent)
-      .toContain('Connecting...')
+    expect(screen.getByRole('button', { name: 'Reconnecting automatically, reconnect now' }).textContent)
+      .toContain('Reconnecting...')
 
     mounted.setConnectionState('connected')
     expect(screen.getByRole('status', { name: 'Connected' })).toBeTruthy()

@@ -39,12 +39,7 @@
 - button "Ran for {{duration}}":
   - img
   - text: Ran for {{duration}}
-- text: {{clock}}
-- button "System prompt":
-  - img
-  - img
-  - text: System prompt
-- text: Now give the same explanation to a human reader. {{clock}}
+- text: {{clock}} Now give the same explanation to a human reader. {{clock}}
 - button "Copy":
   - img
 - button "Thought for a while":
@@ -65,6 +60,8 @@
 - text: {{clock}}
 - textbox "Message or run a task... / commands, @ files or sessions"
 - button "Commands":
+  - img
+- button "Add attachment" [disabled]:
   - img
 - 'button "Access mode, current: Custom"': Custom
 - button "6% of context used"

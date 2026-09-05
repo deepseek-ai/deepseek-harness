@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-commands` 让用户能在交互式 Harness UI 中输入 `/command [input]`，并直接针对接收命令的 agent（智能体）执行，不产生模型消息。插件注册命令时提供名称、描述、可选的输入提示与图片接受标志，以及可中止的处理器；交互式适配器按 agent 发现并分派这些命令。挂载在 agent 上下文之下的命令生产插件可以注册精确限定到该 agent 的命令，它会遮蔽同名的全局定义。每次命令执行都会记录在接收 agent 的会话日志中，结果由适配器渲染，绝不进入模型历史。斜杠命令随 `dsh` CLI 与 Web 客户端一起提供。
+`dsh-commands` 让用户能在交互式 Harness UI 中输入 `/command [input]`，并直接针对接收命令的 agent（智能体）执行，不产生模型消息。插件注册命令时提供名称、描述、可选的输入提示与附件接受标志，以及可中止的处理器；交互式适配器按 agent 发现并分派这些命令。挂载在 agent 上下文之下的命令生产插件可以注册精确限定到该 agent 的命令，它会遮蔽同名的全局定义。每次命令执行都会记录在接收 agent 的会话日志中，结果由适配器渲染，绝不进入模型历史。斜杠命令随 `dsh` CLI 与 Web 客户端一起提供。
 
 ## 目录
 
@@ -53,13 +53,13 @@ ctx.commands.register({
 
 普通注册全局生效。挂载在 agent 自身上下文之下的命令生产插件会声明 `commands` 注入，并注册精确限定到该 agent 的命令；该定义只对这个 agent 遮蔽同名的全局定义。
 
-### 图片附件
+### 附件
 
-命令可以声明 `input.images` 以接受 composer 图片附件。执行器负责声明的强制执行：把图片发给未声明的命令、附件存储缺失或批量超出限制，都会在处理器运行前以错误结果结算。通过准入的图片以冻结的有序 `ImageBlock` 数组挂在 `invocation.attachments` 上交给处理器，其模型可见用途由处理器负责——注册表本身绝不定时调度它们。
+命令可以声明 `input.attachments` 以接受 composer 图片与通用文件。执行器负责强制执行声明：把附件发给未声明的命令、附件存储缺失、Session 范围内的文件上传凭证未知或图片批量超出限制，都会在处理器运行前以错误结果结算。图片以 base64 输入通过命令 wire，通用文件则引用后台上传完成后得到的凭证，因此命令提交不会再次读取文件字节。通过准入的 `ImageBlock` 与 `FileBlock` 按用户选择顺序组成冻结的 `invocation.attachments` 数组，其模型可见用途由处理器负责。
 
 ### 从适配器分派
 
-交互式适配器调用 `execute(agent, line, images, signal)`，传入确切的接收 agent、完整命令行与本次提交的图片。它返回已结算的 `CommandExecution`——规范化结果加生命周期配对 `commandId`——语法无效或名称未知时返回 `undefined`。`list(agent)` 与 `find(agent, name)` 在应用 agent 作用域遮蔽后服务发现。
+交互式适配器调用 `execute(agent, line, attachments, signal)`，传入确切的接收 agent、完整命令行与本次提交的有序附件。它返回已结算的 `CommandExecution`——规范化结果加生命周期配对 `commandId`——语法无效或名称未知时返回 `undefined`。`list(agent)` 与 `find(agent, name)` 在应用 agent 作用域遮蔽后服务发现。
 
 ### 取消
 
@@ -92,9 +92,9 @@ ctx.commands.register({
 
 注册表通过 `ScopedLayers` 维护全局层与按 agent 的作用域层，并按 agent 合并视图。子级注入形态——挂载在 `agent.ctx` 之下的命令生产插件声明自身的 `commands` 注入——保留了 agent 作用域，同时不会让核心 agent loop 依赖 UI 服务。同一层内的名称重复会在注册时失败；注册或移除命令时，系统会通知每个 `commands/change` 观察者，使运行中的适配器能够刷新发现结果。观察者失败会写入日志，既不能否决注册表变更，也不能阻止后续观察者运行。
 
-### 图片准入
+### 附件准入
 
-图片强制执行发生在执行器而非 composer 中：通过准入的批量经 `admitEncodedImages` 提交给 `attachments` 存储，被拒绝的批量不发布任何持久化对象；取消会在处理器运行前被处理，因此重试的调用方绝不会重复状态。无法使用图片的处理器会返回错误，使分发方 composer 保留原件。
+附件强制执行发生在执行器中：图片经 `admitEncodedImages` 提交，文件通过唯一的 Session 感知凭证提供方解析，执行器在调用处理器前恢复原始混合顺序。验证拒绝不会开始写入附件。图片存储失败可能留下等待清理且无法引用的内容寻址对象，但不会发布模型可见消息。取消会在处理器运行前生效。命令返回错误时，分发方 composer 的草稿与附件卡保持原位。
 
 </details>
 
@@ -119,7 +119,7 @@ ctx.commands.register({
 
 #### 模型看到的内容
 
-注册表自身不会提交任何内容。已知斜杠命令在 UI 命令平面执行，其 `CommandResult` 文本不会作为用户消息提交。已交付的适配器会拒绝未知斜杠命令输入，而不是将其变成模型提示词。命令生产方可以显式使用接收命令的 `Agent`；例如，[`dsh-plan-mode`](../../plan/plan-mode/README.zh.md#model-and-human-interactions)在选择 plan mode 后，会提交 `/plan [message]` 中的可选消息。图片附件遵循同一规则：执行器只负责把它们准入为持久化附件对象，是否以及如何成为模型可见的消息内容由声明接受的生产方决定。
+注册表自身不会提交任何内容。已知斜杠命令在 UI 命令平面执行，其 `CommandResult` 文本不会作为用户消息提交。已交付的适配器会拒绝未知斜杠命令输入，而不是将其变成模型提示词。命令生产方可以显式使用接收命令的 `Agent`；例如，[`dsh-plan-mode`](../../plan/plan-mode/README.zh.md#model-and-human-interactions)在选择 plan mode 后，会提交 `/plan [message]` 中的可选消息与有序附件。执行器只负责把附件准入为持久化对象，是否以及如何成为模型可见消息由声明接受的生产方决定。
 
 #### Token 影响
 

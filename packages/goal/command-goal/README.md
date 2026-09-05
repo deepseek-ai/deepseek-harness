@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-command-goal` gives the human `/goal` command over the persisted goal service: a user can create, edit, pause, resume, clear, and inspect the current goal directly from the UI, without involving the model. The command registers in its Cordis scope, so command adapters reading that scope discover and execute it, while command text and output stay in the UI — they never enter model requests. Every accepted mutation persists through the goal service's durable `goal/change` event. Image attachments may accompany a create or edit and are submitted as one ordinary user message so later goal rounds see them. Choose it for interactive deployments with a command adapter; headless and automation apps without one do not need it.
+`dsh-command-goal` gives the human `/goal` command over the persisted goal service: a user can create, edit, pause, resume, clear, and inspect the current goal directly from the UI, without involving the model. The command registers in its Cordis scope, so command adapters reading that scope discover and execute it, while command text and output stay in the UI — they never enter model requests. Every accepted mutation persists through the goal service's durable `goal/change` event. Ordered image and file attachments may accompany a create or edit and are submitted as one ordinary user message so later goal rounds see them. Choose it for interactive deployments with a command adapter; headless and automation apps without one do not need it.
 
 ## Table of Contents
 
@@ -44,9 +44,9 @@ Every sub-command runs against the current goal of the invoking agent; a bare `/
 
 Control words (`clear`, `pause`, `resume`, `edit`) are recognized only when they occupy the complete input; any other non-empty suffix is an objective, so `/goal pause after verification` creates that literal objective. `edit` takes its replacement inline and refuses to replace an unfinished goal directly. Expected domain rejections become stable, direct command errors without exposing branded ids or revisions; unexpected implementation failures still fail dispatch so adapters can report them as command failures.
 
-### Image attachments
+### Attachments
 
-`/goal` declares image support, so a composer may attach images to an invocation. Attachments only accompany an objective: on a successful create or edit the command submits one user followup carrying the admitted image blocks plus the fixed text `Reference images for the goal objective.`, so later goal rounds read them from ordinary session history without the goal domain storing attachment state. Every other sub-command, and any refused create or edit, returns a direct error and submits nothing, so the dispatching composer keeps the images.
+`/goal` declares attachment support. Attachments accompany only an objective: after a successful create or edit, the command submits one user followup carrying the admitted image and file blocks in selection order plus the fixed text `Reference attachments for the goal objective.` Later goal rounds read that ordinary session history; the goal domain stores no attachment state. Every other sub-command, and any refused create or edit, returns a direct error before a domain mutation and leaves the dispatching composer's draft and cards intact.
 
 ### Compose it
 
@@ -77,7 +77,7 @@ This section explains how the command parses input and renders output; the obser
 
 - **Grammar, not free text.** The parser recognizes only the exact control words (`clear`, `pause`, `resume`, `edit`) when they fill the whole input; every other non-empty suffix is an objective. `edit` alone is invalid, and `edit` refuses to replace an unfinished goal directly.
 - **Domain rejections become stable errors.** `GoalError` outcomes are converted into direct command errors with a fixed message; unexpected failures rethrow so adapters report a command failure rather than a domain result. Rendered output never exposes branded ids or revisions.
-- **Attachments ride the objective.** On a successful create or edit the command submits one user followup carrying the admitted image blocks plus the fixed text `Reference images for the goal objective.`; every other path submits nothing, so the dispatching composer keeps the images.
+- **Attachments accompany the objective.** On a successful create or edit, the command submits one user followup carrying the admitted image and file blocks in selection order plus the fixed text `Reference attachments for the goal objective.` Every other path submits nothing, so the dispatching composer keeps the draft and cards.
 
 ### Source map
 
@@ -108,11 +108,11 @@ The command is a thin adapter over the goal domain; read these pages for the sta
 
 #### What the model sees
 
-The slash input, mutation, and direct status/error output are absent from model requests. The goal domain records the mutation as `goal/change`; an enabled same-session driver may expose the resulting state in a later continuation prompt. Presentation text is never logged. When a create or edit carries image attachments, the model sees one ordinary user message: the image blocks followed by the text `Reference images for the goal objective.`; it precedes the next goal round in session history.
+The slash input, mutation, and direct status/error output are absent from model requests. The goal domain records the mutation as `goal/change`; an enabled same-session driver may expose the resulting state in a later continuation prompt. Presentation text is never logged. When a create or edit carries attachments, the model sees one ordinary user message: the ordered image and file blocks followed by the text `Reference attachments for the goal objective.` It precedes the next goal round in session history.
 
 #### Token effect
 
-Reading status, mutating a goal, or receiving a direct command error adds no model tokens. An enabled same-session driver may add later goal-round prompts. An objective's image attachments add one user message billed like any image prompt.
+Reading status, mutating a goal, or receiving a direct command error adds no model tokens. An enabled same-session driver may add later goal-round prompts. An objective's attachments add one ordinary user message with the normal text, image, and file-handle costs.
 
 #### KV Cache effect
 

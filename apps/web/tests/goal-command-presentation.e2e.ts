@@ -67,17 +67,26 @@ describe('web e2e: /goal human transcript presentation', () => {
     const typography = await commandInput.evaluate((element) => {
       const bubble = element.firstElementChild?.firstElementChild
       if (!(bubble instanceof HTMLElement)) throw new Error('command input bubble is missing')
+      const chip = bubble.querySelector('[data-ref-chip="command"]')
+      if (!(chip instanceof HTMLElement)) throw new Error('command chip is missing')
       const rootStyle = getComputedStyle(element)
       const bubbleStyle = getComputedStyle(bubble)
+      const chipStyle = getComputedStyle(chip)
       return {
         fontFamily: bubbleStyle.fontFamily,
         parentFontFamily: rootStyle.fontFamily,
         fontSize: bubbleStyle.fontSize,
         lineHeight: bubbleStyle.lineHeight,
+        chipText: chip.textContent,
+        chipFontFamily: chipStyle.fontFamily,
+        chipFontSize: chipStyle.fontSize,
       }
     })
-    expect(typography).toMatchObject({ fontSize: '14px', lineHeight: '22px' })
-    expect(typography.fontFamily).not.toBe(typography.parentFontFamily)
+    expect(typography).toMatchObject({ fontSize: '14px', lineHeight: '22px', chipText: '/goal', chipFontSize: '14px' })
+    // The bubble reads in the body face like a user bubble; only the command
+    // chip carries the code face that marks the echoed token as a command.
+    expect(typography.fontFamily).toBe(typography.parentFontFamily)
+    expect(typography.chipFontFamily).not.toBe(typography.fontFamily)
     const resultRow = page.locator('[data-variant="others"]').filter({ hasText: 'No goal is currently set.' })
     await expect.poll(() => resultRow.count(), { timeout: 10_000 }).toBe(1)
     expect(await resultRow.getByText('goal', { exact: true }).count()).toBe(1)

@@ -14,7 +14,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export type {
   ArbitrateKey, ArbitrateOutcome, BeginCommandRequest, CommandClaim, ConsumeTokenRequest,
-  InsertReferenceRequest, InsertTextRequest, PickOutcome, ReferenceInsert, SubmitImageAttachment,
+  InsertReferenceRequest, InsertTextRequest, PickOutcome, ReferenceInsert, SubmitAttachment,
   SubmitOutcome, TokenSpan,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
@@ -95,8 +95,8 @@ export interface HeaderRequest {
  * presence to accept or refuse a whole submission.
  */
 export interface SubmitEnvelope {
-  /** Number of image attachments accompanying the draft. */
-  readonly images: number
+  /** Number of attachments accompanying the draft. */
+  readonly attachments: number
 }
 
 /** Candidate request passed to a source. The signal is superseded on query change / menu close. */

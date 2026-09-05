@@ -10,7 +10,7 @@ Web 对话通过会话事件、历史回放与流式累积保留 assistant Markd
 
 ## 决策
 
-`@deepseek-ai/dsh-client-ui-primitives` 导出 `MarkdownText`，用作不受信任的 assistant 文本渲染器；`ui-conversation` 仅为 assistant `text` 块选择该渲染器。已完成的历史消息、流式输出尾部与被中断的部分输出已经共用 `AssistantMarkdown`，因此无需更改事件或快照，它们便会采用同一渲染器。用户消息与 steering 消息继续使用 `MessageText`，并保持按字面渲染。
+`@deepseek-ai/dsh-client-ui-primitives` 导出 `MarkdownText`，用作不受信任的 assistant 文本渲染器；`ui-conversation` 仅为 assistant `text` 块选择该渲染器。已完成的历史消息、流式输出尾部与被中断的部分输出已经共用 `AssistantMarkdown`，因此无需更改事件或快照，它们便会采用同一渲染器。用户消息与 steering 消息经 `projectUserText` 渲染（行内普通片段加引用 chip），并保持按字面渲染。
 
 `MarkdownText` 以 `mdast-util-from-markdown` 加 GFM micromark 扩展解析，并经包内自有渲染器渲染 mdast 树，轮次流式输出期间增量解析（[增量 AST 渲染器 Note](../architecture/2026-08-06-web-markdown-incremental-ast-renderer.zh.md) 拥有该机制及其 DOM 一致性约定）。它覆盖 CommonMark 块，以及 GFM 表格、任务列表、删除线与自动链接，且不解析原始 HTML。一个 micromark attention 扩展复用 CommonMark resolver，同时允许至少两个星号组成的连续序列在 Unicode 标点后闭合，前提是其后紧邻 CJK 文本。这一例外涵盖流式输出期间与完成后无空格 CJK 文本中以标点结尾的粗体；单星号强调、紧邻非 CJK 文本的情况、已转义源文本、代码与数学公式仍沿用上游解析行为。围栏代码经共享的 `CodeBlock` 路由；该组件用客户端的 shiki 单例（`--shiki-*` token）高亮已注册语法，否则回退为纯等宽文本。轮次流式输出期间，围栏增量高亮：每个分片从保存的 grammar state 出发 tokenize 新完成的文本以及仍在增长的最后一行，不重复处理已完成的前缀（[流式围栏高亮 Note](2026-08-20-web-streaming-fence-highlight.zh.md) 拥有该机制）。
 
@@ -28,7 +28,7 @@ assistant 生成的链接目标地址仅限绝对 HTTP、HTTPS 与 mailto URL。
 
 **将现有的 mdast 与 micromark 开发依赖提升为正式依赖，并维护自定义 React walker。**此方案避免引入新的解析器体系，但产品需要自行负责每种节点映射、GFM 扩展和安全敏感的渲染分支。专用 React 渲染器将这套遍历交由上游维护，同时保留 AST 到 React 的处理路径。*后因新证据被推翻——增量流式解析需要纯字符串封装无法提供的 AST 级输入；该决策由[增量 AST 渲染器 Note](../architecture/2026-08-06-web-markdown-incremental-ast-renderer.zh.md) 拥有。*
 
-**将 `MessageText` 替换为 Markdown 渲染。**这会产生格式化用户提示词与 steering 的副作用。在产品明确选择此行为之前，这些输入仍按字面渲染。
+**把用户提示词与 steering 也按 Markdown 渲染。**这会产生格式化用户输入的副作用。在产品明确选择此行为之前，这些输入仍按字面渲染。
 
 **将 Markdown 解析为会话快照。**这会让 React 节点或呈现层 AST 成为持久的运行时状态，并重新引入最终输出与流式输出之间的模式边界。解析仍留在呈现层的叶节点中。
 

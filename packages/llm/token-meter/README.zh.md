@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`@deepseek-ai/dsh-token-meter` 是具备回放感知的 token 计量服务：`ctx.tokenMeter` 从持久事件日志为每个会话推进一个隔离 fold，因此压缩（compaction）与其他压力敏感插件可以共享同一份计量，无需依赖压缩引擎。借助它，你可以测量当前请求与上下文压力、为单条消息计价，并且在挂载会话投影 seam 时读取 `tokenUsage`、`contextPressure` 与 `contextBreakdown` 投影。文本和未声明图片定价的路由使用固定启发式规则，存在时则应用适配器声明的视觉 token 定价；只有请求 envelope 完全匹配时才复用提供方报告的用量。它不添加任何自己的提示词、消息、schema 或工具，也绝不为 loop 做决定。
+`@deepseek-ai/dsh-token-meter` 是具备回放感知的 token 计量服务：`ctx.tokenMeter` 从持久事件日志为每个会话推进一个隔离 fold，因此压缩（compaction）与其他压力敏感插件可以共享同一份计量，无需依赖压缩引擎。借助它，你可以测量当前请求与上下文压力、为单条消息计价，并在挂载会话投影 seam 时读取 `tokenUsage`、`contextPressure` 与 `contextBreakdown` 投影。文本和未声明图片定价的路由使用固定启发式规则，存在时应用适配器声明的视觉 token 定价，文件则按请求组装实际发送的 handle 文本计价；只有请求 envelope 完全匹配时才复用提供方报告的用量。它不添加任何自己的提示词、消息、schema 或工具，也绝不为 loop 做决定。
 
 ## 目录
 
@@ -40,13 +40,13 @@ const { totalTokens, surfaceTokens, nodes } = ctx.tokenMeter.measure(session)
 const price = ctx.tokenMeter.estimateMessage(message)
 ```
 
-每次测量都会通过可选的 `llm` 服务解析生效 envelope 的提供方／模型。适配器声明图片定价时，图片出现处使用路由请求的视觉 token 价格加模型可见文本；其他路由保持固定启发式规则。每个节点还携带与路由无关的 `heuristicTokens`，供替换影子价使用。只有当最新成功调用的规范请求 envelope 与已测量 envelope 匹配、且其总量不低于该调用完整路由定价锚点时，才复用提供方用量；否则会对完整当前 envelope 与表面做估算。表面变更保持相对于按同一路由重新定价的匹配锚点的带符号值，包括缩减替换后的负 delta。
+每次测量都会通过可选的 `llm` 服务解析生效 envelope 的提供方／模型。适配器声明图片定价时，图片出现处使用路由请求的视觉 token 价格加模型可见文本；其他路由保持固定启发式规则。文件出现处使用同一个 `llm` 服务为适配器分发解析的确切、与路由无关的 handle 文本，其中包含当前执行世界路径或明确的无路径说明。每个节点还携带与路由无关的 `heuristicTokens`，供替换影子价使用。只有当最新成功调用的规范请求 envelope 与已测量 envelope 匹配、且其总量不低于该调用完整路由定价锚点时，才复用提供方用量；否则会对完整当前 envelope 与表面做估算。表面变更保持相对于按同一路由重新定价的匹配锚点的带符号值，包括缩减替换后的负 delta。
 
 ### 会话投影
 
 当组合提供 `ctx.sessionProjections` 时，token-meter 注册三个投影单元。`tokenUsage` 携带完整持久日志中的 `uncachedInputTokens`、`outputTokens`、`cacheReadTokens` 与 `cacheWriteTokens`。最终 assistant 消息样本会替换同一次尝试的流式用量；`llm/retry-started` 会结束该替换范围，因此同一步骤中的重试会贡献另一次计费用量。`contextPressure` 携带可选 `pressureTokens`（提供方报告的最新提示词规模）、可选 `projectedTokens`（下一个请求的提示词将花费多少）与来自最新一条 `request/context` 记录的可选 `contextWindow`。`contextBreakdown` 携带启发式 `systemTokens`、`toolsTokens` 与 `messageTokens`——上下文的构成，而非提供方计费规模。卸载插件会移除全部三个键。
 
-`contextBreakdown` 携带启发式的 `systemTokens`、`toolsTokens` 与 `messageTokens`，描述上下文的组成而非提供方计费规模。envelope 数字在每条 `request/header` 上按后者胜重新计价；消息数字重放与 `contextPressure` 相同的 O(1) 影子价折叠，因此在完整计量的日志上，它在每个事件边界都等于 `measure().nodes[].heuristicTokens` 之和，压缩会按记录的影子价缩小该值。路由定价的 `measure().surfaceTokens` 在路由模型重新为图片计价时会与该值不同。若替换前没有紧邻的影子价声明，这个有界投影会保持不变，因为它无法重建被替换区间。三个数字都使用测量服务的固定启发式规则，属于估算值。它们加起来不等于 `projectedTokens`，后者的提供方锚点体现了这些明细行仍然带有的误差（按「4 字符 ≈ 1 token」计价时，CJK 文本与 JSON schema 会被严重低估）。请把它们当作近似的**组成**呈现，而不是总量。
+`contextBreakdown` 携带启发式的 `systemTokens`、`toolsTokens` 与 `messageTokens`，描述上下文的组成而非提供方计费规模。envelope 数字在每条 `request/header` 上按后者胜重新计价；消息数字重放与 `contextPressure` 相同的 O(1) 影子价折叠，因此在完整计量的日志上，它在每个事件边界都等于 `measure().nodes[].heuristicTokens` 之和，压缩会按记录的影子价缩小该值。请求定价的 `measure().surfaceTokens` 在路由模型重新为图片计价或请求组装把文件投影成 handle 文本时会与该值不同。若替换前没有紧邻的影子价声明，这个有界投影会保持不变，因为它无法重建被替换区间。三个数字都使用测量服务的固定启发式规则，属于估算值。它们加起来不等于 `projectedTokens`，后者的提供方锚点包含组成数据仍有的误差，其中按「4 字符约等于 1 token」计价会严重低估 CJK 文本与 JSON schema。请把它们当作近似的**组成**呈现，不要当作总量。
 
 `deriveTurnTokenUsage(events)` 为浏览器消费方把一个完整 Turn 折叠为精确的逐次尝试与整轮用量。生命周期证据缺失、计数不安全或精确总量矛盾时不返回结果；只有每次参与的尝试都报告可选缓存、推理或路由值时，相应汇总才会出现。
 

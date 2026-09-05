@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-client-test-runtime` 让浏览器功能测试拥有真实的 jsdom 测试台：它把 Cordis 上下文、渲染器拥有的 slot 注册表与生产 `UiSession` 适配器组装在带类型的 Session 和 Workspace Controller 替身周围。功能套件无需复制生产渲染器或适配器逻辑，即可检验声明、注册、作用域、store、注入、渲染、更新与销毁。套件通过带类型 fixture 发布 Session 生命周期状态、Workspace 状态、projection 值与 Conversation 事件，再使用局部 DOM 快照根、限定范围的 Testing Library 查询与自明的服务缺失检查。它不属于产品插件图（无 `dsh.client`）；feature 包仅以 `devDependencies` 依赖之。
+`dsh-client-test-runtime` 让浏览器功能测试拥有真实的 jsdom 测试台：它把 Cordis 上下文、渲染器拥有的 slot 注册表与生产 `UiSession` 适配器组装在带类型的 Session 和 Workspace Controller 替身周围。默认文件上传替身可满足声明该服务的功能；测试若没有替换它却发起上传，就会明确失败。功能套件无需复制生产渲染器或适配器逻辑，即可检验声明、注册、作用域、store、注入、渲染、更新与销毁。套件通过带类型 fixture 发布 Session 生命周期状态、Workspace 状态、projection 值与 Conversation 事件，再使用局部 DOM 快照根、限定范围的 Testing Library 查询与自明的服务缺失检查。它不属于产品插件图（无 `dsh.client`）；feature 包仅以 `devDependencies` 依赖之。
 
 ## 目录
 
@@ -40,7 +40,7 @@ expect(view.container).toMatchSnapshot()
 await runtime.dispose()
 ```
 
-`mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时 store 实例，用于身份与动作驱动写入断言。
+`mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。运行时会提供不可用的 `fileUpload` 替身，使装配可以挂载；测试上传行为时，需要在挂载前替换 `runtime.fileUpload.upload`。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时 store 实例，用于身份与动作驱动写入断言。
 
 ### 局部 DOM 快照
 
@@ -101,7 +101,7 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 
 ### 生命周期
 
-`create()` 构建全新上下文，挂载 slot 与会话注册表，安装渲染器，并提供 session/workspace 替身。`mount` 在启动 fiber 前对照上下文检查每个已声明注入，使缺失提供方自明报错而非永久挂起。`dispose()` 先卸载 React 树，再 dispose feature fiber、释放根注册、dispose 已铸 session scope 并清除持久化 store 状态；每个公共修改器都包裹在 act 中，因此测试无需自行处理 SlotCore 微任务批处理或 React `act`。
+`create()` 构建全新上下文，挂载 slot 与会话注册表，安装渲染器，并提供 session/workspace 替身和明确失败的文件上传替身。`mount` 在启动 fiber 前对照上下文检查每个已声明注入，使缺失提供方自明报错而非永久挂起。`dispose()` 先卸载 React 树，再 dispose feature fiber、释放根注册、dispose 已铸 session scope 并清除持久化 store 状态；每个公共修改器都包裹在 act 中，因此测试无需自行处理 SlotCore 微任务批处理或 React `act`。
 
 </details>
 

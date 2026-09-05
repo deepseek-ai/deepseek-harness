@@ -52,14 +52,27 @@
 }
 
 .sourceLink {
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-link);
   font-size: 14px;
+  font-weight: 500;
   line-height: 20px;
   word-break: break-word;
+  text-decoration: none;
 }
 
-.sourceLink:hover {
-  text-decoration: underline;
+/* Leading URL glyph inside source and fetch links; rides the link color.
+   1.1em follows each link's own font size. */
+.linkIcon {
+  width: 1.1em;
+  height: 1.1em;
+  vertical-align: -0.25em;
+  margin-right: 5px;
+}
+
+.sourceLink:hover,
+.sourceLink:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .snippet {
@@ -95,15 +108,19 @@
 }
 
 .fetchUrl {
-  color: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-link);
   font-family: var(--ds-font-family-code);
   font-size: 13px;
+  font-weight: 500;
   line-height: 19px;
   word-break: break-all;
+  text-decoration: none;
 }
 
-.fetchUrl:hover {
-  text-decoration: underline;
+.fetchUrl:hover,
+.fetchUrl:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .fetchMeta {

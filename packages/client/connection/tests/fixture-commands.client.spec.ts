@@ -22,7 +22,7 @@ const sid = (id: string): SessionId => id as SessionId
 describe('createFixtureApi commands/skills', () => {
   it('serves the addressed session catalog', async () => {
     const { rpc } = createFixtureFaces()
-    const commands = await callRemote<{ name: string; input?: { hint: string; images?: boolean } }[]>(
+    const commands = await callRemote<{ name: string; input?: { hint: string; attachments?: boolean } }[]>(
       rpc, 'commands/list', { agentId: sid('fx-alpha') })
     expect(commands.map(c => c.name)).toEqual(['compact', 'echo', 'goal', 'permission', 'plan'])
     // input hint rides only the commands declaring it.
@@ -30,7 +30,7 @@ describe('createFixtureApi commands/skills', () => {
     expect(echo?.input?.hint).toBeTruthy()
     expect(commands.find(c => c.name === 'compact')?.input).toBeUndefined()
     // Image acceptance is declared per descriptor; only goal and plan carry it.
-    expect(commands.filter(c => c.input?.images === true).map(c => c.name)).toEqual(['goal', 'plan'])
+    expect(commands.filter(c => c.input?.attachments === true).map(c => c.name)).toEqual(['goal', 'plan'])
   })
 
   it('rejects a catalog request for an unknown session', async () => {
@@ -97,14 +97,14 @@ describe('createFixtureApi commands/skills', () => {
     const refused = await callRemote<{ commandId: string; result: { kind: string; text?: string } } | undefined>(
       rpc, 'commands/execute', { agentId: sid('fx-alpha'), line: '/echo hi', images: [png] })
     expect(refused?.commandId).toBeTruthy()
-    expect(refused?.result).toEqual({ kind: 'error', text: '/echo does not accept image attachments' })
+    expect(refused?.result).toEqual({ kind: 'error', text: '/echo does not accept attachments' })
     await pump
     const events = frames
       .filter((f): f is { type: string; event: { type: string; data: Record<string, unknown> } } => (f as { type: string }).type === 'event')
       .map(f => f.event)
     expect(events).toMatchObject([
       { type: 'command/run', data: { name: 'echo', args: ' hi', source: { kind: 'user' } } },
-      { type: 'command/done', data: { kind: 'error', text: '/echo does not accept image attachments' } },
+      { type: 'command/done', data: { kind: 'error', text: '/echo does not accept attachments' } },
     ])
   })
 
@@ -129,13 +129,13 @@ describe('createFixtureApi commands/skills', () => {
       rpc, 'commands/execute', { agentId: sid('fx-alpha'), line: '/goal', images: [png] })
     expect(bareGoal?.result).toEqual({
       kind: 'error',
-      text: 'Image attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.',
+      text: 'Attachments only accompany a goal objective: /goal <objective> or /goal edit <objective>.',
     })
     const refused = await callRemote<{ result: { kind: string; text?: string } } | undefined>(
       rpc, 'commands/execute', { agentId: sid('fx-alpha'), line: '/plan off', images: [png] })
     expect(refused?.result).toEqual({
       kind: 'error',
-      text: 'Image attachments cannot accompany /plan off.',
+      text: 'Attachments cannot accompany /plan off.',
     })
   })
 

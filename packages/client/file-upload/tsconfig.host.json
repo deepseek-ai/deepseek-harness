@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.host.tsbuildinfo"
+  },
+  "files": ["src/http-route.ts", "src/index.ts", "src/protocol.ts", "src/types.ts"],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../../util/brand" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/scope" },
+    { "path": "../../core/session" },
+    { "path": "../../attachment/attachment" },
+    { "path": "../../interaction/commands" },
+    { "path": "../../typert/protocol" },
+    { "path": "../connection/tsconfig.host.json" }
+  ]
+}

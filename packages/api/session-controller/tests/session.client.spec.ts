@@ -15,7 +15,6 @@ const PARENT = 'fk-parent' as SessionId
 afterEach(() => {
   vi.unstubAllGlobals()
 })
-
 function makeSession(
   api = new FakeApiClient(),
   options: SessionOptions = {},
@@ -477,6 +476,29 @@ describe('prompt and cancel errors', () => {
     expect(session.getSnapshot().promptError).toMatchObject({
       op: 'stop', error: { code: 'subagent/unauthorized' },
     })
+  })
+
+  it('rejects staged files instead of dropping them from subagent continuations', async () => {
+    const api = new FakeApiClient()
+    const session = new Session(SID, fakeRemote(api), {
+      address: { parentSessionId: PARENT, childSessionId: SID, mode: 'continuable' },
+      parentAvailable: true,
+    })
+    await session.open()
+
+    const prompted = await session.prompt([
+      { type: 'file', receiptId: 'receipt' as never },
+      { type: 'text', text: '继续' },
+    ], 'queue')
+
+    expect(prompted).toMatchObject({
+      ok: false,
+      error: {
+        code: 'subagent/attachment-invalid',
+        details: { reason: 'SUBAGENT_FILE_UNSUPPORTED' },
+      },
+    })
+    expect(api.callsOf('subagents.prompt')).toEqual([])
   })
 
   it('sends a one-shot address to the Host under the continuable marker', async () => {

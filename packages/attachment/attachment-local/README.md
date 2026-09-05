@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides the local storage and image-processing backend for attachments: source images are validated, oriented, stripped of metadata and color profiles, normalized to 8-bit sRGB/sRGBA, and saved below `DSH_HOME`; route-specific request versions are derived and cached separately. It is what the shipped `dsh` composition uses, so durable image attachments work without configuration. Identical normalized images are stored only once, concurrent reads of one request variant share work, and stored images stay readable after later admission-limit changes. Storage is local to this machine — other hosts cannot read these images — and objects are never deleted automatically.
+This package provides the local storage and image-processing backend for attachments: source images are validated, oriented, stripped of metadata and color profiles, normalized to 8-bit sRGB/sRGBA, and saved below `DSH_HOME`; route-specific request versions are derived and cached separately, and generic files are saved byte-for-byte with no admission limits. Streamed file writes and reads use bounded chunks; writes hash into a private staging object before atomic publication, and reads verify the recorded byte length and digest without a whole-file memory copy. It is what the shipped `dsh` composition uses, so durable attachments work without configuration. Identical bytes occupy one canonical object even when uploads use different display names; each model-facing name is a hard link to that object. Concurrent reads of one request variant share work, and stored images stay readable after later admission-limit changes. Storage is local to this machine; other hosts cannot read these objects, and objects are never deleted automatically.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package provides the local storage and image-processing backend for attachm
 <a id="use-this-package"></a>
 ## Use this package
 
-In the default composition, attach images to a prompt or command and they are stored on this machine automatically. If you compose your own setup, mounting this one plugin gives you durable image attachments.
+In the default composition, images and generic files attached to prompts or commands are stored on this machine automatically. If you compose your own setup, mounting this plugin provides durable attachments.
 
 ### Minimal configuration
 
@@ -87,12 +87,15 @@ Admission accepts up to 20 images and 200 MiB of source bytes per message; one s
 
 Request versions live below `<DSH_HOME>/attachments/v1/request-images/`. `readImageRequest` scales without enlargement to a route pixel budget, then applies a separate encoded-byte target through the same alpha routing and quality ladder. Its cache identity includes the attachment id, transform version, budgets, and fixed encoder settings; cached bytes are header-probed for format, 8-bit sRGB/sRGBA, dimensions, and alpha facts, and a mismatch regenerates the entry. Concurrent callers share one transform and cache write, while cancellation stops shared work only when no waiter remains. `imageHostPath` derives the normalized object's host path, and the mounted filesystem may map that path into its execution world without writing it to durable history.
 
+Generic-file bytes have one canonical object at `<DSH_HOME>/attachments/v1/file-objects/<digest-prefix>/<digest>`. Each reference path at `<DSH_HOME>/attachments/v1/files/<digest-prefix>/<digest>/<name>` is a read-only hard link, so different names for equal bytes do not duplicate disk content. `readFileStream` reads the reference path in bounded chunks and verifies the complete digest and recorded byte count before a consumer can finish successfully. A missing, changed, or truncated object fails its consumer instead of producing a complete export with different bytes.
+
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `LocalAttachmentStore`, `Config` schema, defaults |
 | [`src/store.ts`](src/store.ts) | Content-addressed write and verified read: staging, hard-link publish, fsync chain, digest verification |
+| [`src/file-store.ts`](src/file-store.ts) | Verbatim streamed file writes, verified streamed reads, and safe stored filenames |
 | [`src/normalization.ts`](src/normalization.ts) + [`src/encoding.ts`](src/encoding.ts) | Provider-independent normalization and bounded format/quality candidates |
 | [`src/request-image.ts`](src/request-image.ts) | Route-specific request transforms, cache identity, and singleflight |
 | [`src/image.ts`](src/image.ts) | Full raster decode and metadata verification |
@@ -117,7 +120,7 @@ For the full service contract and payload types, read the subsystem reference; f
 <a id="model-experience"></a>
 ## Model Experience
 
-Indirectly, through request descriptors. A mapped execution filesystem lets the model see each image's identity, dimensions, media type, read-only process path, writable-copy extension, and normalization warning alongside the request bytes.
+Indirectly, through request descriptors. A mapped execution filesystem lets the model see each image's identity, dimensions, media type, read-only process path, writable-copy extension, and normalization warning alongside the request bytes. Generic files project as text handles naming their identity and read-only process path; when no mapping exists, the handle states that the execution environment cannot read the file.
 
 #### KV Cache effect
 

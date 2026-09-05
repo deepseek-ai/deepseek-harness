@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-// The command image-attachment envelope over the BUILT client graph (real
+// The command attachment envelope over the BUILT client graph (real
 // bundles via AppWebEntry, keyless fixture Connection RPC): an enter
-// submission carrying composer images resolves only through a command whose
-// descriptor declares `input.images`. A non-declaring command refuses with
+// submission carrying composer attachments resolves only through a command whose
+// descriptor declares `input.attachments`. A non-declaring command refuses with
 // one composer error banner and everything retained; a declaring command
 // consumes the images — serialized through the real draft-image chain into
 // the commands/execute payload — and clears the composer on success, including
@@ -47,7 +47,7 @@ async function pasteImage(textarea: HTMLElement, name: string): Promise<void> {
     },
   })
   await waitFor(() => {
-    const rail = document.querySelector('[role="group"][aria-label="Pending images"]')
+    const rail = document.querySelector('[role="group"][aria-label="Pending attachments"]')
     if (rail === null) throw new Error('attachment rail missing')
     expect([...rail.querySelectorAll('img')].map(img => img.getAttribute('alt'))).toContain(name)
   }, { timeout: 5_000 })
@@ -58,7 +58,7 @@ it('refuses an image-carrying submit to a non-declaring command and keeps draft 
   const textarea = await freshComposer()
   await pasteImage(textarea, 'ref.png')
 
-  // /echo is a leadingInput fixture command without `input.images`.
+  // /echo is a leadingInput fixture command without `input.attachments`.
   await pasteText(textarea, '/echo hello')
   fireEvent.keyDown(textarea, { key: 'Enter' })
 
@@ -66,16 +66,16 @@ it('refuses an image-carrying submit to a non-declaring command and keeps draft 
   // failures; session activity remains on its separate status live region.
   const notice = await waitFor(() => {
     const el = [...document.querySelectorAll('[role="alert"]')]
-      .find(candidate => candidate.textContent?.includes('image attachments') ?? false)
+      .find(candidate => candidate.textContent?.includes('attachments') ?? false)
     if (el === undefined) throw new Error('composer refusal banner missing')
     return el
   }, { timeout: 5_000 })
-  expect(notice.textContent).toBe('/echo does not accept image attachments; remove them first')
+  expect(notice.textContent).toBe('/echo does not accept attachments; remove them first')
   expect([...document.querySelectorAll('[role="status"]')]
-    .some(candidate => candidate.textContent?.includes('image attachments') ?? false)).toBe(false)
+    .some(candidate => candidate.textContent?.includes('attachments') ?? false)).toBe(false)
   // The whole envelope is retained: draft text and the rail thumbnail.
   await waitFor(() => { expect(textarea.textContent).toBe('/echo hello') })
-  const rail = document.querySelector('[role="group"][aria-label="Pending images"]')
+  const rail = document.querySelector('[role="group"][aria-label="Pending attachments"]')
   expect([...(rail?.querySelectorAll('img') ?? [])].map(img => img.getAttribute('alt'))).toEqual(['ref.png'])
 })
 
@@ -84,14 +84,14 @@ it('consumes images through a declaring command and clears the composer on succe
   const textarea = await freshComposer()
   await pasteImage(textarea, 'goal-ref.png')
 
-  // /goal declares `input.images` in the fixture catalog; the claim submit
+  // /goal declares `input.attachments` in the fixture catalog; the claim submit
   // serializes the pasted bytes and the fixture executor admits them.
   await pasteText(textarea, '/goal rebuild the cathedral')
   fireEvent.keyDown(textarea, { key: 'Enter' })
 
   await waitFor(() => {
     expect(textarea.textContent).toBe('')
-    expect(document.querySelector('[role="group"][aria-label="Pending images"]')).toBeNull()
+    expect(document.querySelector('[role="group"][aria-label="Pending attachments"]')).toBeNull()
   }, { timeout: 5_000 })
 })
 
@@ -107,7 +107,7 @@ it('submits a bare /plan with an image as an image-only plan request', async () 
 
   await waitFor(() => {
     expect(textarea.textContent).toBe('')
-    expect(document.querySelector('[role="group"][aria-label="Pending images"]')).toBeNull()
+    expect(document.querySelector('[role="group"][aria-label="Pending attachments"]')).toBeNull()
   }, { timeout: 5_000 })
   expect([...document.querySelectorAll('[role="alert"]')]
     .some(candidate => candidate.textContent?.includes('/plan') ?? false)).toBe(false)

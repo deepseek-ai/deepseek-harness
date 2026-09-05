@@ -65,7 +65,7 @@ function liveSession(initial: SessionSnapshot) {
   }
 }
 
-const INPUT_STATE: InputState = { draft: '', imageIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [] }
+const INPUT_STATE: InputState = { draft: '', attachmentIds: [], draftRev: 0, phase: 'plain', occurrences: [], queue: [] }
 
 const t: QueueDockProps['t'] = makeTranslate(zh, commonZh)
 
@@ -124,13 +124,36 @@ describe('QueueDock', () => {
         placement: 'queued' as const,
         time: 1,
         text: '等待上传',
-        images: [{ previewUrl: 'blob:queue-preview', name: 'queue.png' }],
+        attachments: [
+          {
+            type: 'image' as const,
+            value: { previewUrl: 'blob:queue-preview', name: 'queue.png' },
+          },
+          {
+            type: 'file' as const,
+            value: {
+              attachmentId: 'file-local' as never,
+              name: 'notes.txt',
+              bytes: 2447 * 1024 * 1024,
+            },
+          },
+        ],
       }],
     }
     const source = liveSession(pending)
-    const view = render(<QueueDock {...kitFor(pending)} useSession={source.useSession} />)
+    const props = kitFor(pending)
+    const view = render(<QueueDock {...props} useSession={source.useSession} />)
     expect(view.getByText('等待上传').closest('[data-submission-echo]')).not.toBeNull()
     expect(view.getByRole('img', { name: '排队消息图片' }).getAttribute('src')).toBe('blob:queue-preview')
+    expect(view.getByLabelText('排队文件 notes.txt').textContent).toContain('2.4GB')
+    expect(view.getByRole('status').textContent).toBe('发送中…')
+    for (const name of ['编辑排队消息', '删除排队消息', '插话发送']) {
+      const button = view.getByRole('button', { name }) as HTMLButtonElement
+      expect(button.disabled).toBe(true)
+      fireEvent.click(button)
+    }
+    expect(props.updateQueue).not.toHaveBeenCalled()
+    expect(view.queryByRole('textbox')).toBeNull()
 
     act(() => {
       source.push({
@@ -140,6 +163,32 @@ describe('QueueDock', () => {
     })
     expect(view.getAllByText('等待上传')).toHaveLength(1)
     expect(view.container.querySelector('[data-submission-echo]')).toBeNull()
+    expect(view.queryByRole('status')).toBeNull()
+    for (const name of ['编辑排队消息', '删除排队消息', '插话发送']) {
+      expect((view.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(false)
+    }
+    fireEvent.click(view.getByRole('button', { name: '编辑排队消息' }))
+    expect((view.getByRole('textbox') as HTMLInputElement).value).toBe('等待上传')
+  })
+
+  it('keeps sending status visible while a queue containing local submissions is collapsed', () => {
+    const pending: SessionSnapshot = {
+      ...snapshotWith([row('accepted', '已排队')]),
+      pendingSubmissions: [{
+        requestId: 'req-waiting' as never, placement: 'queued', time: 1,
+        text: '等待发送', attachments: [],
+      }],
+    }
+    const source = liveSession(pending)
+    const view = render(<QueueDock {...kitFor(pending)} useSession={source.useSession} />)
+    expect(view.getByRole('status').textContent).toBe('发送中…')
+    const header = view.getByRole('button', { name: /2 条排队消息\s*发送中…/ })
+    expect(header.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(header)
+    expect(view.getAllByRole('status')).toHaveLength(1)
+    expect(view.getByRole('status').closest('[data-submission-echo]')).not.toBeNull()
+    act(() => { source.push(snapshotWith([row('accepted', '已排队')])) })
+    expect(view.queryByRole('status')).toBeNull()
   })
 
   it('leaves pending steering to the conversation flow', () => {
@@ -280,6 +329,35 @@ describe('QueueDock', () => {
     expect(loadImage).toHaveBeenCalledWith(expect.objectContaining({ attachmentId: 'att-9' }))
     expect(container.querySelector('img')?.getAttribute('alt')).toBe('排队消息图片')
     expect(container.querySelector('li')?.textContent).toBe('带图消息')
+  })
+
+  it('renders durable files and images in their original queue order', async () => {
+    const loadImage = vi.fn(() => Promise.resolve('blob:mixed'))
+    const mixed: QueuedMessage = {
+      id: iid('i-mixed'), messageId: 'message-i-mixed' as never, placement: 'queued',
+      content: [
+        {
+          type: 'file',
+          attachment: { attachmentId: 'file-durable' as never, name: 'report.csv', bytes: 427 },
+        },
+        {
+          type: 'image',
+          attachment: {
+            attachmentId: 'image-durable' as never,
+            mediaType: 'image/png', bytes: 1, width: 1, height: 1,
+          },
+        },
+      ],
+      preview: '', text: null,
+    }
+    const snap = snapshotWith([mixed])
+    const source = liveSession(snap)
+    const view = render(<QueueDock {...kitFor(snap, { loadImage })} useSession={source.useSession} />)
+    await waitFor(() => { expect(view.container.querySelector('img')).not.toBeNull() })
+    const group = view.getByLabelText('排队文件 report.csv').parentElement
+    expect(group?.children).toHaveLength(2)
+    expect(group?.children[0]?.getAttribute('aria-label')).toBe('排队文件 report.csv')
+    expect(group?.children[1]?.tagName).toBe('IMG')
   })
 
   it('keeps the empty thumbnail placeholder when the image read fails', async () => {

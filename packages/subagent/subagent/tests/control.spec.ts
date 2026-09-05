@@ -5,7 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import AttachmentStore, { AttachmentError } from '@deepseek-ai/dsh-attachment'
 import type { MessageId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import SubagentRuntime, {
@@ -169,7 +169,7 @@ describe('subagent prompt Remote', () => {
     const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
     const saveImages = vi.fn(async (inputs: readonly { mediaType: string }[]) =>
       inputs.map((input, index) => ({ ...IMAGE_REF, attachmentId: `att-${index}`, mediaType: input.mediaType })))
-    ctx.provide('attachments', { saveImages } as never)
+    ctx.provide('attachments', Object.setPrototypeOf({ saveImages }, AttachmentStore.prototype) as never)
     const delivery = promptDelivery(subagents).mockResolvedValue('m-content' as MessageId)
     const content = [
       { type: 'text' as const, text: 'before' },
@@ -188,11 +188,11 @@ describe('subagent prompt Remote', () => {
 
   it('maps a refused image batch to subagent/attachment-invalid and delivers nothing', async () => {
     const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
-    ctx.provide('attachments', {
+    ctx.provide('attachments', Object.setPrototypeOf({
       saveImages: async () => {
         throw new AttachmentError('Image batch exceeds the configured image-count limit.', 'TOO_MANY_IMAGES')
       },
-    } as never)
+    }, AttachmentStore.prototype) as never)
     const delivery = promptDelivery(subagents)
 
     await expect(subagents.prompt({
@@ -207,7 +207,7 @@ describe('subagent prompt Remote', () => {
   it('maps non-canonical base64 to subagent/attachment-invalid without touching the store', async () => {
     const { ctx, subagents } = await bench({ [PARENT]: { status: 'idle' } })
     const saveImages = vi.fn()
-    ctx.provide('attachments', { saveImages } as never)
+    ctx.provide('attachments', Object.setPrototypeOf({ saveImages }, AttachmentStore.prototype) as never)
     const delivery = promptDelivery(subagents)
 
     await expect(subagents.prompt({

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-agent-default-model",
   "description": "Default model selection shared by Agent entry points",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3-alpha.1",
   "publishConfig": {
     "access": "public"
   },

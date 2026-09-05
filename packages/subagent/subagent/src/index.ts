@@ -30,7 +30,7 @@
  */
 
 import { Context } from '@deepseek-ai/cordis'
-import { admitPromptContent } from '@deepseek-ai/dsh-attachment'
+import type {} from '@deepseek-ai/dsh-attachment'
 import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
@@ -445,7 +445,7 @@ export class SubagentRuntime extends TypertRemoteService {
       } else {
         const attachments = this.ctx.get('attachments')
         if (attachments === undefined) throw new Error('subagent image prompt requires an attachment store')
-        content = await admitPromptContent(attachments, request.content)
+        content = await attachments.admitPromptContent(request.content)
       }
       return {
         messageId: await this[deliverSubagentPrompt](

@@ -3,6 +3,11 @@
 import { SessionLogOffset } from '@deepseek-ai/dsh-session'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
+import type {
+  AdmittedPromptContentPart,
+  AttachmentAdmissionPart,
+  ImageAttachmentLimits,
+} from '@deepseek-ai/dsh-attachment'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import {
   SessionPersistenceNotFoundError,
@@ -90,6 +95,15 @@ export interface TestSessionRemoteDefaults {
 }
 
 const installed = new WeakMap<Context, SessionController>()
+
+const TEST_IMAGE_LIMITS: ImageAttachmentLimits = Object.freeze({
+  maxImageBytes: 5 * 1024 * 1024,
+  maxImagesPerMessage: 20,
+  maxMessageImageBytes: 100 * 1024 * 1024,
+  maxImagePixels: 40_000_000,
+  maxImageDimension: 2000,
+  mediaTypes: Object.freeze(['image/png'] as const),
+})
 
 /** Compact header-and-events point read a persistence double declares per session. */
 interface TestSessionInspection {
@@ -231,6 +245,29 @@ function installControllers(
         const selection = defaults.defaultModelSelection()
         return [{ id: selection.provider, name: selection.provider }]
       },
+    } as never)
+  }
+  if (ctx.get('attachments') === undefined) {
+    ctx.provide('attachments', {
+      imageLimits: TEST_IMAGE_LIMITS,
+      admitPromptContent: async (
+        content: readonly AttachmentAdmissionPart[],
+      ): Promise<AdmittedPromptContentPart[]> => {
+        const admitted: AdmittedPromptContentPart[] = []
+        for (const part of content) {
+          if (part.type === 'image') throw new Error('test did not configure image persistence')
+          admitted.push(part)
+        }
+        return admitted
+      },
+    } as never)
+  }
+  if (ctx.get('fileUploads') === undefined) {
+    ctx.provide('fileUploads', {
+      registerAgentResolver: () => () => {},
+      resolve: () => undefined,
+      bindPrompt: () => ({ commit: () => {}, [Symbol.dispose]: () => {} }),
+      retirePrompt: () => {},
     } as never)
   }
   installSessionReadTestServices(ctx)

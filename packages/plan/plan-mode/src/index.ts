@@ -225,11 +225,11 @@ export class PlanModeController extends Service {
       commandCtx.commands.register({
         name: 'plan',
         description: 'Enter or leave plan mode',
-        input: { hint: '[off|message]', images: true },
+        input: { hint: '[off|message]', attachments: true },
         handler: ({ agent, rawInput, attachments }) => {
           const message = rawInput.trim()
           if (message === 'off' && attachments.length > 0) {
-            return { kind: 'error', text: 'Image attachments cannot accompany /plan off.' }
+            return { kind: 'error', text: 'Attachments cannot accompany /plan off.' }
           }
           if (message === 'off') {
             switch (this.set(agent, false)) {

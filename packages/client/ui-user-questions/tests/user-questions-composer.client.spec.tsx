@@ -93,7 +93,7 @@ const trajectoryState: TrajectoryState = {
 }
 const inputState: InputState = {
   draft: '',
-  imageIds: [],
+  attachmentIds: [],
   draftRev: 0,
   phase: 'plain',
   occurrences: [],
@@ -118,9 +118,9 @@ const kitBase: Omit<QuestionComposerProps, 'matched' | 'useStore' | 'actions'> =
   useInput: selector => selector(inputState),
   inputActions: {
     setDraft: () => { throw new Error('unused') },
-    addImages: () => { throw new Error('unused') },
-    removeImage: () => { throw new Error('unused') },
-    pruneImages: () => { throw new Error('unused') },
+    addAttachments: () => { throw new Error('unused') },
+    removeAttachment: () => { throw new Error('unused') },
+    pruneAttachments: () => { throw new Error('unused') },
     submit: () => { throw new Error('unused') },
   },
   // The seat's key domain is question ∪ common.

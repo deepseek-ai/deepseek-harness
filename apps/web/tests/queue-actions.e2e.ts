@@ -26,6 +26,8 @@ const LAYOUT_EXPECTED = join(SNAPSHOT_DIR, 'layout.expected.md')
 const PRESERVED_EXPECTED = join(SNAPSHOT_DIR, 'preserved.expected.md')
 const PRESERVED_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'preserved-expanded.expected.md')
 const UI_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
+const SENDING_EXPECTED = join(SNAPSHOT_DIR, 'sending.expected.md')
+const FAILED_EXPECTED = join(SNAPSHOT_DIR, 'failed.expected.md')
 const MODE = webSnapshotMode()
 
 const ACTIVE_PROMPT = 'Reply with a one-sentence description of event sourcing, then stop.'
@@ -34,6 +36,7 @@ const EDIT = 'Queue item to edit'
 const EDITED = 'Edited queue item'
 const TAIL = 'Queue item preserved after stop'
 const WAKE = 'Wake the preserved queue'
+const FAILED = 'Queue submission to retry'
 
 /** Durable turn-end classifications observed by the scenario. */
 function turnEndReasons(events: readonly SessionEvent[]): string[] {
@@ -93,15 +96,44 @@ describe('web e2e: queue row actions', () => {
     await input.press('Enter')
     await expect.poll(() => existsSync(readyFile), { timeout: 15_000 }).toBe(true)
 
-    for (const text of [REMOVE, EDIT]) {
-      // A just-submitted composer is read-only for the prompt round-trip.
-      await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
-      await input.fill(text)
+    const received = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    await page.route('**/api/session/prompt', async (route) => {
+      received.resolve(undefined)
+      await release.promise
+      await route.continue()
+    }, { times: 1 })
+    try {
+      await input.fill(REMOVE)
       await input.press('Enter')
+      await received.promise
+      const pending = page.locator('[data-queue-dock] [data-submission-echo]')
+      await pending.getByRole('status').waitFor()
+      expect(await pending.getByRole('status').textContent()).toBe('Sending…')
+      expect(await pending.getByRole('button').count()).toBe(3)
+      expect(await pending.getByRole('button').evaluateAll(buttons =>
+        buttons.every(button => (button as HTMLButtonElement).disabled))).toBe(true)
+      expect(await input.textContent()).toBe('')
+      expect(await input.getAttribute('contenteditable')).toBe('true')
+      const sending = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
+      await compareOrRefreshGolden(SENDING_EXPECTED, sending, MODE)
+      await page.setViewportSize({ width: 390, height: 1000 })
+      await page.locator('[data-sidebar-collapsed="true"]').waitFor()
+      await expect.poll(() => pending.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
+      await page.setViewportSize({ width: 1680, height: 1000 })
+      await page.locator('[data-sidebar-collapsed="true"]').waitFor({ state: 'detached' })
+    } finally {
+      release.resolve(undefined)
     }
+    await expect.poll(() => page.getByRole('button', { name: 'Remove queued message' }).isEnabled()).toBe(true)
+    expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
+    expect(await page.locator('[data-queue-dock]').getByRole('status').count()).toBe(0)
+    await input.fill(EDIT)
+    await input.press('Enter')
     const queueHeader = page.getByRole('button', { name: '2 queued messages' })
     await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 })
       .toBe('false')
+    await expect.poll(() => queueHeader.getByRole('status').count(), { timeout: 10_000 }).toBe(0)
     const collapsedSnapshot = await captureStableAria(
       page,
       '[class*="centerCol"]',
@@ -110,7 +142,7 @@ describe('web e2e: queue row actions', () => {
     await compareOrRefreshGolden(COLLAPSED_EXPECTED, collapsedSnapshot, MODE)
     await queueHeader.click()
     await expect.poll(
-      () => page.getByRole('button', { name: 'Remove queued message' }).count(),
+      () => page.getByRole('button', { name: 'Remove queued message', disabled: false }).count(),
       { timeout: 10_000 },
     ).toBe(2)
 
@@ -150,13 +182,36 @@ describe('web e2e: queue row actions', () => {
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
     expect(sessionEvents.filter(event => event.type === 'user/message' && event.data.source.kind === 'user')).toHaveLength(1)
-    expect(tripwire.pageErrors).toEqual([])
-    expect(tripwire.warnings).toEqual([])
+    await page.route('**/api/session/prompt', async (route) => {
+      const envelope = route.request().postDataJSON() as { rpcId: string }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        json: {
+          type: 'server-response', rpcId: envelope.rpcId,
+          result: {
+            ok: false,
+            error: { code: 'session/agent-busy', message: 'Queue submission failed', details: { reason: 'admission refused' } },
+          },
+        },
+      })
+    }, { times: 1 })
+    await input.fill(FAILED)
+    await input.press('Enter')
+    const failure = page.getByRole('alert').filter({ hasText: 'Queue submission failed' })
+    await failure.waitFor()
+    await expect.poll(() => input.textContent()).toBe(FAILED)
+    expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
+    const failed = [
+      await failure.ariaSnapshot(),
+      await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd),
+    ].join('\n')
+    await compareOrRefreshGolden(FAILED_EXPECTED, failed, MODE)
 
     await input.fill(TAIL)
     await input.press('Enter')
     await expect.poll(
-      () => page.getByRole('button', { name: 'Remove queued message' }).count(),
+      () => page.getByRole('button', { name: 'Remove queued message', disabled: false }).count(),
       { timeout: 10_000 },
     ).toBe(2)
 
@@ -186,6 +241,8 @@ describe('web e2e: queue row actions', () => {
       ? event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
       : [])).toEqual([ACTIVE_PROMPT, EDITED, TAIL, WAKE])
     await expect.poll(() => page.locator('[data-queue-dock]').count()).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
   }, 120_000)
 
   it.skipIf(MODE === 'record')('orders Todo before Goal and Queue on one responsive card column', async () => {
@@ -232,6 +289,7 @@ describe('web e2e: queue row actions', () => {
     const queueHeader = page.getByRole('button', { name: '2 queued messages' })
     await expect.poll(() => queueHeader.getAttribute('aria-expanded'), { timeout: 10_000 })
       .toBe('false')
+    await expect.poll(() => queueHeader.getByRole('status').count(), { timeout: 10_000 }).toBe(0)
 
     const layoutSnapshot = await captureStableAria(
       page,
@@ -241,9 +299,13 @@ describe('web e2e: queue row actions', () => {
     await compareOrRefreshGolden(LAYOUT_EXPECTED, layoutSnapshot, MODE)
 
     const expectAlignedContextPanels = async () => {
-      const queuePanelBox = await page.locator('[data-queue-dock] > div').boundingBox()
-      const todoBox = await page.locator('[data-testid="todo-panel"]').boundingBox()
-      const goalBox = await page.locator('[data-goal-bar] > div').boundingBox()
+      // Sample one layout: the responsive grid can move between separate browser round trips.
+      const [queuePanelBox, todoBox, goalBox] = await page.evaluate(() => [
+        '[data-queue-dock] > div', '[data-testid="todo-panel"]', '[data-goal-bar] > div',
+      ].map((selector) => {
+        const box = document.querySelector(selector)?.getBoundingClientRect()
+        return box === undefined ? null : { x: box.x, y: box.y, width: box.width }
+      }))
       expect(queuePanelBox).not.toBeNull()
       expect(todoBox).not.toBeNull()
       expect(goalBox).not.toBeNull()
@@ -282,6 +344,7 @@ describe('web e2e: queue row actions', () => {
       [
         'collapsed.expected.md', 'editing.expected.md', 'layout.expected.md',
         'preserved.expected.md', 'preserved-expanded.expected.md', 'ui.expected.md',
+        'sending.expected.md', 'failed.expected.md',
       ],
     )
   })

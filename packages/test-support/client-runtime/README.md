@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-test-runtime` gives a browser feature spec a real jsdom test bench: it assembles a Cordis context, the renderer-owned slot registry, and the production `UiSession` adapter around typed Session and Workspace Controller doubles. Feature suites exercise declaration, registration, scoping, stores, injection, rendering, updates, and disposal without copying production renderer or adapter logic. Suites publish Session lifecycle state, Workspace state, projection values, and Conversation events through typed fixtures, then use local DOM snapshot roots, scoped Testing Library queries, and fail-loud service checks. It is not part of the product plugin graph (no `dsh.client`); feature packages depend on it in `devDependencies` only.
+`dsh-client-test-runtime` gives a browser feature spec a real jsdom test bench: it assembles a Cordis context, the renderer-owned slot registry, and the production `UiSession` adapter around typed Session and Workspace Controller doubles. A default file-upload stub satisfies features that declare the service and rejects if a test starts an upload without replacing it. Feature suites exercise declaration, registration, scoping, stores, injection, rendering, updates, and disposal without copying production renderer or adapter logic. Suites publish Session lifecycle state, Workspace state, projection values, and Conversation events through typed fixtures, then use local DOM snapshot roots, scoped Testing Library queries, and fail-loud service checks. It is not part of the product plugin graph (no `dsh.client`); feature packages depend on it in `devDependencies` only.
 
 ## Table of Contents
 
@@ -40,7 +40,7 @@ expect(view.container).toMatchSnapshot()
 await runtime.dispose()
 ```
 
-`mount` prechecks required services and fails loud when one is missing — `provide(name, value)` supplies an extra service first. `storeOf(key, scopeKey)` returns the live store instance the renderer hands a slot's component for identity and action-driven-write assertions.
+`mount` prechecks required services and fails loud when one is missing — `provide(name, value)` supplies an extra service first. The runtime provides an unavailable `fileUpload` stub so assemblies can mount; replace `runtime.fileUpload.upload` before mounting when a test exercises upload behavior. `storeOf(key, scopeKey)` returns the live store instance the renderer hands a slot's component for identity and action-driven-write assertions.
 
 ### Local DOM snapshots
 
@@ -101,7 +101,7 @@ The bench copies no production logic: it mounts the production `SlotRegistry`, p
 
 ### Lifecycle
 
-`create()` builds a fresh context, mounts the slot and conversation registries, installs the renderer, and provides the session/workspace doubles. `mount` checks every declared injection against the context before starting the fiber, so a missing provider fails loud instead of suspending forever. `dispose()` unmounts React trees first, then disposes feature fibers, releases the root registration, disposes minted session scopes, and clears persisted store state; every public mutator is act-wrapped, so tests never handle SlotCore microtask batching or React `act` themselves.
+`create()` builds a fresh context, mounts the slot and conversation registries, installs the renderer, and provides the session/workspace doubles plus the fail-loud file-upload stub. `mount` checks every declared injection against the context before starting the fiber, so a missing provider fails loud instead of suspending forever. `dispose()` unmounts React trees first, then disposes feature fibers, releases the root registration, disposes minted session scopes, and clears persisted store state; every public mutator is act-wrapped, so tests never handle SlotCore microtask batching or React `act` themselves.
 
 </details>
 

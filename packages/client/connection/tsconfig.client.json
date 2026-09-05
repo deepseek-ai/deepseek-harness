@@ -14,11 +14,15 @@
     "src/client/random-uuid.ts",
     "src/client/rpc.ts",
     "src/loopback-hostname.ts",
+    "src/recovery-config.ts",
     "src/rpc.ts"
   ],
   "references": [
     {
       "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
     },
     {
       "path": "../../attachment/attachment"

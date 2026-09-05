@@ -7,7 +7,7 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { BlockAssembler, expandAssistantStream } from '@deepseek-ai/dsh-llm'
-import type { LlmImageRequestPricing, Message, TokenUsage } from '@deepseek-ai/dsh-llm'
+import type { LlmImageRequestPricing, LlmRuntime, Message, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type {
   EpochHeader,
@@ -147,7 +147,8 @@ export class TokenMeter extends Service {
       ? state.header
       : canonicalHeader(requestHeader)
     const pricing = this._routeImagePricing(header)
-    const surface = priceSurface(state.surface, pricing)
+    const fileText = this._fileRequestText()
+    const surface = priceSurface(state.surface, pricing, fileText)
     const anchor = state.anchor
 
     let baseline: TokenMeasurementBaseline
@@ -156,7 +157,7 @@ export class TokenMeter extends Service {
       // Matching headers share one route, so the anchored snapshot reprices
       // under the same pricing as the current surface and the signed delta
       // compares like with like.
-      const anchorSurfaceTokens = priceSurface(anchor.nodes, pricing).surfaceTokens
+      const anchorSurfaceTokens = priceSurface(anchor.nodes, pricing, fileText).surfaceTokens
         + anchor.assistantTokens
       const estimatedAnchorTokens = estimateHeader(header) + anchorSurfaceTokens
       const usage = anchor.usage
@@ -192,6 +193,14 @@ export class TokenMeter extends Service {
     const config = header?.config
     if (config === undefined) return undefined
     return this.ctx.get('llm')?.imageRequestPricing(config.provider, config.model)
+  }
+
+  /** Resolve request-time file projection when an LLM service is mounted. */
+  private _fileRequestText(): (
+    (ref: Parameters<LlmRuntime['fileRequestText']>[0]) => string
+  ) | undefined {
+    const llm = this.ctx.get('llm')
+    return llm === undefined ? undefined : ref => llm.fileRequestText(ref)
   }
 
   /**

@@ -5,6 +5,7 @@
 
 .rail {
   display: flex;
+  align-items: stretch;
   gap: 10px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -22,9 +23,7 @@
 }
 
 .item {
-  position: relative;
-  flex: 0 0 64px;
-  width: 64px;
+  flex: none;
   height: 64px;
 }
 
@@ -83,7 +82,6 @@
     transition: none;
   }
 }
-
 .arrow {
   position: absolute;
   top: 50%;

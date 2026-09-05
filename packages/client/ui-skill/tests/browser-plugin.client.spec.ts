@@ -5,7 +5,7 @@
  * the source behavior contract driven directly on the captured source with
  * real ClientSessionContext projections — sessionId addressing, the
  * session-keyed catalog cache (single-flight per key, scope-birth warm
- * prewarm, connection/reset clear), startsWith filtering, RPC-failure
+ * prewarm, connection/reset clear), shared fuzzy name ranking, RPC-failure
  * rejection, pick → plain-text outcome (the plain-text-reference decision:
  * .agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md),
  * the synchronous
@@ -167,7 +167,7 @@ describe('apply', () => {
 })
 
 describe('candidates: sessionId addressing', () => {
-  it('lists via {sessionId} and filters by startsWith(query)', async () => {
+  it('lists via {sessionId} and ranks case-insensitive subsequence matches with prefixes first', async () => {
     const { list, payloads } = countingList()
     const { source } = await bench(list)
     const items = await source.candidates(proj('s1'), req('co'))
@@ -177,6 +177,11 @@ describe('candidates: sessionId addressing', () => {
       { name: 'commit-helper', description: 'commit flow' },
       { name: 'code-review', description: 'review flow' },
     ])
+    const names = async (query: string) => (await source.candidates(proj('s1'), req(query))).map(c => c.name)
+    // 'de' prefixes deploy and is a subsequence of code-review: the prefix ranks first.
+    await expect(names('de')).resolves.toEqual(['deploy', 'code-review'])
+    await expect(names('REV')).resolves.toEqual(['code-review'])
+    await expect(names('zzz')).resolves.toEqual([])
   })
 
   it('rejects on a failed result (the slash shell owns the menu-side fold)', async () => {

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { LinkIcon, classifyLinkPath } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HostObservable, InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { TurnTailOwnerProps } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { basename } from './turn-deliverables.ts'
@@ -57,7 +58,8 @@ export function ProducedFiles({
               aria-label={t('produced.open', { name: path })}
               onClick={() => { openFile(path) }}
             >
-              {basename(path)}
+              <LinkIcon kind={classifyLinkPath(path)} className={css.fileIcon} />
+              <span className={css.fileName}>{basename(path)}</span>
             </button>
           ))}
           {shown.map((_, index) => {
@@ -77,6 +79,7 @@ export function ProducedFiles({
             className={css.showFolder}
             onClick={() => { openFile('.') }}
           >
+            <LinkIcon kind="folder" className={css.fileIcon} />
             {t('produced.showInFolder')}
           </button>
         )}

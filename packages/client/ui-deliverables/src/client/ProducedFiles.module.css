@@ -17,7 +17,6 @@
 }
 
 .lane {
-  --produced-file-chip-max: 96px;
   --produced-file-gap: 8px;
 
   grid-column: 2;
@@ -37,28 +36,53 @@
   overflow: hidden;
 }
 
-/* File names yield space to one another while the remainder stays readable. */
+/* File names render at natural width and only shrink (with ellipsis) when
+   the row truly runs out of space; the container-query bands still budget
+   96px per chip when deciding how many chips to show. Same link language as
+   markdown anchors and file mentions: link-blue at rest with no underline,
+   dotted underline on hover; the leading glyph names the file's category
+   and rides the link color. */
 .file {
   box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex: 0 1 auto;
   min-width: 0;
-  max-width: var(--produced-file-chip-max);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin: 0;
-  padding: 0 8px;
+  padding: 0;
   border: none;
-  border-radius: 6px;
-  background: var(--dsw-alias-interactive-bg-hover);
-  color: var(--dsw-alias-label-secondary);
+  border-radius: 4px;
+  background: none;
+  color: var(--dsw-alias-link);
   font: inherit;
+  font-weight: 500;
+  text-decoration: none;
   cursor: pointer;
 }
 
-.file:hover {
-  color: var(--dsw-alias-label-primary);
-  text-decoration: underline;
+/* Flex centering tracks box centers, but the 22px text box carries its
+   glyphs below center (the baseline sits low in the leading); the nudge
+   drops the glyph onto the text's visual center. */
+.fileIcon {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  position: relative;
+  top: 1.2px;
+}
+
+.fileName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file:hover,
+.file:focus-visible {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .file:focus-visible,
@@ -84,7 +108,7 @@
 }
 
 .lane:has(.more[data-shown='6']) > .showFolder {
-  display: block;
+  display: flex;
 }
 
 /* Each band budgets 96px per chip, 8px gaps, and 64px for the remainder. */
@@ -103,7 +127,7 @@
   }
 
   .lane:has(.more[data-shown='5']) > .showFolder {
-    display: block;
+    display: flex;
   }
 }
 
@@ -122,7 +146,7 @@
   }
 
   .lane:has(.more[data-shown='4']) > .showFolder {
-    display: block;
+    display: flex;
   }
 }
 
@@ -141,7 +165,7 @@
   }
 
   .lane:has(.more[data-shown='3']) > .showFolder {
-    display: block;
+    display: flex;
   }
 }
 
@@ -160,7 +184,7 @@
   }
 
   .lane:has(.more[data-shown='2']) > .showFolder {
-    display: block;
+    display: flex;
   }
 }
 
@@ -179,12 +203,14 @@
   }
 
   .lane:has(.more[data-shown='1']) > .showFolder {
-    display: block;
+    display: flex;
   }
 }
 
 .showFolder {
   justify-self: start;
+  align-items: center;
+  gap: 5px;
   margin: 0;
   padding: 0 2px;
   border: none;

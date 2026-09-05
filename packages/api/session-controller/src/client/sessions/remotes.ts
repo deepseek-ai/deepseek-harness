@@ -5,8 +5,8 @@
  * @module @deepseek-ai/dsh-api-session-controller/client/sessions/remotes
  */
 
-import type { EncodedImageAttachment } from '@deepseek-ai/dsh-attachment/types'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
+import type { CommandSubmitAttachment } from '@deepseek-ai/dsh-commands/types'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type {
   SubagentCatalog, SubagentInterruptReceipt, SubagentPromptReceipt, SubagentPromptRequest,
@@ -19,7 +19,7 @@ export interface SessionCommandsRemote {
   execute(
     agentId: SessionId,
     line: string,
-    images: readonly EncodedImageAttachment[],
+    attachments: readonly CommandSubmitAttachment[],
     signal?: AbortSignal,
   ): Promise<RemoteResult<object | undefined>>
 }

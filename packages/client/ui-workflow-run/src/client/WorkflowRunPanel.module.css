@@ -184,9 +184,15 @@
 }
 
 .memberButton .memberLabel {
-  color: var(--dsw-alias-state-business-primary);
-  text-decoration: underline;
-  text-underline-position: from-font;
+  color: var(--dsw-alias-link);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.memberButton:hover .memberLabel,
+.memberButton:focus-visible .memberLabel {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
 }
 
 .dotSlot {

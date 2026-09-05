@@ -67,7 +67,11 @@ export interface SessionProjectionBaseline {
 export type SessionProjectionValues = Partial<SessionProjectionMap>
   & Readonly<Record<string, SessionProjectionValue>>
 
-/** Browser-submitted prompt content; the Host promotes image bytes to durable references. */
+/**
+ * Browser-submitted prompt content; the Host promotes image bytes to durable
+ * references. File parts carry the opaque receipt returned by a preceding
+ * `uploadFile` call on the same Session.
+ */
 export type PromptContentPart =
   | { readonly type: 'text'; readonly text: string }
   | {
@@ -76,6 +80,7 @@ export type PromptContentPart =
     readonly data: string
     readonly name?: string
   }
+  | { readonly type: 'file'; readonly receiptId: Branded<'file-upload-receipt-id'> }
 
 /** Complete model selection for one Session. */
 export interface ModelSelection {

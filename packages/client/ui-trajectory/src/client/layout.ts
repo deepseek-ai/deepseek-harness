@@ -125,10 +125,15 @@ function inputCellDetail(node: InputNode, t: TrajectoryTranslate): Pick<
   const preview = previewContent(node.content)
   const previewMarkdown = preview === '' ? undefined : preview
   const images = imageBlockCount(node.content)
-  return {
-    text: previewMarkdown === undefined && images > 0
+  const files = fileBlockCount(node.content)
+  const attachmentSummary = [
+    previewMarkdown === undefined && images > 0
       ? t('layout.imageOnly', { count: images })
-      : '',
+      : undefined,
+    files > 0 ? t('layout.fileAttachments', { count: files }) : undefined,
+  ].filter((value): value is string => value !== undefined).join(' · ')
+  return {
+    text: attachmentSummary,
     ...(previewMarkdown === undefined ? {} : { previewMarkdown }),
     sourceSeq: node.seq,
     messageSource: node.source,
@@ -846,6 +851,10 @@ function sourceBlock(value: unknown): TrajectorySourceBlock {
 
 function imageBlockCount(content: readonly { type: string }[]): number {
   return content.filter(block => block.type === 'image').length
+}
+
+function fileBlockCount(content: readonly { type: string }[]): number {
+  return content.filter(block => block.type === 'file').length
 }
 
 function stringifySourceValue(value: unknown): string {

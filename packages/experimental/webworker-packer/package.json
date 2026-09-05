@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-webworker-packer",
   "description": "Build-time packer for the browser runtime's base VFS image and ordered data-overlay archives",
-  "version": "0.1.2-rc.1",
+  "version": "0.1.3-alpha.1",
   "private": true,
   "repository": {
     "type": "git",

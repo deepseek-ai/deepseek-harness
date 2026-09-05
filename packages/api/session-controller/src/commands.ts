@@ -4,8 +4,12 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
-import { AttachmentError, admitPromptContent } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError } from '@deepseek-ai/dsh-attachment'
+import type {
+  AttachmentAdmissionPart, FileAttachmentRef, ImageAttachmentRef,
+} from '@deepseek-ai/dsh-attachment'
+import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
+import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
   ReasoningEffortId, createUserMessage, expandAssistantStream, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
@@ -44,6 +48,7 @@ import type {
   SessionSelectModelValue,
   SessionUpdateQueueRequest,
   SessionUpdateQueueValue,
+  SessionRequestId,
 } from './types.ts'
 
 interface SessionReadState {
@@ -297,6 +302,7 @@ export class SessionCommandController {
       )
     }
     const agent = await this.resolveAgent(request.sessionId)
+    if (hasPromptRequest(agent, request.requestId)) return { accepted: true }
     const selection = this.agents.selectionFor(agent).current
     if (!routeServed(this.ctx, selection.provider)) {
       throw new RemoteError(
@@ -324,10 +330,23 @@ export class SessionCommandController {
             )
           }
         }
-        const content = await admitPromptContent(this.ctx.attachments, request.content)
+        const admission = resolvePromptFileReceipts(
+          request.content,
+          receiptId => this.ctx.fileUploads.resolve(agent, receiptId),
+        )
+        const content = await this.ctx.attachments.admitPromptContent(admission.content)
         const message: UserMessage = createUserMessage({ content, source })
+        if (this.ctx.agents.get(agent.id) !== agent) {
+          throw new RemoteError(
+            'session/not-found',
+            `session "${agent.id}" was disposed during prompt admission`,
+            { sessionId: agent.id },
+          )
+        }
+        using binding = this.ctx.fileUploads.bindPrompt(agent, admission.receiptIds, request.requestId)
         if (request.mode === 'steer') agent.steer(message)
         else agent.followup(message)
+        binding.commit()
       } catch (error) {
         if (remoteErrorOf(error) !== undefined) throw error
         if (error instanceof AttachmentError) {
@@ -421,6 +440,12 @@ export class SessionCommandController {
       }))
     } else {
       agent.inbox.remove(request.itemId)
+      if (request.action.kind === 'remove') {
+        const source = message.source
+        if (source.kind === 'user' && 'rpcId' in source) {
+          this.ctx.fileUploads.retirePrompt(agent, source.rpcId)
+        }
+      }
       if (request.action.kind === 'steer') agent.steer(message)
     }
     return { accepted: true }
@@ -497,6 +522,39 @@ export class SessionCommandController {
   }
 }
 
+function resolvePromptFileReceipts(
+  content: SessionPromptRequest['content'],
+  stagedFile: (receiptId: FileUploadReceiptId) => FileAttachmentRef | undefined,
+): { readonly content: AttachmentAdmissionPart[]; readonly receiptIds: readonly FileUploadReceiptId[] } {
+  const receiptIds = new Set<FileUploadReceiptId>()
+  const resolved = content.map((part): AttachmentAdmissionPart => {
+    if (part.type !== 'file') return part
+    const attachment = stagedFile(part.receiptId)
+    if (attachment === undefined) {
+      throw new RemoteError(
+        'session/attachment-invalid',
+        'File was not uploaded for this session.',
+        { reason: 'FILE_NOT_STAGED' },
+      )
+    }
+    receiptIds.add(part.receiptId)
+    return { type: 'file', attachment }
+  })
+  return { content: resolved, receiptIds: [...receiptIds] }
+}
+
+function hasPromptRequest(agent: Agent, requestId: SessionRequestId): boolean {
+  const matches = (message: UserMessage): boolean => {
+    const source = message.source
+    return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
+  }
+  if (agent.inbox.nextTurn.some(matches) || agent.inbox.nextStep.some(matches)) return true
+  return agent.session.snapshotEvents().some((event) => {
+    if (event.type !== 'user/message') return false
+    const source = event.data.source
+    return source.kind === 'user' && 'rpcId' in source && source.rpcId === requestId
+  })
+}
 function imageBlockIn(
   content: unknown,
   match: (ref: ImageAttachmentRef) => boolean,

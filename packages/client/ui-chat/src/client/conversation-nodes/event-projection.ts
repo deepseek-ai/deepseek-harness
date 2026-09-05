@@ -89,6 +89,17 @@ export function sessionRecallLabels(source: unknown): string[] {
 }
 
 /**
+ * Read the skill name a durable skill-invocation injection loaded.
+ * @param source - Logged `user/message` source.
+ * @returns The skill name, or null for every other source.
+ */
+export function skillInvocationName(source: unknown): string | null {
+  const record = asRecord(source)
+  if (record === null || readString(record, 'kind') !== 'skill-invocation') return null
+  return readString(record, 'name')
+}
+
+/**
  * Classify finalized Assistant content for Chat rendering.
  * @param content - Core content blocks.
  * @returns Chat blocks in source order.

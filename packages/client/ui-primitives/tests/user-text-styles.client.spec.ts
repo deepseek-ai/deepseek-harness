@@ -24,4 +24,13 @@ describe('user-text.module.css font-size axis', () => {
       'height: 1em',
     ]))
   })
+
+  it('sets slash chips in the code face at the consumer size', () => {
+    // Skill and command tokens read as code — the family the theme publishes
+    // for code — while the size and line height stay the consumer's, so the
+    // chip rides the bubble line like the plain runs around it.
+    const slashChip = declarations('.slashChip')
+    expect(slashChip.some(declaration => /^font-family: var\(--dsw-font-/.test(declaration))).toBe(true)
+    expect(slashChip.some(declaration => /^(font|font-size|line-height):/.test(declaration))).toBe(false)
+  })
 })

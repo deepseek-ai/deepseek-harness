@@ -205,6 +205,73 @@ describe('LlmRuntime', () => {
     expect(adapter.lastOptions?.messages[0]).toBe(message)
   })
 
+  it('projects file blocks through every host-path availability outcome', async () => {
+    const attachment = {
+      attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`),
+      name: 'notes.txt',
+      bytes: 3,
+    }
+    const cases = [
+      {
+        name: 'native tools under read-only permission receive the mapped read path',
+        attachments: { fileHostPath: () => '/host/notes.txt' },
+        fs: { processPathFromHostPath: () => '/sandbox/notes.txt' },
+        expected: '"/sandbox/notes.txt"',
+      },
+      {
+        name: 'Code Mode under workspace-write permission receives the same mapped read path',
+        attachments: { fileHostPath: () => '/host/notes.txt' },
+        fs: { processPathFromHostPath: () => '/code-sandbox/notes.txt' },
+        expected: '"/code-sandbox/notes.txt"',
+      },
+      {
+        name: 'missing attachment service',
+        expected: 'current execution environment cannot access a readable path',
+      },
+      {
+        name: 'provider without a host path',
+        attachments: { fileHostPath: () => undefined },
+        expected: 'current execution environment cannot access a readable path',
+      },
+      {
+        name: 'invalid durable reference',
+        attachments: { fileHostPath: () => { throw new Error('invalid ref') } },
+        expected: 'current execution environment cannot access a readable path',
+      },
+      {
+        name: 'missing filesystem mapping',
+        attachments: { fileHostPath: () => '/host/notes.txt' },
+        expected: 'current execution environment cannot access a readable path',
+      },
+    ]
+
+    for (const fixture of cases) {
+      const ctx = new Context()
+      if (fixture.attachments !== undefined) ctx.provide('attachments', fixture.attachments as never)
+      if (fixture.fs !== undefined) ctx.provide('fs', fixture.fs as never)
+      await ctx.plugin(LlmRuntime)
+      const adapter = new RecordingAdapter(SCRIPT)
+      ctx.llm.registerAdapter(['test-provider'], adapter)
+
+      await collect(ctx.llm.stream({
+        provider: 'test-provider',
+        model: 'test-model',
+        messages: [createUserMessage({
+          content: [{ type: 'file', attachment }],
+          source: { kind: 'user' },
+        })],
+      }))
+
+      const projected = adapter.lastOptions?.messages[0]?.content[0]
+      expect(projected, fixture.name).toMatchObject({ type: 'text' })
+      if (projected?.type !== 'text') throw new Error(`expected projected text for ${fixture.name}`)
+      expect(projected.text, fixture.name).toContain(fixture.expected)
+      if (fixture.fs !== undefined) {
+        expect(projected.text, fixture.name).toContain('include this saved path in the delegation prompt')
+      }
+    }
+  })
+
   it('captures provider-owned retry policy at registration and defaults omission', async () => {
     const configured = resolveRetryPolicy({ mode: 'always' }, 'test retryPolicy')
     const adapter = new class extends ScriptedAdapter {

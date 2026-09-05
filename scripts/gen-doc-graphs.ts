@@ -108,6 +108,14 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content.',
   },
   {
+    key: 'fileUploads',
+    pkg: 'client-file-upload',
+    title: 'Agent-scoped staged file uploads',
+    mode: 'core',
+    consumers: ['api-session-controller'],
+    note: 'Owns streaming intake, durable storage, and staged receipt lifetime; the Session controller binds receipts to accepted submissions.',
+  },
+  {
     key: 'llm',
     pkg: 'llm',
     title: 'LLM adapter registry',

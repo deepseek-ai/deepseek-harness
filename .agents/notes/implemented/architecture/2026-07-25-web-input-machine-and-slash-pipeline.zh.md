@@ -67,8 +67,8 @@ skill/@subagent 引用不走占位符 + occurrence 身份链——纯文本引�
 
 - PickOutcome 增 `{text}` arm；新 scoped bail 事件 `slash/input-insert-text` `{text, span}`（与另三个同约定：draftRev CAS、返回 true ⟺ 实际改写）；facade.insertText 走 setDraft 拼接，机器零改动。
 - source 可选 `lexicon?(session)` 钩子：同步热快照名录，`undefined` = 数据未热——零装饰、永不触发 fetch（渲染路径保持同步无副作用）；配对的可选 `subscribeLexicon?(session, listener)` 钩子是名录在 warm 之后仍会变化（目录 settle、子代生灭）时的失效通道。controller 把各名录聚合进自己的 `lexicon` 快照 store（每次 source 通知重拉）；scope 出生后才注册的 source 由服务广播给活 controller，补 warm 并并入名录。
-- `decorations.scanTextRefs`：词边界扫描 draft（行首/空白后的 `/name`、`@name`，`x/name` 永不命中）对照名录，命中即成为 Lexical 树中的 `TextRefNode` 实体（claim 装饰对行首 token 席位有优先权——见 [Lexical composer note](2026-08-20-web-composer-lexical-editor.zh.md)）；编辑破坏匹配形状时实体还原为普通文本。
-- 发送即原文（不再 `<skill>` 序列化）；气泡侧 MessageItem 双形状装饰（legacy `<skill>` 标签 + 纯文本 token）。
+- `decorations.scanTextRefs`：词边界扫描 draft（行首/空白后的 `/name`、`@name`，`x/name` 永不命中；`/name` token 还必须止于空白或 draft 末尾——与宿主 skill gesture 同样以空白为界，因此 `/nfs-hg/xxx` 是路径、`/plan。` 是普通文本；ui-primitives 中已发送文本的投影 `projectUserText` 采用同一形状）对照名录，命中即成为 Lexical 树中的 `TextRefNode` 实体（claim 装饰对行首 token 席位有优先权——见 [Lexical composer note](2026-08-20-web-composer-lexical-editor.zh.md)）；编辑破坏匹配形状时实体还原为普通文本。
+- 发送即原文（不再 `<skill>` 序列化）；气泡侧 `projectUserText` 只在同一步骤记录了该名字的 `skill-invocation` 注入时才装饰纯文本 `/name` token——ui-chat 的 `SkillNameProjector` 把该步骤注入的 skill 名挂到直接消息节点上，与 recall 投影挂会话标签的方式相同——因此 `/123` 或随手敲的 `/词` 保持普通文本；指令输入气泡（ui-goal）以同样方式指明其已执行的指令，把 token 渲染为 `command` chip；`@name` token 仍按形状装饰。
 - 装饰响应性：shell 订阅 controller 的 lexicon store，每次名录变化重扫全文档，scope 出生预热后才 settle 的名录会直接点亮已有 draft token，无需菜单交互或无关重渲染。
 
 ### 每会话供数贡献与键盘私面

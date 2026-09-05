@@ -953,6 +953,21 @@
     },
     {
       "doc": "docs/subsystems/attachment.md",
+      "symbol": "PromptContentPart",
+      "source": "packages/attachment/attachment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/attachment.md",
+      "symbol": "AttachmentAdmissionPart",
+      "source": "packages/attachment/attachment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/attachment.md",
+      "symbol": "AdmittedPromptContentPart",
+      "source": "packages/attachment/attachment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/attachment.md",
       "symbol": "EncodedImageAttachment",
       "source": "packages/attachment/attachment/src/types.ts"
     },

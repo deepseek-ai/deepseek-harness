@@ -466,7 +466,7 @@ describe('CommandRuntime', () => {
   })
 })
 
-describe('image attachments', () => {
+describe('command attachments', () => {
   const PNG = 'AAAA'
 
   function storeOf() {
@@ -482,6 +482,12 @@ describe('image attachments', () => {
         return Promise.resolve({
           attachmentId: `att-${saved}`, mediaType: input.mediaType, bytes: 3, width: 1, height: 1,
           ...input.name === undefined ? {} : { name: input.name },
+        })
+      }),
+      saveFile: vi.fn((input: { data: Uint8Array; name?: string }) => {
+        saved += 1
+        return Promise.resolve({
+          attachmentId: `att-${saved}`, bytes: input.data.byteLength, name: input.name ?? 'attachment',
         })
       }),
       validateImageBatch(inputs: readonly unknown[]) {
@@ -501,8 +507,8 @@ describe('image attachments', () => {
   function accepting(handler: CommandDefinition['handler']): CommandDefinition {
     return {
       name: 'vision',
-      description: 'accepts images',
-      input: { hint: '<objective>', images: true },
+      description: 'accepts attachments',
+      input: { hint: '<objective>', attachments: true },
       handler,
     }
   }
@@ -511,32 +517,32 @@ describe('image attachments', () => {
     const ctx = await mount()
     expect(() => ctx.commands.register({
       ...command('flag-type'),
-      input: { hint: 'x', images: 'yes' },
-    } as unknown as CommandDefinition)).toThrow('command "flag-type" input images flag must be a boolean')
+      input: { hint: 'x', attachments: 'yes' },
+    } as unknown as CommandDefinition)).toThrow('command "flag-type" input attachments flag must be a boolean')
   })
 
-  it('lists images acceptance on the descriptor and omits a false flag', async () => {
+  it('lists attachment acceptance on the descriptor and omits a false flag', async () => {
     const ctx = await mount()
     const { agent } = await mintAgentScope(ctx, 'a')
     ctx.commands.register(accepting(() => ({ kind: 'success' })))
-    ctx.commands.register({ ...command('plain-input'), input: { hint: 'x', images: false } })
+    ctx.commands.register({ ...command('plain-input'), input: { hint: 'x', attachments: false } })
     const byName = new Map(ctx.commands.list(agent).map(descriptor => [descriptor.name, descriptor]))
-    expect(byName.get('vision')?.input).toEqual({ hint: '<objective>', images: true })
+    expect(byName.get('vision')?.input).toEqual({ hint: '<objective>', attachments: true })
     expect(byName.get('plain-input')?.input).toEqual({ hint: 'x' })
   })
 
-  it('settles images sent to a non-declaring command as a logged error before the handler', async () => {
+  it('settles attachments sent to a non-declaring command as a logged error before the handler', async () => {
     const ctx = await mount()
     const { agent } = await mintAgentScope(ctx, 'a')
     const handler = vi.fn(() => ({ kind: 'success' as const }))
     ctx.commands.register({ ...command('deploy'), handler })
     const execution = await ctx.commands.execute(
-      agent, '/deploy now', [{ mediaType: 'image/png', data: PNG }], new AbortController().signal)
-    expect(execution?.result).toEqual({ kind: 'error', text: '/deploy does not accept image attachments' })
+      agent, '/deploy now', [{ type: 'image', mediaType: 'image/png', data: PNG }], new AbortController().signal)
+    expect(execution?.result).toEqual({ kind: 'error', text: '/deploy does not accept attachments' })
     expect(handler).not.toHaveBeenCalled()
     expect(lifecycleOf(agent)).toMatchObject([
       { type: 'command/run', data: { name: 'deploy' } },
-      { type: 'command/done', data: { kind: 'error', text: '/deploy does not accept image attachments' } },
+      { type: 'command/done', data: { kind: 'error', text: '/deploy does not accept attachments' } },
     ])
   })
 
@@ -545,32 +551,70 @@ describe('image attachments', () => {
     const { agent } = await mintAgentScope(ctx, 'a')
     ctx.commands.register(accepting(() => ({ kind: 'success' })))
     const execution = await ctx.commands.execute(
-      agent, '/vision x', [{ mediaType: 'image/png', data: PNG }], new AbortController().signal)
+      agent, '/vision x', [{ type: 'image', mediaType: 'image/png', data: PNG }], new AbortController().signal)
     expect(execution?.result).toEqual({
       kind: 'error',
-      text: '/vision: image attachments are unavailable because no attachment store is composed',
+      text: '/vision: attachments are unavailable because no attachment store is composed',
     })
   })
 
-  it('admits and hands the handler frozen ordered image blocks; plain invocations stay empty', async () => {
+  it('admits a mixed batch in selection order and keeps plain invocations empty', async () => {
     const ctx = await mount()
     ctx.provide('attachments', storeOf())
     const { agent } = await mintAgentScope(ctx, 'a')
+    ctx.commands.registerFileReceiptResolver((_receivingAgent, receiptId) => receiptId === 'receipt-notes'
+      ? { attachmentId: 'file-notes' as never, name: 'notes.txt', bytes: 5 }
+      : undefined)
     const seen = vi.fn((invocation: { attachments: readonly unknown[] }) => {
       expect(Object.isFrozen(invocation.attachments)).toBe(true)
       return { kind: 'success' as const }
     })
     ctx.commands.register(accepting(seen))
     await ctx.commands.execute(agent, '/vision x', [
-      { mediaType: 'image/png', data: PNG, name: 'a.png' },
-      { mediaType: 'image/png', data: PNG, name: 'b.png' },
+      { type: 'image', mediaType: 'image/png', data: PNG, name: 'a.png' },
+      { type: 'file', receiptId: 'receipt-notes' },
+      { type: 'image', mediaType: 'image/png', data: PNG, name: 'b.png' },
     ], new AbortController().signal)
     const invocation = seen.mock.calls[0]?.[0] as { attachments: ReadonlyArray<{ type: string; attachment: { name?: string } }> }
     expect(invocation.attachments.map(block => [block.type, block.attachment.name])).toEqual([
-      ['image', 'a.png'], ['image', 'b.png'],
+      ['image', 'a.png'], ['file', 'notes.txt'], ['image', 'b.png'],
     ])
     await ctx.commands.execute(agent, '/vision y', [], new AbortController().signal)
     expect((seen.mock.calls[1]?.[0] as { attachments: readonly unknown[] }).attachments).toEqual([])
+  })
+
+  it('requires a same-session file receipt resolver and keeps its registration single-owner', async () => {
+    const ctx = await mount()
+    const store = storeOf()
+    ctx.provide('attachments', store)
+    const { agent } = await mintAgentScope(ctx, 'a')
+    const handler = vi.fn(() => ({ kind: 'success' as const }))
+    ctx.commands.register(accepting(handler))
+    const missing = await ctx.commands.execute(
+      agent, '/vision x', [{ type: 'file', receiptId: 'missing' }], new AbortController().signal)
+    expect(missing?.result).toEqual({
+      kind: 'error', text: 'File upload receipt is unknown for this session.',
+    })
+    expect(handler).not.toHaveBeenCalled()
+    const mixed = await ctx.commands.execute(agent, '/vision x', [
+      { type: 'image', mediaType: 'image/png', data: PNG },
+      { type: 'file', receiptId: 'missing' },
+    ], new AbortController().signal)
+    expect(mixed?.result).toEqual({
+      kind: 'error', text: 'File upload receipt is unknown for this session.',
+    })
+    expect(store.saveImage).not.toHaveBeenCalled()
+
+    const first = vi.fn(() => undefined)
+    const disposeFirst = ctx.commands.registerFileReceiptResolver(first)
+    expect(() => ctx.commands.registerFileReceiptResolver(() => undefined))
+      .toThrow('commands: a file receipt resolver is already registered')
+    disposeFirst()
+    const disposeSecond = ctx.commands.registerFileReceiptResolver(() => undefined)
+    disposeFirst()
+    expect(() => ctx.commands.registerFileReceiptResolver(() => undefined))
+      .toThrow('commands: a file receipt resolver is already registered')
+    disposeSecond()
   })
 
   it('settles an admission limit failure as a logged error result', async () => {
@@ -579,7 +623,7 @@ describe('image attachments', () => {
     const { agent } = await mintAgentScope(ctx, 'a')
     const handler = vi.fn(() => ({ kind: 'success' as const }))
     ctx.commands.register(accepting(handler))
-    const three = [1, 2, 3].map(() => ({ mediaType: 'image/png' as const, data: PNG }))
+    const three = [1, 2, 3].map(() => ({ type: 'image' as const, mediaType: 'image/png' as const, data: PNG }))
     const execution = await ctx.commands.execute(agent, '/vision x', three, new AbortController().signal)
     expect(execution?.result).toEqual({ kind: 'error', text: 'Image batch exceeds the configured image-count limit.' })
     expect(handler).not.toHaveBeenCalled()
@@ -601,7 +645,7 @@ describe('image attachments', () => {
     const handler = vi.fn(() => ({ kind: 'success' as const }))
     ctx.commands.register(accepting(handler))
     await expect(ctx.commands.execute(
-      agent, '/vision x', [{ mediaType: 'image/png', data: PNG }], controller.signal,
+      agent, '/vision x', [{ type: 'image', mediaType: 'image/png', data: PNG }], controller.signal,
     )).rejects.toThrow('operator cancelled during admission')
     expect(handler).not.toHaveBeenCalled()
     expect(lifecycleOf(agent).at(-1)).toMatchObject({
@@ -618,7 +662,7 @@ describe('image attachments', () => {
     const { agent } = await mintAgentScope(ctx, 'a')
     ctx.commands.register(accepting(() => ({ kind: 'success' })))
     await expect(ctx.commands.execute(
-      agent, '/vision x', [{ mediaType: 'image/png', data: PNG }], new AbortController().signal,
+      agent, '/vision x', [{ type: 'image', mediaType: 'image/png', data: PNG }], new AbortController().signal,
     )).rejects.toThrow('disk gone')
     expect(lifecycleOf(agent).at(-1)).toMatchObject({
       type: 'command/done',

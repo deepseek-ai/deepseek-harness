@@ -73,21 +73,29 @@ describe('Session queue snapshot intake', () => {
     ])
   })
 
-  it('marks mixed-content messages non-editable and keeps image blocks out of the text preview', () => {
+  it('marks mixed-content messages non-editable and keeps attachment blocks out of the text preview', () => {
     const session = makeSession()
     session.handleControlFrame(queueFrame([{
       id: 'q-image',
       body: '',
-      content: [{ type: 'text', text: 'hi' }, { type: 'image', data: 'x' } as never],
+      content: [
+        { type: 'text', text: 'hi' },
+        { type: 'image', data: 'x' } as never,
+        { type: 'file', attachment: { attachmentId: 'file-1', name: 'notes.txt', bytes: 5 } } as never,
+      ],
     }]))
     const queue = session.getSnapshot().queue
     expect(typeof queue[0]?.messageId).toBe('string')
     expect(queue).toMatchObject([
       {
         id: 'q-image', placement: 'queued',
-        content: [{ type: 'text', text: 'hi' }, { type: 'image', data: 'x' }],
-        // Image blocks render as thumbnails from `content`, so the preview
-        // carries only the text; non-image foreign blocks keep their marker.
+        content: [
+          { type: 'text', text: 'hi' },
+          { type: 'image', data: 'x' },
+          { type: 'file', attachment: { attachmentId: 'file-1', name: 'notes.txt', bytes: 5 } },
+        ],
+        // Attachment blocks render from `content`, so the preview carries
+        // only text; other foreign blocks keep their marker.
         preview: 'hi', text: null,
       },
     ])

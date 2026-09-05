@@ -33,25 +33,41 @@ type StubListener = (event: { data?: unknown; message?: string }) => void
 function stubWorker(): {
   worker: Worker
   sent: { t: string; id: number }[]
+  transfers: Transferable[][]
   deliver: (frame: unknown) => void
   fail: (message: string) => void
 } {
   const listeners: StubListener[] = []
   const errorListeners: StubListener[] = []
   const sent: { t: string; id: number }[] = []
+  const transfers: Transferable[][] = []
   const worker = {
     addEventListener: (type: string, listener: StubListener) => {
       if (type === 'message') listeners.push(listener)
       if (type === 'error') errorListeners.push(listener)
     },
-    postMessage: (frame: unknown) => { sent.push(frame as { t: string; id: number }) },
+    postMessage: (frame: unknown, transfer?: Transferable[]) => {
+      sent.push(frame as { t: string; id: number })
+      transfers.push(transfer ?? [])
+    },
   } as unknown as Worker
   return {
     worker,
     sent,
+    transfers,
     deliver: (frame) => { for (const listener of listeners) listener({ data: frame }) },
     fail: (message) => { for (const listener of errorListeners) listener({ message }) },
   }
+}
+
+// ReadableStream request bodies transfer ownership instead of copying chunks on the page.
+{
+  const { worker, sent, transfers } = stubWorker()
+  const tunnel = new WorkerTunnel(worker)
+  const body = new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
+  void tunnel.fetch('/upload', { method: 'POST', body, duplex: 'half' } as RequestInit)
+  check('a stream request body stays intact', (sent[0] as unknown as { body: unknown }).body, body)
+  check('a stream request body is transferred', transfers[0], [body])
 }
 
 // The opening frame preserves overlay order for deterministic pre-boot mounts.
@@ -98,6 +114,15 @@ function stubWorker(): {
   const response = tunnel.fetch('/api/session.delete', { method: 'POST' })
   deliver({ t: 'res', id: 1, status: 204, headers: {} })
   check('204 resolves with a null body', (await response).body, null)
+}
+
+// Blob bodies remain Blob-backed across the page-to-Host Worker handoff.
+{
+  const { worker, sent } = stubWorker()
+  const tunnel = new WorkerTunnel(worker)
+  const body = new Blob(['large'])
+  void tunnel.fetch('/upload', { method: 'POST', body })
+  check('a Blob request body stays opaque', (sent[0] as unknown as { body: unknown }).body, body)
 }
 
 // A streamed reply reassembles in order and closes.

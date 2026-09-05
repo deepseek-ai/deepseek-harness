@@ -1,9 +1,0 @@
-.text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  /* Font metrics inherit from the consumer's container (bubble 16/24,
-     assistant flow 16/28) — a generic text primitive must not pin its own
-     size, or every consumer's line grid breaks (44px bubble spec regression). */
-  font-size: inherit;
-  line-height: inherit;
-}

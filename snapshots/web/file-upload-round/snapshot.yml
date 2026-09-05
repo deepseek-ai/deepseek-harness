@@ -1,0 +1,9 @@
+version: 1
+scenario: file-upload-round
+profile: web
+composition: web-default
+recording: live
+header:
+  class: web-default
+replay:
+  override: true

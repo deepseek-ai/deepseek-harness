@@ -1402,7 +1402,7 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
-  it('materializes series starts and system changes but not same-series config or tool changes', () => {
+  it('materializes series starts and system changes but not unchanged resumes, config, or tool changes', () => {
     const tools = [{ name: 'read', description: 'Read', parameters: { type: 'object' } }]
     const expandedTools = [...tools, { name: 'write', description: 'Write', parameters: { type: 'object' } }]
     const value = assembler([
@@ -1458,7 +1458,6 @@ describe('built-in conversation node Definitions', () => {
     expect(prompts.map(prompt => ({ anchorSeq: prompt.anchorSeq, data: prompt.data }))).toEqual([
       { anchorSeq: 1, data: { text: '# Initial' } },
       { anchorSeq: 4, data: { text: '# Initial' } },
-      { anchorSeq: 5, data: { text: '# Initial' } },
       { anchorSeq: 6, data: { text: '# Updated' } },
     ])
 
@@ -1480,18 +1479,20 @@ describe('built-in conversation node Definitions', () => {
     windowed.prepend([
       at(5, 'request/header', {
         reason: 'initial',
-        header: { config: { provider: 'fake', model: 'fake' }, system: '# Original prompt' },
+        header: { config: { provider: 'fake', model: 'fake' }, system: '# Resumed prompt' },
       }),
     ], false)
     windowed.flush()
     const restored = snapshot(windowed)
-    const restoredPrompts = restored.order.flatMap((key) => {
-      const candidate = restored.nodes.get(key)
-      return candidate?.kind === 'system-prompt' ? [candidate] : []
-    })
-    expect(restoredPrompts.map(prompt => prompt.data)).toEqual([
-      { text: '# Original prompt' },
-      { text: '# Resumed prompt' },
+    const restoredPrompts = restored.nodes.values()
+      .filter(candidate => candidate.kind === 'system-prompt')
+    expect(restoredPrompts.map(prompt => ({
+      anchorSeq: prompt.anchorSeq,
+      visibility: prompt.visibility,
+      data: prompt.data,
+    })).sort((left, right) => left.anchorSeq - right.anchorSeq)).toEqual([
+      { anchorSeq: 5, visibility: 'visible', data: { text: '# Resumed prompt' } },
+      { anchorSeq: 10, visibility: 'hidden', data: { text: '# Resumed prompt' } },
     ])
   })
 
@@ -1764,6 +1765,58 @@ describe('built-in conversation node Definitions', () => {
       messageId: 'steering-reference',
       referenceLabels: ['Research notes'],
     })
+  })
+
+  it('associates a direct message with the skill invocations injected for its step', () => {
+    const skillInvocation = (id: string) => ({
+      ...textMessage(id, 'instructions'),
+      source: { kind: 'skill-invocation', name: 'demo-skill', form: 'instructions' },
+    })
+    const instructions = (id: string) => ({
+      ...textMessage(id, 'workspace rules'),
+      source: { kind: 'agent-instructions', changes: [{ path: 'AGENTS.md' }] },
+    })
+    const value = assembler([
+      at(1, 'turn/start', { turn: 1 }),
+      at(2, 'user/message', textMessage('gesture', '/demo-skill go'), { surfaceOp: 'append' }),
+      at(3, 'step/start', { turn: 1, step: 1 }),
+      at(4, 'user/message', instructions('rules-1'), { surfaceOp: 'append' }),
+      at(5, 'user/message', skillInvocation('skill-body'), { surfaceOp: 'append' }),
+      at(6, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: assistantMessage('answer-1', 'done'),
+      }, { surfaceOp: 'append' }),
+      at(7, 'step/end', { turn: 1, step: 1 }),
+      at(8, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
+      at(9, 'turn/start', { turn: 2 }),
+      at(10, 'user/message', textMessage('later', '/demo-skill again?'), { surfaceOp: 'append' }),
+      at(11, 'step/start', { turn: 2, step: 1 }),
+      at(12, 'user/message', instructions('rules-2'), { surfaceOp: 'append' }),
+    ])
+
+    const users = [...snapshot(value).nodes.values()].filter(candidate => candidate.kind === 'user')
+    expect(users).toHaveLength(2)
+    expect(users[0]?.data).toMatchObject({ skillNames: ['demo-skill'] })
+    expect(users[1]?.data).not.toHaveProperty('skillNames')
+  })
+
+  it('updates an already published direct node when its skill injection arrives', () => {
+    const value = assembler([
+      at(1, 'user/message', textMessage('gesture', '/demo-skill go'), { surfaceOp: 'append' }),
+    ])
+    const before = node(snapshot(value), 'user')
+    expect(before?.data).not.toHaveProperty('skillNames')
+
+    value.append(at(2, 'user/message', {
+      ...textMessage('skill-body', 'instructions'),
+      source: { kind: 'skill-invocation', name: 'demo-skill', form: 'instructions' },
+    }, { surfaceOp: 'append' }))
+    value.flush()
+
+    const after = node(snapshot(value), 'user')
+    expect(after?.key).toBe(before?.key)
+    expect(after?.data).toMatchObject({ skillNames: ['demo-skill'] })
   })
 
   it('keeps replacement copies out of Chat business nodes', () => {

@@ -20,11 +20,19 @@ export interface TokenSpan {
   readonly draftRev: number
 }
 
-/** Base64 image payload passed to a claimed command submission. */
-export interface SubmitImageAttachment {
-  readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
-  readonly data: string
-  readonly name?: string
+/** Attachment payload passed to a claimed command submission. */
+export type SubmitAttachment =
+  | {
+    readonly type: 'image'
+    readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+    readonly data: string
+    readonly name?: string
+  }
+  | { readonly type: 'file'; readonly receiptId: string }
+
+/** Command serialization result for one ordered attachment draft. */
+export interface DraftAttachmentSerializationResult {
+  readonly attachments: readonly SubmitAttachment[]
 }
 
 /** Settled result of a command or default composer submission. */
@@ -37,15 +45,15 @@ export interface SubmitOutcome {
 export interface CommandClaim {
   readonly token: string
   readonly hint?: string
-  readonly images?: boolean
+  readonly attachments?: boolean
   /**
    * Submit the claimed command.
    * @param args - command text after the claimed token.
    * @param actx - current Session scope.
-   * @param images - serialized draft images accepted by the claim.
+   * @param attachments - serialized draft attachments accepted by the claim.
    * @returns command settlement.
    */
-  submit(args: string, actx: Context, images: readonly SubmitImageAttachment[]): Promise<SubmitOutcome>
+  submit(args: string, actx: Context, attachments: readonly SubmitAttachment[]): Promise<SubmitOutcome>
 }
 
 /** Structured reference inserted by an input-trigger source. */
@@ -127,7 +135,7 @@ export interface InputTriggerController {
   adjudicate(
     line: string,
     signal: AbortSignal,
-    envelope: { readonly images: number },
+    envelope: { readonly attachments: number },
   ): Promise<PickOutcome>
   /** @param source - source name. @param hit - synthetic trigger hit. */
   toggleSource(source: string, hit: InputTriggerHit): void
@@ -162,7 +170,7 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 
-/** Browser-runtime identity of one unsent image draft. */
+/** Browser-runtime identity of one unsent attachment draft. */
 export type DraftAttachmentId = Branded<'DraftAttachmentId'>
 
 /**
@@ -181,12 +189,12 @@ export interface InputTarget {
 export interface SessionInput extends InputTarget {
   /** Replace the whole draft (persisted-draft seed and programmatic writes). */
   setDraft(text: string): void
-  /** Append ordered browser-owned image ids; busy admission phases refuse. */
-  addImages(ids: readonly DraftAttachmentId[]): boolean
-  /** Remove one browser-owned image id; busy admission phases refuse. */
-  removeImage(id: DraftAttachmentId): void
+  /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
+  addAttachments(ids: readonly DraftAttachmentId[]): boolean
+  /** Remove one browser-owned attachment id; busy admission phases refuse. @returns whether the id was removed. */
+  removeAttachment(id: DraftAttachmentId): boolean
   /** Drop ids whose browser-owned objects no longer exist. */
-  pruneImages(ids: readonly DraftAttachmentId[]): void
+  pruneAttachments(ids: readonly DraftAttachmentId[]): void
   /**
    * THE complexity sink: enter adjudication, submit transaction, and the default sink live inside.
    * @param mode - delivery intent retained through asynchronous adjudication and serialization.
@@ -221,12 +229,12 @@ export interface SessionInputResolver {
 export interface InputActions {
   /** Replace the whole draft (persisted-draft seed and programmatic writes). */
   setDraft(text: string): void
-  /** Append ordered browser-owned image ids; busy admission phases refuse. */
-  addImages(ids: readonly DraftAttachmentId[]): boolean
-  /** Remove one browser-owned image id; busy admission phases refuse. */
-  removeImage(id: DraftAttachmentId): void
+  /** Append ordered browser-owned attachment ids; busy admission phases refuse. */
+  addAttachments(ids: readonly DraftAttachmentId[]): boolean
+  /** Remove one browser-owned attachment id; busy admission phases refuse. */
+  removeAttachment(id: DraftAttachmentId): void
   /** Drop ids whose browser-owned objects no longer exist. */
-  pruneImages(ids: readonly DraftAttachmentId[]): void
+  pruneAttachments(ids: readonly DraftAttachmentId[]): void
   /** Enter submission (adjudication / claim transaction / default sink inside). */
   submit(): void
 }
@@ -321,13 +329,13 @@ export interface Occurrence {
 export interface InputState {
   /** Clipboard-text projection of the editor document (chips expanded to their clipboard form). */
   readonly draft: string
-  /** Ordered runtime-only image ids; bytes and URLs stay in ConversationController. */
-  readonly imageIds: readonly DraftAttachmentId[]
+  /** Ordered runtime-only attachment ids; browser objects stay in ConversationController. */
+  readonly attachmentIds: readonly DraftAttachmentId[]
   /** Monotonic editor revision (span CAS compares against this). */
   readonly draftRev: number
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
-  readonly claim?: { readonly token: string; readonly hint?: string; readonly images?: boolean }
+  readonly claim?: { readonly token: string; readonly hint?: string; readonly attachments?: boolean }
   /** Reference occurrence view of the editor's chips, sorted by offset. */
   readonly occurrences: readonly Occurrence[]
   /** Read-only transient inbox projection from Session control, including pending steering. */
@@ -369,7 +377,7 @@ export type InputEvent =
   | { readonly type: 'submit-settled'; readonly attempt: SubmitAttempt; readonly ok: boolean; readonly draft: string; readonly outcome?: SubmitOutcome; readonly message?: string }
   /** Settlement of one optimistic default send, independent of the frozen command slot. */
   | { readonly type: 'sink-settled'; readonly attempt: SubmitAttempt; readonly ok: boolean; readonly outcome?: SubmitOutcome; readonly message?: string }
-  /** Commit an image-only send whose empty draft did not need an attempt. */
+  /** Commit an attachment-only send whose empty draft did not need an attempt. */
   | { readonly type: 'send-committed' }
   | { readonly type: 'release' }
 
@@ -392,7 +400,7 @@ export type InputEffect =
    * Clear the committed draft in the editor and cut undo history. A string
    * snapshot keeps a pure suffix typed during the Host round-trip (content
    * appended after the sent snapshot survives; interleaved edits cannot be
-   * separated and clear whole); null clears unconditionally (image-only
+   * separated and clear whole); null clears unconditionally (attachment-only
    * sends have no draft to retain).
    */
   | { readonly type: 'commit-draft'; readonly retainSuffixOf: string | null }
