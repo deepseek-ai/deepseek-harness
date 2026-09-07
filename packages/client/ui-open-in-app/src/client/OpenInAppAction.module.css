@@ -1,0 +1,65 @@
+/* The split button sits beside the session-log capsule at the same compact
+   scale (26px tall, pill radius, hairline l4 border, 11px primary-color label). */
+
+.split {
+  display: inline-flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  height: 26px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 13px;
+  overflow: hidden;
+  font-family: var(--dsw-font-family);
+}
+
+.main,
+.chevron {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-primary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.main {
+  padding: 5px 6px 5px 7px;
+}
+
+.main:hover:not(:disabled),
+.main:focus-visible,
+.chevron:hover,
+.chevron:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.main:disabled {
+  color: var(--dsw-alias-label-dimmed);
+  cursor: wait;
+}
+
+.main[data-state='error'] {
+  color: var(--dsw-alias-state-error-primary);
+  box-shadow: inset 0 0 0 1px var(--dsw-alias-state-error-primary);
+}
+
+.chevron {
+  padding: 5px 6px 5px 4px;
+  border-left: 0.5px solid var(--dsw-alias-border-l4);
+  color: var(--dsw-alias-label-secondary);
+}
+
+.icon {
+  flex: none;
+}
+
+img.icon {
+  display: block;
+  object-fit: contain;
+  user-select: none;
+}

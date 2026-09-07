@@ -47,7 +47,17 @@ Run `dsh --profile my-profile "your task"` and you get a working agent with mode
 
 ### What you get
 
-Out of the box, every profile built on this core provides: a DeepSeek model connection (the provider and model are configurable, and you can enable extra providers from your settings), the full tool set — file editing, shell commands, web search, public HTTP(S) fetch, subagents, task and goal tracking — durable sessions that survive restarts, and the default permission policy that confines file writes to your workspace and asks before risky actions. Web fetch runs without per-call approval; its provider rejects non-public destinations. Telemetry stays off unless you opt in.
+Out of the box, every profile built on this core provides: a DeepSeek model connection (the provider and model are configurable, and you can enable extra providers from your settings), the full tool set — file editing, shell commands, web search, public HTTP(S) fetch, subagents, task and goal tracking — durable sessions that survive restarts, and the default permission policy that confines file writes to your workspace and asks before risky actions. Web fetch runs without per-call approval; its provider rejects non-public destinations. Feedback stays in the Session log. [OTel session upload](../../session/session-telemetry-otel/README.md) defaults to `FEEDBACK_ONLY` for all users, including `deepseek-official`: new text feedback, message ratings, edits, and withdrawals release the complete canonical prefix through that event, including context. Later records wait for the next explicit feedback; sending an authorized batch needs no further interaction or model call. `DISABLED` prevents OTel capture. The opt-in [DeepSeek session-log contributor](../../session/session-log-deepseek/README.md) remains a separate request path.
+
+Default file editing uses `read`, `write`, and `edit`. The optional `str_replace_editor` tool is selected independently by Web minimal and `sdk-minimal`. To add it to a base-backed profile, put this entry in the profile, home, or invocation patch:
+
+```yaml
+- insert:
+    - id: tool-str-replace-editor
+      name: '@deepseek-ai/dsh-tool-str-replace-editor'
+      config:
+        maxOutputChars: 16000
+```
 
 ### Shell tools per platform
 

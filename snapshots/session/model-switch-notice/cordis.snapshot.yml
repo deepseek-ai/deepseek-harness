@@ -1,0 +1,30 @@
+# Keyless replay keeps both recorded model routes in the replay catalog and
+# applies the same second-assembly selection change as the live composition.
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+                contextWindow: 1000000
+                defaultMaxTokens: 256000
+                reasoningEfforts: ['off', 'low', 'high', 'max']
+                defaultReasoningEffort: max
+              - id: deepseek-v4-pro
+                contextWindow: 1000000
+                defaultMaxTokens: 256000
+                reasoningEfforts: ['off', 'low', 'high', 'max']
+                defaultReasoningEffort: max
+
+    - id: model-switch-driver
+      name: './model-switch-driver.mjs'

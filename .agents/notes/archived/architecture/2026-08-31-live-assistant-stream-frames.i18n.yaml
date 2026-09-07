@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/architecture/2026-08-31-live-assistant-stream-frames.md
+2026-08-31-live-assistant-stream-frames.md: cf74bf0b37c06b02ed31dcb68ae1c9cd4860403c
+2026-08-31-live-assistant-stream-frames.zh.md: 5cbe5494e3a7e99a42501e5f8a88a0983d4b4b49

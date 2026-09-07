@@ -113,7 +113,7 @@ Every injected message carries a typed source with its change list; a complete b
 Read these pages when the package-level contract is not enough. They move from the instruction-file format to the design decision and the exhaustive configuration.
 
 - [Documentation standard](../../../docs/AGENTS.md) — what `AGENTS.md` instruction files contain and how they are maintained.
-- [Workspace-context decision record](../../../.agents/notes/implemented/feature/2026-06-24-workspace-context.md) — per-agent/session isolation and lifecycle rationale.
+- [Workspace-context decision record](../../../.agents/notes/archived/feature/2026-06-24-workspace-context.md) — per-agent/session isolation and lifecycle rationale.
 - [Context group map](../README.md) — sibling request-context packages.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-agent-instructions) — every accepted config field and its source declaration.
 

@@ -4,14 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import LlmRuntime from '@deepseek-ai/dsh-llm'
-import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import ToolRuntime from '@deepseek-ai/dsh-tools'
-import AgentRegistry from '@deepseek-ai/dsh-agent'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
 import * as WorkspaceContext from '@deepseek-ai/dsh-agent-instructions'
 import { candidateScopeKey } from '../src/render.ts'
@@ -38,12 +34,9 @@ async function harness(): Promise<{ ctx: Context; agent: Agent }> {
   await mkdir(join(workdir, '.git'), { recursive: true })
   await writeFile(join(workdir, 'AGENTS.md'), `If the user asks for the workspace context handshake, reply with exactly this string and nothing else: ${PROBE}.\n`)
   ctx = new Context()
-  await ctx.plugin(LlmRuntime)
-  await ctx.plugin(SessionStore)
-  await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, { persona: 'Answer the user exactly and concisely.' })
-  await ctx.plugin(ToolRuntime)
-  await ctx.plugin(AgentRegistry)
+  await mountAgentLoopTestDependencies(ctx, {
+    systemPrompt: { personaPrefix: 'Answer the user exactly and concisely.' },
+  })
   await ctx.plugin(LocalFileSystem, { cwd: '/' })
   await ctx.plugin(ToolFs)
   await ctx.plugin(WorkspaceContext, { maxBytes: 65536 })

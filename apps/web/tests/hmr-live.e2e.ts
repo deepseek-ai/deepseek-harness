@@ -78,7 +78,7 @@ function waitForOutput(child: SubprocessHandle, pattern: RegExp, label: string):
 async function stopTree(child: SubprocessHandle): Promise<void> {
   child.terminate()
   const stopped = await child.waitForExit(AbortSignal.timeout(15_000))
-  if (!stopped) throw new Error(`process tree ${String(child.pid)} did not stop after termination escalation`)
+  if (!stopped) throw new Error('managed process range did not stop after termination escalation')
   await child.done
 }
 

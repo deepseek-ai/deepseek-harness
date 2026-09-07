@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-typed locale namespace 与双语字典对等性可以证明已注册字典完整，却无法证明展示代码使用了字典。JSX 文本、无障碍属性、格式化函数返回值和 zero-Cordis 原子组件默认值都可能绕过 `t`，而全部 locale 检查仍保持绿色。[最初的全量接入决策](2026-07-30-client-locale-full-rollout.zh.md)中缓做或假定为语言无关的例外逐渐形成混合语言 UI，trajectory 检查面和通用工具卡尤为明显。
+typed locale namespace 与双语字典对等性可以证明已注册字典完整，却无法证明展示代码使用了字典。JSX 文本、无障碍属性、格式化函数返回值和 zero-Cordis 原子组件默认值都可能绕过 `t`，而全部 locale 检查仍保持绿色。[最初的全量接入决策](../../archived/architecture/2026-07-30-client-locale-full-rollout.md)中缓做或假定为语言无关的例外逐渐形成混合语言 UI，trajectory 检查面和通用工具卡尤为明显。
 
 ## Decision
 
@@ -18,7 +18,7 @@ typed locale namespace 与双语字典对等性可以证明已注册字典完整
 
 **`verify-client-ui-i18n` 强制源码归属。** 基于 TypeScript AST 的检查会发现每个包含 TSX 的 package `src/client` 目录树、`packages/client/ui-*` 下的所有辅助 TS 文件和 web 应用源码；它拒绝自然语言 JSX 文本、承载文案的属性与组件 prop、JSX 字面量分支、label/copy 数据、具名文案辅助函数、返回字符串的展示格式化函数和解构默认值。locale 字典 owner 与不可变语言 token 是严格的语法级排除项。发现范围缩窄会直接失败，单元 fixture 固定纳入与排除形态，检查加入静态 CI 与 `hygiene` 图。字典 key 对等性仍由独立检查负责：一道门禁证明文案进入 locale 路径，另一道门禁证明两种发布语言都实现该路径。
 
-[最初接入决策](2026-07-30-client-locale-full-rollout.zh.md)中的产品自产错误与设计字面量例外、原子组件默认文案和 trajectory 缓做均由本决定取代；其 label thunk、typed 席位、浏览器 locale、日期格式化和搜索占位行决定仍有效。
+[最初接入决策](../../archived/architecture/2026-07-30-client-locale-full-rollout.md)中的产品自产错误与设计字面量例外、原子组件默认文案和 trajectory 缓做均由本决定取代；其 label thunk、typed 席位、浏览器 locale、日期格式化和搜索占位行决定仍有效。
 
 ## Verification
 

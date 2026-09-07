@@ -16,4 +16,4 @@
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}
 {"type":"command/run","data":{"commandId":"{{command:1}}","name":"feedback","source":{"kind":"user"}}}
 {"type":"feedback/record","data":{"text":"the diff view is unreadable"}}
-{"type":"command/done","data":{"commandId":"{{command:1}}","kind":"success","text":"Feedback recorded for session {{session:1}}\nAnonymous user: {{anonymousUserId}}. Session sharing is enabled."}}
+{"type":"command/done","data":{"commandId":"{{command:1}}","kind":"success","text":"Feedback recorded for session {{session:1}}\nAnonymous user: {{anonymousUserId}}."}}

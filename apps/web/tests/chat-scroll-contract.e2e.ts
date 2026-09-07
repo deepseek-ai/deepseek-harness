@@ -660,6 +660,7 @@ describe('web e2e: long Chat scroll contract', () => {
         await liveRow.waitFor({ timeout: 15_000 })
         expect(await liveRow.getAttribute('data-state')).toBe('running')
         await expectBottom(world.page)
+        expect(await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).count()).toBe(0)
 
         await wheelTranscript(world.page, -1_200)
         await world.page.getByRole('button', { name: 'Back to bottom', exact: true }).waitFor({ timeout: 10_000 })

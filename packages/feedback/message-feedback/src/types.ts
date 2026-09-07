@@ -31,9 +31,34 @@ export interface MessageFeedbackItem {
   readonly updatedAt: number
 }
 
+/** A material creation or edit, retaining its complete current value. */
+export interface MessageFeedbackPut {
+  /** Owning Session; inherited feedback in a fork belongs to its parent. */
+  readonly sessionId: SessionId
+  /** Value after this mutation, including the original creation time. */
+  readonly item: MessageFeedbackItem
+}
+
+/** A material deletion of one current feedback item. */
+export interface MessageFeedbackDelete {
+  /** Session that owns the deleted feedback. */
+  readonly sessionId: SessionId
+  /** Message whose feedback was removed. */
+  readonly messageId: MessageId
+}
+
+declare module '@deepseek-ai/dsh-session/types' {
+  interface SessionEventMap {
+    /** Log-only human feedback; never enters model history. */
+    'feedback/message-put': MessageFeedbackPut
+    /** Log-only deletion; earlier ratings and notes remain in the log. */
+    'feedback/message-delete': MessageFeedbackDelete
+  }
+}
+
 /** Read all message feedback belonging to one persisted Session lifecycle. */
 export interface MessageFeedbackListRequest {
-  /** Persisted Session whose sidecar should be read. */
+  /** Session whose feedback events should be read. */
   readonly sessionId: SessionId
 }
 
@@ -59,7 +84,7 @@ export interface MessageFeedbackPutRequest {
 
 /** Delete feedback for one message after observing its current version. */
 export interface MessageFeedbackDeleteRequest {
-  /** Persisted Session that owns the sidecar. */
+  /** Session that owns the feedback. */
   readonly sessionId: SessionId
   /** Message whose feedback should be absent after this operation. */
   readonly messageId: MessageId

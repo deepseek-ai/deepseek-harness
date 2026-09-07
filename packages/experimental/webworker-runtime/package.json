@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-webworker-runtime",
   "description": "Browser-only harness runtime: in-memory VFS, module transform and loader, postMessage tunnel, and the dedicated Web Worker assembly, with the Node-compatibility layer that lets the host tree run unchanged",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "private": true,
   "repository": {
     "type": "git",

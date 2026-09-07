@@ -33,7 +33,7 @@ provider      dsh-fs-local      local implementation of ctx.fs
 
 The model is additive: bare `ctx.fs` performs atomic, unconstrained text I/O, while `dsh-fs-observation-policy` adds observed state, read-before-edit, and version guards. Removing the policy therefore leaves the tools usable but unconstrained. Shipped agent configs load the policy; the bare mode exists to keep policy optional at the service boundary, not as the normal deployment stance.
 
-The [filesystem absence-observation follow-up](../bug-fix/2026-08-09-filesystem-absence-observation.md) refines the recording payload from a success-only version to explicit present/absent state and requires guarded creation to publish without replacement. The event-gate ownership and no-I/O policy boundary remain unchanged.
+The [filesystem absence-observation follow-up](../../archived/bug-fix/2026-08-09-filesystem-absence-observation.md) refines the recording payload from a success-only version to explicit present/absent state and requires guarded creation to publish without replacement. The event-gate ownership and no-I/O policy boundary remain unchanged.
 
 `dsh-tool-fs` no longer injects `fileContext`. It injects `fs` and `tools`/`systemPrompt`.
 

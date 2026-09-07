@@ -26,7 +26,8 @@ export async function readPersistedSession(
 ): Promise<PersistedSessionView> {
   const handle = await persistence.open(id, 'read', { signal })
   try {
-    return { header: handle.header, inheritedEventCount: handle.inheritedEventCount, events: await handle.read(0, undefined, { signal }) }
+    const { events } = await handle.read(0, undefined, { signal })
+    return { header: handle.header, inheritedEventCount: handle.inheritedEventCount, events }
   } finally {
     await handle.close()
   }

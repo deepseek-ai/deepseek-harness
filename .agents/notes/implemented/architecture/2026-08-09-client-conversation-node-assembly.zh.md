@@ -335,11 +335,11 @@ Assistant streaming 到 final、Tool running 到 settled 始终留在同一个 S
 
 业务主动把已发布 Node 改成 hidden 时，它会退出 visible order，恢复 visible 时会重新 mount。这是明确的业务撤显语义，与 running→settled 的稳定 Seat 保证不同。
 
-具体 Tool renderer 仍由 [`ui-tool ownership decision`](2026-08-08-client-tool-presentation-ownership.zh.md) 约束。Tool Definition 只交付递归 root/subcall data，`ui-tool` 再按 Tool name keyed slot 分发具体表现。
+具体 Tool renderer 仍由 [`ui-tool ownership decision`](../../archived/architecture/2026-08-08-client-tool-presentation-ownership.md) 约束。Tool Definition 只交付递归 root/subcall data，`ui-tool` 再按 Tool name keyed slot 分发具体表现。
 
 Trajectory 针对与 Chat 相同的 Assembler 和 `SessionEventLikeEntry` window 注册自己的 target 与业务 Definition。它的 target builder 保留 stage-oriented read model，既不消费 Chat Builder 的 legacy slice，也不运行独立 history fold。Chat 与 Trajectory 分别维护独立的 scalar 和 packed Assistant reducer；target 专属 Definition 不改变共享的 Context、Reader 或 Location 契约。
 
-target 专属 Trajectory Definition、保留的 stage model、Steering 适配、复杂度上界与表现层热点由 [Trajectory Context 组装决策](2026-08-11-trajectory-conversation-context-assembly.zh.md)负责。
+target 专属 Trajectory Definition、保留的 stage model、Steering 适配、复杂度上界与表现层热点由 [Trajectory Context 组装决策](../../archived/architecture/2026-08-11-trajectory-conversation-context-assembly.md)负责。
 
 ## 运行时与渲染链路
 

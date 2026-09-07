@@ -44,7 +44,7 @@ ACP v1 SDK 客户端先初始化 `dsh --profile acp`，再用绝对 `cwd` 与可
 
 #### 模型看到什么
 
-在 base 的工具和上下文贡献之前，profile 提供 `You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.`。ACP 配置项的路由与每个 `session/new` 的 cwd 会解析其中的占位符。
+profile 在第一方指导之前提供 `You are a coding agent powered by the {{model}} model.`，并在独立的 persona 后缀中提供 `Your working directory is {{cwd}}.`。ACP 配置项的路由与每个 `session/new` 的 cwd 会解析其中的占位符。
 
 #### Token 影响
 

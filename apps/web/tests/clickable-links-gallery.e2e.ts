@@ -242,6 +242,7 @@ function galleryFixture(imageUrl: string): string {
       ...(call.meta === undefined ? {} : { meta: call.meta }),
     }, { surfaceOp: 'append', sourceEventSeqs: [source.seq] })
   }
+  session.append('step/end', { turn: 1, step: 1 })
   session.append('step/start', { turn: 1, step: 2 })
   session.append('assistant/message', {
     stream: [],

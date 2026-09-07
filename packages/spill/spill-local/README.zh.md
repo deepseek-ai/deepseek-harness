@@ -1,5 +1,5 @@
 ---
-description: "本地文件系统 spill 后端：spill 工具输出如何保存到私有会话级文件，并用 read 或 grep 取回。"
+description: "本地文件系统 spill 后端：spill 文本如何保存到私有会话级文件，并用 read 或 grep 取回。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-spill-local` 把工具的超大文本保存到宿主文件系统中私有的会话级文件，并以该文件路径作为定位信息返回，同时给出告诉模型读取或搜索它的取回指引。只要组合需要在与 agent 相同的机器上进行 spill 存储，就挂载它。文件对当前用户私有、名称不可预测，且每个会话的文件归入稳定的目录，因此共享根目录既不会泄露输出，也不会被预置的符号链接重定向。配置选择根目录与启动清理保留期；预览与 spill 决策由其他包负责。
+`dsh-spill-local` 把调用方的超大文本保存到宿主文件系统中私有的会话级文件，并以该文件路径作为定位信息返回，同时给出告诉模型读取或搜索它的取回指引。只要组合需要在与 agent 相同的机器上进行 spill 存储，就挂载它。文件对当前用户私有、名称不可预测，且每个会话的文件归入稳定的目录，因此共享根目录既不会泄露输出，也不会被预置的符号链接重定向。配置选择根目录与启动清理保留期；预览与 spill 决策由其他包负责。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在需要把工具输出 spill 到本地文件系统的组合中挂载此后端。它注册为 `dsh-spill-policy` 插件与其他调用方使用的 `ctx.spillStore` 服务。
+在需要把文本 spill 到本地文件系统的组合中挂载此后端。它注册为 `dsh-spill-policy` 插件与其他调用方使用的 `ctx.spillStore` 服务。
 
 ### 最小配置
 
@@ -53,6 +53,7 @@ kind: "package-reference"
 
 文件存放在 `<root>/session-<hash>/<random>-<safeName>`：`session-<hash>` 是所属会话 id 的短哈希（让同一会话的文件归在一起），`<random>-<safeName>` 把不可预测的十六进制前缀与清理为单个安全路径段的调用方建议名配对。相对 `root` 从进程工作目录解析。
 
+<a id="startup-cleanup"></a>
 ### 启动清理
 
 一次尽力而为的扫描会在激活后启动，不延迟服务可用性。它扫描配置的根目录和操作系统临时目录下先前的默认 `dsh-spill-*` 根目录，删除修改时间严格早于配置截止时间的常规文件，修剪空会话目录，并只删除已经变空的先前默认根目录。长期运行的进程要到重启时才会再次扫描。dispose 会等待扫描结束；如果清理移除了会话目录，并发写入会重新创建它。
@@ -75,7 +76,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-后端只负责存储细节，建立在一个原则之上：**spill 工具结果必须私有且不可重定向**。根目录私有（0700）、会话目录是稳定哈希、文件名不可预测、写入采用排他且仅所有者模式。存储机制放在与 Cordis 无关的模块中，以便无需上下文即可单元测试。
+后端只负责存储细节，建立在一个原则之上：**spill 产物必须私有且不可重定向**。根目录私有（0700）、会话目录是稳定哈希、文件名不可预测、写入采用排他且仅所有者模式。存储机制放在与 Cordis 无关的模块中，以便无需上下文即可单元测试。
 
 ### 源码地图
 
@@ -104,7 +105,6 @@ kind: "package-reference"
 - [dsh-spill-policy](../spill-policy/README.zh.md)——结果过大时调用此后端的策略。
 - [spill 子系统](../../../docs/subsystems/spill.zh.md)——穷尽式词汇与归属。
 - [工具输出 spill 决策](../../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.zh.md)——能力边界与设计依据。
-- [本地 spill 启动清理](../../../.agents/notes/implemented/architecture/2026-07-17-local-spill-startup-cleanup.zh.md)——保留期、竞态处理与安全删除规则。
 
 -----
 

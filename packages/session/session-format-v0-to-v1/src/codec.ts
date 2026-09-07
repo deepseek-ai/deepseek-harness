@@ -1,31 +1,45 @@
 import {
   SessionFormatError,
-  isSessionFormatJsonObject,
   sessionFormatCount,
   sessionFormatSafeInteger,
-  snapshotSessionFormatArtifact,
   snapshotSessionFormatJson,
 } from '@deepseek-ai/dsh-session-format'
 import type {
-  EncodedSessionFormatArtifact,
-  SessionFormatArtifact,
+  SessionFormatArtifactDecoder,
   SessionFormatCodec,
-  SessionFormatEncodeOptions,
   SessionFormatEvent,
+  SessionFormatEventRun,
   SessionFormatHeader,
   SessionFormatJsonObject,
   SessionFormatJsonValue,
+  SessionFormatMigrationContext,
+  SessionFormatRecovery,
 } from '@deepseek-ai/dsh-session-format'
-import {
-  assertReleasedSessionFormatHeader,
-  assertReleasedV0SourceArtifact,
-  assertReleasedV1PhysicalArtifact,
-} from './validation.ts'
+import { assertReleasedSessionFormatHeader } from './validation.ts'
 import { assertReleasedV0Keys, releasedV0Record } from './validation-helpers.ts'
 
 const PHYSICAL_HEADER_REQUIRED = ['type', 'version', 'id', 'createdAt', 'delegationDepth'] as const
 const PHYSICAL_HEADER_OPTIONAL = ['cwd', 'parentSession', 'seedLength', 'origin', 'agentPreset'] as const
 const PACKED_TAGS = new Set(['text-chunks', 'reasoning-chunks', 'tool-call-chunks'])
+
+/** A released packed Assistant row retained until v1-to-v2 embeds its compact stream. */
+export interface ReleasedAssistantChunkRun extends SessionFormatEventRun {
+  readonly runType: 'released-assistant-chunks'
+  readonly turn: number
+  readonly step: number
+  readonly lastSeq: number
+  readonly lastTime: number
+  readonly stream: SessionFormatJsonObject
+}
+
+/**
+ * Test whether a compact migration item is a released packed Assistant row.
+ * @param run - compact migration item to classify.
+ * @returns whether the item carries the released Assistant chunk representation.
+ */
+export function isReleasedAssistantChunkRun(run: SessionFormatEventRun): run is ReleasedAssistantChunkRun {
+  return run.runType === 'released-assistant-chunks'
+}
 
 /** Frozen physical JSON codec for the released v0 layout. */
 export const releasedV0SessionFormatCodec = createReleasedCodec(0)
@@ -37,40 +51,88 @@ function createReleasedCodec(version: 0 | 1) {
   return Object.freeze({
     version,
     decodeHeader: (value: unknown) => decodeHeader(value, version),
-    decodeArtifact(headerValue: unknown, rowValues: readonly unknown[]) {
+    createDecoder(headerValue: unknown, recovery: SessionFormatRecovery) {
       const physical = decodePhysicalHeader(headerValue, version)
-      const artifact = snapshotSessionFormatArtifact({
+      const scanner = scanRows(recovery === 'recoverable')
+      return {
         header: physical.header,
-        inheritedEventCount: physical.inheritedEventCount,
-        events: scanRows(rowValues, false).events,
-      }, `released v${version} artifact`)
-      if (version === 0) assertReleasedV0SourceArtifact(artifact)
-      else assertReleasedV1PhysicalArtifact(artifact)
-      return artifact
+        headerInheritedEventCount: physical.inheritedEventCount,
+        decodeRow: (rowValue, context) => { scanner.decodeRow(rowValue, context) },
+        finish(_context) {
+          scanner.finish(physical.inheritedEventCount)
+          return physical.inheritedEventCount
+        },
+      } satisfies SessionFormatArtifactDecoder
     },
-    decodeRecoverableArtifact(headerValue: unknown, rowValues: readonly unknown[]) {
-      const physical = decodePhysicalHeader(headerValue, version)
-      const recovered = scanRows(rowValues, true)
-      const artifact = snapshotSessionFormatArtifact({
-        header: physical.header,
-        inheritedEventCount: physical.inheritedEventCount,
-        events: recovered.events,
-      }, `released v${version} recoverable artifact`)
-      if (version === 0) assertReleasedV0SourceArtifact(artifact)
-      else assertReleasedV1PhysicalArtifact(artifact)
-      return artifact
+  } satisfies SessionFormatCodec)
+}
+
+function scanRows(
+  recoverable: boolean,
+): {
+  decodeRow(
+    rowValue: unknown,
+    context: SessionFormatMigrationContext,
+  ): void
+  finish(inheritedEventCount: number): void
+} {
+  let rowIndex = 0
+  let eventCount = 0
+  let issue: SessionFormatError | undefined
+  return {
+    decodeRow(rowValue, context) {
+      const currentRow = rowIndex
+      rowIndex += 1
+      let packed = false
+      let decoded: SessionFormatEvent | ReleasedAssistantChunkRun
+      try {
+        const record = releasedV0Record(rowValue, `released Session row ${currentRow}`)
+        const type = record['type']
+        if (typeof type === 'string' && PACKED_TAGS.has(type)) {
+          packed = true
+          decoded = decodePackedRun(record, type, currentRow)
+        } else {
+          decoded = decodeEvent(record, currentRow)
+        }
+      } catch (error: unknown) {
+        const current = error instanceof SessionFormatError
+          ? error
+          : new SessionFormatError(`released Session row ${currentRow} is malformed`, { cause: error })
+        if (!recoverable) throw current
+        issue ??= current
+        return
+      }
+      if (issue !== undefined) {
+        if (!packed && (decoded as SessionFormatEvent).type === 'turn/end') throw issue
+        return
+      }
+      const seq = packed
+        ? (decoded as ReleasedAssistantChunkRun).firstSeq
+        : (decoded as SessionFormatEvent).seq
+      if (seq !== eventCount) {
+        const gap = new SessionFormatError(
+          `released Session row ${currentRow} has seq gap (expected ${eventCount}, got ${seq})`,
+        )
+        if (!recoverable) throw gap
+        issue = gap
+        if (!packed && (decoded as SessionFormatEvent).type === 'turn/end') throw gap
+        return
+      }
+      if (packed) {
+        const run = decoded as ReleasedAssistantChunkRun
+        eventCount += run.eventCount
+        context.emitRun(run)
+      } else {
+        eventCount += 1
+        context.emitEvent(decoded as SessionFormatEvent)
+      }
     },
-    encodeArtifact(artifact: SessionFormatArtifact, options: SessionFormatEncodeOptions) {
-      if (version === 0) assertReleasedV0SourceArtifact(artifact)
-      else assertReleasedV1PhysicalArtifact(artifact)
-      return encodeArtifact(artifact, options, version)
+    finish(inheritedEventCount) {
+      if (inheritedEventCount > eventCount) {
+        throw new SessionFormatError('Session inheritedEventCount exceeds its event count')
+      }
     },
-  } satisfies SessionFormatCodec & {
-    encodeArtifact(
-      artifact: SessionFormatArtifact,
-      options: SessionFormatEncodeOptions,
-    ): EncodedSessionFormatArtifact
-  })
+  }
 }
 
 function decodeHeader(value: unknown, version: 0 | 1): SessionFormatHeader {
@@ -109,7 +171,7 @@ function decodePhysicalHeader(
   if (record['origin'] !== undefined && record['origin'] !== 'subagent') {
     throw new SessionFormatError(`released v${version} header origin must be "subagent"`)
   }
-  const header = snapshotSessionFormatJson({
+  const header = {
     version,
     id: record['id'],
     createdAt,
@@ -119,101 +181,34 @@ function decodePhysicalHeader(
     ...(record['origin'] === undefined ? {} : { origin: record['origin'] }),
     delegationDepth,
     ...(record['agentPreset'] === undefined ? {} : { agentPreset: record['agentPreset'] }),
-  }, `released v${version} logical header`) as SessionFormatHeader
+  } as SessionFormatHeader
   assertReleasedSessionFormatHeader(header, version)
   return { header, inheritedEventCount: seedLength }
 }
 
-function encodeArtifact(
-  artifact: SessionFormatArtifact,
-  options: SessionFormatEncodeOptions,
-  version: 0 | 1,
-): EncodedSessionFormatArtifact {
-  const header = artifact.header
-  const physicalHeader = snapshotSessionFormatJson({
-    type: 'session',
-    version,
-    id: header.id,
-    createdAt: header.createdAt,
-    ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
-    ...(header.parentSession === undefined ? {} : { parentSession: header.parentSession }),
-    ...(header.isSeeded ? { seedLength: artifact.inheritedEventCount } : {}),
-    ...(header.origin === undefined ? {} : { origin: header.origin }),
-    delegationDepth: header.delegationDepth,
-    ...(header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset }),
-  }, `released v${version} encoded header`) as SessionFormatJsonObject
-  const records = options.packChunks ? packChunkRuns(artifact.events) : [...artifact.events]
-  const rows = Object.freeze(records.map(record => encodeProvenance(record)))
-  return Object.freeze({ header: physicalHeader, rows })
-}
-
-function scanRows(
-  rowValues: readonly unknown[],
-  recoverable: boolean,
-): { readonly events: readonly SessionFormatEvent[] } {
-  const events: SessionFormatEvent[] = []
-  let issue: SessionFormatError | undefined
-  for (const [rowIndex, value] of rowValues.entries()) {
-    let decoded: readonly SessionFormatEvent[]
-    try {
-      const row = snapshotSessionFormatJson(value, `released Session row ${rowIndex}`)
-      decoded = decodeRow(row, rowIndex)
-    } catch (error: unknown) {
-      const current = error instanceof SessionFormatError
-        ? error
-        : new SessionFormatError(`released Session row ${rowIndex} is malformed`, { cause: error })
-      if (!recoverable) throw current
-      issue ??= current
-      continue
-    }
-    if (issue !== undefined) {
-      if (decoded.some(event => event.type === 'turn/end')) throw issue
-      continue
-    }
-    const rowStart = events.length
-    for (const event of decoded) {
-      if (event.seq !== events.length) {
-        const gap = new SessionFormatError(
-          `released Session row ${rowIndex} has seq gap (expected ${events.length}, got ${event.seq})`,
-        )
-        events.length = rowStart
-        if (!recoverable) throw gap
-        issue = gap
-        break
-      }
-      events.push(event)
-    }
-    if (issue !== undefined) {
-      if (decoded.some(event => event.type === 'turn/end')) throw issue
-      continue
-    }
-  }
-  return Object.freeze({ events: Object.freeze(events) })
-}
-
-function decodeRow(value: SessionFormatJsonValue, rowIndex: number): readonly SessionFormatEvent[] {
-  const record = releasedV0Record(value, `released Session row ${rowIndex}`)
-  const type = record['type']
-  if (typeof type === 'string' && PACKED_TAGS.has(type)) return expandPackedRow(record, type, rowIndex)
+function decodeEvent(
+  record: Record<string, SessionFormatJsonValue>,
+  rowIndex: number,
+): SessionFormatEvent {
   if (record['sourceEventSeqs'] !== undefined) {
     const seq = sessionFormatCount(record['seq'], `released Session row ${rowIndex} seq`)
-    return Object.freeze([{
+    return {
       ...record,
       sourceEventSeqs: decodeSeqRanges(record['sourceEventSeqs'], seq),
-    } as unknown as SessionFormatEvent])
+    } as unknown as SessionFormatEvent
   }
-  return Object.freeze([record as unknown as SessionFormatEvent])
+  return record as unknown as SessionFormatEvent
 }
 
-function expandPackedRow(
+function decodePackedRun(
   row: Record<string, SessionFormatJsonValue>,
   type: string,
   rowIndex: number,
-): readonly SessionFormatEvent[] {
+): ReleasedAssistantChunkRun {
   const label = `released ${type} row ${rowIndex}`
   assertReleasedV0Keys(row, ['type', 'seq0', 'time0', 'data'], [], label)
   const seq0 = sessionFormatCount(row['seq0'], `${label} seq0`)
-  let time = sessionFormatSafeInteger(row['time0'], `${label} time0`)
+  const time0 = sessionFormatSafeInteger(row['time0'], `${label} time0`)
   const data = releasedV0Record(row['data'], `${label} data`)
   const isTool = type === 'tool-call-chunks'
   assertReleasedV0Keys(
@@ -230,37 +225,73 @@ function expandPackedRow(
   if (!Array.isArray(gaps) || gaps.length !== payload.length - 1) {
     throw new SessionFormatError(`${label} dt length must match its payload`)
   }
-  for (const gap of gaps) sessionFormatSafeInteger(gap, `${label} dt member`)
-  if (typeof data['turn'] !== 'number' || typeof data['step'] !== 'number' || typeof data['index'] !== 'number') {
-    throw new SessionFormatError(`${label} turn, step, and index must be numbers`)
+  let lastTime = time0
+  for (const gap of gaps) {
+    const validGap = sessionFormatSafeInteger(gap, `${label} dt member`)
+    lastTime = sessionFormatSafeInteger(lastTime + validGap, `${label} member time`)
   }
+  const turn = sessionFormatCount(data['turn'], `${label} turn`)
+  const step = sessionFormatCount(data['step'], `${label} step`)
+  const chunkIndex = sessionFormatCount(data['index'], `${label} index`)
   if (isTool && (typeof data['id'] !== 'string'
+    || data['id'].length === 0
     || (data['name'] !== undefined && typeof data['name'] !== 'string'))) {
     throw new SessionFormatError(`${label} id and optional name must be strings`)
   }
-  const output: SessionFormatEvent[] = []
-  for (let index = 0; index < payload.length; index += 1) {
-    if (index > 0) time = sessionFormatSafeInteger(time + (gaps[index - 1] as number), `${label} member time`)
-    const member = payload[index] as string
-    const chunk = type === 'text-chunks'
-      ? { type: 'text-delta', index: data['index'], text: member }
-      : type === 'reasoning-chunks'
-        ? { type: 'reasoning-delta', index: data['index'], text: member }
+  const lastSeq = sessionFormatCount(seq0 + payload.length - 1, `${label} final seq`)
+  const stream = (type === 'tool-call-chunks'
+    ? {
+      type,
+      time0,
+      index: chunkIndex,
+      dt: gaps,
+      id: data['id'],
+      ...(data['name'] === undefined ? {} : { name: data['name'] }),
+      args: payload,
+    }
+    : { type, time0, index: chunkIndex, dt: gaps, texts: payload }) as SessionFormatJsonObject
+  const run: ReleasedAssistantChunkRun = {
+    runType: 'released-assistant-chunks',
+    firstSeq: seq0,
+    eventCount: payload.length,
+    turn,
+    step,
+    lastSeq,
+    lastTime,
+    stream,
+    expand: () => expandAssistantChunkRun(run),
+  }
+  return run
+}
+
+function* expandAssistantChunkRun(run: ReleasedAssistantChunkRun): Iterable<SessionFormatEvent> {
+  const stream = run.stream
+  const gaps = stream['dt'] as readonly number[]
+  const members = stream['type'] === 'tool-call-chunks'
+    ? stream['args'] as readonly string[]
+    : stream['texts'] as readonly string[]
+  let time = run.stream['time0'] as number
+  for (let index = 0; index < members.length; index += 1) {
+    if (index > 0) time += gaps[index - 1] as number
+    const member = members[index] as string
+    const chunk = stream['type'] === 'text-chunks'
+      ? { type: 'text-delta', index: stream['index'], text: member }
+      : stream['type'] === 'reasoning-chunks'
+        ? { type: 'reasoning-delta', index: stream['index'], text: member }
         : {
           type: 'tool-call-delta',
-          index: data['index'],
-          id: data['id'],
-          ...(data['name'] === undefined ? {} : { name: data['name'] }),
+          index: stream['index'],
+          id: stream['id'],
+          ...(stream['name'] === undefined ? {} : { name: stream['name'] }),
           argumentsDelta: member,
         }
-    output.push(snapshotSessionFormatJson({
+    yield {
       type: 'assistant/chunk',
-      seq: sessionFormatCount(seq0 + index, `${label} member seq`),
+      seq: run.firstSeq + index,
       time,
-      data: { turn: data['turn'], step: data['step'], chunk },
-    }, `${label} member`) as SessionFormatEvent)
+      data: { turn: run.turn, step: run.step, chunk },
+    } as SessionFormatEvent
   }
-  return Object.freeze(output)
 }
 
 function decodeSeqRanges(value: SessionFormatJsonValue, maxEntries: number): readonly SessionFormatJsonValue[] {
@@ -287,130 +318,5 @@ function decodeSeqRanges(value: SessionFormatJsonValue, maxEntries: number): rea
   if (hasRange && output.some((member, index) => index > 0 && member <= (output[index - 1] as number))) {
     throw new SessionFormatError('sourceEventSeqs ranges must be strictly increasing')
   }
-  return Object.freeze(output)
-}
-
-function encodeProvenance(record: SessionFormatEvent | SessionFormatJsonObject): SessionFormatJsonObject {
-  if (!Object.hasOwn(record, 'sourceEventSeqs')) return record
-  const sourceEventSeqs = record['sourceEventSeqs'] as readonly SessionFormatJsonValue[]
-  const values = sourceEventSeqs.map(value => sessionFormatCount(value, 'sourceEventSeqs member'))
-  return snapshotSessionFormatJson({ ...record, sourceEventSeqs: encodeSeqRanges(values) }) as SessionFormatJsonObject
-}
-
-function encodeSeqRanges(values: readonly number[]): readonly SessionFormatJsonValue[] {
-  if (values.some((value, index) => index > 0 && value <= (values[index - 1] as number))) return Object.freeze([...values])
-  const output: SessionFormatJsonValue[] = []
-  for (let start = 0; start < values.length;) {
-    let end = start
-    while (end + 1 < values.length && values[end + 1] === (values[end] as number) + 1) end += 1
-    if (end - start >= 2) output.push(Object.freeze([values[start] as number, values[end] as number]))
-    else for (let index = start; index <= end; index += 1) output.push(values[index] as number)
-    start = end + 1
-  }
-  return Object.freeze(output)
-}
-
-type ChunkKind = 'text-delta' | 'reasoning-delta' | 'tool-call-delta'
-
-function packChunkRuns(events: readonly SessionFormatEvent[]): readonly (SessionFormatEvent | SessionFormatJsonObject)[] {
-  const output: Array<SessionFormatEvent | SessionFormatJsonObject> = []
-  let kind: ChunkKind | undefined
-  let run: SessionFormatEvent[] = []
-  const flush = (): void => {
-    if (kind !== undefined && run.length >= 3) output.push(buildPackedRow(kind, run))
-    else output.push(...run)
-    kind = undefined
-    run = []
-  }
-  for (const event of events) {
-    const candidate = classifyChunk(event)
-    const previous = run.at(-1)
-    if (candidate !== undefined && candidate === kind && previous !== undefined && continuesChunk(previous, event, candidate)) {
-      run.push(event)
-      continue
-    }
-    flush()
-    if (candidate === undefined) output.push(event)
-    else {
-      kind = candidate
-      run = [event]
-    }
-  }
-  flush()
-  return Object.freeze(output)
-}
-
-function classifyChunk(event: SessionFormatEvent): ChunkKind | undefined {
-  if (event.type !== 'assistant/chunk' || !hasExactKeys(event, ['type', 'seq', 'time', 'data'])) return undefined
-  const data = event.data
-  if (!isSessionFormatJsonObject(data) || !hasExactKeys(data, ['turn', 'step', 'chunk'])) return undefined
-  const chunk = data['chunk']
-  if (!isSessionFormatJsonObject(chunk)
-    || typeof chunk['index'] !== 'number'
-    || typeof chunk['type'] !== 'string') return undefined
-  if (chunk['type'] === 'text-delta' || chunk['type'] === 'reasoning-delta') {
-    return hasExactKeys(chunk, ['type', 'index', 'text']) && typeof chunk['text'] === 'string'
-      ? chunk['type']
-      : undefined
-  }
-  if (chunk['type'] !== 'tool-call-delta') return undefined
-  const exact = hasExactKeys(chunk, ['type', 'index', 'id', 'argumentsDelta'])
-    || hasExactKeys(chunk, ['type', 'index', 'id', 'name', 'argumentsDelta'])
-  return exact && typeof chunk['id'] === 'string'
-    && typeof chunk['argumentsDelta'] === 'string'
-    && (chunk['name'] === undefined || typeof chunk['name'] === 'string')
-    ? 'tool-call-delta'
-    : undefined
-}
-
-function continuesChunk(previous: SessionFormatEvent, next: SessionFormatEvent, kind: ChunkKind): boolean {
-  const previousData = previous.data as SessionFormatJsonObject
-  const nextData = next.data as SessionFormatJsonObject
-  const previousChunk = previousData['chunk'] as SessionFormatJsonObject
-  const nextChunk = nextData['chunk'] as SessionFormatJsonObject
-  if (!Number.isSafeInteger(next.time - previous.time)) return false
-  if (nextData['turn'] !== previousData['turn'] || nextData['step'] !== previousData['step']) return false
-  if (nextChunk['index'] !== previousChunk['index']) return false
-  if (kind !== 'tool-call-delta') return true
-  return nextChunk['id'] === previousChunk['id']
-    && Object.hasOwn(nextChunk, 'name') === Object.hasOwn(previousChunk, 'name')
-    && nextChunk['name'] === previousChunk['name']
-}
-
-function buildPackedRow(kind: ChunkKind, run: readonly SessionFormatEvent[]): SessionFormatJsonObject {
-  const first = run[0] as SessionFormatEvent
-  const firstData = first.data as SessionFormatJsonObject
-  const firstChunk = firstData['chunk'] as SessionFormatJsonObject
-  const base = {
-    turn: firstData['turn'],
-    step: firstData['step'],
-    index: firstChunk['index'],
-    dt: run.slice(1).map((event, index) => event.time - (run[index] as SessionFormatEvent).time),
-  }
-  if (kind === 'tool-call-delta') {
-    return snapshotSessionFormatJson({
-      type: 'tool-call-chunks',
-      seq0: first.seq,
-      time0: first.time,
-      data: {
-        ...base,
-        id: firstChunk['id'],
-        ...(firstChunk['name'] === undefined ? {} : { name: firstChunk['name'] }),
-        args: run.map(event => ((event.data as SessionFormatJsonObject)['chunk'] as SessionFormatJsonObject)['argumentsDelta']),
-      },
-    }) as SessionFormatJsonObject
-  }
-  return snapshotSessionFormatJson({
-    type: kind === 'text-delta' ? 'text-chunks' : 'reasoning-chunks',
-    seq0: first.seq,
-    time0: first.time,
-    data: {
-      ...base,
-      texts: run.map(event => ((event.data as SessionFormatJsonObject)['chunk'] as SessionFormatJsonObject)['text']),
-    },
-  }) as SessionFormatJsonObject
-}
-
-function hasExactKeys(record: Readonly<Record<string, unknown>>, keys: readonly string[]): boolean {
-  return Object.keys(record).length === keys.length && keys.every(key => Object.hasOwn(record, key))
+  return output
 }

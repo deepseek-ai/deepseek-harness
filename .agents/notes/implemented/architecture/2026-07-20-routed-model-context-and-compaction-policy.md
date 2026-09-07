@@ -54,4 +54,4 @@ Service tests cover detached context metadata, invalid adapter output, catalog i
 - DeepSeek deployments may set exact per-model capacities, or use `defaultContextWindow` for entries without capacity and unlisted pass-through ids.
 - Ratio defaults scale naturally across models, while exact-target absolute retention remains available for deployment-specific behavior.
 
-This note supersedes the global-capacity and no-model-policy parts of the [replay token meter service Agent Note](2026-07-15-replay-token-meter-service.md). Its single-fold measurement decision remains unchanged.
+This note supersedes the global-capacity and no-model-policy parts of the [replay token meter service Agent Note](../../archived/architecture/2026-07-15-replay-token-meter-service.md). Its single-fold measurement decision remains unchanged.

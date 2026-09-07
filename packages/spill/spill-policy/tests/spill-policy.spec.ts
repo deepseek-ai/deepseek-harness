@@ -134,7 +134,7 @@ describe('oversized plain-text replacement', () => {
     expect(result.isError).toBe(false)
     expect(spill?.saves).toHaveLength(1)
     expect(spill?.saves[0]?.content).toBe(body)
-    expect(spill?.saves[0]?.source.toolName).toBe('big')
+    expect(spill?.saves[0]?.source).toMatchObject({ toolName: 'big' })
     expect(spill?.saves[0]?.suggestedName).toBe('big.txt')
     expect(spill?.saves[0]?.owner.sessionId).toBe('s1')
 
@@ -216,7 +216,7 @@ describe('outer PTC mode failure capture', () => {
     expect(result.isError).toBe(true)
     const saved = (ctx.spillStore as StubStore).saves
     expect(saved).toHaveLength(1)
-    expect(saved[0]?.source.toolName).toBe('run_code')
+    expect(saved[0]?.source).toMatchObject({ toolName: 'run_code' })
     expect(saved[0]?.content).toContain('code run failed (output-limit)')
     expect(saved[0]?.content).toContain('HEAD-')
     expect(textOf(result.content)).toContain('Full formatted result stored at: /spill/run_code.txt')
@@ -281,7 +281,7 @@ describe('the durable dispatch-log arm', () => {
     // The artifact holds the full text under the dispatch label and sub-call id.
     const save = spill.saves.find(entry => entry.source.label === 'dispatch')
     expect(save).toMatchObject({
-      source: { toolName: 'huge_read', callId: 'parent-1:code:1', label: 'dispatch' },
+      source: { kind: 'tool', toolName: 'huge_read', callId: 'parent-1:code:1', label: 'dispatch' },
     })
     expect(save?.content).toBe('H'.repeat(2_000))
   })

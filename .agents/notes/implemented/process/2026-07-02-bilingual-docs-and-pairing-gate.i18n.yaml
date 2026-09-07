@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-02-bilingual-docs-and-pairing-gate.md
-2026-07-02-bilingual-docs-and-pairing-gate.md: 62302f73120f40a9a1302ee839f266d382be7698
-2026-07-02-bilingual-docs-and-pairing-gate.zh.md: 8e9966de6f08a2f41157ebf2cae4bcd0312d62f2
+2026-07-02-bilingual-docs-and-pairing-gate.md: 9448c9dcd75cae0ab39fd62b418fd3aa3b5e4484
+2026-07-02-bilingual-docs-and-pairing-gate.zh.md: b843de91e2fb92d05c81387f49853c4ca413228f

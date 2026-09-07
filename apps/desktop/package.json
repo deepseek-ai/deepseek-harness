@@ -1,0 +1,51 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "description": "Electron desktop shell for an isolated pnpm-installed dsh runtime",
+  "version": "0.1.3-alpha.2",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/main.js",
+  "scripts": {
+    "build": "tsc -b && tsdown",
+    "dev": "tsx scripts/dev.ts",
+    "start": "tsx scripts/dev.ts --skip-build",
+    "prepare:runtime": "tsx scripts/prepare-runtime.ts",
+    "prepare:packages": "tsx scripts/prepare-package-set.ts",
+    "prepare:seed": "tsx scripts/prepare-seed.ts",
+    "prepare:package": "tsx scripts/package-target.ts --prepare-only",
+    "verify:mac-signature": "node scripts/verify-macos-signature.mjs",
+    "package": "tsx scripts/package-target.ts",
+    "package:dir": "tsx scripts/package-target.ts --dir",
+    "package:mac:arm64": "tsx scripts/package-target.ts mac-arm64",
+    "package:mac:arm64:dir": "tsx scripts/package-target.ts mac-arm64 --dir",
+    "package:mac:x64": "tsx scripts/package-target.ts mac-x64",
+    "package:mac:x64:dir": "tsx scripts/package-target.ts mac-x64 --dir",
+    "package:win:x64": "tsx scripts/package-target.ts win-x64",
+    "package:win:x64:dir": "tsx scripts/package-target.ts win-x64 --dir",
+    "upload:mac:arm64": "tsx scripts/upload-target.ts mac-arm64",
+    "upload:mac:x64": "tsx scripts/upload-target.ts mac-x64",
+    "upload:win:x64": "tsx scripts/upload-target.ts win-x64"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "semver": "^7.8.5"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "3.1067.0",
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
+    "@electron/notarize": "2.5.0",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.20.0",
+    "@types/semver": "^7.8.0",
+    "app-builder-lib": "26.15.3",
+    "electron": "^44.0.0",
+    "electron-builder": "^26.15.3",
+    "extract-zip": "^2.0.1",
+    "js-yaml": "^4.2.0",
+    "msgpackr": "2.0.4",
+    "pnpm": "11.7.0",
+    "tar": "^7.5.0",
+    "typescript": "^6.0.3"
+  }
+}

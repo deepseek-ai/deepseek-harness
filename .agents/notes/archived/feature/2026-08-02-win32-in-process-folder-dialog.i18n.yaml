@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-08-02-win32-in-process-folder-dialog.md
+2026-08-02-win32-in-process-folder-dialog.md: 62b18288ad6f232fcab76189e507e2990b2630f2
+2026-08-02-win32-in-process-folder-dialog.zh.md: 6d537c0a020f2638d59b6ee16c0a58aaa33ddba4

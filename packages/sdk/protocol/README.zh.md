@@ -91,7 +91,6 @@ kind: "package-library"
 - [TypeScript SDK 客户端](../client/README.zh.md) — 驱动该协议的客户端。
 - [Python SDK](../../../python/README.zh.md) — 复现这些结构的 Python 对侧实现。
 - [SDK 应用组合包](../../bundle/sdk-app/README.zh.md) — 启动服务器的 `dsh --profile sdk` 应用。
-- [TypeScript SDK 与 SDK subagent 后端决策](../../../.agents/notes/implemented/feature/2026-07-27-typescript-sdk-and-sdk-subagent-backend.zh.md) — 该协议所服务的客户端约定。
 
 -----
 

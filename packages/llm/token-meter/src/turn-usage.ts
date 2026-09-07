@@ -1,4 +1,4 @@
-import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
+import { lastAssistantStreamChunk } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { AssistantMessage, TokenUsage } from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
@@ -75,11 +75,7 @@ function messageRoute(message: AssistantMessage): TurnTokenUsageRoute | undefine
 }
 
 function streamUsage(stream: SessionEvent<'assistant/message'>['data']['stream']): TokenUsage | undefined {
-  let sample: TokenUsage | undefined
-  for (const member of expandAssistantStream(stream)) {
-    if (member.chunk.type === 'usage') sample = member.chunk.usage
-  }
-  return sample
+  return lastAssistantStreamChunk(stream, 'usage')?.usage
 }
 
 function normalizeUsage(usage: TokenUsage, route?: TurnTokenUsageRoute): NormalizedAttempt | undefined {
@@ -234,10 +230,7 @@ export function deriveTurnTokenUsage(events: readonly SessionEvent[]): TurnToken
         invalid = true
         continue
       }
-      let sample: TokenUsage | undefined = state.sample
-      for (const member of expandAssistantStream(event.data.stream)) {
-        if (member.chunk.type === 'usage') sample = member.chunk.usage
-      }
+      const sample: TokenUsage | undefined = streamUsage(event.data.stream) ?? state.sample
       state = { kind: 'open', turn, step: event.data.step, ...(sample === undefined ? {} : { sample }) }
       if (!closeOpen()) invalid = true
       else state = { kind: 'finishClosed', turn, step: event.data.step }

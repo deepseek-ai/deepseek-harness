@@ -125,7 +125,7 @@ kind: "package-reference"
 
 ### 生命周期与同步
 
-`apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 Agent 作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭活动客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。[自动重连 Agent Note](../../../.agents/notes/implemented/feature/2026-08-06-mcp-client-auto-reconnect.zh.md) 拥有重连决策。
+`apply` 解析重连策略、在当前注册作用域内预留 `serverName`、启动监督器，并等待初始连接加发现完成。独立 Agent 作用域可以复用相同 namespace，因为其工具与传输彼此隔离；同一作用域内重复会在加载时失败。监督器把所有同步——初始、通知与重连——串行到同一条队列，因此两次同步绝不会交错执行各自的先 dispose 后注册交换。dispose 会取消待执行的重连、关闭活动客户端、等待进行中的尝试与排队同步完全停稳，然后注销当前世代。
 
 组合实例的管理器（如 `dsh-mcp-manager`）通过 `connectionStatusOf(ctx, serverName)` 观察单个实例：这是对监督器状态单元（`connecting`、`connected`、`reconnecting`、`failed`）的读取加订阅句柄，随 `serverName` 预留一起注册与释放。`probeServer(config)` 回答配置界面的「测试该服务器」，既不预留名字也不触碰 `ctx.tools`。
 
@@ -150,7 +150,6 @@ kind: "package-reference"
 
 - [工具子系统参考](../../../docs/subsystems/tools.zh.md)——接收已桥接工具的 `ToolRuntime` 与 `ctx.tools.register()` 约定。
 - [MCP 客户端插件 Agent Note](../../../.agents/notes/implemented/feature/2026-07-07-mcp-client-plugin.zh.md)——命名不变式、发现与执行设计、备选方案与后果。
-- [MCP 客户端自动重连 Agent Note](../../../.agents/notes/implemented/feature/2026-08-06-mcp-client-auto-reconnect.zh.md)——重连策略、尝试预算与退出开关的依据。
 - [规范工具输出约定 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-20-canonical-tool-output-contract.zh.md)——MCP 结果如何映射进规范工具输出约定。
 - [第三方记忆 MCP 指南](../../../docs/user/guide/mcp-memory.zh.md)——使用本包的三份记忆服务器 overlay。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-client)——每个受支持配置字段及其源声明。

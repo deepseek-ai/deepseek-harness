@@ -13,7 +13,6 @@ import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-test
 import { LocalBashExecutor } from '@deepseek-ai/dsh-bash-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as HooksCodex from '@deepseek-ai/dsh-hooks-codex'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 
 /**
@@ -43,7 +42,6 @@ function writeHooks(dir: string, hooks: unknown): void {
 async function harness(dir: string, adapter: MockAdapter, beforeHooks?: (ctx: Context) => void): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LocalSubprocessRuntime)
   await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
@@ -184,7 +182,6 @@ describe('hooks-codex bridge', () => {
     const adapter = new MockAdapter([textResponse('ok')])
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })
@@ -208,7 +205,6 @@ describe('hooks-codex bridge', () => {
     writeHooks(dir, { SessionStart: [{ hooks: [{ type: 'command', command: slow }] }] })
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(LocalSubprocessRuntime)
     await ctx.plugin(LocalBashExecutor, { timeoutMs: 10_000 })

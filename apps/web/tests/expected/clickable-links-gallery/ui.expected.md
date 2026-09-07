@@ -201,4 +201,4 @@
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 1 steps LLM {{duration}} · Tool call {{duration}}
+- text: 1 turns · 2 steps LLM {{duration}} · Tool call {{duration}}

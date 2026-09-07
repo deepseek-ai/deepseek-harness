@@ -12,7 +12,7 @@ Agent Teams 的服务与工具约定仍在变化，但它需要使用真实 Sess
 
 ## 决策
 
-`packages/experimental/agent-team`、`packages/experimental/tool-agent-team`、`packages/experimental/agent-team-profile`、`packages/experimental/client-ui-agent-team` 与 `packages/experimental/agent-team-web-profile` 是私有 workspace 包。[实验性包命名决策](2026-08-19-experimental-package-name-prefix.zh.md)负责其 npm 名和 promotion 重命名；本记录负责其目录归属、发布排除与依赖隔离。
+`packages/experimental/agent-team`、`packages/experimental/tool-agent-team`、`packages/experimental/agent-team-profile`、`packages/experimental/client-ui-agent-team` 与 `packages/experimental/agent-team-web-profile` 是私有 workspace 包。[实验性包规则](../../../../packages/experimental/AGENTS.md)负责其 npm 名和 promotion 重命名；本记录负责其目录归属、发布排除与依赖隔离。
 
 dsh pack 与 publish 集合以及本地 baseline 发布器均排除 `packages/experimental/` 下的所有 manifest。`release:dsh` 仍会让这些 manifest 跟随 dsh 共享版本递增，但不会创建发布 tag。workspace 约束要求每个实验性包设置 `private: true` 并省略 `publishConfig`。同一个顶层检查会拒绝发布包、发布 app 或 Python runtime 通过 `dependencies`、`optionalDependencies` 或 `peerDependencies` 依赖实验性包。实验性包可以依赖发布包和其他实验性包；测试可以通过 `devDependencies` 使用它们，示例可以显式加载它们。
 
@@ -36,4 +36,4 @@ profile 启动会先解析所选 bundle，再修复模块 fallback。共享 fall
 
 Agent Teams 可以使用完整仓库依赖图与质量检查，而不进入正式 tarball，也不会成为受支持的运行时依赖。在 Team 包 promotion 前，发布包不能暴露 Team，因此 CLI 实验会安装显式的私有 profile 层，而不是修改已发布 bundle。通用 profile launcher 可以接受该层，而不会让它的 plugin 依赖进入 dsh 发布闭包。
 
-孵化期间的产品职责分组不够直接。promotion 会按照实验性包命名决策产生路径和 npm 名改动。
+孵化期间的产品职责分组不够直接。promotion 会按照实验性包规则产生路径和 npm 名改动。

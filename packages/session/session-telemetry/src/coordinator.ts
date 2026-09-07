@@ -17,6 +17,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import {
   SessionSeq,
+  SessionLogOffset,
   type Session,
   type SessionEvent,
   type SessionSeq as SessionSeqType,
@@ -27,6 +28,14 @@ import type { SessionTelemetrySink, SessionTelemetryRecord, SessionTelemetrySeve
 
 /** Whether capture follows live events or reads the canonical log only when requested. */
 export type SessionTelemetryCapture = 'live' | 'on-demand'
+
+/** Backend-selected capture mode and history policy. */
+export interface SessionTelemetryCaptureOptions {
+  /** Follow live events, or wait for explicit capture; defaults to live. */
+  capture?: SessionTelemetryCapture
+  /** Include stored history before this lifecycle; defaults to false. */
+  includeHistory?: boolean
+}
 
 /** One record ready for backend handoff. */
 interface PendingRecord {
@@ -73,14 +82,14 @@ export class SessionTelemetryCoordinator {
   /**
    * @param ctx - the composing backend's context; listeners bind to its fiber.
    * @param backend - the backend receiving records; owned elsewhere, never disposed here beyond `shutdown()` forwarding.
-   * @param capture - follow live events, or wait for explicit canonical-log capture.
+   * @param options - capture mode and history policy.
    */
   constructor(
     private readonly ctx: Context,
     private readonly backend: SessionTelemetrySink,
-    capture: SessionTelemetryCapture = 'live',
+    private readonly options: SessionTelemetryCaptureOptions = {},
   ) {
-    if (capture === 'live') {
+    if ((options.capture ?? 'live') === 'live') {
       ctx.on('session/created', (session) => {
         this.adopt(session)
       })
@@ -141,12 +150,11 @@ export class SessionTelemetryCoordinator {
    */
   captureSession(session: Session, throughSeq?: SessionSeqType): void {
     const cursor = handoffCursor.get(session)
-      ?? (session.firstLiveSeq === 0 ? -1 : SessionSeq(session.firstLiveSeq - 1))
+      ?? (this.options.includeHistory === true || session.firstLiveSeq === 0 ? -1 : SessionSeq(session.firstLiveSeq - 1))
     // Containment is PER EVENT: one rejected record is withheld fail-closed
     // while the rest of the historical replay proceeds.
-    for (const event of session.snapshotEvents()) {
+    for (const event of session.snapshotEvents(SessionLogOffset(cursor + 1))) {
       if (throughSeq !== undefined && event.seq > throughSeq) break
-      if (event.seq <= cursor) continue
       this.contain(() => {
         this.captureEvent(session, event)
       })
@@ -154,11 +162,10 @@ export class SessionTelemetryCoordinator {
   }
 
   /**
-   * Adopt a session: replay this lifecycle's log suffix after the same-object
-   * handoff cursor, then rely on the firehose for everything after. A newly
-   * constructed Session object starts at its constructor boundary, so inherited
-   * or restored seed history is not attributed to this lifecycle. Re-adopting
-   * the same object resumes after its cursor.
+   * Adopt a session and replay after its handoff cursor, then follow live events.
+   * New objects include inherited and restored history only with includeHistory;
+   * otherwise replay starts at the constructor boundary. Re-adopting the same
+   * object resumes after its cursor.
    * @param session - the live session to adopt; a second adoption is a no-op.
    */
   private adopt(session: Session): void {

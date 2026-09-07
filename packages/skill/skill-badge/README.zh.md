@@ -79,12 +79,11 @@ agent（智能体）可以通过该内置提供方加载官方「powered by dsh�
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从该提供方注册到的注册表逐步进入 skill 如何到达模型，以及该提供方为何如此发布。
+当包级约定不够用时阅读以下页面。它们从该提供方注册到的注册表逐步进入 skill 如何到达模型。
 
 - [skill 子系统参考](../../../docs/subsystems/skills.zh.md)——该提供方实现的注册表与提供方约定。
 - [skill 包](../skill/README.zh.md)——该提供方注册到的注册表，以及已加载 skill 的共享渲染。
 - [tool-skill 包](../tool-skill/README.zh.md)——徽章 skill 如何到达会话目录与模型。
-- [Web 预览产品徽章 Agent Note](../../../.agents/notes/implemented/feature/2026-08-05-web-preview-product-badge.zh.md)——该提供方为何默认禁用，以及资源决策。
 
 -----
 

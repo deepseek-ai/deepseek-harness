@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-command-feedback` 让用户告诉 harness 他们对会话的看法：输入 `/feedback` 加一条评价，评价即被记录并得到确认。记录是即时的，绝不会启动模型工作，因此在对话的任何时刻都是安全的——模型既看不到这条评价，也不会被打断。确认文本会点名会话与匿名用户，并报告部署的遥测策略下会话如何被共享。命令随 Web 客户端交付，无需任何配置；无头模式、ACP（Agent Client Protocol）与 JSON-RPC 入口不提供斜杠命令，因此无法运行它。
+`dsh-command-feedback` 让用户告诉 harness 他们对会话的看法：输入 `/feedback` 加一条评价，评价即被记录并得到确认。记录是即时的，绝不会启动模型工作，因此在对话的任何时刻都是安全的——模型既看不到这条评价，也不会被打断。确认文本会点名会话与匿名用户。命令随 Web 客户端交付，无需任何配置；无头模式、ACP（Agent Client Protocol）与 JSON-RPC 入口不提供斜杠命令，因此无法运行它。
 
 ## 目录
 
@@ -29,27 +29,14 @@ kind: "package-reference"
 
 ### `/feedback` 命令
 
-输入 `/feedback` 加你的评价并发送。成功时会以接收会话 id、匿名用户 id 与共享策略确认：
+输入 `/feedback` 加你的评价并发送。成功时会以接收会话 id 与匿名用户 id 确认：
 
 | 输入 | 结果 |
 |---|---|
-| `/feedback the diff view is unreadable` | 记录评价并确认：`Feedback recorded for session {sessionId}`、`Anonymous user: {userId}`，外加共享披露。 |
+| `/feedback the diff view is unreadable` | 记录评价并以两行确认：`Feedback recorded for session {sessionId}` 和 `Anonymous user: {userId}.` |
 | `/feedback` | 用法错误：`Feedback text is required. Usage: /feedback <text>`。仅含空白的输入视为空输入。 |
 
 前后空白会被去除，但除此之外，评价会按输入原样保留：不进行截断、大小写折叠或命令解析——`/feedback /plan felt slow` 记录的就是这段字面文本。每次执行命令都会记录自己的条目；不会发生合并或替换。
-
-### 共享披露
-
-确认文本还会说明部署的遥测策略下会话如何被共享：
-
-| 披露的状态 | 确认文本中的句子 |
-|---|---|
-| `full` | `Session sharing is enabled.` |
-| `feedback-only` | `Session sharing is feedback-gated; recording feedback uploads the session records not yet shared.` |
-| `disabled` | `Session sharing is disabled.` |
-| 无遥测服务 | `Session sharing is not configured.` |
-
-句子只报告当前策略，绝不声称反馈或会话已投递到任何地方。披露本身不记录任何内容，也绝不会到达模型。
 
 ### 从自己的 UI 记录反馈
 
@@ -74,7 +61,7 @@ Web 客户端随附该命令。无头模式、ACP 自动化和 JSON-RPC 不提�
 
 ### 设计理念
 
-评价是会话日志中一个仅追加的事实，由事件而非产生它的命令拥有：反馈可能来自任何触发方式，因此事实绝不能依赖斜杠命令。命令自身的簿记不携带载荷，所以评价文本在日志中只存在于一个地方，且该事件绝不会浮出到模型。共享披露通过插件上下文读取可选的遥测服务，因此未挂载后端时命令仍可用；句子集镜像遥测状态 union，未知状态会快速失败。
+评价是会话日志中一个仅追加的事实，由事件而非产生它的命令拥有：反馈可能来自任何触发方式，因此事实绝不能依赖斜杠命令。命令自身的簿记不携带载荷，所以评价文本在日志中只存在于一个地方，且该事件绝不会浮出到模型。
 
 ### 评价如何被记录
 
@@ -94,10 +81,8 @@ Web 客户端随附该命令。无头模式、ACP 自动化和 JSON-RPC 不提�
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从这条采集路径背后的共享策略与命令注册表，逐步进入确认文本所依赖的持久化与身份事实。
+当包级约定不够用时阅读以下页面。它们涵盖这条采集路径所依赖的命令注册表、持久化与身份事实。
 
-- [会话遥测子系统](../../../docs/subsystems/session-telemetry.zh.md)——披露背后的 `SessionTelemetrySharingStatus` 词汇与后端约定。
-- [dsh-session-telemetry](../../session/session-telemetry/README.zh.md)——其 `sharing` 成员决定确认文本句子的 seam。
 - [dsh-commands](../../interaction/commands/README.zh.md)——发现全局命令并定义 `recordInput` 语义的注册表。
 - [会话持久化子系统](../../../docs/subsystems/persistence.zh.md)——追加事件如何持久化、flush 屏障的含义。
 - [匿名用户身份](../../identity/anonymous-user-id/README.zh.md)——确认文本报告的 id。
@@ -129,7 +114,7 @@ Web 客户端随附该命令。无头模式、ACP 自动化和 JSON-RPC 不提�
 
 这些限制说明 `/feedback` 何时不合适，或何时行为与用户预期不同。它们是当前包约束，不是任务积压。
 
-- **没有反馈检索或管理 surface**——可选的 OTel 插件仅将该事件用作共享触发器。本包不为 `feedback/record` 提供检索、聚合、分类或面向模型的工具。
+- **没有反馈检索或管理 surface**——本包不为 `feedback/record` 提供检索、聚合、分类或面向模型的工具。
 - **没有结构化字段**——一条条目就是一个自由文本字符串，没有类别、严重程度或关联事件链接，因此无法在不重读文本的情况下按主题过滤反馈。
 - **不支持修改或撤回**——会话日志是仅追加的，本包也不新增 tombstone，因此错误的条目会一直保留在记录中，只能由后续条目取代。
 - **没有显式持久化屏障**——确认文本紧随追加而非 flush，因此紧临崩溃前记录的条目可能与其他未 flush 的尾部一同丢失。需要该保证的消费方可自行等待 `ctx.sessions.flush(session)`。
@@ -144,7 +129,7 @@ Web 客户端随附该命令。无头模式、ACP 自动化和 JSON-RPC 不提�
 
 本开发备注是维护者的工作上下文，明确不具权威性。已交付的行为、限制与理由以上文与包代码为准。
 
-- 确认文本句子由 [`tests/command-feedback.spec.ts`](tests/command-feedback.spec.ts) 固定；修改它们会改变用户可见文案与披露测试。
+- 确认文本句子由 [`tests/command-feedback.spec.ts`](tests/command-feedback.spec.ts) 固定；修改它们会改变用户可见文案。
 - 结构化字段与检索 surface 仍是前两条限制背后的开放方向；当前约定没有为它们预留任何格式。
 
 </details>

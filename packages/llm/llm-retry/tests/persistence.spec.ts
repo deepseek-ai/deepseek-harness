@@ -57,7 +57,7 @@ describe('JSONL retry-event persistence', () => {
       const reader = await ctx.sessionPersistence.open(session.id, 'read')
       try {
         const loaded = await reader.read()
-        expect(loaded.find(item => item.type === 'llm/retry')).toEqual(event)
+        expect(loaded.events.find(item => item.type === 'llm/retry')).toEqual(event)
       } finally {
         await reader.close()
       }

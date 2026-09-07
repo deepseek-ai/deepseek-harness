@@ -24,6 +24,11 @@ function scrollerOf(from: HTMLElement): HTMLElement {
   return (from.closest('[data-conversation-scroll]')) ?? from
 }
 
+/** Browser shrink clamps and recorded writes do not transfer scroll ownership. */
+function readerMovedScroll(top: number, floor: number, observedTop: number): boolean {
+  return Math.abs(top - Math.min(observedTop, floor)) > 0.5
+}
+
 interface PagingAnchor {
   /** Stable node/call identity, independent of boundary-spanning group keys. */
   key: string
@@ -555,7 +560,7 @@ export function ChatView({
     // programmatic deliveries land on the ledger itself, so both preserve
     // the current ownership state.
     const floor = Math.max(0, el.scrollHeight - el.clientHeight)
-    const movedByReader = Math.abs(el.scrollTop - Math.min(observedTopRef.current, floor)) > 0.5
+    const movedByReader = readerMovedScroll(el.scrollTop, floor, observedTopRef.current)
     const isAtBottom = movedByReader
       ? floor - el.scrollTop <= FOLLOW_THRESHOLD + 1
       : atBottomRef.current
@@ -579,8 +584,9 @@ export function ChatView({
     scheduleActiveTurn()
   }
 
-  // Raw scroll events only schedule work. Geometry is sampled at most once
-  // per interval, with scrollend providing the final sample for a short burst.
+  // Non-reader pinned deliveries must settle before layout growth invalidates
+  // their floor. Reader movement stays pending even inside the follow threshold,
+  // so growth cannot erase small gestures before they accumulate off the floor.
   useEffect(() => {
     const local = listRef.current
     /* v8 ignore next -- ref-null guard: effect runs after the list node commits. */
@@ -597,6 +603,13 @@ export function ChatView({
     }
     const onScroll = (): void => {
       scrollSamplePendingRef.current = true
+      if (atBottomRef.current) {
+        const floor = Math.max(0, el.scrollHeight - el.clientHeight)
+        if (!readerMovedScroll(el.scrollTop, floor, observedTopRef.current)) {
+          sample()
+          return
+        }
+      }
       sampleTimer ??= window.setTimeout(sample, SCROLL_SAMPLE_INTERVAL_MS)
     }
     el.addEventListener('scroll', onScroll, { passive: true })

@@ -18,7 +18,7 @@ Status: proposed
 
 阶段词汇归声明该 slot 的领域所有，而不属于全局 slot 框架。`SlotMap` 携带确切的阶段元组，用于编译期注册；运行时 `SlotSpec` 重复该元组，作为排序依据。其他链不会获得任何 composer 术语，也无需迁移，除非它们主动声明阶段。
 
-本提案扩展 [Web subagent 对话](../../implemented/feature/2026-07-27-web-subagent-conversations.zh.md)、[Web 权限与审批](../../implemented/feature/2026-07-23-web-permission-and-approval.zh.md)和[计划审阅呈现](../../implemented/feature/2026-07-30-plan-review-presentation-intent.zh.md)约定，但不取代其中任何一项。[运行时所有权子级守卫](../../implemented/bug-fix/2026-08-01-ask-user-delegated-caller-guard.zh.md)仍然是防止子级新建自己负责的人类等待的权威机制。本提案落地时，不应归档任何活跃 Agent Note。
+本提案扩展 [Web subagent 对话](../../implemented/feature/2026-07-27-web-subagent-conversations.zh.md)、[Web 权限与审批](../../archived/feature/2026-07-23-web-permission-and-approval.md)和[计划审阅呈现](../../archived/feature/2026-07-30-plan-review-presentation-intent.md)约定，但不取代其中任何一项。[运行时所有权子级守卫记录](../../archived/bug-fix/2026-08-01-ask-user-delegated-caller-guard.md)引入了防止子级新建自己负责的人类等待的守卫。本提案落地时，不应归档任何活跃 Agent Note。
 
 ## 备选方案
 

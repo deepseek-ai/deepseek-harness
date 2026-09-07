@@ -83,7 +83,7 @@ The service is built on one separation and three commitments:
 - **Exact reads concrete, search abstract.** Reads, filters, and traces are implemented here once; the two full-text methods are the only abstract surface a backend owns.
 - **One canonical surface fold.** `listEvents`, `readSurface`, and `traceEvent` validate the whole log with the same `dsh-session` fold, so search and traces agree with model-history derivation.
 
-The decision history lives in the [unified service decision](../../../.agents/notes/archived/architecture/2026-07-23-unified-session-query-service.md), the [tracing note](../../../.agents/notes/implemented/feature/2026-07-13-session-query-tracing.md), and the [SQLite provider note](../../../.agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.md).
+The decision history lives in the [unified service decision](../../../.agents/notes/archived/architecture/2026-07-23-unified-session-query-service.md), the [tracing note](../../../.agents/notes/archived/feature/2026-07-13-session-query-tracing.md), and the [SQLite provider note](../../../.agents/notes/archived/feature/2026-07-10-sqlite-session-query-provider.md).
 
 ### Source map
 
@@ -108,7 +108,7 @@ The decision history lives in the [unified service decision](../../../.agents/no
 
 ### Observation cache
 
-`observeSession` builds point observations without a listing preflight. The cold path stats the stored session first and consults an own bounded cache keyed by the persistence instance and the `stat` revision: an unchanged revision reuses the restored unpublished Session without re-reading the log; a changed revision, or a replaced persistence instance, reloads through the handle seam and replaces the entry. The cache holds `preparedSessionCacheSize` entries with least-recently-used eviction, entries pinned by active observation leases are never evicted, and a session that goes live mid-read retries the live path.
+`observeSession` builds point observations without a listing preflight. A live observation fixes its cut as the current log length and materializes `events` on first read, so header-, cursor-, or projection-only consumers never copy the log; the log only appends, so a late first read still yields exactly that prefix. The cold path stats the stored session first and consults an own bounded cache keyed by the persistence instance and the `stat` revision: an unchanged revision reuses the restored unpublished Session without re-reading the log; a changed revision, or a replaced persistence instance, reloads through the handle seam and replaces the entry. The cache holds `preparedSessionCacheSize` entries with least-recently-used eviction, entries pinned by active observation leases are never evicted, and a session that goes live mid-read retries the live path.
 
 ### Reads and traces
 
@@ -126,8 +126,8 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Session Query subsystem reference](../../../docs/subsystems/session-query.md) — the full type-level contract: records, filters, search pages, lineage, bounded reads, and errors.
 - [dsh-session-query-sqlite](../session-query-sqlite/README.md) — the shipped full-text backend and its index lifecycle.
 - [dsh-tool-session-query](../tool-session-query/README.md) — the model-facing consumer built on this service.
-- [Session query relationship tracing](../../../.agents/notes/implemented/feature/2026-07-13-session-query-tracing.md) — trace semantics and the validation boundary.
-- [SQLite FTS5 session search](../../../.agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.md) — how the search surface is implemented and reconciled.
+- [Session query relationship tracing](../../../.agents/notes/archived/feature/2026-07-13-session-query-tracing.md) — trace semantics and the validation boundary.
+- [SQLite FTS5 session search](../../../.agents/notes/archived/feature/2026-07-10-sqlite-session-query-provider.md) — how the search surface is implemented and reconciled.
 
 -----
 
@@ -162,6 +162,6 @@ This Dev Note is working context for maintainers: open design questions and dire
 
 #### Future: extractor and search-provider registries
 
-Recursive traversal through cited source events, extractor and search-provider registries, and additional model-facing surfaces are deferred; the [model-facing tools note](../../../.agents/notes/implemented/feature/2026-07-24-model-facing-session-query-tools.md) records the current consumer surface.
+Recursive traversal through cited source events, extractor and search-provider registries, and additional model-facing surfaces are deferred; the [tool-session-query README](../tool-session-query/README.md) documents the current consumer surface.
 
 </details>

@@ -4,6 +4,8 @@ import type { AttachmentStore, ImageAttachmentRef, ImageRequestPolicy, RequestIm
 import { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { AssistantMessage, AssistantMessageEvent, Usage } from '@earendil-works/pi-ai'
+import { transformMessages } from '@earendil-works/pi-ai/api/transform-messages'
+import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { toPiContext } from '../src/context.ts'
 import { toPiReplayState } from '../src/replay.ts'
 import { mapStopReason, mapUsage, toStreamChunks } from '../src/stream.ts'
@@ -415,6 +417,45 @@ describe('toPiContext', () => {
     })
   })
 
+  it.each(['high', ''])('preserves provider thinking level %j through durable projection and replay', (providerThinkingLevel) => {
+    const state = toPiReplayState(assistant({
+      api: 'anthropic-messages',
+      provider: 'anthropic',
+      model: 'claude-opus-5',
+      providerThinkingLevel,
+      content: [{ type: 'text', text: 'done' }],
+    }))
+    expect(state).toEqual({
+      response: {
+        kind: 'pi-ai',
+        version: 2,
+        api: 'anthropic-messages',
+        provider: 'anthropic',
+        model: 'claude-opus-5',
+        providerThinkingLevel,
+        stopReason: 'stop',
+      },
+      blocks: [{ type: 'text' }],
+    })
+    const replayState: unknown = JSON.parse(JSON.stringify(state))
+    const onDegrade = vi.fn()
+    const context = toPiContext({
+      provider: 'anthropic',
+      model: 'claude-opus-5',
+      messages: [createMessage({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        source: { kind: 'model', provider: 'anthropic', model: 'claude-opus-5', replayState },
+      })],
+    }, undefined, onDegrade)
+    expect(context.messages[0]).toMatchObject({
+      api: 'anthropic-messages',
+      providerThinkingLevel,
+      content: [{ type: 'text', text: 'done' }],
+    })
+    expect(onDegrade).not.toHaveBeenCalled()
+  })
+
   it('replays all native block kinds when optional metadata is absent', () => {
     const state = toPiReplayState(assistant({
       content: [
@@ -450,6 +491,8 @@ describe('toPiContext', () => {
     })
     expect(context.messages[0]).not.toHaveProperty('responseModel')
     expect(context.messages[0]).not.toHaveProperty('responseId')
+    expect(state.response).not.toHaveProperty('providerThinkingLevel')
+    expect(context.messages[0]).not.toHaveProperty('providerThinkingLevel')
   })
 
   it('degrades unsupported replay-state versions to provider-neutral history', () => {
@@ -612,6 +655,8 @@ describe('toPiContext', () => {
     ['unknown stop reason', { ...validReplay, response: { ...validResponse, stopReason: 'pause' } }, 'unknown stopReason'],
     ['non-string response model', { ...validReplay, response: { ...validResponse, responseModel: 1 } }, 'responseModel must be a string'],
     ['non-string response id', { ...validReplay, response: { ...validResponse, responseId: 1 } }, 'responseId must be a string'],
+    ['non-string provider thinking level', { ...validReplay, response: { ...validResponse, providerThinkingLevel: 1 } }, 'providerThinkingLevel must be a string'],
+    ['null provider thinking level', { ...validReplay, response: { ...validResponse, providerThinkingLevel: null } }, 'providerThinkingLevel must be a string'],
     ['missing blocks', { response: validResponse }, 'blocks must be an array'],
     ['non-array blocks', { ...validReplay, blocks: 'text' }, 'blocks must be an array'],
     ['number block', { ...validReplay, blocks: [1] }, 'block 0 must be an object'],
@@ -626,6 +671,48 @@ describe('toPiContext', () => {
 })
 
 describe('toStreamChunks', () => {
+  it.each([
+    ['claude-haiku-4-5', 'claude-haiku-4-5-20251001'],
+    ['claude-fable-5', 'claude-opus-5'],
+    ['claude-opus-5', 'claude-opus-5'],
+  ])('replays Anthropic request %s with native response model %s', async (requestedModel, returnedModel) => {
+    const native = assistant({
+      api: 'anthropic-messages', provider: 'anthropic', model: returnedModel,
+      providerThinkingLevel: 'high',
+      content: [{ type: 'thinking', thinking: 'reason', thinkingSignature: 'signed' }],
+    })
+    const chunks = await collect(toStreamChunks(feed(
+      { type: 'done', reason: 'stop', message: native },
+    ), undefined, undefined, requestedModel))
+    const finish = chunks.find(chunk => chunk.type === 'finish')
+    const replayState: unknown = JSON.parse(JSON.stringify(finish?.replayState))
+    expect(replayState).toMatchObject({ response: { model: requestedModel } })
+    if (requestedModel !== returnedModel) {
+      expect(replayState).toMatchObject({ response: { responseModel: returnedModel } })
+    }
+    const onDegrade = vi.fn()
+    const context = toPiContext({
+      provider: 'anthropic', model: requestedModel,
+      messages: [createMessage({
+        role: 'assistant', content: [{ type: 'reasoning', text: 'reason' }],
+        source: { kind: 'model', provider: 'anthropic', model: requestedModel, replayState },
+      })],
+    }, undefined, onDegrade)
+    expect(onDegrade).not.toHaveBeenCalled()
+    expect(context.messages[0]).toMatchObject({
+      api: 'anthropic-messages', model: returnedModel, providerThinkingLevel: 'high',
+      content: native.content,
+    })
+    const catalog = getBuiltinModels('anthropic')
+    const requested = catalog.find(model => model.id === requestedModel)
+    const returned = catalog.find(model => model.id === returnedModel)
+    if (requested === undefined || returned === undefined) throw new Error('missing Anthropic catalog model')
+    expect(transformMessages(context.messages, returned)[0]).toMatchObject({ content: native.content })
+    expect(transformMessages(context.messages, requested)[0]).toMatchObject({
+      content: requestedModel === returnedModel ? native.content : [{ type: 'text', text: 'reason' }],
+    })
+  })
+
   const partialWithToolCall = assistant({
     content: [{ type: 'toolCall', id: 'call-1', name: 'f', arguments: {} }],
   })

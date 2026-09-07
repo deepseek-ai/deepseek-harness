@@ -89,6 +89,9 @@ async function bootWeb(
     // Export owns a Connection Fetch route, so this Host-only composition
     // disables it with the transport service above.
     { id: 'session-log-download', disabled: true },
+    // The open-in-app host routes wait for the webserver and connection
+    // rows disabled above (connection's trust fence guards every route).
+    { id: 'open-in-app', disabled: true },
     // The always-on reload chain waits for the browser roster and bound port
     // disabled above.
     { id: 'client-hmr', disabled: true },
@@ -292,7 +295,7 @@ describe('the shipped Web composition', () => {
     try {
       const assembly = await ctx.systemPrompt.assemble({ scope: handle.agent })
       expect(assembly.sections).toEqual([
-        { name: 'deployment:persona', text: MINIMAL_PROMPT },
+        { name: 'deployment:persona-prefix', text: MINIMAL_PROMPT },
       ])
       expect(assembly.tools.map(tool => tool.name)).toEqual(['bash', 'str_replace_editor'])
       expect(assembly.tools.find(tool => tool.name === 'bash')?.description).toBe(MINIMAL_BASH_DESCRIPTION)

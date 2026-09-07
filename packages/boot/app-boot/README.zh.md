@@ -45,7 +45,9 @@ const ctx = await boot('dsh', resolveConfigPath(argv[2], process.env.DSH_SNAPSHO
 <a id="profiles"></a>
 ### Profile
 
-profile 是同一套 dsh 安装提供不同应用界面的方式：`web`、`headless`、`acp`、`sdk` 与 `sdk-minimal` 从同一 launcher 启动不同组合。profile 位于 `$DSH_HOME/profiles/<name>`，由可安装 bundle、自身 `cordis.patch.yml` 与 `patchReload: live | startup` 组成；自定义 profile 省略 reload 策略时保留历史 `live` 默认值。随产品交付的 `web` 模板实时重载，其他随附模板只在启动时应用 patch。`sdk-minimal` 只列出自身的独立 bundle，其他模板保留 base 加模式 bundle 的栈。`dsh plugin` 创建自定义 profile；缺失 bundle 或未声明 patch 的 bundle 会让启动明确失败。
+Profile 与 bundle 的声明类型从 [`@deepseek-ai/dsh-package-manifest`](../../util/package-manifest/README.zh.md) 导入。App-boot 负责 profile 加载、JSON 校验和解析后的运行时数据。
+
+profile 是同一套 dsh 安装提供不同应用界面的方式：`web`、`headless`、`acp`、`sdk` 与 `sdk-minimal` 从同一 launcher 启动不同组合。profile 位于 `$DSH_HOME/profiles/<name>`，由可安装 bundle、自身 `cordis.patch.yml` 与 `patchReload: live | startup` 组成；自定义 profile 省略 reload 策略时保留历史 `live` 默认值。随产品交付的 `web` 模板实时重载，其他随附模板只在启动时应用 patch。`sdk-minimal` 只列出自身的独立 bundle，其他模板保留 base 加模式 bundle 的栈。`dsh plugin` 创建自定义 profile；缺失 bundle 或未声明 patch 的 bundle 会让启动明确失败。由应用持有的 npm 项目（例如 Electron 保留的 Desktop profile）通过 `loadProfileDirectory` 加载已经初始化的目录，而不会将它暴露给 CLI profile 查找。
 
 你的机器本地偏好同样位于 harness home 中：
 
@@ -53,6 +55,8 @@ profile 是同一套 dsh 安装提供不同应用界面的方式：`web`、`head
 - **`cordis.patch.yml`**——你的 tweak 层，应用在所有组合包层之后（先应用逐 profile 的文件，再应用 home 级文件，因此后者优先级更高）：替换某个条目的整个 config（重述你要保留的字段）、插入新条目，或在启动时插值 `!!js` 表达式。patch 指定的条目不存在时输出 stderr 警告；空文件或仅含注释的文件会导致启动失败——如需禁用该层，请改用 `[]`。
 
 带 `patchReload: live` 的 profile 会监视两份用户 patch 文件：有效编辑无需重启即可重新组合，被拒绝的编辑则让最后一个可用应用继续运行。`startup` profile 既不安装这些监视器，也不安装 launcher 的仅监视 HMR 回退。
+
+插入条目的插件名可以是绝对文件系统路径、文件 URL 或包标识符。patch 加载会把 `insert` 条目及其嵌套分组中的绝对路径以及相对于 patch 文件的 `./` 或 `../` 路径转换为文件 URL；对已有条目名称的断言及替换用的 `config` 值保持原样。
 
 ### 预览生效配置
 
@@ -124,7 +128,7 @@ profile 是同一套 dsh 安装提供不同应用界面的方式：`web`、`head
 
 #### KV Cache 影响
 
-启动本身不会使请求前缀中的任何内容失效。消费方调用 `addHarnessSourceSection` 时，会在系统提示词靠前位置、逐请求内容之前添加一行短文本，因此不会使跨轮次缓存失效；请求前缀的其他任何变化均由相应的具名消费方负责。
+启动本身不改变请求前缀。`addHarnessSourceSection` 将源码路径放在第一方可复用指令之后，因此工具与配置一致时，不同 checkout 不会改变前置字节。不保证提供方复用缓存。
 
 ## 已知限制与延期工作
 

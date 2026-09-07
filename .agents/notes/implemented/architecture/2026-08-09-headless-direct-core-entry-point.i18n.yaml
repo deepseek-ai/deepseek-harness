@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-09-headless-direct-core-entry-point.md
-2026-08-09-headless-direct-core-entry-point.md: ca3effd6c054ba70bb2f5d4db0794386c37cbcab
-2026-08-09-headless-direct-core-entry-point.zh.md: 4da5c9539358dd275bcde18c23907c31d35d2519

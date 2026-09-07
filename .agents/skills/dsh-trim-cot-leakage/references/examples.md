@@ -8,7 +8,7 @@ Distilled from the 2026-08 repo-wide purge and its review rounds. Use them to id
 
 **Leaked:** "Slash input resolves against the visible catalog (decision 21)."
 
-**Fixed:** "Slash input resolves against the visible catalog — the plain-text-reference decision, owned by [the web input-machine note](../../../notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)."
+**Fixed:** "Slash input resolves against the visible catalog — the plain-text-reference decision, owned by [the web input-machine note](../../../notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)."
 
 The ordinal resolves nowhere at HEAD; the decision's name and owning note path do. Name the owning note's path at least once per file — as a link where the surface supports one — and later mentions may use the searchable name alone.
 

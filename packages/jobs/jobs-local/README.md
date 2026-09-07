@@ -108,7 +108,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Registry contract](../jobs/README.md) — the abstract `ctx.jobs` service this package implements.
 - [Model-facing job controls](../tool-jobs/README.md) — the `job_output`, `job_list`, and `job_kill` tools and completion notices.
 - [Generic long-running tool runtime Agent Note](../../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.md) — the design behind the background-job runtime.
-- [job-registry seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-26-job-registry-seam.md) — the owner-fenced registry contract and its rationale.
+- [job-registry seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md) — the owner-fenced registry contract and its rationale.
 
 -----
 

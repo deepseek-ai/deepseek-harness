@@ -37,7 +37,7 @@ context 组提供不定义任何工具、为每次请求添加模型可见上下
 ## 相关文档
 
 - [会话引用子系统](../../docs/subsystems/session-reference.zh.md)——规范 mention URI、快照语义与稳定的错误分类。
-- [工作区上下文决策记录](../../.agents/notes/implemented/feature/2026-06-24-workspace-context.zh.md)——指令上下文为何按 agent／会话隔离并持久记录。
+- [工作区上下文决策记录](../../.agents/notes/archived/feature/2026-06-24-workspace-context.md)——指令上下文为何按 agent／会话隔离并持久记录。
 - [生成的配置目录](../../docs/config-catalog.zh.md)——本组各包接受的全部配置字段。
 
 -----

@@ -3,7 +3,6 @@ import { join, posix } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
-import { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
 import {
@@ -17,6 +16,7 @@ import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import E2BSubprocessRuntime from '@deepseek-ai/dsh-subprocess-e2b'
+import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 const fixtureRoot = fileURLToPath(new URL('./fixtures/composition/', import.meta.url))
 const binScript = join(fixtureRoot, 'bin.ts')
@@ -87,7 +87,7 @@ describe.skipIf(!process.env.E2B_API_KEY)('E2B live Loader composition', () => {
         id: ownerId,
         options: {},
         session: ownerSession,
-        inbox: new Inbox(ownerSession, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+        inbox: unsupportedInbox(),
         status: 'idle',
         ctx,
         send() {},

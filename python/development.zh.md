@@ -27,7 +27,7 @@ uv run --project python/sdk pytest
 
 `python/sdk/tests/test_bundled_runtime.py` 会运行可用的内置载体；某个载体的产物尚未构建时，会跳过该载体。仓库级测试政策见 [测试](../docs/testing.zh.md)。
 
-该套件面向的是伪造的运行时对端。`scripts/smoke-python-runtime.py` 面向打包运行时。必需的 `python-runtime` CI 任务会构建每个已发布原生目标，把匹配的 SDK wheel 包与运行时 wheel 包安装进新的 Python 3.10 虚拟环境，在 checkout 外清除 `PYTHONPATH` 与 `DSH_RUNTIME_MODE` 后运行，证明两个模块及可执行文件都来自这些 distribution，然后运行全部 keyless 场景。聚焦的本地源码 SDK 运行可以选择一个已构建可执行文件与场景：
+该套件面向的是伪造的运行时对端。`scripts/smoke-python-runtime.py` 面向打包运行时。`python-runtime` CI 任务在拉取请求上构建 Linux x64 与 Windows x64，在 master 推送上构建 Linux arm64 与两种 macOS 架构。每个选定目标把匹配的 SDK wheel 包与运行时 wheel 包安装进新的 Python 3.10 虚拟环境，在 checkout 外清除 `PYTHONPATH` 与 `DSH_RUNTIME_MODE` 后运行，证明两个模块及可执行文件都来自这些 distribution，然后运行全部 keyless 场景。聚焦的本地源码 SDK 运行可以选择一个已构建可执行文件与场景：
 
 ```sh
 uv run --project python/sdk python scripts/smoke-python-runtime.py \
@@ -36,7 +36,7 @@ uv run --project python/sdk python scripts/smoke-python-runtime.py \
 
 其中三个场景会比对 `scripts/snapshots/python-sdk-single-exe/` 下已提交的期望输出。`minimal/model-visible.json` 固定 Linux／macOS `sdk-minimal` profile 所组装的系统提示词、对外公布的工具 schema 与模型可见消息；`minimal/win-x64/model-visible.json` 固定对应的 PowerShell 版本。因此，插件一旦贡献出计划外的系统分段或 user 消息，该任务即失败，且该 profile 发出的每条消息都会参与比对。`advanced/` 跨所有目标固定一个复杂进程的 SDK 结果及父／子会话日志。`restart/` 针对同一持久化根目录启动两个完整 SDK 运行时进程，并跨所有目标固定其彼此隔离的模型历史、高层结果与独立持久日志。重新运行对应场景时加上 `--update-snapshots`，并在提交前审阅该差异。
 
-可信拉取请求还会在每个原生目标上运行 `--scenario sdk-live --installed-wheel`。该场景面向 `https://api.deepseek.com` 执行两个使用工具的轮次，从外部验证已创建文件，并在仓库密钥缺失时失败而不是自行 skip。Fork 与 Dependabot 拉取请求会运行完整的 keyless 安装后 wheel 路径，但不会获得密钥。
+可信拉取请求与 master 推送还会在各自选定的原生目标上运行 `--scenario sdk-live --installed-wheel`。该场景面向 `https://api.deepseek.com` 执行两个使用工具的轮次，从外部验证已创建文件，并在仓库密钥缺失时失败而不是自行 skip。Fork 与 Dependabot 拉取请求会运行完整的 keyless 安装后 wheel 路径，但不会获得密钥。
 
 交互式冒烟测试需要环境变量或仓库根目录 `.env` 中存在 `DEEPSEEK_API_KEY`：
 

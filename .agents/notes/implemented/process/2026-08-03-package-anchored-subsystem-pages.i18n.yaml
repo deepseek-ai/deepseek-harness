@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-03-package-anchored-subsystem-pages.md
-2026-08-03-package-anchored-subsystem-pages.md: e5337fba0c9a69dd786fb156572e978f87435b9b
-2026-08-03-package-anchored-subsystem-pages.zh.md: 25afe84faa43af59d4366b5cc0b6c2d2ad4da1ed
+2026-08-03-package-anchored-subsystem-pages.md: ea98bae0c54b45351712a75b5c2387c5f57fae71
+2026-08-03-package-anchored-subsystem-pages.zh.md: 4da4211f4e29eff0d30bd3da5d5035ad2a928ee5

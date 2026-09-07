@@ -4,8 +4,7 @@
  * matchers, snake_case payloads without a trailing newline, no hook environment
  * or command substitution, and no pre-tool approval or rewrite path; only
  * blocking decisions are honored. Shared execution and parsing live in
- * `dsh-hook-protocol`; see the
- * [hook-bridges Agent Note](../../../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.md).
+ * `dsh-hook-protocol`.
  * @module @deepseek-ai/dsh-hooks-codex
  */
 

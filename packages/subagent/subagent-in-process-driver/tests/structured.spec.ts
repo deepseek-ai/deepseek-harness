@@ -13,7 +13,6 @@ import SubagentRuntime, {
   type ResolvedSubagentStartRequest,
   type SubagentStartRequest,
 } from '@deepseek-ai/dsh-subagent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { Config as ToolConfig, ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import { defineContentToolFixture, RUN_CODE_NAME } from '@deepseek-ai/dsh-tools'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
@@ -69,7 +68,6 @@ async function setup(script: Script, options: SetupOptions = {}) {
   }
   await mountInvariants(ctx)
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SubagentRuntime)
   const disposeProvider = ctx.subagents.registerProvider({
     name: 'spawn',

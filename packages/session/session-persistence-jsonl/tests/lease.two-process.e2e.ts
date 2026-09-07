@@ -51,7 +51,7 @@ describe('two-process write lock (built lib)', () => {
       await expect(mine.open(SessionId(SESSION), 'write')).rejects.toBeInstanceOf(SessionAlreadyOwnedError)
       // Reads are unaffected across processes.
       const reader = await mine.open(SessionId(SESSION), 'read')
-      expect((await reader.read()).map(event => event.seq)).toEqual([0, 1])
+      expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1])
       await reader.close()
 
       // Crash the holder: no release runs, but the kernel drops the lock with
@@ -60,7 +60,7 @@ describe('two-process write lock (built lib)', () => {
       await exited
       const taken = await mine.open(SessionId(SESSION), 'write')
       await taken.append([{ type: 'turn/start', seq: SessionSeq(2), time: 3, data: { turn: 2 } }])
-      expect((await taken.read()).map(event => event.seq)).toEqual([0, 1, 2])
+      expect((await taken.read()).events.map(event => event.seq)).toEqual([0, 1, 2])
       await taken.close()
     } finally {
       if (holder.exitCode === null) holder.kill('SIGKILL')

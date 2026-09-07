@@ -18,6 +18,9 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../llm/llm"
+    },
+    {
       "path": "../../core/session"
     },
     {

@@ -18,7 +18,6 @@ import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { MockAdapter, textResponse, toolCallResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { startInProcessRun } from '../src/index.ts'
 
@@ -41,7 +40,6 @@ async function setupWalled(script: Script): Promise<{ ctx: Context; parent: Agen
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, { mode: 'workspace-write', workspaceRoot: workspace })
   await ctx.plugin(SandboxedFileSystem, { cwd: workspace })
   await ctx.plugin(ToolFs)

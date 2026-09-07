@@ -106,7 +106,7 @@ The three emit points (`SessionStart`, `SubagentStart`, `SubagentStop`) run deta
 - **Dispose reaches quiescence.** Detached runs are tracked and drained on disposal so no hook process or late callback outlives the fiber.
 - **Serial, not concurrent.** Matched hooks run serially in config order: each `hook/invoked` / `hook/result` pair stays adjacent in the log, and the decision fold is order-independent, so the outcome matches the reference engines' concurrent launch at the cost of serialized latency.
 
-The [hook-bridges Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.md) records the bridge design and the deferred gaps; the [hook-protocol-lib Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-protocol-lib.md) records the shared-versus-per-dialect split.
+The [hook-bridges Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md) records the bridge design and the deferred gaps; the [hook-protocol-lib Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md) records the shared-versus-per-dialect split.
 
 ### Source map
 
@@ -127,7 +127,7 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Hooks group map](../README.md) — the sibling group page and its package table.
 - [Hook protocol library](../hook-protocol/README.md) — the shared hook rules this bridge applies.
-- [Hook bridges Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.md) — the bridge design, decision mapping, and deferred gaps.
+- [Hook bridges Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md) — the bridge design, decision mapping, and deferred gaps.
 - [Interception extension-points Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-interception-extension-points.md) — the typed-Decision surface the bridge maps onto.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-hooks-claude-code) — every accepted config field and its source declaration.
 

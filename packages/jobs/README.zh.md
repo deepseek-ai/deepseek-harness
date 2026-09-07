@@ -35,7 +35,7 @@ jobs 组是后台工作能力家族：运行长时间工作的工具把工作注
 
 - [后台任务运行时子系统](../../docs/subsystems/jobs.zh.md)——任务类型、快照字段与 `ctx.jobs` API。
 - [通用长时间运行工具运行时 Agent Note](../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)——后台任务运行时背后的设计。
-- [任务注册表 seam Agent Note](../../.agents/notes/implemented/architecture/2026-07-26-job-registry-seam.zh.md)——按所有者隔离的注册表约定及其理由。
+- [任务注册表 seam Agent Note](../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md)——按所有者隔离的注册表约定及其理由。
 
 -----
 

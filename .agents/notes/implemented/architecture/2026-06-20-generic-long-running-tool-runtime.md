@@ -19,13 +19,13 @@ The `jobs/` package group owns background-job semantics:
 
 Long-running tools are producers. `dsh-tool-bash` adapts a `ShellProcess` into incremental output and process cancellation; `dsh-tool-subagent` adapts a child run into final output and child disposal. The bash and subagent capability seams remain independent of sessions and the job registry.
 
-`JobRegistry` is the Service Definition in `@deepseek-ai/dsh-jobs`; the process-local provider is `LocalJobRegistry` in `@deepseek-ai/dsh-jobs-local` (the [task-registry contract Agent Note](2026-07-26-job-registry-seam.md) records that split).
+`JobRegistry` is the Service Definition in `@deepseek-ai/dsh-jobs`; the process-local provider is `LocalJobRegistry` in `@deepseek-ai/dsh-jobs-local` (the [task-registry contract Agent Note](../../archived/architecture/2026-07-26-job-registry-seam.md) records that split).
 
 ## Runtime contract
 
 The literal types live on the [tasks subsystem page](../../../../docs/subsystems/jobs.md). A producer calls `ctx.jobs.start()` with a kind, label, optional owning `Agent`, optional positive `outputLimitBytes`, and a `run()` function. The runtime completes all failable preflight work before calling `run()` and invokes it once. After `run()` returns hooks, registration commits without another failable step; a producer cannot start work that lacks a collectable job id.
 
-The process-local provider also owns bounded admission, whose rationale is recorded in the [bounded background job admission decision](../bug-fix/2026-08-11-bounded-background-job-admission.md). Its positive-safe-integer `maxConcurrentJobsPerOwner` config defaults to `10`; `start()` derives each exact `Agent` object's active count from `running` and `stopping` records, while every unowned task shares one service bucket. Capacity rejection occurs before `run()` and id allocation, and producer `done` settlement is the only event that releases a stopping task's place. The provider does not queue, preempt, or retain a second mutable count.
+The process-local provider also owns bounded admission, whose rationale is recorded in the [bounded background job admission decision](../../archived/bug-fix/2026-08-11-bounded-background-job-admission.md). Its positive-safe-integer `maxConcurrentJobsPerOwner` config defaults to `10`; `start()` derives each exact `Agent` object's active count from `running` and `stopping` records, while every unowned task shares one service bucket. Capacity rejection occurs before `run()` and id allocation, and producer `done` settlement is the only event that releases a stopping task's place. The provider does not queue, preempt, or retain a second mutable count.
 
 `outputLimitBytes` is producer-owned presentation policy, not a registry buffer. The registry validates and projects it unchanged into `JobSnapshot`; generic control APIs apply the cap to complete model-facing output after adding their own status or notice metadata. Omitting it preserves the existing controller behavior, so the runtime does not impose a hidden default on unrelated producer families.
 
@@ -105,7 +105,7 @@ Separate bash and subagent output/stop tools duplicate ids, isolation, cleanup, 
 
 ### An immediate abstract task-runtime backend
 
-The current `JobStart.run()` contract passes in-process callbacks and exact `Agent` objects. A durable backend changes identity, restart, ownership, and observation semantics, so at introduction time the registry stayed one concrete service rather than freezing the wrong boundary. The [task-registry contract Agent Note](2026-07-26-job-registry-seam.md) later separated the contract from the process-local implementation without changing these in-process semantics.
+The current `JobStart.run()` contract passes in-process callbacks and exact `Agent` objects. A durable backend changes identity, restart, ownership, and observation semantics, so at introduction time the registry stayed one concrete service rather than freezing the wrong boundary. The [task-registry contract Agent Note](../../archived/architecture/2026-07-26-job-registry-seam.md) later separated the contract from the process-local implementation without changing these in-process semantics.
 
 ### Consumer-owned authorization or cleanup events
 

@@ -31,6 +31,8 @@ kind: "package-bundle"
 
 `DSH_MAX_TOKENS_AS_SUCCESS` 保留 SDK 部署映射：未设置或 JSON `true` 把 token 达限的 subagent 完成报告为已接受，JSON `false` 则报告为错误。模型提供方／模型与工作区 cwd 通过 SDK 初始化请求传入；base profile 拥有适配器、工具、持久化、策略、settings 与 credentials。
 
+SDK 使用 base 默认提供的 `read`、`write` 和 `edit`。要添加 `str_replace_editor`，请使用 [base 配置指南](../base/README.zh.md#use-this-package)中的显式插入 patch。独立的 `sdk-minimal` profile 自行决定其工具选择。
+
 -----
 
 <a id="model-experience"></a>
@@ -40,7 +42,7 @@ kind: "package-bundle"
 
 #### 模型看到什么
 
-profile 会在 base 工具与上下文贡献之前提供 `You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.`。确切的 SDK 初始化路由与会话 cwd 会解析其中的占位符。
+profile 在第一方指导之前提供 `You are a coding agent powered by the {{model}} model.`，并在独立的 persona 后缀中提供 `Your working directory is {{cwd}}.`。确切的 SDK 初始化路由与会话 cwd 会解析其中的占位符。默认文件工具 schema 包含 `read`、`write` 和 `edit`，不包含 `str_replace_editor`。
 
 #### Token 影响
 

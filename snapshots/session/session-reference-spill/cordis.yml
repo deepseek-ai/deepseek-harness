@@ -1,0 +1,13 @@
+- id: spill-local
+  name: '@deepseek-ai/dsh-spill-local'
+  config:
+    root: !!js process.env.DSH_SNAPSHOT_SPILL_ROOT ?? './.spill'
+    cleanupPeriodDays: 0
+
+- insert:
+    - id: session-reference
+      name: '@deepseek-ai/dsh-session-reference'
+      config:
+        maxReferenceBytes: 360
+    - id: reference-source-fixture
+      name: ../../../packages/context/session-reference/tests/fixtures/source-session.ts

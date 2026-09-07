@@ -32,7 +32,6 @@ The runtime-diagnostics group provides runtime self-checking for DeepSeek Harnes
 ## Related documentation
 
 - [Runtime invariants subsystem](../../docs/subsystems/invariants.md) — the generated service reference: selection, installer, and companion contract.
-- [Package-owned invariant service Agent Note](../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.md) — why checks live beside their owners and the registry owns selection and lifecycle.
 - [Invariant runtime contracts Agent Note](../../.agents/notes/implemented/architecture/2026-07-19-package-invariant-runtime-contracts.md) — what a runtime invariant may assert and the mechanical gate enforcing companion wiring.
 - [Package conventions](../AGENTS.md) — the `./invariant` companion rule every package follows.
 

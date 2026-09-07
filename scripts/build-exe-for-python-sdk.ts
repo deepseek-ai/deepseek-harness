@@ -17,8 +17,8 @@ const root = resolve(import.meta.dirname, '..')
 
 /** The closure manifest whose dependencies define the executable. */
 const DEPLOY_ROOT_PACKAGE = 'dsh-python-runtime-closure'
-/** The sole application launcher inside the deployed closure. */
-const ENTRY_BIN = 'node_modules/@deepseek-ai/dsh/lib/bin.js'
+/** The sole executable entry inside the deployed closure. */
+const ENTRY_BIN = 'runtime-bootstrap.mjs'
 /** Python-visible executable basename. */
 const OUTPUT_BASENAME = 'deepseek-harness-sdk-runtime'
 /** Default Node major; SEA mode requires at least Node 22. */
@@ -406,7 +406,7 @@ class SingleExeBuild {
       throw new Error(`build-exe-for-python-sdk: ${manifestPath} missing — pnpm deploy did not produce a staged package.`)
     }
     if (!existsSync(join(this.staging, ENTRY_BIN))) {
-      throw new Error(`build-exe-for-python-sdk: ${join(this.staging, ENTRY_BIN)} missing — run without --skip-build so lib/ artifacts exist.`)
+      throw new Error(`build-exe-for-python-sdk: staged bootstrap ${join(this.staging, ENTRY_BIN)} is missing.`)
     }
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
     await writeFile(manifestPath, `${JSON.stringify({ ...manifest, ...patch }, null, 2)}\n`)

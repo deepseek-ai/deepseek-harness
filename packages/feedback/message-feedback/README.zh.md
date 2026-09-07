@@ -1,5 +1,5 @@
 ---
-description: "针对已完成 assistant 消息的逐消息评分与备注，供用户与维护者选择、组合或排查该反馈服务。"
+description: "在权威 Session 日志中保存已完成 assistant 消息的评分与备注。"
 kind: "package-reference"
 ---
 
@@ -9,153 +9,95 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-message-feedback` 让产品界面提供逐消息反馈：用户可以把一条 assistant 消息标记为好评或差评，并可附上简短备注，评分会与该消息绑定。评分与会话一起保存，重启后依然存在，并且绝不会进入模型历史或遥测。产品界面通过 `messageFeedback` 服务读取、创建和修改评分，其 `list`、`put`、`delete` 三个操作就是全部对外表面。唯一需要部署方设置的项是备注最大长度（`maxNoteBytes`），Web 组合将其设为 8192。浏览器控件位于独立的客户端包中；本包提供服务本身。
+本服务为已完成的 assistant 消息记录好评、差评及可选的原样备注。每次创建、编辑和删除都由权威 Session 日志保存；`list`、`put` 和 `delete` 提供当前反馈，不会构造或唤醒 Agent。反馈仅写入日志，不进入模型历史。
 
 ## 目录
 
 - [使用本包](#use-this-package)
 - [理解实现](#understand-the-implementation)
-- [进一步探索](#further-exploration)
 - [模型体验](#model-experience)
 - [已知限制与延期工作](#known-limitations-and-deferred-work)
 - [开发备注](#dev-note)
 
------
-
 <a id="use-this-package"></a>
 ## 使用本包
 
-当产品界面需要让用户对单条 assistant 消息评分或加备注时，选择此服务。反馈只绑定已完成的（即已发出的）消息，并且使用该服务绝不会启动或恢复 agent。自定义应用需要把此服务与会话持久化和存储一起挂载；随附的 Web 组合已用 `maxNoteBytes: 8192` 组合好全部组件。
+将 `dsh-message-feedback` 与 `sessions`、`sessionPersistence` 一起挂载。它不需要 storage-domain 服务。Web 组合提供浏览器消费方，并将备注上限设为 8192 字节。
 
 ### 配置
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `maxNoteBytes` | 必填 | 一条可选备注的最大 UTF-8 字节长度。 |
+| `maxNoteBytes` | 必填 | 单条可选备注的 UTF-8 字节上限，必须为正安全整数。 |
 
-```yaml
-- id: message-feedback
-  name: '@deepseek-ai/dsh-message-feedback'
-  config:
-    maxNoteBytes: 8192
-```
-
-备注必须包含至少一个非空白字符，并且不得超过配置的字节长度；空白备注会以 `note-blank` 拒绝，超长备注会以 `note-too-large` 拒绝。通过校验的文本按提交原样存储——不做任何 trim。生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-message-feedback)是每个受支持字段及其 JSDoc 的穷尽式真源。
+提交的备注必须包含非空白字符，且不超过配置的字节上限。空白备注返回 `note-blank`；过长备注返回 `note-too-large`。通过校验的文本会完整保留，包括首尾空白。省略备注会清除它。备注校验先于 Session 查找。
 
 ### 读取与修改反馈
 
-调用方用三个操作读取和修改某个会话的反馈：
-
-| 操作 | 请求 | 成功 | 拒绝时机 |
+| 操作 | 请求 | 成功 | 业务失败 |
 |---|---|---|---|
-| `list` | 会话 id | 当前的评分与备注，按创建顺序 | 会话不存在 |
-| `put` | 会话、消息、评分、可选备注、期望的 version | 已存储的评分与备注 | 会话不存在、消息不是有效目标、version 冲突、备注空白或超长 |
-| `delete` | 会话、消息、期望的 version | 评分已不存在 | 会话不存在、version 冲突 |
+| `list` | Session id | 按创建顺序返回当前条目 | Session 不存在 |
+| `put` | Session、消息、评分、可选备注、预期版本 | 当前条目 | Session 或目标不存在、版本冲突、备注无效 |
+| `delete` | Session、消息、预期版本 | 条目不存在 | Session 不存在、版本冲突 |
 
-每次修改都必须基于服务为该项评分返回的 version：基于更旧 version 的修改会以 `version-conflict` 拒绝，且回复携带当前评分，调用方无需再次读取即可看到变化。删除一条已经不存在的评分会成功；对不同消息的并发修改互不冲突。省略 `note` 会清除已有备注。
+创建时传入 `ifVersion: null`；编辑或删除时使用返回的版本。陈旧修改返回 `version-conflict` 及当前条目。每次实质 put 都生成新 token，并保留原始创建时间。匹配的无变化 put 返回相同条目，不追加事件。删除不存在的条目始终成功，不受所传版本影响，也不追加事件。重新创建已删除条目会产生新的创建时间和排序位置。
 
-### 可以对什么评分
-
-评分绑定一条已完成的 assistant 消息：消息必须存在，并且是发送过的 assistant 消息。用户消息、空的 assistant 占位与已被替换的消息都不是有效目标，会以 `target-not-found` 拒绝。评分与备注一旦记录就与该消息绑定并跨重启保留；会话的 fork 从没有反馈开始。
-
-### 持久性
-
-只有当评分所指的消息已被持久存储后，评分才会提交，因此反馈绝不会指向可能丢失的消息。读取或写入反馈绝不会启动或恢复 agent；服务直接检查已持久化的会话。
-
------
+目标必须是由 append 来源事件产生的非空 assistant 消息。用户消息、空 assistant 占位及 replacement 来源消息返回 `target-not-found`。反馈跨重启保留；fork 即使继承了包含父会话反馈的前缀，也从没有自有反馈开始。
 
 <a id="understand-the-implementation"></a>
 ## 理解实现
 
-<details>
-<summary>实现细节——点击展开</summary>
+### 权威日志与持久性
 
-### 设计理念
+`feedback/message-put` 保存所属 Session id 及完整条目，包括版本和时间戳。`feedback/message-delete` 保存所属 Session 和消息 id。当前状态从这些事件推导，忽略属于其他 Session 的事件。持久化 payload 在使用前经过校验。不存在第二个反馈存储或缓存。
 
-服务把反馈完全放在会话日志之外：每个会话在存储域中拥有一条伴随记录行，因此评分绝不会与对话内容、模型历史或遥测混淆。伴随记录只在所引用消息已持久之后提交——该行是目标日志的延伸，而不是先于它。每个操作都返回业务结果，把已处理的失败（会话缺失、目标无效、版本陈旧、备注不合格）与基础设施故障区分开，后者会 reject 而非被误标。
+活跃会话通过 `Session.append` 追加，并等待 `sessions.flush`，然后通过持久化读 handle 核实捕获的日志末端与 Session header，才会报告成功。冷会话修改在读取、校验、比较、追加、flush 和关闭期间持有持久化写 handle。冷读取使用读 handle。两条路径都不会构造 Session 或追加生命周期事件。
 
-### 伴随记录里有什么
+每个 Session 的队列在同一服务实例内串行化操作；持久化写 handle 排除其他冷写入方。销毁时停止接收操作并排空已接收操作，然后释放服务。持久化故障会 reject，而非变成业务失败。flush 失败不会回滚已接受的事件；调用方可以读取并使用其版本重试。成功的无变化修改也会 flush 当前前缀。
 
-每个会话一行，把检查所得的会话身份（`createdAt`、`cwd`）与其反馈条目绑定；该身份隔离复用的会话 id，因此更早生命周期的行不可见，fork 也从无反馈开始。条目是不可变值——修改会写入条目新版本并保留其创建时间——行 schema 拒绝重复消息 id 与复用的版本，保证查找无歧义。精确的行 schema 与校验见 [`src/spec.ts`](src/spec.ts)。
-
-### 并发
-
-修改是乐观的、按消息进行的：调用方发送其最后观察到的 version，陈旧的 version 会连同权威当前条目一起被拒绝，调用方无需再次读取即可协调；每次实质修改都会铸造新的 version token，陈旧写入绝不会被误认为当前。按 Session 的队列把整个读-比较-写串行化在一个服务实例内；存储不提供跨进程条件写，这正是下文「已知限制」。
-
-### 持久性与目标校验
-
-写入按「暂存—校验—提交」进行：目标消息先通过权威 checkpoint flush，再物理重读日志前缀，之后才写入伴随记录行——反馈绝不会引用尚未持久的消息。冷会话在不恢复 agent 的情况下被读取，缺失由持久化存储的 `stat` 判定而非猜测，只有真实发送过的 assistant 消息才是有效目标。flush 与读取路径见 [`src/index.ts`](src/index.ts)。
-
-### 故障模式
-
-服务失败时保持封闭：disposal 先排空在途写入再关闭域，disposal 开始后提交的写入会以生命周期故障拒绝，无效配置或域初始化前的读取都会明确失败。
+冷会话的实质修改在 flush 后通过 `feedback/committed` 通知借用的只读权威日志前缀；观察方在转移所有权前必须深拷贝。观察方在写入所有权释放前完成，不得等待同一 Session 的其他反馈操作，也不能使已提交的修改失败。活跃会话消费方观察 `session/event`。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 服务类：配置校验、按 Session 队列、持久性屏障、`@Remote` 方法 |
-| [`src/types.ts`](src/types.ts) | 公开的请求、值与失败词汇（仅类型，供生成的 Remote 客户端使用） |
-| [`src/spec.ts`](src/spec.ts) | storage-domain 声明：`message_feedback` 域、`sessions` 表、行 schema |
-| — | 不发布运行时不变式伴生入口；域 schema 在重开时校验行。 |
+| [`src/index.ts`](src/index.ts) | Remote 服务、payload 校验、事件投影与持久化所有权 |
+| [`src/types.ts`](src/types.ts) | 请求、结果和 Session 事件声明；仅类型 |
 
-</details>
+不发布运行时不变式伴生入口：服务直接从校验后的权威事件推导反馈，不持有可独立修改的投影。
 
------
-
-<a id="further-exploration"></a>
-## 进一步探索
-
-当包级约定不够用时阅读以下页面。它们从子系统类型与设计边界，逐步进入持久化原语与驱动此服务的浏览器消费方。
-
-- [反馈子系统](../../../docs/subsystems/feedback.zh.md)——公开类型、Remote 契约与 Web 消费方细节。
-- [消息反馈伴随记录决策](../../../.agents/notes/implemented/architecture/2026-08-10-message-feedback-sidecar.zh.md)——让此伴随记录不进入会话日志内容的设计边界。
-- [会话持久化子系统](../../../docs/subsystems/persistence.zh.md)——持久性屏障背后的 handle `read`、`stat` 与 `flush` 语义。
-- [dsh-client-ui-message-feedback](../../client/ui-message-feedback/README.zh.md)——驱动 Host Remote 契约的浏览器消费方。
-- [反馈包映射](../README.zh.md)——逐消息反馈与仅写入日志的采集命令并存的组。
-
------
+各自的 API 见[反馈子系统](../../../docs/subsystems/feedback.zh.md)、[Session 持久化](../../../docs/subsystems/persistence.zh.md)和[浏览器消费方](../../client/ui-message-feedback/README.zh.md)。
 
 <a id="model-experience"></a>
 ## 模型体验
 
-### 本地消息反馈状态
+### 消息反馈
 
 #### 模型看到什么
 
-无。`ctx.messageFeedback` 不注册工具、提示词段落、模型可见上下文或 Session 事件；除非另一个具有独立文档的 Consumer 显式公开反馈，否则它只留在 Host 拥有的伴随记录中。
+无。`feedback/message-put` 和 `feedback/message-delete` 不携带 surface 位置、工具、提示词段落或模型可见上下文。日志导出与投递策略由相应消费方负责。
 
 #### Token 影响
 
-为零。本包的请求、结果、评分、备注、时间戳或失败都不会进入模型请求。
+为零。评分、备注和服务结果不进入模型请求。
 
 #### KV Cache 影响
 
-相互独立。读取或变更消息反馈不会触碰模型请求前缀，也不会使本可复用的提供方缓存条目失效。
+相互独立。反馈不改变模型请求前缀。
 
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
 
-
-这些限制说明服务何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是任务积压。
-
-- **Compare-and-set 仅限单进程**——按 Session 划分的队列只串行化一个服务实例；storage-domain 不提供跨进程条件写，因此多个 Host 进程写入同一存储根目录时仍可能丢失更新。
-- **没有持久 Session 删除级联**——Session persistence 没有删除接口，且 `session/disposed`/`api-session/removed` 表示 detach 而非持久删除。因此服务会保留空行，并可能在带外移除日志后留下遗留行，而不会在 detach 时删除仍有效的反馈。
-- **Header 身份不是内容指纹**——只有 `{createdAt, cwd}` 不同时才能识别复用；本契约无法区分保留相同 header 身份的克隆日志。
-- **调用方边界受信任**——`list`/`put`/`delete` 不携带已认证的 actor 或审计身份。在加入授权与归属信息前，部署方必须只通过受信任或另行认证的边界暴露 Host gateway。
-- **行边界**——`maxNoteBytes` 只限制单条备注，单个 Session 行的条目数和聚合保留字节尚无上限；由部署决定的行边界，延后到具体消费方明确策略时处理。
+- **仅日志具有权威性：**不读取或迁移现有 `message_feedback` 伴随数据。这些文件保持不变，但其反馈无法通过本服务访问。
+- **删除保留历史：**delete 移除当前反馈，不会从只追加日志中清除更早的评分或备注；它不是隐私擦除操作。
+- **写入所有权：**另一个进程持有 Session 写 handle 时，冷会话修改会 reject。服务不会唤醒该所有者，也不协调跨进程 Remote 调用。
+- **受信任调用方：**请求不包含经过认证的 actor 或审计身份。部署方必须保护 Host gateway。
+- **遥测导出：**对于所有用户和提供方，包括 `deepseek-official`，随附 OTel 后端在 `FEEDBACK_ONLY` 模式下仅在新的显式文本反馈、评分或备注编辑、撤回后释放完整权威日志前缀。前缀包含上下文和原样备注；后续记录等待下一次反馈，`DISABLED` 阻止捕获。部署方负责脱敏；见 [OTel 导出策略](../../session/session-telemetry-otel/README.zh.md)。
+- **扫描成本：**每次访问已有 Session 的 `list`、`put` 或 `delete` 都会扫描完整事件日志来推导当前反馈；冷会话操作还会从持久化存储读取完整日志。工作量随 Session 历史总量增长，而不只是反馈条目数。
+- **保留量：**`maxNoteBytes` 只限制单条备注，不限制日志总大小或修改次数。
 
 <a id="dev-note"></a>
 ### 开发备注
 
-<details>
-<summary>维护者的工作上下文——点击展开</summary>
-
-本开发备注是维护者的工作上下文，明确不具权威性。已交付的行为、限制与理由以上文、包代码与所链接的 Agent Note 为准。
-
-- 浏览器控件与客户端 Remote 挂载位于 `dsh-client-ui-message-feedback` 与 `dsh-api-remotes`；它们的开放事项属于这些包的备注。
-- 受信任调用方限制是开放的授权方向：Host gateway 不记录任何 actor 或审计身份，任何认证层都必须在部署边界落地，之后服务才能暴露按用户归属。
-- 按设计，备注校验早于 Session 查找，因此对不存在的 Session，`note-blank` 与 `note-too-large` 优先于 `session-not-found`；测试固定了这一顺序。
-
-</details>
+[包测试](tests/message-feedback.spec.ts)覆盖当前状态与持久历史语义；[Loader 组合](tests/loader-composition.spec.ts)验证跨重启的活跃和冷 JSONL 操作。

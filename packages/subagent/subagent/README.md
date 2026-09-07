@@ -48,7 +48,7 @@ One-shot children run once and settle with a single result, plus an optional str
 
 ### Messaging, interrupting, and discovering
 
-Every exact live Agent can use `sendMessage()` with a direct continuable child; a resident continuable child can also use it with its direct parent. A working target receives the message through Steer at its nearest step; an idle target starts a turn, and only a direct child can be cold-resumed. The parent can also interrupt a running descendant or list its children at any time. A browser continuation prompt may carry image parts: the Host admits and persists each image batch through the attachment store before the child inbox accepts the message, and refuses delivery when the child's declared model does not accept image input. Discovery covers both shapes: the service lists direct children and the full descendant tree — mode, activity, and lineage — reading live session state and optional persistence, without loading any child.
+Every exact live Agent can use `sendMessage()` with a direct continuable child; a resident continuable child can also use it with its direct parent. A working target receives the Agent message through Steer at its nearest step; an idle target starts a turn, and only a direct child can be cold-resumed. The parent can also interrupt a running descendant or list its children at any time. A browser continuation prompt independently selects Queue or Steer and may carry image parts: the Host admits and persists each image batch through the attachment store before the child inbox accepts the message, and refuses delivery when the child's declared model does not accept image input. Discovery covers both shapes: the service lists direct children and the full descendant tree — mode, activity, and lineage — reading live session state and optional persistence, without loading any child.
 
 ### Failure and recovery
 
@@ -76,8 +76,11 @@ This section explains how the service is built and where the observable behavior
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Service entry: provider registry, start and continuation API, lifecycle events |
-| [`src/continuation.ts`](src/continuation.ts) | Continuable children: identity reservation, Activation residency, adjacent messaging, interrupt, settlement |
-| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters for browser and Team message protocols |
+| [`src/continuation.ts`](src/continuation.ts) | Continuable orchestration: identity reservation, provider preparation, cold resume, authorization, routing |
+| [`src/continuation-activation.ts`](src/continuation-activation.ts) | Process-local Activation graph, admission, settlement, and child-first disposal |
+| [`src/continuation-messages.ts`](src/continuation-messages.ts) | Adjacent-Agent messages, return guidance, and settlement notices |
+| [`src/internal.ts`](src/internal.ts) | Host-only Queue and Steer adapters plus standard adjacent-Agent messaging markers |
+| [`src/inbox.ts`](src/inbox.ts) | Activation-local Queue and Steer admission plus the synchronous closing cutoff |
 | [`src/types.ts`](src/types.ts) | Public request, result, and provider contracts |
 | [`src/descriptor.ts`](src/descriptor.ts) | Versioned `subagent/descriptor` session-event vocabulary |
 | [`src/child-agent.ts`](src/child-agent.ts) | Child composition, delegated policy, depth helpers |
@@ -91,7 +94,7 @@ A request is validated against the provider's advertised capabilities, a durable
 
 ### Continuable flow
 
-The manager reserves a child identity, resolves the durable descriptor, creates (or cold-resumes) the child Agent, installs it in an Activation, and submits the prompt. Model-authored messages cross one parent/child edge through fixed Steer scheduling; host protocols retain an internal Queue adapter for distinct turns. An absent direct-child Activation cold-resumes from the persisted session. When a resident Activation settles, the manager tells the child's direct parent in the parent's own turn stream.
+The manager reserves a child identity, resolves the durable descriptor, creates (or cold-resumes) the child Agent, installs it in an Activation, and submits the prompt. Model-authored messages cross one parent/child edge through fixed Steer scheduling; browser human prompts choose Queue or best-effort Steer through an internal adapter, while other host protocols may retain Queue for distinct turns. A Session queue command admits a live subagent-owned Agent only from its own continuable descriptor. Settlement waits for Agent activity to finish, an empty Inbox, and no owned children, then flushes final Session state with admission open. Under the child lock, the manager revalidates the wake generation, Session sequence, Inbox, and owned children; the synchronous task entry of `Agent.runMaintenance()` claims the idle phase and closes the private subagent Inbox in the same JavaScript turn before handle disposal. An absent direct-child Activation cold-resumes from the persisted session. When a resident Activation settles, the manager tells the child's direct parent in the parent's own turn stream.
 
 ### Ownership and invariants
 
@@ -111,10 +114,10 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Subagent subsystem](../../../docs/subsystems/subagent.md) — the service contract, provider contract, and terminal result semantics.
 - [Subagent capability seam](../../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.md) — the design record for the delegation capability family.
-- [Continuable background subagents](../../../.agents/notes/implemented/feature/2026-07-21-continuable-background-subagents.md) — durable children that accept follow-up turns.
+- [Continuable subagents](../../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.md) — durable children that accept follow-up turns.
 - [In-process spawn backend](../subagent-spawn-in-process/README.md) — the simplest provider to compose.
 - [Out-of-process ACP backend](../subagent-acp/README.md) — children with their own runtime over the Agent Client Protocol.
-- [Merged subagent control service](../../../.agents/notes/implemented/simplification/2026-07-26-merge-subagent-control-service.md) — the follow-up, interrupt, and listing surface.
+- [tool-subagent-control README](../tool-subagent-control/README.md) — the follow-up, interrupt, and listing surface.
 
 -----
 
@@ -163,9 +166,10 @@ Prefix-stable within a child: the statement never changes during the child's lif
 These limits define when the seam is a poor fit or needs special operational care. They are current package constraints, not a general delegation comparison or a task backlog.
 
 - **ACP children remain one-shot and are not trace-enumerable** — an ACP run has no local child session in the parent's session corpus, and remote providers need an Activation ownership contract before they can support continuable children.
-- **Adjacent model messaging only** — `sendMessage()` requires an exact live sender; every sender may target a direct continuable child, while only a sender with a resident continuable Activation may target its direct parent. Browser prompts use the separate Queue control path.
+- **Adjacent model messaging only** — `sendMessage()` requires an exact live sender; every sender may target a direct continuable child, while only a sender with a resident continuable Activation may target its direct parent. Browser prompts use a separate human Queue-or-Steer control path.
 - **A direct parent must remain live for child-to-parent delivery** — the service has no durable parent mailbox; a missing parent rejects the message instead of accepting work it cannot wake.
 - **Wake gap during cancellation convergence** — a follow-up accepted after an interrupt signal but before the driver becomes idle stays queued until another waking send.
+- **Pending injected context retains an Activation** — settlement conservatively treats every Inbox occurrence as unfinished. Context parked after the Agent becomes idle keeps the child and its live ancestors resident until a waking delivery claims it, a queue mutation removes it, or manager teardown discards it.
 - **Process-local residency** — the Activation inbox and ownership graph do not coordinate two harness processes; concurrent access to one persistence store needs a durable mailbox and cross-process lease protocol.
 - **No replay of accepted-but-unlogged messages** — a crash can lose an accepted prompt that never reached the child's session log; the lost message is not replayed automatically.
 - **No durable parent mailbox** — child-to-parent messages require a resident continuable child and live direct parent, and provide acceptance identity rather than exactly-once delivery.

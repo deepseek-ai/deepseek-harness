@@ -615,7 +615,7 @@ describe.skipIf(MODE === 'record')('web e2e: active Schedule catalog', () => {
     // Seed the zero-I/O list view before the Session is opened.
     const catalogReader = await scaffold.ctx.sessionPersistence.open(CATALOG_SESSION_ID, 'read')
     try {
-      const catalogEvents = [...await catalogReader.read()]
+      const catalogEvents = [...(await catalogReader.read()).events]
       scaffold.ctx.sessionProjectionCache.coldSnapshot(catalogReader.header, catalogReader.inheritedEventCount, catalogEvents)
     } finally {
       await catalogReader.close()

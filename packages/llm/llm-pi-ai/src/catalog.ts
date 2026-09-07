@@ -125,6 +125,19 @@ const MAX_TOKENS_FIELD_GATE: Record<PiAiMaxTokensField, true> = {
 /** The output-cap field spellings a profile may name. */
 export const MAX_TOKENS_FIELDS = Object.keys(MAX_TOKENS_FIELD_GATE) as readonly PiAiMaxTokensField[]
 
+/** The reasoning-budget field spellings pi-ai accepts. */
+export type PiAiThinkingTokenBudgetField = NonNullable<OpenAICompletionsCompat['thinkingTokenBudgetField']>
+
+/** An upstream reasoning-budget spelling must be classified before it can be configured. */
+const THINKING_TOKEN_BUDGET_FIELD_GATE: Record<PiAiThinkingTokenBudgetField, true> = {
+  thinking_token_budget: true,
+  thinking_budget: true,
+  thinking_budget_tokens: true,
+}
+
+/** The reasoning-budget field spellings a profile may name. */
+export const THINKING_TOKEN_BUDGET_FIELDS = Object.keys(THINKING_TOKEN_BUDGET_FIELD_GATE) as readonly PiAiThinkingTokenBudgetField[]
+
 /** The prompt-cache marker conventions pi-ai accepts. */
 export type PiAiCacheControlFormat = NonNullable<OpenAICompletionsCompat['cacheControlFormat']>
 
@@ -143,6 +156,7 @@ export type PiAiChatTemplateVar = Extract<ChatTemplateKwargValue, { $var: string
 const CHAT_TEMPLATE_VAR_GATE: Record<PiAiChatTemplateVar, true> = {
   'thinking.enabled': true,
   'thinking.effort': true,
+  'thinking.budget': true,
 }
 
 /** The request-state placeholders a profile may name. */
@@ -229,6 +243,8 @@ const COMPLETIONS_COMPAT_GATE = {
   chatTemplateKwargs: 'offer',
   chatTemplateArgs: 'offer',
   supportsThinkingTokenBudget: 'offer',
+  thinkingTokenBudgetField: 'offer',
+  vllmPriority: 'offer',
   supportsStrictMode: 'offer',
   cacheControlFormat: 'offer',
   supportsLongCacheRetention: 'offer',
@@ -244,6 +260,7 @@ const COMPLETIONS_COMPAT_GATE = {
 /** Disposition of every `OpenAIResponsesCompat` field; a drift gate like the one above. */
 const RESPONSES_COMPAT_GATE = {
   supportsDeveloperRole: 'offer',
+  supportsMaxOutputTokens: 'offer',
   supportsStrictMode: 'offer',
   supportsLongCacheRetention: 'offer',
   sessionAffinityFormat: 'withhold',
@@ -264,6 +281,8 @@ const ANTHROPIC_COMPAT_GATE = {
   supportsStrictTools: 'offer',
   sendSessionAffinityHeaders: 'withhold',
   supportsToolReferences: 'withhold',
+  supportsMidConvoEffort: 'withhold',
+  allowedFallbackModels: 'withhold',
 } as const satisfies Record<keyof AnthropicMessagesCompat, CompatDisposition>
 
 /** Disposition of every `BedrockCompat` field; a drift gate like the one above. */
@@ -377,8 +396,14 @@ export interface PiAiCompatProfile {
   chatTemplateKwargs?: NonNullable<OpenAICompletionsCompat['chatTemplateKwargs']>
   /** Arguments sent as `chat_template_args` under the `baseten` thinking format; `openai-completions`. */
   chatTemplateArgs?: NonNullable<OpenAICompletionsCompat['chatTemplateArgs']>
-  /** Whether the endpoint accepts `thinking_token_budget` to cap vLLM reasoning; `openai-completions`. */
+  /** Alias for `thinkingTokenBudgetField: "thinking_token_budget"`; an explicit field wins. `openai-completions`. */
   supportsThinkingTokenBudget?: boolean
+  /** Request field carrying the reasoning budget from `thinkingBudgets`; omitted unless configured. `openai-completions`. */
+  thinkingTokenBudgetField?: PiAiThinkingTokenBudgetField
+  /** vLLM scheduler `priority`; lower runs earlier, and the server must enable priority scheduling. Omitted unless configured. */
+  vllmPriority?: number
+  /** Whether `openai-responses` accepts `max_output_tokens`; `false` omits it. Azure and Codex ignore this shared compat field. */
+  supportsMaxOutputTokens?: boolean
   /**
    * Whether the endpoint accepts `strict` in tool definitions;
    * `openai-completions`, the three Responses protocols, `bedrock-converse-stream`.

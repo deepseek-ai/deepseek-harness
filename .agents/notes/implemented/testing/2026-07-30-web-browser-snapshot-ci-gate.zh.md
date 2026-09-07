@@ -12,7 +12,7 @@ Status: implemented
 
 Linux PR 的 `node 24 / snapshots and artifacts` 必须运行完整 Web 浏览器 replay/compare。配置 `DSH_WEB_SNAPSHOT_WORKERS` 后，`scripts/run-gates.ts` 把 `test:web:ci` 登记为 `ci-consumers` 门禁，并显式注入 `DSH_SNAPSHOT=replay`；CI 永不以 `record` 或 `refresh` 模式运行，因此提交的预期输出与当前组装应用不一致时测试直接失败，不会在 runner 内静默改写后通过。
 
-消费方 job 在[消费方独立构建](../process/2026-07-30-independent-ci-consumer-build.zh.md)中负责唯一一次 Linux 构建，因此 `apps/web/dist` 和包的 `lib/` 目录会保留在其工作区中，供浏览器套件使用。在托管运行器上，CI 按锁文件中的 Playwright 版本安装 Chromium 及其系统依赖。在持久化故障切换 VM 上，镜像负责预装 Linux 系统软件包，CI 只安装 Chromium，避免每次运行都通过 `apt` 改动系统。PR 恢复以操作系统和锁文件为键的浏览器缓存，使必需路径无需承担压缩和上传开销，并可在锁文件变化时按操作系统前缀回退。没有任何 master 作业生成这些 hosted 缓存，因此恢复只能命中仍有归档的旧条目，直至其被逐出。自托管热备运行相同的比较，但不执行托管缓存操作。
+消费方 job 在[消费方独立构建](../../archived/process/2026-07-30-independent-ci-consumer-build.md)中负责唯一一次 Linux 构建，因此 `apps/web/dist` 和包的 `lib/` 目录会保留在其工作区中，供浏览器套件使用。在托管运行器上，CI 按锁文件中的 Playwright 版本安装 Chromium 及其系统依赖。在持久化故障切换 VM 上，镜像负责预装 Linux 系统软件包，CI 只安装 Chromium，避免每次运行都通过 `apt` 改动系统。PR 恢复以操作系统和锁文件为键的浏览器缓存，使必需路径无需承担压缩和上传开销，并可在锁文件变化时按操作系统前缀回退。没有任何 master 作业生成这些 hosted 缓存，因此恢复只能命中仍有归档的旧条目，直至其被逐出。自托管热备运行相同的比较，但不执行托管缓存操作。
 
 本地 `pnpm run test:web` 仍先构建，再串行运行完整浏览器套件；`test:web:built` 是已有构建产物的串行执行入口。开发者只在确认用户可见输出有意变化后显式运行 `DSH_SNAPSHOT=refresh pnpm run test:web`，评审每一处预期输出 diff，再以 replay 模式复验不再写文件。
 

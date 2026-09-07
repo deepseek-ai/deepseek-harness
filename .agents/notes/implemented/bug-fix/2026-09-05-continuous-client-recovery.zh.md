@@ -16,7 +16,7 @@ generation source 可能一直挂起，既不报告就绪，也不报告载体�
 
 Host Connection 插件校验配置中的 `recovery`，通过 `webserver/index-inject` 把已解析且不含秘密的时序数据注入每个页面。Client 在提供 Connection 之前校验启动输入；直接传给循环的选项可覆盖这些值。定时器值必须是浏览器定时器范围内的正整数，退避因子必须是至少为一的有限数。共享解析器显式拒绝仅靠范围比较无法排除的 `NaN`。一表示以固定上限持续重试。Host 时序配置的变更适用于随后加载的页面。
 
-Settings 指示器把活动恢复标为**自动重连中**，并始终提供**立即重连**。本决策取代[Web 连接恢复控制](../feature/2026-08-28-web-connection-recovery-control.zh.md)中的终态重试策略。该记录仍拥有手动恢复、浏览器离线暂停、唯一调度器规则与指示器展示。只有新的 `$events` ready 帧才能建立连接状态；各域的 stream 保留各自的 baseline 与 cursor 恢复方式。
+Settings 指示器把活动恢复标为**自动重连中**，并始终提供**立即重连**。本决策取代[Web 连接恢复控制](../../archived/feature/2026-08-28-web-connection-recovery-control.md)中的终态重试策略。该记录仍拥有手动恢复、浏览器离线暂停、唯一调度器规则与指示器展示。只有新的 `$events` ready 帧才能建立连接状态；各域的 stream 保留各自的 baseline 与 cursor 恢复方式。
 
 ## 考虑过的替代方案
 

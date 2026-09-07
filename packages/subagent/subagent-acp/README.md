@@ -67,7 +67,7 @@ A successful run returns the child's final streamed assistant text as the result
 
 ### Failure and recovery
 
-A spawn, initialization, or new-session failure rejects before publication, ordinarily after the child process is reaped. If cleanup also fails, the rejection preserves ordered safe startup and teardown facts without claiming whole-tree quiescence. Non-cancellation errors expose only fixed provider, stage, and category facts; the original failure stays on the internal cause chain and in Host diagnostics. After publication, a prompt, transport, or early-process failure resolves as `error` with a safe diagnostic, while local cancellation resolves as `aborted` without failure detail.
+A spawn, initialization, or new-session failure rejects before publication, ordinarily after the managed range is proven quiescent. If cleanup also fails, the rejection preserves ordered safe startup and teardown facts without claiming whole-range quiescence. Non-cancellation errors expose only fixed provider, stage, and category facts; the original failure stays on the internal cause chain and in Host diagnostics. After publication, a prompt, transport, or early-process failure resolves as `error` with a safe diagnostic, while local cancellation resolves as `aborted` without failure detail.
 
 ### Safe diagnostics
 
@@ -91,7 +91,7 @@ This section explains how the backend drives a child over ACP and where the obse
 
 ### Start and ownership flow
 
-A start resolves the child's working directory (the configured `cwd` override, else the parent session's cwd), spawns the command through the subprocess seam, performs the ACP `initialize` and `newSession` handshake, and only then publishes the run. Fulfillment means a remote session is ready and ownership has transferred to the caller. Disposal is idempotent: it closes stdin and waits a configured grace for cooperative quiescence, then escalates through SIGTERM to SIGKILL and awaits whole-tree exit. Cleanup failures remain observable as ordered safe facts and never claim quiescence.
+A start resolves the child's working directory (the configured `cwd` override, else the parent session's cwd), spawns the command through the subprocess seam, performs the ACP `initialize` and `newSession` handshake, and only then publishes the run. Fulfillment means a remote session is ready and ownership has transferred to the caller. Disposal is idempotent: it closes stdin and waits a configured grace for cooperative quiescence, then escalates through SIGTERM to SIGKILL and awaits whole-range exit. Cleanup failures remain observable as ordered safe facts and never claim quiescence.
 
 ### Stop-reason mapping
 

@@ -27,6 +27,7 @@ Each package provides one primitive; open a package page for how to use it.
 | Package | Role |
 |---|---|
 | [`brand/`](brand/README.md) | Nominal string types and their stateless constructor |
+| [`package-manifest/`](package-manifest/README.md) | Shared TypeScript declarations for package manifests |
 | [`crypto/`](crypto/README.md) | Mints RFC 9562 v4 UUIDs from the cross-runtime `crypto.getRandomValues` primitive |
 | [`deque/`](deque/README.md) | Provides amortized constant-time queue operations with bounded vacant storage |
 | [`values/`](values/README.md) | Validates, snapshots, compares, and freezes lossless JSON-compatible values |

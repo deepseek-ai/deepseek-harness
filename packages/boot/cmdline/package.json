@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cmdline",
   "description": "Immutable command-line handoff from a dsh launcher to any app plugin that injects cmdlineArgs",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

@@ -120,7 +120,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [tool-terminal tools](../tool-terminal/README.md) — the model-facing tools that operate sessions.
 - [Subprocess seam](../../../docs/subsystems/subprocess.md) — the terminal primitive that owns PTY allocation and process-tree cleanup.
 - [Persistent PTY Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-persistent-pty-sessions.md) — the capability design and deferred boundaries.
-- [Persistent pwsh Agent Note](../../../.agents/notes/implemented/architecture/2026-08-11-pwsh-persistent-pty.md) — the Windows substrate and the pwsh dialect.
+- [Persistent pwsh Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md) — the Windows substrate and the pwsh dialect.
 
 -----
 

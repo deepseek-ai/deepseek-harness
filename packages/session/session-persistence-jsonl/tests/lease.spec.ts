@@ -181,7 +181,7 @@ describe('cross-process write lock', () => {
     await pendingWinner.close()
     // Reads never touch the lock.
     const reader = await second.open(SessionId('excluded'), 'read')
-    expect((await reader.read()).map(event => event.seq)).toEqual([0, 1])
+    expect((await reader.read()).events.map(event => event.seq)).toEqual([0, 1])
     await reader.close()
 
     await holder.close()

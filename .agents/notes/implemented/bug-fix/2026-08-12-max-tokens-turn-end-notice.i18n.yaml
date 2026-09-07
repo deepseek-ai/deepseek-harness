@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-12-max-tokens-turn-end-notice.md
-2026-08-12-max-tokens-turn-end-notice.md: bdb34d67a6d8271089af04f6bcd0f046ef7cdea6
-2026-08-12-max-tokens-turn-end-notice.zh.md: 9b9c679972570e791b607330195810d68f04c803

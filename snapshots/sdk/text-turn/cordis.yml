@@ -32,3 +32,13 @@
   name: '@deepseek-ai/dsh-session-log-deepseek'
   config:
     enabled: true
+
+- insert:
+    - id: snapshot-message-feedback
+      name: '@deepseek-ai/dsh-message-feedback'
+      disabled: !!js "process.env.DSH_SNAPSHOT_FEEDBACK !== '1'"
+      config:
+        maxNoteBytes: 1024
+    - id: snapshot-feedback-producer
+      name: './feedback-producer.mjs'
+      disabled: !!js "process.env.DSH_SNAPSHOT_FEEDBACK !== '1'"

@@ -16,7 +16,7 @@ Tool-call timeout is a policy that applies only to model-facing tool execution, 
 
 - `@deepseek-ai/dsh-timeout` remains the shared library that owns `deadline()` and `timeoutOf()`.
 - `@deepseek-ai/dsh-tools` has an around-dispatch waterfall, `tools/execute`, between `tools/pre-execute` and `tools/post-execute`.
-- The [repository naming contract](2026-08-11-repository-naming-contract-and-rename-ledger.md) names `@deepseek-ai/dsh-tool-call-timeout-policy` for the exact operation it limits. The plugin reads each tool's declared `timeoutMs` from the runtime and wraps a call that has one by deriving a new `exec.signal`.
+- The [repository naming contract](../../archived/architecture/2026-08-11-repository-naming-contract-and-rename-ledger.md) names `@deepseek-ai/dsh-tool-call-timeout-policy` for the exact operation it limits. The plugin reads each tool's declared `timeoutMs` from the runtime and wraps a call that has one by deriving a new `exec.signal`.
 
 The execution pipeline is:
 

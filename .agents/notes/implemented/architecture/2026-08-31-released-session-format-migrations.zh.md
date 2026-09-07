@@ -1,4 +1,4 @@
-# Agent Note: 已发布 Session 格式在读取正文时通过相邻纯迁移边升级
+# Agent Note: 已发布 Session 格式通过有状态流式 Stage 迁移
 
 Status: implemented
 
@@ -6,52 +6,176 @@ Status: implemented
 
 ## 问题
 
-Session 格式 v0 已随 alpha 版本发布，因此结构化 writer 变更不能再把已有 JSONL 当作可丢弃的预发布状态。已存储事件正文通过读或写 `SessionHandle` 到达恢复、查询、导出、分叉与继续路径。只迁移一个消费方会让调用方看到不同的逻辑 generation，或只在后续 writer 到达旧文件时失败。
+Session 格式 v0 已随 alpha 版本发布，因此结构化 writer 变更不能再把已有 JSONL 当作可丢弃的预发布状态。第一版 whole-artifact migration 让这些日志在语义上可迁移，但它的数据模型会让一份 116 MB 真实 Session 在返回 handle 前耗尽 16 GB Node 进程。
 
-迁移必须保留精确源路径、字节与 inode，包括撕裂的物理尾部，同时为每个已发布格式提供一个无歧义的规范文件名。普通 JSONL 与 Zstandard 是同一逻辑格式的编码选择，不能产生两套并行迁移实现。
+### Whole-artifact 性能问题
+
+- Zstandard 输入包含 317,540 个 frame，每个 frame 都单独执行一次异步解压。实现先保留全部 plaintext frame，再在 JSON 解析前统一拼接，因此创建了同等数量的 Promise、线程池与 native Decode 调度。
+- Physical Decode 会在同一请求的重叠阶段物化完整 plaintext Buffer、完整字符串、全部 JSONL row、展开后的 source events、迁移后的 target events、编码后的 target rows、拼接后的目标字符串与目标 physical Buffer。
+- 每个 codec 与 migration edge 都会调用 `snapshotSessionFormatJson()` 或 `snapshotSessionFormatArtifact()`，在相邻迁移前后递归复制并 deep freeze 完整 header、row、payload 与 event array。
+- 已发布的 packed Assistant chunk 会先展开成约 914 万个 v0/v1 逻辑事件，再由 v1-to-v2 折叠成 72,784 个 current events。Whole-artifact API 要求两种表示和 old-to-new seq map 同时存活。
+- Encode 会在内存中构造完整 JSONL 与压缩输出。成功路径随后 Decode staged target、Decode committed target，并由 persistence 再 Decode 一次以创建业务对象；它还会完整重读 source 以比较 fingerprint。
+- 逐 frame `await` 没有形成有意义的有界调度。迁移前的高性能 reader 会复用一个同步 decoder，只由外层循环约每 500 ms yield 一次，从而避免数十万次异步切换。
+
+### 既有接口使单点优化无法组合
+
+`SessionFormatCodec` 以完整数组 Decode 与 Encode；每条相邻 `SessionFormatMigration` 接收并返回完整 `SessionFormatArtifact`；compiled chain 只能把已经物化的 artifact 交给下一条 edge。因此即使 physical decoder 单点变快，下游仍会重新创建 source-row array、expanded-event array、逐 edge snapshot 与 target-row array。
+
+Migration 实际有状态，但 API 把它们表现为一次性函数。v0-to-v1 需要跟踪 message 与 retry identity；v1-to-v2 需要暂存一个尚未结算的 Assistant attempt、被它阻塞的后续事件，并维护 old-to-new seq 引用。把这些状态隐藏在 closure 或 push/finish helper object 中，会让运行结构与静态声明分离，也让 production、Worker verify、fixture 与 replay 使用不同入口。
 
 ## 决策
 
-`SESSION_FORMAT_VERSION` 是单调递增的当前 writer 整数。每个相邻 `vN -> vN+1` 转换由一个与 profile 无关的纯包负责。`@deepseek-ai/dsh-session-format` 只提供无损快照、唯一且无缺口的规划、仅 header 转换与整产物组合；`@deepseek-ai/dsh-session-format-catalog` 静态导入完整链，不依赖已挂载的 Cordis 插件。历史 codec 和归一化器位于具名迁移边包中，而当前 Session 与持久化代码只接纳最新逻辑类型。
+Session format 包采用有状态同步 Stage API。静态 migration declaration 描述一条相邻版本边，并为每次 artifact restore 创建新的 stage。Stage 拥有该 artifact 的可变状态；不同 Session 之间绝不共享 stage instance。
 
-每条迁移边都会冻结严格的源与目标语义，其目标物理 codec 则保持词汇中立，使普通事件增长可以留在同一格式版本内。目录通过已安装的 peer `@deepseek-ai/dsh-session` 及其当前 `KNOWN_SESSION_EVENT_TYPES` 还原最终代，避免冻结的历史迁移边反过来成为当前词汇 owner。
+### Stage 与 Context 协议
 
-JSONL provider 在 `open` 为已存储 Session 返回句柄前完成 ensure-current 工作。它选择最高规范 generation、迁移受支持的历史正文，并从同一物理快照解码当前结果；公开 `SessionPersistence` 与 `SessionHandle` 接口不包含迁移操作。仅 header 的 `stat` 与 `list` 会重新扫描 Session 目录，在内存中转换受支持的历史 header，且绝不发布后继。`create` 独立于 header 可读性检查规范文件名，因此每个现有 generation 都会占用其 Session id。
+```text
+interface SessionFormatMigrationContext {
+  emitEvent(event: SessionFormatEvent): void
+  emitRun(run: SessionFormatEventRun): void
+}
 
-取消属于提供信号的 `open`、`stat` 或 `list` 调用。发现、稳定读取、解码与发布前检查都会观察该信号；不可变后继一旦发布且其目录项已经同步，后续取消不会删除已提交 generation。
+interface SessionFormatMigrationStage {
+  readonly headerInheritedEventCount?: number
+  transformEvent(
+    event: SessionFormatEvent,
+    context: SessionFormatMigrationContext,
+  ): void
+  transformRun(
+    run: SessionFormatEventRun,
+    context: SessionFormatMigrationContext,
+  ): void
+  finish(context: SessionFormatMigrationContext): number
+}
+```
 
-配置的 JSONL 编码拥有一个完整后缀：`.jsonl` 或 `.jsonl.zstd`。迁移读取稳定的精确源，解码可恢复逻辑前缀，在内存中组合全部必需迁移边，只为最终目标校验并同步同目录临时 stage，重新检查源 fingerprint，以不覆盖方式发布此前不存在的目标，同步 namespace，并在返回句柄前通过当前格式校验重新打开。源永不移动或改变；只有可丢弃临时 stage 可以被移动、链接或移除。迁移不会合成中断轮次事件：agent-loop 通过写句柄追加这些修复，而只读查询路径在内存中补齐它们。
+`SessionFormatMigrationContext.emitEvent()` 与 `emitRun()` 都是同步操作。Producer 会声明其发出单个事件还是紧凑 run，因此热路径不会根据已解析文件对象的属性推断类别。调度归 caller 所有，context 在每次调用时传入，而不是把 callback 注入 stage constructor。一个输入可以输出零个、一个或多个值，不需要分配临时返回数组，也不需要 stage 内部保留输出队列。
 
-规范文件名编码物理格式 generation：v0 是 `session.jsonl` 或 `session.jsonl.zstd`；每个正 generation 都是小写 `session.vN.jsonl` 或 `session.vN.jsonl.zstd`。`dsh-session-format` 拥有原始 basename 规则（`sessionFormatLogFilename`、`parseSessionFormatLogFilename`）；JSONL provider、session-log 导出归档与 recorded-session fixture 只追加压缩后缀。发布绝不重命名、替换或删除已提交 generation 路径。目标已经存在时，只有它是普通当前格式文件且字节与预期完全相同时才接受；其他目标都会拒绝。低 generation 为 operator 检查或显式复制而保留，但普通 runtime 操作选择数值最高的规范名称，绝不把保留的前任当作自动 fallback、restore 或 downgrade 支持。
+`SessionFormatMigration` 继续作为 immutable declaration，声明版本号、header migration、target-header validation 与 `createStage()`。`CompiledSessionFormatChain` 只校验一次唯一、无缺口的 edge 序列，按 source-to-target 顺序创建每次 artifact 独占的 stage，再按反方向用 context 连接它们。`finish()` 按 source-to-target 顺序关闭 stage，使每一级都能在下游关闭前发出尾部数据。
 
-当前格式快速路径从一个稳定源快照分类 header，不调用历史 converter，不写 generation，并把该快照交给当前格式解码，而不再次读取文件。解码日志进入现有按 revision 为键的有界 memo，供紧接的观察到恢复交接复用，而 `stat` 与 `list` 会有意重新扫描。多条迁移边保持原 generation 不变，并只发布最终目标；中间版本只存在于内存。源 fingerprint 重新检查会在内容变化时重启迁移，排他目标发布只在竞争胜者字节完全相同时接受它。跨进程 append 隔离不在此保证内。
+```text
+JSONL record
+  → released physical row decoder
+  → v0-to-v1 stage
+  → v1-to-v2 stage
+  → current event collector
+```
 
-第一条迁移边 `@deepseek-ai/dsh-session-format-v0-to-v1` 有意保持恒等形态：除版本和 v0 已接纳的有限历史归一化外，它保留逻辑 header、事件、序号、引用、时间戳、payload 与已配置的压缩选择。精确的 `session.jsonl[.zstd]` 源保持字节与 inode 相同，当前 writer 则编码新的 `session.v1.jsonl[.zstd]` 后继。这样可在出现改变基数的格式前先验证完整发布生命周期。
+Chain 中不存在 `flatMap`、spread expansion、中间 event array 或 scheduler。只有在每个 migration stage 都已获得直接消费 compact run 的机会后，最终 event collector 才会展开它。
 
-投影缓存记录把自己的折叠结果绑定到 Session header 的 `formatVersion`。`session_projcache` v7 reader 可以在结构上载入前代 domain 记录，但缺少格式代的记录不能播种当前 Session；权威日志会重新折叠它，下一次检查点写入完整的当前 identity。这样，任何在有界规范化或基数变化边之前产生的缓存行都不能绕过该迁移。
+### Physical codec 与 packed run
 
-## 后果
+每个 released codec 会用显式 `strict` 或 `recoverable` 策略创建 row decoder。Decoder 每次通过不同的 context 方法校验并 emit 一个 event 或 codec-owned `SessionFormatEventRun`。v0-to-v1 与 v1-to-v2 都实现 `transformEvent()` 和 `transformRun()`，因此 packed Assistant chunk 可以直接到达 folding edge，无需先变成数百万个普通事件。
 
-较新 build 读取事件正文时可能持久增加一个更高 generation。精确旧 generation 仍然可用，但 runtime 此后选择最高规范文件名；保留不承诺旧 build 能安全 downgrade，也不保证新 build 在后继损坏时 fallback。只读文件系统会报告可操作的迁移失败，而不会返回与磁盘不一致的内存当前视图。
+v0-to-v1 除了有限的 released-v0 归一化外，会保留逻辑 header、seq、引用、时间戳与 payload。它转换已移除的 `steering/message` 与 `compact/*` 事件名称，接受出现在对应 `step/end` 之后的已发布 `llm/retry`，按 turn／step／provider／policy chain 为缺失的 `llm/retry.retryId` 确定性补值，并为省略 id 的旧 compaction group 确定性补充同一个 `compactionId`。v1-to-v2 负责 attempt folding 与引用重写，并且只 emit 已结算的 current event。它会把旧的 goal 来源 user message 拆成 `goal/change` 与原本的模型可见 message。它还会为一种有限的已发布 restart 插入 interrupted `turn/end`：一个没有 open step 的 open turn 后出现非空 `next-turn` inbox splice，随后直接开始编号连续的下一轮。
 
-JSONL 发布在 POSIX 上使用硬链接创建与目录同步，在 Windows 上使用 write-through 且不覆盖的 `MoveFileExW`。竞争 writer 已先创建目标时，只有已提交字节完全匹配才接受。每个 Session 只支持一个进程内 writer。未来逐 Session 跨进程锁可以关闭剩余的源检查到发布竞态，而无需改变格式迁移边接口。
+Catalog 为 production、Worker、fixture 与 replay 暴露同一个 `createRestore()`。Recovery policy 与最终 validation policy 在 restore 创建时一次确定。Historical production 使用 recoverable source parsing 与 transformed-current validation；这种策略会在迁移后校验已发布 current 结果，而已经是 current 的输入只接受 codec 校验。Worker 与 fixture verification 使用 strict parsing 与已安装 current 格式的完整 restoration。Migration stage 或 transformed-current validation 的拒绝会保持为 `SessionFormatUnsupportedMigrationError`；物理解码失败仍是 corruption。Test support 只保留 fixture 自身需要的 token 和 envelope materialization。
 
-保留的 generation 不是实时流 WAL。未来可选 WAL sidecar 可以在硬崩溃间保留未完成 assistant 流。显式 generation 检查或复制、保留策略工具、压缩转换与流式整产物转换都是独立功能；自动 fallback 与 downgrade compatibility 并非隐含 future work。
+### JSONL 串联
 
-本记录取代 [Session 日志版本机制](2026-08-10-session-log-version-mechanism.zh.md) 中仅在继续时持久化和迁移链仍推迟的规则。原记录继续负责何时递增版本，以及普通同版本 `ignorable` 事件行为。
+JSONL provider 只扫描一次 frame boundary，复用一个 Zstandard decoder，增量解析完整 JSONL record，并把 row 直接送入 catalog restore。外层循环按有界 cadence yield；不存在逐 frame `await`、完整 plaintext 或 source-row array。
+
+Current encode 以单条 record 为单位。Provider 在主线程每个 slice 序列化约 1 MiB plaintext，通过一个会传播 source error 的 Zstandard context 流式压缩，以 4 MiB batch 写入同目录排他创建的临时文件，并在 publication 前 sync。进程级 scheduler 最多允许两个完整 verification Worker 并行，并把释放的 permit 直接交给最早的 waiter。
+
+Preparation 会把 cancellation 传给 source read，并在现有的约 500 ms Decode yield 边界观察它。`publish()` 一旦开始，encode、Worker verification 与 publication 不接收 caller cancellation，并运行到终态；write open 会在之后再次检查 caller signal。已经发布的 generation 绝不会回滚。
+
+Stage pipeline 终止于一份 prepared current artifact。[历史 Session 只读迁移准备](2026-09-05-read-only-session-migration-preparation.zh.md)定义 read open 如何立即消费该 artifact，以及 write open 如何在返回 append 权限前完成 encode、verification 与 publication。
+
+### Durable format 与 publication 规则
+
+规范文件名编码 physical format generation：v0 使用 `session.jsonl[.zstd]`，正 generation 使用 `session.vN.jsonl[.zstd]`。Migration 不会移动、覆盖或删除任何 committed generation，并且只写最终 current target；中间版本只存在于 stage state。
+
+POSIX publication 使用 hard-link creation 加目录 sync；Windows 使用 no-overwrite、write-through 的 `MoveFileExW`。已有 target 只有在其已校验 migration prefix 等于 staged bytes 时才会被接受；任何 append tail 都属于 current-generation reader，而不是 migration winner verification。
+
+既有 write handle 继续使用进程内 claim 与内核支持的跨进程 `SessionWriteLease`。仅 header 的 `stat` 与 `list` 可以转换受支持的历史 header，但不打开 body，也不发布 generation。Projection-cache record 会把 fold 绑定到 Session header 的 format version，使 cache row 不能绕过改变 event 基数的 migration。
+
+## 问题与方案对照
+
+| Whole-artifact 问题 | 实现机制 | 结果 |
+|---|---|---|
+| 每个 Zstandard frame 单独异步 Decode | 一个可复用 decoder；外层 500 ms 调度 cadence | 删除 317,540 次异步切换 |
+| 完整 plaintext、string 与 row array | 增量 JSONL parser 与 row decoder | 只保留一条跨 chunk 残行 |
+| 每条 edge 之间都形成完整 event array | Context 直连的有状态 stage | 不保留中间版本 event array |
+| Packed chunk 在 folding 前完整展开 | `SessionFormatEventRun` 与 `transformRun()` | 无需物化 914 万 source events |
+| 每条 edge 都 whole-artifact snapshot/deep freeze | Stage-owned 独占值与最终 validation | 删除重复递归复制与冻结 |
+| One-shot migration function 隐藏状态 | Immutable declaration 创建每次 artifact 独占的 stage class | 状态 ownership 与并发关系显式化 |
+| Bulk current encode 构造完整 string/Buffer | 单条 record encoder、1 MiB input slice、4 MiB write batch | 限制分配与主线程 slice |
+| 主线程重复执行完整 verification | 最多两个 complete-generation Worker | Verification CPU 不占用主线程 |
+| Production 与 fixture 使用不同 migration API | Catalog `createRestore()` 加显式 policy | 只保留一套 decoder/chain 实现 |
 
 ## 验证
 
-发布验证针对 `snapshots/`、`packages/` 与 `scripts/snapshots/python-sdk-single-exe/` 下每个带版本、来自持久化或投影的 `session*.jsonl` fixture 运行已提交 Session 格式语料门禁。fixture 专用的缺失信封与 request-header token 会先被实体化，再进入真实静态 catalog；每个 fixture 都会通过当前格式 restore 或历史迁移得到当前 v1 视图。Released-v0 replay 输入保持无后缀，而新鲜 v1 writer 输出对 parent 使用 `session.v1.jsonl`、对 child 使用 `session.<ordinal>.v1.jsonl`。Record 与 refresh 会保留每个已完成 generation，包括后续运行不再产生的 child role generation。Malformed 历史 fixture 在来源处修复，不通过依赖路径的 replay 策略准入。持续运行的门禁会动态发现语料，并拒绝每个 restore failure；独立组装式 JSONL 测试负责精确物理字节迁移。
+### Benchmark 输入与口径
 
-句柄集成验证会一起运行纯格式、catalog、持久化 seam 与 JSONL provider 测试套件：420 个测试覆盖两种编码、不可变发布竞态、仅 header 观察、读写句柄、迁移拒绝、迁移后 append、取消与崩溃尾部行为，并达到逐文件 100% statement、branch、function 与 line coverage。仓库 typecheck 与 lint、含两个已声明 skip 的 113 个无密钥 recorded-session replay，以及 28 个 owner-local expected-output case 也都在合并 master 的 checkpoint 上通过。
+Benchmark 使用 Node v24.18.0 和一份 116,228,655-byte 的 v0 Zstandard 日志，其中包含 317,540 个 frame 与 454,151 个 physical row。老 reader 会恢复 9,143,111 个展开后的 v0 event；migration 会生成 72,784 个 current v2 event，artifact SHA-256 为 `fa16ff9472ca350595a3112c20a3db79655bc2673973469987ecaf2a57ebd17c`。
 
-组装后的 headless profile 测试会暂存 `session.jsonl`，通过随附组合恢复它，在构造 Session 前观察到 v1，验证精确 v0 字节与 inode 保持不变而 `session.v1.jsonl` 出现，并证明下一次 append 以 v1 为目标。JSONL 约定测试覆盖 raw 与 Zstandard 排他发布、撕裂尾部保留、源变化、目标冲突、最高未来版本拒绝、按 revision 复用已解析日志、列表重新扫描、临时文件清理、已提交重开与当前格式直通。
+所有样本均通过 plain Node 运行 build artifact，每个样本使用独立进程，V8 heap limit 为 16 GB。“Retained heap”表示 restored Session 仍存活时强制 GC 后的 heap。除无法得到 handle 的 whole-artifact 失败外，下表使用三次运行中位数。
+
+### Physical Decode
+
+| 数据路径 | Decode 耗时 | 峰值 RSS | 调度 |
+|---|---:|---:|---|
+| Migration 前的高性能 reader | 1.553s | 916MB | 一个 decoder；外层 yield 2–3 次 |
+| Whole-artifact migration | 7.527s | 7,219MB | 317,540 次 async decoder 调用 |
+| Streaming Stage 路径 | 1.467s | 908MB | 一个 decoder；外层 yield 2 次 |
+
+### 历史文件首次冷打开
+
+| 版本 | Session restore 完成 | CPU 时间 | 峰值 RSS | Retained heap | Restore event 数 | 结果 |
+|---|---:|---:|---:|---:|---:|---|
+| Migration 前的高性能 v0 reader | 4.594s | 6.048s | 2.720GB | 2.016GB | 9,143,111 | 读取 v0，不迁移 |
+| Whole-artifact migration | >72.8s | — | Decode 阶段已 ≥7.219GB | — | — | 返回 handle 前 OOM |
+| Streaming Stage migration + 串行 publication | 6.241s | 8.493s | 2.107GB | 477MB | 72,784 | 发布并打开 v2 |
+
+老 reader 的一次性 wall time 更低，因为它不做格式转换和 durable publication；同时它会常驻 914 万 event 的表示。Stage 路径只多支付一次 encode 与 verification，随后保留折叠后的 v2 state。
+
+### Current-format 冷打开
+
+| 版本读取自己的 current format | Session restore 完成 | 峰值 RSS | Retained heap |
+|---|---:|---:|---:|
+| 老 reader 读取 v0 | 4.594s | 2.720GB | 2.016GB |
+| Whole-artifact 时代 reader 读取 v2 | 1.273s | 1.107GB | 476MB |
+| Streaming Stage reader 读取 v2 | 1.284s | 1.109GB | 476MB |
+
+Current-v2 快路径保持性能等价。架构改造不会让 current data 进入 historical stage。
+
+### Streaming 串行 migration 分段
+
+下表记录该 Stage 决策测量的串行 open 流程。当前 preparation-first 调度及其测量由[历史 Session 只读迁移准备](2026-09-05-read-only-session-migration-preparation.zh.md)记录。
+
+| 阶段 | 中位耗时 |
+|---|---:|
+| Source Decode + migration | 2.784s |
+| Encode + write + sync | 0.956s |
+| staged 文件完整 Worker verify | 1.415s |
+| Source recheck + no-overwrite publication | 0.106s |
+| committed-prefix verify + header reopen | 0.046s |
+| Generation ensure-current 总计 | 5.318s |
+| Persistence 观察到的最终 current Decode | 0.620s |
+| Session restore | 0.594s |
+| 端到端 Session restore 完成 | 6.241s |
+
+Generation 分段与端到端数据来自不同 instrumented run，因此四舍五入后的各行不要求精确相加。
+
+Format、catalog、edge、JSONL、fixture、replay 与 built-Worker 测试覆盖两种编码、packed run、仅 header 分类、torn tail、migration refusal、确定性 legacy normalization、source change、target collision、write lease 与 Worker failure。
+
+## 后果
+
+最终 current-event array 仍然不可消除，因为 Session restore 与 Agent 执行需要完整历史。Stage 架构删除完整 source 与中间 target array，但不承诺内存与分页窗口大小成正比。
+
+解码后的单条 `assistant/chunk` 会接受 envelope 校验与最终 target 校验，但其完整冻结 v1 source payload 成员校验仍处于延期状态，因为这项逐事件检查会显著影响已发布日志的 Decode 与 migration 耗时。Packed Assistant run 仍接受严格解码。只有性能证据表明不会破坏该迁移路径的已测表现时，才能恢复单条 chunk 校验。
+
+Read-only access 会在 durable publication 前消费 Stage 结果；write open 则复用同一结果，并在 append 前等待 publication。Persistence 调度仍与 format pipeline 相互独立。
+
+低 generation 为 operator 检查而保留。Retention 不承诺 downgrade compatibility、automatic fallback，也不保证旧 runtime 能安全理解新 generation。
 
 ## 考虑过的替代方案
 
-- **只在继续时迁移**——让查询、导出、分叉与后缀消费者停留在旧代际，并重复恢复策略。
-- **返回迁移后的内存视图但不持久化**——让进程观察到与最高已提交 generation 不一致的状态，并把失败推迟到后续 writer。
-- **持久化每个中间版本**——消耗空间并产生没有 runtime 消费者的恢复状态；只有源与最终代际应持久。
-- **让已挂载事件 owner 插件注册迁移**——使历史可读性依赖部署；静态 catalog 必须在功能插件挂载前工作。
-- **让每个当前格式复用同一个文件名并迁走前任**——不予采用，因为迁移会移动或覆盖已提交证据，需要冲突与保留规则，并让文件名与存储格式不一致。规范不可变 generation 名让发现流程直接选择最高版本。
+- **只优化 Zstandard Decode**——可以恢复 physical Decode 速度，但 source rows、expanded events、snapshot、intermediate artifact 与 bulk encode 仍会留在内存中。
+- **同步 Generator stage**——每个 yield 都会保留执行帧与 batch。真实日志测量使 migration 更慢，并让 migrate-complete RSS 从约 1.0 GB 增长到约 1.2 GB。
+- **每个 stage 返回数组**——只是给旧的 allocation、遍历与 flattening cost 换了名字。
+- **Stage 内部输出队列**——增加 drain、EOF 与 error ownership，同时仍会保留中间值。
+- **通过 constructor 注入 emit callback**——迫使 chain 反向构建或引入 partially connected lifecycle。操作时传 context 可以让 stage construction 不依赖下游 wiring。
+- **全局复用有状态 codec instance**——会让不同 Session 的 pending attempt、mapping 与 counter 相互污染。
+- **持久化每个中间格式版本**——产生没有 runtime consumer 的 durable state；只需要精确 source 与最终 current generation。
+- **让 mounted plugin 注册 migration**——使历史可读性依赖部署。Static catalog 必须在 feature plugin 挂载前恢复已发布格式。

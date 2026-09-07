@@ -7,7 +7,7 @@ import type { StateDotState } from '@deepseek-ai/dsh-client-ui-primitives'
 afterEach(cleanup)
 
 describe('StateDot', () => {
-  it.each(['done', 'warning', 'ongoing', 'error'] as const)('renders state %s as data-state', (state) => {
+  it.each(['done', 'warning', 'ongoing', 'error', 'idle'] as const)('renders state %s as data-state', (state) => {
     const { container } = render(<StateDot state={state} />)
     const dot = container.firstElementChild as HTMLElement
     expect(dot.dataset['state']).toBe(state)
@@ -40,7 +40,7 @@ describe('StateDot', () => {
 
   it('rejects unknown states at the type level', () => {
     const bad = (state: StateDotState) => state
-    // @ts-expect-error 'paused' is not one of the four states
+    // @ts-expect-error 'paused' is not one of the five states
     expect(bad('paused')).toBe('paused')
   })
 })

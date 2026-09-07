@@ -87,7 +87,6 @@ The package-level contract is enough for most consumers; read these when you nee
 
 - [Scoped registration subsystem](../../../docs/subsystems/scope.md) — the identity, carrier, and layer types.
 - [Agent-scope contexts Agent Note](../../../.agents/notes/implemented/architecture/2026-07-08-agent-scope-contexts.md) — the security non-goals and context design.
-- [Scoped-layers store Agent Note](../../../.agents/notes/implemented/architecture/2026-07-12-scoped-layers-store.md) — the registry-layer decision.
 - [Agent-scope runtime design Agent Note](../../../.agents/notes/implemented/architecture/2026-07-12-agent-scope-runtime-design.md) — how the loop builds per-agent scopes.
 - [Core group map](../README.md) — how the core packages compose.
 

@@ -153,7 +153,7 @@ Build the child environment from the subprocess seam's shared `scrubbedParentEnv
 
 ### Disconnection / crash
 
-A per-instance connection supervisor reconnects automatically after a lost connection with bounded exponential backoff and a per-outage attempt budget, re-running discovery on success; exhaustion unregisters the server's tools and stops until reload. The [auto-reconnect Agent Note](2026-08-06-mcp-client-auto-reconnect.md) owns that decision, including the `reconnect` config block and the `reconnect.enabled: false` opt-out that restores manual HMR/restart recovery.
+A per-instance connection supervisor reconnects automatically after a lost connection with bounded exponential backoff and a per-outage attempt budget, re-running discovery on success; exhaustion unregisters the server's tools and stops until reload. The [auto-reconnect Agent Note](../../archived/feature/2026-08-06-mcp-client-auto-reconnect.md) owns that decision, including the `reconnect` config block and the `reconnect.enabled: false` opt-out that restores manual HMR/restart recovery.
 
 ## Alternatives considered
 
@@ -167,7 +167,7 @@ Rejected. There is no foreseeable alternative MCP client implementation — MCP 
 
 ### Auto-reconnect with exponential backoff
 
-Rejected by the connect-once design: it added a partial-availability state (tools registered but temporarily non-functional), and stdio crashes often indicate configuration problems retrying cannot fix; HMR was the recovery path. Operational feedback reversed the deferral — the [auto-reconnect Agent Note](2026-08-06-mcp-client-auto-reconnect.md) implements it with a bounded per-outage budget and an opt-out.
+Rejected by the connect-once design: it added a partial-availability state (tools registered but temporarily non-functional), and stdio crashes often indicate configuration problems retrying cannot fix; HMR was the recovery path. Operational feedback reversed the deferral — the [auto-reconnect Agent Note](../../archived/feature/2026-08-06-mcp-client-auto-reconnect.md) implements it with a bounded per-outage budget and an opt-out.
 
 ### Bridge Resources and Prompts
 
@@ -217,5 +217,5 @@ Coverage is named per tier; each behavior lives at the cheapest tier that can ex
 - **MCP SDK stability**: the `@modelcontextprotocol/sdk` is still evolving; breaking changes require updating the bridge. The version is pinned, and the SDK is widely adopted (Claude Desktop, Cursor, VS Code) so breaking changes are unlikely to be silent.
 - **Tool schema quality**: MCP servers may expose poorly-described tools (vague descriptions, incomplete JSON schemas). The harness passes them through as-is — garbage-in-garbage-out; that is the server author's responsibility, not the bridge's.
 - **Stdio process management**: a misbehaving MCP server that ignores signals could wedge dispose. The Cordis fiber disposal has bounded quiescence; a stuck transport eventually times out at the framework level.
-- Crash recovery is automatic within the [reconnect budget](2026-08-06-mcp-client-auto-reconnect.md); manual reload remains the path after exhaustion or with `reconnect.enabled: false`.
+- Crash recovery is automatic within the [reconnect budget](../../archived/feature/2026-08-06-mcp-client-auto-reconnect.md); manual reload remains the path after exhaustion or with `reconnect.enabled: false`.
 - Image payloads can enter model context only through the shared durable attachment store and an exact positive route capability. Audio and embedded-resource payloads remain execution-local with explicit diagnostics.

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-webworker-packer",
   "description": "Build-time packer for the browser runtime's base VFS image and ordered data-overlay archives",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "private": true,
   "repository": {
     "type": "git",
@@ -40,7 +40,8 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@types/js-yaml": "^4.0.9",
-    "@types/picomatch": "^3.0.2"
+    "@types/picomatch": "^3.0.2",
+    "@deepseek-ai/dsh-package-manifest": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"

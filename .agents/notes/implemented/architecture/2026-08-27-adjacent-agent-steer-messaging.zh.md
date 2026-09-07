@@ -79,4 +79,4 @@ parent 与 child 以相同注册表顺序继承相同定义。标准定义携带
 - 初始任务在 fork 前缀之后携带经过 JSON 编码的动态 parent 地址，而请求头系统提示词与工具顺序保持可复用。
 - 人类提示、结算通知、QueueDock 与 base bundle 的一次性 fork 策略仍是独立决策。
 
-本决策合并并删除了已完全被取代的 report 工具与 child report 义务记录。它取代[按意图命名的 subagent 继续执行操作](../simplification/2026-07-27-intent-named-subagent-continuation-operations.zh.md)中的 `followup` 命名选择，并保留[Child Agent 消息先于其结算通知](../bug-fix/2026-08-17-subagent-message-settlement-ordering.zh.md)中的接受顺序保证。
+本决策合并并删除了已完全被取代的 report 工具与 child report 义务记录。它取代[按意图命名的 subagent 继续执行操作](../../archived/simplification/2026-07-27-intent-named-subagent-continuation-operations.md)中的 `followup` 命名选择，并保留[Child Agent 消息先于其结算通知](../bug-fix/2026-08-17-subagent-message-settlement-ordering.zh.md)中的接受顺序保证。

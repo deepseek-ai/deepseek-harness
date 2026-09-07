@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-02-todo-first-composer-context-order.md
-2026-08-02-todo-first-composer-context-order.md: 26962426c763c6911fc61acab09cdb96725922b1
-2026-08-02-todo-first-composer-context-order.zh.md: a341dddfb759043dbd3d7cf8347530bb33afcf65

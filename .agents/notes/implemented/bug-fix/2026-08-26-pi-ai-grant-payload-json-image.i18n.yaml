@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-26-pi-ai-grant-payload-json-image.md
-2026-08-26-pi-ai-grant-payload-json-image.md: 9eb5e5ffd9ccbc18d409bd50e05061006bdca094
-2026-08-26-pi-ai-grant-payload-json-image.zh.md: 8329b4acf062a073dfe78ec10fe03852e7a64fd9

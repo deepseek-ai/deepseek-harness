@@ -8,7 +8,20 @@ The seam is a [capability seam](../../.agents/notes/implemented/architecture/202
 
 ## `SessionHandle` — one open channel onto a stored session
 
-Every log read and write flows through a handle, never through id-addressed service methods: the handle is the single door the cross-process write lease guards. One handle type serves both accesses — a mutation on a `read` handle is a runtime `SessionReadOnlyError` rather than a typed split — and in-process single-writer ownership makes a second `open(id, 'write')` reject with `SessionAlreadyOwnedError` while an owner is active.
+Every log read and write flows through a handle, never through id-addressed service methods: the handle is the single door the cross-process write lease guards. A read returns a caller-owned outer slice and the producer-established aliasing state of its event values. One handle type serves both accesses — a mutation on a `read` handle is a runtime `SessionReadOnlyError` rather than a typed split — and in-process single-writer ownership makes a second `open(id, 'write')` reject with `SessionAlreadyOwnedError` while an owner is active.
+
+```ts type-equiv
+/** One persistence event slice returned by {@link SessionHandle.read}. */
+interface SessionHandleReadResult {
+  /**
+   * Whether event values are exclusively owned or shared only after deep
+   * freezing. Slicing preserves the producer's state even when no events remain.
+   */
+  readonly eventState: SessionSeedEventState
+  /** Event values in a caller-owned outer array. */
+  readonly events: readonly SessionEvent[]
+}
+```
 
 ```ts type-equiv
 /**
@@ -47,9 +60,9 @@ interface SessionHandle extends AsyncDisposable {
    * @param length - maximum number of events to return; defaults to the rest
    *   of the log. An offset at or past the end returns an empty list.
    * @param options - optional cancellation.
-   * @returns the events with `seq >= offset`, at most `length` of them.
+   * @returns the caller-owned outer slice plus the ownership state of its event values.
    */
-  read(offset?: number, length?: number, options?: SessionHandleReadOptions): Promise<readonly SessionEvent[]>
+  read(offset?: number, length?: number, options?: SessionHandleReadOptions): Promise<SessionHandleReadResult>
 
   /**
    * Append a contiguous batch continuing the current logical end. The first
@@ -90,7 +103,7 @@ A created session is observable in this process from the moment `create` resolve
 
 ## The flush checkpoint
 
-`session/event` is a *synchronous* notification; the mounted backend routes it by session id into the active write handle's bounded write-behind window without blocking the producer (the backend installs these listeners once, because persistence already enforces one active write handle per id). The first pending event starts a fixed internal batching window, and later events join without resetting its deadline. Expiry starts one durable `append` through the session's write handle; events admitted during that write receive their own deadline and form a follow-up batch. `session/flush` cancels the wait and drains through quiescence, so the loop still uses it as the ordering and error-observation checkpoint before claiming the next ordinary turn. A rejected background write retains its events in order, pauses the automatic path, and is reported through the logger; the next explicit flush retries and rejects loudly to its caller. `session/disposed` performs the same final drain and closes the handle, and `close()` itself drains the routed buffer through the still-open storage, so backend teardown's close sweep loses nothing. The window bounds only intentional batching wait, not event-loop scheduling or backend durability latency ([decision](../../.agents/notes/implemented/architecture/2026-08-08-bounded-session-persistence-write-batching.md)).
+`session/event` is a *synchronous* notification; the mounted backend routes it by session id into the active write handle's bounded write-behind window without blocking the producer (the backend installs these listeners once, because persistence already enforces one active write handle per id). The first pending event starts a fixed internal batching window, and later events join without resetting its deadline. Expiry starts one durable `append` through the session's write handle; events admitted during that write receive their own deadline and form a follow-up batch. `session/flush` cancels the wait and drains through quiescence, so the loop still uses it as the ordering and error-observation checkpoint before claiming the next ordinary turn. A rejected background write retains its events in order, pauses the automatic path, and is reported through the logger; the next explicit flush retries and rejects loudly to its caller. `session/disposed` performs the same final drain and closes the handle, and `close()` itself drains the routed buffer through the still-open storage, so backend teardown's close sweep loses nothing. The window bounds only intentional batching wait, not event-loop scheduling or backend durability latency.
 
 ## Crash recovery preserves an interrupted turn
 
@@ -98,7 +111,7 @@ A log crashed mid-turn ends with an open `turn/start` and no `turn/end`. Persist
 
 Repair therefore writes only under write ownership: a live session's write handle is held by its lifecycle owner, so a concurrent `open(id, 'write')` rejects with `SessionAlreadyOwnedError` instead of racing repair against a live turn. Read-only observers (session-query) balance an interrupted cold log with the same closers in memory only, writing nothing back.
 
-Read-only observation is `open(id, 'read')`: the handle serves validated contiguous prefix slices, never a torn tail, and repeated reads on one handle never observe an older state than a prior read. There is no persistence-side prepared-Session cache: session-query owns its cold-read cache, keying one balanced cold Session per id on the `stat().revision` change token and re-reading only when the token changes. The [handle-based persistence Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.md) owns this lifecycle; the [Session preparation decision](../../.agents/notes/implemented/architecture/2026-08-05-session-preparation.md) records the publication-boundary `SessionPreparation` that remains.
+Read-only observation is `open(id, 'read')`: the handle serves validated contiguous prefix slices, never a torn tail, and repeated reads on one handle never observe an older state than a prior read. There is no persistence-side prepared-Session cache: session-query owns its cold-read cache, keying one balanced cold Session per id on the `stat().revision` change token and re-reading only when the token changes. The [handle-based persistence Agent Note](../../.agents/notes/implemented/architecture/2026-08-27-handle-based-session-persistence.md) owns this lifecycle; the archived [Session preparation record](../../.agents/notes/archived/architecture/2026-08-05-session-preparation.md) documents the original publication-boundary `SessionPreparation` decision.
 
 ## `SessionLocation` — refusal-diagnostics artifact target
 
@@ -173,7 +186,7 @@ interface SessionHeader {
 
 ## Format refusal — logs a build cannot faithfully read
 
-A backend refuses a log it cannot faithfully interpret with `SessionFormatUnsupportedError`, distinct from `SessionPersistenceCorruptionError` because nothing is damaged. `stat` and `list` classify the highest canonical generation and translate a supported historical header without reading or mutating its body. `open` runs the build-static adjacent migration chain under per-id serialization before returning a handle, leaves every source path, byte, and inode unchanged, and exclusively publishes only the final current generation. A future highest generation refuses even when an older readable generation remains. Current v2 restoration retains installed extensions and unknown events carrying `ignorable: true`; historical v0/v1 migration refuses an unknown type even when marked ignorable. The message appends the selected raw log path when the backend keeps one artifact per session. The JSONL backend migrates released v0 or v1 to current v2 and refuses a future version before interpreting its version-specific fields or event rows. An out-of-tree backend must enforce equivalent current-only handle values and direction-aware refusals at its physical-format entry. The [released-format migration decision](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md) owns the chain and immutable-publication rules.
+A backend refuses a log it cannot faithfully interpret with `SessionFormatUnsupportedError`, distinct from `SessionPersistenceCorruptionError` because nothing is damaged. `stat` and `list` classify the highest canonical generation and translate a supported historical header without reading or mutating its body. Historical `open` calls share one per-session migration preparation before returning current logical values and leave every source path, byte, and inode unchanged. The JSONL provider returns a read handle from that in-memory result without publishing; a write open holds its single-writer claim and file lease while it reuses the preparation, exclusively publishes the final current generation, and only then returns the writable handle. A future highest generation refuses even when an older readable generation remains. Current v2 restoration retains installed extensions and unknown events carrying `ignorable: true`; historical v0/v1 migration refuses an unknown type even when marked ignorable. The message appends the selected raw log path when the backend keeps one artifact per session. An out-of-tree backend must enforce equivalent current-only handle values and direction-aware refusals at its physical-format entry. The [released-format migration decision](../../.agents/notes/implemented/architecture/2026-08-31-released-session-format-migrations.md) owns the chain and immutable-publication rules.
 
 ## `CreateSessionOptions` — seeding and metadata
 
@@ -214,29 +227,37 @@ Replay/fork is therefore `ctx.agents.create({ sessionId, seed, meta })` — a fo
 
 ## Preparation and restoration ownership
 
-`SessionStore.prepare()` accepts ordinary creation options or fresh persistence graphs transferred through `RestoredSessionOptions`. The restoration branch validates and freezes the transferred header and events in place, so callers must retain no mutable aliases. `SessionPreparation` then owns the exact unpublished Session until publication or rollback; disposal is synchronous and idempotent. agent-loop's resume builds these graphs by reading the stored log through the session's write handle and appending any needed `interruptedTurnClosers` before preparation.
+`SessionStore.prepare()` accepts ordinary creation options or an adoptable seed through `RestoredSessionOptions`. Its `eventState` says whether event values are independently owned or shared only after deep freezing; the producer establishes that state, and slicing does not infer a different state from result length. Restoration validates and adopts those values without another copy or freeze pass. `SessionPreparation` then owns the exact unpublished Session until publication or rollback; disposal is synchronous and idempotent. agent-loop's resume reads this result through the session's write handle and appends independently owned `interruptedTurnClosers` before preparation.
 
 ```ts type-equiv
 /**
- * Fresh storage values transferred to {@link SessionStore.prepare} without a
- * second serialization copy. Callers retain no mutable aliases.
+ * Aliasing state of an adoptable Session seed. `shared-frozen` permits deeply
+ * frozen aliases plus independently owned unfrozen values in the same seed.
+ */
+type SessionSeedEventState = 'detached' | 'shared-frozen'
+```
+
+```ts type-equiv
+/**
+ * Adoptable storage values transferred to {@link SessionStore.prepare}
+ * without another copy or freeze pass.
  */
 interface RestoredSessionOptions {
-  /** Fresh detached storage events to validate and freeze in place. */
+  /** Events that are independently owned or already deeply frozen. */
   readonly seed: SessionEvent[]
-  /** Fresh detached storage metadata to validate and freeze in place. */
+  /** Independently owned storage metadata to validate and freeze in place. */
   readonly meta: SessionHeader
   /** Exact number of fork-inherited leading events decoded from storage. */
   readonly inheritedEventCount: SessionLogOffset
-  /** Select the persistence ownership-transfer path. */
-  readonly seedSource: 'persistence'
+  /** Aliasing state carried from the operation that produced the seed. */
+  readonly eventState: SessionSeedEventState
 }
 ```
 
 ```ts type-equiv
 /** Inputs accepted while constructing an unpublished Session. */
 type PrepareSessionOptions =
-  | (CreateSessionOptions & { readonly seedSource?: undefined })
+  | (CreateSessionOptions & { readonly eventState?: undefined })
   | RestoredSessionOptions
 ```
 

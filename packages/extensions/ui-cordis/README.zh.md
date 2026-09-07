@@ -89,7 +89,7 @@ kind: "package-reference"
 - [Host runner](../cordis-host-runner/README.zh.md)——面板背后的清单与生命周期动词。
 - [工具包](../tool-cordis/README.zh.md)——调用被这些卡片渲染的模型侧工具。
 - [extensions 子系统](../../../docs/subsystems/extensions.zh.md)——生成的 `ctx.dynamicCordisRunner` API 与转发的 `cordis/*` 事件。
-- [动态客户端渲染与附件归属 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-17-dynamic-client-render-and-attachment-ownership.zh.md)——槽位注册的浏览器 UI 如何归其包所有。
+- [slots 子系统](../../../docs/subsystems/slots.zh.md)——槽位注册的浏览器 UI 如何归其包所有。
 
 -----
 

@@ -1,17 +1,24 @@
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
-import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import type { Agent, Inbox, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { AttachmentError, AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { createAssistantMessage, createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
-import SessionStore, { SESSION_FORMAT_VERSION, SessionId, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
+import SessionStore, {
+  SESSION_FORMAT_VERSION, Session, SessionId, SessionLogOffset, SessionSeq,
+} from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, UserMessage } from '@deepseek-ai/dsh-session'
+import { snapshotSubagentDescriptor, SUBAGENT_DESCRIPTOR_VERSION } from '@deepseek-ai/dsh-subagent'
+import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiSessionAgentController } from '../src/agent.ts'
 import { SessionCommandController } from '../src/commands.ts'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { installSessionReadTestServices, testSessionPersistence } from './test-remote.ts'
 
-async function commandHarness(): Promise<{
+async function commandHarness(
+  childMode?: 'continuable' | 'seeded-continuable' | 'seed-only' | 'one-shot' | 'unknown' | 'corrupt',
+): Promise<{
   ctx: Context
   controller: SessionCommandController
   agent: Agent
@@ -22,9 +29,48 @@ async function commandHarness(): Promise<{
   const ctx = new Context()
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
-  const session = ctx.sessions.create(SessionId('commands-session'), { meta: { cwd: '/workspace' } })
-  const inbox = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
-  const steer = vi.fn()
+  installSessionReadTestServices(ctx)
+  ctx.sessionProjections.register(subagentIdentityProjectionDefinition)
+  const sessionId = SessionId('commands-session')
+  const ancestor = Session.create(SessionId('ancestor'))
+  ancestor.append('subagent/descriptor', snapshotSubagentDescriptor({
+    mode: 'continuable', provider: 'test', label: 'ancestor',
+  }))
+  // A seeded child inherits exactly the ancestor prefix; its own descriptor
+  // is appended after creation, as the continuation manager does. `seed-only`
+  // never appends one: the identity folds as continuable, but from the
+  // inherited prefix rather than this Session's own suffix.
+  const lineage = childMode === 'seeded-continuable' || childMode === 'seed-only'
+    ? ancestor.snapshotEvents()
+    : undefined
+  const session = ctx.sessions.create(sessionId, {
+    ...lineage === undefined ? {} : { seed: lineage, inheritedEventCount: SessionLogOffset(lineage.length) },
+    meta: {
+      cwd: '/workspace',
+      ...(childMode === undefined ? {} : {
+        origin: 'subagent' as const,
+        parentSession: SessionId('offline-parent'),
+      }),
+      ...lineage === undefined ? {} : { isSeeded: true },
+    },
+  })
+  if (childMode === 'continuable' || childMode === 'seeded-continuable') {
+    session.append('subagent/descriptor', snapshotSubagentDescriptor({
+      mode: 'continuable', provider: 'test', label: 'child',
+    }))
+  } else if (childMode === 'one-shot') {
+    session.append('subagent/descriptor', snapshotSubagentDescriptor({
+      mode: 'one-shot', provider: 'test', label: 'child',
+    }))
+  } else if (childMode === 'corrupt') {
+    session.append('subagent/descriptor', {
+      version: SUBAGENT_DESCRIPTOR_VERSION,
+      mode: 'continuable',
+      provider: 1,
+    } as never)
+  }
+  const inbox = createInboxStub()
+  const steer = vi.fn((message: UserMessage) => { inbox.append('next-step', message) })
   const cancel = vi.fn()
   const agent = {
     id: session.id,
@@ -52,7 +98,14 @@ async function commandHarness(): Promise<{
     serializeImageAdmission: <Value>(_agent: Agent, operation: () => Promise<Value>) => operation(),
     composeAgent: () => Promise.resolve({ setup: () => {} }),
   } as unknown as ApiSessionAgentController
-  return { ctx, controller: new SessionCommandController(ctx, agents, '/workspace'), agent, inbox, steer, cancel }
+  return {
+    ctx,
+    controller: new SessionCommandController(ctx, agents, '/workspace'),
+    agent,
+    inbox,
+    steer,
+    cancel,
+  }
 }
 
 async function expectFailure(operation: Promise<unknown>, code: string): Promise<void> {
@@ -100,6 +153,9 @@ describe('Session queue commands', () => {
       action: { kind: 'edit', content: [{ type: 'text', text: 'edited' }] },
     })).toEqual({ accepted: true })
     expect(inbox.nextTurn[0]?.content).toEqual([{ type: 'text', text: 'edited' }])
+    // An edit rewrites content in place, so the occurrence a client addressed
+    // by id stays addressable.
+    expect(inbox.nextTurn[0]?.id).toBe(queued.id)
     expect(controller.updateQueue({
       sessionId: agent.id, itemId: nextStep.id, action: { kind: 'remove' },
     })).toEqual({ accepted: true })
@@ -135,6 +191,81 @@ describe('Session queue commands', () => {
     expect(controller.cancel({ sessionId: agent.id })).toEqual({ accepted: true })
     expect(cancel).toHaveBeenCalledWith({ kind: 'user' }, { keepInbox: true })
     await ctx.fiber.dispose()
+  })
+
+  it.each(['continuable', 'seeded-continuable'] as const)(
+    'mutates both inbox destinations of a live %s child while its parent is offline',
+    async (childMode) => {
+      const { ctx, controller, agent, inbox, steer } = await commandHarness(childMode)
+      const queued = createUserMessage({
+        content: [{ type: 'text', text: 'queued' }], source: { kind: 'user' },
+      })
+      const context = createUserMessage({
+        content: [{ type: 'text', text: 'context' }], source: { kind: 'plugin', plugin: 'test' },
+      })
+      inbox.append('next-turn', queued)
+      inbox.append('next-step', context)
+
+      expect(controller.updateQueue({
+        sessionId: agent.id,
+        itemId: context.id,
+        action: { kind: 'edit', content: [{ type: 'text', text: 'edited context' }] },
+      })).toEqual({ accepted: true })
+      const editedContext = inbox.nextStep[0]
+      expect(editedContext).toMatchObject({
+        content: [{ type: 'text', text: 'edited context' }],
+        source: context.source,
+      })
+      expect(editedContext?.id).toBe(context.id)
+      if (editedContext === undefined) throw new Error('missing edited context')
+      expect(controller.updateQueue({
+        sessionId: agent.id, itemId: editedContext.id, action: { kind: 'remove' },
+      })).toEqual({ accepted: true })
+      expect(controller.updateQueue({
+        sessionId: agent.id, itemId: queued.id, action: { kind: 'steer' },
+      })).toEqual({ accepted: true })
+      expect(steer).toHaveBeenCalledWith(queued)
+      await ctx.fiber.dispose()
+    },
+  )
+
+  it('removes the selected message before handing it to Agent steering', async () => {
+    const { ctx, controller, agent, inbox, steer } = await commandHarness('continuable')
+    const first = createUserMessage({
+      content: [{ type: 'text', text: 'first' }], source: { kind: 'user' },
+    })
+    const second = createUserMessage({
+      content: [{ type: 'text', text: 'second' }], source: { kind: 'user' },
+    })
+    inbox.append('next-turn', first)
+    inbox.append('next-turn', second)
+    // Stand in for the Agent's cancellation-convergence destination; the
+    // command must accept whichever boundary `Agent.steer()` selects.
+    steer.mockImplementation((message: UserMessage) => { inbox.append('next-turn', message) })
+
+    expect(controller.updateQueue({
+      sessionId: agent.id, itemId: first.id, action: { kind: 'steer' },
+    })).toEqual({ accepted: true })
+    expect(steer).toHaveBeenCalledWith(first)
+    // Ordering proves the removal happened before delivery rather than after.
+    expect(inbox.nextTurn).toEqual([second, first])
+    expect(inbox.nextStep).toEqual([])
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps one-shot, seed-only, missing, and malformed child descriptors behind the ownership fence', async () => {
+    for (const mode of ['one-shot', 'seed-only', 'unknown', 'corrupt'] as const) {
+      const { ctx, controller, agent, inbox } = await commandHarness(mode)
+      const queued = createUserMessage({
+        content: [{ type: 'text', text: mode }], source: { kind: 'user' },
+      })
+      inbox.append('next-turn', queued)
+      await expectFailure(Promise.resolve().then(() => controller.updateQueue({
+        sessionId: agent.id, itemId: queued.id, action: { kind: 'remove' },
+      })), 'session/agent-busy')
+      expect(inbox.nextTurn).toEqual([queued])
+      await ctx.fiber.dispose()
+    }
   })
 })
 

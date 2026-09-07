@@ -48,11 +48,13 @@ describe('Session log positions', () => {
 
   it('rejects a negative-zero seq at the restored event boundary', () => {
     const id = SessionId('negative-zero-event')
-    expect(() => Session.fromRestore(id, [{
-      type: 'turn/start', seq: -0, time: 1, data: { turn: 1 },
-    }] as never, {
-      version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: false,
-    }, SessionLogOffset(0))).toThrow(/invalid event envelope/)
+    expect(() => Session.fromRestore(
+      id,
+      [{ type: 'turn/start', seq: -0, time: 1, data: { turn: 1 } }] as never,
+      { version: SESSION_FORMAT_VERSION, id, createdAt: 1, isSeeded: false },
+      SessionLogOffset(0),
+      'detached',
+    )).toThrow(/invalid event envelope/)
   })
 
   it('keeps fork lineage outside the logical header integer fields', () => {

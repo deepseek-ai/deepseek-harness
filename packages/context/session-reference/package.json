@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-reference",
   "description": "Cross-session snapshot references and durable untrusted model context (ctx.sessionReferenceResolver)",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -60,24 +60,38 @@
     "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
     "@deepseek-ai/dsh-session-query": "workspace:^",
     "@deepseek-ai/dsh-session-title": "workspace:^",
+    "@deepseek-ai/dsh-spill": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^"
   },
   "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-spill": {
+      "optional": true
+    },
     "@deepseek-ai/dsh-session-projection-cache": {
       "optional": true
     }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-compaction": "workspace:^",
+    "@deepseek-ai/dsh-fs-local": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-output-retention": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-projection": "workspace:^",
     "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
     "@deepseek-ai/dsh-session-query": "workspace:^",
+    "@deepseek-ai/dsh-session-query-sqlite": "workspace:^",
     "@deepseek-ai/dsh-session-title": "workspace:^",
+    "@deepseek-ai/dsh-spill": "workspace:^",
+    "@deepseek-ai/dsh-spill-local": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tool-fs": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^"
   }
 }

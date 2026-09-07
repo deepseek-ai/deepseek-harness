@@ -1,4 +1,5 @@
 import { SessionFormatError, sessionFormatCount, sessionFormatSafeInteger } from '@deepseek-ai/dsh-session-format'
+import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import type {
   SessionFormatEvent,
   SessionFormatJsonValue,
@@ -489,7 +490,12 @@ function messageValue(
   if (role === undefined) literalValue(message['role'], ['system', 'user', 'assistant'], `${label} role`)
   else literalValue(message['role'], [role], `${label} role`)
   contentBlocksValue(message['content'], `${label} content`, version)
-  messageSourceValue(message['source'], `${label} source`, version, expected)
+  const source = releasedV0Record(message['source'], `${label} source`)
+  if (version < 2 && expected === 'user' && source['kind'] === 'goal' && source['change'] !== undefined) {
+    legacyGoalMessageValue(message, source, label)
+  } else {
+    messageSourceValue(source, `${label} source`, version, expected)
+  }
   if (expected === 'tool') {
     const content = message['content']
     const block = Array.isArray(content) && content.length === 1
@@ -499,6 +505,34 @@ function messageValue(
     if (block?.['type'] !== 'tool-result' || block['toolCallId'] !== source['callId']) {
       throw new SessionFormatError(`${label} must contain exactly one tool-result block`)
     }
+  }
+}
+
+function legacyGoalMessageValue(message: JsonRecord, source: JsonRecord, label: string): void {
+  assertReleasedV0Keys(source, ['kind', 'goalId', 'revision', 'round', 'change'], [], `${label} source`)
+  nonEmptyString(source['goalId'], `${label} source goalId`)
+  positiveIntegerValue(source['revision'], `${label} source revision`)
+  if (source['round'] !== 0) throw new SessionFormatError(`${label} legacy goal source round must be 0`)
+  const change = releasedV0Record(source['change'], `${label} source change`)
+  goalChangeValue(change, `${label} source change`)
+  const ref = releasedV0Record(
+    change['operation'] === 'clear' ? change['cleared'] : change['goal'],
+    `${label} source change ref`,
+  )
+  if (source['goalId'] !== ref['id'] || source['revision'] !== ref['revision']) {
+    throw new SessionFormatError(`${label} legacy goal source does not match its change`)
+  }
+  const payload = change['operation'] === 'clear'
+    ? { cleared: change['cleared'], clearedAt: change['clearedAt'] }
+    : {
+      goal: change['goal'],
+      roundsStarted: change['roundsStarted'],
+      createdAt: change['createdAt'],
+      updatedAt: change['updatedAt'],
+    }
+  const expected = [{ type: 'text', text: `<goal_state>${JSON.stringify(payload)}</goal_state>` }]
+  if (!deepEqualJson(message['content'], expected)) {
+    throw new SessionFormatError(`${label} legacy goal content does not match its change`)
   }
 }
 

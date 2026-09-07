@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-12-unlink-fixture-junctions-before-delete.md
-2026-08-12-unlink-fixture-junctions-before-delete.md: 4514a33d728866b817f4e9c1393f16c07976ed45
-2026-08-12-unlink-fixture-junctions-before-delete.zh.md: 3c212c052ab0303ccb8d31d2b310a365a1d8cc99

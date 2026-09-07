@@ -62,4 +62,20 @@ describe('Client UI i18n source check', () => {
       'export const en = { title: "Hard-coded by design" }',
     )).toEqual([])
   })
+
+  it('rejects Electron dialog, title, prompt, and DOM copy outside locale owners', () => {
+    const source = `
+      dialog.showMessageBox({ title: 'Update available', message: 'Install it now?' })
+      window.setTitle('Desktop plugins')
+      window.prompt('Target version')
+      status.textContent = 'Finished'
+    `
+    expect(findUiI18nViolations('apps/desktop/src/main.ts', source).map(row => row.text)).toEqual([
+      'Update available',
+      'Install it now?',
+      'Desktop plugins',
+      'Target version',
+      'Finished',
+    ])
+  })
 })

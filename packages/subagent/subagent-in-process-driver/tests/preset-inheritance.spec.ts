@@ -18,7 +18,6 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import AgentPresets from '@deepseek-ai/dsh-agent-presets'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { startInProcessRun } from '../src/index.ts'
@@ -40,7 +39,6 @@ async function setupPresetHost(): Promise<{ ctx: Context; adapter: MockAdapter; 
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(AgentPresets, { default: 'coding', roots: ROOTS, includeShippedRoot: false, includeUserRoot: false })
   const adapter = new MockAdapter([textResponse('parent idle'), textResponse('child done')])

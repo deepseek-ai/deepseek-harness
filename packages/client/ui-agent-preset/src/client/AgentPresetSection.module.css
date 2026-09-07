@@ -198,26 +198,9 @@
   line-height: 1.4;
 }
 
-.badge,
-.inUse {
-  border-radius: 999px;
-  corner-shape: round;
-  padding: 1px 8px;
-  font-size: 11px;
-  line-height: 17px;
-  white-space: nowrap;
-  font-weight: 500;
-}
-
-.badge {
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  color: var(--dsw-alias-label-tertiary);
-}
-
+/* Placement only: the capsule geometry and palette come from `Tag`. */
 .inUse {
   margin-left: auto;
-  background: var(--dsw-alias-label-primary);
-  color: var(--dsw-alias-bg-layer-3);
 }
 
 /* Bounded to four lines. A preset publishes its own description, so one long

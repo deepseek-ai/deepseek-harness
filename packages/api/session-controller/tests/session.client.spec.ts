@@ -400,9 +400,11 @@ describe('prompt and cancel errors', () => {
     })
     await session.open()
     const prompted = await session.prompt([{ type: 'text', text: '继续' }], 'queue')
+    const steered = await session.prompt([{ type: 'text', text: '现在处理' }], 'steer')
     const cancelled = await session.cancel()
 
     expect(prompted).toEqual({ ok: true, value: { accepted: true } })
+    expect(steered).toEqual({ ok: true, value: { accepted: true } })
     expect(cancelled).toEqual({ ok: true, value: { accepted: true } })
     expect(api.callsOf('session.follow')).toEqual([
       {
@@ -419,7 +421,16 @@ describe('prompt and cancel errors', () => {
         requestId: expect.any(String) as unknown as string,
         parentSessionId: PARENT, childSessionId: SID,
         mode: 'continuable',
+        delivery: 'queue',
         content: [{ type: 'text', text: '继续' }],
+        clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      {
+        requestId: expect.any(String) as unknown as string,
+        parentSessionId: PARENT, childSessionId: SID,
+        mode: 'continuable',
+        delivery: 'steer',
+        content: [{ type: 'text', text: '现在处理' }],
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
       },
     ])
@@ -456,6 +467,7 @@ describe('prompt and cancel errors', () => {
         requestId: expect.any(String) as unknown as string,
         parentSessionId: PARENT, childSessionId: SID,
         mode: 'continuable',
+        delivery: 'queue',
         content,
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
       },

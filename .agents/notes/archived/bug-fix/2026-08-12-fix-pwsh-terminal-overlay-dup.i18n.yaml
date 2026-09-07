@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-12-fix-pwsh-terminal-overlay-dup.md
+2026-08-12-fix-pwsh-terminal-overlay-dup.md: 5056f19c46cc732042b19e22405854fa87c89c2e
+2026-08-12-fix-pwsh-terminal-overlay-dup.zh.md: dee96818a10b480d97fdc87bf55f0e63af43dc61

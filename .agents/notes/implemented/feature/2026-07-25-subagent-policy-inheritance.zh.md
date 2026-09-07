@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-委派边界在第一次 await 之前，经由共享的子 agent 辅助函数（`dsh-subagent` 中的 `captureDelegatedPolicyOverrides`／`appendDelegatedPolicyOverrides`）对 `sandboxPolicy.overrideOf(parent.session)` 获取快照；一次性驱动器与[可继续启动](2026-08-10-continuable-subagent-policy-inheritance.zh.md)都会调用这些辅助函数。父级后续的切换属于父级的未来；取消后重新委派会取得新快照。沙箱策略服务为可选，仅复制显式会话覆盖项，绝不复制部署默认值或一次性授权。审批策略不继承：同一次捕获会把每个子 agent 钉定为 `'never'`——[审批钉定决策](2026-08-10-subagent-approval-pinned-never.zh.md)取代了本 note 原先的审批覆盖项继承。
+委派边界在第一次 await 之前，经由共享的子 agent 辅助函数（`dsh-subagent` 中的 `captureDelegatedPolicyOverrides`／`appendDelegatedPolicyOverrides`）对 `sandboxPolicy.overrideOf(parent.session)` 获取快照；一次性驱动器与[可继续启动](../../archived/feature/2026-08-10-continuable-subagent-policy-inheritance.md)都会调用这些辅助函数。父级后续的切换属于父级的未来；取消后重新委派会取得新快照。沙箱策略服务为可选，仅复制显式会话覆盖项，绝不复制部署默认值或一次性授权。审批策略不继承：同一次捕获会把每个子 agent 钉定为 `'never'`——[审批钉定决策](2026-08-10-subagent-approval-pinned-never.zh.md)取代了本 note 原先的审批覆盖项继承。
 
 每个捕获值都会成为子 agent 工厂在未发布设置阶段追加的一条带来源标记的 `sandbox/mode` 或 `approval/policy` 事件。会话构造函数已把 `Session.firstLiveSeq` 固定在 constructor seed 之后，而 `Session.inheritedEventCount` 保留精确的 fork 前缀长度，因此继承事实会排在 fork 历史之后，却不改变其谱系 cut。生命周期本地遥测从 `firstLiveSeq` 开始，因此排除 constructor seed，并包含这些未发布设置事件。因此，既有的末事件胜出折叠会让委派快照压过陈旧的 fork 历史，并让子 agent 后续的切换压过该快照。孙代 agent 会折叠其父级已记录的状态，因此无需另一套继承机制即可组合此规则。
 

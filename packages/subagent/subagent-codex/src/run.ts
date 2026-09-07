@@ -1,7 +1,7 @@
 /**
  * One-shot Codex child lifecycle: spawn the real app-server through the
  * subprocess seam, publish only after initialization and ephemeral thread
- * creation, flatten post-publication failures, and dispose to whole-tree
+ * creation, flatten post-publication failures, and dispose to whole-range
  * quiescence.
  *
  * @module @deepseek-ai/dsh-subagent-codex/run
@@ -146,7 +146,7 @@ export interface CodexRunSpec {
   readonly permissionMode: CodexPermissionMode
   /** Explicit deployment/test environment layered after the shared scrub. */
   readonly env: Record<string, string>
-  /** Subprocess termination grace passed to the shared process-tree owner. */
+  /** Subprocess termination grace passed to the shared managed-range owner. */
   readonly disposeGraceMs: number
   /** Shared subprocess service spawn operation. */
   readonly spawn: (spec: SubprocessSpawnSpec) => SubprocessHandle
@@ -182,10 +182,10 @@ export function textTask(prompt: readonly ContentBlock[]): string[] {
 }
 
 /**
- * Close the private wire, terminate the managed process tree, and wait for the
- * subprocess owner to prove it is gone.
+ * Close the private wire, terminate the managed range, and wait for the
+ * subprocess owner to prove it is quiescent.
  * @param wire - private app-server protocol connection.
- * @param child - shared-service handle that owns the process tree.
+ * @param child - shared-service handle that owns the managed range.
  */
 export async function disposeCodexChild(
   wire: CodexAppServerWire,
@@ -193,32 +193,27 @@ export async function disposeCodexChild(
 ): Promise<void> {
   wire.close()
 
-  if (child.pid > 0) {
-    let outcome: SubprocessOutcome | undefined
-    void child.done.then(
-      (value) => { outcome = value },
-      /* v8 ignore next -- a positive pid excludes spawn-level done rejection. */
-      () => {},
-    )
-    try {
-      child.stdin?.end()
-    } catch {
-      // A concurrently closed stdin does not change tree ownership below.
-    }
-    child.terminate()
-    try {
-      await child.waitForExit()
-    } catch (error: unknown) {
-      throw new CodexRunFailure({
-        stage: 'teardown',
-        category: 'unknown',
-        outcome,
-      }, thrown(error))
-    }
-    await child.done
-  } else {
-    await child.done.catch(() => {})
+  let outcome: SubprocessOutcome | undefined
+  void child.done.then(
+    (value) => { outcome = value },
+    () => {},
+  )
+  try {
+    child.stdin?.end()
+  } catch {
+    // A concurrently closed stdin does not change range ownership below.
   }
+  child.terminate()
+  try {
+    await child.waitForExit()
+  } catch (error: unknown) {
+    throw new CodexRunFailure({
+      stage: 'teardown',
+      category: 'unknown',
+      outcome,
+    }, thrown(error))
+  }
+  await child.done.catch(() => {})
 }
 
 /**

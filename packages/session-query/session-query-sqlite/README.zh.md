@@ -89,7 +89,7 @@ kind: "package-reference"
 - **世代绑定的游标。** 每次语料库变化都会递增世代；游标携带其创建时的世代，宁可陈旧失败也不返回偏移后的页面。
 - **字面短语即数据。** 调用方查询文本被引成一个 FTS5 短语，查询语法保持惰性；保留高亮标记在索引前从文档中剥离。
 
-设计历史记录在 [SQLite FTS5 会话搜索笔记](../../../.agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.zh.md)与[统一服务决策](../../../.agents/notes/archived/architecture/2026-07-23-unified-session-query-service.md)中。
+设计历史记录在 [SQLite FTS5 会话搜索笔记](../../../.agents/notes/archived/feature/2026-07-10-sqlite-session-query-provider.md)与[统一服务决策](../../../.agents/notes/archived/architecture/2026-07-23-unified-session-query-service.md)中。
 
 ### 源码地图
 
@@ -120,7 +120,7 @@ kind: "package-reference"
 - [会话查询子系统参考](../../../docs/subsystems/session-query.zh.md)——本后端实现的完整类型级约定。
 - [dsh-session-query](../session-query/README.zh.md)——服务定义：本后端继承的精确读取、过滤与追踪。
 - [dsh-tool-session-query](../tool-session-query/README.zh.md)——调用这些搜索方法的面向模型消费方。
-- [SQLite FTS5 会话搜索](../../../.agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.zh.md)——搜索语义、对账与 tokenizer 决策。
+- [SQLite FTS5 会话搜索](../../../.agents/notes/archived/feature/2026-07-10-sqlite-session-query-provider.md)——搜索语义、对账与 tokenizer 决策。
 - [JSONL 会话持久化](../../session/session-persistence-jsonl/README.zh.md)——本可丢弃索引观察的权威 Session store；其 root 必须与本包的数据库路径分开。
 
 -----

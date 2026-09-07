@@ -46,14 +46,15 @@ const FILE_URI_PATH_PREFIX_RE = /(?:^|[^a-z0-9+.-])file:\/\/\/?$/i
 
 /** A UUID v4 string, the shape `randomUUID()` produces for session ids. */
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
+// Separator runs also match JSON-escaped Windows paths; extraction preserves their exact serialized spelling.
 const LOCAL_SPILL_PATH_RE = new RegExp(
-  String.raw`\{\{cwd\}\}[\\/]\.spill[\\/]session-[0-9a-f]{12}[\\/][0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
-  + String.raw`(?=\. Use read with offset/limit|[\s)]|$)`,
+  String.raw`\{\{cwd\}\}[\\/]+\.spill[\\/]+session-[0-9a-f]{12}[\\/]+[0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
+  + String.raw`(?=\. Use read with offset/limit|[\s)"]|\\+"|$)`,
   'g',
 )
 const SNAPSHOT_SPILL_PATH_RE = new RegExp(
-  String.raw`(?:[A-Za-z]:)?[\\/](?:tmp|t)[\\/](?:dsh-acp-snap-[0-9a-f]{9}|dsh-acp-snapshot-spill)[\\/]session-[0-9a-f]{12}[\\/][0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
-  + String.raw`(?=\. Use read with offset/limit|[\s)]|$)`,
+  String.raw`(?:[A-Za-z]:)?[\\/]+(?:tmp|t)[\\/]+(?:dsh-acp-snap-[0-9a-f]{9}|dsh-acp-snapshot-spill)[\\/]+session-[0-9a-f]{12}[\\/]+[0-9a-f]{12}-([A-Za-z0-9._~-]+?)`
+  + String.raw`(?=\. Use read with offset/limit|[\s)"]|\\+"|$)`,
   'g',
 )
 
@@ -374,6 +375,7 @@ export function normalizeSessionLog(
       const data = record.data as Record<string, unknown>
       if ('durationMs' in data) data.durationMs = 0
     }
+    normalizeFeedbackClocks(record)
     if (record.type === 'goal/change' && record.data !== null && typeof record.data === 'object') {
       const data = record.data as Record<string, unknown>
       if ('createdAt' in data) data.createdAt = 0
@@ -578,8 +580,19 @@ export function scrubSessionSnapshot(rawLog: string): string {
       return line
     }
     omitFixtureEnvelope(record)
+    normalizeFeedbackClocks(record)
     return JSON.stringify(record)
   }).join('\n')
+}
+
+/** Normalize service-owned feedback clocks without touching user-authored payloads. */
+function normalizeFeedbackClocks(record: Record<string, unknown>): void {
+  if (record.type !== 'feedback/message-put' || record.data === null || typeof record.data !== 'object') return
+  const item = (record.data as { item?: unknown }).item
+  if (item === null || typeof item !== 'object') return
+  const clocks = item as Record<string, unknown>
+  if ('createdAt' in clocks) clocks.createdAt = 0
+  if ('updatedAt' in clocks) clocks.updatedAt = 0
 }
 
 /** Which independent request-header payloads a scrubber replaces. */

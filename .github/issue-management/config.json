@@ -7,7 +7,6 @@
   "priorityField": "Priority",
   "startDateField": "Start Date",
   "projectTimeZone": "Asia/Shanghai",
-  "allowUnassignedOwner": true,
   "statuses": [
     "Inbox",
     "Backlog",

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync, readdirSync } from 'node:fs'
 import test from 'node:test'
 
 import {
-  countVisibleUnits,
   initializeIssueStartDate,
   initializePullRequestStartDates,
   issueSnapshot,
@@ -12,7 +12,6 @@ import {
   retainIssueReferences,
   resolvingIssueStatusCommand,
   requiresPullRequestPolicy,
-  validateBody,
   validateIssue,
   validatePullRequest,
 } from './policy.mjs'
@@ -105,13 +104,7 @@ const mockGraphql = (t, resolve) => {
   return requests
 }
 
-const withDetails = (summary) =>
-  `${summary}\n\n<details><summary>验收与细节</summary>待补充。</details>`
-
 const legalIssue = {
-  title: '完成议题管理校验',
-  body: withDetails('完成议题管理校验。'),
-  assignees: [],
   labels: [],
   type: 'Idea',
   priority: null,
@@ -155,56 +148,80 @@ const reviewedPull = (labels) => ({
   issues: new Map([[2, { priority: null }]]),
 })
 
-test('counts only text outside details', () => {
-  assert.deepEqual(countVisibleUnits('支持 GitHub Project。<details>隐藏文字</details>'), {
-    units: 4,
-    balanced: true,
-    detailsCount: 1,
-    allCollapsed: true,
-  })
-})
+test('keeps only Bug, Feature, and Task Issue templates with used frontmatter', () => {
+  const directory = new URL('../ISSUE_TEMPLATE/', import.meta.url)
+  assert.deepEqual(readdirSync(directory).sort(), ['bug.md', 'config.yml', 'feature.md', 'task.md'])
 
-test('requires a balanced default-collapsed details region', () => {
-  assert.deepEqual(validateBody({ body: '完成工作。', assignees: [] }), [
-    '正文必须包含默认收起的 <details> 区域',
-  ])
-  assert.deepEqual(
-    validateBody({
-      body: '完成工作。\n\n<details open><summary>细节</summary>待补充。</details>',
-      assignees: [],
-    }),
-    ['details 必须默认收起，不得设置 open'],
-  )
-  assert.deepEqual(
-    validateBody({ body: '完成工作。\n\n<details><summary>细节</summary>', assignees: [] }),
-    ['details 标签必须成对闭合'],
+  for (const file of ['bug.md', 'feature.md', 'task.md']) {
+    const source = readFileSync(new URL(file, directory), 'utf8')
+    const frontmatter = source.match(/^---\n([\s\S]*?)\n---/)?.[1] ?? ''
+    const keys = frontmatter
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => line.slice(0, line.indexOf(':')))
+      .sort()
+    assert.deepEqual(keys, ['about', 'name', 'type'], file)
+    assert.match(source, /^## /m, file)
+    assert.match(source, /<!-- [^\n]+ -->/, file)
+    assert.doesNotMatch(source, /<details\b/i, file)
+  }
+  assert.equal(
+    readFileSync(new URL('config.yml', directory), 'utf8'),
+    'blank_issues_enabled: false\n',
   )
 })
 
-test('requires Owner for multiple assignees', () => {
+test('keeps Feature Issues limited to motivation and behavior', () => {
+  const source = readFileSync(
+    new URL('../ISSUE_TEMPLATE/feature.md', import.meta.url),
+    'utf8',
+  )
   assert.deepEqual(
-    validateBody({
-      body: withDetails('完成工作。'),
-      assignees: ['tianyicui', 'tianyicui-bot'],
-    }),
-    ['多个 Assignees 时首个非空行必须是 Owner: @login'],
+    [...source.matchAll(/^## .+$/gm)].map(([heading]) => heading),
+    ['## Motivation', '## Behavior'],
   )
 })
 
-test('accepts an intended Owner while assignment permission is pending', () => {
+test('keeps Bug Issues limited to the problem report', () => {
+  const source = readFileSync(new URL('../ISSUE_TEMPLATE/bug.md', import.meta.url), 'utf8')
   assert.deepEqual(
-    validateBody({
-      body: withDetails('Owner: @octocat\n\n完成工作。'),
-      assignees: [],
+    [...source.matchAll(/^## .+$/gm)].map(([heading]) => heading),
+    ['## Summary', '## Reproduction', '## Current behavior', '## Expected behavior', '## Environment'],
+  )
+})
+
+test('keeps Task Issues limited to summary and deliverables', () => {
+  const source = readFileSync(new URL('../ISSUE_TEMPLATE/task.md', import.meta.url), 'utf8')
+  assert.deepEqual(
+    [...source.matchAll(/^## .+$/gm)].map(([heading]) => heading),
+    ['## Summary', '## Deliverables'],
+  )
+})
+
+test('structures the pull request template around motivation, changes, and testing', () => {
+  const source = readFileSync(new URL('../pull_request_template.md', import.meta.url), 'utf8')
+  for (const heading of ['## Motivation', '## Changes', '## Testing']) {
+    assert.match(source, new RegExp(`^${heading.replaceAll('#', '\\#')}$`, 'm'))
+  }
+  assert.doesNotMatch(source, /^### /m)
+  assert.match(
+    source,
+    /<!-- 高层次说明命令[^\n]+ -->\n<!-- 高层次说明用户[^\n]+ -->/,
+  )
+  assert.match(source, /- <!-- [^\n]+ -->\n\n  <details>\n  <summary>Proof<\/summary>/)
+  assert.equal(source.match(/<details>/g)?.length, 1)
+  assert.equal(source.match(/<\/details>/g)?.length, 1)
+})
+
+test('ignores Issue title, body presentation, and assignee ownership', () => {
+  assert.deepEqual(
+    validateIssue({
+      ...legalIssue,
+      title: '[Bug] English title',
+      body: `Owner: @octocat\n\n${'visible '.repeat(60)}<details open>unclosed`,
+      assignees: ['octocat', 'hubot'],
     }),
     [],
-  )
-  assert.deepEqual(
-    validateBody({
-      body: withDetails('Owner: @octocat\n\n完成工作。'),
-      assignees: ['hubot'],
-    }),
-    ['零或一个 Assignee 时不得写 Owner 行'],
   )
 })
 
@@ -213,11 +230,6 @@ test('allows optional metadata in every open Status', () => {
   for (const status of ['Inbox', 'Backlog', 'Ready', 'In progress', 'In review']) {
     assert.deepEqual(validateIssue({ ...legalIssue, status }), [])
   }
-})
-
-test('rejects metadata prefixes in an Issue title', () => {
-  const errors = validateIssue({ ...legalIssue, title: '[Bug] 修复恢复错误' })
-  assert.ok(errors.includes('Issue 标题不得带 Type、Priority、Status、area 或 Owner 前缀'))
 })
 
 test('reserves PR kind and legacy labels for pull requests', () => {

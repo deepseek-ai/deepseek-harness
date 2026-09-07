@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-standard-acp-automation-controls.md
 2026-08-22-standard-acp-automation-controls.md: dd1e39b84f942417640f741f17a211276b67872c
-2026-08-22-standard-acp-automation-controls.zh.md: be54850a933e4e728c672d76595fbf900bdda833
+2026-08-22-standard-acp-automation-controls.zh.md: 2d7160bda164949799652bc2e3e3ab95afdafb0c

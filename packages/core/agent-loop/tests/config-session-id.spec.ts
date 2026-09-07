@@ -43,7 +43,7 @@ async function makeCoreContext(): Promise<Context> {
 async function readStoredEvents(ctx: Context, sessionId: SessionId): Promise<readonly SessionEvent[]> {
   const handle = await ctx.sessionPersistence.open(sessionId, 'read')
   try {
-    return await handle.read()
+    return (await handle.read()).events
   } finally {
     await handle.close()
   }

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/architecture/2026-08-23-python-sdk-dsh-profile-runtime.md
+2026-08-23-python-sdk-dsh-profile-runtime.md: 042f1c88599efb5cba6ab0024fcbb39247d674ab
+2026-08-23-python-sdk-dsh-profile-runtime.zh.md: c614e54302dfc12cd343351dc050f02b0d2faec1

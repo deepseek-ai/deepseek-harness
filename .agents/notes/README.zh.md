@@ -22,7 +22,7 @@
 
 ## 分类
 
-每份 Agent Note 属于 `scripts/agent-note-tree.ts` 中封闭集合里的一个路径编码类别；分类门禁拒绝其他文件夹。新增类别需要同时更新规范集合与本节。见[分类 Agent Note](implemented/process/2026-06-20-agent-note-classification.zh.md)。
+每份 Agent Note 属于 `scripts/agent-note-tree.ts` 中封闭集合里的一个路径编码类别；分类门禁拒绝其他文件夹。新增类别需要同时更新规范集合与本节。
 
 | 类别 | 覆盖范围 |
 |---|---|

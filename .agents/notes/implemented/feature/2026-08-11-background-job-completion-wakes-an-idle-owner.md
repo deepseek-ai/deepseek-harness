@@ -12,7 +12,7 @@ The gap was recorded as a limitation rather than reasoned about, so the fallback
 
 This supersedes one fact of the [background-job runtime decision](../architecture/2026-06-20-generic-long-running-tool-runtime.md) — that completion never wakes an idle owner — and adds teardown as a `reported` setter. That note keeps every other task-runtime decision and is updated in place rather than replaced.
 
-The delivery machinery was never the obstacle. `Agent.send(message, target, wakeup)` has covered the `target` × `wakeup` matrix since the [unified send decision](../architecture/2026-07-22-unified-send-and-coalesced-user-messages.md), and `wakeDriver()` already handles idle, maintenance, and cancelled-converging phases. The missing piece was the policy choice of which lane a completion takes, plus the bound that choice needs.
+The delivery machinery was never the obstacle. `Agent.send(message, target, wakeup)` has covered the `target` × `wakeup` matrix since the [unified send decision](../../archived/architecture/2026-07-22-unified-send-and-coalesced-user-messages.md), and `wakeDriver()` already handles idle, maintenance, and cancelled-converging phases. The missing piece was the policy choice of which lane a completion takes, plus the bound that choice needs.
 
 ## Decision
 

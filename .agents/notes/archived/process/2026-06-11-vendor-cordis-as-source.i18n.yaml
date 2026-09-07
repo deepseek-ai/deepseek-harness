@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/process/2026-06-11-vendor-cordis-as-source.md
+2026-06-11-vendor-cordis-as-source.md: 9736c64e6419a443e54c586120592d53be90b10a
+2026-06-11-vendor-cordis-as-source.zh.md: d4fdb810c1565bbd2822a0e638e059d5f938741e

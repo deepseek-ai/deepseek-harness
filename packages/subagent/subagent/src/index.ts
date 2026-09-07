@@ -52,12 +52,16 @@ import type {
 import type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
+  ContinuableStart,
+  ContinuableStartSpec,
   ResolvedSubagentStartRequest,
   SubagentCapabilities,
+  SubagentInterruptAuthority,
   SubagentProvider,
   SubagentRun,
   SubagentRunEndInfo,
   SubagentRunInfo,
+  SubagentSendMessageOptions,
   SubagentStartRequest,
 } from './types.ts'
 import { SubagentError } from './error.ts'
@@ -65,17 +69,12 @@ import { assertSubagentMaxDepth } from './depth.ts'
 import { createActivationObserver, createLifecycleEmitter, observeRun } from './lifecycle.ts'
 import type { ActivationObserver, LifecycleEmitter } from './lifecycle.ts'
 import SubagentContinuationManager from './continuation.ts'
-import type {
-  ContinuableStart,
-  ContinuableStartSpec,
-  SubagentInterruptAuthority,
-  SubagentSendMessageOptions,
-} from './continuation.ts'
+import type { SubagentDelivery } from './inbox.ts'
 import { listChildren as listSubagentChildren, listDescendants as listSubagentDescendants } from './list-children.ts'
 import type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts'
 import { snapshotSubagentDescriptor } from './descriptor.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
-import { deliverSubagentPrompt, type HostPromptDeliveryMode } from './internal.ts'
+import { deliverSubagentPrompt } from './internal.ts'
 
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
@@ -83,11 +82,15 @@ export { SubagentRunId } from './types.ts'
 export type {
   ContinuableCreateRequest,
   ContinuableCreateSpec,
+  ContinuableStart,
+  ContinuableStartSpec,
   ResolvedSubagentStartRequest,
   SubagentCapabilities,
+  SubagentInterruptAuthority,
   SubagentProvider,
   SubagentResult,
   SubagentRun,
+  SubagentSendMessageOptions,
   SubagentStartRequest,
   SubagentStopReason,
   SubagentStopReasonMap,
@@ -119,14 +122,7 @@ export {
   SubagentDepthError,
 } from './child-agent.ts'
 export type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
-export type {
-  AgentMessageSource,
-  ContinuableStart,
-  ContinuableStartSpec,
-  SubagentInterruptAuthority,
-  SubagentSendMessageOptions,
-  SubagentSettledMessageSource,
-} from './continuation.ts'
+export type { AgentMessageSource, SubagentSettledMessageSource } from './continuation-messages.ts'
 export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
@@ -271,7 +267,7 @@ export class SubagentRuntime extends TypertRemoteService {
     content: ContentBlock[],
     source: MessageSource,
     signal: AbortSignal,
-    delivery: HostPromptDeliveryMode,
+    delivery: SubagentDelivery,
   ): Promise<MessageId> {
     return delivery === 'steer'
       ? this.requireContinuations().steerPrompt(parent, childId, content, source, signal)
@@ -397,11 +393,12 @@ export class SubagentRuntime extends TypertRemoteService {
    * Deliver one browser-authored message to a continuable child through the
    * exact live direct parent, retaining the caller-minted request identity and
    * validated browser zone on the accepted message. Success identifies the
-   * message the child's FIFO inbox accepted; later execution is independent of
-   * this call.
+   * message the child's inbox accepted; later execution is independent of this
+   * call. Queue delivery targets a later turn; steer delivery targets the
+   * nearest step and retains the Agent loop's best-effort fallback semantics.
    * Image parts are admitted and persisted through the attachment store
    * before delivery, and the child's model must accept image input.
-   * @param request - durable address, minted identity, content, and optional browser zone.
+   * @param request - durable address, delivery, minted identity, content, and optional browser zone.
    * @param signal - carrier cancellation, owning the call until inbox acceptance.
    * @returns the accepted message's inbox identity.
    * @throws {RemoteError} `gateway/bad-request`, `subagent/attachment-invalid`,
@@ -411,7 +408,7 @@ export class SubagentRuntime extends TypertRemoteService {
    */
   @Remote('prompt')
   async prompt(request: SubagentPromptRequest, signal: AbortSignal): Promise<SubagentPromptReceipt> {
-    const { parentSessionId, childSessionId, clientTimeZone } = request
+    const { parentSessionId, childSessionId, clientTimeZone, delivery } = request
     validateControlRequest('subagent.prompt', request)
     const canonicalTimeZone = clientTimeZone === undefined
       ? undefined
@@ -454,7 +451,7 @@ export class SubagentRuntime extends TypertRemoteService {
           content,
           source,
           signal,
-          'queue',
+          delivery,
         ),
       }
     } catch (error: unknown) {

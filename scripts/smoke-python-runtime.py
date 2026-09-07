@@ -769,7 +769,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--scenario",
-        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-spawn-node", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "direct"),
+        choices=("all", "sdk-default", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-spawn-node", "sdk-mcp", "sdk-snapshot", "sdk-restart", "sdk-profile-plugin", "sdk-live", "runner", "direct"),
         default="all",
     )
     parser.add_argument("--exe", type=Path)
@@ -788,12 +788,19 @@ def main() -> None:
         parser.error("--scenario sdk-profile-plugin requires --installed-wheel")
     if args.installed_wheel:
         args.exe = assert_installed_wheel_environment()
-    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-spawn-node", "sdk-snapshot", "sdk-restart", "direct"} and args.exe is None:
-        parser.error("--exe is required for custom, minimal, snapshot, and direct scenarios")
+    if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-spawn-node", "sdk-snapshot", "sdk-restart", "runner", "direct"} and args.exe is None:
+        parser.error("--exe is required for custom, minimal, fs-search, spawn-node, snapshot, restart, runner, and direct scenarios")
     if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-snapshot", "sdk-restart"}:
         parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-snapshot, sdk-restart, or all")
     if args.exe is not None and not args.exe.is_file():
         parser.error(f"runtime executable does not exist: {args.exe}")
+
+    if args.scenario in {"all", "runner"}:
+        assert args.exe is not None
+        smoke_packaged_runner(args.exe.resolve())
+    if args.scenario == "runner":
+        print("smoke-python-runtime: runner passed")
+        return
 
     if args.scenario == "sdk-live":
         smoke_sdk_live()
@@ -1227,6 +1234,7 @@ def smoke_sdk_profile_plugin(base_url: str) -> None:
         if installed.returncode != 0:
             raise AssertionError(
                 f"Python-installed dsh could not add the external profile plugin: "
+                f"returncode={installed.returncode} (0x{installed.returncode & 0xffffffff:08x}) "
                 f"stdout={installed.stdout!r} stderr={installed.stderr!r}"
             )
         manifest = json.loads((dsh_home / "profiles" / "sdk" / "package.json").read_text())
@@ -1269,13 +1277,20 @@ def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) 
         dsh_home = root / "home"
         sessions = dsh_home / "sessions"
         patch = write_advanced_profile_patch(root, "snapshot.patch.yml", sessions)
+        feedback_patch = write_profile_patch(root, "feedback.patch.yml", sessions, [{"insert": [
+            {"id": "snapshot-message-feedback", "name": "@deepseek-ai/dsh-message-feedback",
+             "config": {"maxNoteBytes": 1024}},
+            {"id": "snapshot-feedback-producer", "name": (
+                Path(__file__).resolve().parent.parent / "snapshots/sdk/text-turn/feedback-producer.mjs"
+            ).as_uri()},
+        ]}])
         with DeepSeekHarness(
             provider="deepseek-official",
             model="smoke-model",
             cwd=str(root),
             dsh_bin=str(executable),
             dsh_home=str(dsh_home),
-            patches=(str(patch),),
+            patches=(str(patch), str(feedback_patch)),
             env={
                 "DSH_PERMISSION_MODE": "danger-full-access",
                 "DSH_TELEMETRY_DISABLED": "1",
@@ -1287,6 +1302,10 @@ def smoke_sdk_snapshot(base_url: str, executable: Path, update_snapshots: bool) 
             result = harness.run(SNAPSHOT_PROMPT, session_id=SNAPSHOT_SESSION_ID)
 
         assert result.final_response == SNAPSHOT_FINAL_TEXT, result.final_response
+        feedback_types = [event.get("type") for event in result.events
+                          if str(event.get("type")).startswith("feedback/")]
+        if feedback_types != ["feedback/record", "feedback/message-put", "feedback/message-put", "feedback/message-delete"]:
+            raise AssertionError(f"advanced snapshot did not exercise all feedback mutations: {feedback_types}")
         methods = [notification.method for notification in result.notifications]
         if methods.count("subagent.started") != 2 or methods.count("subagent.finished") != 2:
             raise AssertionError(f"advanced snapshot emitted unexpected subagent lifecycle: {methods}")
@@ -1414,6 +1433,104 @@ def smoke_direct(base_url: str, executable: Path) -> None:
         finally:
             peer.close()
         assert_session_log(sessions, root, EXPECTED_TEXT)
+
+
+def smoke_packaged_runner(executable: Path) -> None:
+    """Exercise the private subprocess runner through the single-file entry."""
+    with tempfile.TemporaryDirectory(prefix="dsh-packaged-runner-") as temporary:
+        root = Path(temporary).resolve()
+        target_script = (
+            "import os,sys; "
+            "ok = (os.getcwd() == os.environ['PACKAGED_RUNNER_EXPECTED_CWD'] "
+            "and os.environ.get('DSH_SUBPROCESS_RUNNER') == 'target-collision-restored'); "
+            "sys.exit(7 if ok else 9)"
+        )
+        if not IS_WINDOWS:
+            request_path = root / "launch-request.json"
+            target_env = dict(os.environ)
+            target_env["DSH_SUBPROCESS_RUNNER"] = "target-collision-restored"
+            target_env["PACKAGED_RUNNER_EXPECTED_CWD"] = str(root)
+            request_path.write_text(
+                json.dumps({"cwd": str(root), "env": target_env}),
+                encoding="utf-8",
+            )
+            request_path.chmod(0o600)
+            environment = dict(os.environ)
+            environment["DSH_SUBPROCESS_RUNNER"] = str(request_path)
+            result = subprocess.run(
+                [str(executable), "--", sys.executable, "-c", target_script],
+                cwd=root,
+                env=environment,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if result.returncode != 7 or request_path.exists() or (root / "startup-error.json").exists():
+                raise AssertionError(
+                    "packaged POSIX runner failed: "
+                    f"exit={result.returncode}; stdout={result.stdout!r}; stderr={result.stderr!r}"
+                )
+            return
+
+        node = shutil.which("node")
+        if node is None:
+            raise AssertionError("packaged Windows runner smoke requires node on PATH")
+        helper = root / "windows-runner-smoke.mjs"
+        helper.write_text(
+            """import { spawn } from 'node:child_process'
+const [runtime, target, cwd, targetScript] = process.argv.slice(2)
+const child = spawn(runtime, ['--', target, '-c', targetScript], {
+  cwd,
+  env: { ...process.env, DSH_SUBPROCESS_RUNNER: 'windows' },
+  stdio: ['ignore', 'ignore', 'ignore', 'ipc', 'pipe', 'pipe', 'pipe'],
+})
+const messages = []
+let stdout = ''
+let stderr = ''
+child.stdio[4].destroy()
+child.stdio[5].on('data', chunk => { stdout += chunk.toString() })
+child.stdio[6].on('data', chunk => { stderr += chunk.toString() })
+child.on('message', message => { messages.push(message) })
+const result = await new Promise((resolve, reject) => {
+  child.once('error', reject)
+  child.once('spawn', () => {
+    child.send({
+      type: 'start',
+      cwd,
+      env: {
+        ...process.env,
+        DSH_SUBPROCESS_RUNNER: 'target-collision-restored',
+        PACKAGED_RUNNER_EXPECTED_CWD: cwd,
+      },
+    }, error => { if (error) reject(error) })
+  })
+  child.once('close', (exitCode, signal) => { resolve({ exitCode, signal }) })
+})
+process.stdout.write(JSON.stringify({ ...result, messages, stdout, stderr }))
+""",
+            encoding="utf-8",
+        )
+        helper_result = subprocess.run(
+            [node, str(helper), str(executable), sys.executable, str(root), target_script],
+            cwd=root,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+        if helper_result.returncode != 0:
+            raise AssertionError(f"packaged Windows runner helper failed: {helper_result.stderr}")
+        observed = json.loads(helper_result.stdout)
+        expected = {
+            "exitCode": 0,
+            "signal": None,
+            "messages": [{"type": "target-exit", "exitCode": 7}],
+            "stdout": "",
+            "stderr": "",
+        }
+        if observed != expected:
+            raise AssertionError(f"packaged Windows runner returned unexpected facts: {observed}")
 
 
 def is_idle_notification(message: dict[str, object]) -> bool:
@@ -1725,6 +1842,30 @@ def build_snapshot_files(
         replacements.append((child_id, f"{{{{child-{index}}}}}"))
         agent_id = snapshot_agent_id(result, child_id)
         replacements.append((agent_id, f"{{{{agent-{index}}}}}"))
+    command_index = 0
+    for record in logs[SNAPSHOT_SESSION_ID]:
+        data = record.get("data")
+        if record.get("type") == "command/run" and isinstance(data, dict):
+            command_index += 1
+            replacements.append((data["commandId"], f"{{{{command:{command_index}}}}}"))
+        if record.get("type") == "command/done" and isinstance(data, dict):
+            anonymous = re.search(r"Anonymous user: ([0-9a-f-]{36})", str(data.get("text")))
+            if anonymous is not None:
+                replacements.append((anonymous.group(1), "{{anonymous-user}}"))
+    feedback_targets = dict.fromkeys(
+        record["data"]["item"]["messageId"]
+        for record in logs[SNAPSHOT_SESSION_ID]
+        if record.get("type") == "feedback/message-put"
+    )
+    for index, message_id in enumerate(feedback_targets, start=1):
+        replacements.append((message_id, f"{{{{message:{index}}}}}"))
+    feedback_versions = dict.fromkeys(
+        record["data"]["item"]["version"]
+        for record in logs[SNAPSHOT_SESSION_ID]
+        if record.get("type") == "feedback/message-put"
+    )
+    for index, version in enumerate(feedback_versions, start=1):
+        replacements.append((version, f"{{{{feedback-version:{index}}}}}"))
     replacements.sort(key=lambda pair: len(pair[0]), reverse=True)
 
     result_value = {
@@ -1902,7 +2043,16 @@ def normalize_snapshot_value(
                 if isinstance(dt, list):
                     member["dt"] = [0] * len(dt)
     if isinstance(normalized.get("id"), str) and normalized.get("role") in ("assistant", "user"):
-        normalized["id"] = "{{messageId}}"
+        if not normalized["id"].startswith("{{message:"):
+            normalized["id"] = "{{messageId}}"
+    if normalized.get("type") in ("feedback/message-put", "feedback/message-delete"):
+        data = normalized.get("data")
+        if isinstance(data, dict):
+            item = data.get("item") if normalized["type"] == "feedback/message-put" else data
+            if isinstance(item, dict):
+                if normalized["type"] == "feedback/message-put":
+                    item["createdAt"] = 0
+                    item["updatedAt"] = 0
     scrub_snapshot_header(normalized)
     return normalized
 

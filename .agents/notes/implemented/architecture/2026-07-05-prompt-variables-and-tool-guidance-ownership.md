@@ -32,7 +32,7 @@ Plugins register `{{name}}` values through `ctx.systemPrompt.variable(name, prov
 
 ### Persona as the order-0 section
 
-`dsh-system-prompt` owns `harness:identity` at first-party order `-1000` and the configured `deployment:persona` at order 0, so both survive a replacement loop. Prompt rendering has one path, `renderPrompt(assembly)`, and the routed request header therefore records the exact prompt later replayed by `ctx.tokenMeter` for compaction pressure. An agent-scoped `deployment:persona` shadows the global default and lets subagent providers install a persona before publication. The [first-party order allocation](2026-08-25-sparse-first-party-prompt-section-orders.md) owns the sparse named placements for identity, policy, tool guidance, generated protocol, and final-output obligations.
+`dsh-system-prompt` owns `harness:identity` at first-party order `-1000` and the configured `deployment:persona-prefix` at order 0, so both survive a replacement loop. Prompt rendering has one path, `renderPrompt(assembly)`, and the routed request header therefore records the exact prompt later replayed by `ctx.tokenMeter` for compaction pressure. An agent-scoped `deployment:persona-prefix` shadows the global default and lets subagent providers install a persona before publication. The [`dsh-system-prompt` README](../../../../packages/core/system-prompt/README.md) owns the sparse named placements for identity, policy, tool guidance, generated protocol, and final-output obligations.
 
 ### Tool guidance ownership
 
@@ -40,7 +40,7 @@ Per-tool semantics and selection guidance live in tool descriptions. Prompt sect
 
 ### The subagent conversation-history descriptor
 
-`SubagentProvider.inheritsParentContext` describes conversation seeding, not scope, services, tools, or authority. Spawn and ACP set it to `false`; fork sets it to `true`. `dsh-tool-subagent` derives its tool and prompt-parameter descriptions from the flag, including that fork inherits completed turns but not the in-flight turn. Provider lifecycle events keep that wording synchronized with reactive provider registration; their rationale lives in the [provider-lifecycle-events Agent Note](2026-07-05-subagent-provider-lifecycle-events.md).
+`SubagentProvider.inheritsParentContext` describes conversation seeding, not scope, services, tools, or authority. Spawn and ACP set it to `false`; fork sets it to `true`. `dsh-tool-subagent` derives its tool and prompt-parameter descriptions from the flag, including that fork inherits completed turns but not the in-flight turn. Provider lifecycle events keep that wording synchronized with reactive provider registration; their rationale lives in the [provider-lifecycle-events Agent Note](../../archived/architecture/2026-07-05-subagent-provider-lifecycle-events.md).
 
 ## Alternatives considered
 
@@ -49,7 +49,7 @@ Per-tool semantics and selection guidance live in tool descriptions. Prompt sect
 - **Hand-write the model name in each persona** — duplicates the `model:` key one line above and silently lies after a config edit; the exact disease this decision cures.
 - **Lenient interpolation (leave unknown refs verbatim, or substitute empty)** — a typo ships `{{modle}}` (or a hole) to the model and nobody notices until transcript review.
 - **Per-instance subagent wording in config** — returns model-facing prose to every deployment × instance, reviving the hand-written-guidance-in-leaf-YAML drift. **Keying wording off the provider NAME** — `providerName` is itself config, so a renamed provider silently gets the wrong words.
-- **Resolving the provider at `apply` time (a load-order requirement)** and **section-only subagent wording (lazily resolved at assemble)** — the alternatives to the provider-lifecycle events; both rejected in [the provider-lifecycle-events Agent Note](2026-07-05-subagent-provider-lifecycle-events.md).
+- **Resolving the provider at `apply` time (a load-order requirement)** and **section-only subagent wording (lazily resolved at assemble)** — the alternatives to the provider-lifecycle events; both rejected in [the provider-lifecycle-events Agent Note](../../archived/architecture/2026-07-05-subagent-provider-lifecycle-events.md).
 
 ## Out of scope
 

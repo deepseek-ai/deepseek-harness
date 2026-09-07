@@ -11,7 +11,7 @@
 
 import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { Branded } from '@deepseek-ai/dsh-brand'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm'
+import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session'
 import type { ObjectJsonSchema, ToolRestriction } from '@deepseek-ai/dsh-tools'
 import type { SubagentDescriptorData } from './descriptor.ts'
@@ -26,6 +26,50 @@ export type SubagentRunId = Branded<'SubagentRunId'>
  */
 export function SubagentRunId(id: string): SubagentRunId {
   return id as SubagentRunId
+}
+
+/** What a caller asks for when starting a continuable background child. */
+export interface ContinuableStartSpec {
+  /** The `ctx.subagents` provider whose continuable-creation capability establishes the child. */
+  readonly provider: string
+  /** The initial delegation's short `description`, persisted as the child's creation label. */
+  readonly label: string
+  /**
+   * Optional caller-reserved child identity. Omission preserves the manager's
+   * UUID allocation; supplying one lets a durable parent record provisioning
+   * before child materialization without a second identity handshake.
+   */
+  readonly childId?: SessionId
+  /**
+   * The delegation request. The manager reserves the stable child id, resolves
+   * the durable descriptor, and composes the child itself.
+   */
+  readonly request: Omit<SubagentStartRequest, 'label' | 'signal' | 'outputSchema'>
+  /** Caller cancellation, owning the operation only until inbox acceptance. */
+  readonly signal: AbortSignal
+}
+
+/** Identities returned once a continuable child accepted its initial prompt. */
+export interface ContinuableStart {
+  /** The durable child session id, stable across activations. */
+  readonly childId: SessionId
+  /** The accepted initial prompt's inbox message id. */
+  readonly messageId: MessageId
+}
+
+/**
+ * Authority under which one interrupt request is admitted. `user` carries the
+ * durable direct-parent address a human client presented; `ancestor` carries
+ * the exact live Agent object whose recorded lineage must contain the caller.
+ */
+export type SubagentInterruptAuthority =
+  | { readonly kind: 'user'; readonly parentSessionId: SessionId }
+  | { readonly kind: 'ancestor'; readonly agent: Agent }
+
+/** Options for one model-authored message between adjacent Agents. */
+export interface SubagentSendMessageOptions {
+  /** Caller cancellation, owning the operation only until inbox acceptance. */
+  readonly signal: AbortSignal
 }
 
 /**
@@ -149,7 +193,7 @@ export interface SubagentStartRequest {
   /**
    * Optional per-child persona. Requires {@link SubagentCapabilities.persona};
    * rejected at start otherwise. In-process backends register it as a scoped
-   * `deployment:persona` section on the child, SHADOWING the deployment's
+   * `deployment:persona-prefix` section on the child, SHADOWING the deployment's
    * persona for this child alone — same template semantics as the deployment
    * persona (strict `{{…}}` interpolation against the registered variables).
    */

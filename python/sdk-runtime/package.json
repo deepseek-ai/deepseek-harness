@@ -121,6 +121,7 @@
     "@deepseek-ai/dsh-user-approval": "workspace:^",
     "@deepseek-ai/dsh-user-questions": "workspace:^",
     "@deepseek-ai/dsh-util-time": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^",
     "@deepseek-ai/dsh-web": "workspace:^",
     "@deepseek-ai/dsh-web-fetch-http": "workspace:^",
     "@deepseek-ai/dsh-web-search-deepseek": "workspace:^",

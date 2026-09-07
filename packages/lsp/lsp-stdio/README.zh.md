@@ -91,7 +91,7 @@ kind: "package-reference"
 - **先读后启动。** 源文件在工作区队列内先完成解析、包含关系检查与字节限制，然后才创建任何进程，因此排队查询只会在轮到自身时读取当前字节，无效源文件也不会留下空闲的池化进程。
 - **每个规范工作区一个池化进程。** 实例按 `(server id, canonical workspace target)` 进行 single-flight；传输故障会在等待释放完成后于新进程上重试一次该只读查询。
 - **逐工作区串行化。** 每个工作区一条可中止队列，串行执行源读取／打开／查询／关闭生命周期；不同工作区并行运行，无法停止服务器的取消只会终止该实例。
-- **有边界的释放。** 优雅 `shutdown`／`exit` 升级为进程树终止（POSIX 进程组信号，Windows `taskkill /T /F`）；是否完全停稳由等待进程树退出确认，而非由终止操作自身的结果确认。
+- **有边界的释放。** 优雅 `shutdown`／`exit` 会升级到 subprocess 提供方的 managed-range 终止流程；是否完全停稳由等待整个 range 确认，而非由终止请求自身的结果确认。
 - **执行世界配对。** 服务器通过 `ctx.subprocess` 启动，`processId: null`（另一台机器或 PID namespace 不得监视 harness）；源文件通过 `ctx.fs` 读取；不发出 `fs/observed` 事件——只有 LSP 结果对模型可见。
 
 ### 源码地图
@@ -119,10 +119,9 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从共享的导航模型逐步进入 seam、工具与决策证据。
+当包级约定不够用时阅读以下页面。它们从共享的导航模型逐步进入 seam 与工具。
 
 - [LSP 导航子系统](../../../docs/subsystems/lsp.zh.md)——操作、坐标、请求与结果，以及 `LspError` code。
-- [LSP 能力 seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.zh.md)——设计原理、备选方案与刻意推迟的 API。
 - [dsh-lsp](../lsp/README.zh.md)——本提供方注册到的 seam。
 - [dsh-tool-lsp](../tool-lsp/README.zh.md)——基于该 seam 的面向模型工具。
 - [lsp 组地图](../README.zh.md)——三个包的家族及其相关文档。

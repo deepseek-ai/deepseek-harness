@@ -1,4 +1,4 @@
-# Agent Note: Released Session formats migrate on body read through adjacent pure edges
+# Agent Note: Released Session formats migrate through stateful streaming stages
 
 Status: implemented
 
@@ -6,52 +6,176 @@ English | [中文](2026-08-31-released-session-format-migrations.zh.md)
 
 ## Problem
 
-Session format v0 shipped in an alpha release, so a structural writer change can no longer treat existing JSONL as disposable pre-release state. Stored event bodies reach consumers through read or write `SessionHandle` instances used by resume, query, export, fork, and continuation paths. Migrating only one consumer would let callers observe different logical generations or fail only when a later writer reaches the old file.
+Session format v0 shipped in an alpha release, so a structural writer change can no longer treat existing JSONL as disposable pre-release state. The first whole-artifact migration implementation made those logs convertible, but its data model turned a 116 MB real Session into an operation that exhausted a 16 GB Node process before returning a handle.
 
-Migration must retain the exact source path, bytes, and inode, including a torn physical tail, while giving every published format one unambiguous canonical filename. Plain JSONL and Zstandard are encoding choices for the same logical format and must not create parallel migration implementations.
+### Whole-artifact performance failure
+
+- Zstandard input was split into 317,540 frames and each frame used a separate asynchronous decompression call. The implementation retained every plaintext frame and then concatenated them before JSON parsing, creating the same number of Promise, thread-pool, and native decode transitions.
+- Physical Decode materialized a complete plaintext Buffer, one complete string, every JSONL row, expanded source events, migrated target events, encoded target rows, a joined target string, and target physical Buffers at overlapping points in the same request.
+- Every codec and migration edge called `snapshotSessionFormatJson()` or `snapshotSessionFormatArtifact()`. These operations detached, recursively copied, and deeply froze whole headers, rows, payloads, and event arrays before and after adjacent migrations.
+- Released packed Assistant chunks expanded into about 9.14 million logical v0/v1 events before v1-to-v2 folded them into 72,784 current events. The whole-artifact API required both representations and the old-to-new sequence map to coexist.
+- Encoding built the complete JSONL and compressed output in memory. The successful path then decoded the staged target, decoded the committed target, and decoded it again in persistence to construct the business object; it also reread the source for a full fingerprint comparison.
+- Per-frame `await` calls did not provide useful bounded scheduling. The pre-migration reader instead reused one synchronous decoder and yielded from the outer loop about every 500 ms, avoiding hundreds of thousands of asynchronous transitions.
+
+### The interfaces prevented local fixes from composing
+
+`SessionFormatCodec` decoded and encoded complete arrays, each adjacent `SessionFormatMigration` accepted and returned a complete `SessionFormatArtifact`, and the compiled chain could only hand one materialized artifact to the next edge. A faster physical decoder therefore still encountered source-row arrays, expanded-event arrays, per-edge snapshots, and target-row arrays downstream.
+
+The migrations are stateful even though the API presented them as one-shot functions. v0-to-v1 tracks message and retry identity. v1-to-v2 buffers one unsettled Assistant attempt, tracks events blocked behind it, and maintains old-to-new sequence references. Wrapping that state in closures or push/finish helper objects made the runtime structure different from the static declarations and made production, Worker verification, fixtures, and replay use different entry paths.
 
 ## Decision
 
-`SESSION_FORMAT_VERSION` is a monotonic current-writer integer. One profile-independent pure package owns each adjacent `vN -> vN+1` conversion. `@deepseek-ai/dsh-session-format` supplies only lossless snapshots, unique gap-free planning, header-only conversion, and whole-artifact composition; `@deepseek-ai/dsh-session-format-catalog` statically imports the complete chain independently of mounted Cordis plugins. Historical codecs and normalizers live in the named edge package, while current Session and persistence code accept only the latest logical types.
+The Session format packages use a stateful synchronous Stage API. Static migration declarations describe one adjacent version edge and create a new stage for each restored artifact. A stage owns that artifact's mutable state; no stage instance is shared across Sessions.
 
-Each edge freezes strict source and target semantics, while its target physical codec remains vocabulary-neutral so ordinary event growth can stay within one format version. The catalog restores the final generation through the installed peer `@deepseek-ai/dsh-session` and its current `KNOWN_SESSION_EVENT_TYPES`, preventing a frozen historical edge from becoming the current vocabulary owner.
+### Stage and Context protocol
 
-The JSONL provider completes ensure-current work before `open` returns a handle for a stored Session. It selects the highest canonical generation, migrates a supported historical body, and decodes the current result from one physical snapshot; the public `SessionPersistence` and `SessionHandle` interfaces contain no migration operations. Header-only `stat` and `list` rescan Session directories, translate supported historical headers in memory, and never publish a successor. `create` checks canonical filenames independently of header readability, so every existing generation reserves its Session id.
+```text
+interface SessionFormatMigrationContext {
+  emitEvent(event: SessionFormatEvent): void
+  emitRun(run: SessionFormatEventRun): void
+}
 
-Cancellation belongs to the `open`, `stat`, or `list` call that supplied it. Discovery, stable reads, decoding, and pre-publication checks observe that signal; once an immutable successor is published and its directory entry is synced, later cancellation does not delete the committed generation.
+interface SessionFormatMigrationStage {
+  readonly headerInheritedEventCount?: number
+  transformEvent(
+    event: SessionFormatEvent,
+    context: SessionFormatMigrationContext,
+  ): void
+  transformRun(
+    run: SessionFormatEventRun,
+    context: SessionFormatMigrationContext,
+  ): void
+  finish(context: SessionFormatMigrationContext): number
+}
+```
 
-The configured JSONL encoding owns one full suffix, `.jsonl` or `.jsonl.zstd`. Migration reads a stable exact source, decodes the recoverable logical prefix, composes every required edge in memory, validates and syncs a same-directory temporary stage for only the final target, rechecks the source fingerprint, publishes that previously absent target without overwrite, syncs the namespace, and reopens it through current validation before returning a handle. The source never moves or changes; only disposable temporary stages may be moved, linked, or removed. Migration does not synthesize interrupted-turn events: agent-loop appends those repairs through the write handle, while read-only query paths balance them in memory.
+`SessionFormatMigrationContext.emitEvent()` and `emitRun()` are synchronous. The producer declares whether it emits a scalar event or a compact run, so the hot path never infers the category from properties on a parsed file object. The caller owns scheduling and supplies the context to each operation instead of injecting a callback into the stage constructor. One input may emit zero, one, or many outputs without allocating a temporary return array or retaining an internal output queue.
 
-Canonical filenames encode the physical format generation: v0 is `session.jsonl` or `session.jsonl.zstd`; every positive generation is lowercase `session.vN.jsonl` or `session.vN.jsonl.zstd`. `dsh-session-format` owns the raw basename rule (`sessionFormatLogFilename`, `parseSessionFormatLogFilename`); the JSONL provider, the session-log export archive, and recorded-session fixtures append only the compression suffix. Publication never renames, replaces, or deletes a committed generation path. If the target already exists, it is accepted only as a regular current-format file with exactly the expected bytes; any other target refuses. Lower generations remain for operator inspection or explicit copying, but normal runtime operations select the numerically highest canonical name and never use retained predecessors as automatic fallback, restore, or downgrade support.
+`SessionFormatMigration` remains an immutable declaration: version numbers, header migration, target-header validation, and `createStage()`. `CompiledSessionFormatChain` validates a unique gap-free edge sequence once, creates per-artifact stages in source-to-target order, and connects them with context objects in reverse order. `finish()` settles stages in source-to-target order so each stage can emit its tail before the downstream stage closes.
 
-The current-format fast path classifies the header from one stable source snapshot, invokes no historical converter or generation write, and passes that snapshot to current decoding without another file read. The decoded log enters the existing bounded revision-keyed memo for an immediate observe-to-resume handoff, while `stat` and `list` deliberately rescan. Multiple edges leave the original generation unchanged and publish only the final target; intermediate versions exist only in memory. A source fingerprint recheck restarts migration when content changes, and exclusive target publication accepts a racing winner only when its bytes match exactly. Cross-process append fencing remains outside this guarantee.
+```text
+JSONL record
+  → released physical row decoder
+  → v0-to-v1 stage
+  → v1-to-v2 stage
+  → current event collector
+```
 
-The first edge, `@deepseek-ai/dsh-session-format-v0-to-v1`, is intentionally identity-shaped: aside from the version and bounded historical normalizations already accepted by v0, it preserves logical headers, events, sequence numbers, references, timestamps, payloads, and the configured compression choice. The exact `session.jsonl[.zstd]` source remains byte- and inode-identical, while the current writer encodes the new `session.v1.jsonl[.zstd]` successor. This exercises the complete publication lifecycle before a cardinality-changing format needs it.
+The chain contains no `flatMap`, spread expansion, intermediate event array, or scheduler. The final event collector expands a compact run only after every migration stage has had the opportunity to consume it directly.
 
-Projection-cache records bind their fold to the Session header's `formatVersion`. The `session_projcache` v7 reader may load predecessor domain records structurally, but a record without the format generation cannot seed a current Session; the authoritative log refolds it and the next checkpoint writes the complete current identity. This prevents a cache row produced before a bounded normalizer or cardinality-changing edge from bypassing that migration.
+### Physical codecs and packed runs
 
-## Consequences
+Each released codec creates a row decoder with explicit `strict` or `recoverable` recovery. The decoder validates and emits one event or one codec-owned `SessionFormatEventRun` at a time through separate context methods. v0-to-v1 and v1-to-v2 implement both `transformEvent()` and `transformRun()`, so packed Assistant chunks can reach the folding edge without first becoming millions of ordinary events.
 
-Reading event bodies with a newer build may durably add a higher generation. The exact old generation remains available, but the runtime thereafter selects the highest canonical filename; retention does not promise that an older build can safely downgrade or that the newer build will fall back when the successor is corrupt. A read-only filesystem reports an actionable migration failure instead of returning an in-memory current view that differs from disk.
+The v0-to-v1 edge preserves logical headers, sequence numbers, references, timestamps, and payloads except for bounded released-v0 normalizations. It translates the retired `steering/message` and `compact/*` event names, accepts a released `llm/retry` after its matching `step/end`, deterministically supplies a missing `llm/retry.retryId` per turn/step/provider/policy chain, and supplies one deterministic `compactionId` across a legacy compaction group that omitted it. The v1-to-v2 edge owns attempt folding and reference remapping, and emits only settled current events. It splits a legacy goal-sourced user message into `goal/change` plus the original model-visible message. It also inserts an interrupted `turn/end` for the bounded released restart in which an open turn with no open step is followed by a non-empty `next-turn` inbox splice and the next numbered `turn/start`.
 
-JSONL publication uses POSIX hard-link creation plus directory sync, and Windows uses no-overwrite `MoveFileExW` with write-through. A competing writer that wins target creation is accepted only when the committed bytes exactly match. One process-local writer per Session is the supported concurrency model. A future per-Session cross-process lock can close the remaining source-check-to-publication race without changing the format edge interface.
+The catalog exposes one `createRestore()` operation for production, Worker, fixture, and replay callers. Recovery policy and final validation policy are chosen once at restore creation. Historical production uses recoverable source parsing with transformed-current validation; this validates the released current result after migration, while input that is already current receives only codec validation. Worker and fixture verification use strict parsing with full installed current restoration. A migration-stage or transformed-current validation refusal remains `SessionFormatUnsupportedMigrationError`; physical decoding failures remain corruption. Test support keeps only fixture-specific token and envelope materialization.
 
-Retained generations are not a live-stream write-ahead log. A future optional WAL sidecar may preserve unfinished assistant streams across a hard crash. Explicit generation inspection or copying, retention tooling, compression conversion, and streamed whole-artifact transformation are separate features; automatic fallback and downgrade compatibility are not implied future work.
+### JSONL integration
 
-This note supersedes the continue-only persistence rule and the deferred-chain status in [Session log versioning](2026-08-10-session-log-version-mechanism.md). That note remains the authority for when to bump the version and for ordinary equal-version `ignorable` event behavior.
+The JSONL provider scans frame boundaries once, reuses one Zstandard decoder, parses complete JSONL records incrementally, and feeds rows directly into the catalog restore. The outer loop yields at a bounded cadence; there is no per-frame `await` and no complete plaintext or source-row array.
+
+Current encoding is record based. The provider serializes about 1 MiB of plaintext per main-thread slice, streams it through one Zstandard context with source-error propagation, writes compressed output in 4 MiB batches to an exclusively created same-directory temporary file, and syncs it before publication. A process-wide scheduler admits at most two full verification Workers and hands a released permit directly to the oldest waiter.
+
+Preparation forwards cancellation through source reads and observes it at the existing approximately 500 ms Decode yield boundary. Once `publish()` starts, encode, Worker verification, and publication do not receive caller cancellation and run to settlement; write open checks its caller signal again afterward. A published generation is never rolled back.
+
+The Stage pipeline ends at one prepared current artifact. [Historical Session read preparation](2026-09-05-read-only-session-migration-preparation.md) defines how read open consumes that artifact immediately while write open performs encode, verification, and publication before returning append access.
+
+### Durable format and publication rules
+
+Canonical filenames encode physical format generation: v0 is `session.jsonl[.zstd]` and positive generations use `session.vN.jsonl[.zstd]`. Migration never moves, replaces, or deletes a committed generation and writes only the final current target; intermediate versions exist only as stage state.
+
+POSIX publication uses hard-link creation plus directory sync. Windows uses no-overwrite, write-through `MoveFileExW`. An existing target is accepted only when its verified migration prefix equals the staged bytes; any append tail belongs to current-generation reading rather than migration winner verification.
+
+Existing write handles retain the process-local claim and kernel-backed cross-process `SessionWriteLease`. Header-only `stat` and `list` translate supported historical headers without opening the body or publishing a generation. Projection-cache records bind their fold to the Session header's format version so a cache row cannot bypass a cardinality-changing migration.
+
+## Problem-to-solution mapping
+
+| Whole-artifact problem | Implemented mechanism | Result |
+|---|---|---|
+| One asynchronous decode call per Zstandard frame | One reusable decoder; outer 500 ms scheduling cadence | Removes 317,540 async transitions |
+| Complete plaintext, string, and row arrays | Incremental JSONL parser and row decoder | Retains only one cross-chunk record fragment |
+| Complete event array between every edge | Context-connected stateful stages | No intermediate version event arrays |
+| Packed chunks expand before folding | `SessionFormatEventRun` plus `transformRun()` | 9.14 million source events need not materialize |
+| Whole-artifact snapshot and deep freeze at every edge | Stage-owned exclusive values and final validation | Removes repeated recursive copy/freeze |
+| One-shot migration functions hide state | Per-artifact stage classes from immutable declarations | State ownership and concurrency are explicit |
+| Bulk current encode builds whole strings and Buffers | Record encoder, 1 MiB input slices, 4 MiB write batches | Bounds allocation and main-thread slices |
+| Verification repeats on the main thread | At most two complete-generation Workers | Keeps verification CPU off the main thread |
+| Production and fixture migration use different APIs | Catalog `createRestore()` with explicit policies | One decoder/chain implementation |
 
 ## Verification
 
-Release verification runs the committed Session-format corpus gate over every versioned persisted-or-projected `session*.jsonl` fixture under `snapshots/`, `packages/`, and `scripts/snapshots/python-sdk-single-exe/`. Fixture-only omitted envelopes and request-header tokens are materialized before the real static catalog; every fixture reaches the current v1 view through current restoration or historical migration. Released-v0 replay inputs remain suffixless, while fresh v1 writer outputs use `session.v1.jsonl` for a parent and `session.<ordinal>.v1.jsonl` for children. Record and refresh preserve every completed generation, including generations of a child role absent from a later run. Malformed historical fixtures are repaired at their source rather than admitted through path-dependent replay policy. The continuing gate discovers the corpus dynamically and fails every restoration refusal; separate assembled JSONL tests own exact physical-byte migration.
+### Benchmark input and meanings
 
-Handle-integration verification runs the pure format, catalog, persistence-seam, and JSONL provider suites together: 420 tests cover both encodings, immutable publication races, header-only observation, read and write handles, migration refusal, append after migration, cancellation, and crash-tail behavior with per-file 100% statement, branch, function, and line coverage. Repository typecheck and lint, 113 keyless recorded-session replays with two declared skips, and 28 owner-local expected-output cases also pass on the merged master checkpoint.
+The benchmark uses Node v24.18.0 and one 116,228,655-byte v0 Zstandard log containing 317,540 frames and 454,151 physical rows. The old reader restores 9,143,111 expanded v0 events. Migration produces 72,784 current v2 events with artifact SHA-256 `fa16ff9472ca350595a3112c20a3db79655bc2673973469987ecaf2a57ebd17c`.
 
-The assembled headless profile test stages `session.jsonl`, resumes it through the shipped composition, observes v1 before Session construction, verifies that the exact v0 bytes and inode remain while `session.v1.jsonl` appears, and proves the next append targets v1. JSONL contract tests exercise raw and Zstandard exclusive publication, torn-tail preservation, source changes, target collisions, future-highest refusal, revision-keyed parsed-log reuse, listing rescans, temporary cleanup, committed reopen, and current-format bypass.
+Runs use built artifacts under plain Node, one process per sample, and a 16 GB V8 heap limit. “Retained heap” is measured after forced GC while the restored Session remains live. Values below are three-run medians except the whole-artifact failure, which consistently cannot reach a handle.
+
+### Physical Decode
+
+| Data path | Decode time | Peak RSS | Scheduling |
+|---|---:|---:|---|
+| Pre-migration optimized reader | 1.553s | 916MB | One decoder; 2–3 outer yields |
+| Whole-artifact migration | 7.527s | 7,219MB | 317,540 async decoder calls |
+| Streaming Stage path | 1.467s | 908MB | One decoder; 2 outer yields |
+
+### Historical-file cold open
+
+| Version | Time to restored Session | CPU time | Peak RSS | Retained heap | Restored events | Outcome |
+|---|---:|---:|---:|---:|---:|---|
+| Pre-migration high-performance v0 reader | 4.594s | 6.048s | 2.720GB | 2.016GB | 9,143,111 | Reads v0; does not migrate |
+| Whole-artifact migration | >72.8s | — | ≥7.219GB during Decode | — | — | OOM before a handle |
+| Streaming Stage migration with serial publication | 6.241s | 8.493s | 2.107GB | 477MB | 72,784 | Publishes and opens v2 |
+
+The old reader has lower one-time wall time because it performs no format conversion or durable publication. It also keeps the 9.14-million-event representation live. The Stage path pays encode and verification once, then retains the folded v2 state.
+
+### Current-format cold open
+
+| Version reading its current format | Time to restored Session | Peak RSS | Retained heap |
+|---|---:|---:|---:|
+| Old reader on v0 | 4.594s | 2.720GB | 2.016GB |
+| Whole-artifact-era reader on v2 | 1.273s | 1.107GB | 476MB |
+| Streaming Stage reader on v2 | 1.284s | 1.109GB | 476MB |
+
+The current-v2 fast path remains performance-equivalent. The architectural change does not route current data through historical stages.
+
+### Streaming serial migration breakdown
+
+This table records the serial open flow measured for this Stage decision. The current preparation-first scheduling and its measurements are owned by [Historical Session read preparation](2026-09-05-read-only-session-migration-preparation.md).
+
+| Phase | Median |
+|---|---:|
+| Source Decode and migration | 2.784s |
+| Encode, write, and sync | 0.956s |
+| Full staged-file Worker verification | 1.415s |
+| Source recheck and no-overwrite publication | 0.106s |
+| Committed-prefix verification and header reopen | 0.046s |
+| Generation ensure-current total | 5.318s |
+| Final current decode observed by persistence | 0.620s |
+| Session restoration | 0.594s |
+| End-to-end restored Session | 6.241s |
+
+The generation breakdown and end-to-end table come from separate instrumented runs, so rounded rows are not expected to sum exactly.
+
+Format, catalog, edge, JSONL, fixture, replay, and built-Worker tests cover both encodings, packed runs, header-only classification, torn tails, migration refusal, deterministic legacy normalization, source changes, target collisions, write leases, and Worker failure.
+
+## Consequences
+
+At least one final current-event array remains necessary because Session restoration and Agent execution retain complete history. The Stage architecture removes full source and intermediate target arrays; it does not promise memory proportional to a page window.
+
+Decoded scalar `assistant/chunk` rows receive envelope validation and final target validation, but their complete frozen-v1 source payload-member validation is deferred because that per-event check materially affects Decode and migration time on released logs. Packed Assistant runs remain strictly decoded. The scalar check must be restored only with performance evidence that preserves this migration path's measured behavior.
+
+Read-only access consumes the Stage result before durable publication, while write open reuses the same result and waits for publication before append. The persistence scheduling remains independent from the format pipeline.
+
+Lower generations remain for operator inspection. Retention does not promise downgrade compatibility, automatic fallback, or that an older runtime can safely interpret a newer generation.
 
 ## Alternatives considered
 
-- **Migrate only on continuation** — leaves query, export, fork, and suffix consumers on old generations and duplicates restoration policy.
-- **Return a migrated in-memory view without persisting** — lets one process observe state that does not match the highest committed generation and postpones failure until a later writer.
-- **Persist every intermediate version** — consumes space and creates recovery states with no runtime consumer; only the source and final generation are durable.
-- **Let mounted event-owner plugins register migrations** — makes historical readability deployment-dependent; the static catalog must work before feature plugins mount.
-- **Reuse one filename for every current format and relocate its predecessor** — rejected because migration would move or overwrite committed evidence, require collision and retention rules, and make the filename disagree with the stored format. Canonical immutable generation names let discovery select the highest version directly.
+- **Optimize only Zstandard Decode** — restores physical Decode speed but leaves source rows, expanded events, snapshots, intermediate artifacts, and bulk encode in memory.
+- **Synchronous Generator stages** — retain execution frames and batches at each yield. Real-log measurements increased migration time and migrate-complete RSS from about 1.0 GB to about 1.2 GB.
+- **Return arrays from each stage** — preserves the old allocation, traversal, and flattening costs under a new name.
+- **Give each stage an internal output queue** — adds drain, EOF, and error ownership while still retaining intermediate values.
+- **Inject an emit callback through constructors** — forces reverse construction or a partially connected lifecycle. Passing a context to operations keeps stage construction independent of downstream wiring.
+- **Share stateful codec instances globally** — would mix pending attempts, mappings, and counters across concurrent Session restores.
+- **Persist every intermediate format version** — creates durable states with no runtime consumer; only the exact source and final current generation are needed.
+- **Let mounted plugins register migrations** — makes historical readability deployment dependent. The static catalog must restore released formats before feature plugins mount.

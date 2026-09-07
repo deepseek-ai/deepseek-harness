@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-cordis-host-runner",
   "description": "Dynamic package definition registry, host-half sandbox lifecycle, and invoke handler table for model-mounted dual-half packages",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

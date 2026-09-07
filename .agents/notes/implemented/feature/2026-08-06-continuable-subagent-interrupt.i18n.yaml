@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-06-continuable-subagent-interrupt.md
-2026-08-06-continuable-subagent-interrupt.md: e7b2926cec32679fa66392381da6c0cb551fc324
-2026-08-06-continuable-subagent-interrupt.zh.md: 45f26a004819dad6212b4b901ddd7bc8b07bc306
+2026-08-06-continuable-subagent-interrupt.md: c59601fd486d40c3a9367f2af132fb30207c35c9
+2026-08-06-continuable-subagent-interrupt.zh.md: b56b94e30fc544e77c0be99dcb759e56e47ef5d4

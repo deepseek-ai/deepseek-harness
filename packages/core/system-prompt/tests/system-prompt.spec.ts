@@ -7,20 +7,21 @@ import type { PromptContextOrderName, PromptSectionOrderName } from '@deepseek-a
 
 /**
  * Every assembly carries the plugin's own built-ins — `harness:identity`
- * and `deployment:persona` (from config). Tests about
+ * and `deployment:persona-prefix` / `deployment:persona-suffix` (from config). Tests about
  * registry MECHANICS strip them with {@link contributed} to stay focused on
  * their own sections; the built-ins' behavior is pinned by its own describe.
  */
-const BUILT_IN = ['harness:identity', 'deployment:persona']
+const BUILT_IN = ['harness:identity', 'deployment:persona-prefix', 'deployment:persona-suffix']
 const IDENTITY = 'You are an AI agent powered by DeepSeek Harness.'
 const SECTION_ORDER_NAMES = [
-  'HARNESS_IDENTITY', 'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA',
+  'HARNESS_IDENTITY', 'DEPLOYMENT_PERSONA_PREFIX',
   'PLAN_POLICY', 'TEAM_POLICY', 'PTC_ONLY', 'FILE_REFERENCE', 'TOOL_BASH',
   'TOOL_PWSH', 'TOOL_READ', 'TOOL_WRITE', 'TOOL_EDIT', 'TOOL_GLOB',
   'TOOL_GREP', 'TOOL_JOBS', 'TOOL_PTY', 'TOOL_WEB_SEARCH', 'TOOL_WEB_FETCH',
   'TOOL_LSP', 'TOOL_SESSION_QUERY', 'TOOL_GOAL', 'TOOL_CORDIS', 'TOOL_WORKFLOW',
   'TOOL_RALPH', 'TOOL_SUBAGENT', 'TOOL_REPORT', 'TOOLS_SDK',
   'DELIVERABLE_FILE_REFERENCES', 'STRUCTURED_OUTPUT',
+  'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA_SUFFIX',
 ] as const satisfies readonly PromptSectionOrderName[]
 const CONTEXT_ORDER_NAMES = [
   'SANDBOX_POLICY', 'APPROVAL_POLICY', 'SUBAGENT_DELEGATION',
@@ -40,6 +41,39 @@ describe('SystemPrompt', () => {
     expect(sorted.slice(1).every((order, index) => order - sorted[index]! >= 10)).toBe(true)
   })
 
+  it('keeps reusable instructions identical across local environments', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SystemPrompt, { personaPrefix: 'Model {{model}}.', personaSuffix: 'In {{cwd}} on {{platform}}.' })
+      let environment = { model: 'model-a', cwd: '/alice/project', platform: 'darwin', source: '/alice/dsh', url: 'http://127.0.0.1:3080' }
+      for (const key of ['model', 'cwd', 'platform'] as const) {
+        ctx.systemPrompt.variable(key, () => environment[key])
+      }
+      const reusable = SECTION_ORDER_NAMES.filter(name =>
+        !['HARNESS_IDENTITY', 'DEPLOYMENT_PERSONA_PREFIX', 'HARNESS_SOURCE', 'WEB_SURFACE', 'DEPLOYMENT_PERSONA_SUFFIX'].includes(name))
+      for (const name of [...reusable].reverse()) {
+        ctx.systemPrompt.section({ name, order: ctx.systemPrompt.getSectionOrder(name), text: name })
+      }
+      ctx.systemPrompt.section({
+        name: 'source', order: ctx.systemPrompt.getSectionOrder('HARNESS_SOURCE'), text: () => environment.source,
+      })
+      ctx.systemPrompt.section({
+        name: 'web', order: ctx.systemPrompt.getSectionOrder('WEB_SURFACE'), text: () => environment.url,
+      })
+      const first = renderPrompt(await ctx.systemPrompt.assemble())
+      environment = { model: 'model-a', cwd: 'C:/bob/project', platform: 'win32', source: 'C:/bob/dsh', url: 'http://127.0.0.1:4080' }
+      const second = renderPrompt(await ctx.systemPrompt.assemble())
+      const prefix = [IDENTITY, 'Model model-a.', ...reusable].join('\n\n') + '\n\n'
+      expect(first).toBe(prefix + '/alice/dsh\n\nhttp://127.0.0.1:3080\n\nIn /alice/project on darwin.')
+      expect(second).toBe(prefix + 'C:/bob/dsh\n\nhttp://127.0.0.1:4080\n\nIn C:/bob/project on win32.')
+      environment.model = 'model-b'
+      expect(renderPrompt(await ctx.systemPrompt.assemble()))
+        .toBe(second.replace('Model model-a.', 'Model model-b.'))
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('keeps repository context placements unique and integral', async () => {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt, {})
@@ -49,19 +83,37 @@ describe('SystemPrompt', () => {
   })
 
   describe('built-in sections', () => {
+    it('renders the environment after guidance and reports its strict interpolation errors', async () => {
+      const ctx = new Context()
+      try {
+        await ctx.plugin(SystemPrompt, { personaPrefix: 'Model {{model}}.', personaSuffix: 'Workspace {{cwd}}.' })
+        ctx.systemPrompt.variable('model', () => 'm')
+        ctx.systemPrompt.section({ name: 'guidance', order: 100, text: 'Use tools.' })
+        const unresolved = await ctx.systemPrompt.assemble()
+        expect(() => renderPrompt(unresolved))
+          .toThrow('unknown prompt variable "{{cwd}}" in section "deployment:persona-suffix"')
+        ctx.systemPrompt.variable('cwd', () => '/work')
+        expect(renderPrompt(await ctx.systemPrompt.assemble()))
+          .toBe(`${IDENTITY}\n\nModel m.\n\nUse tools.\n\nWorkspace /work.`)
+      } finally {
+        await ctx.fiber.dispose()
+      }
+    })
+
     it('registers the harness identity and the configured deployment persona', async () => {
       const ctx = new Context()
-      await ctx.plugin(SystemPrompt, { persona: 'You are DeepSeek Harness.' })
+      await ctx.plugin(SystemPrompt, { personaPrefix: 'You are DeepSeek Harness.' })
 
       const assembly = await ctx.systemPrompt.assemble()
       expect(assembly.sections.map(s => s.name)).toEqual([
         'harness:identity',
-        'deployment:persona',
+        'deployment:persona-prefix',
+        'deployment:persona-suffix',
       ])
       expect(renderPrompt(assembly)).toBe(`${IDENTITY}\n\nYou are DeepSeek Harness.`)
       // The names are reserved by the plugin — one owner per section.
-      expect(() => ctx.systemPrompt.section({ name: 'deployment:persona', order: 0, text: 'imposter' }))
-        .toThrow('prompt section "deployment:persona" is already registered')
+      expect(() => ctx.systemPrompt.section({ name: 'deployment:persona-prefix', order: 0, text: 'imposter' }))
+        .toThrow('prompt section "deployment:persona-prefix" is already registered')
     })
 
     it('renders no persona section for a persona-less deployment (empty default)', async () => {
@@ -74,11 +126,11 @@ describe('SystemPrompt', () => {
       const ctx = new Context()
       await ctx.plugin(SystemPrompt, {
         includeHarnessIdentity: false,
-        persona: 'You are a helpful software engineer assistant.',
+        personaPrefix: 'You are a helpful software engineer assistant.',
       })
 
       const assembly = await ctx.systemPrompt.assemble()
-      expect(assembly.sections.map(section => section.name)).toEqual(['deployment:persona'])
+      expect(assembly.sections.map(section => section.name)).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix'])
       expect(renderPrompt(assembly)).toBe('You are a helpful software engineer assistant.')
     })
 
@@ -112,7 +164,7 @@ describe('SystemPrompt', () => {
 
   it('assembles sections in order with context-resolved text and collected tools', async () => {
     const ctx = new Context()
-    await ctx.plugin(SystemPrompt, { persona: 'You are DeepSeek Harness.' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: 'You are DeepSeek Harness.' })
 
     ctx.systemPrompt.section({ name: 'cwd', order: 20, text: () => 'cwd: /tmp' })
     ctx.systemPrompt.section({ name: 'rules', order: 10, text: 'Be precise.' })
@@ -121,8 +173,8 @@ describe('SystemPrompt', () => {
     ctx.systemPrompt.tools(() => ({ schemas: [{ name: 'echo', description: 'echo back', parameters: {} }] }))
 
     const assembly = await ctx.systemPrompt.assemble()
-    expect(assembly.sections.map(s => s.name)).toEqual(['harness:identity', 'deployment:persona', 'rules', 'cwd'])
-    expect(assembly.sections.map(s => s.text)).toEqual([IDENTITY, 'You are DeepSeek Harness.', 'Be precise.', 'cwd: /tmp'])
+    expect(assembly.sections.map(s => s.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'rules', 'cwd', 'deployment:persona-suffix'])
+    expect(assembly.sections.map(s => s.text)).toEqual([IDENTITY, 'You are DeepSeek Harness.', 'Be precise.', 'cwd: /tmp', ''])
     expect(assembly.contexts).toEqual([
       { name: 'earlier', text: 'context 1' },
       { name: 'later', text: 'context 2' },
@@ -307,8 +359,8 @@ describe('SystemPrompt', () => {
 
     const passed: AssembleContext = {}
     const assembly = await ctx.systemPrompt.assemble(passed)
-    expect(seen).toEqual([['harness:identity', 'deployment:persona', 'base', 'from-a']])
-    expect(assembly.sections.map(s => s.name)).toEqual(['harness:identity', 'deployment:persona', 'base', 'from-a'])
+    expect(seen).toEqual([['harness:identity', 'deployment:persona-prefix', 'base', 'deployment:persona-suffix', 'from-a']])
+    expect(assembly.sections.map(s => s.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'base', 'deployment:persona-suffix', 'from-a'])
     expect(contexts[0]).toBe(passed) // the caller's context reaches listeners
   })
 
@@ -368,7 +420,7 @@ describe('SystemPrompt', () => {
     firstParameters.properties['leak'] = { type: 'string' }
 
     const second = await ctx.systemPrompt.assemble()
-    expect(second.sections.map(section => section.name)).toEqual(['harness:identity', 'deployment:persona', 'base'])
+    expect(second.sections.map(section => section.name)).toEqual(['harness:identity', 'deployment:persona-prefix', 'base', 'deployment:persona-suffix'])
     expect(second.sections[0]!.text).toBe(IDENTITY)
     expect(second.contexts).toEqual([])
     expect(second.tools).toEqual([{ name: 't', description: 'tool', parameters: { type: 'object', properties: {} } }])
@@ -520,7 +572,7 @@ describe('SystemPrompt', () => {
 
     it('interpolates {{name}} references in section text at render — the persona included', async () => {
       const ctx = new Context()
-      await ctx.plugin(SystemPrompt, { persona: 'You run on {{model}} in {{cwd}}.' })
+      await ctx.plugin(SystemPrompt, { personaPrefix: 'You run on {{model}} in {{cwd}}.' })
       ctx.systemPrompt.variable('model', () => 'deepseek-v4')
       ctx.systemPrompt.variable('cwd', () => '/work')
 

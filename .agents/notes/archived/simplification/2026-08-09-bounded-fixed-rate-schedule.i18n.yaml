@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/simplification/2026-08-09-bounded-fixed-rate-schedule.md
+2026-08-09-bounded-fixed-rate-schedule.md: 849ff666c38d92cf28edef7e6ea551584c152b03
+2026-08-09-bounded-fixed-rate-schedule.zh.md: da4868f0d23080e37cf8d78afd98700d3e88ed74

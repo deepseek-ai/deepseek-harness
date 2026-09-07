@@ -37,6 +37,7 @@ const INITIAL = 'Explain event sourcing in one sentence.'
 const REARM = 'Keep working until I stop you again.'
 const REARM_WAKE = 'Start that queued work now.'
 const FOLLOWUP = 'Now give the same explanation to a human reader.'
+const EDITED_FOLLOWUP = 'Explain the same idea for a human reader.'
 const WAKING = 'And add one concrete example.'
 const REARMED_ANSWER = 're-armed setup answer'
 const PARKED_ANSWER = 'parked follow-up answer'
@@ -213,22 +214,26 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       const send = page.getByRole('button', { name: 'Send message' })
       expect(await send.count()).toBe(1)
       expect(await send.isDisabled()).toBe(true)
+      // Keep the continuable Activation resident after this first abort. The
+      // direct setup queue also proves the ordinary row controls remain
+      // available while this parent-offline composer cannot submit new input.
+      await scaffold.ctx.subagents.prompt({
+        requestId: 'interrupt-ui-rearm' as SubagentPromptRequestId,
+        parentSessionId: parent.id,
+        childSessionId: childId,
+        mode: 'continuable',
+        delivery: 'queue',
+        content: [{ type: 'text', text: REARM }],
+      }, new AbortController().signal)
+      await page.getByRole('button', { name: 'Edit queued message' }).waitFor({ timeout: 15_000 })
+      expect(await page.getByRole('button', { name: 'Remove queued message' }).count()).toBe(1)
+      expect(await page.getByRole('button', { name: 'Steer queued message' }).count()).toBe(1)
       await compareOrRefreshGolden(
         OFFLINE_COMPOSER_EXPECTED,
         await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd),
         MODE,
       )
 
-      // Keep the continuable Activation resident after this first abort. The
-      // direct setup queue does not change the parent-offline UI contract: its
-      // input and Send remain disabled throughout the exercised browser path.
-      await scaffold.ctx.subagents.prompt({
-        requestId: 'interrupt-ui-rearm' as SubagentPromptRequestId,
-        parentSessionId: parent.id,
-        childSessionId: childId,
-        mode: 'continuable',
-        content: [{ type: 'text', text: REARM }],
-      }, new AbortController().signal)
       const aborted = waitForAbortedTurn(scaffold, childId)
       const interruptResponse = page.waitForResponse(response =>
         new URL(response.url()).pathname === '/api/subagents/interruptByParent')
@@ -247,6 +252,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
         parentSessionId: parent.id,
         childSessionId: childId,
         mode: 'continuable',
+        delivery: 'queue',
         content: [{ type: 'text', text: REARM_WAKE }],
       }, new AbortController().signal)
       await waitFor(() => existsSync(rearmedReadyFile), 'the re-armed child turn to open')
@@ -263,8 +269,13 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       .getByRole('button').first().click()
     await page.getByRole('button', { name: /1 subagent/ }).click()
     await page.getByRole('treeitem', { name: new RegExp(LABEL) }).click()
-    const input = page.getByRole('textbox', { name: 'Message or run a task... / commands, @ files or sessions' })
-    await input.waitFor({ timeout: 15_000 })
+    // A live continuable child advertises the ordinary steer-all gesture, so
+    // that placeholder is the composer's accessible name in this window. It
+    // changes back as the queue drains, so later interactions address the
+    // stable composer node instead.
+    await page.getByRole('textbox', { name: 'Cmd/Ctrl+Enter steers all queued messages' })
+      .waitFor({ timeout: 15_000 })
+    const input = page.locator('[data-composer-input]').first()
     expect(await input.isDisabled()).toBe(false)
 
     // Queue a follow-up through Send while independent Stop remains available.
@@ -274,6 +285,19 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
     await page.getByRole('button', { name: 'Send message' }).click()
     expect(((await (await promptResponse).json()) as { result: { ok: boolean } }).result)
       .toMatchObject({ ok: true })
+
+    await page.getByRole('button', { name: '2 queued messages' }).click()
+    const followupRow = page.locator('[data-queue-dock] li', { hasText: FOLLOWUP })
+    await followupRow.getByRole('button', { name: 'Edit queued message' }).click()
+    const editor = page.getByRole('textbox', { name: 'Edit queued message' })
+    await editor.fill(EDITED_FOLLOWUP)
+    const updateResponse = page.waitForResponse(response =>
+      new URL(response.url()).pathname === '/api/session/updateQueue')
+    await page.getByRole('button', { name: 'Save queued message' }).click()
+    expect(((await (await updateResponse).json()) as { result: { ok: boolean } }).result)
+      .toMatchObject({ ok: true })
+    await page.getByText(EDITED_FOLLOWUP, { exact: true }).waitFor()
+    expect(apiCalls.filter(path => path === '/api/subagents/updateQueue')).toEqual([])
 
     const aborted = waitForAbortedTurn(scaffold, childId)
     const stop = page.getByRole('button', { name: 'Stop generating' })
@@ -314,7 +338,7 @@ describe.skipIf(MODE === 'record')('web e2e: composer interrupt for a running co
       : [])
     expect(userTexts[0]).toBe(INITIAL)
     expect(userTexts[1]).toMatch(/^Your parent agent id is .+send_message\(\{ agent_id: /)
-    expect(userTexts.slice(2)).toEqual([REARM, REARM_WAKE, FOLLOWUP, WAKING])
+    expect(userTexts.slice(2)).toEqual([REARM, REARM_WAKE, EDITED_FOLLOWUP, WAKING])
     const turnEndKinds = events
       .filter(event => event.type === 'turn/end')
       .map(event => event.data.reason.kind)

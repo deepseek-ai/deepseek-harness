@@ -29,7 +29,7 @@ Use this package when the agent's shell commands and terminals should run inside
 
 ### When to choose it
 
-Choose it when a composition already uses the E2B sandbox and you want commands and terminals to run there. Choose the local subprocess package for host execution. Tooling that needs a process id immediately — for example the ACP child backend — cannot use this package.
+Choose it when a composition already uses the E2B sandbox and you want commands and terminals to run there. Choose the local subprocess package for host execution.
 
 ### Configuration
 
@@ -71,7 +71,7 @@ This section explains the design decisions behind the provider and points at the
 
 ### Design philosophy
 
-- **Deferred remote identity.** The synchronous seam never blocks on the network: the handle publishes its real process-group id asynchronously, and the wrapper's private files are the authority for pid, exit code, and spill validity.
+- **Provider-private remote identity.** The synchronous seam never blocks on the network. Private wrapper files asynchronously publish a process-group identity for stdin, observation, termination, and quiescence checks, together with the direct exit code and spill validity; that identity is not the requested target PID.
 - **One teardown ladder.** Termination, rollback, and disposal share one process-group signal path — `SIGTERM`, then `SIGKILL` plus the SDK kill fallback — and treat proven quiescence as final.
 - **Environment is explicit.** Nothing from the host and nothing credential-shaped enters the sandbox implicitly; every ambient value is scrubbed and every `spec.env` entry is an explicit opt-in.
 
@@ -91,9 +91,9 @@ This section explains the design decisions behind the provider and points at the
 
 The bootstrap resolves its own tools from the sandbox PATH, refuses any missing or non-executable path, execs through `env -i` and `setsid --wait`, publishes the process-group id and exit code to private files beneath `ctx.e2b.runtimeRoot/processes`, and redirects stdout and stderr through base64 encoders that emit a reserved completion frame; `tee` and `head -c` bound optional spill files.
 
-### Process identity and publication
+### Private process identity and publication
 
-The synchronous seam returns a handle immediately while the command starts asynchronously; `pid` stays `-1` until the wrapper publishes its process-group id and the adapter validates it, and stdin plus ordinary observation wait for that publication. A startup signal aborts environment and private-state preparation before allocation; once allocation begins, cancellation waits for a provisional SDK handle it can clean.
+The synchronous seam returns a handle immediately while the command starts asynchronously. The wrapper publishes a private process-group ID for stdin, observation, termination, and quiescence checks, but that ID is not the requested target PID. A startup signal aborts environment and private-state preparation before allocation; once allocation begins, cancellation waits for a provisional SDK handle it can clean.
 
 ### Environment boundary
 
@@ -142,7 +142,6 @@ No direct invalidation: the consumer seams own any request-prefix changes; this 
 These limits define when the provider is a poor fit or needs special operational care. They are current package constraints, not a task backlog.
 
 - **The SDK still retains complete command output in host memory** — E2B `CommandHandle.stdout` and `.stderr` accumulate the base64 transport even when this adapter exposes bounded raw-byte tails, so the subprocess seam's normal host-memory bound is not achieved and transport retention is larger than the source stream.
-- **Synchronous-PID consumers are unsupported** — `pid` remains `-1` during remote startup; consumers that require a positive PID immediately, including the ACP child backend, cannot use this provider unchanged.
 - **Private state lives for the sandbox lifetime** — process directories and valid spill files remain under `.dsh-e2b` until the owner deletes the sandbox; this POC supplies no in-sandbox sweep.
 - **Control state shares the sandbox user's UID** — E2B runs every command as the same default user, so `0700`/`0600` modes cannot isolate `.dsh-e2b` control files from concurrently running sandbox processes; real isolation needs an E2B per-command user or an out-of-band control channel.
 - **Numeric process identities are not reuse-fenced** — E2B exposes numeric PID/PGID input, signalling, and cleanup operations but no atomic identity-bound alternative; replacement is deferred until E2B adds an identity primitive or a failure demonstrates a narrower protocol.

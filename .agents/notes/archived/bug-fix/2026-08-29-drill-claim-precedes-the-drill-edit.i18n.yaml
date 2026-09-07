@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-29-drill-claim-precedes-the-drill-edit.md
+2026-08-29-drill-claim-precedes-the-drill-edit.md: 0b9585e339bb1d5e7b5960e12696b4497da9e7d9
+2026-08-29-drill-claim-precedes-the-drill-edit.zh.md: a8a94c34f2fe58335cdff5b37965ff094f6d7505

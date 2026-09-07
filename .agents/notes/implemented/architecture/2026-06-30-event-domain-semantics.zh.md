@@ -26,14 +26,14 @@ harness 通过 Cordis 事件分类体系扩展 agent loop（智能体循环）�
 
 **边界规则：** 持久的、可回放的事实是 `SessionEvent`；实时拦截或瞬态/活对象信号是 `agent`/`tools` Cordis 事件。轮次或步骤边界是持久事实，因此存在于会话日志中并从 `session/event` 源读取——不会被镜像为 `agent/*` emit。
 
-**将规则应用于边界镜像：** 全部四个边界镜像——`agent/turn-start`、`agent/turn-end`、`agent/step-start`、`agent/step-end`——被**移除**。没有生产消费方需要在边界处获取活的 `Agent`：ACP（Agent Client Protocol）桥接将其进行中的提示词与精确对应的 `session/event` `turn/start`/`turn/end` 事件对关联，其他 transcript 消费方同样从持久流派生边界。见[移除边界镜像事件 Agent Note](../simplification/2026-06-20-remove-agent-boundary-mirror-events.zh.md)，该决策由它负责。移除 emit 也简化了循环的 `closeStep`/`closeTurn`（各只需一次 append，无需配对 emit）。
+**将规则应用于边界镜像：** 全部四个边界镜像——`agent/turn-start`、`agent/turn-end`、`agent/step-start`、`agent/step-end`——被**移除**。没有生产消费方需要在边界处获取活的 `Agent`：ACP（Agent Client Protocol）桥接将其进行中的提示词与精确对应的 `session/event` `turn/start`/`turn/end` 事件对关联，其他 transcript 消费方同样从持久流派生边界。见[移除边界镜像事件 Agent Note](../../archived/simplification/2026-06-20-remove-agent-boundary-mirror-events.md)，该决策由它负责。移除 emit 也简化了循环的 `closeStep`/`closeTurn`（各只需一次 append，无需配对 emit）。
 
 ## 后果
 
 - 循环不再 emit 任何边界镜像；`closeStep` 仅追加 `step/end`，`closeTurn` 仅追加 `turn/end`。`Session.append` 负责 post-commit observer 隔离，因此抛出异常的边界 observer 无法改变轮次结果或饿死后续消费方；事件接纳失败或内部校验失败仍会在边界进入日志之前向外抛出。
 - 之前通过已移除 emit 观察边界的测试，现在观察持久的 `turn/start`/`turn/end`/`step/start`/`step/end` 会话事件——它们所锁定的行为（边界顺序、步骤计数）不变；只是读取的源移到了规范源。那些测试*抛出异常的轮次边界 emit 监听器*的用例被删除，因为该代码路径不再存在（没有 emit 可供抛出）。按照 [AGENTS.md「测试记录行为，而非黄金真相」](../../../../AGENTS.md)，行为与其测试一同迁移（或一同消亡）。
 - 循环仅在 `append('step/start')` 返回后才标记步骤已打开（`stepOpen = true`）。内部分发校验在日志推入之前运行，可能在不打开步骤的情况下拒绝；post-commit `session/event` observer 的失败被隔离在 `Session.append` 内部。因此该标记精确表示已提交的、欠一个后续 `step/end` 的边界。
-- 完整实现见[简化 Agent Note「停止将持久边界镜像为 agent 事件」](../simplification/2026-06-20-remove-agent-boundary-mirror-events.zh.md)：全部四个边界镜像被移除，所有消费方从 `session/event` 读取边界。`agent/steering`（不是边界镜像）不在该 Agent Note 范围内，由其后续 Agent Note [移除 `agent/steering` 镜像 emit](../../archived/simplification/2026-07-04-remove-agent-steering-mirror.md) 单独移除——它镜像的是持久的中途 steering `user/message`。
+- 完整实现见[简化 Agent Note「停止将持久边界镜像为 agent 事件」](../../archived/simplification/2026-06-20-remove-agent-boundary-mirror-events.md)：全部四个边界镜像被移除，所有消费方从 `session/event` 读取边界。`agent/steering`（不是边界镜像）不在该 Agent Note 范围内，由其后续 Agent Note [移除 `agent/steering` 镜像 emit](../../archived/simplification/2026-07-04-remove-agent-steering-mirror.md) 单独移除——它镜像的是持久的中途 steering `user/message`。
 - 生成的 Cordis 事件表面（`docs/subsystems/` 各页）不再列出镜像事件。
 
 <!-- agent-note-format: alternatives-not-recorded (pre-format Agent Note) -->

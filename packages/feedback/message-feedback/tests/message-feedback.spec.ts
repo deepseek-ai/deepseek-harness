@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
-import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, SessionLogOffset, SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
-import MessageFeedbackService, { messageFeedbackRowSchema } from '../src/index.ts'
+import MessageFeedbackService from '../src/index.ts'
 import type {
   MessageFeedbackItem,
   MessageFeedbackVersion,
@@ -247,59 +247,32 @@ describe('MessageFeedbackService public contract', () => {
     }))
   })
 
-  it('fails invalid direct configuration and a read before domain initialization', async () => {
-    const invalidCtx = new Context()
-    expect(() => new MessageFeedbackService(invalidCtx, { maxNoteBytes: 0 }))
-      .toThrow(/positive safe integer/u)
-    await invalidCtx.fiber.dispose()
-
-    const fixture = messageFixture('uninitialized-domain')
-    const rawCtx = new Context()
-    rawCtx.provide('sessions', { get: () => undefined } as never)
-    rawCtx.provide('sessionPersistence', {
-      stat: () => Promise.resolve({ header: fixture.session.header, revision: 'test' }),
-      open: () => Promise.resolve({
-        header: fixture.session.header,
-        read: () => Promise.resolve(fixture.session.snapshotEvents()),
-        close: () => Promise.resolve(),
-      }),
-    } as never)
-    const raw = new MessageFeedbackService(rawCtx, { maxNoteBytes: 1 })
-    await expect(raw.list({ sessionId: fixture.session.id }))
-      .rejects.toThrow(/durable domain is not initialized/u)
-    await rawCtx.fiber.dispose()
+  it('rejects invalid configuration', async () => {
+    const ctx = new Context()
+    try {
+      expect(() => new MessageFeedbackService(ctx, { maxNoteBytes: 0 })).toThrow(/positive safe integer/u)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
-  it('rejects durable rows with duplicate message ids or reused item versions', () => {
-    const version = staleVersion()
-    const duplicate = messageFeedbackRowSchema.safeParse({
-      session: { createdAt: 1 },
-      items: [
-        {
-          messageId: 'same-message',
-          rating: 'positive',
-          version,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-        {
-          messageId: 'same-message',
-          rating: 'negative',
-          version,
-          createdAt: 1,
-          updatedAt: 1,
-        },
-      ],
-    })
-    expect(duplicate.success).toBe(false)
-    if (duplicate.success) throw new Error('expected duplicate row rejection')
-    expect(duplicate.error.issues.map(issue => issue.path.join('.')))
-      .toEqual(['items.1.messageId', 'items.1.version'])
-  })
 })
 
 describe('MessageFeedbackService item concurrency', () => {
-  it('serializes whole-row writes while keeping versions independent per message', async () => {
+  it('allows only one of two concurrent creates for the same message', async () => {
+    const { ctx, persistence } = await harness()
+    const fixture = messageFixture('same-item-race')
+    persistence.persist(fixture.session)
+    const request = {
+      sessionId: fixture.session.id, messageId: fixture.assistantMessageIds[0], rating: 'positive' as const, ifVersion: null,
+    }
+    const [first, second] = await Promise.all([ctx.messageFeedback.put(request), ctx.messageFeedback.put(request)])
+    const item = expectItem(first)
+    expect(second).toEqual({ ok: false, error: { code: 'version-conflict', current: item } })
+    expect(persistence.appendCalls).toBe(1)
+  })
+
+  it('serializes canonical event writes while keeping versions independent per message', async () => {
     const { ctx, persistence } = await harness()
     const fixture = messageFixture('concurrent-items')
     persistence.persist(fixture.session)
@@ -428,7 +401,7 @@ describe('MessageFeedbackService item concurrency', () => {
     })
   })
 
-  it('fences a reused Session id and lets the new lifecycle start cleanly', async () => {
+  it('starts clean when a stored log is replaced without feedback events', async () => {
     const { ctx, persistence } = await harness()
     const old = messageFixture('reused-session', { createdAt: 10, cwd: '/old' })
     persistence.persist(old.session)
@@ -464,7 +437,7 @@ describe('MessageFeedbackService item concurrency', () => {
     expect(newItem.version).not.toBe(oldItem.version)
   })
 
-  it('drains admitted mutations before domain close and rejects later admission', async () => {
+  it('drains admitted mutations before disposal and rejects later admission', async () => {
     const current = await harness()
     const { ctx, persistence } = current
     const fixture = messageFixture('dispose-quiescence')
@@ -474,16 +447,12 @@ describe('MessageFeedbackService item concurrency', () => {
     const started = Promise.withResolvers<undefined>()
     const release = Promise.withResolvers<undefined>()
     let physicalReads = 0
-    let committed = 0
     persistence.onRead = async () => {
       physicalReads += 1
       if (physicalReads !== 1) return
       started.resolve(undefined)
       await release.promise
     }
-    ctx.on('domain/changed', (change) => {
-      if (change.domain === 'message_feedback') committed += 1
-    })
 
     const first = service.put({
       sessionId: fixture.session.id,
@@ -511,150 +480,155 @@ describe('MessageFeedbackService item concurrency', () => {
     expectItem(await first)
     expectItem(await second)
     await disposal
-    expect(physicalReads).toBe(4)
-    expect(committed).toBe(2)
+    expect(physicalReads).toBe(2)
+    expect(persistence.appendCalls).toBe(2)
+    expect(persistence.closeCalls).toBe(2)
   })
 })
 
-describe('MessageFeedbackService durability ordering', () => {
-  it('rejects a live target missing from the re-read physical durable prefix', async () => {
+describe('canonical message feedback history', () => {
+  it('appends only material cold mutations and leaves lifecycle and model history alone', async () => {
     const { ctx, persistence } = await harness()
-    const session = ctx.sessions.create(SessionId('live-prefix'), {
-      meta: { createdAt: 50, cwd: '/prefix' },
-    })
-    const fixture = appendMessageFixture(session)
-    ctx.on('session/flush', () => {
-      persistence.setDurable({ meta: session.header, events: [] })
-    })
-
-    await expect(ctx.messageFeedback.put({
-      sessionId: session.id,
-      messageId: fixture.assistantMessageIds[0],
-      rating: 'positive',
-      ifVersion: null,
-    })).resolves.toEqual({
-      ok: false,
-      error: {
-        code: 'target-not-found',
-        sessionId: session.id,
-        messageId: fixture.assistantMessageIds[0],
-      },
-    })
-    expect(persistence.readCalls).toBe(1)
-    await expect(ctx.messageFeedback.list({ sessionId: session.id })).resolves.toEqual({
-      ok: true,
-      value: { items: [] },
-    })
+    const fixture = messageFixture('cold-log')
+    const sessionId = fixture.session.id
+    const messageId = fixture.assistantMessageIds[0]
+    persistence.persist(fixture.session)
+    const prefix = fixture.session.snapshotEvents()
+    const lifecycle: string[] = []
+    ctx.on('session/created', () => { lifecycle.push('created') })
+    ctx.on('session/event', () => { lifecycle.push('event') })
+    const created = expectItem(await ctx.messageFeedback.put({ sessionId, messageId, rating: 'positive', note: '  exact\ntext  ', ifVersion: null }))
+    const edited = expectItem(await ctx.messageFeedback.put({ sessionId, messageId, rating: 'negative', ifVersion: created.version }))
+    expectItem(await ctx.messageFeedback.put({ sessionId, messageId, rating: 'negative', ifVersion: edited.version }))
+    await ctx.messageFeedback.delete({ sessionId, messageId, ifVersion: edited.version })
+    await ctx.messageFeedback.delete({ sessionId, messageId, ifVersion: edited.version })
+    const events = persistence.durable.get(sessionId)!.events
+    expect(events.slice(0, prefix.length)).toEqual(prefix)
+    expect(events.slice(prefix.length).map(({ type, data }) => ({ type, data }))).toEqual([
+      { type: 'feedback/message-put', data: { sessionId, item: created } },
+      { type: 'feedback/message-put', data: { sessionId, item: edited } },
+      { type: 'feedback/message-delete', data: { sessionId, messageId } },
+    ])
+    expect(events.map(event => event.seq)).toEqual(events.map((_, index) => index))
+    expect(lifecycle).toEqual([])
+    expect(ctx.sessions.get(sessionId)).toBeUndefined()
+    expect(persistence.openCalls).toEqual(['write', 'write', 'write', 'write', 'write'])
+    expect(persistence.closeCalls).toBe(5)
   })
 
-  it('commits and physically verifies a live target checkpoint before the sidecar write', async () => {
+  it('starts a fork without inherited feedback and keeps parent mutations independent', async () => {
     const { ctx, persistence } = await harness()
-    const session = ctx.sessions.create(SessionId('live-checkpoint'), {
-      meta: { createdAt: 30, cwd: '/live' },
-    })
+    const parent = messageFixture('feedback-parent')
+    persistence.persist(parent.session)
+    const messageId = parent.assistantMessageIds[0]
+    const parentItem = expectItem(await ctx.messageFeedback.put({ sessionId: parent.session.id, messageId, rating: 'positive', ifVersion: null }))
+    const seed = persistence.durable.get(parent.session.id)!.events
+    const childId = SessionId('feedback-child')
+    const child = Session.create(childId, seed, {
+      ...parent.session.header, id: childId, isSeeded: true, parentSession: parent.session.id,
+    }, SessionLogOffset(seed.length))
+    persistence.persist(child)
+    await expect(ctx.messageFeedback.list({ sessionId: childId })).resolves.toEqual({ ok: true, value: { items: [] } })
+    const childItem = expectItem(await ctx.messageFeedback.put({ sessionId: childId, messageId, rating: 'negative', ifVersion: null }))
+    await ctx.messageFeedback.delete({ sessionId: parent.session.id, messageId, ifVersion: parentItem.version })
+    await expect(ctx.messageFeedback.list({ sessionId: childId })).resolves.toEqual({ ok: true, value: { items: [childItem] } })
+  })
+
+  it('flushes live feedback with the target and retries durability without a duplicate event', async () => {
+    const { ctx, persistence } = await harness()
+    const session = ctx.sessions.create(SessionId('live-log'))
     const fixture = appendMessageFixture(session)
-    const order: string[] = []
+    const before = session.snapshotEvents().length
+    const failure = new Error('disk unavailable')
+    let fail = true
     ctx.on('session/flush', (current) => {
-      order.push('session:durable')
+      if (fail) throw failure
       persistence.persist(current)
     })
-    ctx.on('domain/changed', (change) => {
-      if (change.domain === 'message_feedback') order.push('sidecar:durable')
-    })
-    persistence.onRead = () => { order.push('session:verified') }
-
-    expectItem(await ctx.messageFeedback.put({
-      sessionId: session.id,
-      messageId: fixture.assistantMessageIds[0],
-      rating: 'positive',
-      ifVersion: null,
-    }))
-    expect(order).toEqual(['session:durable', 'session:verified', 'sidecar:durable'])
-    expect(persistence.readCalls).toBe(1)
-    expect(persistence.durable.get(session.id)?.events).toContainEqual(
-      expect.objectContaining({ type: 'assistant/message' }),
-    )
+    const request = { sessionId: session.id, messageId: fixture.assistantMessageIds[0], rating: 'positive' as const, ifVersion: null }
+    await expect(ctx.messageFeedback.put(request)).rejects.toBe(failure)
+    const listed = await ctx.messageFeedback.list({ sessionId: session.id })
+    if (!listed.ok) throw new Error('missing live session')
+    const item = listed.value.items[0]!
+    fail = false
+    expectItem(await ctx.messageFeedback.put({ ...request, ifVersion: item.version }))
+    expect(session.snapshotEvents()).toHaveLength(before + 1)
+    expect(persistence.durable.get(session.id)?.events).toEqual(session.snapshotEvents())
+    expect(persistence.openCalls).toEqual(['read'])
   })
 
-  it('fails closed when a live checkpoint fails, has no participant, or is not physically durable', async () => {
-    const failed = await harness()
-    const failedSession = failed.ctx.sessions.create(SessionId('live-flush-failure'))
-    const failedFixture = appendMessageFixture(failedSession)
-    const diskFailure = new Error('disk unavailable')
-    failed.ctx.on('session/flush', () => { throw diskFailure })
-    await expect(failed.ctx.messageFeedback.put({
-      sessionId: failedSession.id,
-      messageId: failedFixture.assistantMessageIds[0],
-      rating: 'positive',
-      ifVersion: null,
-    })).rejects.toBe(diskFailure)
-    await expect(failed.ctx.messageFeedback.list({ sessionId: failedSession.id })).resolves.toEqual({
-      ok: true,
-      value: { items: [] },
-    })
+  it.each(['missing-tail', 'different-tail', 'different-lifecycle'] as const)(
+    'rejects a live checkpoint with %s and closes its verification handle', async (kind) => {
+      const { ctx, persistence } = await harness()
+      const session = ctx.sessions.create(SessionId('mismatched-checkpoint'))
+      const fixture = appendMessageFixture(session)
+      ctx.on('session/flush', () => {
+        const events = [...session.snapshotEvents()]
+        if (kind === 'missing-tail') events.pop()
+        if (kind === 'different-tail') events[events.length - 1] = { ...events.at(-1)!, time: 0 }
+        const meta = kind === 'different-lifecycle' ? { ...session.header, createdAt: 0 } : session.header
+        persistence.setDurable({ meta, events })
+      })
+      await expect(ctx.messageFeedback.put({
+        sessionId: session.id, messageId: fixture.assistantMessageIds[0], rating: 'positive', ifVersion: null,
+      })).rejects.toThrow(/feedback prefix is not durable/u)
+      expect(persistence.closeCalls).toBe(1)
+    },
+  )
 
-    const absent = await harness()
-    const absentSession = absent.ctx.sessions.create(SessionId('live-no-flush'))
-    const absentFixture = appendMessageFixture(absentSession)
-    await expect(absent.ctx.messageFeedback.put({
-      sessionId: absentSession.id,
-      messageId: absentFixture.assistantMessageIds[0],
-      rating: 'positive',
-      ifVersion: null,
-    })).rejects.toThrow(/no durability listener participated/u)
-    await expect(absent.ctx.messageFeedback.list({ sessionId: absentSession.id })).resolves.toEqual({
-      ok: true,
-      value: { items: [] },
-    })
-
-    const noDurability = await harness()
-    const unpersistedSession = noDurability.ctx.sessions.create(SessionId('live-unpersisted'))
-    const unpersistedFixture = appendMessageFixture(unpersistedSession)
-    noDurability.ctx.on('session/flush', () => {})
-    await expect(noDurability.ctx.messageFeedback.put({
-      sessionId: unpersistedSession.id,
-      messageId: unpersistedFixture.assistantMessageIds[0],
-      rating: 'positive',
-      ifVersion: null,
-    })).rejects.toThrow(/not found/u)
-    expect(noDurability.persistence.durable.has(unpersistedSession.id)).toBe(false)
-    await expect(noDurability.ctx.messageFeedback.list({ sessionId: unpersistedSession.id })).resolves.toEqual({
-      ok: true,
-      value: { items: [] },
-    })
-  })
-
-  it('finishes the captured live checkpoint when the Session detaches mid-flush', async () => {
+  it('verifies an empty live no-op and captures its checkpoint before concurrent appends', async () => {
     const { ctx, persistence } = await harness()
-    const session = ctx.sessions.prepare(SessionId('detach-during-flush'), {
-      meta: { createdAt: 40, cwd: '/detach' },
-    })
-    const detach = ctx.sessions.enter(session)
-    ctx.sessions.announce(session)
+    const session = ctx.sessions.create(SessionId('checkpoint-prefix'))
+    ctx.on('session/flush', () => { persistence.persist(session) })
+    await expect(ctx.messageFeedback.delete({ sessionId: session.id, messageId: 'absent' as MessageId, ifVersion: staleVersion() }))
+      .resolves.toEqual({ ok: true, value: { absent: true } })
     const fixture = appendMessageFixture(session)
-    const started = Promise.withResolvers<undefined>()
-    const release = Promise.withResolvers<undefined>()
-    ctx.on('session/flush', async (current) => {
-      started.resolve(undefined)
-      await release.promise
-      persistence.persist(current)
-    })
+    persistence.onRead = () => { session.append('turn/start', { turn: 2 }) }
+    expectItem(await ctx.messageFeedback.put({
+      sessionId: session.id, messageId: fixture.assistantMessageIds[0], rating: 'positive', ifVersion: null,
+    }))
+    expect(persistence.durable.get(session.id)!.events.length).toBe(session.snapshotEvents().length - 1)
+  })
 
-    const pending = ctx.messageFeedback.put({
-      sessionId: session.id,
-      messageId: fixture.assistantMessageIds[0],
-      rating: 'positive',
-      ifVersion: null,
-    })
-    await started.promise
-    detach()
-    expect(ctx.sessions.get(session.id)).toBeUndefined()
-    release.resolve(undefined)
-    expectItem(await pending)
-    expect(persistence.readCalls).toBe(1)
-    await expect(ctx.messageFeedback.list({ sessionId: session.id })).resolves.toMatchObject({
-      ok: true,
-      value: { items: [{ messageId: fixture.assistantMessageIds[0] }] },
-    })
+  it('rejects an unowned durability checkpoint and closes cold handles on failures', async () => {
+    const { ctx, persistence } = await harness()
+    const live = ctx.sessions.create(SessionId('no-flush-owner'))
+    const fixture = appendMessageFixture(live)
+    await expect(ctx.messageFeedback.put({ sessionId: live.id, messageId: fixture.assistantMessageIds[0], rating: 'positive', ifVersion: null }))
+      .rejects.toThrow(/no durability listener participated/u)
+    const cold = messageFixture('cold-failures')
+    persistence.persist(cold.session)
+    const request = { sessionId: cold.session.id, messageId: cold.assistantMessageIds[0], rating: 'positive' as const, ifVersion: null }
+    const appendFailure = new Error('append failed')
+    persistence.appendFailure = appendFailure
+    await expect(ctx.messageFeedback.put(request)).rejects.toBe(appendFailure)
+    expect(persistence.closeCalls).toBe(1)
+    persistence.appendFailure = undefined
+    const flushFailure = new Error('flush failed')
+    persistence.flushFailure = flushFailure
+    await expect(ctx.messageFeedback.put(request)).rejects.toBe(flushFailure)
+    expect(persistence.closeCalls).toBe(2)
+  })
+
+  it.each([
+    { type: 'feedback/message-put', data: null },
+    { type: 'feedback/message-put', data: { sessionId: 'x', item: {} } },
+    ...[
+      { messageId: '' }, { rating: 'neutral' }, { version: 'bad-token' }, { note: ' 	' },
+      { createdAt: -1 }, { updatedAt: 0 }, { updatedAt: 1.5 },
+    ].map(patch => ({ type: 'feedback/message-put', data: { sessionId: 'x', item: {
+      messageId: 'message', rating: 'positive', version: randomUUID(), createdAt: 1, updatedAt: 1, ...patch,
+    } } })),
+    { type: 'feedback/message-delete', data: { sessionId: 'x', messageId: '' } },
+    { type: 'feedback/message-delete', data: { sessionId: 12, messageId: 'message' } },
+  ])('rejects malformed durable feedback payload %#', async (record) => {
+    const { ctx, persistence } = await harness()
+    const fixture = messageFixture('invalid-feedback')
+    const events = fixture.session.snapshotEvents()
+    persistence.setDurable({ meta: fixture.session.header, events: [...events, {
+      ...record, seq: SessionSeq(events.length), time: 1,
+    } as SessionEvent] })
+    await expect(ctx.messageFeedback.list({ sessionId: fixture.session.id })).rejects.toThrow()
+    expect(persistence.closeCalls).toBe(1)
   })
 })

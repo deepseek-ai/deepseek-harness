@@ -25,22 +25,22 @@ interface Koffi {
   register(fn: (...args: unknown[]) => unknown, type: unknown): unknown
   unregister(callback: unknown): void
   sizeof(type: string): number
-  view(ref: unknown, len: number): ArrayBuffer
 }
 
 /**
- * Read a NUL-terminated UTF-16 string at a native address. koffi's
- * `_Out_ void **` out-params surface a raw address, and
- * `koffi.decode(addr, 'str16')` would dereference it as a pointer — crash
- * on real Windows — so view the memory directly instead.
+ * Read a valid NUL-terminated UTF-16 allocation without an external buffer.
+ * Generic `koffi.decode(..., 'str16')` expects a pointer variable, so the
+ * buffer holds the string address rather than the string bytes.
+ * @param koffi - the loaded koffi binding.
+ * @param address - the string address surfaced by the `_Out_ void **` param.
+ * @param pointerSize - the process's pointer width (`koffi.sizeof('void *')`).
+ * @returns the decoded UTF-16 path.
  */
-function readUtf16(koffi: Koffi, address: unknown): string {
-  const bytes = Buffer.from(koffi.view(address, 32768))
-  let end = 0
-  // UTF-16LE NUL is two zero bytes. A single zero low byte is a valid BMP
-  // code unit (U+XX00, e.g. 开 = U+5F00) and must not terminate the scan.
-  while (end + 1 < bytes.length && !(bytes[end] === 0 && bytes[end + 1] === 0)) end += 2
-  return bytes.toString('utf16le', 0, end)
+function readUtf16(koffi: Koffi, address: unknown, pointerSize: number): string {
+  const pointer = Buffer.alloc(8)
+  // koffi 3 surfaces `_Out_ void **` values as BigInt native addresses.
+  pointer.writeBigUInt64LE(BigInt(address as bigint | number))
+  return koffi.decode(pointer.subarray(0, pointerSize), 'str16') as string
 }
 
 const COINIT_APARTMENTTHREADED = 0x2
@@ -158,7 +158,7 @@ export async function loadWin32DialogBindings(): Promise<Win32DialogBindings> {
             const nameOut: unknown[] = [null]
             const gotName = method(item, SLOT_GET_DISPLAY_NAME, protoGetDisplayName)(SIGDN_FILESYSPATH, nameOut)
             if (gotName < 0) return { hr: gotName }
-            const path = readUtf16(koffi, nameOut[0])
+            const path = readUtf16(koffi, nameOut[0], pointerSize)
             coTaskMemFree(nameOut[0])
             return { hr: gotName, path }
           } finally {

@@ -7,7 +7,7 @@ function tool(name: string, description = name): ToolSchema {
   return { name, description, parameters: { type: 'object', properties: {} } }
 }
 
-async function mount(config: { persona?: string; toolOrder?: string[] } = {}): Promise<Context> {
+async function mount(config: { personaPrefix?: string; toolOrder?: string[] } = {}): Promise<Context> {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt, config)
   return ctx

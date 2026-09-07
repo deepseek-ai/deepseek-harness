@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-04-composer-tab-gutter-reservation.md
+2026-08-04-composer-tab-gutter-reservation.md: b072b683173a25aeb82102c4c9cc2732cd101083
+2026-08-04-composer-tab-gutter-reservation.zh.md: 8533c8796259d326a96c87f7f8c070e398650dd2

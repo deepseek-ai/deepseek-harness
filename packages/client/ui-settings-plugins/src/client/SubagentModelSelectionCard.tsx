@@ -1,6 +1,6 @@
 /** User control for model-selectable subagent delegation in new sessions. */
 
-import clsx from 'clsx'
+import { Switch } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   SubagentModelCandidate,
@@ -73,17 +73,12 @@ export function SubagentModelSelectionCard(props: SubagentModelSelectionCardProp
       <div className={css.permission}>
         <div className={css.toggleRow}>
           <span className={css.toggleLabel}>{t('subagentModelSelectionToggle')}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={state.enabled}
-            aria-label={t('subagentModelSelectionToggle')}
-            className={clsx(css.switch, state.enabled && css.switchOn)}
+          <Switch
+            checked={state.enabled}
+            label={t('subagentModelSelectionToggle')}
             disabled={!state.writable || state.saving}
-            onClick={props.toggleEnabled}
-          >
-            <span className={css.thumb} />
-          </button>
+            onChange={props.toggleEnabled}
+          />
         </div>
         <p className={css.hint}>
           {t(state.enabled ? 'subagentModelSelectionChoose' : 'subagentModelSelectionOff')}

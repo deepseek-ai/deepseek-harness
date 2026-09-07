@@ -29,7 +29,7 @@ These rules permit all four combinations:
 | `{ modelInvocable: false, userInvocable: true }` | excluded | included |
 | `{ modelInvocable: false, userInvocable: false }` | excluded | excluded |
 
-This decision extends the [skill system](2026-07-05-skill-system.md) and supersedes the invocation-policy limitation recorded by the [archived TUI skill slash command](../../archived/feature/2026-07-21-tui-skill-slash-command.md).
+This decision extends the [skill system](../../archived/feature/2026-07-05-skill-system.md) and supersedes the invocation-policy limitation recorded by the [archived TUI skill slash command](../../archived/feature/2026-07-21-tui-skill-slash-command.md).
 
 ## Alternatives considered
 

@@ -51,7 +51,7 @@ agent 生命周期、agent 整体活动状态、收件箱条目的进度以及�
 
 ## 相关内容
 
-- [统一 agent 交付路由，并将注入上下文合并到 user/message](../architecture/2026-07-22-unified-send-and-coalesced-user-messages.zh.md)
+- [统一 agent 交付路由，并将注入上下文合并到 user/message](../../archived/architecture/2026-07-22-unified-send-and-coalesced-user-messages.md)
 - [移除普通发送中的隐式批处理](2026-07-17-one-send-one-turn.zh.md)
 - [微内核事件分类体系](../architecture/2026-06-11-microkernel-event-taxonomy.zh.md)
 - [有界 LLM（大语言模型）请求恢复](../architecture/2026-06-21-bounded-llm-request-recovery.zh.md)

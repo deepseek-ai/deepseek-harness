@@ -50,7 +50,6 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
       allowedModels: TEST_ALLOWED_MODELS,
     })
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(SubagentRuntime)
     const provider = await mock.mountScriptedProvider(ctx, { name: 'mock', ...mockConfig })

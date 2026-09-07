@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Any composition that runs child processes can start a fully specified child process or a real terminal session through `ctx.subprocess`, receive a live handle with streams and exit facts, and terminate the whole process tree on demand. The service provides executable lookup, the shared environment scrub, and bounded output capture, while every default — argv, deadlines, shell semantics — stays explicit on the request, so the consuming capability seams decide what a process means. A composition mounts one provider implementation (such as `dsh-subprocess-local`) that registers the service; the seam package itself is an abstract contract, not a loadable plugin. Nothing here reaches a model directly: process output and lifecycle are rendered by the consuming tools.
+Any composition that runs child processes can start a fully specified child process or a real terminal session through `ctx.subprocess`, receive a live handle with streams and direct exit facts, then terminate and wait for the provider-managed range. The service provides executable lookup, the shared environment scrub, and bounded output capture, while every default — argv, deadlines, shell semantics — stays explicit on the request, so the consuming capability seams decide what a process means. A composition mounts one provider implementation (such as `dsh-subprocess-local`) that registers the service; the seam package itself is an abstract contract, not a loadable plugin. Nothing here reaches a model directly: process output and lifecycle are rendered by the consuming tools.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ Any composition that runs child processes can start a fully specified child proc
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount a subprocess provider in any composition that must run child processes, and call `ctx.subprocess` from the capability that owns the command. The common path is explicit: resolve the executable, spawn with a fully specified request, read the output you asked for, and terminate the tree when the work is done.
+Mount a subprocess provider in any composition that must run child processes, and call `ctx.subprocess` from the capability that owns the command. The common path is explicit: resolve the executable, spawn with a fully specified request, read the output you asked for, and terminate the managed range when the work is done.
 
 ### Mounting the service
 
@@ -38,7 +38,7 @@ One provider registers `ctx.subprocess` per composition; load it beside the cons
 
 ### Starting a managed process
 
-The request is fully explicit: the program and arguments, the working directory, one stdio disposition per stream, a termination grace, an optional abort signal, and optional environment overrides. `done` resolves with exit facts (`exitCode` and `signal`) when the process closes and rejects only for spawn-level failures; collected output stays readable after exit.
+The request is fully explicit: the program and arguments, the working directory, one stdio disposition per stream, a termination grace, an optional abort signal, and optional environment overrides. Target and managed-range identities remain provider-private. `done` resolves with the direct command's exit facts (`exitCode` and `signal`) and rejects for spawn or provider failures; collected output stays readable after exit.
 
 ```text
 const executable = await ctx.subprocess.resolveExecutable('bash')
@@ -62,7 +62,7 @@ Reads are offset-based and non-consuming: a background reader and a final batch 
 
 ### Managing process lifetime
 
-Termination is tree-scoped everywhere: `terminate()` escalates SIGTERM → grace → SIGKILL (Windows force-terminates immediately), is idempotent, and is a no-op once the tree is gone. The request's abort signal starts the same escalation, so a consumer-owned deadline can cancel a whole tree. `waitForExit()` resolves only when the entire tree has exited, not just the direct child, so a still-running helper is observable before teardown returns. Callers own deadlines and cause classification; the service only reacts.
+Termination and waiting use one provider-managed range. `terminate()` starts the provider's documented procedure, is idempotent, and becomes a no-op after that range is empty; the request's abort signal starts the same procedure. `waitForExit()` observes the same range and resolves only after the provider proves it quiescent, so direct command completion does not hide a surviving descendant. It rejects when the selected owner can no longer prove quiescence. Providers document their native owners and weaker fallbacks; callers own deadlines, teardown ladders, and cause classification.
 
 ### Running a terminal session
 
@@ -74,7 +74,7 @@ Children never inherit the harness's ambient secrets: credential-shaped names an
 
 ### What can go wrong
 
-An executable that cannot be resolved fails loud with a stable error. A spawn that never starts rejects `done`; there is no buffered output for a process that never ran. A daemonized child that leaves its tree or session can outlive termination — provider READMEs document their observability limits. When a transport owns its own spawn (the SDK client, MCP), route around the service and import `scrubbedParentEnv` directly so environment policy stays single-sourced.
+An executable that cannot be resolved fails loud with a stable error. A spawn that never starts rejects `done`; there is no buffered output for a process that never ran. `waitForExit()` also rejects when the provider cannot prove its selected range is empty, and a provider fallback may not own descendants that escape its process group or observed session. When a transport owns its own spawn (the SDK client, MCP), route around the service and import `scrubbedParentEnv` directly so environment policy stays single-sourced.
 
 -----
 
@@ -100,7 +100,7 @@ The seam is built on one separation: the service owns process coordinates and li
 
 ### Data model and flow
 
-A spawn returns a live handle immediately; the request's abort signal drives the same termination escalation as `terminate()`. Collected readers are cursor-free: offsets are whole-stream byte coordinates the caller owns, so independent readers cannot consume one another's output, and a read whose offset slid out of the in-memory tail is `lossy` and points at the spill file when one exists. `spawnTerminal` is one deep primitive because ordinary pipes cannot allocate a controlling terminal or clean terminal-session members.
+A spawn returns a live handle immediately without exposing target identity. `done` independently reports the direct command outcome or failure, while `waitForExit()` reports managed-range quiescence. The request's abort signal drives the same termination procedure as `terminate()`. Collected readers are cursor-free: offsets are whole-stream byte coordinates the caller owns, so independent readers cannot consume one another's output, and a read whose offset slid out of the in-memory tail is `lossy` and points at the spill file when one exists. `spawnTerminal` is one deep primitive because ordinary pipes cannot allocate a controlling terminal or clean terminal-session members.
 
 ### Lifecycle and invariants
 
@@ -119,7 +119,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [dsh-subprocess-local](../subprocess-local/README.md) — the local host provider that implements this contract.
 - [dsh-subprocess-e2b](../../e2b/subprocess-e2b/README.md) — the remote E2B provider for the same seam.
 - [dsh-bash-local](../../shell/bash-local/README.md) — the largest consumer: bash commands over this service.
-- [Subprocess seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-26-subprocess-seam.md) — why the process half became its own seam and what moved with it.
+- [Subprocess seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-subprocess-seam.md) — why the process half became its own seam and what moved with it.
 
 -----
 
@@ -140,8 +140,8 @@ No direct invalidation; the named consumers own any request-prefix changes.
 These limits define when the seam is a poor fit or leaves work to its consumers. They are current package constraints, not a comparison or a backlog.
 
 - **SDK-managed spawns remain outside** — a transport that owns its internal spawn (the SDK client, MCP) cannot route that call through this service; it can still import `scrubbedParentEnv` so environment policy stays single-sourced.
-- **Teardown ladders are consumer-owned** — the seam ships signalling verbs and the whole-tree wait, not a canned quiesce sequence; each out-of-process consumer encodes its child's cooperation shape itself (the ACP backend's stdin-EOF-first ladder is the in-repo template).
-- **Observability is provider-specific** — a daemonized child that leaves its tree or session can outlive termination; providers document their substrate limits, and the seam adds no continuous process-table monitor.
+- **Teardown ladders are consumer-owned** — the seam ships signalling verbs and the managed-range wait, not a canned quiesce sequence; each out-of-process consumer encodes its child's cooperation shape itself (the ACP backend's stdin-EOF-first ladder is the in-repo template).
+- **Observability is provider-specific** — native providers may own escaped descendants through systemd scopes or Windows Jobs, while fallback providers expose weaker process-group, tree, or session visibility. The seam adds no continuous process-table monitor.
 
 <a id="dev-note"></a>
 ### Dev Note

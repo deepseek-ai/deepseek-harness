@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { agentEvents, Inbox } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { createUserMessage, HarnessError } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, type UserMessage } from '@deepseek-ai/dsh-session'
@@ -12,11 +12,18 @@ import GoalService, {
   foldGoal,
 } from '@deepseek-ai/dsh-goal'
 import type { GoalChangeMeta, GoalRef, GoalSnapshotChangeMeta } from '@deepseek-ai/dsh-goal'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 interface StubAgent {
   agent: Agent
   session: Session
 }
+
+const isolatedInboxCtx = new Context()
+await isolatedInboxCtx.plugin(SessionStore)
+await isolatedInboxCtx.plugin(SessionProjectionRegistry)
+await isolatedInboxCtx.plugin(AgentRegistry)
+const sessionStubs = new WeakMap<Session, StubAgent>()
 
 /** Number the next balanced test-fixture turn. */
 function nextTurn(session: Session): number {
@@ -25,46 +32,61 @@ function nextTurn(session: Session): number {
 
 /** Mirror the public Agent.inject contract for domain tests. */
 function appendInjection(session: Session, input: UserMessage): void {
-  new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }).append('next-step', input)
+  stubAgentForSession(session).agent.inbox.append('next-step', input)
 }
 
 /** Build a registry-compatible agent around one concrete session. */
-function stubAgentForSession(session: Session): StubAgent {
+function stubAgentForSession(session: Session, suppliedCtx?: Context): StubAgent {
+  const existing = sessionStubs.get(session)
+  if (existing !== undefined) return existing
   const id = session.id
-  const inbox = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
+  const agentCtx = suppliedCtx ?? isolatedInboxCtx
+  if (suppliedCtx === undefined) {
+    agentCtx.sessions.enter(session)
+  }
+  const inbox = createInboxStub()
   const agent: Agent = {
     id,
     options: {},
     session,
     inbox,
-    ctx: new Context(),
+    ctx: agentCtx,
     status: 'idle',
     send: () => {},
     followup: () => {},
     steer: () => {},
-    inject(input) { inbox.append('next-step', input) },
+    inject(input) { this.inbox.append('next-step', input) },
     cancel() {},
     runMaintenance: task => task(new AbortController().signal),
     whenIdle() { return Promise.resolve() },
   }
-  return {
+  const stub = {
     agent,
     session,
   }
+  sessionStubs.set(session, stub)
+  return stub
 }
 
 /** Build a registry-compatible agent around a fresh session. */
-function stubAgent(rawId: string, seed?: readonly import('@deepseek-ai/dsh-session').SessionEvent[]): StubAgent {
-  return stubAgentForSession(Session.create(SessionId(rawId), seed))
+function stubAgent(
+  rawId: string,
+  seed?: readonly import('@deepseek-ai/dsh-session').SessionEvent[],
+  ctx?: Context,
+): StubAgent {
+  const session = ctx === undefined
+    ? Session.create(SessionId(rawId), seed)
+    : ctx.sessions.create(SessionId(rawId), { ...(seed === undefined ? {} : { seed }) })
+  return stubAgentForSession(session, ctx)
 }
 
 async function harness(config: { defaultMaxGoalRounds?: number } = {}) {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(AgentRegistry)
   await ctx.plugin(GoalService, config)
-  const stub = stubAgentForSession(ctx.sessions.create(SessionId(`goal-test-${Math.random()}`)))
+  const stub = stubAgent(`goal-test-${Math.random()}`, undefined, ctx)
   ctx.agents.register(stub.agent)
   return { ctx, ...stub }
 }
@@ -182,15 +204,15 @@ describe('GoalService creation and replay', () => {
   it('inherits the completed-turn goal prefix through SessionStore.fork with child activation disarmed', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(GoalService)
-    const parent = stubAgentForSession(ctx.sessions.create(SessionId('goal-fork-parent')))
+    const parent = stubAgentForSession(ctx.sessions.create(SessionId('goal-fork-parent')), ctx)
     ctx.agents.register(parent.agent)
     const goal = ctx.goals.create(parent.agent, { objective: 'inherit through fork', maxGoalRounds: 5 })
     appendRound(parent.session, goal, 1)
 
-    const child = stubAgentForSession(ctx.sessions.fork(parent.session))
+    const child = stubAgentForSession(ctx.sessions.fork(parent.session), ctx)
     ctx.agents.register(child.agent)
     expect(ctx.goals.get(child.agent)).toMatchObject({
       id: goal.id,
@@ -252,7 +274,7 @@ describe('GoalService creation and replay', () => {
     const { ctx, agent } = await harness()
     // A same-id agent backed by a different session object — the live-instance
     // check must reject it even though the ids match.
-    const impostor = stubAgentForSession(Session.create(agent.id)).agent
+    const impostor = { ...agent, session: Session.create(agent.id) } as Agent
     expect(() => ctx.goals.get(impostor)).toThrow(expect.objectContaining({ code: 'GOAL_AGENT_NOT_LIVE' }))
     expect(() => ctx.goals.create(impostor, { objective: 'no' })).toThrow(expect.objectContaining({
       code: 'GOAL_AGENT_NOT_LIVE',
@@ -439,10 +461,10 @@ describe('GoalService mutations', () => {
   it('publishes a mutation consistently to a reentrant session observer', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
-    await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)
+    await ctx.plugin(AgentRegistry)
     await ctx.plugin(GoalService)
-    const stub = stubAgentForSession(ctx.sessions.create(SessionId('goal-reentrant-observer')))
+    const stub = stubAgentForSession(ctx.sessions.create(SessionId('goal-reentrant-observer')), ctx)
     ctx.agents.register(stub.agent)
     let observed: ReturnType<GoalService['get']>
     ctx.on('session/event', (session, event) => {
@@ -501,6 +523,31 @@ describe('GoalService mutations', () => {
     })
   })
 
+  it('rejects a corrupt append while preserving the valid prefix', async () => {
+    const { ctx, agent, session } = await harness()
+    expect(ctx.goals.get(agent)).toBeUndefined()
+    const change: GoalSnapshotChangeMeta = {
+      kind: 'goal/change',
+      version: 1,
+      operation: 'create',
+      goal: {
+        id: GoalId('goal-valid-prefix'),
+        revision: 1,
+        objective: 'valid prefix',
+        phase: 'active',
+        maxGoalRounds: 4,
+      },
+      roundsStarted: 0,
+      createdAt: 12,
+      updatedAt: 12,
+    }
+    session.append('goal/change', change)
+    expect(() => {
+      session.append('goal/change', { ...change, operation: 'edit', extra: true } as never)
+    }).toThrow('snapshot change must have exactly')
+
+    expect(ctx.goals.get(agent)).toMatchObject({ id: change.goal.id, objective: 'valid prefix' })
+  })
 })
 
 describe('goal replay validation', () => {
@@ -566,7 +613,7 @@ describe('goal replay validation', () => {
       content: [{ type: 'text', text: 'unrelated pending context' }],
       source: { kind: 'plugin', plugin: 'test' },
     })
-    const inbox = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
+    const inbox = stubAgentForSession(session).agent.inbox
     inbox.append('next-step', message)
     expect(inbox.remove(message.id)).toBe(true)
     expect(foldGoal(session.snapshotEvents())).toMatchObject({ goal: { id: change.goal.id, revision: 1 } })

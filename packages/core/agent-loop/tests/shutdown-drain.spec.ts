@@ -61,7 +61,7 @@ describe.each(['backend-first', 'loop-first'] as const)('root shutdown drain (%s
     const verify = new Context()
     await verify.plugin(JsonlSessionPersistence, { root })
     const reader = await verify.sessionPersistence.open(sessionId, 'read')
-    const events = await reader.read()
+    const { events } = await reader.read()
     await reader.close()
     expect(events.at(-1)).toMatchObject({ type: 'turn/end', data: { reason: { kind: 'completed' } } })
     await verify.fiber.dispose()

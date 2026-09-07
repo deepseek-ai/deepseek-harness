@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-todo",
   "description": "Model-facing todo_write tool over the DeepSeek Harness event-sourced session log",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

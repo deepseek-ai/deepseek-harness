@@ -96,7 +96,6 @@ The driver consumes the goal state and defers policy to the goal tools; read the
 
 - [Goal service](../goal/README.md) — the goal state and lifecycle this driver continues.
 - [Goal tools](../tool-goal/README.md) — the model-facing tools and their execution-time authority checks.
-- [Same-session driver Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-same-session-goal-round-driver.md) — the race and lifecycle rationale.
 
 -----
 

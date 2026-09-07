@@ -79,10 +79,10 @@ async function harness(
   ctx.loader.builtins.include = Include
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(AgentPresets, roster)
   return ctx

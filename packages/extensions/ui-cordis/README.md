@@ -89,7 +89,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Host runner](../cordis-host-runner/README.md) — the inventory and lifecycle verbs behind the panel.
 - [Tool package](../tool-cordis/README.md) — the model-facing tools whose calls these cards render.
 - [Extensions subsystem](../../../docs/subsystems/extensions.md) — the generated `ctx.dynamicCordisRunner` API and forwarded `cordis/*` events.
-- [Dynamic client render and attachment ownership Agent Note](../../../.agents/notes/implemented/architecture/2026-08-17-dynamic-client-render-and-attachment-ownership.md) — how slot-registered browser UI is owned by its package.
+- [Slots subsystem](../../../docs/subsystems/slots.md) — how slot-registered browser UI is owned by its package.
 
 -----
 

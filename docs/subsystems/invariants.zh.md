@@ -2,7 +2,7 @@
 
 [English](invariants.md) | 中文
 
-[dsh-invariants](../../packages/runtime-diagnostics/invariants) 是面向包自有运行时不变式检查的可配置注册表服务（`ctx.invariants`）。它是一个 support 组的包，不是三包能力 seam，也不属于 agent loop（智能体循环）主干：注册表拥有选择逻辑、名称保留、子 fiber 生命周期和归因到包的失败，而每个工作区包发布一个 `./invariant` 配套插件，以自己确切的 npm 包名注册检查。检查可以断言什么（权威事件流或可变数据，绝不是服务或方法是否存在）是 [AGENTS.md](../../AGENTS.md#conventions) 中的运行时不变式约定；注册表设计由[不变式服务 Agent Note](../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.zh.md)规定。
+[dsh-invariants](../../packages/runtime-diagnostics/invariants) 是面向包自有运行时不变式检查的可配置注册表服务（`ctx.invariants`）。它是一个 support 组的包，不是三包能力 seam，也不属于 agent loop（智能体循环）主干：注册表拥有选择逻辑、名称保留、子 fiber 生命周期和归因到包的失败，而每个工作区包发布一个 `./invariant` 配套插件，以自己确切的 npm 包名注册检查。检查可以断言什么（权威事件流或可变数据，绝不是服务或方法是否存在）是 [AGENTS.md](../../AGENTS.md#conventions) 中的运行时不变式约定。
 
 源码：[`packages/runtime-diagnostics/invariants/src/index.ts`](../../packages/runtime-diagnostics/invariants/src/index.ts)
 

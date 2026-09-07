@@ -27,7 +27,7 @@ export interface PackedIdentity {
  * @returns Every path inside the archive.
  */
 export function tarballFiles(tarball: string): string[] {
-  return capture('tar', ['-tzf', tarball]).split('\n').filter(line => line !== '')
+  return capture('tar', ['-tzf', tarball]).split(/\r?\n/u).filter(line => line !== '')
 }
 
 /**

@@ -18,6 +18,9 @@
       "path": "../../core/agent"
     },
     {
+      "path": "../../core/agent-loop"
+    },
+    {
       "path": "../../llm/llm"
     },
     {
@@ -28,6 +31,9 @@
     },
     {
       "path": "../../core/tools"
+    },
+    {
+      "path": "../../session/session-projection"
     }
   ]
 }

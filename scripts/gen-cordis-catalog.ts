@@ -206,6 +206,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'subagent': 'subagent.md',
   'system-prompt': 'system-prompt.md',
   'session-telemetry': 'session-telemetry.md',
+  'feedback': 'feedback.md',
   'tools': 'tools.md',
   'user-questions': 'user-questions.md',
   'webserver': 'web-server.md',
@@ -254,6 +255,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ContentBlock: 'llm-streaming.md',
   CreateAgentOptions: 'core.md',
   GenerateOptions: 'llm-streaming.md',
+  Inbox: 'core.md',
   InboxItem: 'core.md',
   InboxPlacement: 'core.md',
   InspectorJsonValue: 'extensions.md',
@@ -671,6 +673,9 @@ export const FOUNDATION_TYPE_NAMES: ReadonlySet<string> = new Set([
   'Promise',
   'Record',
   'Readonly',
+  'ReadonlyMap',
+  'Request',
+  'Response',
   'Uint8Array',
 ])
 

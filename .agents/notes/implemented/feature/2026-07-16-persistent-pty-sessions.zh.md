@@ -45,7 +45,7 @@ agent scope dispose（资源释放）时先撤销注册，再等待全部所属 
 
 沙箱限制本地进程副作用，但不会让任意 shell 输入自动安全：网络调用和其他外部副作用仍由部署策略治理。工具描述会说明 PTY 会话比一次性工具更难审计，只应在确实需要持久状态或交互式 stdin 时使用。
 
-本地子进程终端原语只使用 `node-pty` 的公开能力：子进程 PID、`data` 与 `exit` 通知、`write` 和 `kill`。它不假设能访问原生 master fd，也不从 TypeScript 调用 `waitpid`。该原语下的平台进程检查器在 Linux 上通过 `/proc`、在 macOS 上通过 `ps` 推导前台进程组和父子进程身份。[可移植执行环境决策](../architecture/2026-07-28-portable-execution-world-consumers.zh.md)负责定义这种进程／消费方拆分。
+本地子进程终端原语只使用 `node-pty` 的公开能力：子进程 PID、`data` 与 `exit` 通知、`write` 和 `kill`。它不假设能访问原生 master fd，也不从 TypeScript 调用 `waitpid`。在受支持的 Linux 宿主上，[原生收容 owner](../architecture/2026-08-28-subprocess-native-containment.zh.md)会在 user-systemd scope 内启动同一条 PTY 命令，同时保持 PID、session、控制终端、前台进程组与就绪语义。该原语下的平台进程检查器仍在 Linux 上通过 `/proc`、在 macOS 上通过 `ps` 推导前台进程组和 fallback 父子进程身份。[可移植执行环境决策](../architecture/2026-07-28-portable-execution-world-consumers.zh.md)负责定义这种进程／消费方拆分。
 
 ### 6 个面向模型的工具
 
@@ -92,7 +92,9 @@ Tier 2 在持续 `idleSilenceMs` 没有输出后返回 `inferred_idle`，因此 
 
 ### 进程树 teardown
 
-子进程终端句柄拥有顶层终端进程及其会话。关闭时，它按父 PID 以子进程优先顺序捕获传递后代、发送 `SIGTERM` 并等待，然后重新扫描关停期间 fork 出的子进程，向二者并集发送 `SIGKILL`，并在停止顶层进程前验证每个非僵尸后代都已离开进程表。身份匹配的 Linux 僵尸进程已无可执行工作，因此视为完全停稳。每个捕获的 PID 都包含进程启动身份，避免 PID 复用把升级信号发给无关进程。
+在受支持的 Linux 宿主上，subprocess 终端句柄会把顶层 PTY 进程绑定到临时 user-systemd scope。建立前，close 通过 direct PTY fallback 发送 `SIGTERM`，阻止 bootstrap 继续；建立后只向 scope 发送信号，并且仅在 scope signalling 失败时使用 direct fallback。随后它等待 manager 证明该 range 为空，并在配置的宽限期后升级到 `SIGKILL`。调用 `setsid` 或发生 reparent 的后代仍属于 scope，而 PTY 的 direct exit 通知继续作为终端结果。
+
+fallback 宿主保留观察式进程 session 清理。句柄会按父 PID 以子进程优先顺序捕获传递后代、发送 `SIGTERM` 并等待，然后重新扫描关停期间 fork 出的子进程，向二者并集发送 `SIGKILL`，并在停止顶层进程前验证每个非僵尸后代都已离开进程表。身份匹配的 Linux 僵尸进程已无可执行工作，因此视为完全停稳。每个捕获的 PID 都包含进程启动身份，避免 PID 复用把升级信号发给无关进程。
 
 teardown 独立报告顶层进程退出与存活进程清理。PTY 会话不会只因 shell 退出就声称成功：它会调用 `SubprocessTerminalHandle.terminate()` 并等待整个会话完全停稳，若清理失败则向外传播并列出存活者。失败的 close 不会永久缓存：注册表与本地会话各自仅在关闭围栏仍指向该次失败尝试时才将其清除，因此后续的显式 close 或生命周期 close 会重试，且不会干扰较新的并发尝试。即使某个 close 失败，服务 dispose 仍会清空其后端、预留与 owner detacher 注册表。
 
@@ -134,7 +136,7 @@ plugins:
 - 声明式 per-agent 启动需要 agent-setup 组合点；仍然禁止插件加载期全局会话。
 - harness 进程丢失后的会话恢复需要进程外 owner 和版本化协议。
 - 网络出口策略与外部副作用回滚超出 PTY 范围，继续作为独立安全工作。
-- Windows/ConPTY 会话经由 subprocess-local 的 Windows inspector（Toolhelp32 身份、伪前台进程组、taskkill 拆卸）与 `pty-local` 的 pwsh 方言运行；见 [pwsh 持久工具 note](../architecture/2026-08-11-pwsh-persistent-pty.zh.md)。
+- Windows/ConPTY 会话经由 subprocess-local 的 Windows inspector（Toolhelp32 身份、伪前台进程组、taskkill 拆卸）与 `pty-local` 的 pwsh 方言运行；见 [pwsh 持久工具 note](../../archived/architecture/2026-08-11-pwsh-persistent-pty.md)。
 
 ## 备选方案
 
@@ -158,7 +160,7 @@ plugins:
 
 - 逐文件覆盖测试锁定了 owner 隔离、并发预留、写入前检查期间的取消、未发布 spawn 的取消与等待式 teardown、沙箱模式变更拒绝、可重试的生命周期清理、就绪层级、对写入前 stdin 等待与延迟到达的先前 prompt 的拒绝、配置化交接宽限把 idle fallback 顶过一次轮询以及低于 `pollIntervalMs` 时的拒绝、sanitizer carry state、完整 UTF-8 结果上限、task 集成、schema 和精确 render intent。
 - 子进程 fixture（测试前置数据）覆盖非 leader 与非主线程的 stdin 等待、线程本地 fd 表、`/dev/tty` 别名、用户态模拟下受支持的内核 ABI、拒绝把指向管道的 fd 0 当作终端输入、僵尸进程完全停稳、不可读进程状态、不支持的架构和其他误报拒绝；同一单元测试套件通过注入覆盖 macOS 检查器逻辑。
-- 真实 `node-pty` 与 PTY 消费方测试共同在受支持宿主上覆盖 shell 状态、通过 `/dev/tty` 读取控制终端输入、进程 syscall 可读时的精确归因、宿主策略拒绝读取时的有界 idle fallback、共享沙箱策略、环境清洗、raw mode 前台 `SIGINT`、忽略 `SIGTERM` 的后代进程，以及 dispose 返回后立即完全停稳。
+- 真实 `node-pty` 与 PTY 消费方测试共同覆盖 shell 状态、通过 `/dev/tty` 读取控制终端输入、进程 syscall 可读时的精确归因、宿主策略拒绝读取时的有界 idle fallback、共享沙箱策略、环境清洗、raw mode 前台 `SIGINT`、忽略 `SIGTERM` 的后代进程，以及 dispose 返回后立即完全停稳。Linux native 冒烟测试会在一个 reparent 的 `setsid` 后代仍由 scope 拥有时，保持 PTY PID、session leader、控制终端、前台 `inputWaiting` 与 readiness；fallback 测试套件继续覆盖带身份围栏的观察式清理。
 - Loader 驱动的 `cordis.yml` 测试挂载真实三包组合，并验证延迟到达的流水线输出随已完成命令返回，而不会被归类为终端输入就绪。SDK minimal 快照通过持久 Bash 工具固定该输出；ACP 与 headless 快照通过 opt-in overlay 固定 6 个终端 schema、有界结果和错误；TUI 快照固定 terminal 与 generic 卡片展示。
 - 包约定、架构图、子系统页面、生成目录和 website API 描述同一个已发布接口。
 
@@ -172,7 +174,7 @@ plugins:
 
 **持久状态可能偏离模型认知。**模型可能忘记 cwd 或活跃 REPL。会话摘要和保留输出有助恢复，但任何提示词都无法让状态持久化变成确定行为。
 
-**daemonized 后代进程可能离开本地提供方捕获的进程树。**在 teardown 前 reparent 的进程无法再从 `node-pty` 根进程发现。本地终端原语接受这个清理缺口，不冒险按 SID 向无关进程发送信号。
+**Linux native ownership 消除了进程树观察缺口，fallback ownership 没有。**受支持的 user-systemd scope 会持续保有 daemonized 或 reparent 后代，直到 scope 为空。在 macOS、Windows ConPTY，以及无法建立 scope 的 Linux 宿主上，观察式 teardown 开始前已经逃逸的进程仍可能避开捕获树；fallback 接受这个缺口，不冒险按 SID 向无关进程发送信号。
 
 **Shell 可以造成外部副作用。**会话沙箱和环境清洗降低本地暴露，但无法撤销 push、API 调用或消息发送。无法容忍这些副作用的部署必须省略 PTY 或增加网络策略。
 

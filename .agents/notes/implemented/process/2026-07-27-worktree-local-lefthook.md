@@ -34,7 +34,7 @@ If Lefthook fails after changing `core.hooksPath`, the installer restores the pr
 
 ## Consequences
 
-Installing or removing one worktree no longer changes another worktree's active hooks, binary path, or generated hook bytes. Concurrent installs are serialized and repeated installation is idempotent, while the jobs and latency boundary owned by [Fast local Git hooks](2026-07-22-fast-local-git-hooks.md) stay unchanged.
+Installing or removing one worktree no longer changes another worktree's active hooks, binary path, or generated hook bytes. Concurrent installs are serialized and repeated installation is idempotent, while the jobs and latency boundary owned by [Fast local Git hooks](../../archived/process/2026-07-22-fast-local-git-hooks.md) stay unchanged.
 
 The repository becomes a Git format-1 repository after the first installation. The installer requires Git 2.26 for `--show-scope`; the worktree-config extension itself predates that command. Custom worktree hook managers require an explicit integration choice; inherited hook paths can coexist across other worktrees, but opting the current worktree into Lefthook means those inherited hooks do not run there unless the contributor chains them through `lefthook.yml`.
 

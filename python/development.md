@@ -27,7 +27,7 @@ uv run --project python/sdk pytest
 
 `python/sdk/tests/test_bundled_runtime.py` exercises available bundled carriers and skips a carrier when its artifact has not been built. For repository-wide test policy, see [Testing](../docs/testing.md).
 
-That suite drives fake runtime peers. `scripts/smoke-python-runtime.py` drives the packaged runtime instead. The required `python-runtime` CI job builds every published native target, installs the matching SDK and runtime wheels into a new Python 3.10 virtual environment, runs outside the checkout with `PYTHONPATH` and `DSH_RUNTIME_MODE` unset, proves that both modules and the executable came from those distributions, and then runs every keyless scenario. A focused local source-SDK run can select one built executable and scenario:
+That suite drives fake runtime peers. `scripts/smoke-python-runtime.py` drives the packaged runtime instead. The `python-runtime` CI jobs build Linux x64 and Windows x64 on pull requests, and Linux arm64 plus both macOS architectures on master pushes. Each selected target installs the matching SDK and runtime wheels into a new Python 3.10 virtual environment, runs outside the checkout with `PYTHONPATH` and `DSH_RUNTIME_MODE` unset, proves that both modules and the executable came from those distributions, and then runs every keyless scenario. A focused local source-SDK run can select one built executable and scenario:
 
 ```sh
 uv run --project python/sdk python scripts/smoke-python-runtime.py \
@@ -36,7 +36,7 @@ uv run --project python/sdk python scripts/smoke-python-runtime.py \
 
 Three scenarios compare committed expected output under `scripts/snapshots/python-sdk-single-exe/`. `minimal/model-visible.json` pins the Linux/macOS `sdk-minimal` profile's assembled system prompts, advertised tool schemas, and model-visible messages; `minimal/win-x64/model-visible.json` pins its PowerShell counterpart. A plugin that contributes an unintended system section or user message therefore fails the job, and every message the profile emits is compared. `advanced/` pins one complex process's SDK result and parent/child session logs across every target. `restart/` launches two complete SDK runtime processes against one persistence root and snapshots their isolated model histories, high-level results, and separate durable logs across every target. Rerun the owning scenario with `--update-snapshots` and review that diff before committing it.
 
-Trusted pull requests also run `--scenario sdk-live --installed-wheel` on every native target. That scenario performs two tool-using turns against `https://api.deepseek.com`, verifies the created file externally, and fails when the repository secret is absent instead of self-skipping. Fork and Dependabot pull requests run the complete keyless installed-wheel path but receive no key.
+Trusted pull requests and master pushes also run `--scenario sdk-live --installed-wheel` on each selected native target. That scenario performs two tool-using turns against `https://api.deepseek.com`, verifies the created file externally, and fails when the repository secret is absent instead of self-skipping. Fork and Dependabot pull requests run the complete keyless installed-wheel path but receive no key.
 
 An interactive smoke test needs `DEEPSEEK_API_KEY` in the environment or repository-root `.env`:
 

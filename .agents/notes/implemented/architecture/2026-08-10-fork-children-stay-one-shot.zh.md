@@ -1,6 +1,6 @@
-# Agent Note：Fork child 保留 parent 请求前缀
+# Agent Note: Fork child 保留 parent 请求前缀
 
-状态：已实现
+Status: implemented
 
 [English](2026-08-10-fork-children-stay-one-shot.md) | 中文
 

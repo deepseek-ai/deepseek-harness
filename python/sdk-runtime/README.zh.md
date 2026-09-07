@@ -19,7 +19,7 @@ Wheel 会安装 `dsh` 控制台命令和 `deepseek_harness_runtime` Python 模�
 - `bundled_package_dir() -> Path` 返回已安装模块数据根目录，并校验发布元数据。
 - `bundled_runtime_path() -> Path` 返回当前平台可执行程序，并校验必需伴随文件。
 - `resolve_bundled_launch_args(mode=None) -> tuple[str, ...]` 默认返回可执行程序 argv。显式 `mode="node"` 或 `DSH_RUNTIME_MODE=node` 会选择仅限仓库使用的 Node 载体。
-- `main()` 实现已安装的 `dsh` 控制台命令，并在替换 Python 进程前拒绝缺失或空白的 `DSH_HOME`。
+- `main()` 实现已安装的 `dsh` 控制台命令，并拒绝缺失或空白的 `DSH_HOME`。在 Windows 上，它让打包进程继承标准流，等待其结束并转发退出状态；在 POSIX 上，它替换 Python 进程。
 
 不支持的平台以及缺失的可执行程序或伴随文件会抛出 `FileNotFoundError`，并指出构建与安装路径。未知运行时模式会抛出 `ValueError`。
 

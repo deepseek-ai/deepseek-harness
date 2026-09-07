@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-app",
   "description": "The dsh browser-surface bundle: the web patch layer over dsh-base plus the runtime glue plugin (frontend dist serving, web-surface prompt, bash runtime variables, URL line)",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -59,6 +59,7 @@
     "@deepseek-ai/dsh-client-ui-cordis": "workspace:^",
     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-open-in-app": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
     "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:^",
     "@deepseek-ai/dsh-client-ui-goal": "workspace:^",
@@ -94,6 +95,7 @@
     "@deepseek-ai/dsh-host-directory-picker-auto": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-browse": "workspace:^",
     "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
+    "@deepseek-ai/dsh-host-open-in-app": "workspace:^",
     "@deepseek-ai/dsh-host-plugin-inventory": "workspace:^",
     "@deepseek-ai/dsh-host-webserver": "workspace:^",
     "@deepseek-ai/dsh-file-reference": "workspace:^",

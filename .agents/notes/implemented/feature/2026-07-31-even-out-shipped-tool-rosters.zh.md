@@ -12,11 +12,11 @@ Status: implemented
 
 ## 决策
 
-那些并非 surface 专属的行移入 [`base.cordis.yml`](../../../../packages/bundle/base/cordis.patch.yml)，另有三行加入：`tool-session-query`、`tool-str-replace-editor` 和 `repeat-tool-reminder`。Web 搜索也一并移入；其[部署决策](2026-07-31-web-default-search.zh.md)负责安全边界，共享 base 则负责与 surface 无关的挂载。两个 surface 组装同一份清单，其中 `glob` 和 `grep` 是固定成员，因为 `dsh-tool-fs-search` 直接 spawn [打包的 ripgrep 二进制](../architecture/2026-08-01-packaged-ripgrep-search.zh.md)。之后有两项决策收窄这份清单：[session-search 决策](2026-08-02-session-search-not-shipped-default.zh.md)让 `tool-session-query` 保持需显式启用，[单一编辑器决策](../simplification/2026-08-10-default-presets-single-editor.zh.md)让通用 preset 不提供 `tool-str-replace-editor`，但在 `minimal` 中保留它。
+那些并非 surface 专属的行移入 [`base.cordis.yml`](../../../../packages/bundle/base/cordis.patch.yml)，另有三行加入：`tool-session-query`、`tool-str-replace-editor` 和 `repeat-tool-reminder`。Web 搜索也一并移入；其[部署决策](2026-07-31-web-default-search.zh.md)负责安全边界，共享 base 则负责与 surface 无关的挂载。两个 surface 组装同一份清单，其中 `glob` 和 `grep` 是固定成员，因为 `dsh-tool-fs-search` 直接 spawn [打包的 ripgrep 二进制](../../archived/architecture/2026-08-01-packaged-ripgrep-search.md)。之后有两项决策收窄这份清单：[session-search 决策](../../archived/feature/2026-08-02-session-search-not-shipped-default.md)让 `tool-session-query` 保持需显式启用，[单一编辑器决策](../../archived/simplification/2026-08-10-default-presets-single-editor.md)让通用 preset 不提供 `tool-str-replace-editor`，但在 `minimal` 中保留它。
 
 有两行仍是 surface 专属。`tmux-context` 只在 TUI，因为浏览器 surface 没有终端复用器可描述。`session-reference` 只在 TUI，因为它以 launcher 的进程本地路径驱动共享的 session-query 索引，而浏览器侧边栏会在自己的首次搜索里重建该索引。
 
-**本次工具清单决策当时只做加法。** 落地时两个 surface 均未移除任何工具行，目录对比只发现了新增，别无其他。后续的 session-search 与单一编辑器决策分别负责对应的默认清单例外。共享执行器、沙箱组合与访问默认值独立归属[workspace-write 默认值决策](2026-07-31-workspace-write-surface-default.zh.md)。
+**本次工具清单决策当时只做加法。** 落地时两个 surface 均未移除任何工具行，目录对比只发现了新增，别无其他。后续的 session-search 与单一编辑器决策分别负责对应的默认清单例外。共享执行器、沙箱组合与访问默认值独立归属[workspace-write 默认值决策](../../archived/feature/2026-07-31-workspace-write-surface-default.md)。
 
 ### 什么保持不挂，以及为什么
 
@@ -38,7 +38,7 @@ Status: implemented
 
 该尾部还曾插入 `composition-settled.ts`，用于在终端字节流上宣告 Loader 激活已 settle。TUI 在自己的 fiber 一启动就渲染，因此在 banner 处敲下的提示词可能在工具行与持久化仍在激活时就抵达循环，从而组装出不完整的目录；把冒烟的首个提示词 gate 在该标记上，正是断言得以确定的原因。
 
-同一份冒烟还根据同一份产物固定 TUI 的执行姿态。那些沙箱 schema 与初始权限断言归[workspace-write 默认值决策](2026-07-31-workspace-write-surface-default.zh.md)所有，独立于本工具清单决策。
+同一份冒烟还根据同一份产物固定 TUI 的执行姿态。那些沙箱 schema 与初始权限断言归[workspace-write 默认值决策](../../archived/feature/2026-07-31-workspace-write-surface-default.md)所有，独立于本工具清单决策。
 
 [`apps/web/tests/shipped-composition.e2e.ts`](../../../../apps/web/tests/shipped-composition.e2e.ts) 在构建产物 lane 中覆盖 Web surface,断言它的工具目录、它的访问默认值未被触碰,以及 `workspace-write` 的可写根包含临时目录——一个会让沙箱测试说谎的陷阱,当工作区落在 `/tmp` 下时([`roots.ts`](../../../../packages/sandbox/sandbox/src/roots.ts))。
 
@@ -58,8 +58,8 @@ Status: implemented
 
 ## 后果
 
-同一个模型在两个 surface 上拿到同样的工具,那处没有记录理由的差异消失了。测试会精确断言二十个无条件提供的名称，并把 `glob` 与 `grep` 作为固定成员钉在两侧，因此日后只改一个 surface 都会让检查失败而不是悄悄发出去；[session-search-not-shipped-default 决策](2026-08-02-session-search-not-shipped-default.zh.md)正是这样一次后来的改动，两个测试也随之移动。
+同一个模型在两个 surface 上拿到同样的工具,那处没有记录理由的差异消失了。测试会精确断言二十个无条件提供的名称，并把 `glob` 与 `grep` 作为固定成员钉在两侧，因此日后只改一个 surface 都会让检查失败而不是悄悄发出去；[session-search-not-shipped-default 决策](../../archived/feature/2026-08-02-session-search-not-shipped-default.md)正是这样一次后来的改动，两个测试也随之移动。
 
-`apps/cli` 增加了五个 workspace 依赖:四个是交付树当时挂载的,外加 `dsh-mcp-client`——它并不被挂载,存在的意义是让已安装的 `dsh` 能挂。四个保留了下来——[session-search-not-shipped-default 决策](2026-08-02-session-search-not-shipped-default.zh.md)把 `@deepseek-ai/dsh-tool-session-query` 连同它的行一起移除了。
+`apps/cli` 增加了五个 workspace 依赖:四个是交付树当时挂载的,外加 `dsh-mcp-client`——它并不被挂载,存在的意义是让已安装的 `dsh` 能挂。四个保留了下来——[session-search-not-shipped-default 决策](../../archived/feature/2026-08-02-session-search-not-shipped-default.md)把 `@deepseek-ai/dsh-tool-session-query` 连同它的行一起移除了。
 
-执行策略独立于工具清单。[共享 workspace-write 决策](2026-07-31-workspace-write-surface-default.zh.md)拥有两个 surface 的沙箱执行器与默认权限；更改该策略不会增加或移除工具。
+执行策略独立于工具清单。[共享 workspace-write 决策](../../archived/feature/2026-07-31-workspace-write-surface-default.md)拥有两个 surface 的沙箱执行器与默认权限；更改该策略不会增加或移除工具。

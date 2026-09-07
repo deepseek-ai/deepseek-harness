@@ -29,7 +29,7 @@ Web 与 headless 共用 `createProcessShutdown`，它是围绕根级 dispose 建
 
 headless 对完成的轮次仍以 0 退出，对其他轮次结束原因或 API 业务错误仍以 1 退出，对 SIGINT 以 130 退出，对 SIGTERM 以 143 退出。Web 保留现有行为：SIGTERM 以 0 退出，SIGINT 以 130 退出。
 
-这项决策取代了[遥测部署 Agent Note](../feature/2026-07-31-web-telemetry-default-mount.zh.md) 中 SDK 导出器／处理器超时能够限制提供方完整关闭流程的假设，也取代了其中暂缓进程级退出兜底的决定。后端负责导出数据丢失与延迟策略，并封住已知的 SDK `forceFlush()` 缺口；启动器负责最外层保证，确保任何插件都无法无限期困住进程。
+这项决策取代了[遥测部署 Agent Note](../../archived/feature/2026-07-31-web-telemetry-default-mount.md) 中 SDK 导出器／处理器超时能够限制提供方完整关闭流程的假设，也取代了其中暂缓进程级退出兜底的决定。后端负责导出数据丢失与延迟策略，并封住已知的 SDK `forceFlush()` 缺口；启动器负责最外层保证，确保任何插件都无法无限期困住进程。
 
 ## 考虑过的替代方案
 

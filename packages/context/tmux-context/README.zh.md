@@ -85,7 +85,7 @@ kind: "package-reference"
 
 包级约定不够用时阅读以下页面。它们从设计决策进入查询所经由的执行器与穷尽式配置。
 
-- [tmux 位置上下文决策记录](../../../.agents/notes/implemented/feature/2026-07-27-tmux-location-context.zh.md)——基于 tty 的检测与读数形状的设计理由。
+- [tmux 位置上下文决策记录](../../../.agents/notes/archived/feature/2026-07-27-tmux-location-context.md)——基于 tty 的检测与读数形状的设计理由。
 - [shell 子系统](../../../docs/subsystems/shell.zh.md)——只读查询所经由的执行器服务。
 - [context 组地图](../README.zh.md)——相邻的请求上下文包。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tmux-context)——每个受支持配置字段及其源声明。

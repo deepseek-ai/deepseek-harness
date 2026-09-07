@@ -543,9 +543,10 @@ describe('Agent.cancel()', () => {
     expect(message?.type === 'assistant/message' ? message.data.interrupted : undefined).toBe(true)
     expect(() => Session.fromRestore(
       agent.session.id,
-      structuredClone(agent.session.snapshotEvents()),
+      structuredClone([...agent.session.snapshotEvents()]),
       structuredClone(agent.session.header),
       SessionLogOffset(0),
+      'detached',
     )).not.toThrow()
   })
 

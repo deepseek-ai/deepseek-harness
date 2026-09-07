@@ -168,59 +168,11 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.statusDot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  flex: none;
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--dsw-alias-label-tertiary);
-}
-
-.statusDot[data-phase='active'] {
-  background: var(--dsw-alias-state-success-primary);
-}
-
-.statusDot[data-phase='failed'] {
-  background: var(--dsw-alias-state-error-primary);
-}
-
-.statusDot[data-phase='loading'] {
-  background: var(--dsw-alias-state-business-primary);
-}
-
-.configTag {
+/* Accessible-name and layout wrapper: StateDot is aria-hidden and carries no
+   name, and the row needs the phase to stay on one flex line. */
+.phaseDot {
   display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  border-radius: 5px;
-  padding: 1px 6px;
-  background: var(--dsw-alias-bg-layer-1);
-  color: var(--dsw-alias-label-secondary);
-  font-size: 11px;
-  line-height: 16px;
-  white-space: nowrap;
-}
-
-.configTag[data-kind='enabled'] {
-  background: color-mix(in srgb, var(--dsw-alias-state-success-primary) 10%, transparent);
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.configTag[data-kind='preset'] {
-  background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent);
-  color: var(--dsw-alias-state-business-primary);
-}
-
-.configTag[data-kind='conditional'] {
-  background: color-mix(in srgb, var(--dsw-alias-state-warning-primary, #b45309) 12%, transparent);
-  color: var(--dsw-alias-state-warning-primary, #b45309);
-}
-
-.configTag[data-kind='failed'] {
-  background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent);
-  color: var(--dsw-alias-state-error-primary);
+  flex: none;
 }
 
 .group {

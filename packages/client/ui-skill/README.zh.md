@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### source 提供什么
 
-普通会话的候选来自 `skills/list` Remote；宿主提供每一个用户可调用的 skill，`modelInvocable: false` 的条目（即 `disable-model-invocation` skill，此路径是其唯一入口）会以当前语言把仅限用户标记作为描述前缀带上。结果经 `/` 菜单共享的名字排序器（ui-primitives 的 `rankByName`）排名：查询作为不区分大小写的有序子序列匹配 skill 名，前缀命中排最前，同分保持宿主顺序（[排名决策](../../../.agents/notes/implemented/feature/2026-08-04-web-slash-command-fuzzy-discovery.zh.md)）。`skills/list` 调用失败时会被记录并静默丢弃该菜单组——菜单只显示 pending/ready 状态。
+普通会话的候选来自 `skills/list` Remote；宿主提供每一个用户可调用的 skill，`modelInvocable: false` 的条目（即 `disable-model-invocation` skill，此路径是其唯一入口）会以当前语言把仅限用户标记作为描述前缀带上。结果经 `/` 菜单共享的名字排序器（ui-primitives 的 `rankByName`）排名：查询作为不区分大小写的有序子序列匹配 skill 名，前缀命中排最前，同分保持宿主顺序（[排名决策](../../../.agents/notes/archived/feature/2026-08-04-web-slash-command-fuzzy-discovery.md)）。`skills/list` 调用失败时会被记录并静默丢弃该菜单组——菜单只显示 pending/ready 状态。
 
 ### skill 工具行
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-source 不实现任何裁决钩子，也没有引用 codec：pick 落下字面文本，发出的提示词中也是同一段字面文本，因此确定性在宿主侧（[slash 流水线笔记](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.zh.md)）。
+source 不实现任何裁决钩子，也没有引用 codec：pick 落下字面文本，发出的提示词中也是同一段字面文本，因此确定性在宿主侧（[slash 流水线笔记](../../../.agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)）。
 
 ### 候选流程
 
@@ -65,7 +65,7 @@ source 不实现任何裁决钩子，也没有引用 codec：pick 落下字面�
 - [ui-input-trigger](../ui-input-trigger/README.zh.md)——该 source 注册进的行内建议机制。
 - [ui-tool](../ui-tool/README.zh.md)——承载 `tool.call.toolview` slot 的工具调用展示层。
 - [tool-skill](../../skill/tool-skill/README.zh.md)——拥有 pre-step 手势边界的宿主侧 `skill` 工具。
-- [Web 输入机器与 slash 流水线](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.zh.md)——引用与命令如何共享输入机器。
+- [Web 输入机器与 slash 流水线](../../../.agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)——引用与命令如何共享输入机器。
 
 -----
 

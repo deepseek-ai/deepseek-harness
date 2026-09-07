@@ -99,8 +99,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Skill subsystem reference](../../../docs/subsystems/skills.md) — the registry and provider vocabulary behind the catalog.
 - [skill package](../skill/README.md) — the registry and the shared `renderSkillContent` rendering.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-skill) — the exact `skill` schema the model receives.
-- [Skill catalog hot-refresh Agent Note](../../../.agents/notes/implemented/feature/2026-07-27-skill-catalog-hot-refresh.md) — the durable initial catalog and replacement lifecycle.
-- [User-explicit skill invocation Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-user-explicit-skill-invocation.md) — the `/name` gesture design.
+- [User-explicit skill invocation Agent Note](../../../.agents/notes/archived/feature/2026-08-08-user-explicit-skill-invocation.md) — the `/name` gesture design.
 
 -----
 

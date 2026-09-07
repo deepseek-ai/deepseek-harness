@@ -42,7 +42,7 @@ async function appendPersistedTitle(ctx: Context, id: ReturnType<typeof SessionI
 async function expectPersistedTitle(ctx: Context, id: ReturnType<typeof SessionId>): Promise<void> {
   const handle = await ctx.sessionPersistence.open(id, 'read')
   try {
-    const events = await handle.read()
+    const { events } = await handle.read()
     expect(foldSessionTitle(events)).toMatchObject({
       title: 'Persist this session title',
       messageSeqs: [1],

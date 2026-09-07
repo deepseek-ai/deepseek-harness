@@ -1,11 +1,33 @@
 import { describe, expect, it } from 'vitest'
+import { SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
+import type {
+  SessionFormatEvent,
+  SessionFormatEventRun,
+} from '@deepseek-ai/dsh-session-format'
 import {
   RELEASED_V0_EVENT_TYPES,
-  releasedV0SessionFormatCodec,
   releasedV1SessionFormatCodec,
   restoreReleasedV1Artifact,
   sessionFormatV0ToV1,
 } from '../src/index.ts'
+import { restoreV0ToV1, restoreV1 } from '../src/testing/restore.ts'
+
+function createMigrationStage(id: string) {
+  const sourceHeader = { version: 0, id, createdAt: 1, isSeeded: false, delegationDepth: 0 }
+  const stage = sessionFormatV0ToV1.createStage({
+    sourceHeader,
+    targetHeader: sessionFormatV0ToV1.migrateHeader(sourceHeader),
+    sourceInheritedEventCount: 0,
+    sourceKind: 'decoded',
+  })
+  return {
+    transform(event: SessionFormatEvent): SessionFormatEvent[] {
+      const context = new SessionFormatEventCollector()
+      stage.transformEvent(event, context)
+      return context.values
+    },
+  }
+}
 
 describe('released Session format v0 to v1', () => {
   it('changes only the version of a canonical decoded artifact', () => {
@@ -27,19 +49,71 @@ describe('released Session format v0 to v1', () => {
         data: { turn: 1, step: 1, index: 0, dt: [1, 1], texts: ['a', 'b', 'c'] },
       },
     ]
-    const source = releasedV0SessionFormatCodec.decodeArtifact(header, rows)
-
-    const migrated = sessionFormatV0ToV1.migrate(source)
+    const migrated = restoreV0ToV1(header, rows)
 
     expect(migrated).toEqual({
-      ...source,
-      header: { ...source.header, version: 1 },
+      header: {
+        version: 1, id: 'identity', createdAt: 1, cwd: '/work', isSeeded: false, delegationDepth: 0,
+      },
+      inheritedEventCount: 0,
+      events: [
+        rows[0],
+        rows[1],
+        { type: 'assistant/chunk', seq: 2, time: 4, data: {
+          turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'a' },
+        } },
+        { type: 'assistant/chunk', seq: 3, time: 5, data: {
+          turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'b' },
+        } },
+        { type: 'assistant/chunk', seq: 4, time: 6, data: {
+          turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'c' },
+        } },
+      ],
     })
-    sessionFormatV0ToV1.validateTarget(migrated)
-    expect(releasedV1SessionFormatCodec.encodeArtifact(migrated, { packChunks: true })).toEqual({
-      header: { ...header, version: 1 },
-      rows,
+  })
+
+  it('expands an unrecognized compact run through the identity stage', () => {
+    const sourceHeader = {
+      version: 0, id: 'generic-run', createdAt: 1, isSeeded: false, delegationDepth: 0,
+    } as const
+    const stage = sessionFormatV0ToV1.createStage({
+      sourceHeader,
+      targetHeader: sessionFormatV0ToV1.migrateHeader(sourceHeader),
+      sourceInheritedEventCount: 0,
+      sourceKind: 'transformed',
     })
+    const source = {
+      type: 'feedback/record', seq: 0, time: 2, data: { text: 'retained' },
+    } as const
+    const run: SessionFormatEventRun = {
+      runType: 'test-run', firstSeq: 0, eventCount: 1, *expand() { yield source },
+    }
+    const output = new SessionFormatEventCollector()
+
+    stage.transformRun(run, output)
+
+    expect(output.values).toEqual([source])
+  })
+
+  it('accepts an inherited delivery marker for its source generation', () => {
+    const sourceHeader = {
+      version: 0, id: 'child', createdAt: 1, parentSession: 'parent', isSeeded: true, delegationDepth: 0,
+    } as const
+    const stage = sessionFormatV0ToV1.createStage({
+      sourceHeader,
+      targetHeader: sessionFormatV0ToV1.migrateHeader(sourceHeader),
+      sourceInheritedEventCount: 2,
+      sourceKind: 'decoded',
+    })
+    const marker = {
+      type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2,
+      data: { sessionId: 'parent', throughSeq: 0 },
+    } as const
+    const output = new SessionFormatEventCollector()
+
+    stage.transformEvent(marker, output)
+
+    expect(output.values).toEqual([marker])
   })
 
   it('recovers only the complete row prefix and refuses a later committing turn end', () => {
@@ -61,13 +135,13 @@ describe('released Session format v0 to v1', () => {
       data: { turn: 2, step: 0, index: 0, dt: [1], texts: ['x', 'y'] },
     }
 
-    expect(releasedV0SessionFormatCodec.decodeRecoverableArtifact(header, [...prefix, badRow]))
-      .toEqual(releasedV0SessionFormatCodec.decodeArtifact(header, prefix))
-    expect(() => releasedV0SessionFormatCodec.decodeRecoverableArtifact(header, [
+    expect(restoreV0ToV1(header, [...prefix, badRow], 'recoverable'))
+      .toEqual(restoreV0ToV1(header, prefix))
+    expect(() => restoreV0ToV1(header, [
       ...prefix,
       badRow,
       { type: 'turn/end', seq: 2, time: 6, data: { turn: 2, reason: { kind: 'interrupted' } } },
-    ])).toThrow(/seq gap/)
+    ], 'recoverable')).toThrow(/seq gap/)
   })
 
   it('requires canonical delegation depth and decodes provenance without mutating source rows', () => {
@@ -100,15 +174,15 @@ describe('released Session format v0 to v1', () => {
       provenanceRow,
     ]
 
-    const decoded = releasedV0SessionFormatCodec.decodeArtifact(header, rows)
+    const migrated = restoreV0ToV1(header, rows)
 
-    expect(() => releasedV0SessionFormatCodec.decodeArtifact(incompleteHeader, rows)).toThrow(/delegationDepth/)
-    expect(decoded.header.delegationDepth).toBe(0)
-    expect(decoded.events[3]?.sourceEventSeqs).toEqual([0, 1, 2])
+    expect(() => restoreV0ToV1(incompleteHeader, rows)).toThrow(/delegationDepth/)
+    expect(migrated.header.delegationDepth).toBe(0)
+    expect(migrated.events[3]?.sourceEventSeqs).toEqual([0, 1, 2])
     expect(provenanceRow.sourceEventSeqs).toEqual([[0, 2]])
-    const migrated = sessionFormatV0ToV1.migrate(decoded)
-    expect(releasedV1SessionFormatCodec.encodeArtifact(migrated, { packChunks: false }).header)
-      .toEqual({ ...header, version: 1 })
+    expect(migrated.header).toEqual({
+      version: 1, id: 'old', createdAt: 1, isSeeded: false, delegationDepth: 0,
+    })
   })
 
   it('refuses v1-only generation fields in v0 and accepts them in v1', () => {
@@ -122,10 +196,91 @@ describe('released Session format v0 to v1', () => {
     const v0 = { type: 'session', version: 0, id: 'delivery', createdAt: 1, delegationDepth: 0 }
     const v1 = { ...v0, version: 1 }
 
-    expect(() => sessionFormatV0ToV1.migrate(
-      releasedV0SessionFormatCodec.decodeArtifact(v0, [prefix, event]),
-    )).toThrow(/unexpected member "sessionFormatVersion"/)
-    expect(releasedV1SessionFormatCodec.decodeArtifact(v1, [prefix, event]).events).toEqual([prefix, event])
+    expect(() => restoreV0ToV1(v0, [prefix, event])).toThrow(/unexpected member "sessionFormatVersion"/)
+    expect(restoreV1(v1, [prefix, event]).events).toEqual([prefix, event])
+  })
+
+  it('does not synthesize over an explicitly invalid retry id', () => {
+    const header = { type: 'session', version: 0, id: 'retry', createdAt: 1, delegationDepth: 0 }
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      { type: 'request/header', seq: 2, time: 3, data: {
+        header: { config: { provider: 'p', model: 'm' } }, reason: 'initial',
+      } },
+      { type: 'llm/retry', seq: 3, time: 4, data: {
+        retryId: null, turn: 1, step: 1, provider: 'p', mode: 'normal', policyKey: 'k',
+        retry: 1, maxRetries: 1, delayMs: 0, failure: { message: 'retry', code: 'SERVER' },
+      } },
+    ]
+    expect(() => restoreV0ToV1(header, rows)).toThrow(/retryId/)
+
+    const transformer = createMigrationStage('retry')
+    const retry = (seq: number, attempt: number) => ({
+      type: 'llm/retry', seq, time: seq + 1,
+      data: {
+        turn: 1, step: 1, provider: 'p', mode: 'normal', policyKey: 'k', retry: attempt,
+        maxRetries: 2, delayMs: 0, failure: { message: 'retry', code: 'SERVER' },
+      },
+    })
+    expect(transformer.transform(retry(0, 1))[0]?.data).toMatchObject({ retryId: 'legacy-retry:retry:0' })
+    expect(transformer.transform(retry(1, 2))[0]?.data).toMatchObject({ retryId: 'legacy-retry:retry:0' })
+  })
+
+  it('normalizes legacy compaction names and assigns one deterministic id to the group', () => {
+    const transformer = createMigrationStage('compact')
+    const rows = [
+      { type: 'compaction/start', seq: 0, time: 1, data: { turn: null } },
+      {
+        type: 'compaction/summary', seq: 1, time: 2,
+        data: {
+          summary: [{ type: 'text', text: 'summary' }], shadowedRange: { start: 0, end: 0 },
+          shadowedSeqs: [0], shadowedTokenCount: 0, provider: 'p', model: 'm',
+        },
+      },
+      {
+        type: 'compaction/prune', seq: 2, time: 3,
+        data: { shadowedRange: { start: 0, end: 0 }, shadowedSeqs: [0], shadowedTokenCount: 1 },
+      },
+      {
+        type: 'user/message', seq: 3, time: 4,
+        data: {
+          id: 'checkpoint', role: 'user', content: [{ type: 'text', text: 'summary' }],
+          source: { kind: 'plugin', plugin: 'compact' },
+        },
+        sourceEventSeqs: [0, 1], surfaceOp: { op: 'replace', start: 0, end: 0 },
+      },
+      { type: 'compaction/end', seq: 4, time: 5, data: { turn: null } },
+    ]
+
+    const migrated = rows.map(row => transformer.transform(row)[0])
+    expect(migrated.map(event => event?.type === 'user/message'
+      ? (event.data as { source: { compactionId: string } }).source.compactionId
+      : (event?.data as { compactionId: string }).compactionId))
+      .toEqual([
+        'legacy-compaction:compact:0',
+        'legacy-compaction:compact:0',
+        undefined,
+        'legacy-compaction:compact:0',
+        'legacy-compaction:compact:0',
+      ])
+
+    const historical = rows.map(row => ({
+      ...row,
+      type: row.type.replace(/^compaction\//, 'compact/'),
+    }))
+    const historicalTransformer = createMigrationStage('compact')
+    expect(historical.map(row => historicalTransformer.transform(row as SessionFormatEvent)[0])).toEqual(migrated)
+
+    const reset = createMigrationStage('compact')
+    expect(() => reset.transform({
+      ...(rows[0] as SessionFormatEvent), data: { turn: null, compactionId: null },
+    })).toThrow(/compactionId/)
+    reset.transform(rows[0] as never)
+    expect(reset.transform({ type: 'feedback/record', seq: 1, time: 2, data: { text: 'kept' } })[0]?.type)
+      .toBe('feedback/record')
+    reset.transform({ type: 'session/end-seed', seq: 2, time: 3, data: {} })
+    expect(() => reset.transform({ ...(rows[1] as SessionFormatEvent), seq: 3 })).toThrow(/compactionId/)
   })
 
   it('preserves a complete canonical multi-owner log except for header.version', () => {
@@ -209,9 +364,14 @@ describe('released Session format v0 to v1', () => {
       },
       { type: 'turn/end', seq: 19, time: 20, data: { turn: 1, reason: { kind: 'completed' } } },
     ]
-    const source = releasedV0SessionFormatCodec.decodeArtifact(physicalHeader, rows)
-    const migrated = sessionFormatV0ToV1.migrate(source)
-    expect(migrated).toEqual({ ...source, header: { ...source.header, version: 1 } })
+    const migrated = restoreV0ToV1(physicalHeader, rows)
+    expect(migrated).toEqual({
+      header: {
+        version: 1, id: 'full-identity', createdAt: 1, cwd: '/work', isSeeded: false, delegationDepth: 0,
+      },
+      inheritedEventCount: 0,
+      events: rows,
+    })
   })
 
   it('keeps the v1 physical codec vocabulary-neutral for current growth and a future source freeze', () => {
@@ -219,10 +379,17 @@ describe('released Session format v0 to v1', () => {
       type: 'session', version: 1, id: 'ordinary-growth', createdAt: 1, delegationDepth: 0,
     }
     const ordinary = { type: 'ordinary/post-v1', seq: 0, time: 1, data: { required: true } }
-    const decoded = releasedV1SessionFormatCodec.decodeArtifact(physicalHeader, [ordinary])
+    const decoder = releasedV1SessionFormatCodec.createDecoder(physicalHeader, 'strict')
+    const events = new SessionFormatEventCollector()
+    decoder.decodeRow(ordinary, events)
+    const decoded = {
+      header: decoder.header,
+      inheritedEventCount: decoder.finish(events),
+      events: events.values,
+    }
 
     expect(decoded.events).toEqual([ordinary])
-    expect(() => { sessionFormatV0ToV1.validateTarget(decoded) }).toThrow(/unknown required event/)
+    expect(RELEASED_V0_EVENT_TYPES).not.toContain(ordinary.type)
 
     const generatedCurrentTypes = new Set([...RELEASED_V0_EVENT_TYPES, ordinary.type])
     expect(() => restoreReleasedV1Artifact(decoded, generatedCurrentTypes)).not.toThrow()
@@ -230,10 +397,19 @@ describe('released Session format v0 to v1', () => {
     const frozenFutureV1SourceTypes = new Set(generatedCurrentTypes)
     expect(() => restoreReleasedV1Artifact(decoded, frozenFutureV1SourceTypes)).not.toThrow()
 
-    const extendedKnownPayload = releasedV1SessionFormatCodec.decodeArtifact(physicalHeader, [{
+    const extendedDecoder = releasedV1SessionFormatCodec.createDecoder(physicalHeader, 'strict')
+    const extendedEvents = new SessionFormatEventCollector()
+    extendedDecoder.decodeRow({
+      type: 'turn/start', seq: 0, time: 1, data: { turn: 1, postReleaseMember: true },
+    }, extendedEvents)
+    const extendedKnownPayload = {
+      header: extendedDecoder.header,
+      inheritedEventCount: extendedDecoder.finish(extendedEvents),
+      events: extendedEvents.values,
+    }
+    expect(extendedKnownPayload.events).toEqual([{
       type: 'turn/start', seq: 0, time: 1, data: { turn: 1, postReleaseMember: true },
     }])
-    expect(() => { sessionFormatV0ToV1.validateTarget(extendedKnownPayload) }).toThrow(/unexpected member/)
     expect(() => restoreReleasedV1Artifact(extendedKnownPayload, generatedCurrentTypes)).not.toThrow()
   })
 })

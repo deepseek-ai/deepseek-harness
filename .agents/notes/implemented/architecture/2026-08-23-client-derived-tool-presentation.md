@@ -22,6 +22,8 @@ The required result is one raw Session journal and one Client presentation owner
 
 ## Decision
 
+The visual-equivalence requirements below exclude the separately approved [nested terminal-card fix](../bug-fix/2026-09-05-nested-terminal-cards.md); all other presentation and ownership constraints remain.
+
 The Session Remote journal sends only raw, validated, persistable Session events. `session.page` and `session.follow` do not parse tool arguments, query the Tools registry, restore a presenter scope, execute `presentCall` or `presentResult`, or construct or clone any tool view.
 
 The Client Conversation layer continues to own tool call/result identity, pairing, lifecycle, Code Dispatch topology, and stable Chat Nodes. It does not interpret individual tool names or produce terminal, diff, read, search, or web component props.
@@ -49,7 +51,7 @@ The Host `ToolDefinition.presentCall`, `ToolDefinition.presentResult`, `ToolCall
 | Retained | the Session log format, Remote journal lifecycle, and Conversation identity/topology |
 | Retained | the existing keyed slot, Generic fallback, and Chat, Details, and Trajectory structure |
 | Forbidden | a new Client presenter service, parallel registry, or wire renderer id |
-| Forbidden | new cards, visual redesign, interaction redesign, or Code Dispatch rich-card enhancements |
+| Forbidden | new cards, visual redesign, interaction redesign, or Code Dispatch rich-card enhancements except the [nested terminal-card exception](../bug-fix/2026-09-05-nested-terminal-cards.md) |
 | Forbidden | compatibility dual-writing, version negotiation, or retention of the old `view` field |
 
 ## Terminology
@@ -242,13 +244,13 @@ The Chat and Trajectory Tool Definitions read no views. They derive the followin
 
 ### Root and Code Dispatch subcalls
 
-Host presenter APIs describe top-level calls and results. Code Dispatch subcalls use the Generic, flattened Client presentation; recognizing a subcall name does not grant it a structured card.
+Host presenter APIs describe top-level calls and results. Code Dispatch subcalls retain Generic, flattened presentation for the diff, read, search, and web models covered here; supported terminal calls use the same eligibility rules as roots.
 
-Code Dispatch start and result events already carry `parentCallId`. Conversation preserves that existing fact on each child `ToolCallBlock`; root Session calls omit it. The five structured card models accept only blocks without `parentCallId`, while existing renderers that intentionally support nested calls continue receiving the same child block.
+Code Dispatch start and result events already carry `parentCallId`. Conversation preserves that existing fact on each child `ToolCallBlock`; root Session calls omit it. The diff, read, search, and web models accept only blocks without `parentCallId`; the terminal model and existing renderers that intentionally support nested calls accept child blocks.
 
-The Details panel delegates the selected block unchanged. The same card models observe `parentCallId` and keep a selected Code Dispatch child on the existing raw fallback, so the Details slot needs no placement field.
+The Details panel delegates the selected block unchanged. Shared card models apply the same terminal eligibility and nonterminal child restrictions in rows and Details, so the Details slot needs no placement field.
 
-The keyed slot continues dispatching every subcall by its real tool name. `parentCallId` controls only the terminal, diff, read, search, and web structured models covered by this decision. Existing specialized renderers such as Skill and Cordis, which already read raw blocks, remain unchanged.
+The keyed slot continues dispatching every subcall by its real tool name. `parentCallId` restricts only the diff, read, search, and web structured models covered by this decision. Existing specialized renderers such as Skill and Cordis, which already read raw blocks, remain unchanged.
 
 ### Missing call head
 
@@ -294,7 +296,7 @@ The title, kind, rawInput, content, and locations from Generic Host `presentCall
 
 ### Terminal card
 
-The Client terminal model derives existing `TerminalBlock` props from the tool name, call arguments, result content, error, existing `parentCallId`, and Session cwd.
+The Client terminal model derives existing `TerminalBlock` props from the tool name, call arguments, result content, error, and Session cwd, independently of `parentCallId`.
 
 | Input | Preserved result |
 |---|---|
@@ -306,9 +308,9 @@ The Client terminal model derives existing `TerminalBlock` props from the tool n
 | settled persistent `bash`/`pwsh` | Generic flattened result, with no new exit card |
 | foreground `terminal_send` | terminal prompt and output |
 | background/error `terminal_send` | Generic result |
-| Code Dispatch child | current flattened Generic form |
+| Code Dispatch child | same terminal eligibility and fallback rules as a root call |
 
-Standard shell results continue parsing trailing `[exit code: N]` and `[killed by signal: X]` markers. A parsed marker is removed from the body; timeout, sandbox denial, and markers without a pill remain in the body.
+Standard shell results parse trailing `[exit code: N]` and `[killed by signal: X]` markers. A final recognized spill-policy notice selects Generic output instead: expandable in shell rows and raw in Details, because the exit marker may be displaced or omitted. A parsed marker is removed from the terminal body; timeout, sandbox denial, and markers without a pill remain in the body.
 
 Call `description` remains above the card and overrides the collapsed summary. Workdir continues handling absolute, relative, and missing values. Relative paths resolve against the Session cwd while preserving normalization for `.`, `..`, drive letters, and UNC roots.
 
@@ -418,7 +420,7 @@ The fixture does not import Host tool packages to compute page presentation and 
 | grep/glob | current grouped/path card, truncation, and recovery |
 | web_search/web_fetch | current source/summary card and raw body |
 | Todo/Question/Skill/Cordis | current specialized rows |
-| Code Dispatch subcall | current Generic/flattened form |
+| Code Dispatch subcall | terminal cards when eligible; diff/read/search/web remain Generic/flattened |
 | Chat and Details | identical card fields for the same call |
 | Trajectory | current identity, tree, selection, and details |
 | Deliverables | current successful-mutation chips and links |
@@ -526,7 +528,7 @@ This change does not promise to preserve differences expressed only through a Ho
 - search produces the pinned grouped/path card and recovery from metadata/content.
 - web produces the pinned sources/fetch summary from metadata/content.
 - unknown, malformed, error, missing-call, and missing-metadata cases remain Generic.
-- absent and present `parentCallId` cases prove that structured presentation does not reach Code Dispatch descendants.
+- absent and present `parentCallId` cases prove equal terminal eligibility and preserve Generic fallback for diff, read, search, and web descendants.
 - Chat and Details produce identical card fields for the same block.
 
 ### Deliverables
@@ -582,12 +584,12 @@ Changes to this decision use `dsh-pre-push-checks` to select commands for the fi
 - Result metadata passes byte-for-byte through the log and Remote to the Client.
 - Conversation assembles `ToolCallBlock` only from raw events.
 - `ToolCallBlock` contains no Host render-intent fields.
-- The five structured card models read only raw blocks, their existing `parentCallId`, and Session path facts.
+- The five structured card models read only raw blocks and Session path facts; only diff, read, search, and web use `parentCallId` to reject children.
 - Generic, Todo, Question, Skill, and Cordis rows remain unchanged.
 - Deliverables does not depend on render intent and preserves current paths.
 - Text, components, expanded content, states, links, and ordering for all first-party top-level tools remain unchanged.
 - Malformed, missing-metadata, error, orphan, and unknown-tool cases continue to fall back safely.
-- Code Dispatch subcalls remain Generic and flattened.
+- Code Dispatch diff, read, search, and web subcalls remain Generic and flattened; terminal subcalls follow root eligibility.
 - Chat, Details, and Trajectory behavior remains unchanged.
 - Existing Web browser expected outputs pass without refresh.
 - Host presenter APIs, implementations, and direct tests remain unchanged.
@@ -632,7 +634,7 @@ An on-demand RPC would turn one page read into N network calls and would still r
 
 ### Allow presentation enhancements
 
-The Client could produce more rich cards for Code Dispatch subcalls, missing call heads, or history whose Host presenter was unavailable. That would mix an ownership change with product behavior and prevent snapshots from proving equivalence, so this alternative is rejected.
+Bundling richer Code Dispatch cards, missing-call-head inference, or other historical presentation enhancements with the ownership change would prevent snapshots from proving equivalence. This decision rejects that coupling; the [nested terminal-card exception](../bug-fix/2026-09-05-nested-terminal-cards.md) does not relax nonterminal child restrictions.
 
 ### Accept temporary Generic degradation
 
@@ -684,9 +686,11 @@ The absence of optional `view` is a prerelease wire-type decision shared by all 
 
 ## Relationship to Existing Decisions
 
-This note partially supersedes the implementation fact in [Client tool presentation ownership](2026-08-08-client-tool-presentation-ownership.md) that “card models receive Host views.” Its core decisions remain: `ui-tool` owns presentation, business plugins use keyed slots, and Conversation owns only lifecycle and topology.
+[Nested terminal cards](../bug-fix/2026-09-05-nested-terminal-cards.md) partially supersedes only the terminal child-card prohibition and its visual-equivalence requirement. This note remains active for raw-journal ownership, Client derivation, and the diff/read/search/web child restrictions.
 
-This note preserves [toolview dissolution](2026-07-23-toolview-dissolution.md): the Client still has one slot registration model and does not restore `ToolViewRegistry`.
+This note partially supersedes the implementation fact in [Client tool presentation ownership](../../archived/architecture/2026-08-08-client-tool-presentation-ownership.md) that “card models receive Host views.” Its core decisions remain: `ui-tool` owns presentation, business plugins use keyed slots, and Conversation owns only lifecycle and topology.
+
+This note preserves [toolview dissolution](../../archived/architecture/2026-07-23-toolview-dissolution.md): the Client still has one slot registration model and does not restore `ToolViewRegistry`.
 
 This note narrows the consumer scope of the [render-intent union](2026-07-02-tool-render-intent-union.md). The Host APIs and types remain, while the Session Remote and Web Client do not consume them. This note owns the transport split without rewriting that presenter decision.
 
@@ -699,7 +703,7 @@ This note preserves result metadata from the [canonical tool output contract](20
 ## Deferred
 
 - A separate explicit decision may evaluate deleting Host presenters if they remain without production consumers; this decision does not prejudge it.
-- Specialized cards for Code Dispatch subcalls require a separate design and visible-snapshot updates; this decision preserves current behavior.
+- Specialized diff, read, search, and web cards for Code Dispatch subcalls require a separate design and visible-snapshot updates; terminal calls are covered by the linked partial supersession.
 - A third-party mutation tool that joins Deliverables requires a new Client-owned contribution; this decision does not create a registry for an absent consumer.
 - Distinct Client presentation for same-named providers first requires a stable, non-presentational identity; it must not restore per-page Host views.
 - If Client card-model performance needs measurement, an immutable-block microbenchmark can be added; the shipped architecture already prohibits scanning the Session window.

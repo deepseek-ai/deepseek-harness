@@ -8,7 +8,6 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId, type Session, type SessionEvent } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentService from '@deepseek-ai/dsh-subagent'
 import { deliverSubagentPrompt, type HostPromptDeliverer } from '@deepseek-ai/dsh-subagent/internal'
@@ -50,7 +49,7 @@ function durable(agent: Agent): {
 async function storedEvents(ctx: Context, id: SessionId): Promise<readonly SessionEvent[]> {
   const handle = await ctx.sessionPersistence.open(id, 'read')
   try {
-    return await handle.read()
+    return (await handle.read()).events
   } finally {
     await handle.close()
   }
@@ -62,7 +61,6 @@ async function setup(
 ) {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-'))
   roots.push(storageRoot)
   await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })
@@ -170,7 +168,6 @@ describe('Team identity and provisioning', () => {
   it('supports direct-constructor defaults and recovers roots that already exist', async () => {
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-direct-'))
     roots.push(storageRoot)
     await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })
@@ -1411,7 +1408,6 @@ describe('Team mailbox and waiting', () => {
   it('waits for one change, supports cancellation, times out, and releases waiters on HMR disposal', async () => {
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     const storageRoot = mkdtempSync(join(tmpdir(), 'dsh-team-wait-'))
     roots.push(storageRoot)
     await ctx.plugin(JsonlSessionPersistence, { root: storageRoot })

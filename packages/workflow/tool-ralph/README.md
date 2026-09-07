@@ -58,7 +58,7 @@ This section explains the fixed-script design and the validation and lifecycle m
 
 ### Design concept
 
-The loop is a deployment-owned fixed script: the model supplies data only and cannot alter the loop, provider route, schema, or handoff validation. The tool is an ordinary plugin over `ctx.workflowEngine` and `ctx.subagents` — no Ralph mode or fresh-agent loop is added to `agent-loop`, and the same-session goal domain stays independent. The [Ralph Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-fresh-agent-ralph-workflow-tool.md) owns the policy and deferred work.
+The loop is a deployment-owned fixed script: the model supplies data only and cannot alter the loop, provider route, schema, or handoff validation. The tool is an ordinary plugin over `ctx.workflowEngine` and `ctx.subagents` — no Ralph mode or fresh-agent loop is added to `agent-loop`, and the same-session goal domain stays independent. The [harness-level goal-based execution Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.md) owns the policy and deferred work.
 
 ### Fixed script and routing
 
@@ -97,7 +97,7 @@ Read these pages when the tool-level contract is not enough. They move from the 
 - [Worker-thread engine](../workflow-worker-thread/README.md) — the engine that executes the fixed script.
 - [subagent seam](../../subagent/subagent/README.md) — the fresh-child provider contract.
 - [Goal group](../../goal/goal/README.md) — same-session goal tools for ordinary long-running objectives.
-- [Ralph tool Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-fresh-agent-ralph-workflow-tool.md) — the policy, provider requirements, and deferred work.
+- [Harness-level goal-based execution Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.md) — the policy, provider requirements, and deferred work.
 
 -----
 

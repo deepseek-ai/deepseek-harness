@@ -55,12 +55,14 @@ const definition = {
 
 ### Register and read
 
-`register(definition)` installs the unit; the registration is an effect on the calling fiber, so unloading the domain removes its key. Carriers read a consistent synchronous cut over every client-visible unit with `snapshot(session)` — `{ asOfSeq, values }`, where `asOfSeq` is the seq of the last event every value reflects — and subscribe to per-change notifications with `onChanged(listener)`. `stateOf(session, key)` reads one unit's host state without computing unrelated views.
+`register(definition)` installs the unit; registrants with the same key and `stateVersion` share its cells, while an incompatible version or invalid `stateVersion` throws. Registration is an effect on the calling fiber, so the last unload removes the key and its cached cells. Carriers read a consistent synchronous cut over every client-visible unit with `snapshot(session)` — `{ asOfSeq, values }`, where `asOfSeq` is the seq of the last event every value reflects — and subscribe to per-change notifications with `onChanged(listener)`. `stateOf(session, key)` reads one unit's live read-only host state without computing unrelated views.
 
 ```text
 const dispose = ctx.sessionProjections.register(definition)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
+
+A domain that requires projected state declares `sessionProjections` as a Cordis service dependency; optional contributors may register under `ctx.inject(['sessionProjections'], …)`. Carriers use `ctx.get('sessionProjections')` and omit their block or frames when the registry is absent.
 
 ### Persisted checkpoints
 

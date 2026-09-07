@@ -27,13 +27,49 @@ English | [中文](README.zh.md)
 
 Compose feature UI from these atoms whenever the web client needs a standard control or an agent-output renderer. They render through React only and take `--dsw-*` design tokens from the theme, so they fit any plugin without importing the theme or the slot system.
 
+<a id="component-catalog"></a>
+### Component catalog
+
+Check this table before writing a control in a feature package. A plugin cannot import another plugin's component, so this package is the only place a control can be shared: reuse what fits, and lift a deliberate visual difference into a prop rather than starting a second copy.
+
+| Export | What it is |
+|---|---|
+| `Button` | Clickable action; `variant` selects `primary`, `ghost`, `outline`, or `toolbar`. |
+| `Switch` | Two-state toggle, 36×20. `label` is required, so the control cannot ship unnamed. |
+| `Input` | Single-line text entry for search boxes and inline forms. |
+| `Menu` | Dropdown of items, separators, and group labels, with nested submenus. |
+| `Pill` | Selectable capsule button for view switchers and filters; takes `active` and `onClick`. |
+| `Tag` | Read-only capsule badge; `tone` selects one of eight palettes. |
+| `StateDot` | Status mark: `done`, `warning`, `ongoing`, `error`, or `idle`. `aria-hidden`, so the render site owns the name. |
+| `ConnectionIndicator` | Inline connection-recovery control across outage, retry, and recovered states. |
+| `DisclosureRow` | 24px compact disclosure that lays title and content side by side. |
+| `Modal` | Centered dialog over a page mask. |
+| `RiskConfirmation` | Sensitive action gated behind an explicit checkbox. |
+| `OnboardingSurface` | First-run stage that holds the application root inert. |
+| `Tooltip` | Hover text on a cloned anchor, placed right, bottom, or top. |
+| `HoverCard` | Hover preview the pointer can rest on and select from; optional copy button. |
+| `Toast` | Transient top-center banner held for the owner's `holdMs`. |
+| `JsonTree`, `JsonBlock` | Read-only JSON inspection. |
+| `MarkdownText`, `CodeBlock` | Untrusted GFM with TeX math, and highlighted code. |
+| `TerminalBlock`, `ReadBlock`, `DiffBlock`, `SearchBlock`, `WebBlock` | The agent-output card matching each tool-result intent. |
+| `icons/*`, `FishLogo`, `BrandWordmark`, `ReferenceIcon`, `LinkIcon`, `DocumentFileIcon` | Glyphs and brand marks, all riding `currentColor`. |
+
+Three pairs are easy to confuse:
+
+- **`Tag` against `Pill`.** Reach for `Tag` for a read-only badge at the 11px capsule size, and for `Pill` when the capsule is selectable (`active` and `onClick`, as view switchers and filters use) or when it must sit on a 24px text line — `TerminalBlock` renders its exit status as a static `Pill` for exactly that reason. Size decides as much as interactivity here; the two are not interchangeable.
+- **`DisclosureRow` against a card.** The row lays its title and content side by side at a fixed 24px. A card that stacks a name over a description is a different layout, and belongs in the feature package — `ui-settings-plugins`' `PluginCard` is the precedent and records why.
+- **`FoldToggle` against the exported surface.** It is package-internal and not exported; the output cards use it for their head-tail fold.
+
+Writing your own component in your own package is fine when the need is genuinely specific. What is not fine is copying a control that already exists here — and once a second package needs the same control, it belongs in this package ([decision](../../../.agents/notes/implemented/architecture/2026-09-05-shared-client-control-primitives.md)).
+
 ### Controls and icons
 
-`Button`, `Pill`, `Input`, `Menu`, `Modal`, `Tooltip`, `DisclosureRow`, `StateDot`, `HoverCard`, `Toast`, `ConnectionIndicator`, `RiskConfirmation`, and the `OnboardingSurface` first-run takeover cover the common interaction shapes. The `ic_ds_*` icon set and `FishLogo`/`BrandWordmark` marks fill brand and inline-icon slots. `LinkIcon` draws the leading category glyph for clickable artifact links — globe, folder, code, image, document, or plain paper, all riding `currentColor` — and `classifyLinkPath` derives a file path's category from its extension. `ConnectionIndicator` renders a warning-colored disconnected action, a connecting label whose one-to-three dots advance every 500ms independently of retry timing, or a success-colored recovered status. Every state reserves the widest supplied label and uses fixed icon and text columns, so copy changes do not move or resize the control. Its owner supplies visibility, the recovery hold, localized labels, and the immediate-reconnect callback; the primitive uses no native title tooltip. `useAnchoredPosition` and `useAnchoredMaxHeight` keep floating panels and bottom-anchored overlays clamped to the viewport and following their anchor. `HoverCard` keeps its portaled preview reachable across the anchor gap and can expose a copy button through the `copyText` prop. `Toast` holds for the window its owner names through `holdMs`, because how long a banner has to stay depends on how much there is to read; the same value drives its unmount timer and the stylesheet's fade delay, so the two cannot disagree. `rankByName` is the `/` menu's shared candidate ranker for the command and skill sources: the query must be a case-insensitive ordered subsequence of the name; prefix hits rank first, then alignment score, then source order ([ranking decision](../../../.agents/notes/implemented/feature/2026-08-04-web-slash-command-fuzzy-discovery.md)).
+The catalog above lists what each export is for; this section covers the behavior that props alone do not show. The `ic_ds_*` icon set and `FishLogo`/`BrandWordmark` marks fill brand and inline-icon slots. `LinkIcon` draws the leading category glyph for clickable artifact links — globe, folder, code, image, document, or plain paper, all riding `currentColor` — and `classifyLinkPath` derives a file path's category from its extension. `ConnectionIndicator` renders a warning-colored disconnected action, a connecting label whose one-to-three dots advance every 500ms independently of retry timing, or a success-colored recovered status. Every state reserves the widest supplied label and uses fixed icon and text columns, so copy changes do not move or resize the control. Its owner supplies visibility, the recovery hold, localized labels, and the immediate-reconnect callback; the primitive uses no native title tooltip. `useAnchoredPosition` and `useAnchoredMaxHeight` keep floating panels and bottom-anchored overlays clamped to the viewport and following their anchor. `HoverCard` keeps its portaled preview reachable across the anchor gap and can expose a copy button through the `copyText` prop. `Toast` holds for the window its owner names through `holdMs`, because how long a banner has to stay depends on how much there is to read; the same value drives its unmount timer and the stylesheet's fade delay, so the two cannot disagree. `rankByName` is the `/` menu's shared candidate ranker for the command and skill sources: the query must be a case-insensitive ordered subsequence of the name; prefix hits rank first, then alignment score, then source order.
 
 ### Rendering agent output
 
-`MarkdownText` renders untrusted GFM and TeX math, blocks unsafe links and images, and can turn resolved file mentions into explicit controls. While a reply streams, it freezes completed blocks, advances a top-level open fence by completed lines, and highlights that fence from saved Shiki grammar state. Completed token lines enter fixed-size React groups, so later chunks reconcile only the growing group; an unchanged fence retains that DOM when the final full parse resolves cross-document syntax ([incremental renderer](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.md), [streaming fence highlighting](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.md)). `TerminalBlock`, `ReadBlock`, `DiffBlock`, `SearchBlock`, and `WebBlock` render the matching tool-result intent with copy controls, overflow handling, and ANSI processing where applicable. `JsonTree` and `JsonBlock` inspect JSON values read-only, while `projectUserText` projects sent user text into inline plain runs and reference chips for the message bubble and queue rows.
+`MarkdownText` renders untrusted GFM and TeX math, blocks unsafe links and images, and can turn resolved file mentions into explicit controls. While a reply streams, it freezes completed blocks, advances a top-level open fence by completed lines, and highlights that fence from saved Shiki grammar state. Completed token lines enter fixed-size React groups, so later chunks reconcile only the growing group; an unchanged fence retains that DOM when the final full parse resolves cross-document syntax. `TerminalBlock`, `ReadBlock`, `DiffBlock`, `SearchBlock`, and `WebBlock` render the matching tool-result intent with copy controls, overflow handling, and ANSI processing where applicable. `JsonTree` and `JsonBlock` inspect JSON values read-only, while `projectUserText` projects sent user text into inline plain runs and reference chips for the message bubble and queue rows.
+
 
 ### Localizing copy
 
@@ -63,7 +99,7 @@ The package is one separation: presentational React atoms with zero Cordis and z
 
 ### Streaming markdown
 
-While a reply streams, `MarkdownText` parses incrementally: all but the trailing two blocks freeze as cached React elements and only the source tail re-parses per chunk, so per-chunk work tracks the tail instead of the whole reply. A final unclosed top-level fence keeps its parsed code node and sends only the last completed line plus the current partial line through the same GFM grammar; a closing fence or ambiguous parse returns to the ordinary tail path. Highlighting likewise resumes from saved Shiki grammar state and publishes only newly completed lines plus the mutable tail. `CodeBlock` seals completed lines into fixed-size React groups, reuses earlier groups, and retains the whole highlighted tree across settlement when code and language are unchanged. The settled full parse still resolves references that crossed the freeze boundary ([incremental renderer](../../../.agents/notes/implemented/architecture/2026-08-06-web-markdown-incremental-ast-renderer.md), [streaming fence highlighting](../../../.agents/notes/implemented/feature/2026-08-20-web-streaming-fence-highlight.md)).
+While a reply streams, `MarkdownText` parses incrementally: all but the trailing two blocks freeze as cached React elements and only the source tail re-parses per chunk, so per-chunk work tracks the tail instead of the whole reply. A final unclosed top-level fence keeps its parsed code node and sends only the last completed line plus the current partial line through the same GFM grammar; a closing fence or ambiguous parse returns to the ordinary tail path. Highlighting likewise resumes from saved Shiki grammar state and publishes only newly completed lines plus the mutable tail. `CodeBlock` seals completed lines into fixed-size React groups, reuses earlier groups, and retains the whole highlighted tree across settlement when code and language are unchanged. The settled full parse still resolves references that crossed the freeze boundary.
 
 ### Geometry and overflow
 
@@ -106,7 +142,7 @@ These limits define how the atoms behave at the edges; they are current package 
 - **A long highlighted fence retains its complete token DOM** — streaming avoids re-parsing, re-tokenizing, and reconciling the completed prefix, but it does not discard old colors or virtualize token spans. Final DOM cardinality therefore still follows the fence's token count; nested/container fences and a pathological single long line remain on the general tail path.
 - **Glyph-level icons are redrawn approximations** — the fish logo and the sparkle mark come from font glyphs whose vector geometry is not exportable from the local design data; hand-authored recreations stand in until an exact export path exists.
 - **`Pill` and `Input` have no design source** — both atoms are self-defined; the sidebar search field and view-tab strip that resemble them are consumer-owned compositions, not these atoms.
-- **No `Active` `StateDot` variant** — the supported states are done, warning, ongoing, and error.
+- **No `Active` `StateDot` variant** — the supported states are done, warning, ongoing, error, and idle.
 - **User-facing copy is required at the render site** — the atoms are zero-Cordis and cannot reach `ctx.locale`; each feature must supply complete localized labels through the primitive's typed props ([decision](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md)).
 - **`TerminalBlock` is not a terminal emulator** — it renders settled or still-running command output, not an interactive session: SGR colors, carriage return, backspace, erase-in-line, tab stops, and character width are honored; absolute cursor positioning, screen clearing, and alternate-screen sequences are stripped.
 

@@ -72,6 +72,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-message-feedback/`](ui-message-feedback/README.md) | Contributes per-message feedback controls to the assistant-message action strip | — |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.md) | In-app directory browsing surface for the workspace directory flow | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.md) | Native directory-picker surface driving the host's OS chooser | — |
+| [`ui-open-in-app/`](ui-open-in-app/README.md) | Session-header split button opening the workspace directory in an installed application | — |
 
 -----
 

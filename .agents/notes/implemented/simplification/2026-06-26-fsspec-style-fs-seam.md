@@ -6,7 +6,7 @@ English | [中文](2026-06-26-fsspec-style-fs-seam.zh.md)
 
 ## Problem
 
-The filesystem capability from [filesystem-capability-seam](../architecture/2026-06-17-filesystem-capability-seam.md) currently makes one abstract `FileSystem` service own two different jobs:
+The filesystem capability from [filesystem-capability-seam](../../archived/architecture/2026-06-17-filesystem-capability-seam.md) currently makes one abstract `FileSystem` service own two different jobs:
 
 1. **Provider operations** — resolving targets, stat/version metadata, text reads/streams, atomic writes, and guarded literal edits.
 2. **Agent-facing policy** — line windows, literal edit semantics, and read-before-write/edit observed-state.
@@ -65,7 +65,7 @@ type FsWriteIntent =
 
 This is a *text-storage* seam, deliberately half a level above byte-level fsspec (`cat`/`open` hand back raw bytes). UTF-8 decoding, binary/NUL rejection, guarded full-file writes, and guarded literal text edits live in the provider so the policy layer never touches raw bytes, reimplements cross-chunk decoding, or separates stale checks from the mutation critical section. Model-facing concepts still stay out of the provider: no line windows, numbered lines, rendered footers, or observed-state store leak down.
 
-Deleted from `dsh-fs`: `readPage`, `FsExpectation`, `FsView`, `FsStateSource`, `FsReadRequest`, `FsTextLine`, line/window constants, `formatReadBody`, and the observed-state `WeakMap`. `applyEdit` is replaced by the narrower provider primitive `editText`, whose contract is version-guarded literal text mutation rather than policy-layer read authorization. The `FS_PARTIAL_OBSERVATION` code also leaves the `FsErrorCode` taxonomy: freshness authorization has no partial/full distinction, so nothing can raise it. `FsTargetKey` and `FsVersion` become branded opaque ids under the existing [branded-ids Agent Note](../architecture/2026-06-20-branded-ids.md).
+Deleted from `dsh-fs`: `readPage`, `FsExpectation`, `FsView`, `FsStateSource`, `FsReadRequest`, `FsTextLine`, line/window constants, `formatReadBody`, and the observed-state `WeakMap`. `applyEdit` is replaced by the narrower provider primitive `editText`, whose contract is version-guarded literal text mutation rather than policy-layer read authorization. The `FS_PARTIAL_OBSERVATION` code also leaves the `FsErrorCode` taxonomy: freshness authorization has no partial/full distinction, so nothing can raise it. `FsTargetKey` and `FsVersion` become branded opaque ids under the existing [branded-ids Agent Note](../../archived/architecture/2026-06-20-branded-ids.md).
 
 ## Policy Contract
 
@@ -99,7 +99,7 @@ Cross-process writes are best-effort freshness plus atomic replacement: `mtime:s
 
 ## Supersedes
 
-This Agent Note reverses two decisions from [filesystem-capability-seam](../architecture/2026-06-17-filesystem-capability-seam.md) and narrows a third:
+This Agent Note reverses two decisions from [filesystem-capability-seam](../../archived/architecture/2026-06-17-filesystem-capability-seam.md) and narrows a third:
 
 - Read-before-write/edit policy moves out of `ctx.fs` and into the `dsh-fs-observation-policy` plugin (on the `fs/*` event gate).
 - Text reads no longer return backend-numbered line records or `full`/`partial` views; authorization is based on version freshness, so a windowed read can authorize edit when the file is unchanged.

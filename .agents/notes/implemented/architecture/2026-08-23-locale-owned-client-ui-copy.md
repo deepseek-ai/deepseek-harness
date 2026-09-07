@@ -6,7 +6,7 @@ English | [中文](2026-08-23-locale-owned-client-ui-copy.zh.md)
 
 ## Problem
 
-Typed locale namespaces and bilingual dictionary parity proved that registered dictionaries were complete, but they could not prove that presentation code used them. JSX text, accessibility attributes, formatter returns, and zero-Cordis primitive defaults could bypass `t` while every locale check remained green. The deferred and supposedly language-neutral exceptions recorded in the [initial full-rollout decision](2026-07-30-client-locale-full-rollout.md) accumulated into a mixed-language UI, especially in trajectory inspection and generic Tool cards.
+Typed locale namespaces and bilingual dictionary parity proved that registered dictionaries were complete, but they could not prove that presentation code used them. JSX text, accessibility attributes, formatter returns, and zero-Cordis primitive defaults could bypass `t` while every locale check remained green. The deferred and supposedly language-neutral exceptions recorded in the [initial full-rollout decision](../../archived/architecture/2026-07-30-client-locale-full-rollout.md) accumulated into a mixed-language UI, especially in trajectory inspection and generic Tool cards.
 
 ## Decision
 
@@ -18,7 +18,7 @@ Typed locale namespaces and bilingual dictionary parity proved that registered d
 
 **`verify-client-ui-i18n` enforces source ownership.** The TypeScript-AST check discovers every package `src/client` tree that contains TSX, all helper TS files under `packages/client/ui-*`, and the web app source. It rejects natural-language JSX text, copy-bearing attributes and component props, literal JSX branches, label/copy data, named copy helpers, string-returning display formatters, and destructuring defaults. Locale dictionary owners and immutable language tokens are the narrow syntactic exclusions. Discovery refuses a narrowed corpus, unit fixtures pin admitted and excluded forms, and the check runs in the static CI and `hygiene` graphs. Dictionary-key parity remains a separate check: one gate proves copy enters the locale path, while the other proves both shipped languages implement that path.
 
-The product-authored error and design-literal exclusions, primitive defaults, and trajectory deferral in the [initial rollout](2026-07-30-client-locale-full-rollout.md) are superseded by this decision. Its label-thunk, typed-seat, browser-locale, date-formatting, and search-placeholder decisions remain active.
+The product-authored error and design-literal exclusions, primitive defaults, and trajectory deferral in the [initial rollout](../../archived/architecture/2026-07-30-client-locale-full-rollout.md) are superseded by this decision. Its label-thunk, typed-seat, browser-locale, date-formatting, and search-placeholder decisions remain active.
 
 ## Verification
 

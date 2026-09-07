@@ -1,0 +1,17 @@
+- name: '@deepseek-ai/dsh-session'
+- name: '@deepseek-ai/dsh-system-prompt'
+- name: '@deepseek-ai/dsh-tools'
+- name: '@deepseek-ai/dsh-fs-local'
+- name: '@deepseek-ai/dsh-tool-fs'
+- name: '@deepseek-ai/dsh-session-query-sqlite'
+  config:
+    path: ':memory:'
+    openAt: never
+- name: '@deepseek-ai/dsh-session-reference'
+  config:
+    maxReferenceBytes: 360
+- name: './source-session.ts'
+- name: '@deepseek-ai/dsh-spill-local'
+  config:
+    root: '{{spillRoot}}'
+    cleanupPeriodDays: 0

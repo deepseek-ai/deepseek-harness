@@ -128,7 +128,6 @@ The library is built on one separation: it owns the mechanical question of what 
 
 Read these pages when you need the consumers or the boundary decision behind the library.
 
-- [Tool-result retention library Agent Note](../../../.agents/notes/implemented/architecture/2026-07-06-tool-result-retention-library.md) — the boundary the library draws around tool semantics.
 - [Spill policy](../../spill/spill-policy/README.md) — composes `TextRetainer` for a bounded preview around a spill-file notice.
 - [Spill subsystem](../../../docs/subsystems/spill.md) — the spill vocabulary this library's preview mechanics serve.
 - [File search tool](../../fs/tool-fs-search/README.md) — an `ItemRetainer` consumer collecting full results for spill.

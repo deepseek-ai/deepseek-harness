@@ -16,7 +16,7 @@ Status: implemented
 
 「落地堆叠」通过 `gh stack merge <stack-number> --yes --merge` 合并整个官方堆叠。部分落地需要明确指定边界 PR，并合并从底部到该 PR 的前缀。工作流绝不回退到逐个执行 `gh pr merge` 和手动调整 base。原生直接合并要么全部成功，要么全部不合并；合并队列可能分组处理所选 PR，因此只有每个所选 PR 都分别达到 `MERGED`，落地才算完成。
 
-merge-forward 和 rebase 都可以作为独立 PR 与官方堆叠 PR 的历史刷新方式，包括评审后。改写远端历史时，必须使用精确 lease 或受 lease 保护的 `gh stack` 推送路径；如果远端已经发生变化，操作必须中止。禁止直接使用 `--force`。[增量更新 base 的决策](2026-07-26-incremental-pr-base-retargeting.zh.md)仍负责 merge-forward 选项。
+merge-forward 和 rebase 都可以作为独立 PR 与官方堆叠 PR 的历史刷新方式，包括评审后。改写远端历史时，必须使用精确 lease 或受 lease 保护的 `gh stack` 推送路径；如果远端已经发生变化，操作必须中止。禁止直接使用 `--force`。[增量更新 base 的决策](../../archived/process/2026-07-26-incremental-pr-base-retargeting.md)仍负责 merge-forward 选项。
 
 相关检查通常在发布前运行。`gh stack sync` 是明确的例外，因为它在一次操作中完成获取、级联 rebase 和推送：随后立即验证每个已改写的层；这些验证通过前，不得合并任何受影响的 PR。每次改写推送后，都要重新审计当前 head、未解决的评审线程、批准状态、可合并性和检查结果，因为先前的 commit OID 和内联锚点可能已经过时。
 

@@ -118,6 +118,9 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'subagent-continuable': {
+    environment: { DSH_SNAPSHOT_HUMAN_STEER: '1' },
+  },
   'subagent-dsh-sdk-diagnostic': {
     environment: { DSH_TEST_CHILD_PATCH: dshSdkDiagnosticChildPatch },
   },
@@ -336,11 +339,17 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
   const events = notifications
     .filter(n => n.method === 'session.event')
     .map(n => n.params.event as Record<string, unknown>)
+  const typedFeedback = events.some(event => event.type === 'feedback/message-put')
+  const eventLog = events.map(event => JSON.stringify(event)).join('\n') + '\n'
+  const typedLog = typedFeedback
+    ? redactSessionSnapshotIds([JSON.stringify({ type: 'session', id: ctx.sessionIds[0] }) + '\n' + eventLog])[0]!.split('\n').slice(1).join('\n')
+    : eventLog
   const normalizedEvents = events.length === 0
     ? []
     : scrubRequestHeaders(normalizeSessionLog(
-      normalizeSessionFormatProvenance(`${events.map(event => JSON.stringify(event)).join('\n')}\n`),
+      normalizeSessionFormatProvenance(typedLog),
       ctx,
+      typedFeedback ? { identityMode: 'preserve' } : {},
     )).trimEnd().split('\n').map(line => JSON.parse(line) as Record<string, unknown>)
   let eventIndex = 0
   const records = notifications.map((notification) => {
@@ -348,7 +357,11 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
     const event = normalizedEvents[eventIndex++]
     return { method: notification.method, params: { ...notification.params, event } }
   })
-  return normalizeStdout(`${records.map(record => JSON.stringify(record)).join('\n')}\n`, ctx)
+  let output = records.map(record => JSON.stringify(record)).join('\n') + '\n'
+  if (typedFeedback) {
+    for (const [index, id] of ctx.sessionIds.entries()) output = output.replaceAll(id, '{{session:' + (index + 1) + '}}')
+  }
+  return normalizeStdout(output, ctx, typedFeedback ? { identityMode: 'preserve' } : {})
 }
 
 /** Normalize the owned-run projection. */
@@ -597,6 +610,12 @@ async function runScenario(scenario: CorpusScenario): Promise<{
           },
         })
         results.push(result)
+        if (scenario.manifest.environment?.DSH_SNAPSHOT_FEEDBACK === '1') {
+          const feedback = result.events.filter(event => event.type.startsWith('feedback/'))
+          expect(feedback.map(event => event.type)).toEqual([
+            'feedback/record', 'feedback/message-put', 'feedback/message-put', 'feedback/message-delete',
+          ])
+        }
         await waitForRootEvent(
           subscription,
           sessionId,

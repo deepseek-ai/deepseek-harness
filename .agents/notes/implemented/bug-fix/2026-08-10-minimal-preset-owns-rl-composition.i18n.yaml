@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-10-minimal-preset-owns-rl-composition.md
-2026-08-10-minimal-preset-owns-rl-composition.md: 4c296ed4af5df7a48bdfba6ff1972321cc2e54cf
-2026-08-10-minimal-preset-owns-rl-composition.zh.md: 545f0a32fe9c7726d6fc910d0598174e7d7a3ec1

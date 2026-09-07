@@ -94,13 +94,11 @@ The `sandbox:policy` contribution states the mode's capability-neutral file-effe
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Start with the subsystem reference for the shared vocabulary, then the seam contract, the cross-family decision, and the model-context decision.
+Start with the subsystem reference for the shared vocabulary, then the seam contract and the cross-family decision.
 
 - [Process sandbox subsystem](../../../docs/subsystems/sandbox.md) — modes, per-call policy, and enforcement semantics.
 - [Sandbox seam package](../sandbox/README.md) — the confinement contract every enforcing capability implements.
 - [Cross-family file sandbox decision](../../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.md) — why one shared policy home exists.
-- [Current sandbox policy context decision](../../../.agents/notes/implemented/feature/2026-07-30-current-sandbox-policy-context.md) — how the policy reaches the model before each request.
-- [Capability-neutral policy context decision](../../../.agents/notes/implemented/simplification/2026-07-31-capability-neutral-sandbox-policy-context.md) — why the contribution names no mounted capabilities.
 
 -----
 

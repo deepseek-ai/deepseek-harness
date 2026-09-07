@@ -16,7 +16,7 @@ Status: implemented
 
 底层 SDK 协议在入队成功后立即以 `{ messageId }` 响应 `session/prompt`。它通过 `session.event` 流式传输持久事实，通过 `session.status` 发布整个 agent 的状态转换，且不包含 `session.finished`。底层客户端可以观察该回执和之后的 idle，但不会收到提示词结果。
 
-只有明确拥有一个活动区间时，高层自动化 API 才返回 `RunResult`。TypeScript 和 Python SDK 的 `run()` 方法从已提交消息的持久 inbox 回执开始收集，直至整个 agent 下一次进入 `idle`；其最终响应是该区间内最后一条已提交的 assistant 消息，而不是按因果关系归属于已提交提示词的响应。Python SDK 还把根会话最后一个轮次的结束原因 kind 作为运行级 [`finish_reason`](../bug-fix/2026-08-11-owned-run-finish-reason.zh.md) 返回，但不会将其归因于已提交的提示词。单次 CLI（命令行界面）拥有相应的 idle 到 idle 区间。隔离的子 agent 运行可以报告结果，因为调用方拥有完整的子级生命周期，任何 steering 都属于该运行。
+只有明确拥有一个活动区间时，高层自动化 API 才返回 `RunResult`。TypeScript 和 Python SDK 的 `run()` 方法从已提交消息的持久 inbox 回执开始收集，直至整个 agent 下一次进入 `idle`；其最终响应是该区间内最后一条已提交的 assistant 消息，而不是按因果关系归属于已提交提示词的响应。Python SDK 还把根会话最后一个轮次的结束原因 kind 作为运行级 [`finish_reason`](../../archived/bug-fix/2026-08-11-owned-run-finish-reason.md) 返回，但不会将其归因于已提交的提示词。单次 CLI（命令行界面）拥有相应的 idle 到 idle 区间。隔离的子 agent 运行可以报告结果，因为调用方拥有完整的子级生命周期，任何 steering 都属于该运行。
 
 ACP（Agent Client Protocol）必须返回协议规定的 `stopReason`。其桥接层对每个 ACP 会话中的提示词进行串行处理，并拥有从准入到整个 Agent idle 和有序更新交付的区间。它会关联准入该已识别 ACP 消息的轮次，但不会声称区间内所有活动都只由该消息引起。关联的 token 上限结尾映射为标准 `max_tokens`；关联模型错误在同一个完全停稳边界拒绝；无轮次 slot 与显式 ACP 取消或 dispose 一样以 `cancelled` 结算。其他正常完全停稳报告 `end_turn`。
 

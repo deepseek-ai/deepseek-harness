@@ -10,7 +10,7 @@ The Node 22 branch of the root `engines.node` range is a contract for the instal
 
 ## Decision
 
-Set `engines.node` to `^22.19.0 || >=24.0.0` and test keyless CI on `['22.19', 24, 26]`. The primary Node 24 jobs own the complete typecheck and unit coverage inventory; every version runs focused source-worker, Zstandard, source-launch, and [jsdom storage](../testing/2026-07-30-vitest-jsdom-webstorage-ownership.md) smokes without repeating that inventory. The real-API e2e workflow stays on Node 24 because it exercises API integration rather than the runtime floor.
+Set `engines.node` to `^22.19.0 || >=24.0.0` and test keyless CI on `['22.19', 24, 26]`. The primary Node 24 jobs own the complete typecheck and unit coverage inventory; every version runs focused source-worker, Zstandard, source-launch, and [jsdom storage](../../archived/testing/2026-07-30-vitest-jsdom-webstorage-ownership.md) smokes without repeating that inventory. The real-API e2e workflow stays on Node 24 because it exercises API integration rather than the runtime floor.
 
 Two Node features gate the source runtime:
 

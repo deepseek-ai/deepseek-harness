@@ -73,7 +73,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-- **`dsh-tool-bash` 的刻意孪生。** 前台与后台执行、受管环境、沙箱升权面以及标记／截断渲染都逐调用镜像 bash 工具，因此其中之一的消费方也能接受另一个的协议形状（[pwsh 工具与执行器 Agent Note](../../../.agents/notes/implemented/feature/2026-08-01-pwsh-tool-and-executor.zh.md)）。
+- **`dsh-tool-bash` 的刻意孪生。** 前台与后台执行、受管环境、沙箱升权面以及标记／截断渲染都逐调用镜像 bash 工具，因此其中之一的消费方也能接受另一个的协议形状（[pwsh 工具与 bash 对齐 Agent Note](../../../.agents/notes/implemented/feature/2026-08-02-pwsh-tool-bash-parity.zh.md)）。
 - **PowerShell 方言约定。** 工具约定是 PowerShell：原生路径与 `$env:` 变量，经由 `pwsh -Command` 执行，没有中间 shell。
 - **Windows 沙箱事实写进描述。** ConstrainedLanguage 与命名管道约定是 Windows 受限令牌行为；教授它们的条件是「已挂载任意约束执行器」，之所以安全，是因为每个已发布的配对都是 win32-only。
 - **非零退出只报告、不失败。** 只有基础设施故障（spawn 错误、中止）才会作为工具错误暴露，与 bash 的故事一致。
@@ -104,7 +104,7 @@ renderer 共享 bash 工具的结构与来自 `dsh-shell` 的 `parseExitStatus` 
 - [Bash 执行器子系统](../../../docs/subsystems/shell.zh.md)——请求／spec 词汇、结果与后台进程。
 - [shell-env](../shell-env/README.zh.md)——每次调用都会收到的受管 `DSH_*` 环境。
 - [tool-jobs](../../jobs/tool-jobs/README.zh.md)——后台运行的 `job_output`、`job_list` 与 `job_kill` 控制。
-- [pwsh 工具与执行器 Agent Note](../../../.agents/notes/implemented/feature/2026-08-01-pwsh-tool-and-executor.zh.md)——为什么工具镜像 bash 工具，以及 Windows 沙箱如何门控其描述。
+- [pwsh 工具与 bash 对齐 Agent Note](../../../.agents/notes/implemented/feature/2026-08-02-pwsh-tool-bash-parity.zh.md)——为什么工具镜像 bash 工具。
 - [Windows ACL 受限令牌沙箱 Agent Note](../../../.agents/notes/implemented/feature/2026-08-08-windows-acl-restricted-token-sandbox.zh.md)——语言模式与命名管道约定。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-pwsh)——`pwsh` 参数 schema 的确切内容。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-pwsh)——每个受支持配置字段及其源声明。

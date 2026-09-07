@@ -98,7 +98,7 @@ export interface ISession {
     attachmentId: AttachmentIdType,
   ): Promise<RemoteResult<{ attachment: ImageAttachmentRef; data: Uint8Array }>>
   /**
-   * Apply one edit, remove, or strict steer action to a still-pending queue occurrence.
+   * Apply one edit, remove, or Steer action to a still-pending queue occurrence.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
    * @returns acceptance, or a business/transport error.

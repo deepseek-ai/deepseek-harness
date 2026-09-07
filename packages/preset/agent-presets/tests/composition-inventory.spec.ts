@@ -55,7 +55,7 @@ async function harness(roster: Config): Promise<Context> {
   ctx.loader.builtins.include = Include
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(SessionProjectionRegistry)
@@ -377,7 +377,7 @@ describe('AgentPresets.compositionInventory', () => {
     ctx.loader.builtins['agent-presets'] = AgentPresets
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
-    await ctx.plugin(SystemPrompt, { persona: '' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionProjectionRegistry)

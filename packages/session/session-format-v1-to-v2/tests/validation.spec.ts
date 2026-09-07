@@ -8,10 +8,10 @@ import type {
 } from '@deepseek-ai/dsh-session-format'
 import {
   RELEASED_V2_EVENT_TYPES,
-  assertReleasedV2Artifact,
   assertReleasedV2Header,
   restoreReleasedV2Artifact,
 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
+import { assertReleasedV2Artifact } from '../src/testing/validation.ts'
 
 const textBlock = { type: 'text', text: 'hello' } as const
 const usage = { inputTokens: 3, outputTokens: 2 } as const
@@ -208,6 +208,22 @@ describe('released v2 event envelopes and payloads', () => {
     expect(() => { assertReleasedV2Artifact(value) }).toThrow(message)
   })
 
+  it.each([
+    ['inherited count beyond events', artifact([], { inheritedEventCount: 1 }), /exceeds its events/],
+    ['unseeded inherited count', artifact([
+      event('feedback/record', 0, { text: 'x' }),
+    ], { inheritedEventCount: 1 }), /unseeded.*inherited events/],
+    ['non-string type', artifact([
+      { type: 1, seq: 0, time: 1, data: {} } as unknown as SessionFormatEvent,
+    ]), /type must be a string/],
+    ['non-dense seq', artifact([event('feedback/record', 1, { text: 'x' })]), /not dense/],
+    ['false ignorable marker', artifact([
+      event('feedback/record', 0, { text: 'x' }, { ignorable: false }),
+    ]), /ignorable must be true/],
+  ])('rejects production artifact drift before payload restoration: %s', (_name, value, message) => {
+    expect(() => { restoreReleasedV2Artifact(value, new Set(RELEASED_V2_EVENT_TYPES)) }).toThrow(message)
+  })
+
   it('validates present and absent opaque payload members before relationship checks', () => {
     for (const includeMeta of [false, true]) {
       const value = artifact([
@@ -296,6 +312,16 @@ describe('released v2 seed and surface relationships', () => {
     ['invalid inherited tag', artifact([event('session/end-seed', 0, { inherited: false })]), /inherited must be true/],
   ])('rejects seed lineage disagreement: %s', (_name, value, message) => {
     expect(() => { assertReleasedV2Artifact(value) }).toThrow(message)
+  })
+
+  it('rejects production seed lineage disagreement', () => {
+    const known = new Set(RELEASED_V2_EVENT_TYPES)
+    expect(() => { restoreReleasedV2Artifact(artifact([], {
+      header: { version: 2, id: 'seeded', createdAt: 1, isSeeded: true, delegationDepth: 0 },
+    }), known) }).toThrow(/seeded header disagrees/)
+    expect(() => { restoreReleasedV2Artifact(artifact([
+      event('session/end-seed', 0, { inherited: true }),
+    ]), known) }).toThrow(/unseeded.*inherited end-seed/)
   })
 
   it('accepts append and exact replacement surface operations', () => {

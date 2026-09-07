@@ -8,9 +8,6 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import Storage from '@deepseek-ai/dsh-storage'
-import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import MessageFeedbackService from '../src/index.ts'
 import { appendMessageFixture } from './helpers.ts'
@@ -32,9 +29,6 @@ async function loadComposition(configPath: string): Promise<Context> {
   const modules = new Map<string, unknown>([
     ['@deepseek-ai/dsh-session', SessionStore],
     ['@deepseek-ai/dsh-session-persistence-jsonl', JsonlSessionPersistence],
-    ['@deepseek-ai/dsh-storage', Storage],
-    ['@deepseek-ai/dsh-storage-json', StorageJson],
-    ['@deepseek-ai/dsh-storage-domain', StorageDomain],
     ['@deepseek-ai/dsh-message-feedback', MessageFeedbackService],
   ])
   ctx.loader.internal = {
@@ -57,7 +51,7 @@ async function loadComposition(configPath: string): Promise<Context> {
 }
 
 describe('message feedback through a real Loader composition', () => {
-  it('persists a checkpointed target and its sidecar across a cold restart', async () => {
+  it('persists canonical feedback across live and cold operations', async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-message-feedback-loader-'))
     const configPath = join(root, 'cordis.yml')
     await writeFile(configPath, [
@@ -66,13 +60,6 @@ describe('message feedback through a real Loader composition', () => {
       '  config:',
       `    root: ${JSON.stringify(join(root, 'sessions'))}`,
       '    compression: none',
-      "- name: '@deepseek-ai/dsh-storage'",
-      "- name: '@deepseek-ai/dsh-storage-json'",
-      '  config:',
-      `    root: ${JSON.stringify(join(root, 'storage'))}`,
-      "- name: '@deepseek-ai/dsh-storage-domain'",
-      '  config:',
-      '    backend: json',
       "- name: '@deepseek-ai/dsh-message-feedback'",
       '  config:',
       '    maxNoteBytes: 32',
@@ -83,6 +70,19 @@ describe('message feedback through a real Loader composition', () => {
     expect(first.messageFeedback.typertRemote.namespace).toBe('messageFeedback')
     expect(remoteMethods(first.messageFeedback).map(marker => marker.method))
       .toEqual(['list', 'put', 'delete'])
+
+    const unowned = first.sessions.create(SessionId('unowned-feedback'))
+    const unownedFixture = appendMessageFixture(unowned)
+    const unownedRequest = {
+      sessionId: unowned.id, messageId: unownedFixture.assistantMessageIds[0], rating: 'positive' as const, ifVersion: null,
+    }
+    // A mounted JSONL listener alone does not persist Sessions without a write handle.
+    await expect(first.messageFeedback.put(unownedRequest)).rejects.toThrow(/not found/u)
+    expect(await first.sessionPersistence.stat(unowned.id)).toBeUndefined()
+    const unownedItems = await first.messageFeedback.list({ sessionId: unowned.id })
+    if (!unownedItems.ok) throw new Error(unownedItems.error.code)
+    await expect(first.messageFeedback.put({ ...unownedRequest, ifVersion: unownedItems.value.items[0]!.version }))
+      .rejects.toThrow(/not found/u)
 
     const session = first.sessions.create(SessionId('loader-feedback'), {
       meta: { cwd: root },
@@ -100,7 +100,7 @@ describe('message feedback through a real Loader composition', () => {
     })
     if (!put.ok) throw new Error(`expected put success, got ${put.error.code}`)
     const readHandle = await first.sessionPersistence.open(session.id, 'read')
-    const durableEvents = await readHandle.read()
+    const { events: durableEvents } = await readHandle.read()
     await readHandle.close()
     expect(durableEvents.some(event =>
       event.type === 'assistant/message'
@@ -115,6 +115,23 @@ describe('message feedback through a real Loader composition', () => {
       ok: true,
       value: { items: [put.value] },
     })
+    const edited = await second.messageFeedback.put({
+      sessionId: session.id,
+      messageId: fixture.assistantMessageIds[0],
+      rating: 'negative',
+      note: 'cold edit',
+      ifVersion: put.value.version,
+    })
+    if (!edited.ok) throw new Error(edited.error.code)
+    await second.messageFeedback.delete({ sessionId: session.id, messageId: edited.value.messageId, ifVersion: edited.value.version })
+    const coldHandle = await second.sessionPersistence.open(session.id, 'read')
+    try {
+      const { events: coldEvents } = await coldHandle.read()
+      expect(coldEvents.slice(0, durableEvents.length)).toEqual(durableEvents)
+      expect(coldEvents.slice(durableEvents.length).map(event => event.type)).toEqual(['feedback/message-put', 'feedback/message-delete'])
+    } finally {
+      await coldHandle.close()
+    }
     expect(second.sessions.get(session.id)).toBeUndefined()
   })
 })

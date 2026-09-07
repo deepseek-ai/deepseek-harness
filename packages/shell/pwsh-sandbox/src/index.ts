@@ -3,12 +3,12 @@
  * `@deepseek-ai/dsh-bash-sandbox`. It wraps the exact local pwsh argv through
  * `ctx.sandbox` (which on Windows resolves to the ACL restricted-token runner
  * chain), inherits local process mechanics, and reports the selected mode,
- * enforcement, and denial facts. Positive runner-launch evidence means the
- * command never ran: foreground calls throw `SANDBOX_UNAVAILABLE`, while
- * background processes carry `runnerFailed`; other spawn rejections retain
- * local-executor semantics. The tool layer owns the escalation approval flow
- * through `ctx.approval`; this executor reports the sandbox facts the tool
- * renders.
+ * enforcement, and denial facts. Positive runner-executable evidence
+ * identifies a broken confinement runner: foreground calls throw
+ * `SANDBOX_UNAVAILABLE`, while background processes carry `runnerFailed`;
+ * other provider rejections retain stage-neutral local-executor semantics. The
+ * tool layer owns the escalation approval flow through `ctx.approval`; this
+ * executor reports the sandbox facts the tool renders.
  * @module @deepseek-ai/dsh-pwsh-sandbox
  */
 
@@ -153,14 +153,15 @@ export class SandboxPwshExecutor extends PwshLocalExecutor {
    * Stamp per-process sandbox facts before `done` settles. Full-access
    * processes have no facts; signal deaths are not denials.
    */
-  protected override onProcessDone(proc: ShellProcess, stderr: string, spawnFailed: boolean, spawnError?: unknown): void {
+  protected override onProcessDone(proc: ShellProcess, stderr: string, providerRejected: boolean, providerError?: unknown): void {
     const facts = this.processFacts.get(proc)
     if (facts !== undefined) {
       this.processFacts.delete(proc)
-      // A rejected spawn never started the confined launch. Otherwise runner
-      // failure outranks denial because its diagnostics may contain denial terms.
-      const runnerFailed = spawnFailed
-        ? isRunnerSpawnFailure(spawnError, facts.runnerProgram, facts.workdir)
+      // A provider rejection exposes no public failure stage. Attribute it to
+      // the confinement runner only when the error independently names argv[0].
+      // Otherwise settled runner failure outranks denial-like diagnostics.
+      const runnerFailed = providerRejected
+        ? isRunnerSpawnFailure(providerError, facts.runnerProgram, facts.workdir)
         : classifyRunnerFailure(proc.exitCode, stderr, facts.runnerFailureRules) !== undefined
       proc.sandbox = {
         mode: facts.mode,
@@ -169,7 +170,7 @@ export class SandboxPwshExecutor extends PwshLocalExecutor {
         ...(runnerFailed ? { runnerFailed } : {}),
       }
     }
-    super.onProcessDone(proc, stderr, spawnFailed, spawnError)
+    super.onProcessDone(proc, stderr, providerRejected, providerError)
   }
 
   /**

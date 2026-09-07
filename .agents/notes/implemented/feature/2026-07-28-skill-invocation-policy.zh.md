@@ -29,7 +29,7 @@ skill 注册表最初将发现操作视为模型目录：`ctx.skills.list()` 会
 | `{ modelInvocable: false, userInvocable: true }` | 排除 | 包含 |
 | `{ modelInvocable: false, userInvocable: false }` | 排除 | 排除 |
 
-该决策扩展了 [skill 系统](2026-07-05-skill-system.zh.md)，并取代[已归档的 TUI skill 斜杠命令](../../archived/feature/2026-07-21-tui-skill-slash-command.md)中记录的调用策略限制。
+该决策扩展了 [skill 系统](../../archived/feature/2026-07-05-skill-system.md)，并取代[已归档的 TUI skill 斜杠命令](../../archived/feature/2026-07-21-tui-skill-slash-command.md)中记录的调用策略限制。
 
 ## 曾考虑的替代方案
 

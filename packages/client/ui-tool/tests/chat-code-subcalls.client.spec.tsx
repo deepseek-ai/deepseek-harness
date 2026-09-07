@@ -157,6 +157,13 @@ describe('run_code sub-calls through the real chat machinery', () => {
     expect(view.getByText('Bash')).toBeTruthy()
     expect(view.getByText('List notes')).toBeTruthy()
     expect(view.getByText('Tool call')).toBeTruthy()
+
+    const bashRow = nest!.querySelector('[data-sample="bash"]')!
+    expect(bashRow.getAttribute('role')).toBe('button')
+    fireEvent.click(bashRow)
+    expect(nest!.querySelector('[data-terminal]')).not.toBeNull()
+    expect(view.getByText('ls notes')).toBeTruthy()
+    expect(nest!.querySelector('[data-terminal]')!.textContent).toContain('demo.txt')
   })
 
   it('renders Cordis sub-calls with lifecycle titles over the generic variants', async () => {

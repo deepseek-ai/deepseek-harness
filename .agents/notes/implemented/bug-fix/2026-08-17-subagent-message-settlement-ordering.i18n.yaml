@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-17-subagent-message-settlement-ordering.md
-2026-08-17-subagent-message-settlement-ordering.md: cdc996643c84c5f50a3bd1836e82645660dc8c57
-2026-08-17-subagent-message-settlement-ordering.zh.md: 1143da1560e4969dcc4f6a0c6d5ca18060b56191
+2026-08-17-subagent-message-settlement-ordering.md: 7462a670766664745e46204dcb01e578b4f86219
+2026-08-17-subagent-message-settlement-ordering.zh.md: bba8fe0e7c543982176def4dbcc6f94dda204339

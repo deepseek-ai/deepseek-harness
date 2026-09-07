@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-08-13-python-minimal-model-visible-snapshot.md
-2026-08-13-python-minimal-model-visible-snapshot.md: 1cef57c440ddd2209628016ab550174b448587bc
-2026-08-13-python-minimal-model-visible-snapshot.zh.md: fbbb3bd6f4c3edadb61a02eebbae3dfaa97cb8e7

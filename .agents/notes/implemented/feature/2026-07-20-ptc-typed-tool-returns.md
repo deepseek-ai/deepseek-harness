@@ -75,7 +75,7 @@ Temporary Cordis Plugins follow the same rule: `cordis_mount` returns `{ id, plu
 
 Nested dispatch logs the sub-call's full rendered `content`/`isError` on `tool/code-dispatch` but does not persist canonical values. `tool/result` continues to persist only rendered content, error, and optional metadata. A successful final content sequence containing an image is also wrapped in a source-attributed user message and deferred through the outer result; the normal session event makes that model-visible input reconstructable. This feature did not itself require a structural Session-format change; the released v0-to-v1 identity edge preserves these records, and replay still cannot recreate intermediate canonical program values.
 
-The opaque `exec.parent` token marks nested calls. Presentation metadata and generic or tool-owned spill projections skip those calls because they have no direct result card and their canonical values never enter context. The outer `run_code` call alone produces one card and may spill its final post-policy presentation; `run_code` intentionally declares neither a result presenter nor presentation metadata, so UI adapters complete the card through their generic raw-content fallback using durable `tool/result.content`.
+The opaque `exec.parent` token marks nested calls. Presentation metadata and generic or tool-owned spill projections skip those calls; their canonical values never enter context. The Client can derive [nested terminal cards](../bug-fix/2026-09-05-nested-terminal-cards.md) from raw dispatch events without metadata. The outer `run_code` call produces the model-facing result and may spill its final post-policy presentation; `run_code` intentionally declares neither a result presenter nor presentation metadata, so UI adapters complete the card through their generic raw-content fallback using durable `tool/result.content`.
 
 ## Testing
 
@@ -112,5 +112,5 @@ The worker performs bounded-depth flat-wire transport and lossless validation bu
 - The 64 MiB hard cap applies only to the outer variable payloads, excluding fixed result-envelope syntax and presentation whitespace; spill cannot recover bytes rejected beyond that cap.
 - Provider or executor acquisition limits may already have discarded source data before a canonical value reaches PTC mode.
 - Unsupported MCP output schemas fall back to `JsonValue`; admitted MCP images use the generic deferred projection, while audio and embedded-resource payloads remain diagnostic-only.
-- There is one result card per outer `run_code`, never per nested call.
+- Nested calls have no separate model-facing result; Client child cards do not add model context.
 - Code failures expose `ToolCallError` message and tool name only, without a programmatic error-code union.

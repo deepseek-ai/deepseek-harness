@@ -52,7 +52,7 @@ function writeAged(path: string, content: string, ageDays: number): void {
 function request(overrides: Partial<SaveTextSpill> = {}): SaveTextSpill {
   return {
     owner: { sessionId: SessionId('sess-1') },
-    source: { toolName: 'web_fetch', callId: ToolCallId('call-1'), label: 'result' },
+    source: { kind: 'tool', toolName: 'web_fetch', callId: ToolCallId('call-1'), label: 'result' },
     suggestedName: 'web_fetch.txt',
     content: 'the full body',
     ...overrides,

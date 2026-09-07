@@ -4,8 +4,8 @@ import {
   SessionFormatUnsupportedMigrationError,
   sessionFormatCount,
   sessionFormatSafeInteger,
-  snapshotSessionFormatJson,
 } from '@deepseek-ai/dsh-session-format'
+import { isJsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
   SessionFormatArtifact,
   SessionFormatEvent,
@@ -14,7 +14,6 @@ import type {
 } from '@deepseek-ai/dsh-session-format'
 import { RELEASED_V0_EVENT_DISPOSITIONS } from './dispositions.ts'
 import { assertReleasedPayloadSemantics } from './payload-validation.ts'
-import { assertReleasedArtifactRelationships } from './relationships.ts'
 import { assertReleasedV0Keys, releasedV0Record } from './validation-helpers.ts'
 
 const HEADER_REQUIRED = ['version', 'id', 'createdAt', 'isSeeded', 'delegationDepth'] as const
@@ -23,8 +22,15 @@ const EVENT_REQUIRED = ['type', 'seq', 'time', 'data'] as const
 const SURFACE_EVENT_TYPES = new Set(['user/message', 'assistant/message', 'tool/result'])
 const SURFACE_OPTIONAL = ['ignorable', 'sourceEventSeqs', 'surfaceOp'] as const
 const LOG_OPTIONAL = ['ignorable'] as const
-const LEGACY_SOURCE_TYPES = new Set(['steering/message', 'request/header-delta', 'mode/set'])
-const RELEASED_V0_EVENT_TYPE_SET: ReadonlySet<string> = new Set(Object.keys(RELEASED_V0_EVENT_DISPOSITIONS))
+const LEGACY_SOURCE_TYPES = new Set([
+  'steering/message',
+  'request/header-delta',
+  'mode/set',
+  'compact/start',
+  'compact/summary',
+  'compact/end',
+  'compact/prune',
+])
 
 /**
  * Validate the logical header shared by released v0 and v1.
@@ -63,39 +69,6 @@ export function assertReleasedV1Header(header: SessionFormatHeader): void {
 }
 
 /**
- * Validate v0 before historical normalizers run.
- * @param artifact - decoded released-v0 source.
- */
-export function assertReleasedV0SourceArtifact(artifact: SessionFormatArtifact): void {
-  assertReleasedSessionFormatHeader(artifact.header, 0)
-  assertArtifactCoordinates(artifact, true, RELEASED_V0_EVENT_TYPE_SET)
-}
-
-/**
- * Validate normalized v0 events before the identity header version changes.
- * @param artifact - normalized released-v0 artifact.
- */
-export function assertNormalizedReleasedV0Artifact(artifact: SessionFormatArtifact): void {
-  assertReleasedSessionFormatHeader(artifact.header, 0)
-  assertArtifactCoordinates(artifact, false, RELEASED_V0_EVENT_TYPE_SET)
-  for (const event of artifact.events) assertReleasedEventPayload(event, 0)
-  assertReleasedArtifactRelationships(artifact)
-}
-
-/**
- * Validate the exact logical image emitted by the released v1 writer.
- * @param artifact - decoded or migration-produced v1 artifact.
- */
-export function assertReleasedV1Artifact(artifact: SessionFormatArtifact): void {
-  assertReleasedV1Header(artifact.header)
-  assertArtifactCoordinates(artifact, false, RELEASED_V0_EVENT_TYPE_SET)
-  for (const event of artifact.events) {
-    if (RELEASED_V0_EVENT_DISPOSITIONS[event.type] !== undefined) assertReleasedEventPayload(event, 1)
-  }
-  assertReleasedArtifactRelationships(artifact)
-}
-
-/**
  * Restore v1 against the installed build's ordinary event vocabulary without freezing payload additions.
  * @param artifact - vocabulary-neutral released-v1 physical decode.
  * @param knownEventTypes - event types understood by the installed current Session package.
@@ -106,24 +79,24 @@ export function restoreReleasedV1Artifact(
   knownEventTypes: ReadonlySet<string>,
 ): SessionFormatArtifact {
   assertReleasedV1Header(artifact.header)
-  assertArtifactCoordinates(artifact, false, knownEventTypes)
+  assertReleasedArtifactCoordinates(artifact, false, knownEventTypes)
   return artifact
 }
 
 /**
- * Validate released-v1 physical layout without interpreting event vocabulary.
- * @param artifact - physical-codec output.
+ * Validate released-v0/v1 artifact coordinates under an explicit vocabulary policy.
+ * @param artifact - logical artifact to validate.
+ * @param allowLegacySteering - whether to accept the retired steering event name.
+ * @param knownEventTypes - installed event vocabulary, when vocabulary-aware.
+ * @param vocabularyNeutral - whether unknown event types remain opaque.
+ * @param frozenEnvelope - whether event envelopes must already be frozen.
  */
-export function assertReleasedV1PhysicalArtifact(artifact: SessionFormatArtifact): void {
-  assertReleasedV1Header(artifact.header)
-  assertArtifactCoordinates(artifact, false, undefined, true)
-}
-
-function assertArtifactCoordinates(
+export function assertReleasedArtifactCoordinates(
   artifact: SessionFormatArtifact,
   allowLegacySteering: boolean,
   knownEventTypes?: ReadonlySet<string>,
   vocabularyNeutral = false,
+  frozenEnvelope = false,
 ): void {
   const inheritedEventCount = sessionFormatCount(artifact.inheritedEventCount, 'Session inheritedEventCount')
   if (inheritedEventCount > artifact.events.length) {
@@ -151,7 +124,6 @@ function assertArtifactCoordinates(
         `format v1 contains unknown required event type ${JSON.stringify(type)} at seq ${index}`,
       )
     }
-    const frozenEnvelope = !vocabularyNeutral && knownEventTypes === RELEASED_V0_EVENT_TYPE_SET
     const surface = disposition !== undefined ? SURFACE_EVENT_TYPES.has(type) : type === 'steering/message'
     const optional = frozenEnvelope
       ? surface ? SURFACE_OPTIONAL : LOG_OPTIONAL
@@ -195,8 +167,7 @@ export function assertReleasedSurfaceMetadata(
       }
       seen.add(current)
     }
-    if (sources.length === 0
-      && (type !== 'assistant/message' || assistantSources === 'forbid-assistant')) {
+    if (sources.length === 0 && type !== 'assistant/message') {
       throw new SessionFormatError(`${type} ${seq} sourceEventSeqs must be non-empty`)
     }
   }
@@ -220,7 +191,7 @@ export function assertReleasedEventPayload(event: SessionFormatEvent, version: 0
   /* v8 ignore next -- artifact coordinate validation admits only the frozen inventory before payload validation. */
   if (disposition === undefined) {
     throw new SessionFormatUnsupportedMigrationError(
-      `format v0 contains unknown event type ${JSON.stringify(event.type)} at seq ${event.seq}`,
+      `format v0 contains unknown historical event type ${JSON.stringify(event.type)} at seq ${event.seq}; migration refuses unknown historical events even when ignorable`,
     )
   }
   const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
@@ -238,7 +209,9 @@ export function assertReleasedEventPayload(event: SessionFormatEvent, version: 0
     : disposition.optional
   assertReleasedV0Keys(data, disposition.required, versionOptional, `${event.type} ${event.seq} data`)
   for (const key of disposition.opaque) {
-    if (Object.hasOwn(data, key)) snapshotSessionFormatJson(data[key], `${event.type} ${event.seq} opaque ${key}`)
+    if (Object.hasOwn(data, key) && !isJsonValue(data[key])) {
+      throw new SessionFormatError(`${event.type} ${event.seq} opaque ${key} is not lossless JSON`)
+    }
   }
   assertReleasedPayloadSemantics(event, version)
 }

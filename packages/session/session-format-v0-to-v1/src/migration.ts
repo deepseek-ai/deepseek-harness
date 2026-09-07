@@ -3,19 +3,20 @@ import {
   SessionFormatUnsupportedMigrationError,
   defineSessionFormatMigration,
   sessionFormatCount,
-  snapshotSessionFormatArtifact,
 } from '@deepseek-ai/dsh-session-format'
 import type {
   SessionFormatEvent,
+  SessionFormatEventRun,
   SessionFormatHeader,
   SessionFormatJsonObject,
   SessionFormatJsonValue,
+  SessionFormatMigrationContext,
+  SessionFormatMigrationStage,
+  SessionFormatMigrationStageInput,
 } from '@deepseek-ai/dsh-session-format'
+import { isReleasedAssistantChunkRun } from './codec.ts'
 import {
   assertReleasedEventPayload,
-  assertNormalizedReleasedV0Artifact,
-  assertReleasedV0SourceArtifact,
-  assertReleasedV1Artifact,
   assertReleasedV1Header,
 } from './validation.ts'
 import { assertReleasedV0Keys, releasedV0Record } from './validation-helpers.ts'
@@ -29,45 +30,179 @@ export const sessionFormatV0ToV1 = defineSessionFormatMigration({
     assertHeaderVersion(header, 0)
     return { ...header, version: 1 }
   },
-  migrate(source) {
-    assertReleasedV0SourceArtifact(source)
-    const events = normalizeReleasedV0Events(source.events, source.header.id)
-    assertNormalizedReleasedV0Artifact({ ...source, events })
-    const target = snapshotSessionFormatArtifact({
-      header: { ...source.header, version: 1 },
-      inheritedEventCount: source.inheritedEventCount,
-      events,
-    }, 'released v0-to-v1 target')
-    assertReleasedV1Artifact(target)
-    return target
+  createStage(input) {
+    return new ReleasedV0ToV1Stage(input)
   },
-  validateTarget: assertReleasedV1Artifact,
   validateTargetHeader: assertReleasedV1Header,
 })
+
+class ReleasedV0ToV1Stage implements SessionFormatMigrationStage {
+  readonly headerInheritedEventCount: number
+  private readonly state: LegacyNormalizationState = { messageIds: new Map(), retryIds: new Map() }
+
+  constructor(private readonly input: SessionFormatMigrationStageInput) {
+    assertHeaderVersion(input.sourceHeader, 0)
+    this.headerInheritedEventCount = input.sourceInheritedEventCount
+  }
+
+  transformEvent(
+    event: SessionFormatEvent,
+    context: SessionFormatMigrationContext,
+  ): void {
+    const normalized = normalizeReleasedV0Event(event, this.input.sourceHeader.id, this.state)
+    assertSourceDeliveryMarker(normalized, this.input)
+    context.emitEvent(normalized)
+  }
+
+  transformRun(
+    run: SessionFormatEventRun,
+    context: SessionFormatMigrationContext,
+  ): void {
+    if (isReleasedAssistantChunkRun(run)) {
+      context.emitRun(run)
+      return
+    }
+    for (const event of run.expand()) this.transformEvent(event, context)
+  }
+
+  finish(_context: SessionFormatMigrationContext): number {
+    return this.input.sourceInheritedEventCount
+  }
+}
 
 function assertHeaderVersion(header: SessionFormatHeader, version: 0 | 1): void {
   if (header.version !== version) throw new SessionFormatError(`expected format v${version} header`)
 }
 
-function normalizeReleasedV0Events(
-  events: readonly SessionFormatEvent[],
+interface LegacyNormalizationState {
+  readonly messageIds: Map<number, string>
+  readonly retryIds: Map<string, string>
+  compactionId?: string
+}
+
+function normalizeReleasedV0Event(
+  event: SessionFormatEvent,
   sessionId: string,
-): readonly SessionFormatEvent[] {
-  const messageIds = new Map<number, string>()
-  const output: SessionFormatEvent[] = []
-  for (const event of events) {
-    assertSupportedLegacyType(event, sessionId)
-    const start = normalizeLegacyTurnStart(event, sessionId)
-    const end = normalizeLegacyTurnEnd(start, sessionId)
-    const header = normalizeLegacyRequestHeader(end, sessionId)
-    const steering = normalizeLegacySteering(header, sessionId)
-    const message = normalizeLegacyMessage(steering, sessionId, messageIds)
-    assertReleasedEventPayload(message, 0)
-    output.push(message)
-    const messageId = eventMessageId(message)
-    if (messageId !== undefined) messageIds.set(message.seq, messageId)
+  state: LegacyNormalizationState,
+): SessionFormatEvent {
+  const named = normalizeLegacyCompactionType(event)
+  assertSupportedLegacyType(named, sessionId)
+  const start = normalizeLegacyTurnStart(named, sessionId)
+  const end = normalizeLegacyTurnEnd(start, sessionId)
+  const header = normalizeLegacyRequestHeader(end, sessionId)
+  const steering = normalizeLegacySteering(header, sessionId)
+  const retry = normalizeLegacyRetry(steering, sessionId, state.retryIds)
+  const compaction = normalizeLegacyCompaction(retry, sessionId, state)
+  const message = normalizeLegacyMessage(compaction, sessionId, state.messageIds)
+  if (message.type !== 'assistant/chunk') assertReleasedEventPayload(message, 0)
+  const messageId = eventMessageId(message)
+  if (messageId !== undefined) state.messageIds.set(message.seq, messageId)
+  return message
+}
+
+function normalizeLegacyCompactionType(event: SessionFormatEvent): SessionFormatEvent {
+  const type: string = event.type
+  switch (type) {
+    case 'compact/start':
+      return { ...event, type: 'compaction/start' }
+    case 'compact/summary':
+      return { ...event, type: 'compaction/summary' }
+    case 'compact/end':
+      return { ...event, type: 'compaction/end' }
+    case 'compact/prune':
+      return { ...event, type: 'compaction/prune' }
+    default:
+      return event
   }
-  return Object.freeze(output)
+}
+
+function assertSourceDeliveryMarker(
+  event: SessionFormatEvent,
+  input: SessionFormatMigrationStageInput,
+): void {
+  if (event.type !== 'session-log-deepseek/delivery-accepted') return
+  const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
+  const acceptedVersion = data['sessionFormatVersion'] ?? 0
+  const inherited = input.sourceHeader.parentSession !== undefined
+    && event.seq < input.sourceInheritedEventCount
+  if (acceptedVersion === 0 && !inherited && data['sessionId'] !== input.sourceHeader.id) {
+    throw new SessionFormatError('current-generation delivery marker names the wrong Session')
+  }
+}
+
+function normalizeLegacyRetry(
+  event: SessionFormatEvent,
+  sessionId: string,
+  retryIds: Map<string, string>,
+): SessionFormatEvent {
+  if (event.type !== 'llm/retry') return event
+  const data = releasedV0Record(event.data, `llm/retry ${event.seq} data`)
+  const chain = [data['turn'], data['step'], data['provider'], data['policyKey']]
+    .map(value => JSON.stringify(value))
+    .join('\0')
+  const retryId = data['retryId']
+  if (typeof retryId === 'string' && retryId.length > 0) {
+    retryIds.set(chain, retryId)
+    return event
+  }
+  if (Object.hasOwn(data, 'retryId')) return event
+  const migratedRetryId = retryIds.get(chain) ?? `legacy-retry:${sessionId}:${event.seq}`
+  retryIds.set(chain, migratedRetryId)
+  return { ...event, data: { ...data, retryId: migratedRetryId } }
+}
+
+function normalizeLegacyCompaction(
+  event: SessionFormatEvent,
+  sessionId: string,
+  state: LegacyNormalizationState,
+): SessionFormatEvent {
+  if (event.type === 'session/end-seed') {
+    delete state.compactionId
+    return event
+  }
+  if (event.type === 'compaction/start') {
+    const data = releasedV0Record(event.data, `compaction/start ${event.seq} data`)
+    const existing = data['compactionId']
+    if (typeof existing === 'string' && existing.length > 0) {
+      state.compactionId = existing
+      return event
+    }
+    if (Object.hasOwn(data, 'compactionId')) return event
+    const id = `legacy-compaction:${sessionId}:${event.seq}`
+    state.compactionId = id
+    return { ...event, data: { ...data, compactionId: id } }
+  }
+  const compactionId = state.compactionId
+  if (compactionId === undefined) return event
+  if (event.type === 'compaction/summary' || event.type === 'compaction/end') {
+    const normalized = addLegacyCompactionId(event, compactionId)
+    if (event.type === 'compaction/end') delete state.compactionId
+    return normalized
+  }
+  if (event.type !== 'user/message') return event
+  const data = releasedV0Record(event.data, `user/message ${event.seq} data`)
+  const source = data['source']
+  if (!releasedIsRecord(source) || source['kind'] !== 'plugin' || source['plugin'] !== 'compact'
+    || Object.hasOwn(source, 'compactionId')) return event
+  return {
+    ...event,
+    data: {
+      ...data,
+      source: {
+        ...source,
+        compactionId,
+      },
+    },
+  }
+}
+
+function addLegacyCompactionId(
+  event: SessionFormatEvent,
+  compactionId: string,
+): SessionFormatEvent {
+  const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
+  if (Object.hasOwn(data, 'compactionId')) return event
+  return { ...event, data: { ...data, compactionId } }
 }
 
 function normalizeLegacyRequestHeader(event: SessionFormatEvent, sessionId: string): SessionFormatEvent {

@@ -4,12 +4,16 @@ import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import {
   RELEASED_V0_EVENT_TYPES,
   RELEASED_V0_EVENT_DISPOSITIONS,
-  assertReleasedV1Artifact,
-  releasedV0SessionFormatCodec,
-  releasedV1SessionFormatCodec,
-  sessionFormatV0ToV1,
 } from '../src/index.ts'
-import { assertReleasedEventPayload } from '../src/validation.ts'
+import { assertReleasedEventPayload, assertReleasedSurfaceMetadata } from '../src/validation.ts'
+import { restoreV0ToV1, restoreV1 } from '../src/testing/restore.ts'
+import {
+  assertNormalizedReleasedV0Artifact,
+  assertReleasedV0SourceArtifact,
+  assertReleasedV1Artifact,
+  assertReleasedV1MigrationSource,
+  assertReleasedV1PhysicalArtifact,
+} from '../src/testing/validation.ts'
 
 const v0Header = {
   type: 'session', version: 0, id: 'validation', createdAt: 1, delegationDepth: 0,
@@ -290,6 +294,15 @@ describe('released event and payload inventory', () => {
     }
   })
 
+  it('refuses opaque members that are not lossless JSON without snapshotting them', () => {
+    const data = {
+      ...(validPayloads['tool/result'] as Record<string, unknown>),
+      meta: { value: undefined },
+    }
+    expect(() => { assertPayload('tool/result', data as unknown as SessionFormatJsonValue) })
+      .toThrow(/opaque meta is not lossless JSON/)
+  })
+
   it.each([
     ['user/message content block', 'user/message', {
       ...userMessage,
@@ -312,8 +325,56 @@ describe('released event and payload inventory', () => {
 
   it('refuses unknown v0 events even when the envelope marks them ignorable', () => {
     const row = { type: 'plugin/unknown', seq: 0, time: 1, data: {}, ignorable: true }
-    expect(() => releasedV0SessionFormatCodec.decodeArtifact(v0Header, [row]))
+    expect(() => restoreV0ToV1(v0Header, [row]))
       .toThrow(/unknown historical event.*refuses.*ignorable/)
+  })
+
+  it('exercises each released test validation policy', () => {
+    const v0 = {
+      header: { version: 0, id: 'validation', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0,
+      events: [],
+    } as const
+    const v1 = { ...v0, header: { ...v0.header, version: 1 } } as const
+    const forwardCompatible = {
+      ...v1,
+      events: [{ type: 'plugin/future', seq: 0, time: 1, data: {}, ignorable: true }],
+    } as const
+
+    expect(() => { assertReleasedV0SourceArtifact(v0) }).not.toThrow()
+    expect(() => { assertNormalizedReleasedV0Artifact({
+      ...v0,
+      events: [{ type: 'feedback/record', seq: 0, time: 1, data: { text: 'retained' } }],
+    }) }).not.toThrow()
+    expect(() => { assertReleasedV1MigrationSource(v1) }).not.toThrow()
+    expect(() => { assertReleasedV1MigrationSource(forwardCompatible) }).not.toThrow()
+    expect(() => { assertReleasedV1PhysicalArtifact(v1) }).not.toThrow()
+    expect(() => { assertReleasedV0SourceArtifact({
+      ...v0,
+      events: [{
+        type: 'steering/message', seq: 0, time: 1, surfaceOp: 'append',
+        data: { turn: 1, content: [], source: { kind: 'user' } },
+      }],
+    }) }).not.toThrow()
+    expect(() => { assertReleasedV0SourceArtifact({
+      ...v0,
+      events: [{ type: 'compact/start', seq: 0, time: 1, data: { turn: null } }],
+    }) }).not.toThrow()
+    expect(() => { assertReleasedV0SourceArtifact({
+      ...v0,
+      events: [{ type: 'plugin/unknown', seq: 0, time: 1, data: {}, ignorable: true }],
+    }) }).toThrow(/unknown historical event/)
+  })
+
+  it('permits empty Assistant provenance only under the released-v1 policy', () => {
+    const assistant = {
+      type: 'assistant/message', seq: 1, time: 2, data: {},
+      sourceEventSeqs: [], surfaceOp: 'append',
+    }
+    expect(() => { assertReleasedSurfaceMetadata(assistant, 1, assistant.type, 'allow-empty-assistant') })
+      .not.toThrow()
+    expect(() => { assertReleasedSurfaceMetadata(assistant, 1, assistant.type, 'forbid-assistant') })
+      .toThrow(/obsolete chunk provenance/)
   })
 
   it('keeps capturedFormatVersion v1-only inside session-reference sources', () => {
@@ -329,9 +390,9 @@ describe('released event and payload inventory', () => {
       },
     }
     const event = { type: 'user/message', seq: 0, time: 1, data, surfaceOp: 'append' }
-    expect(() => sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(v0Header, [event])))
+    expect(() => restoreV0ToV1(v0Header, [event]))
       .toThrow(/capturedFormatVersion/)
-    expect(releasedV1SessionFormatCodec.decodeArtifact(v1Header, [event]).events).toEqual([event])
+    expect(restoreV1(v1Header, [event]).events).toEqual([event])
   })
 
   it('accepts every released nested union variant and optional member', () => {
@@ -487,6 +548,30 @@ describe('released event and payload inventory', () => {
     for (const [type, data] of remaining) {
       expect(() => { assertPayload(type, data) }, type).not.toThrow()
     }
+  })
+
+  it('validates legacy round-zero goal mutation messages', () => {
+    const change = {
+      kind: 'goal/change', version: 1, operation: 'clear',
+      cleared: { id: 'goal', revision: 2 }, clearedAt: 3,
+    }
+    const content = [{
+      type: 'text',
+      text: `<goal_state>${JSON.stringify({ cleared: change.cleared, clearedAt: change.clearedAt })}</goal_state>`,
+    }]
+    const message = {
+      id: 'legacy-goal', role: 'user', content,
+      source: { kind: 'goal', goalId: 'goal', revision: 2, round: 0, change },
+    }
+    expect(() => { assertPayload('user/message', message) }).not.toThrow()
+    expect(() => { assertPayload('user/message', {
+      ...message, source: { ...message.source, round: 1 },
+    }) }).toThrow(/round must be 0/)
+    expect(() => { assertPayload('user/message', {
+      ...message, source: { ...message.source, goalId: 'other' },
+    }) }).toThrow(/does not match/)
+    expect(() => { assertPayload('user/message', { ...message, content: [textBlock] }) })
+      .toThrow(/content does not match/)
   })
 
   it('refuses malformed logical headers, cuts, event envelopes, and surface metadata', () => {

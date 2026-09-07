@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-01-host-goal-pause-aborts-turn.md
-2026-09-01-host-goal-pause-aborts-turn.md: 8a6acc1403ea9d8f1dab241e7888bb98aadcde31
-2026-09-01-host-goal-pause-aborts-turn.zh.md: 60170cd1029ce210fa1002ab407b4083af36d72e

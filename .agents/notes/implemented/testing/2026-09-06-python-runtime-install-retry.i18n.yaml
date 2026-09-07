@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/testing/2026-09-06-python-runtime-install-retry.md
+2026-09-06-python-runtime-install-retry.md: c52e87c2d18393113c0e884d7e6d1e56cc6e6145
+2026-09-06-python-runtime-install-retry.zh.md: 7a7943f43fcec536542c5aef0e608e177f64907f

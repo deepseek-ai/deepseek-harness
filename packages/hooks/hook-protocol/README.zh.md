@@ -75,7 +75,7 @@ kind: "package-library"
 - **绝不向循环抛异常。** 每种失败模式——格式错误的 JSON、无效正则、执行器拒绝——都会降级为受控的结果或不匹配，因此钩子永远不能使调用轮次崩溃。
 - **仅日志、轮次内的事件。** `hook/*` 记录是「运行了什么、决定了什么」的持久证据；它们不是 surface 事件，不变式伴生插件会拒绝未开启轮次外的记录。
 
-[hook-protocol-lib Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-protocol-lib.zh.md) 记录了共享与逐方言的划分以及备选方案。
+[hook-protocol-lib Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md) 记录了共享与逐方言的划分以及备选方案。
 
 ### 源码地图
 
@@ -101,8 +101,8 @@ kind: "package-library"
 当包级约定不够用时阅读以下页面。它们从共享规则进入应用这些规则的桥接，以及它们所面向的扩展点。
 
 - [hooks 组地图](../README.zh.md)——同级组页面及其包表。
-- [hook-protocol-lib Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-protocol-lib.zh.md)——协议核心为何共享、各桥接负责什么。
-- [钩子桥接 Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.zh.md)——两个桥接如何使用这些原语。
+- [hook-protocol-lib Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md)——协议核心为何共享、各桥接负责什么。
+- [钩子桥接 Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md)——两个桥接如何使用这些原语。
 - [拦截扩展点 Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-interception-extension-points.zh.md)——桥接所映射的类型化 Decision 接口面。
 - [生成的持久化日志事件目录](../../../docs/persistence-catalog.zh.md)——`hook/*` 事件载荷与逐事件 JSDoc。
 

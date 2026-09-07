@@ -18,7 +18,7 @@ subagent 启动有三个独立的组合控制：`persona`、`toolFilter` 和 `ma
 
 | 控制 | 问题 | 结果 |
 |---|---|---|
-| `persona` | 什么角色指令替换该子 agent 的部署人设？ | 一个子 agent 局部的提示词段落遮蔽 `deployment:persona` |
+| `persona` | 什么角色指令替换该子 agent 的部署人设？ | 一个子 agent 局部的提示词段落遮蔽 `deployment:persona-prefix` |
 | `toolFilter` | 部署全局工具中哪些进入该子 agent 的可见工具视图？ | 一个有作用域的限制在添加子 agent 局部工具之前过滤全局工具 |
 | `maxDepth` | 这棵委派树最深可以长到多少层？ | 子 agent 深度超过绝对上限时，启动请求被拒绝 |
 
@@ -26,7 +26,7 @@ subagent 启动有三个独立的组合控制：`persona`、`toolFilter` 和 `ma
 
 ### 人设是有作用域的遮蔽
 
-人设控制改变一个子 agent 的行为，而不改变部署级的提示词组装。在未发布的设置阶段，进程内提供方在子 agent 作用域中注册一个名为 `deployment:persona` 的段落；普通的最具体者优先解析规则仅在该子 agent 的组装中替换全局段落。
+人设控制改变一个子 agent 的行为，而不改变部署级的提示词组装。在未发布的设置阶段，进程内提供方在子 agent 作用域中注册一个名为 `deployment:persona-prefix` 的段落；普通的最具体者优先解析规则仅在该子 agent 的组装中替换全局段落。
 
 其值与部署人设具有相同的严格模板语义。省略时通过全局层继承部署段落；显式空字符串则以空段落遮蔽全局人设。父级和兄弟级的人设永远不会进入子 agent 的扁平作用域。
 

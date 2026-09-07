@@ -43,7 +43,7 @@ When the composer submits with images or generic files, only a host command decl
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-`src/client/contract.ts` is the fixed business contract: `CommandUiContract.register(name, spec)` and `decorate(name, spec)` are everything a business package consumes. `CommandDirectory` is the one wire-derived cache, keyed by session: ordinary sessions fetch through `command.list({sessionId})`, entries are soft-invalidated by the forwarded `commands/change` owner event and hard-invalidated by `connection/reset`, and epoch-guarded so a superseded pull can never overwrite a newer one. `matchSpace` answers synchronously from this cache only; `matchEnter` strong-waits it on the SubmitAttempt signal and rejects on warmup failure. After `command.execute` returns a matched result, the browser emits a local `command/executed` acknowledgment; other clients receive the durable command nodes through the Host event stream but never this acknowledgment. `PopupSelectController` is the headless shell state; `PopupSelectView` self-registers into `conversation.input.overlay` with per-session resolution. Decision record: the [web command surfaces note](../../../.agents/notes/implemented/architecture/2026-07-25-web-command-surfaces-and-assembly.md); the [fuzzy discovery note](../../../.agents/notes/implemented/feature/2026-08-04-web-slash-command-fuzzy-discovery.md) covers menu ranking.
+`src/client/contract.ts` is the fixed business contract: `CommandUiContract.register(name, spec)` and `decorate(name, spec)` are everything a business package consumes. `CommandDirectory` is the one wire-derived cache, keyed by session: ordinary sessions fetch through `command.list({sessionId})`, entries are soft-invalidated by the forwarded `commands/change` owner event and hard-invalidated by `connection/reset`, and epoch-guarded so a superseded pull can never overwrite a newer one. `matchSpace` answers synchronously from this cache only; `matchEnter` strong-waits it on the SubmitAttempt signal and rejects on warmup failure. After `command.execute` returns a matched result, the browser emits a local `command/executed` acknowledgment; other clients receive the durable command nodes through the Host event stream but never this acknowledgment. `PopupSelectController` is the headless shell state; `PopupSelectView` self-registers into `conversation.input.overlay` with per-session resolution.
 
 </details>
 
@@ -56,8 +56,6 @@ Read these pages when the command surface is not enough. They move from the comm
 
 - [ui-input-trigger](../ui-input-trigger/README.md) — the pipeline the `/` source registers into.
 - [ui-conversation](../ui-conversation/README.md) — declares the input overlay slot and owns the composer.
-- [Web command surfaces and assembly](../../../.agents/notes/implemented/architecture/2026-07-25-web-command-surfaces-and-assembly.md) — the design decision behind the command surfaces.
-- [Web slash-command fuzzy discovery](../../../.agents/notes/implemented/feature/2026-08-04-web-slash-command-fuzzy-discovery.md) — the menu ranking rationale.
 - [Client package map](../README.md) — adjacent browser UI packages.
 
 -----

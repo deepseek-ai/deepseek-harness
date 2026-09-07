@@ -6,7 +6,7 @@ English | [中文](2026-08-04-configuration-source-ownership.zh.md)
 
 ## Problem
 
-`$DSH_HOME/.env` had just [become an ordinary environment layer](2026-08-04-credentials-yaml-and-user-environment-layer.md), which left the harness resolving user-facing values from a flattened `process.env` that could no longer say where a value came from. Three consequences followed.
+`$DSH_HOME/.env` had just [become an ordinary environment layer](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md), which left the harness resolving user-facing values from a flattened `process.env` that could no longer say where a value came from. Three consequences followed.
 
 A key stored through the web page stayed shadowed by an older key in the user's own `.env`, because the credential provider compared "the environment" against its file and the environment now included that file. The migration dead end the split was supposed to remove had simply moved.
 
@@ -27,7 +27,7 @@ explicit for this run     per-operation override, CLI argument
 > defaults                schema default, provider public default
 ```
 
-Settings sit above composition because that is what the [settings seam](2026-07-28-user-settings-seam.md) does: a plugin registers its cordis entry config as the `base` layer and the user's section layers over it, and the seam cannot tell a value a profile's bundles set from one its user patch layer or a `--patch` overlay set — all arrive as entry config. The product CLI has no lever above stored settings, so a deployment that must pin a field against a user's settings ships its own bin or loader tree, or mounts no settings provider at all. Composition still outranks the environment, so a stale `DEEPSEEK_BASE_URL` in a shell cannot rewrite a configured endpoint.
+Settings sit above composition because that is what the [settings seam](../../archived/architecture/2026-07-28-user-settings-seam.md) does: a plugin registers its cordis entry config as the `base` layer and the user's section layers over it, and the seam cannot tell a value a profile's bundles set from one its user patch layer or a `--patch` overlay set — all arrive as entry config. The product CLI has no lever above stored settings, so a deployment that must pin a field against a user's settings ships its own bin or loader tree, or mounts no settings provider at all. Composition still outranks the environment, so a stale `DEEPSEEK_BASE_URL` in a shell cannot rewrite a configured endpoint.
 
 **Credentials keep a narrower, separate ordering**, and this note does not unify them:
 

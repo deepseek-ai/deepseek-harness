@@ -1,44 +1,58 @@
 import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
-import AgentRegistry, { agentEvents, Inbox } from '@deepseek-ai/dsh-agent'
-import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentStatus, Inbox } from '@deepseek-ai/dsh-agent'
 import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import GoalService, { GoalId } from '@deepseek-ai/dsh-goal'
 import type { GoalRef } from '@deepseek-ai/dsh-goal'
 import { createUserMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
-import {
+import SessionStore, {
   SESSION_FORMAT_VERSION,
   Session,
   SessionId,
   SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import * as toolGoal from '@deepseek-ai/dsh-tool-goal'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 const testToolSignal = new AbortController().signal
 
 interface StubAgent {
   readonly agent: Agent
   readonly session: Session
+  readonly inbox: Inbox
   setStatus(status: AgentStatus): void
 }
 
-/** Build one registry-compatible live agent whose injections enter the durable inbox. */
-function stubAgent(rawId: string, supplied?: Session): StubAgent {
-  const session = supplied ?? Session.create(SessionId(rawId))
+const isolatedInboxCtx = new Context()
+await isolatedInboxCtx.plugin(SessionStore)
+await isolatedInboxCtx.plugin(SessionProjectionRegistry)
+await isolatedInboxCtx.plugin(AgentRegistry)
+
+/** Build one registry-compatible live agent whose injections enter its test Inbox. */
+function stubAgent(rawId: string, supplied?: Session, suppliedCtx?: Context): StubAgent {
+  const agentCtx = suppliedCtx ?? isolatedInboxCtx
+  const session = supplied ?? (suppliedCtx === undefined
+    ? agentCtx.sessions.create(SessionId(rawId))
+    : suppliedCtx.sessions.create(SessionId(rawId)))
+  if (suppliedCtx === undefined) {
+    if (agentCtx.sessions.get(session.id) !== session) agentCtx.sessions.enter(session)
+  }
+  const inbox = createInboxStub()
   let status: AgentStatus = 'running'
   const agent: Agent = {
     id: session.id,
     options: {},
     session,
-    inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+    inbox,
     get status() { return status },
-    ctx: new Context(),
+    ctx: agentCtx,
     send: () => {},
     followup: () => {},
     steer: () => ({ outcome: Promise.resolve({ status: 'rejected' as const }) }),
@@ -49,7 +63,7 @@ function stubAgent(rawId: string, supplied?: Session): StubAgent {
     runMaintenance: task => task(new AbortController().signal),
     whenIdle() { return Promise.resolve() },
   }
-  return { agent, session, setStatus(value) { status = value } }
+  return { agent, session, inbox, setStatus(value) { status = value } }
 }
 
 /** Open one message-triggered turn with its accepted model-visible input. */
@@ -62,7 +76,7 @@ function openTurn(stub: StubAgent, source: MessageSource, text = 'prompt'): numb
     source,
   })
   stub.agent.inbox.append('next-turn', message)
-  const claimed = stub.agent.inbox.claim('next-turn', turn)
+  const claimed = stub.inbox.splice('next-turn', 0, 1, [])
   if (claimed.length === 0) throw new Error('expected queued turn input')
   stub.session.append('turn/start', { turn })
   for (const admitted of claimed) {
@@ -78,14 +92,15 @@ function closeTurn(stub: StubAgent, turn: number): void {
 
 async function harness(config: toolGoal.Config = {}) {
   const ctx = new Context()
+  await ctx.plugin(SessionStore)
+  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(ToolRuntime)
-  await ctx.plugin(SessionProjectionRegistry)
   ctx.sessionProjections.register(turnBoundaryProjectionDefinition)
   await ctx.plugin(GoalService)
   const fiber = await ctx.plugin(toolGoal, config)
-  const root = stubAgent(`goal-tool-root-${Math.random()}`)
+  const root = stubAgent(`goal-tool-root-${Math.random()}`, undefined, ctx)
   ctx.agents.register(root.agent)
   return { ctx, fiber, root }
 }
@@ -252,7 +267,7 @@ describe('goal tool execution authority', () => {
     openTurn(root, { kind: 'user' })
     // A distinct agent object over root's exact session: same id, not the live
     // registered instance, so the executor must reject it.
-    const stale = stubAgent('goal-tool-stale', root.agent.session).agent
+    const stale = stubAgent('goal-tool-stale', root.agent.session, ctx).agent
     const staleResult = await execute(ctx, 'get_goal', {}, stale, stale)
     expect(staleResult.error?.info?.code).toBe('GOAL_TOOL_DRIVER_REQUIRED')
 

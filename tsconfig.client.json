@@ -1,5 +1,5 @@
 {
-  // Client-side typecheck aggregate: packages/client tests (.ts and .tsx).
+  // Client-side typecheck aggregate: packages/client tests and top-level Client benchmarks.
   // Split from the host aggregate because both sides merge cordis Context
   // under the same keys (sessions, loader) with different services; shared
   // leaves (session/llm/tools/...) build once and are referenced by
@@ -19,6 +19,9 @@
     "packages/client/*/src/css-modules.d.ts",
     "packages/client/*/tests/**/*.ts",
     "packages/client/*/tests/**/*.tsx",
+    "benchmarks/**/*.client.ts",
+    "benchmarks/**/*.client.tsx",
+    "benchmarks/support/**/*.ts",
     "packages/*/*/tests/**/*.client.spec.ts",
     "packages/*/*/tests/**/*.client.spec.tsx",
     "packages/*/*/tests/**/*.client.tsx",
@@ -38,6 +41,8 @@
     "packages/client/*/tests/**/*.host.spec.ts"
   ],
   "references": [
+    // Producer-to-UI spill tests execute the real nested dispatch worker.
+    { "path": "./packages/code-runtime/code-runtime-worker-thread" },
     // Shared leaf: web e2e boots the real host webserver (fixture + real-host
     // smoke policy). webserver has zero workspace deps and no cordis merge,
     // so it cannot drag host-side Context augmentation into this program.
@@ -93,6 +98,7 @@
     { "path": "./packages/client/ui-user-questions" },
     { "path": "./packages/client/ui-trajectory" },
     { "path": "./packages/session-query/session-log-export/tsconfig.client.json" },
+    { "path": "./packages/client/ui-open-in-app" },
     { "path": "./packages/client/ui-theme" },
     { "path": "./packages/client/ui-settings" },
     { "path": "./packages/client/ui-settings-general" },

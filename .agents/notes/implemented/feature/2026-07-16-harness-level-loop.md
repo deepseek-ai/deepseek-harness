@@ -42,7 +42,7 @@ Time-based `/loop` or scheduled execution is a third policy and is not implement
 | `@deepseek-ai/dsh-command-goal` | `packages/goal/command-goal/`, human-command producer | Registers `/goal` status, creation, edit, pause, resume, and clear over the goal domain for TUI. |
 | `@deepseek-ai/dsh-tool-ralph` | `packages/workflow/tool-ralph/`, fixed workflow consumer | Registers `ralph({ objective, maxRounds? })`, validates the fresh structured provider and bounded `RalphRoundReport`, and returns `complete`, `blocked`, or `budget-limited`. |
 
-The detailed contracts live in the [goal-domain](2026-07-19-persisted-same-session-goal-domain.md), [goal-owned event](../architecture/2026-07-31-goal-owned-durable-events.md), [model goal-tools](2026-07-19-model-facing-goal-tools.md), [goal-round driver](2026-07-19-same-session-goal-round-driver.md), [command registry](2026-07-19-plugin-command-registration.md), [human goal-command](2026-07-19-human-goal-command.md), and [Ralph workflow-tool](2026-07-19-fresh-agent-ralph-workflow-tool.md) Agent Notes.
+The detailed contracts live in the [goal-domain](2026-07-19-persisted-same-session-goal-domain.md), [goal-owned event](../architecture/2026-07-31-goal-owned-durable-events.md), [model goal-tools](2026-07-19-model-facing-goal-tools.md), [goal-round driver](../../archived/feature/2026-07-19-same-session-goal-round-driver.md), [command registry](2026-07-19-plugin-command-registration.md), [human goal-command](../../archived/feature/2026-07-19-human-goal-command.md), and [Ralph workflow-tool](../../archived/feature/2026-07-19-fresh-agent-ralph-workflow-tool.md) Agent Notes.
 
 ### Durable goal state and live authority
 

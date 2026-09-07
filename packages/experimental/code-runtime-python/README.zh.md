@@ -88,7 +88,7 @@ kind: "package-reference"
 
 - [Code runtime seam](../../code-runtime/code-runtime/README.zh.md) — 本后端实现的抽象契约。
 - [fd-3 协议 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-31-code-runtime-python-fd3-protocol.zh.md) — 设计理由与 wire 契约。
-- [结算修复 Agent Note](../../../.agents/notes/implemented/bug-fix/2026-07-31-code-runtime-python-settlement-fixes.zh.md) — 结算、计量与隔离修复及其回归用例。
+- [结算修复 Agent Note](../../../.agents/notes/archived/bug-fix/2026-07-31-code-runtime-python-settlement-fixes.md) — 结算、计量与隔离修复及其回归用例。
 - [Worker 线程后端](../../code-runtime/code-runtime-worker-thread/README.zh.md) — 已发布的 TypeScript 兄弟。
 - [Code runtime 子系统参考](../../../docs/subsystems/code-runtime.zh.md) — 请求／结果词汇、binding 与失败分类。
 

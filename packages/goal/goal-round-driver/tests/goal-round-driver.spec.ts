@@ -10,7 +10,6 @@ import { createUserMessage, LlmAdapter, LlmError  } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import * as goalSession from '../src/index.ts'
 
 type ScriptEntry = StreamChunk[] | Error | 'hang' | ((options: GenerateOptions) => StreamChunk[])
@@ -90,7 +89,6 @@ async function harness(script: ScriptEntry[]): Promise<Harness> {
   const ctx = new Context()
   contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(GoalService)
   const driver = await ctx.plugin(goalSession)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -217,7 +215,6 @@ describe('same-session goal driving', () => {
     const ctx = new Context()
     contexts.push(ctx)
     await mountAgentLoopTestDependencies(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(GoalService)
     await ctx.plugin(AgentLoop, { agents: [] })
     const adapter = new ScriptedAdapter([textResponse('after resume')])

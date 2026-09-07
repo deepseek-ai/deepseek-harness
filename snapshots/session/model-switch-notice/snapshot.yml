@@ -1,0 +1,10 @@
+version: 1
+scenario: model-switch-notice
+profile: headless
+composition: model-switch-notice
+recording: live
+header:
+  class: model-switch-notice
+  pin: true
+  changes: 1
+  toolSchemasSource: compaction-recovery

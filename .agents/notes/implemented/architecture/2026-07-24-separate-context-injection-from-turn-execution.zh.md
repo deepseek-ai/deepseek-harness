@@ -40,7 +40,7 @@ enter 分支的 `PreStepDecision.messages` 是拟议步骤的完整批次。wate
 
 调用方主动注入与当前步骤上下文刻意采用不同的时序。`inject()` 会加入下一个可用 pre-step，无法保证正在最终确定的请求会消费它。必须影响该请求的监听器在 `PreStepDecision.messages` 中返回上下文；下游 reject 或失败时，该上下文不会落入日志。
 
-跨会话引用采用这种领域组合方式：TUI 先准备快照，然后在 idle 直接消息的 pre-step 中把快照与该消息一同返回，或在 running 轮次中先注入快照再唤醒 steering。目标日志包含两条简单消息，因此来源会话后续变化不会改变回放，transcript 消费方也不需要提示词封套。本决策取代[跨会话引用决策](../feature/2026-07-21-cross-session-references.zh.md)中的附件机制，但保留其快照与信任边界规则。
+跨会话引用采用这种领域组合方式：TUI 先准备快照，然后在 idle 直接消息的 pre-step 中把快照与该消息一同返回，或在 running 轮次中先注入快照再唤醒 steering。目标日志包含两条简单消息，因此来源会话后续变化不会改变回放，transcript 消费方也不需要提示词封套。本决策取代[跨会话引用决策](../../archived/feature/2026-07-21-cross-session-references.md)中的附件机制，但保留其快照与信任边界规则。
 
 本决策保留[移除注入内容封套](../simplification/2026-07-20-unwrap-injected-content-envelopes.zh.md)确立的由调用方决定内容框架的原则，以及[一次 send、一个轮次](../simplification/2026-07-17-one-send-one-turn.zh.md)确立的单条目轮次规则。后续的[独立纯日志事件决策](../simplification/2026-07-28-remove-synthetic-log-only-turns.zh.md)将同样的「轮次仅表示执行」语义应用于插件所属记录。
 

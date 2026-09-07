@@ -400,12 +400,10 @@ describe('E2BSubprocessHandle', () => {
         KEEP: undefined,
       },
     }), '/workspace/.dsh-e2b/processes/one')
-    expect(handle.pid).toBe(-1)
     handle.stdin!.write('hello')
     handle.stdin!.end()
     fake.releaseStart()
     await flush()
-    expect(handle.pid).toBe(4343)
     expect(fake.handle.sent.map(value => String(value))).toEqual(['hello'])
     expect(fake.handle.closes).toBe(1)
     const controlEnvs = fake.startOptions?.envs
@@ -1164,7 +1162,6 @@ describe('E2BSubprocessHandle', () => {
     fake.backgroundError = new Error('start failed')
     const handle = testHandle(runtime(fake), spec(), '/runtime/fail')
     await expect(handle.done).rejects.toThrow('start failed')
-    expect(handle.pid).toBe(-1)
     expect(fake.removed).toContain('/runtime/fail/environment')
     expect(fake.removed).toContain('/runtime/fail')
     await expect(handle.waitForExit()).resolves.toBe(true)
@@ -1405,6 +1402,17 @@ describe('E2BSubprocessHandle', () => {
     await expect(absent.waitForExit()).resolves.toBe(true)
   })
 
+  it('keeps polling while a running command has not published its process group yet', async () => {
+    const fake = new FakeSandbox()
+    fake.processGroupReads.push('', '4242\n')
+    const handle = testHandle(runtime(fake), spec(), '/runtime/delayed-group-publication', 1)
+
+    await vi.waitFor(() => { expect(fake.processGroupReads).toEqual([]) })
+    fake.finish()
+    await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
+    await expect(handle.waitForExit()).resolves.toBe(true)
+  })
+
   it('preserves publication failure and reports cleanup that cannot be verified', async () => {
     const fake = new FakeSandbox()
     fake.processGroupId = 'not-a-pid\n'
@@ -1445,15 +1453,6 @@ describe('E2BSubprocessHandle', () => {
     await expect(observed.done).rejects.toThrow('process-group publication failed')
     naturallyGone.alive = false
     await expect(observed.waitForExit()).resolves.toBe(true)
-  })
-
-  it('waits for delayed process-group publication', async () => {
-    const fake = new FakeSandbox()
-    fake.processGroupReads.push('', '4242\n')
-    const handle = testHandle(runtime(fake), spec(), '/runtime/delayed-group')
-    await vi.waitFor(() => { expect(handle.pid).toBe(4242) })
-    fake.finish()
-    await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
   })
 
   it('handles output backpressure and contains a stderr sink failure', async () => {
@@ -1775,9 +1774,37 @@ describe('E2BSubprocessRuntime', () => {
     await expect(handle.done).rejects.toThrow('start failed during disposal')
   })
 
-  it('validates synchronous spawn preconditions', async () => {
-    const { ctx } = await service()
+  it('validates synchronous spawn preconditions before handle or remote work', async () => {
+    const fake = new FakeSandbox()
+    const getSandbox = vi.fn(async () => fake.sandbox)
+    const { ctx } = await service(fake, runtime(fake, getSandbox))
+    const live = (ctx.subprocess as unknown as { live: Set<E2BSubprocessHandle> }).live
     expect(() => ctx.subprocess.spawn(spec({ argv: [] }))).toThrow(/non-empty program/)
-    expect(() => ctx.subprocess.spawn(spec({ signal: AbortSignal.abort('stop') }))).toThrow(/aborted before spawn/)
+    expect(() => ctx.subprocess.spawn(spec({ signal: AbortSignal.abort('stop') })))
+      .toThrow(new Error('aborted before spawn: stop'))
+    expect(() => ctx.subprocess.spawn(spec({ signal: AbortSignal.abort(null) })))
+      .toThrow(new Error('aborted before spawn: aborted'))
+    const throwingReason = { toString: () => { throw new Error('caller reason escaped') } }
+    expect(() => ctx.subprocess.spawn(spec({ signal: AbortSignal.abort(throwingReason) })))
+      .toThrow(new Error('aborted before spawn: aborted'))
+
+    for (const invalid of [
+      spec({ argv: ['bash\0'] }),
+      spec({ argv: ['bash', 'bad\0arg'] }),
+      spec({ cwd: 'bad\0cwd' }),
+      spec({ env: { REMOVED: undefined, 'BAD\0KEY': 'value' } }),
+      spec({ env: { BAD: 'bad\0value' } }),
+    ]) {
+      let thrown: unknown
+      try {
+        ctx.subprocess.spawn(invalid)
+      } catch (error) {
+        thrown = error
+      }
+      expect(thrown).toMatchObject({ name: 'TypeError', code: 'ERR_INVALID_ARG_VALUE' })
+    }
+    expect(getSandbox).not.toHaveBeenCalled()
+    expect(live).toEqual(new Set())
+    expect(fake.directories).toEqual([])
   })
 })

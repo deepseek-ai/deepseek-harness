@@ -39,9 +39,8 @@ Start with the Python SDK (the sibling implementation of the client contract), t
 
 - [Python SDK](../../python/README.md) — the Python counterpart that speaks the same protocol and ships a bundled runtime.
 - [SDK application bundle](../bundle/sdk-app/README.md) — the `dsh --profile sdk` application that boots the JSON-RPC server.
-- [Python profile-runtime decision](../../.agents/notes/implemented/architecture/2026-08-23-python-sdk-dsh-profile-runtime.md) — why the packaged Python client launches the same named profiles.
-- [TypeScript SDK and SDK subagent backend decision](../../.agents/notes/implemented/feature/2026-07-27-typescript-sdk-and-sdk-subagent-backend.md) — the client contract and the subagent backend built on it.
-- [SDK project toolchain removal](../../.agents/notes/implemented/simplification/2026-08-11-remove-sdk-project-toolchain.md) — why this group never creates, configures, or builds developer projects.
+- [Architecture](../../docs/architecture.md) — why the packaged Python client launches the same named profiles.
+- [SDK project toolchain removal](../../.agents/notes/archived/simplification/2026-08-11-remove-sdk-project-toolchain.md) — why this group never creates, configures, or builds developer projects.
 - [SDK subagent provider](../subagent/subagent-dsh-sdk/README.md) — a harness-internal consumer of the TypeScript client.
 
 <a id="dev-note"></a>

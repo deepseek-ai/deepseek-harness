@@ -2,7 +2,7 @@
 
 [English](shell.md) | 中文
 
-bash 执行 seam 分为 Service Definition（[dsh-shell](../../packages/shell/shell)，`ctx.shell`）、Service Provider（[dsh-bash-local](../../packages/shell/bash-local) 与 [dsh-bash-sandbox](../../packages/shell/bash-sandbox)）和 Consumer（[dsh-tool-bash](../../packages/shell/tool-bash)，即 `bash` schema）。通用后台任务的 job id、所有权与控制位于 [jobs.md](jobs.zh.md)；本 seam 返回一个不含任务概念的进程句柄。原始进程组机制封装在[子进程 seam](subprocess.zh.md)之后。
+bash 执行 seam 分为 Service Definition（[dsh-shell](../../packages/shell/shell)，`ctx.shell`）、Service Provider（[dsh-bash-local](../../packages/shell/bash-local) 与 [dsh-bash-sandbox](../../packages/shell/bash-sandbox)）和 Consumer（[dsh-tool-bash](../../packages/shell/tool-bash)，即 `bash` schema）。通用后台任务的 job id、所有权与控制位于 [jobs.md](jobs.zh.md)；本 seam 返回一个不含任务概念的进程句柄。managed-range 机制封装在[子进程 seam](subprocess.zh.md)之后。
 
 源码：[`packages/shell/shell/src/types.ts`](../../packages/shell/shell/src/types.ts)
 
@@ -98,7 +98,7 @@ interface ShellExecSpec {
 }
 ```
 
-`stdin` 和 `env` 是受信任的进程内插件输入，不由 `dsh-tool-bash` 暴露。本地执行器会先清除环境中的凭据，再合并调用方显式提供的 env。见 [bash-stdin-env Agent Note](../../.agents/notes/implemented/architecture/2026-06-30-bash-stdin-env-trusted-plugin-api.zh.md)。
+`stdin` 和 `env` 是受信任的进程内插件输入，不由 `dsh-tool-bash` 暴露。本地执行器会先清除环境中的凭据，再合并调用方显式提供的 env。
 
 `stdoutMaxBytes` 同样仅供受信任插件使用。它让前台消费方能在有界解析预算内请求完整 stdout，而不会改变 stderr、后台任务或面向模型的 bash 工具的常规输出上限。
 
@@ -166,7 +166,7 @@ interface ShellSandboxInfo {
 
 ## 后台进程：`ShellProcess`
 
-`start()` 返回不含 id 或所有者的句柄。`dsh-tool-bash` 将它适配为 `ctx.jobs.start()` 钩子；随后由通用运行时拥有任务标识与生命周期。`done` 在进程关闭时完成且绝不被拒绝；进程结束后仍可读取，并且沙箱事实会在 `done` 完成前写入。
+`start()` 返回不含 id 或所有者的句柄。`dsh-tool-bash` 将它适配为 `ctx.jobs.start()` 钩子；随后由通用运行时拥有任务标识与生命周期。`done` 会在底层进程结算时完成且绝不 reject；subprocess 提供方的 rejection 会生成状态为 `killed` 的进程，并把不声明阶段的错误写入 stderr。进程结算后仍可读取，并且沙箱事实会在 `done` 完成前写入。
 
 ```ts type-equiv
 /**
@@ -182,7 +182,10 @@ interface ShellProcess {
   exitCode: number | null
   /** Terminating signal name, when signal-killed. */
   signal: NodeJS.Signals | null
-  /** Resolves when the underlying process closes (never rejects — a spawn failure settles as `killed` with the error on stderr). */
+  /**
+   * Resolves when the underlying process settles (never rejects — provider
+   * rejection settles as `killed` with a stage-neutral error on stderr).
+   */
   readonly done: Promise<void>
   /** Sandbox facts, stamped once a confined process settles. */
   sandbox?: ShellSandboxInfo
@@ -193,7 +196,7 @@ interface ShellProcess {
    */
   readOutput(): ShellProcessRead
   /**
-   * Kill the process group. Returns false when it had already finished
+   * Terminate the provider-managed range. Returns false when it had already finished
    * (no-op); idempotent.
    */
   kill(): boolean
@@ -218,7 +221,7 @@ interface ShellProcessRead {
 
 ## 服务
 
-`ShellExecutor` 拥有 `resolve`、前台 `run`、后台进程 `start` 以及 `sandboxMode` 能力事实。`dsh-bash-local` 拥有命令默认值补全、超时/中止分类、终端环境以及后台读取合并；进程组、有界收集器、spill 文件、凭据清除与 dispose（资源释放）后完全停稳归[子进程服务](subprocess.zh.md)所有。`dsh-tool-bash` 拥有面向模型的渲染，并将后台句柄适配到[通用任务运行时](jobs.zh.md)。`dsh-shell` 拥有 shell 工具共享的退出状态约定：导出的 `parseExitStatus`/`ParsedExitStatus` 是 `dsh-tool-bash` 的 `renderResult` 与 `dsh-tool-pwsh` 的 `renderPwshResult` 所追加的 `[exit code: N]` / `[killed by signal: X]` 标记的逆解析，两个工具的 `presentResult` 都用它把渲染文本拆分为 terminal 卡的输出正文与退出状态 pill。
+`ShellExecutor` 拥有 `resolve`、前台 `run`、后台进程 `start` 以及 `sandboxMode` 能力事实。`dsh-bash-local` 拥有命令默认值补全、超时/中止分类、终端环境以及后台读取合并；managed-range 终止、有界收集器、spill 文件、凭据清除与 dispose（资源释放）后完全停稳归[子进程服务](subprocess.zh.md)所有。`dsh-tool-bash` 拥有面向模型的渲染，并将后台句柄适配到[通用任务运行时](jobs.zh.md)。`dsh-shell` 拥有 shell 工具共享的退出状态约定：导出的 `parseExitStatus`/`ParsedExitStatus` 是 `dsh-tool-bash` 的 `renderResult` 与 `dsh-tool-pwsh` 的 `renderPwshResult` 所追加的 `[exit code: N]` / `[killed by signal: X]` 标记的逆解析，两个工具的 `presentResult` 都用它把渲染文本拆分为 terminal 卡的输出正文与退出状态 pill。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

@@ -12,7 +12,7 @@ The `dsh-tool-fs` write and edit operations can receive `FS_NOT_OBSERVED` from e
 
 `remediateFsError(error, displayPath)` replaces every `FS_NOT_OBSERVED` message at the `dsh-tool-fs` model boundary with `cannot modify "<path>": file has not been read — read the file, then retry`. The wrapper preserves the structured error code and chains the source error as `cause`, so machine routing and diagnostics can still inspect the original failure.
 
-`FS_STALE_VERSION` retains the appended re-read remedy owned by the [guarded-mutation remedy note](../feature/2026-08-03-fs-tool-error-remedy.md). Filesystem providers and policies keep their operation-specific messages because other consumers do not share the tool's model-facing presentation.
+`FS_STALE_VERSION` retains the appended re-read remedy owned by the [guarded-mutation remedy note](../../archived/feature/2026-08-03-fs-tool-error-remedy.md). Filesystem providers and policies keep their operation-specific messages because other consumers do not share the tool's model-facing presentation.
 
 ## Alternatives considered
 

@@ -37,8 +37,6 @@ skill 组让 agent（智能体）和用户按需使用可复用的任务专项�
 先从子系统参考了解共享词汇，再阅读 Agent Note 了解设计依据。
 
 - [skill 子系统参考](../../docs/subsystems/skills.zh.md)——注册表、提供方约定、本地发现优先级，以及目录与工具。
-- [skill 系统 Agent Note](../../.agents/notes/implemented/feature/2026-07-05-skill-system.zh.md)——家族如何拆分与分层注册表设计。
-- [skill 目录热刷新 Agent Note](../../.agents/notes/implemented/feature/2026-07-27-skill-catalog-hot-refresh.zh.md)——持久初始目录与替换生命周期。
 - [skill 调用策略 Agent Note](../../.agents/notes/implemented/feature/2026-07-28-skill-invocation-policy.zh.md)——模型与用户调用控制。
 
 -----

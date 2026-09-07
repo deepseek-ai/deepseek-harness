@@ -13,7 +13,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
-  Button, IconBrowseOutline16, IconCopyOutline16, IconFolderOpenOutline16, IconPlusOutline16, IconTrashOutline16, Modal, Tooltip,
+  Button, IconBrowseOutline16, IconCopyOutline16, IconFolderOpenOutline16, IconPlusOutline16, IconTrashOutline16, Modal, Tag, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -296,10 +296,10 @@ export function AgentPresetSection(props: AgentPresetSectionProps): ReactNode {
                             </span>
                           )
                           : null}
-                        <span className={css.badge}>
+                        <Tag>
                           {row.trust === 'user' ? t('userTrust') : t('builtIn')}
-                        </span>
-                        {row.isDefault ? <span className={css.inUse}>{t('inUse')}</span> : null}
+                        </Tag>
+                        {row.isDefault ? <Tag tone="solid" className={css.inUse}>{t('inUse')}</Tag> : null}
                       </span>
                       <CardDescription text={text.description ?? t('noDescription')} />
                       {/* Visually hidden, deliberately: the pointer path is the

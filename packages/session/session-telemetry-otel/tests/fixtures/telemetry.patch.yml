@@ -1,5 +1,8 @@
 # Test-only patch over the shipped headless profile. The driver points the
 # production telemetry row at its mock collector through the public env vars.
+- id: session-telemetry-otel
+  disabled: false
+
 - id: headless-startup
   disabled: true
 

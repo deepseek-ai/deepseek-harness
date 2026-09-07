@@ -54,7 +54,7 @@ declare module 'cordis' {
 }
 ```
 
-- `SessionProjectionStateMap` 描述 host 折叠状态；`SessionProjectionMap` 继续作为协议块和 React 钩子经 `import type` 共享的唯一客户端 DTO 表。单元省略 `wire` 即保持 host-only。客户端值如何*渲染*是 slot 体系的事，永远不归投影层管。状态/视图拆分见[已实现的状态与客户端视图记录](../../implemented/architecture/2026-08-19-session-projection-state-and-client-views.zh.md)。
+- `SessionProjectionStateMap` 描述 host 折叠状态；`SessionProjectionMap` 继续作为协议块和 React 钩子经 `import type` 共享的唯一客户端 DTO 表。单元省略 `wire` 即保持 host-only。客户端值如何*渲染*是 slot 体系的事，永远不归投影层管。状态/视图拆分见[已实现的状态与客户端视图记录](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md)。
 - **host 是投影唯一的计算地点。** 框架主动驱动（eager drive）每个已注册的单元：每个已提交的会话事件都经过 `apply`；对某事件不感兴趣的单元返回同一个状态引用，而引用未变（`Object.is`）就不产生任何下游工作。客户端从不折叠领域事件——它们收到的是成品值（基线块 + 下文的推送帧）。这消除了双重实现陷阱（plan 的双事件折叠只在 host 写一遍），也消除了一切客户端侧领域代码。
 - **状态永远靠计算得出，绝不入日志。** 日志只存事件；单元的状态住在框架的按会话水位线缓存里（每单元一份 `{state, observedSeq}`），并在后续阶段进入 domain-KV 存储 seam 上的**持久投影缓存（persisted projection cache）**：形如 `(sessionId, key, ver, seq, val)` 的行（`ver` = 单元的 `stateVersion`，`seq` = 水位线，`val` = 状态 JSON）。一行永远不会是错的，至多是陈旧的——其 `seq` 精确说明陈旧到哪。冷读与活读共用同一套读取配方：取缓存状态（或 `init()`），只对超出其水位线的事件做正向 `apply`，再对结果做 `view`。冷列表（跨全部 workspace 列出每个会话的标题）变成一次索引读，至多外加一小段尾部回放；session-persistence seam 在同一后续阶段为这段尾部补一个按 seq 起读的原语。写入策略：节流（次数/间隔，可配置）外加两个强制点——`turn/end` 与 detach（由活转冷的时刻）。两次写入之间崩溃的代价是尾部回放更长一些，绝不会是值出错。
 - 领域的输入事件集由领域自己选择：todos 只折叠 `todo/write`；plan 折叠 `plan/mode` 外加它自己的 `/plan` `command/run` 记录（见 plan 一节）；goal 折叠 `goal/change` 元数据；会话标题折叠其标题事件（顺带下线专设的 `session/title` 帧与客户端的标题快照表——这是该 seam 收编的第四个手工投影）。
@@ -63,7 +63,7 @@ declare module 'cordis' {
 
 ### 已交付的消费方：subagent 身份单元
 
-注册表的两处既有读法已经服务于本 RFC 协议计划之外的一个已交付消费方：[subagent 列表经投影单元读取身份](../../implemented/architecture/2026-08-06-subagent-list-identity-projection.zh.md)注册了 `subagent` 单元——从 `subagent/descriptor` 按 last-wins 折叠出的持久化 mode/label 身份——`SubagentRuntime.listChildren` 对 live child 经 `snapshot()` 读取（水位缓存，零日志读），对 cold child 则用一次持久化整读的结果调用 `restore({}, events, 0)` 读取。注册表约定不变：没有失败通道、没有新读法——单元永不抛错，值缺席本身就是信号，缺席如何呈现是该消费方自己的决定。
+注册表的两处既有读法已经服务于本 RFC 协议计划之外的一个已交付消费方：[subagent 列表经投影单元读取身份](../../archived/architecture/2026-08-06-subagent-list-identity-projection.md)注册了 `subagent` 单元——从 `subagent/descriptor` 按 last-wins 折叠出的持久化 mode/label 身份——`SubagentRuntime.listChildren` 对 live child 经 `snapshot()` 读取（水位缓存，零日志读），对 cold child 则用一次持久化整读的结果调用 `restore({}, events, 0)` 读取。注册表约定不变：没有失败通道、没有新读法——单元永不抛错，值缺席本身就是信号，缺席如何呈现是该消费方自己的决定。
 
 ### 协议层：历史尾页上的 projections 块
 

@@ -36,12 +36,11 @@ kind: "package-group"
 <a id="related-documentation"></a>
 ## 相关文档
 
-先从子系统参考了解共享的查询词汇，再看追踪、搜索与面向模型工具背后的设计记录。
+先从子系统参考了解共享的查询词汇，再看追踪与搜索背后的设计记录。
 
 - [会话查询子系统参考](../../docs/subsystems/session-query.zh.md)——逻辑记录、过滤器、搜索页、血缘、有界读取与事件关系。
-- [会话查询关系追踪](../../.agents/notes/implemented/feature/2026-07-13-session-query-tracing.zh.md)——追踪语义与校验边界。
-- [SQLite FTS5 会话搜索](../../.agents/notes/implemented/feature/2026-07-10-sqlite-session-query-provider.zh.md)——搜索语义、对账与 tokenizer 决策。
-- [面向模型的会话查询工具](../../.agents/notes/implemented/feature/2026-07-24-model-facing-session-query-tools.zh.md)——工作区授权与无游标结果设计。
+- [会话查询关系追踪](../../.agents/notes/archived/feature/2026-07-13-session-query-tracing.md)——追踪语义与校验边界。
+- [SQLite FTS5 会话搜索](../../.agents/notes/archived/feature/2026-07-10-sqlite-session-query-provider.md)——搜索语义、对账与 tokenizer 决策。
 
 <a id="dev-note"></a>
 ## 开发备注

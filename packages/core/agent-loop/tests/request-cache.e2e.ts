@@ -43,7 +43,7 @@ async function loopHarness(): Promise<Context> {
   await created.plugin(LlmRuntime)
   await created.plugin(SessionStore)
   await created.plugin(SessionProjectionRegistry)
-  await created.plugin(SystemPrompt, { persona: SYSTEM })
+  await created.plugin(SystemPrompt, { personaPrefix: SYSTEM })
   await created.plugin(ToolRuntime)
   await created.plugin(AgentRegistry)
   await created.plugin(AgentLoop, { agents: [] })

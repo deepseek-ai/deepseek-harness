@@ -136,6 +136,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
         parentSessionId: parentId,
         childSessionId: childId,
         mode: 'continuable',
+        delivery: 'queue',
         content: [{ type: 'text', text: FOLLOWUP }],
       },
     })
@@ -170,6 +171,7 @@ describe.skipIf(MODE === 'record')('web e2e: subagents/interruptByParent over th
         parentSessionId: parentId,
         childSessionId: childId,
         mode: 'continuable',
+        delivery: 'queue',
         content: [{ type: 'text', text: WAKING }],
       },
     })

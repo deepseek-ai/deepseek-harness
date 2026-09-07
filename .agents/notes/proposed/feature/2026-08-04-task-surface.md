@@ -25,7 +25,7 @@ Task Surface is the default structured-UI path when all of the following hold:
 
 This is one trigger, not a family of product heuristics. The agent calls `show_task_surface` explicitly. A user may ask the agent to use a Task Surface in ordinary language. Products do not inspect tool names or task topics to open bespoke panels, and repeated use does not automatically turn a Task Surface into a Plugin.
 
-Short blocking questions remain with [`ask_user_question`](../../implemented/feature/2026-07-29-ask-question-web-presentation.md). Plain explanation remains chat. Cross-Session navigation, background behavior, new services, or durable custom UI belongs to the Generated Client Plugin workflow.
+Short blocking questions remain with [`ask_user_question`](../../archived/feature/2026-07-29-ask-question-web-presentation.md). Plain explanation remains chat. Cross-Session navigation, background behavior, new services, or durable custom UI belongs to the Generated Client Plugin workflow.
 
 ## Declarative model
 
@@ -102,7 +102,7 @@ interface TaskSurfacePresentationMeta {
 
 The tool keeps a generic [render intent](../../implemented/architecture/2026-07-02-tool-render-intent-union.md). The keyed Web row reads the tagged metadata already retained on `ToolResultNode`; no new render-intent arm or presentation registry is required. Clients without Task Surface support render the ordinary result content.
 
-The Web plugin has two static Session-scoped registrations under the [toolview](../../implemented/architecture/2026-07-23-toolview-dissolution.md) and [slot registration](../../implemented/architecture/2026-07-22-slot-type-chain-implementation.md) contracts. A keyed `conversation.chat.toolview` entry for `show_task_surface` renders the durable transcript occurrence as a compact summary and read-only replay. One `TaskSurfaceDock` entry in the existing `conversation.input.dock` is the only actionable mount: it reads the active projection, calls `getActive` for the exact identity, and owns fields, drafts, submit, and dismiss. Because the Dock is independent of transcript pagination, an active Surface remains actionable when its `ToolResultNode` is outside the loaded history window.
+The Web plugin has two static Session-scoped registrations under the [toolview](../../archived/architecture/2026-07-23-toolview-dissolution.md) and [slot registration](../../implemented/architecture/2026-07-22-slot-type-chain-implementation.md) contracts. A keyed `conversation.chat.toolview` entry for `show_task_surface` renders the durable transcript occurrence as a compact summary and read-only replay. One `TaskSurfaceDock` entry in the existing `conversation.input.dock` is the only actionable mount: it reads the active projection, calls `getActive` for the exact identity, and owns fields, drafts, submit, and dismiss. Because the Dock is independent of transcript pagination, an active Surface remains actionable when its `ToolResultNode` is outside the loaded history window.
 
 The Dock follows the existing composer-chain fallback semantics. Any `conversation.composer` takeover hides the fallback composer stack, including `TaskSurfaceDock`, without unmounting it; the same draft owner reappears when the takeover resolves. A takeover does not receive Task Surface actions or create another editor.
 

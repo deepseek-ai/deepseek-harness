@@ -1,5 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
-import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import AttachmentStore, { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type {
@@ -38,7 +39,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   const session = ctx.sessions.create(SESSION, {
     meta: { cwd: '/workspace', ...(origin === undefined ? {} : { origin }) },
   })
-  const inbox = new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
+  const inbox = createInboxStub()
   const followup = vi.fn()
   const agent = {
     id: session.id,

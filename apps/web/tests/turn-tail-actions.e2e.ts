@@ -168,7 +168,7 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
   }, 120_000)
 
   it.skipIf(MODE === 'record')('shows exact completed-Turn usage and expands its available facts', async () => {
-    await launch()
+    await launch(undefined, 5)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-turn-usage-expanded'))
     const { settled } = await sendPrompt(120_000)
     await settled
@@ -200,8 +200,8 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
     await timeTrigger.click()
     const timeDialog = page.getByRole('dialog', { name: 'Turn time and speed' })
     expect(await timeDialog.count()).toBe(1)
-    expect(await timeDialog.getByText(/tok\/s/).count()).toBe(1)
-    expect(await timeDialog.getByText('Time to first token (TTFT)', { exact: true }).count()).toBe(1)
+    expect(await timeDialog.getByText(/tok\/s/).count()).toBe(0)
+    expect(await timeDialog.getByText('Time to first token (TTFT)', { exact: true }).count()).toBe(0)
     await page.keyboard.press('Escape')
     await trigger.click()
 
@@ -212,7 +212,7 @@ describe('web e2e: assistant IconActions wait for the turn to end', () => {
   }, 120_000)
 
   it.skipIf(MODE === 'record')('folds the Turn process after the completed reply becomes the answer', async () => {
-    await launch()
+    await launch(undefined, 5)
     onTestFailed(() => saveFailureShot(page, 'web-e2e-turn-tail-actions-completed'))
     const { settled } = await sendPrompt()
     await settled

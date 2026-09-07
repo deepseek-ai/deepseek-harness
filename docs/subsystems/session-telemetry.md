@@ -55,21 +55,37 @@ interface SessionTelemetryRecord {
 }
 ```
 
-Every canonical [session event](session.md), including each `assistant/message` or `assistant/attempt` with its complete compact stream and every plugin-merged type the seam never heard of, passes through whole as one ordered ledger record. Process-local `agent/assistant-stream` frames do not enter this durable feed. A new Session object replays its complete log from seq 0, including constructor seed history; re-adopting the same object resumes after its handoff cursor. Delivery is best-effort: the cursor marks handed-off, not delivered, and records can be lost (crash, reload window) or duplicated (new-object replay, SDK retries), so receivers dedupe ledger records on `(session.id, session.format_version, event.seq)`; ops records deliberately omit that identity — they are signals to alert on, not entries to sum, and tolerate duplicates instead.
+Every canonical [session event](session.md), including each `assistant/message` or `assistant/attempt` with its complete compact stream and every plugin-merged type the seam never heard of, passes through whole as one ordered ledger record. Process-local `agent/assistant-stream` frames do not enter this durable feed. A new Session object starts at its lifecycle boundary unless the backend selects `includeHistory`; re-adopting the same object resumes after its handoff cursor. Delivery is best-effort: the cursor marks handed-off, not delivered, and records can be lost (crash, reload window) or duplicated (new-object replay, SDK retries), so receivers dedupe ledger records on `(session.id, session.format_version, event.seq)`; ops records deliberately omit that identity — they are signals to alert on, not entries to sum, and tolerate duplicates instead.
 
 ## The sharing disclosure
 
-The seam's acknowledgement contract (owned by the [Service Definition README's sharing-disclosure section](../../packages/session/session-telemetry/README.md#the-sharing-disclosure)): every backend discloses its deployment-selected sharing policy through the required abstract `sharing` member on `ctx.sessionTelemetry`, and consumers render "not configured" only when no telemetry service is mounted. The disclosure states the current policy, never delivery or retention — handoff is the non-blocking enqueue, and batching, retry, and loss policy stay the reporting SDK's.
+Every backend exposes its deployment-selected mode through the required abstract `sharing` member on `ctx.sessionTelemetry` ([Service Definition README](../../packages/session/session-telemetry/README.md#the-sharing-disclosure)). This is neither a per-Session admission decision nor a delivery receipt. The `/feedback` acknowledgement does not consult it.
 
 ```ts type-equiv
 /**
- * Deployment-selected session-sharing policy disclosed by a mounted
- * {@link SessionTelemetryBackend} backend to human-facing acknowledgement surfaces (the
- * `/feedback` command's confirmation text). The Service Definition owns the
- * vocabulary so consumers and backends do not depend on a specific provider.
+ * Deployment-selected session-sharing mode, not confirmation of SDK delivery.
  */
 type SessionTelemetrySharingStatus = 'full' | 'feedback-only' | 'disabled'
 ```
+
+## Capture policy
+
+```ts type-equiv
+/** Whether capture follows live events or reads the canonical log only when requested. */
+type SessionTelemetryCapture = 'live' | 'on-demand'
+```
+
+```ts type-equiv
+/** Backend-selected capture mode and history policy. */
+interface SessionTelemetryCaptureOptions {
+  /** Follow live events, or wait for explicit capture; defaults to live. */
+  capture?: SessionTelemetryCapture
+  /** Include stored history before this lifecycle; defaults to false. */
+  includeHistory?: boolean
+}
+```
+
+`includeHistory` permits stored and inherited records but does not itself authorize capture. The [OTel backend](../../packages/session/session-telemetry-otel/README.md) uses on-demand capture and requires new own explicit feedback; it releases only the complete prefix through that feedback, for every provider.
 
 ## The backend contract
 

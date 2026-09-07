@@ -22,6 +22,8 @@ Host presenter 与 Client keyed renderer 分担展示会形成对同一事件的
 
 ## Decision
 
+下述展示对等要求不包含已独立批准的[嵌套 terminal 卡片修复](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)；其他展示与所有权约束全部保留。
+
 Session Remote journal 只下发原始、已验证、可持久化的 Session event。`session.page` 和 `session.follow` 不解析工具参数，不查询 Tools registry，不恢复 presenter scope，不执行 `presentCall`／`presentResult`，也不构造或克隆任何 tool view。
 
 Client Conversation 层继续负责工具调用与结果的 identity、配对、生命周期、Code Dispatch 拓扑和稳定 Chat Node。它不解释具体工具名称，也不生成 terminal、diff、read、search 或 web 组件 props。
@@ -49,7 +51,7 @@ Host 的 `ToolDefinition.presentCall`、`ToolDefinition.presentResult`、`ToolCa
 | 保留 | Session 日志格式、Remote journal 生命周期与 Conversation identity/topology |
 | 保留 | 现有 keyed slot、Generic fallback、Chat、Details 与 Trajectory 结构 |
 | 禁止 | 新 Client presenter service、平行 registry 或 wire renderer id |
-| 禁止 | 新卡片、视觉改版、交互改版或 Code Dispatch rich-card 增强 |
+| 禁止 | 新卡片、视觉改版、交互改版或 Code Dispatch rich-card 增强，[嵌套 terminal 卡片例外](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)除外 |
 | 禁止 | 为兼容保留双写、版本协商或旧 `view` 字段 |
 
 ## 术语
@@ -242,13 +244,13 @@ Chat 和 Trajectory 的 Tool Definition 都不读取 view，而从事件生成�
 
 ### Root 与 Code Dispatch 子调用
 
-Host presenter API 描述顶层 call/result。Code Dispatch 子调用使用 Generic/flattened Client 展示；Client 能识别子调用名称并不赋予它结构化卡片。
+Host presenter API 描述顶层 call/result。本决定覆盖的 diff、read、search 和 web model 对 Code Dispatch 子调用保留 Generic/flattened 展示；受支持的 terminal 调用使用与根调用相同的适用规则。
 
-Code Dispatch start 与 result event 已经携带 `parentCallId`。Conversation 在每个 child `ToolCallBlock` 上保留这项现有事实，root Session call 则不携带它。五类结构化 card model 只接受没有 `parentCallId` 的 block，原本有意支持嵌套调用的 renderer 则继续收到同一个 child block。
+Code Dispatch start 与 result event 已经携带 `parentCallId`。Conversation 在每个 child `ToolCallBlock` 上保留这项现有事实，root Session call 则不携带它。diff、read、search 和 web model 只接受没有 `parentCallId` 的 block；terminal model 与原本有意支持嵌套调用的 renderer 接受 child block。
 
-Details panel 原样委托选中的 block。同一组 card model 读取 `parentCallId`，让选中的 Code Dispatch child 保持现有 raw fallback，因此 Details slot 不需要 placement 字段。
+Details panel 原样委托选中的 block。共享 card model 在行与 Details 中应用相同的 terminal 适用规则和非 terminal 子调用限制，因此 Details slot 不需要 placement 字段。
 
-keyed slot 仍按每个子调用的真实 tool name 分发；`parentCallId` 只控制本决定覆盖的 terminal/diff/read/search/web 结构化模型。Skill、Cordis 等已经直接读取 raw block 的专用 renderer 保持现状。
+keyed slot 仍按每个子调用的真实 tool name 分发；`parentCallId` 只限制本决定覆盖的 diff/read/search/web 结构化模型。Skill、Cordis 等已经直接读取 raw block 的专用 renderer 保持现状。
 
 ### 缺失调用头
 
@@ -294,7 +296,7 @@ Generic Host `presentCall` 的 title、kind、rawInput、content 与 locations �
 
 ### Terminal 卡片
 
-Client terminal model 从工具名称、调用参数、结果 content、error、现有 `parentCallId` 与 Session cwd 派生现有 `TerminalBlock` props。
+Client terminal model 从工具名称、调用参数、结果 content、error 与 Session cwd 派生现有 `TerminalBlock` props，不依赖 `parentCallId`。
 
 | 输入 | 保持的结果 |
 |---|---|
@@ -306,9 +308,9 @@ Client terminal model 从工具名称、调用参数、结果 content、error、
 | persistent `bash`／`pwsh` settled | Generic flattened result，不新增 exit card |
 | `terminal_send` 前台 | terminal prompt 与 output |
 | `terminal_send` background/error | Generic 结果 |
-| Code Dispatch child | 当前 flattened Generic 形态 |
+| Code Dispatch child | 与根调用相同的 terminal 适用规则与 fallback 规则 |
 
-标准 shell 结果继续解析末尾 `[exit code: N]` 与 `[killed by signal: X]`。已解析的 marker 从正文移除；timeout、sandbox denial 与没有 pill 的 marker 留在正文。
+标准 shell 结果解析末尾 `[exit code: N]` 与 `[killed by signal: X]`。末尾已识别的 spill 策略提示会改用 Generic 输出：在 shell 行中可展开，在 Details 中显示原文，因为退出标记可能被移位或省略。已解析的 marker 从 terminal 正文移除；timeout、sandbox denial 与没有 pill 的 marker 留在正文。
 
 调用 `description` 继续显示在 card 上方并覆盖折叠摘要。workdir 继续按绝对、相对和缺失三种情况处理；相对路径基于 Session cwd，且保留 `.`、`..`、盘符与 UNC root 的归一化。
 
@@ -418,7 +420,7 @@ fixture 不导入 Host 工具包来计算页面展示，也不保留 presenter �
 | grep/glob | 当前 grouped/path card、截断与 recovery |
 | web_search/web_fetch | 当前来源/摘要 card 与原始正文 |
 | Todo/Question/Skill/Cordis | 当前专用行 |
-| Code Dispatch subcall | 当前 Generic/flattened 形态 |
+| Code Dispatch subcall | 满足条件时显示 terminal 卡片；diff/read/search/web 保持 Generic/flattened |
 | Chat 与 Details | 同一调用使用相同 card fields |
 | Trajectory | 当前 identity、树、选择和 details |
 | Deliverables | 当前成功 mutation chips 与链接 |
@@ -526,7 +528,7 @@ Host registry 允许不同 scope 为同一 tool name 提供不同定义；Sessio
 - search 用 meta/content 得到已固定的 grouped/path card 与 recovery。
 - web 用 meta/content 得到已固定的 sources/fetch summary。
 - unknown、malformed、error、missing-call 与 missing-meta 继续 Generic。
-- `parentCallId` 缺失与存在的用例证明结构化展示不会到达 Code Dispatch descendant。
+- `parentCallId` 缺失与存在的用例证明 terminal 适用规则一致，并保留 diff、read、search 和 web descendant 的 Generic fallback。
 - Chat 与 Details 对同一 block 得到相同 card fields。
 
 ### Deliverables
@@ -582,12 +584,12 @@ Host registry 允许不同 scope 为同一 tool name 提供不同定义；Sessio
 - result meta 逐字节通过日志与 Remote 到达 Client。
 - Conversation 只从 raw event 组装 ToolCallBlock。
 - ToolCallBlock 不含 Host render-intent 字段。
-- 五类结构化 card model 只读 raw block、其现有 `parentCallId` 与 Session path facts。
+- 五类结构化 card model 只读 raw block 与 Session path facts；只有 diff、read、search 和 web 使用 `parentCallId` 拒绝子调用。
 - Generic、Todo、Question、Skill 与 Cordis 行行为不变。
 - Deliverables 不依赖 render intent 且保持当前 paths。
 - 所有第一方顶层工具的文本、组件、展开内容、状态、链接与排序不变。
 - malformed、missing-meta、error、orphan 与 unknown-tool 继续安全 fallback。
-- Code Dispatch 子调用保持 Generic/flattened。
+- Code Dispatch 的 diff、read、search 和 web 子调用保持 Generic/flattened；terminal 子调用遵循根调用适用规则。
 - Chat、Details 与 Trajectory 行为不变。
 - 现有 Web browser expected 无需刷新即可通过。
 - Host presenter API、实现与直接测试不变。
@@ -632,7 +634,7 @@ read 行结构、applied diff、search 分组、web sources 和有效 truncation
 
 ### 允许展示增强
 
-Client 可以为 Code Dispatch 子调用、缺失 call head 或 Host presenter 不可用的历史生成更多 rich card，但这会混淆 ownership 变化与产品行为，并使快照无法证明对等，因此拒绝。
+将更丰富的 Code Dispatch 卡片、缺失 call head 的推断或其他历史展示增强与所有权变更捆绑，会使快照无法证明对等。本决定拒绝这种捆绑；[嵌套 terminal 卡片例外](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)不放宽非 terminal 子调用限制。
 
 ### 接受临时 Generic 退化
 
@@ -684,9 +686,11 @@ optional `view` 的缺失是所有 consumer 共同遵守的预发布 wire 类型
 
 ## 与现有决策的关系
 
-本文部分取代 [Client 工具展示所有权](2026-08-08-client-tool-presentation-ownership.zh.md) 中“card model 接收 Host view”的实现事实；`ui-tool` 拥有展示、业务插件使用 keyed slot、Conversation 只拥有生命周期与拓扑的核心决定保持不变。
+[嵌套 terminal 卡片](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)仅部分取代 terminal 子调用卡片禁令及其展示对等要求。本文继续负责原始 journal 所有权、Client 派生以及 diff/read/search/web 子调用限制。
 
-本文保留 [toolview 溶解](2026-07-23-toolview-dissolution.zh.md) 的决定：Client 仍只有 slot 注册模型，不恢复 `ToolViewRegistry`。
+本文部分取代 [Client 工具展示所有权](../../archived/architecture/2026-08-08-client-tool-presentation-ownership.md) 中“card model 接收 Host view”的实现事实；`ui-tool` 拥有展示、业务插件使用 keyed slot、Conversation 只拥有生命周期与拓扑的核心决定保持不变。
+
+本文保留 [toolview 溶解](../../archived/architecture/2026-07-23-toolview-dissolution.md) 的决定：Client 仍只有 slot 注册模型，不恢复 `ToolViewRegistry`。
 
 本文收窄 [render-intent union](2026-07-02-tool-render-intent-union.zh.md) 的消费范围：Host API 与类型保留，Session Remote 与 Web Client 不消费它。本文独自规定 transport 拆分，不改写该 presenter 决策。
 
@@ -699,7 +703,7 @@ optional `view` 的缺失是所有 consumer 共同遵守的预发布 wire 类型
 ## Deferred
 
 - Host presenter 若长期没有生产消费者，可由另一项明确决策评估删除；本决定不预判。
-- Code Dispatch 子调用若要专用卡片，需单独设计并更新可见快照；本决定保持现状。
+- Code Dispatch 子调用的 diff、read、search 和 web 专用卡片仍需独立设计并更新可见快照；terminal 调用由链接的部分取代决策负责。
 - 第三方 mutation tool 若要加入 Deliverables，需新增 Client-owned 贡献；本决定不为尚无消费者的扩展性建 registry。
 - 同名 provider 若要不同 Client 展示，需先定义稳定、非展示性的 identity；不得恢复按页 Host view。
 - Client card model 若需量化性能，可以增加 immutable-block 微基准；已交付架构禁止扫描 Session window。

@@ -58,7 +58,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-循环是部署方拥有的固定脚本：模型只提供数据，无法改变循环、提供方路由、schema 或交接校验。该工具是基于 `ctx.workflowEngine` 与 `ctx.subagents` 的普通插件——不会向 `agent-loop` 添加 Ralph 模式或全新 agent loop，同会话的 goal 领域也保持独立。[Ralph Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-fresh-agent-ralph-workflow-tool.zh.md)拥有策略与暂缓事项。
+循环是部署方拥有的固定脚本：模型只提供数据，无法改变循环、提供方路由、schema 或交接校验。该工具是基于 `ctx.workflowEngine` 与 `ctx.subagents` 的普通插件——不会向 `agent-loop` 添加 Ralph 模式或全新 agent loop，同会话的 goal 领域也保持独立。[Harness 层目标式执行 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)拥有策略与暂缓事项。
 
 ### 固定脚本与路由
 
@@ -97,7 +97,7 @@ kind: "package-reference"
 - [worker-thread 引擎](../workflow-worker-thread/README.zh.md)——执行固定脚本的引擎。
 - [subagent seam](../../subagent/subagent/README.zh.md)——全新子 agent 的提供方契约。
 - [goal 组](../../goal/goal/README.zh.md)——面向普通长期目标的同会话 goal 工具。
-- [Ralph 工具 Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-fresh-agent-ralph-workflow-tool.zh.md)——策略、提供方要求与暂缓事项。
+- [Harness 层目标式执行 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)——策略、提供方要求与暂缓事项。
 
 -----
 

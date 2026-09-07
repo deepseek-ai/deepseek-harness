@@ -39,16 +39,23 @@ export interface SpillOwner {
 }
 
 /**
- * Tool and call that produced one spilled artifact — recorded by the backend for a readable
- * filename and inspection. Not interpreted for access control; purely
- * descriptive.
+ * Producer of a spilled artifact. Tool results carry their model-issued call id;
+ * session references identify the captured source session instead. Descriptive
+ * provenance only, never access control.
  */
-export interface SpillSource {
+export type SpillSource = {
+  kind: 'tool'
   /** The tool whose result was spilled (e.g. `web_fetch`). */
   toolName: string
   /** The model-issued call id the result belongs to. */
   callId: ToolCallId
   /** A short human label for the artifact (e.g. `result`). */
+  label: string
+} | {
+  kind: 'session-reference'
+  /** Session whose projected conversation was captured. */
+  sessionId: SessionId
+  /** Host-provided label for the referenced session. */
   label: string
 }
 

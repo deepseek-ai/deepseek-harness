@@ -99,7 +99,7 @@ export function QueueDock({ useSession, updateQueue, notify, loadImage, t }: Que
   }, [pendingSubmissions, queue])
   const rowCount = queue.length + pendingQueue.length
   const running = useSession(s => s.running)
-  const queueMutable = useSession(s => s.subagent === null)
+  const queueMutable = useSession(s => s.subagent === null || s.subagent.address.mode === 'continuable')
   const [editing, setEditing] = useState<{ id: QueueItemId; text: string } | null>(null)
   const [busy, setBusy] = useState<QueueItemId | null>(null)
   const [collapsed, setCollapsed] = useState(true)

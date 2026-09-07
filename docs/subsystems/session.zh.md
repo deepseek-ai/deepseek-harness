@@ -442,13 +442,16 @@ declare class Session {
     inheritedEventCount?: SessionLogOffset,
   ): Session;
   /**
-   * Restore a detached session by taking ownership of fresh persistence values.
-   * The storage format, event envelopes, sequence continuity, surface transitions,
-   * and header fields are validated before the restored objects are frozen.
+   * Restore a detached session by adopting an independently owned or deeply frozen seed.
+   * Runtime-required event fields, event envelopes, sequence continuity, surface
+   * transitions, and header fields are validated without copying or freezing events.
+   * Embedded Assistant streams remain opaque until a stream consumer or storage
+   * verifier reads them.
    * @param id - restored session identity.
-   * @param seed - fresh detached events whose ownership is transferred.
-   * @param header - fresh detached metadata whose ownership is transferred.
+   * @param seed - independently owned or deeply frozen events.
+   * @param header - independently owned storage metadata.
    * @param inheritedEventCount - exact fork-inherited prefix length decoded from storage.
+   * @param eventState - aliasing state carried from the operation that produced the seed.
    * @returns a restored detached session.
    */
   static fromRestore(
@@ -456,6 +459,7 @@ declare class Session {
     seed: readonly SessionEvent[],
     header: SessionHeader,
     inheritedEventCount: SessionLogOffset,
+    eventState: SessionSeedEventState,
   ): Session;
   /**
    * Return the immutable event stored at one exact sequence number.
@@ -655,7 +659,7 @@ interface TurnEndReasonMap {
 
 如果同一个插件事件族中的多条事件要组装成一个 Web Client Conversation Node，该事件族中的每条 start、update、result、resource 或 interruption 事件都必须携带或独立推导出同一个稳定业务 id。此要求只约束需要关联的 Node 事件族，并不要求每条 Session 事件都有业务 id；Client 因此无须根据相邻关系猜测归属，也无须扫描历史。参见 [Conversation 子系统](conversation.zh.md)。
 
-钩子桥接层的 `hook/invoked` / `hook/result` 对（来自 `@deepseek-ai/dsh-hook-protocol`）通过 `handlerId` 关联。`UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop` 在 loop 已打开的轮次内触发，因此其 `hook/*` 记录天然位于轮次之内。`SessionStart` 不生成 `hook/*` 记录，因为它在轮次 1 之前运行；其上下文会在 inbox 中保持待处理，直到唤醒交付打开一个轮次（见[钩子桥接 Agent Note](../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.zh.md)）。
+钩子桥接层的 `hook/invoked` / `hook/result` 对（来自 `@deepseek-ai/dsh-hook-protocol`）通过 `handlerId` 关联。`UserPromptSubmit`、`PreToolUse`、`PostToolUse` 与 `Stop` 在 loop 已打开的轮次内触发，因此其 `hook/*` 记录天然位于轮次之内。`SessionStart` 不生成 `hook/*` 记录，因为它在轮次 1 之前运行；其上下文会在 inbox 中保持待处理，直到唤醒交付打开一个轮次。
 
 ## 持久性约定
 
@@ -865,10 +869,9 @@ create(id?: SessionId, options?: CreateSessionOptions): Session
  *
  * @param id - the session id; omitted, the store mints `session-<n>`.
  * @param options - seed events and/or creation metadata for the header. With
- *   `seedSource: 'persistence'`, metadata and events must be fresh detached
- *   graphs whose ownership transfers to this call: they are validated and
- *   frozen in place through {@link Session.fromRestore}, so the caller must
- *   retain no mutable aliases.
+ *   `eventState`, every seed event is either independently owned or any
+ *   shared value is deeply frozen; {@link Session.fromRestore} validates and
+ *   adopts those values without copying or freezing them.
  * @returns the constructed session, NOT yet in the store.
  * @throws if a session with `id` already exists, metadata is not a plain
  *   lossless-JSON record with valid scalar fields, or `meta.cwd` is a

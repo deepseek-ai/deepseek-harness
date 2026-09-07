@@ -69,7 +69,7 @@ interface Agent {
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
-  /** The agent-owned projection of durable pending work. */
+  /** Agent-owned access to durable pending work. */
   readonly inbox: Inbox
   /** The current lifecycle state, mirrored on every `agent/status` transition. */
   readonly status: AgentStatus
@@ -210,16 +210,73 @@ interface AgentOptions {
 }
 ```
 
-在 `agent/request` 之后，分发要求 `provider` 与 `model` 都存在。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona` 提示词段落可以遮蔽全局默认 persona。
+在 `agent/request` 之后，分发要求 `provider` 与 `model` 都存在。显式 `reasoningEffort` 会为该路由的首次请求提供初始值；确切模型解析会校验该值，省略时则允许填入适配器默认值。提供 `maxTokens` 时，它必须是正安全整数，并限制每次对话模型请求的输出；省略时，系统会在写入请求 header 前填入确切模型的适配器默认值，否则提供方行为保持不变。agent 作用域的 `deployment:persona-prefix` 提示词段落可以遮蔽全局默认 persona。
 
 inbox 即投递词汇——agent 以持久投影形式拥有的两条有序待处理消息列表：
+
+```ts type-equiv
+/** Agent-owned access to pending work; concrete storage belongs to the driver. */
+interface Inbox {
+  /** Prompts awaiting individual turns. */
+  readonly nextTurn: readonly UserMessage[]
+  /** Input awaiting the next step boundary. */
+  readonly nextStep: readonly UserMessage[]
+
+  /** Durably cancel all pending input, clearing next-step before next-turn. */
+  clear(): void
+
+  /**
+   * Append one message to a pending list.
+   * @param target - pending list to extend.
+   * @param message - message to append.
+   */
+  append(target: InboxTarget, message: UserMessage): void
+
+  /**
+   * Prepend one message to a pending list.
+   * @param target - pending list to extend.
+   * @param message - message to prepend.
+   */
+  prepend(target: InboxTarget, message: UserMessage): void
+
+  /**
+   * Replace one pending message in place.
+   * @param messageId - identity of the pending message to replace.
+   * @param newMessage - replacement message.
+   * @returns whether the message was still pending.
+   */
+  replace(messageId: MessageId, newMessage: UserMessage): boolean
+
+  /**
+   * Remove one pending message.
+   * @param messageId - identity of the pending message to remove.
+   * @returns whether the message was still pending.
+   */
+  remove(messageId: MessageId): boolean
+
+  /**
+   * Apply standard splice semantics and durably record the normalized result.
+   * @param target - pending list to mutate.
+   * @param start - splice position.
+   * @param deleteCount - maximum number of messages to remove.
+   * @param inserted - messages to insert at the resolved position.
+   * @returns messages removed by the splice.
+   */
+  splice(
+    target: InboxTarget,
+    start: number,
+    deleteCount: number,
+    inserted: UserMessage[],
+  ): UserMessage[]
+}
+```
 
 ```ts type-equiv
 /** One of the two ordered pending-message lists owned by an agent. */
 type InboxTarget = 'next-turn' | 'next-step'
 ```
 
-每个待处理入队项就是其 `UserMessage`；`MessageId` 是唯一标识。`Inbox.append`、`prepend`、`replace`、`remove`、`clear`、`splice` 与 `claim` 会记录规范化的持久 `agent/inbox/spliced` 变更，并拒绝重复的待处理 id。`replace(messageId, newMessage)` 与 `remove(messageId)` 通过 `MessageId` 跨两份列表定位待处理消息；替换可以改变标识，并先将旧消息作为 discarded 发布，再将新消息作为 inserted 发布。普通删除和 `clear()` 都表示取消。`claim(target)` 通过纯删除 splice 移除拟进入步骤的批次——全部 `next-step` 输入，外加轮次边界上的一条 `next-turn` 消息——且不发出 discarded 通知；循环另行逐条发出 claimed 通知。UI 投影等整体队列消费方通过持久 splice 重建 `nextTurn` 与 `nextStep`，而跟踪单条消息的消费方使用精确的 `agent/inbox/inserted`、`claimed` 与 `discarded` 通知。
+每个待处理入队项就是其 `UserMessage`；`MessageId` 是唯一标识。结构化 `Inbox` 方法会记录规范化的持久 `agent/inbox/spliced` 变更，并拒绝重复的待处理 id。`replace(messageId, newMessage)` 与 `remove(messageId)` 通过 `MessageId` 跨两份列表定位待处理消息；替换可以改变标识，并先将旧消息作为 discarded 发布，再将新消息作为 inserted 发布。普通删除和 `clear()` 都表示取消。在步骤边界，dsh-agent-loop 包内部的 `ReactLoopInbox` 会通过纯删除 splice 移除拟进入步骤的批次——全部 `next-step` 输入，外加轮次边界上的一条 `next-turn` 消息——且不发出 discarded 通知，随后逐条发出 claimed 通知。仅供循环使用的待处理检测与领取操作不属于 `Agent.inbox`。每个 `ReactLoopInbox` 构造函数都从其 agent 作用域贡献标准 `inbox` 投影；注册表通过引用计数在多个 agent 之间共享该定义，其 cell 是唯一 live 状态，同一份折叠也服务于冷消费方。该 fold 会拒绝不安全或越界的 splice 坐标，以及跨两份列表重复的标识，并通过事件 seq 指出格式错误的持久历史。跟踪单条消息的消费方使用精确的 `agent/inbox/inserted`、`claimed` 与 `discarded` 通知。
 
 取消：
 

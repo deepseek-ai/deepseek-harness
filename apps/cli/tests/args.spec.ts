@@ -95,6 +95,12 @@ describe('parseDshArgs', () => {
     expect(exitCode(['plugin', 'add', 'x'])).toBe(1) // --profile required
     expect(exitCode(['plugin', '--profile', 'tui'])).toBe(1) // nothing to forward
     expect(exitCode(['plugin', '--profile', ''])).toBe(1)
+    expect(exitCode(['--profile', 'desktop'])).toBe(1)
+    expect(exitCode(['--profile', 'Desktop'])).toBe(1)
+    expect(exitCode(['--profile', 'DESKTOP'])).toBe(1)
+    expect(exitCode(['--profile', 'desktop', '--dump-config'])).toBe(1)
+    expect(exitCode(['plugin', '--profile', 'desktop', 'add', 'x'])).toBe(1)
+    expect(exitCode(['plugin', '--profile', 'Desktop', 'add', 'x'])).toBe(1)
     expect(exitCode(['--profile', 'x', 'plugin', 'add', 'y'])).toBe(1)
   })
 

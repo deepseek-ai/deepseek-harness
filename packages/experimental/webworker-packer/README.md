@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The VFS image packer: turns one composed profile into the gzip-compressed base tar the browser worker mounts as its filesystem, and opaque data trees into ordered overlay tars ([experimental stance](../../../.agents/notes/implemented/architecture/2026-08-20-webworker-pack-lowering-and-preview.md)). Nothing is compiled from source — the base image carries the repository's real build products, so a preview deployment debugs exactly what the served deployment ships. Read this page when packaging a preview image or diagnosing its contents.
+The VFS image packer: turns one composed profile into the gzip-compressed base tar the browser worker mounts as its filesystem, and opaque data trees into ordered overlay tars ([experimental group](../README.md)). Nothing is compiled from source — the base image carries the repository's real build products, so a preview deployment debugs exactly what the served deployment ships. Read this page when packaging a preview image or diagnosing its contents.
 
 ## Table of Contents
 
@@ -22,6 +22,8 @@ The VFS image packer: turns one composed profile into the gzip-compressed base t
 
 <a id="use-this-package"></a>
 ## Use this package
+
+The [`DshConfigTreeDeclaration`](../../util/package-manifest/README.md) type describes each `dsh.configTrees` entry; this packer validates it and resolves its source directory.
 
 The pack is a three-layer standard stack:
 

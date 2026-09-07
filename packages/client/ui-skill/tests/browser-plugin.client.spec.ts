@@ -7,7 +7,7 @@
  * session-keyed catalog cache (single-flight per key, scope-birth warm
  * prewarm, connection/reset clear), shared fuzzy name ranking, RPC-failure
  * rejection, pick → plain-text outcome (the plain-text-reference decision:
- * .agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md),
+ * .agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md),
  * the synchronous
  * lexicon reads over the settled cache, and the reference codec's two
  * projections. Direct driving is deliberate: this spec owns only the

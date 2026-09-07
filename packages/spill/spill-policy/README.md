@@ -86,11 +86,17 @@ The policy is deliberately narrow: it only decides **when** to spill and compose
 
 A `tools/post-execute` waterfall listener (registered with `prepend`, delegating via `next()`) bounds the model-facing result; a `tools/ptc-dispatch-log` listener bounds the durable log copy of each `run_code` sub-call. Both share one replacement helper so the two projections are byte-identical. The post-execute arm skips `read` to avoid a read → spill → read loop; the dispatch-log arm bounds `read` sub-calls because a log copy is not model context.
 
+<a id="shared-notice-ownership"></a>
+### Shared notice ownership
+
+The browser-safe `@deepseek-ai/dsh-spill-policy/notice` entry owns both `formatSpillNotice(omitted, ref)`, used by the producer, and `hasSpillNotice(text)`, used by presentation consumers. Formatting and recognition share the notice delimiters; omission validation uses the existing `describeOmitted` formatter rather than a second copy of its prose. Recognition accepts a complete final notice after a preview or by itself and preserves the persisted notice spelling. It reads recorded text without rewriting it.
+
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` validation, the two waterfall listeners, the shared replacement helper |
+| [`src/notice.ts`](src/notice.ts) | Browser-safe notice formatting and recognition, published as `./notice` |
 | [`src/types.ts`](src/types.ts) | `SpillPolicyExec`: the minimal structural view of a tool execution the policy reads for the owning session id |
 | — | No runtime invariant companion is published; this package exposes no independent event sequence or mutable data relation beyond contracts enforced at its owning seam. |
 
@@ -111,7 +117,6 @@ Read these pages when the package-level contract is not enough.
 - [dsh-spill-local](../spill-local/README.md) — the local backend that stores the spilled text.
 - [dsh-output-retention](../../util/output-retention/README.md) — the preview mechanics (`TextRetainer`) the policy composes.
 - [Tool output spill decision](../../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.md) — the capability boundary and design rationale.
-- [PTC dispatch-log spill decision](../../../.agents/notes/implemented/feature/2026-07-26-ptc-dispatch-log-spill.md) — why the durable log copy is bounded too.
 
 -----
 
@@ -139,6 +144,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits define when the policy cannot help. They are current package constraints.
 
+- **Text recognition cannot authenticate output** — a tool can print the same notice text; `hasSpillNotice` identifies a text convention, not proof that the policy saved a result.
 - **Only final plain-text results are spillable** — mixed-content results, blocked feedback, and `read` pass through; provider truncation or tool-owned retention that happened earlier cannot be recovered here.
 - **A notice that cannot fit disables replacement for that call** — a tiny cap or long locator leaves the oversized original inline after the backend has already saved an unreferenced spill.
 

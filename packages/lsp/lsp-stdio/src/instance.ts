@@ -97,7 +97,7 @@ export class LspInstance {
     const run = abortable(this.queue, signal)
       .then(() => this.runQuery(request, source, signal))
       .catch(async (error: unknown) => {
-        if (this.isTransportFailure(error)) await this.startTeardown()
+        if (this.isTransportFailure(error)) await this.awaitTeardownAttempt()
         throw error
       })
     // Keep the tail alive regardless of this query's outcome so the next caller still serializes. The
@@ -136,7 +136,7 @@ export class LspInstance {
       await abortable(this.ready, signal)
     } catch (error) {
       if (!this.dead) {
-        await this.startTeardown()
+        await this.awaitTeardownAttempt()
       }
       throw error
     }
@@ -162,7 +162,7 @@ export class LspInstance {
       } catch (error) {
         // A canceled backpressured write or failed stdin leaves the protocol stream unusable before
         // `opened` can arm the didClose cleanup. Teardown here makes the pool evict the instance.
-        await this.startTeardown()
+        await this.awaitTeardownAttempt()
         throw error
       }
       opened = true
@@ -175,15 +175,10 @@ export class LspInstance {
       if (opened && !this.dead) {
         try {
           await this.connection.notify('textDocument/didClose', { textDocument: { uri } })
-        } catch {
+        } catch (_closeFailure: unknown) {
           // A close-write failure does not replace the settled result/error, but the instance can no
-          // longer be trusted: invalidate it and await bounded process termination.
-          try {
-            await this.startTeardown()
-          } catch {
-            /* v8 ignore next -- teardown owns all expected process races; this only preserves the
-               already-settled query outcome if an unexpected cleanup primitive itself rejects. */
-          }
+          // longer be trusted. The provider re-awaits this teardown and owns failure reporting.
+          await this.awaitTeardownAttempt()
         }
       }
     }
@@ -232,7 +227,7 @@ export class LspInstance {
             grace.signal.addEventListener('abort', () => { resolve(false) }, { once: true })
           }),
         ])
-        if (!settled) await this.startTeardown()
+        if (!settled) await this.awaitTeardownAttempt()
       } finally {
         grace[Symbol.dispose]()
       }
@@ -283,12 +278,21 @@ export class LspInstance {
     return this.teardownPromise
   }
 
+  /** Await teardown while leaving its memoized failure for provider-level finalization. */
+  private async awaitTeardownAttempt(): Promise<void> {
+    try {
+      await this.startTeardown()
+    } catch (_teardownFailure: unknown) {
+      // LocalLspProvider re-awaits the same teardown and combines it with the query outcome.
+    }
+  }
+
   private async tearDown(): Promise<void> {
     const shutdownDeadline = deadline(undefined, this.spec.shutdownTimeoutMs, 'LSP_SHUTDOWN')
     try {
       await this.gracefulShutdown(shutdownDeadline.signal)
     } catch {
-      // Graceful shutdown failed or timed out; process-tree cleanup below remains authoritative.
+      // Graceful shutdown failed or timed out; managed-range cleanup below remains authoritative.
     } finally {
       shutdownDeadline[Symbol.dispose]()
     }
@@ -303,16 +307,15 @@ export class LspInstance {
   }
 
   /**
-   * Terminate the tree (the seam escalates SIGTERM→`killGraceMs`→SIGKILL),
-   * then await leader and helper exit. The awaits are unbounded on purpose:
-   * the seam's escalation already committed to SIGKILL, so quiescence — not
-   * another timer — is the postcondition disposal owes its callers.
+   * Terminate the provider-managed range, then await the direct server result
+   * and whole-range quiescence. The awaits are unbounded on purpose because
+   * quiescence, not another timer, is the postcondition disposal owes callers.
    */
   private async forceTerminate(): Promise<void> {
     this.connection.terminate()
     await Promise.all([
       this.connection.closed,
-      this.connection.waitForProcessTreeExit(),
+      this.connection.waitForManagedRangeExit(),
     ])
   }
 }

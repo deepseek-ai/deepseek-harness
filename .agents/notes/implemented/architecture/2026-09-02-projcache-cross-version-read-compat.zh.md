@@ -24,7 +24,7 @@ Status: implemented
 | 6 | v1 之前的 mainline | per-record | 同 v5 | 同 v5 | 同上 |
 | 7 | 当前版本 | per-record | 同 v5 | + `formatVersion`；当前写入也要求两个 lineage 字段 | 同上 |
 
-v4→v5 的唯一实质差异是 identity 新增两个 lineage 字段；v6 只改变写入版本戳。这些前代的行内 `ver/seq/val` 表示一致，`seq` 的数值含义未变（[2026-08-31 seq/offset brands note](2026-08-31-session-sequence-and-log-offset-brands.zh.md) 明确 on-disk 数值不变）。v3→v4 是布局迁移，记录内容结构一致。v7 把 Session 格式代加入缓存 identity，因为无法从 domain 版本戳推导行语义。
+v4→v5 的唯一实质差异是 identity 新增两个 lineage 字段；v6 只改变写入版本戳。这些前代的行内 `ver/seq/val` 表示一致，`seq` 的数值含义未变（[2026-08-31 seq/offset brands note](../../archived/architecture/2026-08-31-session-sequence-and-log-offset-brands.md) 明确 on-disk 数值不变）。v3→v4 是布局迁移，记录内容结构一致。v7 把 Session 格式代加入缓存 identity，因为无法从 domain 版本戳推导行语义。
 
 另有一种衍生形态：跑过一次 v5 版本的 v3 home（投毒态）——新树里存在**版本戳为 5 但内容是 v3 记录**（缺 lineage 字段）的文档。
 

@@ -98,6 +98,14 @@ export class InspectorClientFixture {
     return await this.request({ op: 'get-tree' }) as CordisRuntimeTree
   }
 
+  /**
+   * Pause or resume ingest reads without blocking the fixture MessagePort.
+   * @param paused - Whether incoming WebSocket frames must wait.
+   */
+  async setIngestPaused(paused: boolean): Promise<void> {
+    await this.request({ op: 'set-ingest-paused', paused })
+  }
+
   /** Break the active ingest socket while preserving the Client source. */
   async disconnect(): Promise<void> {
     await this.request({ op: 'disconnect' })

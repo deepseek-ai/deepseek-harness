@@ -68,6 +68,8 @@ const handle = await ctx.agents.create({
 })
 ```
 
+每次 inbox 变更都会提交一条规范化的 `agent/inbox/spliced` 事件。投影注册表会同步折叠该事件，因此 `Session.append()` 返回时，实时投影已经反映该 splice。插入、编辑、移除、领取与取消都通过同一组标准 splice 坐标回放。普通删除携带 `outcome: 'canceled'` 并发出 `agent/inbox/discarded { message }`；领取使用不带 outcome 的纯删除，并发出 `agent/inbox/claimed`。每次插入都会发出 `agent/inbox/inserted { message }`。`MessageId` 在两个待处理列表之间保持唯一。需要被移除消息的消费方应使用 claimed 或 discarded 通知，而不依赖 splice 前的 `session/event` 投影视图。
+
 ### 一个步骤做什么
 
 每个步骤都会发送该 agent 渲染后的系统提示词、其可见工具 schema 与会话的派生历史；模型的工具调用经过受守卫的工具流水线，每个被接纳的事实都会在下一步据此派生之前追加到会话日志。并行安全调用最多可重叠 `maxParallelToolCalls` 个；独占调用单独运行并构成排序屏障。取消是协作式的：`agent.cancel()` 中止当前活动，并在未设置 `keepInbox` 时清除待处理工作；被取消的流会终结已送达用户的文本。
@@ -90,12 +92,15 @@ const handle = await ctx.agents.create({
 
 `agent/request` 返回后，`ctx.llm.prepareCall()` 会在活跃轮次信号下校验适配器持有的字段，并解析推理强度和输出 token 默认值。循环会在解析、`request/header` 记录与分派期间保留同一个适配器。循环会为首次请求、变化的 envelope、显式消息序列起点、表层替换后的请求及恢复写入完整 header；同一序列内内容未变的步骤、重试与普通后续轮次继承最新 header。下一次 waterfall 前，循环移除适配器默认字段，使当前路由重新解析它们；显式设置则保留。未处理的路由仍以 `NO_ADAPTER` 失败。
 
+循环在每个派生消息对象首次进入请求时执行深冻结，并且仅在同一 agent 内复用该证明。恢复的消息保留对象身份；构造请求不会冻结包含消息的事件包装对象。每个请求都会冻结本地规范化 header、新消息数组和请求封装，同时保留取消信号的可变性。[请求冻结决策](../../../.agents/notes/implemented/simplification/2026-09-06-agent-request-freeze-provenance.zh.md)解释了所有权与测量依据。
+
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`AgentLoop` 服务、配置 schema、声明式 agent 启动、工厂注册 |
 | [`src/agent.ts`](src/agent.ts) | 具体 `ReactLoopAgent` 驱动器：收件箱、轮次／步骤状态机、取消 |
+| [`src/inbox.ts`](src/inbox.ts) | 包内部的 `ReactLoopInbox`：持久投影、结构化命令与仅供循环使用的领取状态 |
 | [`src/tool-calls.ts`](src/tool-calls.ts) | 工具调度：独占屏障与有界并行池 |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | 每步骤 runtime-context 快照处理 |
 | [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
@@ -111,7 +116,7 @@ const handle = await ctx.agents.create({
 
 ### 轮次与步骤流程
 
-驱动器在其整个生命周期内拥有一个 agent，并在 `ctx.agents.withInitiator(agent, ...)` 内运行。在轮次边界，它先打开持久轮次，再原子领取待处理的 next-step 输入与一条排队提示词；在步骤之间则只领取 next-step 输入。`agent/pre-step` 决定什么进入该步骤。进入步骤的决定会在驱动器再次领取消息前追加完整的 `user/message` 批次，被拒绝的决定则不追加任何消息。每次模型尝试会发出一个进程本地 `start`，仅在匹配的持久 `assistant/chunk` 之后发出各个 `chunk`，并恰好发出一个终态 `end`；最终组装或消息追加失败时以 `aborted` 结算，`committed` 则出现在持久 `assistant/message` 之后。每次成功的模型调用都恰好追加一个引用其分片 seq 的 message 锚点，被取消的流则追加带 `interrupted: true` 的锚点并携带已交付前缀，使下一次请求包含用户看到的内容。在步骤内，独占调用形成屏障，并行安全调用使用有界滚动池；策略、持久结果与结果上下文保持模型顺序。
+驱动器在其整个生命周期内拥有一个 agent，并在 `ctx.agents.withInitiator(agent, ...)` 内运行。其包内部 `ReactLoopInbox` 构造函数在 agent 作用域上注册标准 `inbox` 投影，随后将该投影用于结构化命令与仅供 loop 使用的领取操作。注册表引用计数会使共享 key 持续有效，直至最后一个 agent 作用域卸载。在轮次边界，驱动器先打开持久轮次，再原子领取待处理的 next-step 输入与一条排队提示词；在步骤之间则只领取 next-step 输入。`agent/pre-step` 决定什么进入该步骤。进入步骤的决定会在驱动器再次领取消息前追加完整的 `user/message` 批次，被拒绝的决定则不追加任何消息。每次模型尝试会发出一个进程本地 `start`，仅在匹配的持久 `assistant/chunk` 之后发出各个 `chunk`，并恰好发出一个终态 `end`；最终组装或消息追加失败时以 `aborted` 结算，`committed` 则出现在持久 `assistant/message` 之后。每次成功的模型调用都恰好追加一个引用其分片 seq 的 message 锚点，被取消的流则追加带 `interrupted: true` 的锚点并携带已交付前缀，使下一次请求包含用户看到的内容。在步骤内，独占调用形成屏障，并行安全调用使用有界滚动池；策略、持久结果与结果上下文保持模型顺序。
 
 ### 失败与取消
 

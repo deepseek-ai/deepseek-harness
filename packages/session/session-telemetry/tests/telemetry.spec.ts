@@ -76,7 +76,7 @@ async function setup(
     name: 'fake-telemetry',
     inject: ['sessions'],
     apply: (inner: Context) => {
-      coordinator = new SessionTelemetryCoordinator(inner, backend, capture)
+      coordinator = new SessionTelemetryCoordinator(inner, backend, { capture })
     },
   })
   return { ctx, backend, coordinator, fiber }
@@ -135,6 +135,24 @@ describe('SessionTelemetryCoordinator capture', () => {
     ;(message.body as { content: { text: string }[] }).content[0]!.text = 'tampered'
     const logged = session.snapshotEvents()[1] as SessionEvent<'user/message'>
     expect(logged.data.content[0]).toMatchObject({ text: 'hello' })
+  })
+
+  it('captures a live request header without replaying previously withheld events', async () => {
+    const { ctx, backend } = await setup()
+    try {
+      const session = liveSession(ctx, 'live-header')
+      const disposeRule = ctx.on('session-telemetry/record', () => {
+        throw new Error('withheld')
+      })
+      session.append('turn/start', { turn: 1 })
+      disposeRule()
+      session.append('request/header', {
+        header: { config: { provider: 'mock', model: 'mock' } }, reason: 'initial',
+      })
+      expect(backend.ledger().map(record => record.attributes['event.type'])).toEqual(['request/header'])
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('stamps header facts on every record when present', async () => {
@@ -264,6 +282,37 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
     })
   })
 
+  it('includes inherited history only when explicitly requested, through the exact sequence', async () => {
+    const ctx = new Context()
+    const backend = new FakeBackend()
+    try {
+      await ctx.plugin(SessionStore)
+      let coordinator!: SessionTelemetryCoordinator
+      await ctx.plugin({
+        name: 'history-telemetry',
+        inject: ['sessions'],
+        apply: (inner: Context) => {
+          coordinator = new SessionTelemetryCoordinator(inner, backend, {
+            capture: 'on-demand', includeHistory: true,
+          })
+        },
+      })
+      const parent = liveSession(ctx, 'history-parent')
+      appendTurn(parent)
+      const child = ctx.sessions.create(SessionId('history-child'), { seed: [...parent.snapshotEvents()] })
+      const boundary = child.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+      child.append('turn/start', { turn: 2 })
+      expect(backend.records).toEqual([])
+      coordinator.captureSession(child, boundary.seq)
+      coordinator.captureSession(child, boundary.seq)
+      expect(backend.ledger().map(record => record.attributes['event.seq'])).toEqual([0, 1, 2, 3])
+      expect(backend.ledger().at(-1)?.attributes['event.seq']).toBe(boundary.seq)
+      expect(backend.ledger().every(record => record.attributes['session.id'] === child.id)).toBe(true)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('runs the currently mounted redaction policy during canonical-log capture', async () => {
     const { ctx, backend, coordinator } = await setup(new FakeBackend(), 'on-demand')
     const session = liveSession(ctx, 'on-demand-redacted')
@@ -310,7 +359,7 @@ describe('SessionTelemetryCoordinator on-demand capture', () => {
       name: 'fake-telemetry-after-on-demand-reload',
       inject: ['sessions'],
       apply: (inner: Context) => {
-        coordinator = new SessionTelemetryCoordinator(inner, second, 'on-demand')
+        coordinator = new SessionTelemetryCoordinator(inner, second, { capture: 'on-demand' })
       },
     })
     coordinator.captureSession(session)
@@ -386,7 +435,7 @@ describe('SessionTelemetryCoordinator adoption', () => {
         isSeeded: false,
       },
       inheritedEventCount: SessionLogOffset(0),
-      seedSource: 'persistence',
+      eventState: 'detached',
     })
     ctx.sessions.enter(resumed)
     ctx.sessions.announce(resumed)

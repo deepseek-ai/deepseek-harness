@@ -264,17 +264,7 @@ describe('web e2e: navigation & panes over a rich seeded session', () => {
     await page.evaluate(() => { document.body.removeAttribute('data-ds-dark-theme') })
     await page.getByRole('tab', { name: 'Result' }).click()
     await expect.poll(() => page.getByText('NAVIGATION_OK', { exact: false }).count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(1)
-    const assistantSpan = page.locator('[data-timeline-span="message"][data-assistant-timing="true"]').first()
-    await assistantSpan.hover()
-    const timingTooltip = page.getByRole('tooltip')
-    await timingTooltip.waitFor({ timeout: 5_000 })
-    await expect.poll(() => timingTooltip.textContent(), { timeout: 5_000 }).toMatch(/TTFT .* Decoding/)
-    const assistantTimingStyle = await assistantSpan.evaluate(node => ({
-      background: getComputedStyle(node).backgroundImage,
-      ttft: getComputedStyle(node).getPropertyValue('--trajectory-assistant-ttft'),
-    }))
-    expect(assistantTimingStyle.background).toContain('linear-gradient')
-    expect(assistantTimingStyle.ttft).toMatch(/%$/)
+    expect(await page.locator('[data-timeline-span="message"][data-assistant-timing="true"]').count()).toBe(0)
     const snapshot = (await captureStableAria(page, '[class*="viewArea"]', scaffold.workspaceCwd))
       .split(SEED_ID).join('{{seededId}}')
     await compareOrRefreshGolden(TRAJECTORY_EXPECTED, snapshot, MODE)

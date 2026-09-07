@@ -54,4 +54,4 @@ Compact-basic 拥有消费方策略。顶层字段定义默认值；`modelPolici
 - DeepSeek 部署可以设置精确的逐模型容量，也可以让未提供容量的模型项与未列出的透传 id 使用 `defaultContextWindow`。
 - 比例默认值会随模型自然缩放，同时仍可按精确目标使用绝对保留值，以满足部署专用行为。
 
-本记录取代[回放式 token 计量服务 Agent Note](2026-07-15-replay-token-meter-service.zh.md) 中的全局容量与无模型策略部分，单折叠计量决策保持不变。
+本记录取代[回放式 token 计量服务 Agent Note](../../archived/architecture/2026-07-15-replay-token-meter-service.md) 中的全局容量与无模型策略部分，单折叠计量决策保持不变。

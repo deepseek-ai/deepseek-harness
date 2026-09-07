@@ -61,7 +61,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 
 ### Background processes
 
-Call `start` to run a command in the background; it returns a handle immediately and no timeout applies. `readOutput()` merges the stream deltas into one consuming read, marking stderr under a `[stderr]` section; `kill()` stops the process group; `done` settles when the process closes and never rejects. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, which the tool layer registers the handle with.
+Call `start` to run a command in the background; it returns a handle immediately and no timeout applies. `readOutput()` merges the stream deltas into one consuming read, marking stderr under a `[stderr]` section; `kill()` terminates the provider-managed range; `done` settles when the direct command closes and never rejects. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, which the tool layer registers the handle with.
 
 <a id="adjusting-budgets-at-runtime"></a>
 ### Adjusting budgets at runtime
@@ -80,7 +80,7 @@ This section explains the design of the executor and points at the code that rea
 
 ### Design concept
 
-The executor is a Service Provider for the `ctx.shell` seam built on the subprocess capability: it owns everything bash-shaped — command defaulting and caps, deadline fusion and cause classification, the model-friendly terminal environment, and the background read merge — while process-group mechanics (bounded spill-backed output, credential scrub, kill escalation, disposal) belong to the subprocess service. Every call spawns a fresh non-login `bash -c` with no rc files, so commands are deterministic and shell state never leaks between calls.
+The executor is a Service Provider for the `ctx.shell` seam built on the subprocess capability: it owns everything bash-shaped — command defaulting and caps, deadline fusion and cause classification, the model-friendly terminal environment, and the background read merge — while managed-range mechanics (bounded spill-backed output, credential scrub, termination escalation, quiescence, and disposal) belong to the subprocess service. Every call spawns a fresh non-login `bash -c` with no rc files, so commands are deterministic and shell state never leaks between calls.
 
 ### Source map
 
@@ -114,7 +114,7 @@ Read these pages when the executor contract is not enough. They move from the se
 - [bash-sandbox](../bash-sandbox/README.md) — the confining executor to compose instead when commands need the sandbox capability.
 - [tool-bash](../tool-bash/README.md) — the model-facing `bash` tool over this executor.
 - [Bash executor subsystem](../../../docs/subsystems/shell.md) — request/spec vocabulary, results, and the service contract in full.
-- [subprocess-local](../../subprocess/subprocess-local/README.md) — the process-group mechanics behind this executor.
+- [subprocess-local](../../subprocess/subprocess-local/README.md) — the managed-range mechanics behind this executor.
 
 -----
 
@@ -137,7 +137,7 @@ These limits define when this executor is a poor fit. They are current package c
 - **Unconfined by itself** — commands run with the harness process's authority; deployments needing confinement compose `dsh-bash-sandbox`, while per-call allow/deny/ask policy belongs on the tools' `pre-execute` waterfall.
 - **No persistent shell or PTY** — every call starts a fresh non-login `bash -c`; cwd-only persistence and interactive terminal sessions remain deferred until a real workflow requires them.
 - **POSIX-only** — the `bash` binary is hardcoded and the underlying service's group semantics are POSIX; Windows is unsupported.
-- **A background spawn-failure note is single-delivery** — the subprocess service buffers no output for a process that never ran, so the executor injects `spawn failed: …` into exactly one `readOutput()` delta; a reader that discards that delta cannot recover it.
+- **A background provider-failure note is single-delivery** — `SubprocessHandle.done` can reject before or after target execution begins, so the executor injects the stage-neutral `subprocess failed before reporting an outcome: …` into exactly one `readOutput()` delta; a reader that discards that delta cannot recover it.
 
 <a id="dev-note"></a>
 ### Dev Note

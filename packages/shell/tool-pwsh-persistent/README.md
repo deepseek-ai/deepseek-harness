@@ -72,7 +72,7 @@ This section explains the design decisions behind the tool and points at the cod
 
 ### Design philosophy
 
-- **A deliberate twin of `dsh-tool-bash-persistent`.** The session registry, polling loop, and reset contract mirror the persistent bash tool by design ([pwsh persistent PTY Agent Note](../../../.agents/notes/implemented/architecture/2026-08-11-pwsh-persistent-pty.md)).
+- **A deliberate twin of `dsh-tool-bash-persistent`.** The session registry, polling loop, and reset contract mirror the persistent bash tool by design ([pwsh persistent PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md)).
 - **Prompt-function readiness.** The tool installs its own `prompt` function that prints a BEL-terminated OSC marker plus a printable prompt; the OSC marker carries the last exit code and the printable prompt settles every command, so a model redefinition of `prompt` degrades readiness to the silence tier.
 - **PSReadLine echo stripped by anchoring.** PowerShell renders submitted input back into the stream; the marker-anchored extraction and a wrapper-source strip remove the echo, and a wrapper that wraps across the terminal width may leave a partial echo in partial-output results.
 - **Reset, never repair.** Any uncertain state — an explicit `exit`, a timeout, a send failure, an abort — closes the shell and starts the next call fresh.
@@ -100,7 +100,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [terminal package map](../../terminal/README.md) — the persistent PTY capability family.
 - [terminal seam](../../terminal/terminal/README.md) — the `ctx.terminals` service behind the tool.
 - [terminal-bash backend](../../terminal/terminal-bash/README.md) — the default backend, configured with `shellDialect: pwsh`.
-- [pwsh persistent PTY Agent Note](../../../.agents/notes/implemented/architecture/2026-08-11-pwsh-persistent-pty.md) — the pwsh-side session design and its rationale.
+- [pwsh persistent PTY Agent Note](../../../.agents/notes/archived/architecture/2026-08-11-pwsh-persistent-pty.md) — the pwsh-side session design and its rationale.
 - [Persistent PTY sessions Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-persistent-pty-sessions.md) — the owner-scoped session design and its rationale.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-pwsh-persistent) — the exact `pwsh` argument schema.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-pwsh-persistent) — every accepted config field and its source declaration.

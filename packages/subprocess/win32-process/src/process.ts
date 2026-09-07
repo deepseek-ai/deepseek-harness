@@ -15,7 +15,7 @@ import {
   throwLastError,
   throwWin32,
 } from './ffi.ts'
-import type { NativePtr, Win32ProcessBindings } from './ffi.ts'
+import type { CurrentTokenProcessBindings, NativePtr, Win32ProcessBindings } from './ffi.ts'
 
 /**
  * Quote one argument according to CommandLineToArgvW parsing.
@@ -53,14 +53,49 @@ export function buildCommandLine(program: string, args: readonly string[]): stri
   return [program, ...args].map(quoteArg).join(' ')
 }
 
-/** Restricted-token process creation inputs owned by the Windows ACL sandbox. */
-export interface RestrictedProcessSpawnOptions {
-  /** Executable argv entry passed through CreateProcessAsUserW. */
+function compareWindowsEnvironmentKeys(
+  [left]: readonly [string, string],
+  [right]: readonly [string, string],
+): number {
+  const foldedLeft = left.toUpperCase()
+  const foldedRight = right.toUpperCase()
+  return foldedLeft < foldedRight ? -1 : foldedLeft > foldedRight ? 1 : 0
+}
+
+function encodeWindowsEnvironment(env: Readonly<Record<string, string>>): Buffer {
+  const entries = Object.entries(env).sort(compareWindowsEnvironmentKeys)
+  const strings = entries.map(([key, value]) => `${key}=${value}`)
+  return Buffer.from(`${strings.join('\0')}\0\0`, 'utf16le')
+}
+
+interface ProcessSpawnOptions {
+  /** Executable argv entry passed through CreateProcess. */
   command: string
   /** Arguments excluding the executable. */
   args: readonly string[]
   /** Existing child working directory. */
   cwd: string
+}
+
+/** Ordinary process creation inputs used by the local Win32 runner. */
+export interface CurrentTokenProcessSpawnOptions extends ProcessSpawnOptions {
+  /** Resolved executable path passed separately from the preserved argv entry. */
+  applicationName: string
+  /** Complete target environment passed without mutating the runner. */
+  env: Readonly<Record<string, string>>
+  /** Runner CRT descriptors carrying target stdin, stdout, and stderr. */
+  stdio: CurrentTokenStdioFileDescriptors
+}
+
+/** Runner CRT descriptors whose OS handles become the target standard handles. */
+export interface CurrentTokenStdioFileDescriptors {
+  stdin: number
+  stdout: number
+  stderr: number
+}
+
+/** Restricted-token process creation inputs owned by the Windows ACL sandbox. */
+export interface RestrictedProcessSpawnOptions extends ProcessSpawnOptions {
   /** Restricted primary token supplied by sandbox policy. */
   token: NativePtr
 }
@@ -316,41 +351,71 @@ function createKillOnCloseJob(api: Win32ProcessBindings): NativePtr {
   return job
 }
 
-/**
- * Spawn suspended, assign the child to a kill-on-close Job, then resume it.
- * @param api - active binding table.
- * @param options - command, cwd, args, and restricted primary token.
- * @returns caller-owned process and Job handles after successful resume.
- * @remarks Node clears stdio handle inheritability at startup through
- * uv_disable_stdio_inheritance. This operation temporarily restores the bits
- * required by STARTF_USESTDHANDLES. Restoring them afterward is best-effort:
- * failure must not replace the already-created child's outcome.
- */
-export function spawnInheritedJobProcess(
-  api: Win32ProcessBindings,
-  options: RestrictedProcessSpawnOptions,
-): SpawnedJobProcess {
-  const job = createKillOnCloseJob(api)
-  const getStdHandle = (selector: number, label: string): NativePtr => {
+interface ProcessStandardHandles {
+  stdin: NativePtr
+  stdout: NativePtr
+  stderr: NativePtr
+}
+
+// Koffi exposes PVOID as an unsigned 64-bit bigint on supported Windows hosts.
+const UV_INVALID_OS_FILE_HANDLE = 0xffff_ffff_ffff_ffffn
+const UV_INVALID_FILE_DESCRIPTOR = 0xffff_ffff_ffff_fffen
+
+function inheritedStandardHandles(api: Win32ProcessBindings): ProcessStandardHandles {
+  const get = (selector: number, label: string): NativePtr => {
     const handle = api.getStdHandle(selector)
     if (!isNullPtr(handle)) return handle
-    const win32Code = api.getLastError()
-    api.closeHandle(job)
-    throwWin32(api, 'GetStdHandle', win32Code, `null ${label} handle`)
+    throwLastError(api, 'GetStdHandle', `null ${label} handle`)
   }
-  const stdIn = getStdHandle(abi.STD_INPUT_HANDLE, 'stdin')
-  const stdOut = getStdHandle(abi.STD_OUTPUT_HANDLE, 'stdout')
-  const stdErr = getStdHandle(abi.STD_ERROR_HANDLE, 'stderr')
+  return {
+    stdin: get(abi.STD_INPUT_HANDLE, 'stdin'),
+    stdout: get(abi.STD_OUTPUT_HANDLE, 'stdout'),
+    stderr: get(abi.STD_ERROR_HANDLE, 'stderr'),
+  }
+}
+
+function targetCarrierHandles(
+  api: CurrentTokenProcessBindings,
+  descriptors: CurrentTokenStdioFileDescriptors,
+): ProcessStandardHandles {
+  const get = (fileDescriptor: number, label: string): NativePtr => {
+    const handle = api.uvGetOsfhandle(fileDescriptor)
+    if (
+      isNullPtr(handle)
+      || handle === UV_INVALID_OS_FILE_HANDLE
+      || handle === UV_INVALID_FILE_DESCRIPTOR
+    ) {
+      throw new Error(`uv_get_osfhandle returned an invalid handle for target ${label} fd ${String(fileDescriptor)}`)
+    }
+    return handle
+  }
+  return {
+    stdin: get(descriptors.stdin, 'stdin'),
+    stdout: get(descriptors.stdout, 'stdout'),
+    stderr: get(descriptors.stderr, 'stderr'),
+  }
+}
+
+/** Shared suspended-create, Job-assignment, and resume lifecycle. */
+function spawnJobProcess(
+  api: Win32ProcessBindings,
+  options: ProcessSpawnOptions,
+  resolveStdio: () => ProcessStandardHandles,
+  createName: 'CreateProcessAsUserW' | 'CreateProcessW',
+  create: (startupInfo: NativePtr, processInfo: NativePtr) => number,
+): SpawnedJobProcess {
+  const job = createKillOnCloseJob(api)
   const enabled: NativePtr[] = []
   let startupInfo: NativePtr | undefined
   let processInfo: NativePtr | undefined
   let created = 0
   let createFailureCode = 0
   try {
+    const stdio = resolveStdio()
     for (const [handle, label] of [
-      [stdIn, 'stdin'],
-      [stdOut, 'stdout'],
-      [stdErr, 'stderr'],
+      [stdio.stdin, 'stdin'],
+      [stdio.stdout, 'stdout'],
+      [stdio.stderr, 'stderr'],
     ] as const) {
       if (api.setHandleInformation(handle, abi.HANDLE_FLAG_INHERIT, abi.HANDLE_FLAG_INHERIT) === 0) {
         throwLastError(api, 'SetHandleInformation', `${label} (enable inherit)`)
@@ -361,19 +426,12 @@ export function spawnInheritedJobProcess(
     encodeStartupInfo(startupInfo, {
       cb: abi.STARTUPINFOW_SIZE,
       dwFlags: abi.STARTF_USESTDHANDLES,
-      hStdInput: stdIn,
-      hStdOutput: stdOut,
-      hStdError: stdErr,
+      hStdInput: stdio.stdin,
+      hStdOutput: stdio.stdout,
+      hStdError: stdio.stderr,
     })
     processInfo = allocProcessInfo()
-    created = createRestrictedProcess(
-      api,
-      options,
-      buildCommandLine(options.command, options.args),
-      abi.CREATE_SUSPENDED,
-      startupInfo,
-      processInfo,
-    )
+    created = create(startupInfo, processInfo)
     if (created === 0) createFailureCode = api.getLastError()
   } catch (error) {
     freeNative(processInfo)
@@ -391,7 +449,7 @@ export function spawnInheritedJobProcess(
     api.closeHandle(job)
     throwWin32(
       api,
-      'CreateProcessAsUserW',
+      createName,
       createFailureCode,
       `command: ${options.command}, cwd: ${options.cwd}`,
     )
@@ -407,7 +465,7 @@ export function spawnInheritedJobProcess(
     api.closeHandle(job)
     closeBestEffort(api, info.hThread)
     closeBestEffort(api, info.hProcess)
-    throw new Error(`CreateProcessAsUserW succeeded but returned null process/thread handles (pid ${info.dwProcessId})`)
+    throw new Error(`${createName} succeeded but returned null process/thread handles (pid ${info.dwProcessId})`)
   }
   if (api.assignProcessToJobObject(job, info.hProcess) === 0) {
     const win32Code = api.getLastError()
@@ -426,4 +484,125 @@ export function spawnInheritedJobProcess(
   }
   closeBestEffort(api, info.hThread)
   return { pid: info.dwProcessId, process: info.hProcess, job }
+}
+
+/**
+ * Spawn a restricted-token process suspended, assign its Job, then resume it.
+ * @param api - active binding table.
+ * @param options - command, cwd, args, and restricted primary token.
+ * @returns caller-owned process and Job handles after successful resume.
+ * @remarks Node clears stdio handle inheritability at startup through
+ * uv_disable_stdio_inheritance. This operation temporarily restores the bits
+ * required by STARTF_USESTDHANDLES. Restoring them afterward is best-effort:
+ * failure must not replace the already-created child's outcome.
+ */
+export function spawnInheritedJobProcess(
+  api: Win32ProcessBindings,
+  options: RestrictedProcessSpawnOptions,
+): SpawnedJobProcess {
+  const commandLine = buildCommandLine(options.command, options.args)
+  return spawnJobProcess(api, options, () => inheritedStandardHandles(api), 'CreateProcessAsUserW', (startupInfo, processInfo) =>
+    createRestrictedProcess(
+      api,
+      options,
+      commandLine,
+      abi.CREATE_SUSPENDED,
+      startupInfo,
+      processInfo,
+    ))
+}
+
+/**
+ * Spawn an ordinary process suspended, assign its Job, then resume it.
+ * @param api - active binding table.
+ * @param options - command, cwd, argv, and target carrier descriptors.
+ * @returns caller-owned process and Job handles after successful resume.
+ */
+export function spawnCurrentTokenJobProcess(
+  api: CurrentTokenProcessBindings,
+  options: CurrentTokenProcessSpawnOptions,
+): SpawnedJobProcess {
+  const commandLine = buildCommandLine(options.command, options.args)
+  const environment = encodeWindowsEnvironment(options.env)
+  return spawnJobProcess(api, options, () => targetCarrierHandles(api, options.stdio), 'CreateProcessW', (startupInfo, processInfo) =>
+    api.createProcessW(
+      options.applicationName,
+      commandLine,
+      null,
+      null,
+      1,
+      abi.CREATE_SUSPENDED | abi.CREATE_UNICODE_ENVIRONMENT,
+      environment,
+      options.cwd,
+      startupInfo,
+      processInfo,
+    ))
+}
+
+/**
+ * Verify that an unnamed kill-on-close Job can be created and released now.
+ * @param api - active binding table.
+ */
+export function probeCurrentTokenJobSupport(api: CurrentTokenProcessBindings): void {
+  const job = createKillOnCloseJob(api)
+  closeHandleChecked(api, job, 'current-token Job capability probe')
+}
+
+/**
+ * Poll one process handle without blocking the runner event loop.
+ * @param api - active binding table.
+ * @param process - caller-owned process handle.
+ * @returns the direct exit code when signalled, or undefined while running.
+ */
+export function pollProcessExit(api: Win32ProcessBindings, process: NativePtr): number | undefined {
+  const waitResult = api.waitForSingleObject(process, 0)
+  if (waitResult === abi.WAIT_TIMEOUT) return undefined
+  if (waitResult === 0xFFFFFFFF) throwLastError(api, 'WaitForSingleObject')
+  const exitCodeSlot = allocUint32()
+  try {
+    if (api.getExitCodeProcess(process, exitCodeSlot) === 0) throwLastError(api, 'GetExitCodeProcess')
+    return decodeUint32(exitCodeSlot)
+  } finally {
+    koffi.free(exitCodeSlot)
+  }
+}
+
+/**
+ * Return whether a Job has no active processes.
+ * @param api - active binding table.
+ * @param job - caller-owned Job handle.
+ * @returns true once the Job reports zero active processes.
+ */
+export function isJobEmpty(api: Win32ProcessBindings, job: NativePtr): boolean {
+  const information = Buffer.alloc(abi.JOBOBJECT_BASIC_ACCOUNTING_SIZE)
+  if (api.queryInformationJobObject(
+    job,
+    abi.JobObjectBasicAccountingInformation,
+    information,
+    information.length,
+    null,
+  ) === 0) {
+    throwLastError(api, 'QueryInformationJobObject', 'active process count')
+  }
+  return information.readUInt32LE(abi.JOBOBJECT_BASIC_ACCOUNTING_ACTIVE_PROCESSES_OFFSET) === 0
+}
+
+/**
+ * Terminate every process in a Job.
+ * @param api - active binding table.
+ * @param job - caller-owned Job handle.
+ * @param exitCode - direct Windows exit code assigned to members.
+ */
+export function terminateJob(api: Win32ProcessBindings, job: NativePtr, exitCode: number): void {
+  if (api.terminateJobObject(job, exitCode) === 0) throwLastError(api, 'TerminateJobObject')
+}
+
+/**
+ * Close a caller-owned handle and report a labelled Win32 failure.
+ * @param api - active binding table.
+ * @param handle - handle to close.
+ * @param detail - lifecycle label for diagnostics.
+ */
+export function closeHandleChecked(api: Win32ProcessBindings, handle: NativePtr, detail: string): void {
+  if (api.closeHandle(handle) === 0) throwLastError(api, 'CloseHandle', detail)
 }

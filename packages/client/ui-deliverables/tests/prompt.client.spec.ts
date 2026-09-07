@@ -15,7 +15,7 @@ afterEach(async () => {
 describe('ui-deliverables node plugin', () => {
   it('registers final-response file-reference guidance only while mounted', async () => {
     ctx = new Context()
-    await ctx.plugin(SystemPrompt, { persona: '' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     const mounted = ctx.plugin({ apply, inject })
     await mounted.await()
 

@@ -28,7 +28,6 @@ const [
   { Context },
   { default: AgentLoop },
   { mountAgentLoopTestDependencies },
-  { default: SessionProjectionRegistry },
   { default: SubagentRuntime },
   { default: JsonlSessionPersistence },
   { HarnessSdkJsonRpcServer },
@@ -37,7 +36,6 @@ const [
   load("vendor/cordis/lib/index.js"),
   load("packages/core/agent-loop/lib/index.js"),
   load("packages/test-support/agent-loop-testkit/lib/index.js"),
-  load("packages/session/session-projection/lib/index.js"),
   load("packages/subagent/subagent/lib/index.js"),
   load("packages/session/session-persistence-jsonl/lib/index.js"),
   load("packages/sdk/server/lib/index.js"),
@@ -48,7 +46,6 @@ const storageRoot = await mkdtemp(join(tmpdir(), "jsonrpc-built-scope-"));
 const ctx = new Context();
 try {
   await mountAgentLoopTestDependencies(ctx);
-  await ctx.plugin(SessionProjectionRegistry);
   await ctx.plugin(AgentLoop, { agents: [] });
   await ctx.plugin(SubagentRuntime);
   await ctx.plugin(JsonlSessionPersistence, { root: storageRoot });

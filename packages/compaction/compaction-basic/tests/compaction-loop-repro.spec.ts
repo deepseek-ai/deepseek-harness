@@ -13,7 +13,6 @@ import * as SessionInvariant from '@deepseek-ai/dsh-session/invariant'
 import * as AgentInvariant from '@deepseek-ai/dsh-agent/invariant'
 import * as AgentLoopInvariant from '@deepseek-ai/dsh-agent-loop/invariant'
 import { BasicCompactionEngine } from '@deepseek-ai/dsh-compaction-basic'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import TokenMeter from '@deepseek-ai/dsh-token-meter'
 import * as LlmRetry from '@deepseek-ai/dsh-llm-retry'
 import { Session, SessionId, type SessionEvent, type SurfaceEvent } from '@deepseek-ai/dsh-session'
@@ -151,9 +150,6 @@ async function harness(toolSteps: number): Promise<{ ctx: Context; compact: Repr
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
   await mountInvariants(ctx)
-  // AgentLoop and TokenMeter both declare the registry as a required
-  // injection; mount it before either activates.
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(TokenMeter)
   ctx.llm.registerAdapter(['mock'], new StepwiseToolAdapter(toolSteps))
@@ -317,7 +313,6 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
       const adapter = new OverflowRecoveryAdapter(delivery)
       await mountAgentLoopTestDependencies(ctx)
       await mountInvariants(ctx)
-      await ctx.plugin(SessionProjectionRegistry)
       await ctx.plugin(AgentLoop, { agents: [] })
       await ctx.plugin(TokenMeter)
       ctx.llm.registerAdapter(['mock'], adapter)
@@ -396,7 +391,6 @@ describe('context-overflow recovery across the real loop and compaction-basic', 
     const adapter = new OverflowRecoveryAdapter('thrown', true)
     await mountAgentLoopTestDependencies(ctx)
     await mountInvariants(ctx)
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(LlmRetry)
     await ctx.plugin(AgentLoop, { agents: [] })
     await ctx.plugin(TokenMeter)

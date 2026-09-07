@@ -204,6 +204,10 @@ async listCandidates( agent: Agent, query: string = '', limit: number = this.con
 
 /**
  * Snapshot all references for one accepted direct message and return one aggregated durable context.
+ * Automatic budgets use the last assembled route, or agent options before any assembly.
+ * Missing model capacity or adapter uses 64 KiB; other metadata lookup failures and cancellation reject preparation.
+ * Truncated previews include omission facts and a full-snapshot spill locator, or an explicit unavailable notice.
+ * Cancellation prevents context publication, including when storage completes after cancellation.
  * @param agent - target agent; references to it are rejected.
  * @param content - already host-normalized readable message content.
  * @param references - structured source sessions in mention order.

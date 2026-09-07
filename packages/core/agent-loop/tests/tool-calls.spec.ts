@@ -22,7 +22,7 @@ async function harness(adapter: MockAdapter, maxParallelToolCalls?: number) {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, {
@@ -283,7 +283,7 @@ describe('tool-call scheduler: rolling pool honors maxParallelToolCalls', () => 
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(SystemPrompt, { persona: '' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
 
@@ -352,7 +352,7 @@ describe('tool-call scheduler: rolling pool honors maxParallelToolCalls', () => 
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(SystemPrompt, { persona: '' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(AgentLoop, { agents: [], maxParallelToolCalls: 1 })
@@ -711,7 +711,7 @@ describe('PTC mode native-tool denial through the agent loop', () => {
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
-    await ctx.plugin(SystemPrompt, { persona: '' })
+    await ctx.plugin(SystemPrompt, { personaPrefix: '' })
     await ctx.plugin(ToolRuntime, { mode: 'ptc' })
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- FakeCodeRuntime is an internal test helper with an opaque type shape
     await ctx.plugin(FakeCodeRuntime as any)

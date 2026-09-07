@@ -24,30 +24,9 @@
  */
 
 import { z } from 'zod'
-import { expandAssistantStream, type AssistantStreamRecord, type StreamChunk } from '@deepseek-ai/dsh-llm'
+import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm'
 import type { ProjectionDefinition } from '@deepseek-ai/dsh-session-projection'
 
-/* jscpd:ignore-start -- Session Stats owns its whole-log timing projection independently. */
-
-/** Whether a stream chunk carries a non-empty first-token delta. */
-function isTokenDelta(chunk: StreamChunk): boolean {
-  switch (chunk.type) {
-    case 'text-delta':
-    case 'reasoning-delta':
-      return chunk.text !== ''
-    case 'tool-call-delta':
-      return chunk.argumentsDelta !== '' || chunk.name !== undefined
-    default:
-      return false
-  }
-}
-
-/** First non-empty token timestamp in one durable Assistant stream. */
-function firstTokenTime(stream: readonly AssistantStreamRecord[]): number | null {
-  return expandAssistantStream(stream).find(member => isTokenDelta(member.chunk))?.time ?? null
-}
-
-/* jscpd:ignore-end */
 
 /** Accumulated whole-log figures (the view is exactly these totals). */
 interface SessionStatsTotals {
@@ -159,14 +138,14 @@ export const sessionStatsProjectionDefinition = {
       case 'assistant/attempt': {
         const open = state.openStep
         if (open === null || open.turn !== event.data.turn || open.step !== event.data.step) return state
-        const first = firstTokenTime(event.data.stream)
+        const first = assistantStreamFirstTokenTime(event.data.stream) ?? null
         if (open.firstTokenTime !== null || first === null) return state
         return { ...state, openStep: { ...open, firstTokenTime: first } }
       }
       case 'assistant/message': {
         const open = state.openStep
         if (open === null || open.turn !== event.data.turn || open.step !== event.data.step) return state
-        const firstToken = open.firstTokenTime ?? firstTokenTime(event.data.stream)
+        const firstToken = open.firstTokenTime ?? assistantStreamFirstTokenTime(event.data.stream) ?? null
         // One assembled message per step: closing the boundary means a
         // defensive duplicate cannot accrue twice.
         const next: SessionStatsState = {

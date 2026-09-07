@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-01-css-produced-file-layout.md
-2026-09-01-css-produced-file-layout.md: fce7d70b21b05db8970fb249927c36f87abc6b23
-2026-09-01-css-produced-file-layout.zh.md: bc8ad941dbe33af3acc629f0da50e79c4a0954da

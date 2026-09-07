@@ -6,7 +6,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { BlockAssembler, expandAssistantStream } from '@deepseek-ai/dsh-llm'
+import { assembleAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { LlmImageRequestPricing, LlmRuntime, Message, TokenUsage } from '@deepseek-ai/dsh-llm'
 import { deepFreeze } from '@deepseek-ai/dsh-util-values'
 import type {
@@ -316,9 +316,7 @@ export class TokenMeter extends Service {
   private _estimateProviderAssistant(
     event: SessionEvent<'assistant/message'>,
   ): number {
-    const assembler = new BlockAssembler()
-    for (const member of expandAssistantStream(event.data.stream)) assembler.push(member.chunk)
-    const providerContent = assembler.blocks()
+    const providerContent = assembleAssistantStream(event.data.stream).blocks()
     return providerContent.length === 0 ? 0 : estimateContent(providerContent) + ROLE_OVERHEAD
   }
 }

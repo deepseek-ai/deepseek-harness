@@ -29,21 +29,40 @@ env:
 jobs:
   pack:
     name: Pack npm tarballs
-    runs-on: ubuntu-24.04
+    # Persistent runners accept only trusted, credential-free rehearsals.
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+        && github.repository == 'deepseek-harness/deepseek-harness'
+        && github.actor != 'dependabot[bot]'
+        && ((github.event_name == 'push' && github.ref == 'refs/heads/master')
+          || (github.event_name == 'pull_request'
+            && github.event.pull_request.head.repo.full_name == github.repository
+            && github.event.pull_request.head.repo.fork == false
+            && github.event.pull_request.user.login != 'dependabot[bot]'))
+        && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+        || 'ubuntu-24.04' }}
     steps:
       # Complete history: the release scripts read tags.
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           persist-credentials: false
+          clean: true
+
+      - name: Configure runner-private caches
+        run: |
+          echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+          echo "npm_config_devdir=${{ runner.temp }}/node-gyp" >> "$GITHUB_ENV"
+          echo "TMPDIR=${{ runner.temp }}" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:
-          dest: ${{ runner.temp }}/setup-pnpm
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          package-manager-cache: false
 
       - name: Configure pnpm store path
         id: pnpm-store
@@ -54,6 +73,7 @@ jobs:
           echo "path=$store_path" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache/restore@v4
+        if: runner.environment == 'github-hosted'
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}

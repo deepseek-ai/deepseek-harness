@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
 import {
-  releasedV0SessionFormatCodec,
   sessionFormatV0ToV1,
 } from '../src/index.ts'
+import { restoreV0ToV1 } from '../src/testing/restore.ts'
 
 const header = {
   type: 'session',
@@ -14,7 +14,7 @@ const header = {
 } as const
 
 function migrate(rows: readonly unknown[]) {
-  return sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(header, rows))
+  return restoreV0ToV1(header, rows)
 }
 
 describe('released v0 legacy normalization', () => {

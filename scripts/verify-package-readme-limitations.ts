@@ -2,7 +2,8 @@
  * Doc-sync gate for the canonical package-README limitations section. It scans
  * package manifests, rejects missing or variant sections, and requires one
  * top-level bullet; audited packages in {@link NO_LIMITATIONS} must omit it.
- * See the [limitations Agent Note](../.agents/notes/implemented/process/2026-07-10-readme-known-limitations-gate.md).
+ * The archived [limitations gate record](../.agents/notes/archived/process/2026-07-10-readme-known-limitations-gate.md)
+ * documents the original decision.
  */
 
 import { existsSync, globSync, readFileSync } from 'node:fs'

@@ -61,7 +61,7 @@ export class InputTriggerController {
     createSnapshotStore<ReadonlyMap<string, readonly InputTriggerCrumb[]>>(new Map())
   /**
    * Aggregated hot reference lexicon, grouped by trigger (plain-text-reference decision;
-   * see .agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md):
+   * see .agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md):
    * sources implementing the lexicon hook are polled with the session
    * projection; undefined answers (roll not hot yet) are skipped; multiple
    * sources on one trigger concatenate in registration order. A snapshot

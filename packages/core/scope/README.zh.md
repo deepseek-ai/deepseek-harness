@@ -87,7 +87,6 @@ await scope.dispose()   // unwinds every registration made through scope.ctx
 
 - [作用域注册子系统](../../../docs/subsystems/scope.zh.md)——身份、载体与层类型。
 - [agent 作用域上下文 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-08-agent-scope-contexts.zh.md)——安全非目标与上下文设计。
-- [作用域层存储 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-12-scoped-layers-store.zh.md)——注册表层决策。
 - [agent 作用域 runtime 设计 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-12-agent-scope-runtime-design.zh.md)——循环如何构建按 agent 的作用域。
 - [core 分组地图](../README.zh.md)——core 各包如何组合。
 

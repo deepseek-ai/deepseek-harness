@@ -38,7 +38,7 @@ console.log(result.exitCode, result.stdout.text)
 
 ### Background processes
 
-Call `start` with a resolved spec to launch a background process; it returns a handle immediately and no timeout applies. Read output incrementally with `readOutput()` — consecutive reads never repeat output, and lossy reads point at full-stream spill files. Kill the process group with `kill()` (returns `false` once it has finished) and await `done` for settlement. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, where the tool layer registers the handle.
+Call `start` with a resolved spec to launch a background process; it returns a handle immediately and no timeout applies. Read output incrementally with `readOutput()` — consecutive reads never repeat output, and lossy reads point at full-stream spill files. Terminate the provider-managed range with `kill()` (returns `false` once the direct command has finished) and await `done` for direct-command settlement. Job ids, ownership, polling, and notices belong to the generic `ctx.jobs` runtime, where the tool layer registers the handle.
 
 ### Requests and resolved specs
 
@@ -91,7 +91,7 @@ The package is one role of a standard capability seam: the Service Definition th
 
 ### Background lifecycle and ownership
 
-A background process belongs to the subprocess service, not to the executor: it survives an executor-only reload and is killed and joined when the composition tears down. Implementations must honor the seam's semantics — `run` rejects only for infrastructure failures; `start` returns immediately with no timeout and its `done` never rejects (spawn failures settle as `killed` with the error on stderr); `readOutput` is consuming and lossy reads report spill files.
+A background process belongs to the subprocess service, not to the executor: it survives an executor-only reload and is killed and joined when the composition tears down. Implementations must honor the seam's semantics — `run` rejects only for infrastructure failures; `start` returns immediately with no timeout and its `done` never rejects (a subprocess provider rejection settles as `killed` with a stage-neutral error on stderr); `readOutput` is consuming and lossy reads report spill files.
 
 </details>
 

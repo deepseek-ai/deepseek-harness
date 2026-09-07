@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-24-web-config-tree-boot-and-transport-layering.md
-2026-07-24-web-config-tree-boot-and-transport-layering.md: c44f68bb65758ec4879da8bded60f27f2f11e0bc
-2026-07-24-web-config-tree-boot-and-transport-layering.zh.md: 80f385a0a76a427c8f604a0df76decf77d2e62b0
+2026-07-24-web-config-tree-boot-and-transport-layering.md: e7c0781e1504bce12a8b0d2197bd47b37d3e873a
+2026-07-24-web-config-tree-boot-and-transport-layering.zh.md: 9a0affa397151a3994c5731bebda4b45a4139b6c

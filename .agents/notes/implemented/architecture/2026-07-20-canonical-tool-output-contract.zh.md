@@ -34,7 +34,7 @@ type ToolExecutionResult =
 
 `tools/post-execute` 为成功结果提供两种互斥的投影方式。替换 `content` 只改变 Native／模型展示，并保留规范值和元数据。替换 `value` 会重新校验替代值，并重新计算两份展示投影。阻止操作会移除值并转为失败。因此，替换内容并不是保密机制：必须阻止程序化访问的策略，应当阻止调用或替换值。
 
-规范值仅存在于执行期间。agent loop（智能体循环）持久化的 `tool/result` 只包含 `content`、`error` 和可选的 `meta`；PTC mode 的 `tool/code-dispatch` 持久化子调用渲染后的 `content` 与 `isError`。两个事件都不存储规范中间值，因此回放可以重现展示，却无法重建程序化结果。当工具声明 `presentationMeta` 时，系统只会为直接的外层调用计算它；嵌套 Code 分发没有元数据或结果卡片。外层 `run_code` 卡片则读取最终的 post-policy 内容，并且不声明展示元数据。通用以及工具自有的 spill 投影同样跳过嵌套分发，因为它们的规范值永远不会进入模型上下文。
+规范值仅存在于执行期间。agent loop（智能体循环）持久化的 `tool/result` 只包含 `content`、`error` 和可选的 `meta`；PTC mode 的 `tool/code-dispatch` 持久化子调用渲染后的 `content` 与 `isError`。两个事件都不存储规范中间值，因此回放可以重现展示，却无法重建程序化结果。当工具声明 `presentationMeta` 时，系统只会为直接的外层调用计算它；嵌套 Code 分发没有元数据。Client 可以从原始参数与渲染后的内容派生[嵌套 terminal 卡片](../bug-fix/2026-09-05-nested-terminal-cards.zh.md)，无需这些元数据。外层 `run_code` 卡片则读取最终的 post-policy 内容，并且不声明展示元数据。通用以及工具自有的 spill 投影同样跳过嵌套分发，因为它们的规范值永远不会进入模型上下文。
 
 第一方工具在保持现有 Native 文本不变的同时返回领域 DTO：
 

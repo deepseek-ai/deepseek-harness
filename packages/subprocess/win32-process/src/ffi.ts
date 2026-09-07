@@ -70,13 +70,25 @@ export interface Win32ProcessBindings {
   setHandleInformation(handle: NativePtr, mask: number, flags: number): number
   createProcessAsUserW(
     token: NativePtr,
-    applicationName: null,
+    applicationName: string | null,
     commandLine: string,
     processAttributes: null,
     threadAttributes: null,
     inheritHandles: number,
     creationFlags: number,
     environment: null,
+    currentDirectory: string | null,
+    startupInfo: NativePtr,
+    processInfo: NativePtr,
+  ): number
+  createProcessW(
+    applicationName: string | null,
+    commandLine: string,
+    processAttributes: null,
+    threadAttributes: null,
+    inheritHandles: number,
+    creationFlags: number,
+    environment: Buffer | null,
     currentDirectory: string | null,
     startupInfo: NativePtr,
     processInfo: NativePtr,
@@ -94,10 +106,23 @@ export interface Win32ProcessBindings {
   getExitCodeProcess(process: NativePtr, exitCode: NativePtr): number
   createJobObjectW(attributes: null, name: null): NativePtr
   setInformationJobObject(job: NativePtr, cls: number, information: Buffer, length: number): number
+  queryInformationJobObject(
+    job: NativePtr,
+    cls: number,
+    information: Buffer,
+    length: number,
+    returnLength: null,
+  ): number
   assignProcessToJobObject(job: NativePtr, process: NativePtr): number
   resumeThread(thread: NativePtr): number
   terminateProcess(process: NativePtr, exitCode: number): number
+  terminateJobObject(job: NativePtr, exitCode: number): number
   getStdHandle(stdHandle: number): NativePtr
+}
+
+/** Generic Win32 calls plus Node's libuv descriptor-to-handle bridge. */
+export interface CurrentTokenProcessBindings extends Win32ProcessBindings {
+  uvGetOsfhandle(fileDescriptor: number): NativePtr | null
 }
 
 /** Koffi STARTUPINFOW layout. */
@@ -209,7 +234,7 @@ export function decodeProcessInfo(processInfo: NativePtr): ProcessInfoOutput {
 }
 
 let cachedContext: Win32BindingContext | undefined
-let cached: Win32ProcessBindings | undefined
+let cached: CurrentTokenProcessBindings | undefined
 
 /* v8 ignore start -- exercised by native Windows ABI and sandbox jobs. */
 function bindingContext(): Win32BindingContext {
@@ -226,9 +251,10 @@ function bindingContext(): Win32BindingContext {
   return cachedContext
 }
 
-function bindings(): Win32ProcessBindings {
+function bindings(): CurrentTokenProcessBindings {
   if (cached !== undefined) return cached
   const { kernel32, advapi32, bind } = bindingContext()
+  const node = koffi.load(null)
   cached = {
     closeHandle: bind(kernel32, 'CloseHandle', 'int', [PVOID]),
     getLastError: bind(kernel32, 'GetLastError', 'uint32', []),
@@ -241,6 +267,10 @@ function bindings(): Win32ProcessBindings {
       PVOID, 'str16', 'str16', PVOID, PVOID, 'int', 'uint32', PVOID, 'str16',
       koffi.pointer(STARTUPINFOW), koffi.pointer(PROCESS_INFORMATION),
     ]),
+    createProcessW: bind(kernel32, 'CreateProcessW', 'int', [
+      'str16', 'str16', PVOID, PVOID, 'int', 'uint32', PVOID, 'str16',
+      koffi.pointer(STARTUPINFOW), koffi.pointer(PROCESS_INFORMATION),
+    ]),
     readFile: bind(kernel32, 'ReadFile', 'int', [PVOID, PVOID, 'uint32', koffi.pointer('uint32'), PVOID]),
     peekNamedPipe: bind(kernel32, 'PeekNamedPipe', 'int', [
       PVOID, PVOID, 'uint32', koffi.pointer('uint32'), koffi.pointer('uint32'), koffi.pointer('uint32'),
@@ -249,11 +279,16 @@ function bindings(): Win32ProcessBindings {
     getExitCodeProcess: bind(kernel32, 'GetExitCodeProcess', 'int', [PVOID, koffi.pointer('uint32')]),
     createJobObjectW: bind(kernel32, 'CreateJobObjectW', PVOID, [PVOID, 'str16']),
     setInformationJobObject: bind(kernel32, 'SetInformationJobObject', 'int', [PVOID, 'int', PVOID, 'uint32']),
+    queryInformationJobObject: bind(kernel32, 'QueryInformationJobObject', 'int', [
+      PVOID, 'int', PVOID, 'uint32', PVOID,
+    ]),
     assignProcessToJobObject: bind(kernel32, 'AssignProcessToJobObject', 'int', [PVOID, PVOID]),
     resumeThread: bind(kernel32, 'ResumeThread', 'uint32', [PVOID]),
     terminateProcess: bind(kernel32, 'TerminateProcess', 'int', [PVOID, 'uint32']),
+    terminateJobObject: bind(kernel32, 'TerminateJobObject', 'int', [PVOID, 'uint32']),
     getStdHandle: bind(kernel32, 'GetStdHandle', PVOID, ['int']),
-  } as unknown as Win32ProcessBindings
+    uvGetOsfhandle: node.func('uv_get_osfhandle', PVOID, ['int']),
+  } as unknown as CurrentTokenProcessBindings
   return cached
 }
 
@@ -264,8 +299,16 @@ function bindings(): Win32ProcessBindings {
  */
 export function extendWin32ProcessBindings<Extension extends object>(
   create: (context: Win32BindingContext) => Extension,
-): Win32ProcessBindings & Extension {
+): CurrentTokenProcessBindings & Extension {
   return { ...bindings(), ...create(bindingContext()) }
+}
+
+/**
+ * Load the generic process binding table without policy-specific extensions.
+ * @returns shared Win32 process, stdio, and Job operations.
+ */
+export function loadWin32ProcessBindings(): CurrentTokenProcessBindings {
+  return bindings()
 }
 /* v8 ignore stop */
 

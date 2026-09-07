@@ -18,7 +18,7 @@ import { Context } from '@deepseek-ai/cordis'
 import { PwshLocalExecutor, ENCODING_PREAMBLE, candidatePwshPaths, resolvePwshPath } from '@deepseek-ai/dsh-pwsh-local'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import SubprocessRuntime from '@deepseek-ai/dsh-subprocess'
-import type { SubprocessHandle, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
+import type { SubprocessHandle, SubprocessOutcome, SubprocessOutputReader, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import type { ShellProcess } from '@deepseek-ai/dsh-shell'
 
@@ -168,20 +168,28 @@ describe('spawn construction (pure, every platform)', () => {
   /** A subprocess service that records spawn specs and settles instantly. */
   class CapturingSubprocessRuntime extends SubprocessRuntime {
     specs: SubprocessSpawnSpec[] = []
+    done: Promise<SubprocessOutcome> = Promise.resolve({ exitCode: 0, signal: null })
+    stderrText = ''
     override async resolveExecutable(command: string): Promise<string> { return command }
     override spawnTerminal(): Promise<never> { throw new Error('pwsh spawns pipes, never terminals') }
-    private readonly reader: SubprocessOutputReader = {
+    private readonly stdoutReader: SubprocessOutputReader = {
       readFrom: () => ({ text: '', lossy: false, nextOffset: 0 }),
+    }
+    private readonly stderrReader: SubprocessOutputReader = {
+      readFrom: offset => ({
+        text: this.stderrText.slice(offset),
+        lossy: false,
+        nextOffset: this.stderrText.length,
+      }),
     }
     override spawn(spec: SubprocessSpawnSpec): SubprocessHandle {
       this.specs.push(spec)
       return {
-        pid: -1,
         stdin: undefined,
         stdout: undefined,
         stderr: undefined,
-        collected: { stdout: this.reader, stderr: this.reader },
-        done: Promise.resolve({ exitCode: 0, signal: null }),
+        collected: { stdout: this.stdoutReader, stderr: this.stderrReader },
+        done: this.done,
         terminate: () => {},
         waitForExit: async () => true,
       }
@@ -199,6 +207,67 @@ describe('spawn construction (pure, every platform)', () => {
     expect(argv[5]).toBe(`${ENCODING_PREAMBLE}Write-Output 你好`)
     expect(ENCODING_PREAMBLE).toContain('[Console]::OutputEncoding')
     expect(ENCODING_PREAMBLE).toContain('$OutputEncoding')
+  })
+
+  it('reports both unread stderr and an asynchronous provider rejection exactly once', async () => {
+    const ctx = new Context()
+    const subprocess = new CapturingSubprocessRuntime(ctx)
+    await ctx.plugin(PwshLocalExecutor)
+    subprocess.stderrText = 'target stderr'
+    subprocess.done = Promise.reject(new Error('provider lost the direct outcome'))
+
+    const proc = ctx.shell.start(ctx.shell.resolve({ command: 'Write-Output maybe-ran' }))
+    await expect(proc.done).resolves.toBeUndefined()
+    expect(proc.status).toBe('killed')
+    const output = proc.readOutput().delta
+    expect(output).toContain('target stderr')
+    expect(output).toContain('subprocess failed before reporting an outcome:')
+    expect(output).not.toContain('spawn failed:')
+    expect(proc.readOutput().delta).toBe('')
+  })
+
+  it('settles an unprintable provider rejection instead of rejecting done', async () => {
+    const ctx = new Context()
+    const subprocess = new CapturingSubprocessRuntime(ctx)
+    await ctx.plugin(PwshLocalExecutor)
+    const providerError = new Error('unprintable provider error')
+    Object.defineProperty(providerError, Symbol.toPrimitive, {
+      value: () => { throw new Error('provider formatting must not escape') },
+    })
+    subprocess.done = Promise.reject(providerError)
+
+    const proc = ctx.shell.start(ctx.shell.resolve({ command: 'Write-Output maybe-ran' }))
+    await expect(proc.done).resolves.toBeUndefined()
+    expect(proc.status).toBe('killed')
+    expect(proc.readOutput().delta).toContain('unprintable provider failure')
+    expect(proc.readOutput().delta).toBe('')
+  })
+
+  it('preserves an explicit kill stamp and maps an aborted direct outcome to killed', async () => {
+    const ctx = new Context()
+    const subprocess = new CapturingSubprocessRuntime(ctx)
+    await ctx.plugin(PwshLocalExecutor)
+
+    const killedOutcome = Promise.withResolvers<SubprocessOutcome>()
+    subprocess.done = killedOutcome.promise
+    const killed = ctx.shell.start(ctx.shell.resolve({ command: 'Write-Output maybe-ran' }))
+    expect(killed.kill()).toBe(true)
+    killedOutcome.resolve({ exitCode: 0, signal: null })
+    await killed.done
+    expect(killed.status).toBe('killed')
+    expect(killed.exitCode).toBe(0)
+
+    const abortedOutcome = Promise.withResolvers<SubprocessOutcome>()
+    subprocess.done = abortedOutcome.promise
+    const controller = new AbortController()
+    const aborted = ctx.shell.start(ctx.shell.resolve({
+      command: 'Write-Output maybe-ran',
+      signal: controller.signal,
+    }))
+    controller.abort()
+    abortedOutcome.resolve({ exitCode: 0, signal: null })
+    await aborted.done
+    expect(aborted.status).toBe('killed')
   })
 })
 
@@ -414,7 +483,7 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
     expect(lf(read.delta)).toContain('[stderr]')
   })
 
-  it('kill() terminates the process tree: true once, false after settlement', async () => {
+  it('kill() requests managed-range termination: true once, false after settlement', async () => {
     const { bash } = await setup()
     const proc = bash.start(bash.resolve({ command: 'Start-Sleep -Seconds 60' }))
     expect(proc.kill()).toBe(true)
@@ -450,13 +519,13 @@ describe.skipIf(!hasPwsh)('PwshLocalExecutor.start (background process handles)'
     expect(['SIGTERM', 'SIGKILL']).toContain(proc.signal)
   })
 
-  it('a background spawn failure settles as killed with the error readable on stderr', async () => {
+  it('an asynchronous creation failure settles as killed with a stage-neutral note', async () => {
     const { bash } = await setup()
     const proc = bash.start(bash.resolve({ command: 'Write-Output ok', workdir: '/nonexistent-dsh' }))
     // done resolves (never rejects) even though the process never ran.
     await expect(proc.done).resolves.toBeUndefined()
     expect(proc.status).toBe('killed')
-    expect(proc.readOutput().delta).toContain('spawn failed:')
+    expect(proc.readOutput().delta).toContain('subprocess failed before reporting an outcome:')
   })
 })
 

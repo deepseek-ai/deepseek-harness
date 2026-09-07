@@ -10,7 +10,7 @@ English | [中文](2026-07-31-code-runtime-python-fd3-protocol.zh.md)
 
 `@deepseek-ai/dsh-experimental-code-runtime-python` owns the wire protocol intended for a CPython code-runtime provider. Such a provider runs each model program in a fresh `python3 -I` subprocess and bridges binding calls and completion values over the child's fd 3. The host cannot trust that channel: model code has full access to fd 3 and can forge any frame, so every inbound frame is hostile input that the host must validate and rebuild before reading. The protocol also has to carry lossless JSON without the depth limit `JSON.stringify` and `json.dumps` impose, because the seam's `CodeJsonValue` is depth-unbounded.
 
-The private experimental package contains both the protocol and runtime implementation: `PythonCodeRuntime` (the plugin's default export), the `python3 -I` subprocess path, and the Python-side JSON codec all live in `@deepseek-ai/dsh-experimental-code-runtime-python`. The protocol builds on the [portable identifier seam](2026-07-31-code-runtime-portable-identifier-seam.md).
+The private experimental package contains both the protocol and runtime implementation: `PythonCodeRuntime` (the plugin's default export), the `python3 -I` subprocess path, and the Python-side JSON codec all live in `@deepseek-ai/dsh-experimental-code-runtime-python`. The protocol builds on the [portable identifier seam](../../archived/architecture/2026-07-31-code-runtime-portable-identifier-seam.md).
 
 ## Decision
 

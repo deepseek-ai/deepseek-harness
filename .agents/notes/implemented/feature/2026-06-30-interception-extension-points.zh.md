@@ -16,7 +16,7 @@ harness 需要一套钩子子系统：用户像 Claude Code（CC）和 Codex 那
 
 **Agent 事件**（`dsh-agent`）：
 - `agent/session-start({ agent, source })` ——emit，在第 1 轮次之前触发一次，携带 `SessionStartSource`（`startup` 表示全新/fork 创建，`resume` 表示重新加载的持久化会话；`clear`/`compact` 保留）。纯通知，不能阻塞启动（这是有意的空白：桥接可以记录/注入，但不管控启动）。监听器通过 `agent.inject()` 注入上下文。
-- `agent/pre-step({ agent, messages, turn, step, signal }, next) → PreStepDecision` ——waterfall，在每个拟议步骤之前、循环原子移除其独占 inbox 批次后触发。payload 携带该请求的 `turn`、`step` 与取消 `signal`（已退役的 `PreStepContext` 字段位于 payload 中；参见 [payload-object 事件决策](../architecture/2026-08-06-agent-event-payload-objects.zh.md)）；没有中途输入的工具续步会收到空批次。`enter` 返回完整消息批次，其中包括监听器为当前请求贡献的上下文；`reject` 不打开步骤，并让已领取消息保持已删除。
+- `agent/pre-step({ agent, messages, turn, step, signal }, next) → PreStepDecision` ——waterfall，在每个拟议步骤之前、循环原子移除其独占 inbox 批次后触发。payload 携带该请求的 `turn`、`step` 与取消 `signal`（已退役的 `PreStepContext` 字段位于 payload 中；参见 [payload-object 事件决策](../../archived/architecture/2026-08-06-agent-event-payload-objects.md)）；没有中途输入的工具续步会收到空批次。`enter` 返回完整消息批次，其中包括监听器为当前请求贡献的上下文；`reject` 不打开步骤，并让已领取消息保持已删除。
 
 **`agent/turn-stopping`** 是自然停止边界上的一次 awaited 通知。需要再执行一步的监听器调用 `agent.steer()`，传入来源显式的 steering（中途引导）内容供模型使用；循环随后重新读取 outbox，继续执行或关闭轮次。
 
@@ -52,7 +52,7 @@ Service Definition 包**不**声明 `hook/*` 会话事件（持久的钩子调�
 ## 曾考虑的替代方案
 
 - **将工具执行前输入重写作为本扩展点集合的一部分发布**：推迟，视为越界信号；上文已阐述一致性问题（审计、历史和展示都读取执行前记录的 `tool/call.arguments`），[工具执行前输入重写提案](../../proposed/feature/2026-06-30-pre-tool-input-rewrite.zh.md)负责该设计。
-- **将持久的 `hook/*` SessionEvents 与扩展点一起声明**：否决。原生插件使用类型化 Decision 而完全不需要钩子日志（实际示例已证明），因此持久日志属于[钩子协议库](2026-06-30-hook-protocol-lib.zh.md)，而非扩展接口。
+- **将持久的 `hook/*` SessionEvents 与扩展点一起声明**：否决。原生插件使用类型化 Decision 而完全不需要钩子日志（实际示例已证明），因此持久日志属于[钩子协议库](../../../../packages/hooks/hook-protocol/README.zh.md)，而非扩展接口。
 
 ## 后果
 

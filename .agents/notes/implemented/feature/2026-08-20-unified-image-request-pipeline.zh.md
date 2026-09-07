@@ -34,7 +34,7 @@ Status: implemented
 
 ### DeepSeek Files 生命周期
 
-直接 `deepseek-official` 适配器通常通过 OpenAI 兼容 Files API 上传每张保留的请求版本，并发送 `file_id` 内容块。文件解析失败时，[有界内联回退](../bug-fix/2026-08-21-deepseek-files-inline-fallback.zh.md)会发送相同的确定性请求版本。默认 catalog 把 `deepseek-v4-flash-vision-exp` 公布为支持图片。上传 ID 按端点和 API key 作用域以及 `variantId` 写入索引。上传默认请求 7 天有效期，并记录返回的 `expires_at`；本地映射剩余时间不超过一小时时会直接替换，不会先查询远端文件。索引绝不存储 API key。
+直接 `deepseek-official` 适配器通常通过 OpenAI 兼容 Files API 上传每张保留的请求版本，并发送 `file_id` 内容块。文件解析失败时，[有界内联回退](../../archived/bug-fix/2026-08-21-deepseek-files-inline-fallback.md)会发送相同的确定性请求版本。默认 catalog 把 `deepseek-v4-flash-vision-exp` 公布为支持图片。上传 ID 按端点和 API key 作用域以及 `variantId` 写入索引。上传默认请求 7 天有效期，并记录返回的 `expires_at`；本地映射剩余时间不超过一小时时会直接替换，不会先查询远端文件。索引绝不存储 API key。
 
 只有上传响应返回完整文件对象、匹配的字节数和 `expires_at` 时，上传结果才会写入索引。缺失或不一致的响应不会留下本地映射，后续请求会重新上传。同一作用域和 `variantId` 的并发解析共享一次提供方上传；单个等待方无法取消其他等待方，全部等待方取消时才会停止上传。格式损坏的上传索引按空缓存处理，并在下一次成功上传时替换；文件系统 I/O 失败仍是错误。如果 chat 报告 ID 已过期、删除、缺失或无效，并指出本次请求使用的一个或多个 ID，适配器只删除这些映射。如果响应只说明文件状态失效而没有指出具体 ID，适配器会删除该次 chat 使用的全部映射。受影响的请求字节会重新上传，chat 只重试一次。第二次仍报告文件失效时，适配器会按响应清理映射并返回错误，不会发起第三次 chat。一次上传配额错误会先列出配置数量的最旧 `dsh-` 文件，再删除收集到的文件并重试一次；分页完成后才删除，避免游标失效。公开文件操作提供列表、查询、删除、单个变体释放和整个作用域释放。每个 Files 请求都携带 Harness 的共享 `User-Agent`。客户端执行文档规定的 Files 单次上传 128MiB、chat 单图 32MiB、10,000 个文件、25GiB，以及一小时到 30 天有效期限制。
 

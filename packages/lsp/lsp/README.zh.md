@@ -100,10 +100,9 @@ seam 需要提供方与消费方才能发挥作用。最小组合挂载服务、
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从共享的导航模型逐步进入提供方、工具与决策证据。
+当包级约定不够用时阅读以下页面。它们从共享的导航模型逐步进入提供方与工具。
 
 - [LSP 导航子系统](../../../docs/subsystems/lsp.zh.md)——操作、坐标、请求与结果，以及 `LspError` code。
-- [LSP 能力 seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.zh.md)——设计原理、备选方案与刻意推迟的 API。
 - [dsh-lsp-stdio](../lsp-stdio/README.zh.md)——注册到该 seam 的 stdio 提供方。
 - [dsh-tool-lsp](../tool-lsp/README.zh.md)——基于该 seam 的面向模型工具。
 - [lsp 组地图](../README.zh.md)——三个包的家族及其相关文档。
@@ -126,7 +125,7 @@ seam 需要提供方与消费方才能发挥作用。最小组合挂载服务、
 
 这些限制定义 seam 当前的范围。它们是包约束，不是任务积压。
 
-- **同一运行时内扩展名归属互斥**——两个提供方不能同时声明 `.ts`，即使 language id 不同；重叠会使注册失败。预期扩展是在注册之上增加部署配置的 selector，它可以在不把提供方选择加入模型输入的前提下放宽互斥保留（见 [seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.zh.md)）。
+- **同一运行时内扩展名归属互斥**——两个提供方不能同时声明 `.ts`，即使 language id 不同；重叠会使注册失败。预期扩展是在注册之上增加部署配置的 selector，它可以在不把提供方选择加入模型输入的前提下放宽互斥保留。
 - **仅四种只读操作**——symbol 与 call hierarchy 因需要不同 schema 而推迟；diagnostics 需要独立的新鲜度与累积规则；修改（重命名、code action、格式化）需要独立工具，并集成预览、权限与写入策略。
 - **没有观测表层**——可用性只能通过运行 `query()` 并按抛出的 `LspError` code 路由来观测；没有提供方变更事件或能力状态查询。
 

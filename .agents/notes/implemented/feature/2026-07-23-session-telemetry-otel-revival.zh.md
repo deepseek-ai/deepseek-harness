@@ -14,8 +14,7 @@ Status: implemented
 
 - **`@deepseek-ai/dsh-session-telemetry`** —— seam 本体。`SessionTelemetrySink`（`emit`/`flush?`/`shutdown`）、服务注册形态的 `SessionTelemetryBackend` 与 `SessionTelemetryCoordinator` 共同拥有生命周期本地捕获：每个新的 Session 对象从 `firstLiveSeq` 之前开始，随后逐 append firehose 以零 I/O 深拷贝、脱敏并交接每个事件；重新收养同一对象时从模块作用域游标之后继续。无缓冲按需捕获使用同样的一事件一记录映射，直到可选的包含式边界。Ledger 身份包含 `session.id`、`session.format_version` 与 `event.seq`；实时捕获还会转发 `agent/error`，并创建 dispose（资源释放）时的 `shutdown` 记录。
 - **`session-telemetry/record` waterfall（瀑布式事件）** —— 相对分支版本的增量，也是该 seam 的脱敏扩展点。每条记录抵达任何后端前必经此处；seam 自身不带任何规则——最内层 `next()` 原样透传，部署方以监听器挂载自己的规则（通过变换 `next()` 的返回值堆叠），抛异常的规则将该记录 fail-closed 扣下。脱敏只作用于导出副本；canonical log 永不改写。
-- **`@deepseek-ai/dsh-session-telemetry-otel`** —— 参考后端：OTel JS SDK 日志流水线（`LoggerProvider` → `BatchLogRecordProcessor` → OTLP/HTTP exporter），经 `exporter`/`processor` passthrough 原样配置。`DISABLED` 是默认值，且不构造任何传输；[反馈门控遥测决策](2026-08-05-feedback-gated-session-telemetry.zh.md)定义了需显式启用的 `FULL` 与 `FEEDBACK_ONLY` 投递模式，这两种模式要求 `exporter.url`，且不移动脱敏或后端边界。[无缓冲反馈回放](../simplification/2026-08-06-buffer-free-feedback-telemetry.zh.md)避免在内存中创建会话前缀的第二份副本。
-
+- **`@deepseek-ai/dsh-session-telemetry-otel`** —— 参考后端：OTel JS SDK 日志流水线（`LoggerProvider` → `BatchLogRecordProcessor` → OTLP/HTTP exporter），经 `exporter`/`processor` passthrough 原样配置。`DISABLED` 是插件默认值，且不构造任何传输。`FEEDBACK_ONLY` 要求 `exporter.url`；[显式反馈策略](../architecture/2026-09-05-nonofficial-feedback-otel.zh.md)要求每次有界捕获都由新提交触发，适用于所有提供方。[无缓冲反馈回放](../../archived/simplification/2026-08-06-buffer-free-feedback-telemetry.md)避免在内存中创建会话前缀的第二份副本。
 
 边界公理保持不变：harness 的职责止于 `emit()`。批处理、重试、排队与丢失策略属于 reporting SDK，并经 passthrough 配置。投递是尽力而为：崩溃可能丢失已排队记录。后端重试或丢失同一 live 对象的模块作用域游标可能重复生命周期本地 row，因此接收端基于 `(session.id, session.format_version, event.seq)` 去重。
 
@@ -29,10 +28,10 @@ Status: implemented
 
 **映射到 OTel span（GenAI 语义约定）而非日志。** 本次复活否决：分支实现的日志映射已经过评审、形态可交付；span 模型对可 fork、可中断的会话有损，留给将来真正有 span 查询需求的消费方。
 
-**为每个新 Session 对象回放完整 constructor seed。** 不予采用，因为 fork 的继承事件以及 resume 或迁移日志属于其他生命周期，可能早于当前共享动作。在新对象下回放这些内容会再次释放已共享数据、把继承事件归因给 child Session，并使反馈确认文本低估实际交接范围。因此，新对象从 `firstLiveSeq` 之前开始：全新 Session 仍从 seq 0 开始，seeded Session 则从其生命周期边界开始。重新收养同一对象时仍从游标之后继续，因此 HMR 不会重复稳定的生命周期后缀。该规则不提供崩溃回填；要求保证历史投递的部署需要延后的 durable outbox，并对更广范围作出显式披露。
+**自动回放每个 constructor seed。** fork 的继承事件和恢复的日志可能早于当前共享动作。协调器对新对象默认从 `firstLiveSeq` 开始；`includeHistory` 显式允许后端捕获存储的上下文。OTel 仅在新的自身反馈时选择完整历史，绝不在构造、恢复或 HMR 时捕获。同对象游标减少重复交接，但不保证历史投递，也不替代延后的持久化 outbox。
 
 **将 seam 的轮次边界 `flush()` 提示转发到 OTel 提供方的 `forceFlush()`。** 首轮复活曾交付此转发，其后移除：三条不同的静默丢失路径共用同一份包装层状态——dispose 与进行中的 flush 之间的竞态（SDK 的并发 flush 防护会令 shutdown 的内部排空被跳过）、相互重叠的提示顶掉留存的 promise、以及提供方固定的 30 秒 flush 超时在批处理器仍在排空时便 reject。这些路径存在的唯一原因，是该转发让这个后端成为进程内第二个执行 flush 的组件，面对的还是上游实验性（experimental）源码树中未见诸文档的 SDK 内部行为；不实现 `flush()` 时，批处理器就是唯一执行 flush 的组件，其 `scheduledDelayMillis`（已可由部署方经 `processor` passthrough 调优）决定导出节奏，`shutdown()` 的排空从构造上就是完整的。仅当某个部署提出 `scheduledDelayMillis` 无法满足的轮次边界延迟要求时才恢复此转发——且届时应调用留存的 `BatchLogRecordProcessor` 自身的 `forceFlush()`，绝不调用提供方那个带超时包装的版本。
 
 ## 后果
 
-部署方在 `cordis.yml` 加一个带 OTLP endpoint 的 Cordis 配置项，并显式选择 `FULL`，即可把生命周期本地权威事件流接入任何 OTel 兼容体系；选择 `FEEDBACK_ONLY` 则会在记录反馈时回放生命周期本地权威日志前缀。`DISABLED` 是[默认值](2026-08-10-telemetry-default-off.zh.md)，且不构造上报流水线；删除该配置项仍是静默退出方式，而禁用模式会保留本地反馈警告。未挂载规则的部署会按捕获原样导出每个事件 body，包括每条 assistant chunk，以及文件内容与命令输出中内嵌的任何凭据。因此，跨信任边界的部署必须挂载 `session-telemetry/record` 监听器，两份 README 对此如实陈述。挂载规则后，导出的 body 可能与 canonical log 字节不同，接收端不得把遥测当作字节精确副本；日志仍是真源。同一对象丢失游标状态后的回放可能重复生命周期本地 ledger 行，崩溃持久性则在上述 outbox 决定重新审议前继续不在范围内。
+部署方配置 OTLP endpoint 并选择 `FEEDBACK_ONLY`，即可在新的显式反馈时释放完整权威日志前缀。`DISABLED` 是插件默认值（[`dsh-session-telemetry-otel` README](../../../../packages/session/session-telemetry-otel/README.zh.md)），且不构造上报流水线；删除配置项是静默退出方式，而禁用模式保留本地反馈警告。SDK 定时刷新和关闭只排空已授权批次，不捕获后续记录。未挂载规则的部署会导出每条已捕获事件的正文，包括紧凑 assistant stream 以及文件内容或命令输出中内嵌的凭据，因此跨信任边界的部署必须挂载 `session-telemetry/record` 监听器。脱敏后的正文可能与权威日志字节不同；日志仍是真源。丢失交接游标可能使后续已授权捕获产生重复，崩溃持久性则在上述 outbox 决定重新审议前继续不在范围内。

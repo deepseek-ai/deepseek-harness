@@ -1,0 +1,10 @@
+version: 1
+scenario: session-reference-spill
+profile: headless
+composition: session-reference-spill
+recording: authored
+header:
+  class: session-reference-spill
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

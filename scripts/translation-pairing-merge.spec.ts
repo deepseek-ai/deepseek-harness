@@ -268,7 +268,7 @@ function expectMergedPair(fixture: Fixture): void {
 // yielding to it, so a smaller one here lowers what the lane grants every case
 // in this file, none of which carries an allowance of its own. Measurements and
 // the rejected alternatives are in
-// .agents/notes/implemented/testing/2026-08-27-translation-pairing-merge-budget.md.
+// .agents/notes/archived/testing/2026-08-27-translation-pairing-merge-budget.md.
 describe('translation pairing merge composition', { timeout: 90_000 }, () => {
   it('rejects a pairing-record path outside the repository', () => {
     const fixture = createFixture(false)

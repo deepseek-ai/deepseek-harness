@@ -1,0 +1,51 @@
+# Agent Note: Human inbox controls for continuable subagents
+
+Status: implemented
+
+English | [中文](2026-08-27-continuable-subagent-human-inbox-control.zh.md)
+
+## Problem
+
+Continuable children use the same Agent loop and inbox as ordinary Agents, but the human delivery path exposed only FIFO follow-up. The Client discarded its existing Queue/Steer choice when it selected the dedicated subagent prompt Remote, and the generic Session ownership fence rejected every queue mutation for a subagent-owned identity. The browser therefore hid controls that the live child inbox already supported.
+
+Opening generic Session control indiscriminately would weaken the subagent ownership rule. Prompt delivery still needs exact live direct-parent authorization and cold-resume accounting, while queue mutation must reject one-shot, unknown, corrupt, and cold children. A valid continuable descriptor in the child's own log suffix identifies which live subagent-owned Sessions may use occurrence mutation. Settlement must also retain an idle Agent while a delivery a driver will claim is still pending, and must not tear down an Agent that claimed the idle phase for a maintenance task after `whenIdle()` resolved.
+
+## Decision
+
+A live continuable child exposes the ordinary human inbox controls without adding another queue, Remote endpoint, queue action, or Host-facing subagent operation. One-shot children remain read-only.
+
+The existing `SubagentPromptRequest` carries `delivery: 'queue' | 'steer'`. The Client forwards the mode already selected by `Session.prompt(content, mode)` through `subagent.prompt`. The Remote still requires the exact live direct parent and then uses one package-internal continuation-manager delivery operation. Queue calls `Agent.followup(message)`; steer calls `Agent.steer(message)`. Both paths share child locking, cold resume, final parent reauthorization, caller-signal cutoff, `MessageId` creation, rollback, and disposal-race handling. This human choice adds no public scheduling method or model tool; the separately owned `sendMessage()` and model-facing `send_message` operation keep their fixed adjacent-Agent Steer semantics.
+
+The browser gives a continuable child the ordinary busy Enter/Cmd+Enter Queue/Steer preference, QueueDock Edit/Remove/Steer actions, and empty-draft steer-all gesture. Send and Stop remain independent controls. Composer prompts still require the live parent because their Remote mints new admitted work. QueueDock mutations address already-live inbox work directly, so they remain available when the parent is offline; the parent-offline composer stays locked.
+
+The existing `session.updateQueue(itemId, action)` resolves the exact live Agent and admits a subagent-owned Session only when its current projected identity is continuable and the descriptor sequence belongs to the child's own non-seed suffix. A live one-shot Agent and a missing, inherited-only, or invalid identity retain the ownership failure. An absent Agent returns `queue-item-not-found` and does not cold-resume the child. The target Session id is sufficient human authority for a live inbox occurrence mutation; a parent address is not required. Edit and Remove retain their complete existing `nextTurn` and `nextStep` semantics, including plugin-injected context, while Steer requires a queued occurrence and an Agent that reports running when the command begins.
+
+The continuation manager keeps no second message-reservation state. One private `SubagentInbox` delegates Queue and Steer to the Agent inbox and owns the Activation's existing closing promise. Natural settlement waits for `Agent.whenIdle()`, an empty child Inbox, and disposal of every owned child. The manager confirms the Inbox, owned-child set, and wake generation under the child lock, then flushes final Session state while admission remains open. The final child-lock decision revalidates the Session sequence and the same residency facts, then synchronously starts an `Agent.runMaintenance()` task whose entry claims the idle phase and closes the wrapper in the same JavaScript turn. Every pending Inbox occurrence retains the Activation regardless of its delivery mode or provenance. Manager-owned deliveries, Inbox claims or discards, and owned-child release renew the wake generation. Direct Agent work accepted during the flush either changes the final Session or residency observation, remains active and prevents the final maintenance task from starting, or completes before revalidation.
+
+QueueDock Steer uses the Agent's best-effort delivery after the command admits a running queued occurrence. If the queued occurrence was claimed first, `queue-item-not-found` leaves its ordinary Queue delivery underway. If active cancellation wins during the synchronous transfer, Agent steering appends the message to `nextTurn`, latches a wake, and the Session command still succeeds. The selected message moves behind the remaining Queue in that fallback case. Newly composed Steer uses the same fallback and remains deliverable when it misses the nearest step.
+
+This decision partially supersedes the human-control exclusions in [Web subagent catalog and human continuation](2026-07-27-web-subagent-conversations.md), [Continuable subagents](2026-07-28-continuable-subagent-conversations.md), [Steer a queued Web message](../../archived/feature/2026-07-30-web-queue-steer-action.md), and [Steer the whole Web queue with an empty-draft Cmd/Ctrl+Enter](../../archived/feature/2026-08-06-web-queue-steer-all-gesture.md). The active records own catalog authorization and Activation lifecycle; the archived records preserve the original QueueDock Steer and gesture decisions.
+
+## Alternatives considered
+
+**Add `SubagentRuntime.steer()` and a new Remote.** Rejected because human prompt delivery already has a mode-bearing Client method and one authenticated Remote. A new public operation would expand both the service and model-adjacent surface without adding an execution primitive.
+
+**Add `subagents.updateQueue`.** Rejected because `session.updateQueue` already owns exact inbox occurrence mutation and its race failures. The projected continuable identity provides the narrow ownership-fence exception without adding another operation.
+
+**Route every subagent control through generic Session APIs.** Rejected because prompt and cancellation require subagent lineage authorization, cold-resume accounting, and dedicated failure mapping. Only live inbox occurrence mutation has enough target-local state to use the narrow ownership-fence exception.
+
+**Restrict continuable queue mutation to `nextTurn`.** Rejected because human inbox parity intentionally includes editing or removing pending steering and injected context. If a plugin needs a stronger transaction around its `nextStep` input, that protection belongs to the shared Agent inbox semantics rather than a subagent-only restriction.
+
+**Track waking work by `MessageId` and transfer that record across mutation.** Rejected because it duplicates the Inbox's pending set with a second activity ledger and couples residency to occurrence identity. `whenIdle()` waits for existing Agent activity, `Inbox.hasPending` conservatively retains every occurrence, the Activation generation invalidates stale observations, and the final maintenance task atomically joins idle ownership to admission closure. This choice can retain quiet injected context, but it avoids both an additional mutation protocol and silent loss of accepted steering.
+
+**Derive residency from `MessageSource.kind`, treating `plugin` as parked context.** Rejected because `kind` records who produced a message, not how it was delivered, and `MessageSourceMap` is merge-extensible. Plugins steer with a plugin source (`cordis-host-runner` failure reports, blocking Stop hooks) and hosts inject with non-plugin sources (`dsh-experimental-agent-team` quiet mail), so the correspondence fails in both directions. Treating all pending occurrences alike avoids that unsupported inference.
+
+## Consequences
+
+Continuable child conversations and ordinary Sessions share one human inbox interaction model and one Agent-loop queue. Human steering can affect a resident or cold-resumed child without changing public model controls. QueueDock remains useful for a live child after its parent goes offline, while new messages continue to respect direct-parent authorization.
+
+The generic Session command has one narrow ownership-fence exception for a live subagent-owned Agent with a valid own-suffix continuable identity. Because the operation addresses either inbox destination, a caller that knows a pending `MessageId` can edit or remove plugin-supplied next-step input, exactly as on an ordinary Session. QueueDock renders only `queued`-placement rows, so no browser gesture reaches that input; an edit there also keeps the original producer's `MessageSource`, which would attribute human text to that producer.
+
+Inbox notifications retain their occurrence semantics and do not carry continuation residency. Claim and discard notifications only wake settlement after pending work changes; `whenIdle()`, the final idle-phase maintenance task, `Inbox.hasPending`, the owned-child set, the Activation generation, and the Session sequence decide whether disposal is safe without depending on scheduler ordering, message identity, or provenance. The final flush precedes the closing cutoff, so a detached hook, job completion, or direct Agent delivery accepted during that await invalidates the observation instead of being stopped by the resulting disposal. Maintenance that remains active prevents the final task from claiming the idle phase; maintenance that starts and finishes during the flush has completed before disposal. A child left holding only injected context remains resident even though no driver is obliged to claim it; without a later waking delivery, queue removal, or manager teardown, that child and its live ancestors can remain resident for the process lifetime. A replayed Inbox follows the same conservative rule without reconstructing how each pending message was delivered.
+
+Model-side scheduling remains fixed rather than caller-selectable. The adjacent-Agent `send_message` tool always uses Steer, while only the browser human path chooses Queue or Steer.

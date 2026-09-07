@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:">
+    <title id="page-title"></title>
+    <link rel="stylesheet" href="plugin-manager.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <h1 id="title"></h1>
+          <p id="description"></p>
+        </div>
+        <button id="refresh" class="quiet" type="button"></button>
+      </header>
+      <form id="install-form">
+        <label id="package-label" for="package-spec"></label>
+        <div class="install-row">
+          <input id="package-spec" name="package-spec" autocomplete="off" placeholder="@scope/plugin@1.2.3" required>
+          <button id="install" type="submit"></button>
+        </div>
+      </form>
+      <p id="status" role="status" aria-live="polite"></p>
+      <section aria-labelledby="installed-heading">
+        <h2 id="installed-heading"></h2>
+        <ul id="plugins"></ul>
+        <p id="empty"></p>
+      </section>
+    </main>
+    <script src="plugin-manager.js"></script>
+  </body>
+</html>

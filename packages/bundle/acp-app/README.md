@@ -44,7 +44,7 @@ The complete supported method matrix, MCP trust model, update mapping, and stop 
 
 #### What the model sees
 
-The profile supplies `You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.` before the base tool and context contributions. The ACP row's route and each `session/new` cwd resolve the placeholders.
+The profile supplies `You are a coding agent powered by the {{model}} model.` before first-party guidance and `Your working directory is {{cwd}}.` in a separate persona suffix. The ACP row's route and each `session/new` cwd resolve the placeholders.
 
 #### Token effect
 

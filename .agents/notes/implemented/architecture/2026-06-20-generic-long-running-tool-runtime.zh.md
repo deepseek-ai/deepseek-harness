@@ -19,13 +19,13 @@ Status: implemented
 
 长时间运行工具是生产方。`dsh-tool-bash` 将 `ShellProcess` 适配为增量输出与进程取消；`dsh-tool-subagent` 将子运行适配为最终输出与子运行释放。bash 与 subagent 能力 seam 保持独立，不依赖会话或任务注册表。
 
-`JobRegistry` 是 `@deepseek-ai/dsh-jobs` 中的 Service Definition；进程内 Service Provider 是 `@deepseek-ai/dsh-jobs-local` 中的 `LocalJobRegistry`（该拆分记录在[任务注册表约定 Agent Note](2026-07-26-job-registry-seam.zh.md)中）。
+`JobRegistry` 是 `@deepseek-ai/dsh-jobs` 中的 Service Definition；进程内 Service Provider 是 `@deepseek-ai/dsh-jobs-local` 中的 `LocalJobRegistry`（该拆分记录在[任务注册表约定 Agent Note](../../archived/architecture/2026-07-26-job-registry-seam.md)中）。
 
 ## 运行时约定
 
 字面类型见[任务子系统页面](../../../../docs/subsystems/jobs.zh.md)。生产方调用 `ctx.jobs.start()`，传入 kind、label、可选的所属 `Agent`、可选的正数 `outputLimitBytes` 与一个 `run()` 函数。运行时会在调用 `run()` 前完成所有可能失败的预检工作，并且只调用一次。`run()` 返回钩子后，注册过程不会再执行可能失败的步骤而直接提交；生产方无法启动没有可收集 job id 的工作。
 
-进程内 Service Provider 还拥有有界准入，其理由记录在[有界后台任务准入决策](../bug-fix/2026-08-11-bounded-background-job-admission.zh.md)中。它的 `maxConcurrentJobsPerOwner` 配置必须是正的安全整数，默认值为 `10`；`start()` 从 `running` 与 `stopping` 记录派生每个确切 `Agent` 对象的活动数量，而全部无 owner 任务共享一个服务级桶。容量拒绝发生在 `run()` 与 id 分配之前，处于 stopping 的任务只有在生产方 `done` 结算时才释放名额。Service Provider 不排队或抢占任务，也不保留第二份可变计数。
+进程内 Service Provider 还拥有有界准入，其理由记录在[有界后台任务准入决策](../../archived/bug-fix/2026-08-11-bounded-background-job-admission.md)中。它的 `maxConcurrentJobsPerOwner` 配置必须是正的安全整数，默认值为 `10`；`start()` 从 `running` 与 `stopping` 记录派生每个确切 `Agent` 对象的活动数量，而全部无 owner 任务共享一个服务级桶。容量拒绝发生在 `run()` 与 id 分配之前，处于 stopping 的任务只有在生产方 `done` 结算时才释放名额。Service Provider 不排队或抢占任务，也不保留第二份可变计数。
 
 `outputLimitBytes` 是生产方拥有的呈现策略，而非注册表缓冲区。注册表校验该值，并将其原样投影到 `JobSnapshot`；通用任务控制器添加自身的状态或通知元数据后，再将该上限应用于完整的面向模型输出。省略该值时保持现有控制器行为，因此运行时不会向无关的生产方类别施加隐式默认值。
 
@@ -105,7 +105,7 @@ bash seam 暴露 `resolve`、`run` 和 `start`。`start(spec)` 返回一个 `She
 
 ### 立即抽象任务运行时后端
 
-当前 `JobStart.run()` 约定传入进程内回调与确切的 `Agent` 对象。持久化后端会改变身份、重启、所有权与观察语义，因此在引入之时注册表保持为单一具体服务，而非固化错误的边界。[任务注册表约定 Agent Note](2026-07-26-job-registry-seam.zh.md)后来在不改变这些进程内语义的前提下，将约定与进程内实现分离。
+当前 `JobStart.run()` 约定传入进程内回调与确切的 `Agent` 对象。持久化后端会改变身份、重启、所有权与观察语义，因此在引入之时注册表保持为单一具体服务，而非固化错误的边界。[任务注册表约定 Agent Note](../../archived/architecture/2026-07-26-job-registry-seam.md)后来在不改变这些进程内语义的前提下，将约定与进程内实现分离。
 
 ### 由消费方负责授权或清理事件
 

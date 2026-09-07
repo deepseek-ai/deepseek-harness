@@ -71,11 +71,11 @@ kind: "package-reference"
 
 ### 持久性与崩溃语义
 
-会话延迟实体化：`create(header)` 不写入任何内容并返回持有的写句柄，句柄的第一次 `append` 通过无覆盖发布写入并 `fsync` 编码后的 header 与第一批——因此已创建但从未 append 的会话不留下任何磁盘内容，除非其所有者调用 `handle.flush()`，以无事件的单个 header 帧发布它。后续每个批次追加行或一个压缩帧，并在 append 完成前 `fsync`；捕获到写入或同步失败时把文件回滚到之前的字节长度。已提交事件绝不重写。崩溃后，已存储日志保留被中断的最终轮次——已提交前缀中的每条记录都保留下来，由执行恢复的读方通过其写句柄追加合成 closer。撕裂尾部——不完整的最后一行，或撕裂的最后一帧——绝不返回给读取方并被整体丢弃，在写句柄的第一次新 append 之前被持久截断，因为其自身的 append 从未成功返回，其中没有任何内容被确认为已持久；已提交前缀中的校验和、解压或结构失败以损坏拒绝。
+会话延迟实体化：`create(header)` 不写入任何内容并返回持有的写句柄，句柄的第一次 `append` 通过无覆盖发布写入并 `fsync` 编码后的 header 与第一批——因此已创建但从未 append 的会话不留下任何磁盘内容，除非其所有者调用 `handle.flush()`，以无事件的单个 header 帧发布它。后续每个批次追加行或一个压缩帧，并在 append 完成前 `fsync`；捕获到写入或同步失败时把文件回滚到之前的字节长度。已提交事件绝不重写。崩溃后，已存储日志保留被中断的最终轮次——已提交前缀中的每条记录都保留下来，由执行恢复的读方通过其写句柄追加合成 closer。不完整的最终原始行会被丢弃。撕裂的最终 Zstandard 帧只贡献其中完整解码出的 JSONL 记录；写句柄会截掉撕裂字节，并在第一次新批次之前持久重写这些恢复出的记录。完整已提交帧中的校验和、解压或结构失败以损坏拒绝。
 
 ### 读取日志
 
-`open(id, 'read'|'write')` 选择最高规范 generation，并在返回句柄前为受支持的历史源发布一个并列的当前后继；源保持逐字节不变。句柄的 `read(offset?, length?)` 随后提供经过验证的连续切片，绝不包含撕裂尾部。撕裂的最终 Zstandard 帧会被部分解码：其中已刷入的完整 JSONL 记录被恢复进逻辑日志，写句柄的第一次修改会截掉当前 generation 的撕裂字节并在自己的批次之前持久重写这些恢复的记录。写 open 会用已验证的存储前缀预热句柄，一个按 revision 为键的有界 memo 让紧接的观察到恢复交接复用该解析。`stat(id)` 与 `list()` 只选择并转换最高 generation 的 header，不读取事件行，也不发布迁移输出；快照携带所选文件的 `sizeBytes` 与尽力而为的 stat 派生修订号。选择 `compression: 'none'` 后，日志是外部读取方可直接消费的换行分隔文本；压缩默认值必须经后端读取。
+`open(id, 'read'|'write')` 选择最高规范 generation。当前格式输入走普通快速路径。对于历史输入，只读 open 会单遍解码并迁移源、校验当前逻辑结果，然后在不发布后继的情况下返回。写 open 会在可用时复用按 revision 为键的 preparation，否则执行同一套 preparation，再按有界分片编码同目录临时文件、在 Worker Thread 中校验、复查源修订，并在返回前以不覆盖方式发布当前后继。源保持逐字节不变。如果源在 preparation 后发生变化，该次写 open 会失败，已经返回给读方的逻辑历史不会被替换；后续写 open 会针对新的 revision 重新执行 preparation。Backend 在 memo 化前冻结已解码的 event graph，并在此时将其标记为 `shared-frozen`；句柄读取和 slice 即使为空也保留该状态。只有尚未实体化的 pending 空日志报告 `detached`。`stat(id)` 与 `list()` 只选择并转换最高 generation 的 header，不读取事件行，也不启动迁移；快照携带所选文件的 `sizeBytes` 与尽力而为的 stat 派生修订号。选择 `compression: 'none'` 后，日志是外部读取方可直接消费的换行分隔文本；压缩默认值必须经后端读取。
 
 -----
 
@@ -89,11 +89,11 @@ kind: "package-reference"
 
 ### 设计理念
 
-该后端拥有自己完整的存储运行时（`src/storage.ts`）：`JsonlSessionHandle` 承载逐句柄修改链、带固定批处理窗口与 single-flight 排空的已路由实时事件缓冲、单调读取与幂等 close；一个 tracker 持有进程内单写者认领、teardown 清扫所遍历的打开句柄集合，以及后端自己的会话监听器所路由进的已创建但未实体化待定会话。本包有意只暴露默认插件导出与配置类型——具体类不是具名导出，因此消费方只耦合 `ctx.sessionPersistence`，其可观察行为由共享 seam 测试套件（`runPersistenceContract`/`runLiveWritePathContract`）钉住。其变更令牌是尽力而为的文件修订值：device、inode、size 与纳秒时间戳标识一份日志，供 `stat`/`list` 以及在并发 append 撕裂读取时重试的稳定读取循环使用。
+该后端拥有自己完整的存储运行时（`src/storage.ts`）：`JsonlSessionHandle` 承载逐句柄修改链、带固定批处理窗口与 single-flight 排空的已路由实时事件缓冲、单调读取与幂等 close；一个 tracker 持有进程内单写者认领、teardown 清扫所遍历的打开句柄集合，以及后端自己的会话监听器所路由进的已创建但未实体化待定会话。历史正文读取共享每个 Session 唯一的一次 Decode/Migrate preparation，按 revision 为键的有界 memo 让紧接的观察到恢复交接复用该解析；backend 在 memo 化前只对每个 event graph 深度冻结一次，因此后续 handle read 无需复制或再次冻结。只有写 open 才发布准备好的后继。本包有意只暴露默认插件导出与配置类型——具体类不是具名导出，因此消费方只耦合 `ctx.sessionPersistence`，其可观察行为由共享 seam 测试套件（`runPersistenceContract`/`runLiveWritePathContract`）钉住。其变更令牌是尽力而为的文件修订值：device、inode、size 与纳秒时间戳标识一份日志，供 `stat`/`list`、在并发 append 撕裂读取时重试的稳定读取循环，以及发布前源检查使用。
 
 ### 物理编码
 
-默认产物是独立 [Zstandard 帧](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.zh.md) 的标准拼接：一个仅包含 header 行的带校验和帧，后跟每个持久 append 批次一个带校验和帧，使用 Node 内置 Zstandard API 的默认压缩级别（无级别开关）。当前 v2 为每个事件写一行；`sourceEventSeqs` 使用无损存储形式：至少包含三个序列号的连续段会变成 `[start, end]` 区间对，其他列表原样保留；读取时会展开回精确的内存数组。列表只读取并验证 header 帧。`compression: 'none'` 保留相同的存储形式逻辑行，但不使用帧压缩。一个根只属于一种编码：启动发现与定向查找会拒绝使用另一后缀的 generation；格式迁移保留已配置编码，而压缩转换、混合根回退与双写仍不受支持。冻结的 v0 与 v1 codec 仅为历史 generation 保留 packed-row decoder。
+默认产物是独立 [Zstandard 帧](../../../.agents/notes/implemented/architecture/2026-07-19-zstandard-jsonl-session-logs.zh.md) 的标准拼接：一个仅包含 header 行的带校验和帧，后跟每个持久 append 批次一个带校验和帧，使用 Node 内置 Zstandard API 的默认压缩级别（无级别开关）。当前 v2 为每个事件写一行；`sourceEventSeqs` 使用无损存储形式：至少包含三个序列号的连续段会变成 `[start, end]` 区间对，其他列表原样保留；读取时会展开回精确的内存数组。历史迁移会复用一个 Zstandard decoder，让已解析行流经有状态格式 Stage，并通过一个压缩 context 以约 1 MiB 主线程分片流式写入当前记录，同时只保留最终当前事件、有界 decoder 状态与必需的序号重映射表。列表只读取并验证 header 帧。`compression: 'none'` 保留相同的存储形式逻辑行，但不使用帧压缩。一个根只属于一种编码：启动发现与定向查找会拒绝使用另一后缀的 generation；格式迁移保留已配置编码，而压缩转换、混合根回退与双写仍不受支持。冻结的 v0 与 v1 codec 仅为历史 generation 保留 packed-row decoder。
 
 ### 源码地图
 
@@ -102,7 +102,8 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、后端服务类与文件存储原语 |
 | [`src/storage.ts`](src/storage.ts) | JSONL 句柄、已路由实时事件缓冲、进程内写入者记账、监听器、teardown |
 | [`src/format.ts`](src/format.ts) | 日志路径派生、header 编码与当前记录扫描 |
-| [`src/generation.ts`](src/generation.ts) | 稳定 generation 读取、格式 adapter 调用、排他后继发布与已提交 reopen |
+| [`src/generation.ts`](src/generation.ts) | 单遍历史还原、有界 stage 编码、源 revision 检查与排他后继发布 |
+| [`src/migration-verifier.ts`](src/migration-verifier.ts) | stage 与竞争 generation 校验的 Worker 生命周期 |
 | [`src/zstd.ts`](src/zstd.ts) | Zstandard 帧压缩、解码与帧扫描 |
 | [`src/win32.ts`](src/win32.ts) | Windows write-through 发布与目录创建 |
 | — | 不发布运行时不变式伴生入口；身份在存储层强制。 |

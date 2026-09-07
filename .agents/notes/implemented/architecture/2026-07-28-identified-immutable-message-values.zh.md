@@ -46,5 +46,5 @@ harness 曾存在多种形似消息的表示，各自采用不同的标识规则
 
 ## 相关
 
-- [统一 agent 交付路由，并合并注入上下文](2026-07-22-unified-send-and-coalesced-user-messages.zh.md)——本记录取代其中的输入表示和由 agent 分配 id 的细节，同时保留其路由决策。
+- [统一 agent 交付路由，并合并注入上下文](../../archived/architecture/2026-07-22-unified-send-and-coalesced-user-messages.md)——本记录取代其中的输入表示和由 agent 分配 id 的细节，同时保留其路由决策。
 - [可重建的请求](2026-07-05-reconstructable-requests.zh.md)——会话日志仍是每项模型可见输入的权威来源。

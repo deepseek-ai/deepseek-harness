@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-06-user-bubbles-drop-the-branch-action.md
-2026-08-06-user-bubbles-drop-the-branch-action.md: 817b5e72b7e18b03ddb3a160e6f7a86b04f02764
-2026-08-06-user-bubbles-drop-the-branch-action.zh.md: 0f538315106ef89020633a90873af2cf519b0166

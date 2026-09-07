@@ -8,7 +8,7 @@ Status: implemented
 
 工具输出需要有界的模型可见预览，但部分超大结果仍可能在之后有用。抓取的页面正文或冗长的工具响应不应完整占用下一次模型请求，但模型应能使用现有文件读取工具，在之后查看经过格式化的完整结果。
 
-这项改动之前的行为并不一致。`dsh-bash-local` 已经会在内存尾部溢出时，把完整 stdout／stderr 流写入私有的临时 spill 文件；普通文本工具结果则仍以内联形式返回，除非工具自行实现上限。[工具结果保留库](2026-07-06-tool-result-retention-library.zh.md)负责预览机制，但不负责存储，也不负责把这些机制应用于最终工具结果的执行流水线策略。
+这项改动之前的行为并不一致。`dsh-bash-local` 已经会在内存尾部溢出时，把完整 stdout／stderr 流写入私有的临时 spill 文件；普通文本工具结果则仍以内联形式返回，除非工具自行实现上限。[工具结果保留库](../../archived/architecture/2026-07-06-tool-result-retention-library.md)负责预览机制，但不负责存储，也不负责把这些机制应用于最终工具结果的执行流水线策略。
 
 其形态与超时策略设计一致：工具作者声明规范值与 Native renderer（原生渲染器），由策略插件在渲染后的内容上执行部署默认的上下文预算。工具仍可在提供方采集上限处提前 spill；由工具负责的展示 spill 可以保留已完整采集的规范值，而只替换展示内容。[规范工具输出约定](2026-07-20-canonical-tool-output-contract.zh.md)规定了这项区分。
 
@@ -22,7 +22,7 @@ Status: implemented
 | `@deepseek-ai/dsh-spill-local` | 本地后端：在宿主文件系统中提供私有、会话作用域的文件存储。 |
 | `@deepseek-ai/dsh-spill-policy` | 工具结果策略插件：包装分发后的最终文本结果，并以保留预览和 spill 定位符替换超大结果。 |
 
-系统不增加专用的面向模型消费方包。消费方是现有 `ctx.tools` 执行流水线：`dsh-spill-policy` 通过 `tools/post-execute` waterfall（瀑布式事件）使用最终工具结果，模型则按照后端随定位符返回的检索提示读取内容。
+工具结果消费方是 `dsh-spill-policy`，它通过 `tools/post-execute` waterfall（瀑布式事件）使用最终工具结果。模型按照后端随定位符返回的检索提示读取内容。[会话引用 spill 复用](../bug-fix/2026-09-05-session-reference-spill-reuse.zh.md)增加一个直接存储消费方，采用独立的预览、来源信息与失败语义；它不改变工具结果策略。
 
 ### spill seam
 
@@ -33,9 +33,14 @@ interface SpillStore {
   saveText(input: SaveTextSpill): Promise<SpillRef>
 }
 
-interface SpillSource {
+type SpillSource = {
+  kind: 'tool'
   toolName: string
   callId: ToolCallId
+  label: string
+} | {
+  kind: 'session-reference'
+  sessionId: SessionId
   label: string
 }
 
@@ -57,7 +62,7 @@ interface SpillRef {
 
 `SpillLocator` 是一个[品牌化的](../../../../packages/util/brand)模型可见句柄，由后端返回。本地后端将其渲染为文件系统路径；远程或数据库后端可以渲染 URI、键或命令 token。消费方把它视为不透明值，并使用 `retrievalHint` 渲染，而不是假定 `read` 始终是正确的检索机制。`SpillOwner.sessionId` 是保存时的存储命名空间：fork 后的会话会从种子日志继承已有的 spill 定位符，无需复制它们或重新取得所有权；fork 后的新 spill 使用子会话 id。保留期清理可以连同其他旧会话产物一起使旧定位符失效；spill seam 不定义逐会话的清理策略。
 
-`dsh-spill-local` 负责存储细节：选择会话作用域的目录、安全名称、防止路径遍历、执行写入、本地产物生命周期，以及返回 `{ locator, bytes, retrievalHint }`。它不负责工具结果替换、模型可见的预览策略、搜索、文件检查，也不定义 seam 级或逐会话保留策略。文件写入 `<root>/session-<hash>/<random>-<safeName>`：`root` 是配置路径，或延迟创建的私有（0700）进程级临时目录；会话子目录是 `sha256(sessionId)` 的短前缀；叶节点由随机十六进制前缀与调用方的 `suggestedName` 组成，后者会被清理成单一路径段（与 JSONL 后端的 `encodeSegment` 一致）。系统使用 `open(path, 'wx', 0o600)` 写入，确保独占且仅所有者可访问，因此预先植入的符号链接无法重定向写入。定位符就是该路径，检索提示则告知模型可以在该路径上使用 `read` 或 `grep`。它的一次性启动清理会应用[本地 spill 清理说明](./2026-07-17-local-spill-startup-cleanup.zh.md)所述的后端专属产物生命周期。
+`dsh-spill-local` 负责存储细节：选择会话作用域的目录、安全名称、防止路径遍历、执行写入、本地产物生命周期，以及返回 `{ locator, bytes, retrievalHint }`。它不负责工具结果替换、模型可见的预览策略、搜索、文件检查，也不定义 seam 级或逐会话保留策略。文件写入 `<root>/session-<hash>/<random>-<safeName>`：`root` 是配置路径，或延迟创建的私有（0700）进程级临时目录；会话子目录是 `sha256(sessionId)` 的短前缀；叶节点由随机十六进制前缀与调用方的 `suggestedName` 组成，后者会被清理成单一路径段（与 JSONL 后端的 `encodeSegment` 一致）。系统使用 `open(path, 'wx', 0o600)` 写入，确保独占且仅所有者可访问，因此预先植入的符号链接无法重定向写入。定位符就是该路径，检索提示则告知模型可以在该路径上使用 `read` 或 `grep`。它的一次性启动清理会应用[本地 spill 清理说明](../../archived/architecture/2026-07-17-local-spill-startup-cleanup.md)所述的后端专属产物生命周期。
 
 ### spill 策略
 
@@ -161,7 +166,7 @@ ctx.tools.register(defineTool({
 - 如果内置的 `read` 跳过规则不足，再增加逐工具选择退出或逐工具策略声明。
 - 面向 ACP（Agent Client Protocol）或远程环境的远程／数据库存储后端，因为本地路径在这些环境中没有意义。
 
-本地后端通过一次性启动扫描清理旧文件，而不是绑定到会话删除——参见[启动清理 Agent Note](./2026-07-17-local-spill-startup-cleanup.zh.md)。seam 仍未定义逐会话清理策略；保留策略属于后端。
+本地后端通过一次性启动扫描清理旧文件，而不是绑定到会话删除——参见[启动清理 Agent Note](../../archived/architecture/2026-07-17-local-spill-startup-cleanup.md)。seam 仍未定义逐会话清理策略；保留策略属于后端。
 
 ## 测试
 

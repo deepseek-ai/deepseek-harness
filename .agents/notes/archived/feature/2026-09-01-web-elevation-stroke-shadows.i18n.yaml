@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-09-01-web-elevation-stroke-shadows.md
+2026-09-01-web-elevation-stroke-shadows.md: 53c0e5a84d487697f9560d3052a0da790b7d002d
+2026-09-01-web-elevation-stroke-shadows.zh.md: f32fa2a02bac12bcd37974977b1fbcd3e36930f4

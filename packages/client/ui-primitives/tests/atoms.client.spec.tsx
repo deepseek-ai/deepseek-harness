@@ -120,6 +120,24 @@ describe('Menu', () => {
     fireEvent.keyDown(document, { key: 'a' })
   })
 
+  it('fill selection holds the row fill instead of a trailing check', () => {
+    render(
+      <Menu
+        open
+        selection="fill"
+        anchor={<span>trigger</span>}
+        items={items}
+        selectedId="a"
+        onSelect={() => {}}
+        onClose={() => {}}
+      />)
+    const selected = screen.getByRole('menuitem', { name: 'Alpha' })
+    expect(selected.querySelector('svg')).toBeNull()
+    expect(selected.className).toMatch(/selectedFill/)
+    const other = screen.getByRole('menuitem', { name: 'Beta' })
+    expect(other.className).not.toMatch(/selectedFill/)
+  })
+
   it('renders a leading icon and a separator between groups', () => {
     render(
       <Menu

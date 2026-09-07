@@ -21,9 +21,6 @@ import SessionPersistence, {
   type SessionHandle,
   type SessionPersistenceSnapshot,
 } from '@deepseek-ai/dsh-session-persistence'
-import Storage from '@deepseek-ai/dsh-storage'
-import * as StorageDomain from '@deepseek-ai/dsh-storage-domain'
-import * as StorageJson from '@deepseek-ai/dsh-storage-json'
 import MessageFeedbackService from '../src/index.ts'
 
 export interface MessageFixture {
@@ -110,6 +107,11 @@ interface StoredSession {
 class TestPersistence extends SessionPersistence {
   readonly durable = new Map<SessionId, StoredSession>()
   readFailure: Error | undefined
+  appendFailure: Error | undefined
+  flushFailure: Error | undefined
+  openCalls: SessionAccess[] = []
+  closeCalls = 0
+  appendCalls = 0
   statCalls = 0
   readCalls = 0
   onRead: (() => void | Promise<void>) | undefined
@@ -126,6 +128,7 @@ class TestPersistence extends SessionPersistence {
   async flush(): Promise<void> {}
 
   async open(id: SessionId, access: SessionAccess): Promise<SessionHandle> {
+    this.openCalls.push(access)
     const stored = this.durable.get(id)
     if (stored === undefined) throw new SessionPersistenceNotFoundError(id)
     return this.handle(stored, access)
@@ -159,18 +162,24 @@ class TestPersistence extends SessionPersistence {
         if (this.readFailure !== undefined) throw this.readFailure
         await this.onRead?.()
         const events = stored.events.filter(event => event.seq >= offset)
-        return length === undefined ? events : events.slice(0, length)
+        return {
+          eventState: 'detached',
+          events: structuredClone(length === undefined ? events : events.slice(0, length)),
+        }
       },
       append: async (events) => {
         if (closed) throw new SessionHandleClosedError(stored.meta.id, 'append')
         if (access !== 'write') throw new SessionReadOnlyError(stored.meta.id, 'append')
+        if (this.appendFailure !== undefined) throw this.appendFailure
+        this.appendCalls += 1
         stored.events = [...stored.events, ...events]
       },
       flush: async () => {
         if (closed) throw new SessionHandleClosedError(stored.meta.id, 'flush')
         if (access !== 'write') throw new SessionReadOnlyError(stored.meta.id, 'flush')
+        if (this.flushFailure !== undefined) throw this.flushFailure
       },
-      close: async () => { closed = true },
+      close: async () => { closed = true; this.closeCalls += 1 },
       [Symbol.asyncDispose]() { return handle.close() },
     }
     return handle
@@ -193,7 +202,7 @@ export interface TestHarness {
   dispose(): Promise<void>
 }
 
-/** Compose the service over the real storage hub/domain/JSON backend. */
+/** Compose feedback over a controllable Session persistence backend. */
 export async function setupHarness(maxNoteBytes = 64): Promise<TestHarness> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-message-feedback-test-'))
   const ctx = new Context()
@@ -201,9 +210,6 @@ export async function setupHarness(maxNoteBytes = 64): Promise<TestHarness> {
   try {
     await ctx.plugin(SessionStore)
     await ctx.plugin(TestPersistence)
-    await ctx.plugin(Storage)
-    await ctx.plugin(StorageJson, { root })
-    await ctx.plugin(StorageDomain, { backend: 'json' })
     const feedbackFiber = await ctx.plugin(MessageFeedbackService, { maxNoteBytes })
     disposeFeedback = feedbackFiber.dispose
   } catch (error) {

@@ -55,12 +55,14 @@ const definition = {
 
 ### 注册与读取
 
-`register(definition)` 安装单元；注册是挂在调用方 fiber 上的 effect，因此卸载领域即移除其 key。载体用 `snapshot(session)` 对每个客户端可见单元读取一致的同步切面——`{ asOfSeq, values }`，其中 `asOfSeq` 是所有值共同反映到的最后一个事件的 seq——并用 `onChanged(listener)` 订阅逐变更通知。`stateOf(session, key)` 读取一个单元的主机状态，不计算无关视图。
+`register(definition)` 安装单元；具有相同 key 和 `stateVersion` 的注册方共享其 cell，版本不兼容或 `stateVersion` 非法时会 throw。注册是挂在调用方 fiber 上的 effect，因此最后一个注册方卸载后会移除 key 及其缓存 cell。载体用 `snapshot(session)` 对每个客户端可见单元读取一致的同步切面——`{ asOfSeq, values }`，其中 `asOfSeq` 是所有值共同反映到的最后一个事件的 seq——并用 `onChanged(listener)` 订阅逐变更通知。`stateOf(session, key)` 读取一个单元的实时只读 host 状态，不计算无关视图。
 
 ```text
 const dispose = ctx.sessionProjections.register(definition)
 const { asOfSeq, values } = ctx.sessionProjections.snapshot(session)
 ```
+
+必须使用投影状态的领域把 `sessionProjections` 声明为 Cordis 服务依赖；可选贡献方可以在 `ctx.inject(['sessionProjections'], …)` 下注册。载体使用 `ctx.get('sessionProjections')`，注册表缺席时省略自己的块或帧。
 
 ### 持久检查点
 

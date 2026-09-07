@@ -37,8 +37,6 @@ The skill group gives agents and users access to reusable, task-specific instruc
 Start with the subsystem reference for the shared vocabulary, then read the Agent Notes for the design rationale.
 
 - [Skill subsystem reference](../../docs/subsystems/skills.md) — the registry, provider contract, local discovery priority, and the catalog and tool.
-- [Skill system Agent Note](../../.agents/notes/implemented/feature/2026-07-05-skill-system.md) — how the family is split and the layered registry design.
-- [Skill catalog hot-refresh Agent Note](../../.agents/notes/implemented/feature/2026-07-27-skill-catalog-hot-refresh.md) — the durable initial catalog and replacement lifecycle.
 - [Skill invocation policy Agent Note](../../.agents/notes/implemented/feature/2026-07-28-skill-invocation-policy.md) — the model and user invocation controls.
 
 -----

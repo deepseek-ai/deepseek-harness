@@ -8,9 +8,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
+import { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import SubagentService, { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -46,7 +44,7 @@ function durable(agent: Agent): {
 async function storedEvents(ctx: Context, id: SessionId): Promise<readonly SessionEvent[]> {
   const handle = await ctx.sessionPersistence.open(id, 'read')
   try {
-    return await handle.read()
+    return (await handle.read()).events
   } finally {
     await handle.close()
   }
@@ -102,7 +100,6 @@ async function stack(
   const ctx = new Context()
   contexts.add(ctx)
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await backend.mount(ctx, root)
   await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })

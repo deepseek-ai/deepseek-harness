@@ -100,10 +100,9 @@ Registration and disposal run through `ctx.effect()`, so provider routes live an
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these pages when the package-level contract is not enough. They move from the shared navigation model to the provider, the tool, and the decision evidence.
+Read these pages when the package-level contract is not enough. They move from the shared navigation model to the provider and the tool.
 
 - [LSP navigation subsystem](../../../docs/subsystems/lsp.md) — operations, coordinates, requests and results, and `LspError` codes.
-- [LSP capability seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.md) — design rationale, alternatives, and deliberately deferred API.
 - [dsh-lsp-stdio](../lsp-stdio/README.md) — the stdio provider that registers against this seam.
 - [dsh-tool-lsp](../tool-lsp/README.md) — the model-facing tool over this seam.
 - [lsp group map](../README.md) — the three-package family and its related documentation.
@@ -126,7 +125,7 @@ No direct invalidation; `dsh-tool-lsp` owns request-prefix changes.
 
 These limits define the seam's current scope. They are package constraints, not a task backlog.
 
-- **Exclusive extension ownership within one runtime** — two providers cannot both claim `.ts`, even with different language ids; overlaps fail registration. A deployment-configured selector above registrations is the intended extension, which can relax exclusive reservation without adding provider choice to model input ([seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.md)).
+- **Exclusive extension ownership within one runtime** — two providers cannot both claim `.ts`, even with different language ids; overlaps fail registration. A deployment-configured selector above registrations is the intended extension, which can relax exclusive reservation without adding provider choice to model input.
 - **Four read-only operations only** — symbols and call hierarchy are deferred because they need different schemas; diagnostics need separate freshness and accumulation rules; mutations (rename, code actions, formatting) require separate tools with preview, permission, and write-policy integration.
 - **No observation API** — availability is observed only by running `query()` and routing the thrown `LspError` codes; there is no provider-change event or capability-status query.
 

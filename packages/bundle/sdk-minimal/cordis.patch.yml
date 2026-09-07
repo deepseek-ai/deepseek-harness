@@ -93,7 +93,7 @@
       config:
         includeHarnessIdentity: false
         includeRuntimeContext: false
-        persona: !!js process.env.DSH_SYSTEM_PROMPT ?? 'You are a helpful software engineer assistant.'
+        personaPrefix: !!js process.env.DSH_SYSTEM_PROMPT ?? 'You are a helpful software engineer assistant.'
 
     - id: tools
       name: '@deepseek-ai/dsh-tools'

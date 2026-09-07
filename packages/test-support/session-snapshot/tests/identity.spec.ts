@@ -10,6 +10,23 @@ const otherId = '66666666-6666-4666-8666-666666666666'
 const proseUuid = '77777777-7777-4777-8777-777777777777'
 
 describe('session snapshot identity redaction', () => {
+  it('preserves feedback versions and target relationships without redacting unrelated prose', () => {
+    const source = [
+      { type: 'session', id: parentId },
+      { type: 'assistant/message', data: { message: { id: messageId, role: 'assistant', content: [], source: {} } } },
+      { type: 'feedback/message-put', data: { sessionId: parentId, item: { messageId, version: approvalId, note: proseUuid } } },
+      { type: 'feedback/message-put', data: { sessionId: parentId, item: { messageId, version: runId } } },
+      { type: 'feedback/message-delete', data: { sessionId: parentId, messageId } },
+      { type: 'example', data: { version: proseUuid } },
+    ].map(record => JSON.stringify(record)).join('\n')
+    const [output] = redactSessionSnapshotIds([source])
+    expect(output).toContain('"version":"{{id:1}}"')
+    expect(output).toContain('"version":"{{id:2}}"')
+    expect(output?.match(/"messageId":"{{message:1}}"/g)).toHaveLength(3)
+    expect(output).toContain(proseUuid)
+    expect(redactSessionSnapshotIds([output!])).toEqual([output])
+  })
+
   it('preserves typed relationships across parent and child logs', () => {
     const parent = [
       JSON.stringify({ type: 'session', id: parentId, createdAt: 1, cwd: '/tmp/work' }),

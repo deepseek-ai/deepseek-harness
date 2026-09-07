@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-06-21-subagent-capability-seam.md) | 中文
 
-> 完整 seam 已交付：`dsh-subagent` 接口与 `dsh-tool-subagent` 消费方；两个进程内后端（`dsh-subagent-spawn-in-process`、`dsh-subagent-fork-in-process`）；嵌套 agent（智能体）快照基础设施（[逐会话快照回放](../testing/2026-06-22-subagent-snapshot-replay.zh.md)）；以及进程外的 ACP（Agent Client Protocol）、Codex 与 Claude Code 后端（[ACP Agent Note](2026-06-22-acp-subagent-backend.zh.md)、[产品提供方 Agent Note](2026-08-04-claude-code-and-codex-subagent-backends.zh.md)）。
+> 完整 seam 已交付：`dsh-subagent` 接口与 `dsh-tool-subagent` 消费方；两个进程内后端（`dsh-subagent-spawn-in-process`、`dsh-subagent-fork-in-process`）；嵌套 agent（智能体）快照基础设施（[逐会话快照回放](../../archived/testing/2026-06-22-subagent-snapshot-replay.md)）；以及进程外的 ACP（Agent Client Protocol）、Codex 与 Claude Code 后端（[ACP Agent Note](../../archived/feature/2026-06-22-acp-subagent-backend.md)、[产品提供方 Agent Note](2026-08-04-claude-code-and-codex-subagent-backends.zh.md)）。
 
 ## 问题
 
@@ -66,7 +66,7 @@ bash seam（[能力 seam](../architecture/2026-06-13-capability-seams.zh.md)）�
 
 ## 测试
 
-注册表与工具测试仅用包内脚本化提供方替换非确定性的子 agent，同时测试真实的 `SubagentRuntime`、生命周期、任务集成和面向模型的工具。loader 回归测试仍覆盖提供方与消费方的 export，以防止[事故复盘（postmortem）0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md) 中描述的失败。注册表测试覆盖重载安全性、重名和启动时能力拒绝；嵌套 agent 场景通过[逐会话快照回放](../testing/2026-06-22-subagent-snapshot-replay.zh.md)进行无密钥回放；进程内后端还有真实循环的单元测试和带密钥的 e2e 测试。
+注册表与工具测试仅用包内脚本化提供方替换非确定性的子 agent，同时测试真实的 `SubagentRuntime`、生命周期、任务集成和面向模型的工具。loader 回归测试仍覆盖提供方与消费方的 export，以防止[事故复盘（postmortem）0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md) 中描述的失败。注册表测试覆盖重载安全性、重名和启动时能力拒绝；嵌套 agent 场景通过[逐会话快照回放](../../archived/testing/2026-06-22-subagent-snapshot-replay.md)进行无密钥回放；进程内后端还有真实循环的单元测试和带密钥的 e2e 测试。
 
 ## 后果
 

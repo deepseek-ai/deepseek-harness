@@ -7,7 +7,6 @@ import {
   readFileSync,
   writeFileSync,
 } from 'node:fs'
-import { rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, resolve } from 'node:path'
@@ -31,6 +30,7 @@ import {
   type ResponsesBehavior,
   type ResponsesFixture,
 } from './responses-fixture.ts'
+import { cleanupRealProduct } from './real-product-cleanup.ts'
 
 const execFileAsync = promisify(execFile)
 const packageRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
@@ -47,13 +47,7 @@ const roots: string[] = []
 const fixtures: ResponsesFixture[] = []
 const contexts: Context[] = []
 
-afterEach(async () => {
-  await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
-  await Promise.all(fixtures.splice(0).map(fixture => fixture.close()))
-  for (const root of roots.splice(0)) {
-    await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
-  }
-}, 30_000)
+afterEach(() => cleanupRealProduct({ contexts, fixtures, roots }))
 
 interface RealHarness {
   readonly ctx: Context

@@ -114,7 +114,7 @@ export function findUiI18nViolations(file: string, sourceText: string): UiI18nVi
     sourceText,
     ts.ScriptTarget.Latest,
     true,
-    file.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+    file.endsWith('.tsx') ? ts.ScriptKind.TSX : file.endsWith('.js') ? ts.ScriptKind.JS : ts.ScriptKind.TS,
   )
   const violations = new Map<number, UiI18nViolation>()
 
@@ -254,11 +254,25 @@ export function findUiI18nViolations(file: string, sourceText: string): UiI18nVi
       && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))
     ) collectExpression(node.expression, 'JSX child')
 
-    if (file.endsWith('.tsx') && ts.isPropertyAssignment(node)) {
+    if ((file.endsWith('.tsx') || file.startsWith('apps/desktop/')) && ts.isPropertyAssignment(node)) {
       const name = propertyName(node.name)
       if (name !== undefined && (COPY_NAME.test(name) || COPY_SUFFIX.test(name))) {
         collectExpression(node.initializer, `${name} property`)
       }
+    }
+
+    if (file.startsWith('apps/desktop/') && ts.isBinaryExpression(node)
+      && node.operatorToken.kind === ts.SyntaxKind.EqualsToken
+      && ts.isPropertyAccessExpression(node.left)
+      && (node.left.name.text === 'textContent' || node.left.name.text === 'innerText')) {
+      collectExpression(node.right, `${node.left.name.text} assignment`)
+    }
+
+    if (file.startsWith('apps/desktop/') && ts.isCallExpression(node)
+      && ts.isPropertyAccessExpression(node.expression)
+      && (node.expression.name.text === 'setTitle' || node.expression.name.text === 'prompt')) {
+      const copy = node.arguments[0]
+      if (copy !== undefined) collectExpression(copy, `${node.expression.name.text} argument`)
     }
 
     if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
@@ -314,6 +328,8 @@ function sourceFiles(): string[] {
     ...[...clientComponentRoots].flatMap(clientRoot =>
       globSync(`${clientRoot}/**/*.{ts,tsx}`, { cwd: root })),
     ...globSync('apps/web/src/**/*.{ts,tsx}', { cwd: root }),
+    ...globSync('apps/desktop/src/{main,update-coordinator}.{ts,tsx}', { cwd: root }),
+    ...globSync('apps/desktop/renderer/*.js', { cwd: root }),
   ])]
     .map(file => file.replaceAll('\\', '/'))
     .filter(file => !file.endsWith('.d.ts'))

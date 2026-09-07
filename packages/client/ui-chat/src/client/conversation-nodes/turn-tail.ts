@@ -4,8 +4,6 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { deriveTurnTokenUsage } from '@deepseek-ai/dsh-token-meter/client'
 import type {
@@ -45,7 +43,7 @@ function isSessionEvent(event: ConversationMatch['event']): event is SessionEven
 
 function hasTextAssistant(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
   return event.type === 'assistant/message'
-    && isAppendSurfaceEvent(event)
+    && event.surfaceOp === 'append'
     && toAssistantBlocks(event.data.message.content)
       .some(block => block.kind === 'text' && block.text.trim() !== '')
 }
@@ -55,12 +53,6 @@ function chunkHasText(chunk: StreamChunk): boolean {
   return chunk.type === 'block-end'
     && chunk.block.type === 'text'
     && chunk.block.text.trim() !== ''
-}
-
-function eventStreamHasText(event: Parameters<ConversationNodeDefinition['match']>[0]): boolean {
-  if (event.type === 'assistant/live-chunk') return chunkHasText(event.data.chunk)
-  if (event.type !== 'assistant/attempt') return false
-  return expandAssistantStream(event.data.stream).some(member => chunkHasText(member.chunk))
 }
 
 function turnCoordinates(event: Parameters<ConversationNodeDefinition['match']>[0]): {
@@ -92,10 +84,10 @@ function closingAnchor(context: ConversationNodeContext<TurnTailState>): number 
     const coordinates = turnCoordinates(event)
     if (coordinates?.step === undefined) continue
     const previous = steps.get(coordinates.step) ?? { streamedText: false, finalized: false }
-    if (event.type === 'assistant/live-chunk' || event.type === 'assistant/attempt') {
+    if (event.type === 'assistant/live-chunk') {
       steps.set(coordinates.step, {
         ...previous,
-        streamedText: previous.streamedText || eventStreamHasText(event),
+        streamedText: previous.streamedText || chunkHasText(event.data.chunk),
       })
       continue
     }
@@ -145,7 +137,7 @@ function tailData(context: ConversationNodeContext<TurnTailState>): TurnTailChat
   for (const match of context.matches) {
     const event = match.event
     const candidate = event.type === 'tool/call'
-      || (event.type === 'tool/result' && isAppendSurfaceEvent(event))
+      || (event.type === 'tool/result' && event.surfaceOp === 'append')
       || (event.type === 'turn/end' && event.data.reason.kind === 'error')
       || event.type === 'llm/retry'
       ? event.seq

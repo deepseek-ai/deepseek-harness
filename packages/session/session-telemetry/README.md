@@ -29,7 +29,7 @@ As a deployment, choose a backend, mount it, and add redaction rules when record
 
 ### Choosing and mounting a backend
 
-Load exactly one backend plugin; it registers `ctx.sessionTelemetry` with the capture coordinator and its own delivery pipeline, and a duplicate load throws. The mounted backend discloses its sharing policy through the required [`sharing` member](#the-sharing-disclosure), which the `/feedback` acknowledgement renders; a consumer renders "not configured" only when no telemetry service is mounted.
+Load exactly one backend plugin; it registers `ctx.sessionTelemetry` with the capture coordinator and its delivery pipeline. A duplicate load throws. The required [`sharing` member](#the-sharing-disclosure) reports the deployment mode, not per-session admission or delivery. A consumer may report "not configured" only when no telemetry service is mounted. The `/feedback` command confirms recording without reading this policy.
 
 ### The backend contract
 
@@ -37,13 +37,13 @@ A backend implements three members: `emit(record)` must be a non-blocking enqueu
 
 ### What gets captured
 
-Capture runs in one of two modes. `live` capture follows session events as they are appended, replays already-live sessions at mount time, and records lifecycle markers; `on-demand` capture reads the canonical session log only when the backend requests a prefix through `captureSession(session, throughSeq?)`. Every canonical session event maps to one ledger record in order. An `assistant/message` or `assistant/attempt` record carries its complete embedded compact stream, including failed and retried output. Each ledger record also carries `session.id`, `session.format_version`, the numeric event identity, optional header facts, and a pre-mapped severity (`error` for `tool/result.isError`, `turn/end` error reasons, and `agent-error`; `info` otherwise).
+Capture runs in one of two modes. `live` capture follows session events as they are appended, replays already-live sessions at mount time, and records lifecycle markers; `on-demand` capture reads the canonical session log only when the backend requests a prefix through `captureSession(session, throughSeq?)`. Coordinator options select whether stored history is included. Every canonical session event maps to one ledger record in order. An `assistant/message` or `assistant/attempt` record carries its complete embedded compact stream, including failed and retried output. Each ledger record also carries `session.id`, `session.format_version`, the numeric event identity, optional header facts, and a pre-mapped severity (`error` for `tool/result.isError`, `turn/end` error reasons, and `agent-error`; `info` otherwise).
 
 ### The sharing disclosure
 
 <a id="the-sharing-disclosure"></a>
 
-Every backend discloses its deployment-selected sharing policy through the seam's `sharing` vocabulary: `full` (every event is handed over as it happens), `feedback-only` (nothing is handed over until a `feedback/record` event releases the unreleased prefix), or `disabled` (nothing is handed over at all). The acknowledgement of a recorded feedback entry reports this status; the disclosure never claims delivery — handoff is the non-blocking enqueue, and batching, retry, and loss policy stay the backend SDK's.
+Every backend discloses its deployment mode through `sharing`: `full`, `feedback-only`, or `disabled`. A backend may additionally restrict eligible Sessions. This property is not a delivery receipt; handoff is a non-blocking enqueue, and batching, retry, and loss policy belong to the backend SDK.
 
 ### Redacting records
 
@@ -74,11 +74,11 @@ The seam is built on one boundary: the harness's aspect ends at `emit()`. Comple
 
 ### Capture flow
 
-Live capture registers, through the composing fiber's effects: `session/created` adopts the session and replays its lifecycle-local log suffix from the handoff cursor; `session/event` deep-copies, redacts, and hands off each event with zero I/O; `session/flush` forwards the optional hint and returns void so the loop's awaited parallel never waits on telemetry; `session/disposed` captures the session's `shutdown` marker and retires it; `agent/error` is the one live-bus relay, because the session-event vocabulary intentionally has no operational-error record. Disposal captures shutdown markers for still-live sessions, then awaits the backend's `shutdown()`. On-demand capture registers only the disposal effect and reads the requested lifecycle-local canonical-log prefix on request. Every synchronous handler runs inside containment so a failing backend or rule can never starve other listeners or reach the agent loop.
+Live capture registers Session events, flush hints, shutdown markers, and agent/error observers through the composing fiber’s effects. On-demand capture registers only the disposal effect and reads the requested canonical-log prefix under its history policy. Synchronous handlers contain failures so they cannot affect the agent loop or other listeners.
 
 ### The handoff cursor
 
-A module-scope `WeakMap<Session, seq>` records, per Session object, the highest seq handed off (not delivered). Live capture advances it at append time; on-demand capture advances it only while handing a requested prefix. Re-adopting the same object resumes after that cursor and does not duplicate its handed-off ledger records. A new Session object starts immediately before `firstLiveSeq`: a fresh object starts at seq 0, while a forked, resumed, or migrated object skips its constructor seed and starts with this lifecycle's `session/end-seed` boundary. This keeps inherited and previously persisted history outside a new lifecycle's sharing act. Receivers absorb SDK retries by deduplicating on `(session.id, session.format_version, event.seq)`. The object-keyed map is a narrow, documented exception to the registrations-are-effects discipline: entries die with their sessions, and losing one can replay only the current lifecycle suffix.
+A module-scope `WeakMap<Session, seq>` records the highest sequence handed off, not delivered. Re-adopting the same object resumes after that cursor. Capture normally starts at `firstLiveSeq`; explicit `includeHistory: true` starts an unhanded object at seq 0, including restored or fork history. The backend owns capture authorization. Stored history does not itself authorize capture; the OTel backend waits for new explicit feedback. Receivers deduplicate repeated records by `(session.id, session.format_version, event.seq)`.
 
 </details>
 

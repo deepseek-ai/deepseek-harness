@@ -1,4 +1,4 @@
-# Agent Note: Wine 与原生 Windows 双通道拉取请求 CI
+# Agent Note: Wine 与原生 Windows CI
 
 Status: implemented
 
@@ -6,13 +6,13 @@ Status: implemented
 
 ## 问题
 
-拉取请求必需的 Windows 判定既需要快速的 win32 工具链信号，也不能让聚合流程等待稀缺的 Windows 容量。Wine 提供这项关键路径信号，但它运行在 Linux 内核与区分大小写的 ext4 之上，采用 hoisted 依赖布局，且无法证明 NTFS、DACL、ConPTY、崩溃持久性或原生进程行为。原生串行参考流程停用期间，每个拉取请求分支头还需要自动取得真实 Windows 内核结果。
+Wine 在 Linux 内核与区分大小写的 ext4 之上采用 hoisted 依赖布局检查 win32 工具链。它无法证明 NTFS、DACL、ConPTY、崩溃持久性或原生进程行为。因此，拉取请求的正确性需要原生 Windows 构建和进程检查，独立于合并后的 Wine 结果。
 
 覆盖率审计发现，陈旧分支状态恢复了针对受支持 LSP 源码的临时排除项。因此，原生 Windows 需要按同一逐文件 100% 阈值执行完整的受支持源码清单，而不能依赖缩小后的平台专用分母。
 
 ## 决策
 
-[ci.yml](../../../../.github/workflows/ci.yml) 中必需的 `windows` 作业仍是在 `ubuntu-latest` 上运行的 `windows node 24 / wine blocking`。它保留经过校验和验证的 Windows Node、Wine apt 与 pnpm 缓存、仅限工作区快照的 hoisted 安装，以及运行工作区构建与生产网站的[共享 Wine 门禁脚本](../../../../scripts/wine-windows-gates.sh)。Node 分发文件传输采用有界重试；nodejs.org 的大文件传输停滞时，由支持范围请求的传输镜像续传相同字节，但版本和 SHA-256 权威仍属于 nodejs.org，归档通过该校验前绝不会投入使用。稳定的 `windows` 作业 ID 仍是 `all checks passed` 的依赖项。[已归档的 Wine 实验](../../archived/process/2026-07-27-wine-windows-gates-experiment.md)保留其实测取舍，而本文负责当前双通道拓扑。
+[ci-master.yml](../../../../.github/workflows/ci-master.yml) 中仅 master 触发的 `windows` 作业在 `ubuntu-latest` 上运行 `windows node 24 / wine`。它保留经过校验和验证的 Windows Node、Wine apt 与 pnpm 缓存、仅限工作区快照的 hoisted 安装，以及运行工作区构建与生产网站的[共享 Wine 门禁脚本](../../../../scripts/wine-windows-gates.sh)。Node 分发文件传输采用有界重试；nodejs.org 的大文件传输停滞时，由支持范围请求的传输镜像续传相同字节，但版本和 SHA-256 权威仍属于 nodejs.org，归档通过该校验前绝不会投入使用。根据[仅 master 平台策略](2026-09-06-master-only-platform-ci.zh.md)，Wine 不参与 PR 聚合。[已归档的 Wine 实验](../../archived/process/2026-07-27-wine-windows-gates-experiment.md)保留其实测取舍，而本文负责当前双通道拓扑。
 
 每个拉取请求还会在组织自有的 `dsh-windows-2025-16core` 运行器上启动 4 个相互独立的原生作业：`windows-build`、`windows-coverage`、`windows-native-tests` 与 `windows-observational`。每个作业都会为工作区符号链接启用开发人员模式，通过 `pnpm/action-setup` 提供仓库固定版本的 pnpm，在不传输 store 归档的情况下执行不可变安装，并在原生 PowerShell 下运行自己的清单。Windows 故障切换变量会把这 4 个作业全部重定向到公司内部运行器池。各作业采用 60 至 120 分钟的截止时间，以约束卡住的工作，同时不把性能目标当作正确性截止时间。
 
@@ -50,7 +50,7 @@ Shiki 会禁用 TextMate 正则的延迟编译，并在用户内容进入保持�
 
 ## 后果
 
-Wine 保留必需聚合流程现有的关键路径和作业身份。`all checks passed` 变绿时，原生覆盖率与观测性结果仍可能处于待处理或红灯状态，因此分支保护采用 Wine 加定向原生构建和进程检查，而评审者和后续自动化采用其余原生结果。
+Wine 提供合并后的工具链证据。`all checks passed` 变绿时，原生覆盖率与观测性结果仍可能处于待处理或红灯状态，因此分支保护采用定向原生构建和进程检查，而评审者和后续自动化采用其余原生结果。
 
 尽管如此，每个拉取请求都会获得真实 NT 内核、NTFS、PowerShell、Windows 进程、原生插件和受支持源码覆盖率信号。原生作业会在构建、覆盖率与观测性工作区中重复设置流程，并在构建与观测性工作区中重复构建，但它们会降低每个作业的进程数，并暴露兼容性通道掩盖的路径、watcher、生命周期与 fixture 缺陷。
 

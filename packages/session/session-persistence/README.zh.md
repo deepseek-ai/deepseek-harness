@@ -46,7 +46,7 @@ await ctx.sessionPersistence.flush()                           // backend-wide d
 
 服务级 `flush()` 排空每个活跃写句柄已路由的事件并把其会话实体化，效果与各句柄自己的 `flush` 完全相同；失败按会话聚合为一个 `AggregateError` 而不中途放弃清扫，清扫途中被关闭的句柄视同已 flush，因为 close 本身会持久排空。
 
-每一次日志读写都流经返回的 `SessionHandle`；不存在按 id 寻址的 append 或 load 方法。`handle.read(offset?, length?)` 返回经过验证的连续前缀切片——绝不返回撕裂尾部，且同一句柄上的重复读取绝不会观察到比先前读取更旧的状态；写句柄能读到自己成功的 append。`handle.append(events)` 追加一个连续批次，其第一个 `seq` 等于已存储 next-seq；完成时的持久化是尽力而为的——批次被接受、有序，并对同一后端实例上的读取可见，只有完成的 `flush` 才承诺它在崩溃后依然存在（交付的 JSONL 后端恰好会立即持久化每个批次）。`handle.flush()` 是持久性屏障，同时把空的已创建会话实体化，使其可被持久列出。`handle.close()` 幂等且不可取消：读句柄释放本地资源，写句柄完成待处理的持久化并释放写所有权。一旦某次 `append` 或 `flush` 完成，其后在同一后端实例上开始的读取——无论经由任何句柄，还是经由 `stat`/`list`——至少能观察到该前缀。
+每一次日志读写都流经返回的 `SessionHandle`；不存在按 id 寻址的 append 或 load 方法。`handle.read(offset?, length?)` 返回 `{ eventState, events }`：外层 slice 属于调用方，`eventState` 则区分独占的 `detached` event graph 与可能同时保存在 backend cache 中的 `shared-frozen` graph。该状态由生产者建立，slice 即使为空也会保留原状态。两种状态都能直接接管而无需复制；需要修改 event 的 consumer 必须先 clone。Read 绝不包含撕裂尾部，同一句柄上的重复读取绝不会观察到比先前读取更旧的状态，写句柄也能读到自己成功的 append。`handle.append(events)` 追加一个连续批次，其第一个 `seq` 等于已存储 next-seq；完成时的持久化是尽力而为的——批次被接受、有序，并对同一后端实例上的读取可见，只有完成的 `flush` 才承诺它在崩溃后依然存在（交付的 JSONL 后端恰好会立即持久化每个批次）。`handle.flush()` 是持久性屏障，同时把空的已创建会话实体化，使其可被持久列出。`handle.close()` 幂等且不可取消：读句柄释放本地资源；写句柄完成待处理的持久化并释放写所有权。一旦某次 `append` 或 `flush` 完成，其后在同一后端实例上开始的读取——无论经由任何句柄，还是经由 `stat`/`list`——至少能观察到该前缀。
 
 ### 所有权与可见性
 

@@ -1,9 +1,10 @@
 /**
- * Process plumbing for the local subprocess service: detached process-tree
- * spawn with per-stream stdio dispositions, tail-keep collection with spill
- * files, tree-scoped signalling (POSIX groups; Windows taskkill), and the
- * SIGTERM→SIGKILL escalation. This layer reacts to an abort signal; callers
- * own deadlines, teardown ladders, and cause classification.
+ * Process plumbing for the local subprocess service: ordinary process launch
+ * with per-stream stdio dispositions, tail-keep collection with spill
+ * files, provider-owned range signalling, and common termination scheduling.
+ * POSIX owners stage TERM before KILL; Windows owners terminate immediately.
+ * This layer reacts to an abort signal; callers own deadlines, teardown
+ * ladders, and cause classification.
  * @module dsh-subprocess-local/spawn
  */
 
@@ -24,6 +25,8 @@ import type {
   SubprocessOutputMode,
   SubprocessSpawnSpec,
 } from '@deepseek-ai/dsh-subprocess'
+import type { BoundProcessOwner, ManagedProcessLaunch } from './managed-owner.ts'
+import { waitWithAbort } from './managed-owner.ts'
 import { linuxProcessGroupHasLiveMembers } from './process-inspector.ts'
 
 type SpawnProcess = (
@@ -112,6 +115,17 @@ process.once('exit', () => {
   if (defaultSpillDir === undefined) return
   try { rmdirSync(defaultSpillDir) } catch { /* best-effort: ENOENT/ENOTEMPTY/EBUSY/EPERM must not change the exit code. */ }
 })
+
+/**
+ * Prepare fallible output storage before starting a managed native process.
+ * @param internals - optional caller-owned spill directory.
+ * @returns binding inputs whose spill directory is ready for use.
+ */
+export function prepareManagedProcessBinding(
+  internals: Pick<SpawnInternals, 'spillDir'> = {},
+): { spillDir: string } {
+  return { spillDir: internals.spillDir ?? privateSpillDir() }
+}
 
 /**
  * Collects one stream with a bounded in-memory tail. With a spill cap, on
@@ -275,12 +289,12 @@ export class OutputCollector {
 /**
  * Send `sig` to a detached POSIX process group. Never throws: delivery races
  * process exit and may run in a timer callback, so failures are contained and
- * a non-positive pid is a no-op.
- * @param pid - the group leader's pid; non-positive means the spawn failed and the call is a no-op.
+ * a missing pid is a no-op.
+ * @param pid - the group leader's pid, when the spawn published one.
  * @param sig - the signal to deliver to the whole group.
  */
-export function killGroup(pid: number, sig: NodeJS.Signals): void {
-  if (pid <= 0) return
+export function killGroup(pid: number | undefined, sig: NodeJS.Signals): void {
+  if (pid === undefined) return
   try {
     process.kill(-pid, sig)
   } catch {
@@ -293,10 +307,10 @@ export function killGroup(pid: number, sig: NodeJS.Signals): void {
  * POSIX group signalling — delivery races tree exit, so an absent tree, a
  * nonzero status, or a missing taskkill binary must not break idempotent
  * teardown.
- * @param pid - root process id; non-positive is a no-op.
+ * @param pid - root process id, when the spawn published one.
  */
-export function taskkillProcessTree(pid: number): void {
-  if (pid <= 0) return
+export function taskkillProcessTree(pid: number | undefined): void {
+  if (pid === undefined || pid <= 0) return
   // Outcome deliberately unchecked: an already-absent tree (status 128), exit
   // races, and a missing taskkill binary (spawnSync reports, never throws) are
   // as tolerable here as ESRCH is for a POSIX group signal.
@@ -314,17 +328,17 @@ export function taskkillProcessTree(pid: number): void {
  */
 function signalTree(
   platform: NodeJS.Platform,
-  pid: number,
+  pid: number | undefined,
   sig: NodeJS.Signals,
   child: ChildProcess,
   taskkill: (pid: number) => void,
 ): void {
+  /* v8 ignore next -- kill/terminate gate on treeAlive(), which is false without a pid; this guard protects direct callers only. */
+  if (pid === undefined) return
   if (platform === 'win32') {
     taskkill(pid)
     return
   }
-  /* v8 ignore next -- kill/terminate gate on treeAlive(), which is false for pid -1; this guard protects direct callers only. */
-  if (pid <= 0) return
   try {
     process.kill(-pid, sig)
   } catch {
@@ -340,31 +354,120 @@ function signalTree(
 }
 
 /**
- * Spawn one isolated detached process tree with the spec's per-stream stdio
- * dispositions. Runtime exits resolve `done` as {@link SubprocessOutcome};
- * only spawn failures reject.
- * @param spec - fully resolved argv, cwd, stdio, grace, cancellation, environment.
- * @param internals - test-only spill-directory, platform, and taskkill overrides.
- * @returns live subprocess handle.
- * @throws when `graceMs` cannot be represented by one Node timer.
+ * Validate the synchronous portion of one ordinary spawn request.
+ * @param spec - exact target request.
+ * @throws when grace, cancellation, or argv is invalid before launch.
  */
-export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInternals = {}): LocalSubprocessHandle {
+export function validateSubprocessSpec(spec: SubprocessSpawnSpec): void {
   if (!Number.isFinite(spec.graceMs) || spec.graceMs <= 0 || spec.graceMs > MAX_TIMER_DELAY_MS) {
     throw new Error(`subprocess graceMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
   }
-  const spillDir = internals.spillDir ?? privateSpillDir()
-  const platform = internals.platform ?? process.platform
-  const spawnProcess = internals.spawn ?? spawn
-  const taskkill = internals.taskkill ?? taskkillProcessTree
-  const linuxGroupHasLiveMembers = internals.linuxProcessGroupHasLiveMembers ?? linuxProcessGroupHasLiveMembers
-
   if (spec.signal?.aborted) {
-    throw new Error(`aborted before spawn: ${String(spec.signal.reason ?? 'aborted')}`)
+    let reason = 'aborted'
+    try {
+      reason = String(spec.signal.reason ?? reason)
+    } catch {
+      // Arbitrary caller-owned reasons cannot escape the stable Error boundary.
+    }
+    throw new Error(`aborted before spawn: ${reason}`)
   }
-  const [program, ...args] = spec.argv
+  const [program] = spec.argv
   if (program === undefined || program.length === 0) {
     throw new Error('invalid argv: expected a non-empty program name at argv[0]')
   }
+}
+
+function directChildResult(child: ChildProcess): Promise<SubprocessOutcome> {
+  return new Promise((resolve, reject) => {
+    let completed = false
+    child.once('error', (error) => {
+      /* v8 ignore next -- ChildProcess may report a later operational error after its
+         terminal exit event; the first terminal event owns the result. */
+      if (completed) return
+      completed = true
+      reject(error)
+    })
+    child.once('exit', (exitCode, signal) => {
+      /* v8 ignore next -- a spawn/kill error may be followed by exit; a Promise can publish only the first terminal event. */
+      if (completed) return
+      completed = true
+      resolve({ exitCode, signal })
+    })
+  })
+}
+
+function fallbackOwner(
+  platform: NodeJS.Platform,
+  pid: number | undefined,
+  child: ChildProcess,
+  taskkill: (pid: number) => void,
+  linuxGroupHasLiveMembers: (processGroupId: number) => boolean | undefined,
+  direct: Promise<SubprocessOutcome>,
+): BoundProcessOwner {
+  let stopped = false
+  let directSettled = false
+  let observation: Promise<void> | undefined
+  void direct.then(
+    () => { directSettled = true },
+    () => { directSettled = true },
+  )
+
+  const alive = (): boolean => {
+    if (stopped || pid === undefined) return false
+    if (platform === 'win32') return child.exitCode === null && child.signalCode === null
+    try {
+      process.kill(-pid, 0)
+      if (directSettled && platform === 'linux' && linuxGroupHasLiveMembers(pid) === false) return false
+      return true
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ESRCH') return false
+      /* v8 ignore start -- EPERM and non-POSIX negative-pid failures are platform defenses. */
+      if (code === 'EPERM') return true
+      return child.exitCode === null && child.signalCode === null
+      /* v8 ignore stop */
+    }
+  }
+
+  return {
+    signal: (signal) => {
+      if (!alive()) {
+        stopped = true
+        return
+      }
+      signalTree(platform, pid, signal, child, taskkill)
+    },
+    waitForExit: async () => {
+      /* v8 ignore next -- bindManagedProcess memoizes this owner wait; the guard only
+         protects direct internal re-entry after signal() observed absence. */
+      if (stopped) return
+      observation ??= (async () => {
+        while (alive()) await sleepTick()
+        stopped = true
+      })()
+      await observation
+    },
+    terminateForHostExit: () => {
+      if (stopped) return
+      signalTree(platform, pid, 'SIGKILL', child, taskkill)
+    },
+  }
+}
+
+/**
+ * Bind platform launch facts to the existing stdio, outcome, abort, and termination lifecycle.
+ * @param spec - fully resolved argv, cwd, stdio, grace, cancellation, environment.
+ * @param launch - platform streams, direct outcome, and managed-range owner.
+ * @param internals - test-only spill-directory override.
+ * @returns live subprocess handle.
+ */
+export function bindManagedProcess(
+  spec: SubprocessSpawnSpec,
+  launch: ManagedProcessLaunch,
+  internals: Pick<SpawnInternals, 'spillDir'> = {},
+): LocalSubprocessHandle {
+  const { spillDir } = prepareManagedProcessBinding(internals)
+  const { stdin, stdout, stderr } = launch
 
   const isCollect = (mode: SubprocessOutputMode): mode is SubprocessCollect =>
     mode !== 'pipe' && mode !== 'inherit'
@@ -372,191 +475,156 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
   const errMode = spec.stdio.stderr
   const stdinMode = spec.stdio.stdin
 
-  const env = childEnv(spec.env)
-  const child = spawnProcess(program, args, {
-    cwd: spec.cwd,
-    env,
-    stdio: [
-      stdinMode === 'ignore' ? 'ignore' : 'pipe',
-      outMode === 'inherit' ? 'inherit' : 'pipe',
-      errMode === 'inherit' ? 'inherit' : 'pipe',
-    ],
-    // `detached` gives teardown a tree root on POSIX (its own process group);
-    // Windows terminates by root pid through taskkill /T instead.
-    detached: platform !== 'win32',
-    windowsHide: platform === 'win32',
-  })
-
   const collectStream = (mode: SubprocessOutputMode, stream: Readable | null, label: string): OutputCollector | undefined => {
     if (!isCollect(mode) || stream === null) return undefined
     const collector = new OutputCollector(mode.maxBytes, mode.spill?.maxBytes, label, spillDir)
     stream.on('data', (chunk: Buffer) => { collector.push(chunk) })
     return collector
   }
-  const stdoutCollector = collectStream(outMode, child.stdout, 'stdout')
-  const stderrCollector = collectStream(errMode, child.stderr, 'stderr')
+  const stdoutCollector = collectStream(outMode, stdout, 'stdout')
+  const stderrCollector = collectStream(errMode, stderr, 'stderr')
+  const observeOutputStream = (mode: SubprocessOutputMode, stream: Readable | null): Promise<void> | undefined => {
+    if (mode === 'inherit' || stream === null || stream.readableEnded || stream.destroyed) return undefined
+    return new Promise((resolve) => {
+      const settle = (): void => {
+        stream.off('end', settle)
+        stream.off('close', settle)
+        stream.off('error', settle)
+        resolve()
+      }
+      stream.once('end', settle)
+      stream.once('close', settle)
+      stream.once('error', settle)
+    })
+  }
+  const stdoutClosed = observeOutputStream(outMode, stdout)
+  const stderrClosed = observeOutputStream(errMode, stderr)
+  const outputStreamsClosed = Promise.all([stdoutClosed, stderrClosed])
+  const stopCollectors = (): void => {
+    if (stdoutCollector !== undefined) stdout?.destroy()
+    if (stderrCollector !== undefined) stderr?.destroy()
+    stdoutCollector?.seal()
+    stderrCollector?.seal()
+  }
 
   let graceTimer: ReturnType<typeof setTimeout> | undefined
-  let treeExitObserved = false
-  let treeExitObservation: Promise<void> | undefined
+  let terminationStarted = false
+  let rangeExitObserved = false
+  let rangeExitObservation: Promise<void> | undefined
   let settled = false
 
-  // Failed spawns use pid -1 so signalling remains a no-op.
-  const pid = child.pid ?? -1
-
-  /** Whether the detached tree's root (or POSIX group) is still alive. */
-  const treeAlive = (): boolean => {
-    /* v8 ignore next -- only a timer callback already queued when the observer settles can enter here;
-       the guard is the final defense against probing an id after its tree was confirmed absent. */
-    if (treeExitObserved) return false
-    if (pid <= 0) return false
-    if (platform === 'win32') {
-      // Windows has no group-liveness probe; the direct child's exit is the
-      // observable boundary (taskkill /T already took the tree with it).
-      return child.exitCode === null && child.signalCode === null
-    }
-    try {
-      process.kill(-pid, 0)
-      // A group containing only unreaped zombies still answers kill(0), but
-      // it can execute no work and cannot be signalled into quiescence. Only
-      // inspect after direct-child settlement so live-process polls remain a
-      // syscall rather than repeated process-table scans.
-      if (settled && platform === 'linux' && linuxGroupHasLiveMembers(pid) === false) return false
-      return true
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code
-      /* v8 ignore next 2 -- POSIX reports an absent group as ESRCH; child-reaping timing
-         makes observing the other arm platform-dependent. */
-      if (code === 'ESRCH') return false
-      /* v8 ignore start -- EPERM and non-POSIX negative-pid failures are platform defenses; CI runs
-         tree-lifecycle tests on POSIX hosts where absence reports ESRCH. */
-      if (code === 'EPERM') return true
-      return child.exitCode === null && child.signalCode === null
-      /* v8 ignore stop */
-    }
+  const scheduleOwnerCleanup = (): boolean => {
+    if (launch.owner.cleanup === undefined) return false
+    queueMicrotask(() => { void done.finally(() => { launch.owner.cleanup?.() }).catch(() => {}) })
+    return true
   }
 
   /**
-   * Start or reuse the handle's single whole-tree exit observer. The first
-   * confirmed absence is a permanent no-more-signals boundary: it cancels a
-   * pending escalation before this process-group id can be reused.
+   * Start or reuse the handle's managed-range exit observer. A failed read
+   * before direct settlement can be retried. Once direct settlement permits
+   * cleanup, retain a failed observation because removing its private evidence
+   * must not turn a later wait into a false success. The first confirmed
+   * absence is the permanent no-more-signals boundary and cancels pending
+   * escalation before stale identity can be used.
    */
-  const observeTreeExit = (): Promise<void> => {
-    treeExitObservation ??= (async () => {
-      while (treeAlive()) await sleepTick()
-      treeExitObserved = true
+  const observeRangeExit = (): Promise<void> => {
+    rangeExitObservation ??= (async () => {
+      await launch.owner.waitForExit()
+      rangeExitObserved = true
       if (graceTimer !== undefined) clearTimeout(graceTimer)
       graceTimer = undefined
-    })()
-    return treeExitObservation
+      spec.signal?.removeEventListener('abort', onAbort)
+      scheduleOwnerCleanup()
+    })().catch((error: unknown) => {
+      if (!settled || !scheduleOwnerCleanup()) rangeExitObservation = undefined
+      throw error
+    })
+    return rangeExitObservation
   }
 
-  // The escalation's tier primitive (not on the handle — terminate() is the
-  // only consumer-facing termination verb). Guards on TREE liveness, not
-  // outcome settlement: a TERM-trapping helper can outlive the settled direct
-  // child and must stay signalable, while a fully-dead tree (possible pid
-  // reuse) must not be re-signalled by a later tier.
-  const kill = (sig: NodeJS.Signals): void => {
-    /* v8 ignore next -- the shared exit observer cancels the ordinary dead-tree timer;
-       this remains the timer/death race guard and cannot be staged deterministically. */
-    if (!treeAlive()) return
-    signalTree(platform, pid, sig, child, taskkill)
+  const kill = (sig: 'SIGTERM' | 'SIGKILL', cancellationReason?: unknown): void => {
+    if (rangeExitObserved) return
+    launch.owner.signal(sig, cancellationReason)
+  }
+
+  const terminateWithReason = (cancellationReason: unknown): void => {
+    if (rangeExitObserved || terminationStarted) return
+    terminationStarted = true
+    // Keep the shared observation rejection available to waitForExit() without
+    // leaking an unhandled rejection when a caller only invokes terminate().
+    void observeRangeExit().catch(() => {})
+    kill('SIGTERM', cancellationReason)
+    graceTimer = setTimeout(() => {
+      graceTimer = undefined
+      kill('SIGKILL')
+    }, spec.graceMs)
   }
 
   const terminate = (): void => {
-    if (treeExitObserved || graceTimer !== undefined) return
-    // Observe from the first termination tier onward, even when inherited
-    // pipes delay `done` and no consumer has begun its own teardown wait.
-    void observeTreeExit()
-    // oxlint-disable-next-line typescript/no-unnecessary-condition -- observer can record absence before its first await.
-    if (treeExitObserved) return
-    kill('SIGTERM')
-    // The escalation must survive direct-child settlement — the leader dying
-    // does not mean the tree died — so settle does not clear this timer, and
-    // kill() re-probes tree liveness before force-killing. It stays ref'd:
-    // the pending SIGKILL is a commitment, and a parent exiting before it
-    // fires would orphan a trapped survivor. Self-bounds at graceMs.
-    graceTimer = setTimeout(() => { kill('SIGKILL') }, spec.graceMs)
+    terminateWithReason(new Error('subprocess terminated before target start'))
   }
 
   const terminateForHostExit = (): void => {
-    kill('SIGKILL')
+    launch.owner.terminateForHostExit()
   }
 
   // The caller owns timeout classification; this layer only reacts to abort.
-  const onAbort = (): void => { terminate() }
+  const onAbort = (): void => { terminateWithReason(spec.signal?.reason) }
   spec.signal?.addEventListener('abort', onAbort, { once: true })
 
   // Batch stdin is written and closed up front; process exit and captured
   // output remain authoritative, so write errors (EPIPE) are best-effort.
-  if (typeof stdinMode === 'object' && child.stdin !== null) {
-    child.stdin.on('error', () => { /* stdin write is best-effort; outcome rides on exit/output. */ })
-    child.stdin.end(stdinMode.data)
+  if (typeof stdinMode === 'object' && stdin !== null) {
+    stdin.on('error', () => { /* stdin write is best-effort; outcome rides on exit/output. */ })
+    stdin.end(stdinMode.data)
   }
 
   const done = new Promise<SubprocessOutcome>((resolve, reject) => {
     let pipeDrainTimer: ReturnType<typeof setTimeout> | undefined
-    const settle = (exitCode: number | null, signal: NodeJS.Signals | null): void => {
+    const settle = (outcome: SubprocessOutcome): void => {
       if (settled) return
       settled = true
       // Only harness-collected pipes are force-closed at the drain boundary;
       // a 'pipe'-mode stream belongs to the caller and closes with the child.
-      if (stdoutCollector !== undefined) child.stdout?.destroy()
-      if (stderrCollector !== undefined) child.stderr?.destroy()
-      stdoutCollector?.seal()
-      stderrCollector?.seal()
+      stopCollectors()
       cleanup()
-      resolve({ exitCode, signal })
+      resolve(outcome)
     }
-    child.on('error', (error) => {
-      // No meaningful close outcome follows a spawn failure.
+    const fail = (error: unknown): void => {
       settled = true
+      terminate()
+      stopCollectors()
       cleanup()
+      // Preserve the exact parent-local AbortSignal reason, including null or undefined.
+      // oxlint-disable-next-line typescript/prefer-promise-reject-errors -- Exact cancellation reason is the contract.
       reject(error)
-    })
-    child.on('exit', (exitCode, signal) => {
-      // A surviving descendant that inherited a pipe must not hold the
-      // outcome open indefinitely: after exit, the same bounded grace that
-      // governs kills also bounds the close wait.
-      pipeDrainTimer = setTimeout(() => {
-        settle(exitCode, signal)
-      }, spec.graceMs)
-    })
-    child.on('close', settle)
+    }
+    launch.direct.then((outcome) => {
+      if (stdoutClosed === undefined && stderrClosed === undefined) {
+        settle(outcome)
+        return
+      }
+      pipeDrainTimer = setTimeout(() => { settle(outcome) }, spec.graceMs)
+      void outputStreamsClosed.then(() => { settle(outcome) })
+    }, fail)
     function cleanup(): void {
-      // graceTimer deliberately NOT cleared: the SIGKILL escalation must be
-      // able to reach tree survivors after the direct child settles.
+      // graceTimer deliberately NOT cleared: forced termination must still
+      // reach range survivors after the spawned command settles.
       if (pipeDrainTimer !== undefined) clearTimeout(pipeDrainTimer)
-      spec.signal?.removeEventListener('abort', onAbort)
     }
   })
 
   const waitForExit = async (signal?: AbortSignal): Promise<boolean> => {
-    const observed = observeTreeExit()
-    if (treeExitObserved) return true
-    if (signal?.aborted) return false
-    if (signal === undefined) {
-      await observed
-      return true
-    }
-    const aborted = Promise.withResolvers<boolean>()
-    const onAbort = (): void => { aborted.resolve(false) }
-    signal.addEventListener('abort', onAbort, { once: true })
-    /* v8 ignore next -- closes the event-loop race between the preceding aborted check and listener registration. */
-    if (signal.aborted) onAbort()
-    try {
-      return await Promise.race([observed.then(() => true), aborted.promise])
-    } finally {
-      signal.removeEventListener('abort', onAbort)
-    }
+    if (rangeExitObserved) return true
+    return waitWithAbort(observeRangeExit(), signal)
   }
 
   return {
-    pid,
-    /* v8 ignore start -- pipe-mode fds exist on every spawn Node returns; the null-coalesces guard a nonconforming ChildProcess only. */
-    stdin: stdinMode === 'pipe' ? child.stdin ?? undefined : undefined,
-    stdout: outMode === 'pipe' ? child.stdout ?? undefined : undefined,
-    stderr: errMode === 'pipe' ? child.stderr ?? undefined : undefined,
+    /* v8 ignore start -- pipe-mode streams exist on every conforming launch;
+       the null-coalesces guard an internal adapter defect only. */
+    stdin: stdinMode === 'pipe' ? stdin ?? undefined : undefined,
+    stdout: outMode === 'pipe' ? stdout ?? undefined : undefined,
+    stderr: errMode === 'pipe' ? stderr ?? undefined : undefined,
     /* v8 ignore stop */
     collected: {
       ...stdoutCollector !== undefined ? { stdout: stdoutCollector } : {},
@@ -567,4 +635,44 @@ export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInter
     terminateForHostExit,
     waitForExit,
   }
+}
+
+/**
+ * Spawn one detached PGID/taskkill fallback and bind the common lifecycle.
+ * @param spec - fully resolved argv, cwd, stdio, grace, cancellation, environment.
+ * @param internals - test-only spill-directory, platform, and taskkill overrides.
+ * @returns live subprocess handle.
+ */
+export function spawnSubprocess(spec: SubprocessSpawnSpec, internals: SpawnInternals = {}): LocalSubprocessHandle {
+  const binding = prepareManagedProcessBinding(internals)
+  const platform = internals.platform ?? process.platform
+  const [program, ...args] = spec.argv
+  const child = (internals.spawn ?? spawn)(program as string, args, {
+    cwd: spec.cwd,
+    env: childEnv(spec.env),
+    stdio: [
+      spec.stdio.stdin === 'ignore' ? 'ignore' : 'pipe',
+      spec.stdio.stdout === 'inherit' ? 'inherit' : 'pipe',
+      spec.stdio.stderr === 'inherit' ? 'inherit' : 'pipe',
+    ],
+    detached: platform !== 'win32',
+    windowsHide: platform === 'win32',
+  })
+  const direct = directChildResult(child)
+  const pid = child.pid
+  const owner = fallbackOwner(
+    platform,
+    pid,
+    child,
+    internals.taskkill ?? taskkillProcessTree,
+    internals.linuxProcessGroupHasLiveMembers ?? linuxProcessGroupHasLiveMembers,
+    direct,
+  )
+  return bindManagedProcess(spec, {
+    stdin: child.stdin,
+    stdout: child.stdout,
+    stderr: child.stderr,
+    direct,
+    owner,
+  }, binding)
 }

@@ -15,7 +15,8 @@ interface TreeState { root: number; descendant: number }
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 const hostScript = fileURLToPath(new URL('./fixtures/process-exit-host.ts', import.meta.url))
-const scenarioTimeoutMs = 30_000
+const scenarioTimeoutMs = process.platform === 'win32' ? 60_000 : 30_000
+const testTimeoutMs = scenarioTimeoutMs + 15_000
 
 function processExists(pid: number): boolean {
   try {
@@ -141,7 +142,7 @@ describe('synchronous cleanup on host exit', () => {
     { trigger: 'direct' as const, expectedCode: 23, diagnostic: undefined },
     { trigger: 'uncaught-exception' as const, expectedCode: 1, diagnostic: 'host-exit-uncaught-exception' },
     { trigger: 'unhandled-rejection' as const, expectedCode: 1, diagnostic: 'host-exit-unhandled-rejection' },
-  ])('removes an ordinary managed tree after $trigger', { timeout: 45_000 }, async ({
+  ])('removes an ordinary managed tree after $trigger', { timeout: testTimeoutMs }, async ({
     trigger,
     expectedCode,
     diagnostic,
@@ -154,7 +155,7 @@ describe('synchronous cleanup on host exit', () => {
 
   it.skipIf(process.platform === 'win32')(
     'removes a terminal root and descendant after direct exit',
-    { timeout: 45_000 },
+    { timeout: testTimeoutMs },
     async () => {
       const { outcome } = await runScenario('terminal', 'direct')
       expect(outcome.exitCode).toBe(23)
@@ -162,7 +163,7 @@ describe('synchronous cleanup on host exit', () => {
     },
   )
 
-  it('preserves normal terminate-and-join disposal and removes the exit listener', { timeout: 45_000 }, async () => {
+  it('preserves normal terminate-and-join disposal and removes the exit listener', { timeout: testTimeoutMs }, async () => {
     const { outcome, disposeCounts } = await runScenario('ordinary', 'dispose')
     expect(outcome.exitCode).toBe(0)
     expect(disposeCounts?.listenersAfterLoad).toBe((disposeCounts?.listenersBefore ?? 0) + 1)

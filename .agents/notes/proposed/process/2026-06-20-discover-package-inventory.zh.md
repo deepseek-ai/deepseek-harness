@@ -8,7 +8,7 @@ Status: proposed
 
 包与门禁清单在 TypeScript project references、包文档和 CI 描述中反复出现。大多数只是重述包布局、manifest（元数据清单）数据或聚合命令内容。因此每新增一个包都会产生本可避免的同步点。
 
-[包层级结构](../../archived/architecture/2026-06-20-package-hierarchy.md)已经手动消除了其中若干：`scripts/publint-all.ts` 现在从 `packages/<group>/<pkg>` 布局推导列表，两份 `tsconfig` 的 `paths` 映射也合并为一个 `@deepseek-ai/dsh-*` 通配符——该合并此后已被回退为「每包一条、由生成器托管并有门禁把关」的显式别名，因为按顺序试候选的解析开销主导了源码启动时间（[显式 workspace 路径别名](../../implemented/process/2026-08-27-explicit-workspace-path-aliases.zh.md)）。剩下的是无法用 glob 消除的清单，主要是聚合配置（`tsconfig.host.json`、`tsconfig.client.json`）中的项目引用（`references`）——TypeScript 要求它们是显式数组（没有通配符形式）。
+[包层级结构](../../archived/architecture/2026-06-20-package-hierarchy.md)已经手动消除了其中若干：`scripts/publint-all.ts` 现在从 `packages/<group>/<pkg>` 布局推导列表，两份 `tsconfig` 的 `paths` 映射也合并为一个 `@deepseek-ai/dsh-*` 通配符——该合并此后已被回退为「每包一条、由生成器托管并有门禁把关」的显式别名，因为按顺序试候选的解析开销主导了源码启动时间（[显式 workspace 路径别名](../../archived/process/2026-08-27-explicit-workspace-path-aliases.md)）。剩下的是无法用 glob 消除的清单，主要是聚合配置（`tsconfig.host.json`、`tsconfig.client.json`）中的项目引用（`references`）——TypeScript 要求它们是显式数组（没有通配符形式）。
 
 当静态列表编码的是策略时，它们是合理的；当它们只是重复 `package.json`、workspace glob 或包层级结构中已有的 manifest 数据或布局事实时，就是不必要的摩擦。
 

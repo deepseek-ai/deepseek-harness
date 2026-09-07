@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-27-steer-followup-image-delivery.md
-2026-08-27-steer-followup-image-delivery.md: 3a3d985e1dd09e17937d260253f3594b9a27a842
-2026-08-27-steer-followup-image-delivery.zh.md: 8015960eb899b1566cc1d738067acf3b318cdea6

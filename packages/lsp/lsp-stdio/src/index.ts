@@ -281,23 +281,35 @@ class LocalLspProvider implements LspProvider {
       // synchronous get-or-create so every spawned process remains owned by teardown.
       this.assertActive(querySignal)
       let instance = this.instanceFor(workspaceKey, workspace)
-      try {
-        return await instance.query(request, source, querySignal)
-      } catch (error) {
-        // A selected child can have died while idle or fail during the next write. Queries are
-        // read-only, so replace that transport once and retry transparently.
-        if (!instance.isTransportFailure(error)) throw error
-        await instance.dispose()
-        this.evictIfCurrent(workspaceKey, instance)
-        this.assertActive(querySignal)
-        instance = this.instanceFor(workspaceKey, workspace)
-        return await instance.query(request, source, querySignal)
-      } finally {
-        // Reach quiescence before dropping a dead slot; a replacement must survive this ownership check.
+      let canRetryTransport = true
+      for (;;) {
+        const [queryOutcome] = await Promise.allSettled([
+          instance.query(request, source, querySignal),
+        ])
+        let teardownOutcome: PromiseSettledResult<void> | undefined
         if (instance.dead) {
-          await instance.dispose()
+          ;[teardownOutcome] = await Promise.allSettled([instance.dispose()])
+          // A dead instance is never reusable, even when its final quiescence observation fails.
           this.evictIfCurrent(workspaceKey, instance)
         }
+        if (teardownOutcome?.status === 'rejected') {
+          if (queryOutcome.status === 'rejected') {
+            throw new AggregateError(
+              [queryOutcome.reason, teardownOutcome.reason],
+              'LSP operation and teardown failed',
+            )
+          }
+          throw teardownOutcome.reason
+        }
+        if (queryOutcome.status === 'fulfilled') return queryOutcome.value
+        // A selected child can have died while idle or fail during the next write. Queries are
+        // read-only, so replace that transport once and retry transparently after clean disposal.
+        if (!canRetryTransport || !instance.isTransportFailure(queryOutcome.reason)) {
+          throw queryOutcome.reason
+        }
+        canRetryTransport = false
+        this.assertActive(querySignal)
+        instance = this.instanceFor(workspaceKey, workspace)
       }
     })
   }

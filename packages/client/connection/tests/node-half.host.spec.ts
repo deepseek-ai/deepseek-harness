@@ -118,6 +118,15 @@ function browserCookie(connection: HostConnectionHandle, authority: string): str
 }
 
 describe('connection node half', () => {
+  it('provides the carrier-neutral service without a Web server', async () => {
+    const ctx = new Context()
+    provideBrowserCredentials(ctx)
+    const fiber = ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    expect(ctx.get('connection')).toBeInstanceOf(Object)
+    await fiber.dispose()
+  })
+
   it('injects validated browser recovery timing and withdraws it on disposal', async () => {
     const { ctx, dispose } = await mounted({ recovery: { generationReadyTimeoutMs: 25_000 } })
     try {

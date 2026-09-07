@@ -134,9 +134,9 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Session-local Schedule subsystem](../../../docs/subsystems/schedule.md) — durable record, transition, view, and delivery contracts with the exact type definitions.
 - [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-schedule) — the complete `schedule_create`, `schedule_list`, and `schedule_delete` schemas the model receives.
 - [Durable Web Schedule decision](../../../.agents/notes/implemented/feature/2026-08-05-durable-web-schedule.md) — persistence and lifecycle decisions behind the package.
-- [Conversational delivery decision](../../../.agents/notes/implemented/simplification/2026-08-09-conversational-schedule-delivery.md) — the no-receipt boundary and follow-up delivery.
+- [Conversational delivery decision](../../../.agents/notes/archived/simplification/2026-08-09-conversational-schedule-delivery.md) — the no-receipt boundary and follow-up delivery.
 - [Explicit time-zone boundary](../../../.agents/notes/implemented/simplification/2026-08-09-explicit-schedule-time-zone.md) — why the model must always pass an explicit zone.
-- [Bounded fixed-rate Schedule](../../../.agents/notes/implemented/simplification/2026-08-09-bounded-fixed-rate-schedule.md) — recurrence scope: latest-only catch-up and batch delivery.
+- [Bounded fixed-rate Schedule](../../../.agents/notes/archived/simplification/2026-08-09-bounded-fixed-rate-schedule.md) — recurrence scope: latest-only catch-up and batch delivery.
 - [Schedule user guide](../../../docs/user/guide/schedule.md) — the official configuration path for mounting this package with time-context.
 
 -----

@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-30-credential-boundaries-and-atomic-registration.md) | 中文
 
-> 范围：加固[请求级 LLM（大语言模型）配置边界](2026-07-29-request-level-llm-config-credentials.zh.md)——存下来的凭据落在哪里、谁能读到它，一次请求所用的事实如何保持在同一代，以及一组路由如何在不留空窗的前提下更换。本 note 与 [settings 写路径 note](2026-07-30-settings-write-path-integrity.zh.md) 配套：它把那篇 note 的提供方修复套用到 `credentials-local`，并把其中的写锁提升进 `dsh-atomic-write`。
+> 范围：加固[请求级 LLM（大语言模型）配置边界](../../archived/architecture/2026-07-29-request-level-llm-config-credentials.md)——存下来的凭据落在哪里、谁能读到它，一次请求所用的事实如何保持在同一代，以及一组路由如何在不留空窗的前提下更换。本 note 与 [settings 写路径 note](../../archived/architecture/2026-07-30-settings-write-path-integrity.md) 配套：它把那篇 note 的提供方修复套用到 `credentials-local`，并把其中的写锁提升进 `dsh-atomic-write`。
 
 ## 问题
 
@@ -18,7 +18,7 @@ Status: implemented
 
 ## 决策
 
-**凭据文档只归凭据提供方所有。**没有任何一个面会把它加载进 `process.env`。当时该文档是 `$DSH_HOME/.env`；[凭据文档拆分](2026-08-04-credentials-yaml-and-user-environment-layer.zh.md)后来把它移到 `$DSH_HOME/.credentials.yaml`，因此 `$DSH_HOME/.env` 是用户的普通环境层，其中不含任何提供方管理的密钥。真正的启动环境，以及调用目录中由 bin 加载的 `.env`，仍然是那一层只读的环境来源，因此不挂载该提供方的组合，解析密钥的方式与从前完全一致，而存下的密钥跨重启仍然来源于文件、仍然可写——这一点由 loader 组合中的一次真实重启来证明，而不是靠对 `describe()` 的单元断言。
+**凭据文档只归凭据提供方所有。**没有任何一个面会把它加载进 `process.env`。当时该文档是 `$DSH_HOME/.env`；[凭据文档拆分](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md)后来把它移到 `$DSH_HOME/.credentials.yaml`，因此 `$DSH_HOME/.env` 是用户的普通环境层，其中不含任何提供方管理的密钥。真正的启动环境，以及调用目录中由 bin 加载的 `.env`，仍然是那一层只读的环境来源，因此不挂载该提供方的组合，解析密钥的方式与从前完全一致，而存下的密钥跨重启仍然来源于文件、仍然可写——这一点由 loader 组合中的一次真实重启来证明，而不是靠对 `describe()` 的单元断言。
 
 **存下的凭据对模型没有边界，而 README 就是这么写的。**`0700` 目录下的 `0600` 挡得住其他 OS 用户；模型的 bash 与文件系统工具正是以同一用户身份运行，而已交付的默认配置不提供任何约束。harness 真正守住的边界更窄，文档也严格按这一范围表述：没有任何一个面会把该文档提升进 `process.env`，模型也从不会拿到它的解析后路径，因此要拿到这个值，需要刻意去读一条并未交给它的路径。OS 钥匙串（keychain）提供方——一个模型的进程根本读不到的存储——被记录为真正的答案，而不是靠一个残缺的方案去暗示它。
 

@@ -8,9 +8,9 @@ import Include from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
+import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import AgentRegistry, { assembleContextFor, type Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,10 +51,10 @@ async function harness(roster: Config = { default: 'standard', roots: ROOTS, inc
   ctx.loader.builtins.group = Group
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SessionProjectionRegistry)
+  await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(AgentPresets, roster)
   return ctx
@@ -459,10 +459,10 @@ describe('the preset file is an input, never a persistence target', () => {
     scoped.loader.builtins.group = Group
     await scoped.plugin(LlmRuntime)
     await scoped.plugin(SessionStore)
-    await scoped.plugin(SystemPrompt, { persona: '' })
+    await scoped.plugin(SessionProjectionRegistry)
+    await scoped.plugin(SystemPrompt, { personaPrefix: '' })
     await scoped.plugin(ToolRuntime)
     await scoped.plugin(AgentRegistry)
-    await scoped.plugin(SessionProjectionRegistry)
     await scoped.plugin(AgentLoop, { agents: [] })
     await scoped.plugin(AgentPresets, { default: 'self-disposing', roots: [{ path: root, trust: 'user' as const }], includeShippedRoot: false, includeUserRoot: false })
 
@@ -648,10 +648,10 @@ describe('replacing a composition', () => {
     scoped.loader.builtins.group = Group
     await scoped.plugin(LlmRuntime)
     await scoped.plugin(SessionStore)
-    await scoped.plugin(SystemPrompt, { persona: '' })
+    await scoped.plugin(SessionProjectionRegistry)
+    await scoped.plugin(SystemPrompt, { personaPrefix: '' })
     await scoped.plugin(ToolRuntime)
     await scoped.plugin(AgentRegistry)
-    await scoped.plugin(SessionProjectionRegistry)
     await scoped.plugin(AgentLoop, { agents: [] })
     await scoped.plugin(AgentPresets, { default: 'first', roots: [{ path: root, trust: 'user' as const }], includeShippedRoot: false, includeUserRoot: false })
     const handle = await scoped.agents.create({

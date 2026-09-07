@@ -68,6 +68,8 @@ const handle = await ctx.agents.create({
 })
 ```
 
+Every inbox mutation commits one normalized `agent/inbox/spliced` event. The projection registry folds that event synchronously, so the live projection reflects the splice when `Session.append()` returns. Insertions, edits, removals, claiming, and cancellation replay through the same standard splice coordinates. Ordinary removals carry `outcome: 'canceled'` and emit `agent/inbox/discarded { message }`; claiming uses pure deletions with no outcome and emits `agent/inbox/claimed`. Every insertion emits `agent/inbox/inserted { message }`. `MessageId` stays unique across both pending lists. Consumers that need a removed message use the claimed or discarded notification instead of depending on a pre-splice `session/event` view.
+
 ### What a step does
 
 Each step sends the agent's rendered system prompt, its visible tool schemas, and the session's derived history; the model's tool calls run through the guarded tool pipeline and every accepted fact is appended to the session log before the next step derives from it. Parallel-safe calls may overlap up to `maxParallelToolCalls`; exclusive calls run alone as ordering barriers. Cancellation is cooperative: `agent.cancel()` aborts the current activity and, unless `keepInbox` is set, clears pending work; a cancelled stream finalizes the text already delivered to the user.
@@ -90,12 +92,15 @@ The package is the one concrete implementation of the public `Agent` contract. I
 
 After `agent/request`, `ctx.llm.prepareCall()` validates adapter-owned fields and resolves reasoning-effort and output-token defaults under the active turn signal. The loop retains that exact adapter through resolution, `request/header` logging, and dispatch. It writes a full header for the first request, a changed envelope, an explicit message-series start, a request after surface replacement, and resume; unchanged steps, retries, and ordinary later turns in the same series inherit the latest header. Before the next waterfall, the loop removes adapter-default fields so the current route resolves them again, while explicit settings persist. An unhandled route still fails with `NO_ADAPTER`.
 
+The loop deep-freezes each derived message identity on its first request and reuses that proof only within the same agent. Restored messages keep their identity; request construction does not freeze their containing event wrappers. Each request freezes its local canonical header, fresh message array, and envelope while leaving the cancellation signal live. The [request-freeze decision](../../../.agents/notes/implemented/simplification/2026-09-06-agent-request-freeze-provenance.md) explains ownership and measurement.
+
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: `AgentLoop` service, config schema, declarative agent startup, factory registration |
 | [`src/agent.ts`](src/agent.ts) | The concrete `ReactLoopAgent` driver: inbox, turn/step machine, cancellation |
+| [`src/inbox.ts`](src/inbox.ts) | Package-internal `ReactLoopInbox`: durable projection, structural commands, and loop-only claim state |
 | [`src/tool-calls.ts`](src/tool-calls.ts) | Tool scheduling: exclusive barriers and the bounded parallel pool |
 | [`src/runtime-context.ts`](src/runtime-context.ts) | Per-step runtime-context snapshot handling |
 | [`src/constants.ts`](src/constants.ts) | `DEFAULT_MAX_PARALLEL_TOOL_CALLS` |
@@ -111,7 +116,7 @@ The loop is the production acquisition point for session write handles. When `ct
 
 ### Turn and step flow
 
-The driver owns one agent for its lifetime and runs inside `ctx.agents.withInitiator(agent, ...)`. At a turn boundary it opens the durable turn, then atomically claims pending next-step input plus one queued prompt; between steps it claims only next-step input. `agent/pre-step` decides what enters the step. An entered decision appends its complete `user/message` batch before the driver can claim again, while a rejected decision appends none. Each model attempt emits one process-local `start`, emits every `chunk` only after the matching durable `assistant/chunk`, and emits exactly one terminal `end`; final assembly or message-append failure settles it as `aborted`, while `committed` follows the durable `assistant/message`. Each successful model call appends one message anchor citing its chunk seqs, and a cancelled stream appends an `interrupted: true` anchor with the delivered prefix so the next request contains what the user saw. Within a step, exclusive calls form barriers and parallel-safe calls use the bounded rolling pool; policy, durable results, and result context remain model-ordered.
+The driver owns one agent for its lifetime and runs inside `ctx.agents.withInitiator(agent, ...)`. Its package-internal `ReactLoopInbox` constructor registers the standard `inbox` projection on the agent scope, then uses that projection for structural commands and loop-only claims. Registry reference counting keeps the shared key active until the last agent scope unloads. At a turn boundary the driver opens the durable turn, then atomically claims pending next-step input plus one queued prompt; between steps it claims only next-step input. `agent/pre-step` decides what enters the step. An entered decision appends its complete `user/message` batch before the driver can claim again, while a rejected decision appends none. Each model attempt emits one process-local `start`, emits every `chunk` only after the matching durable `assistant/chunk`, and emits exactly one terminal `end`; final assembly or message-append failure settles it as `aborted`, while `committed` follows the durable `assistant/message`. Each successful model call appends one message anchor citing its chunk seqs, and a cancelled stream appends an `interrupted: true` anchor with the delivered prefix so the next request contains what the user saw. Within a step, exclusive calls form barriers and parallel-safe calls use the bounded rolling pool; policy, durable results, and result context remain model-ordered.
 
 ### Failure and cancellation
 

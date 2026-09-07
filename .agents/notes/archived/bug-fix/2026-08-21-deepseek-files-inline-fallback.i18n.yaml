@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-21-deepseek-files-inline-fallback.md
+2026-08-21-deepseek-files-inline-fallback.md: 159dd8f98df8cf684f0cd1d89378fb70b200b804
+2026-08-21-deepseek-files-inline-fallback.zh.md: ba39c1019c35c76379ff5615df5caddfef68c9e0

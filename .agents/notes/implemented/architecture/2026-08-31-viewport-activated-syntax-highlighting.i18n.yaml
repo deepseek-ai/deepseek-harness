@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-31-viewport-activated-syntax-highlighting.md
-2026-08-31-viewport-activated-syntax-highlighting.md: 050c4e50240f9e1d1eb4f2708df6bc93c3a1faf1
-2026-08-31-viewport-activated-syntax-highlighting.zh.md: abd02161ae00d8bdd31863826565175e1d8fddf9

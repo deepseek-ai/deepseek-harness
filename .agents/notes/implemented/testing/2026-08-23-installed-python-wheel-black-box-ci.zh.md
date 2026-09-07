@@ -24,17 +24,17 @@ Linux 另外保留 manylinux 2.28 干净安装冒烟测试与 GLIBC 检查。mac
 
 ### 真实 DeepSeek API
 
-可信拉取请求会在每个原生目标上运行第二项安装后 wheel 检查，并且只在预检与 live 测试步骤中把 `DEEPSEEK_API_KEY_EXTERNAL` 映射进去。密钥为空时预检失败，因此提供方测试不能通过自行 skip 产生假绿。该测试通过公开 SDK 访问 `https://api.deepseek.com`，要求模型通过当前平台 shell 写入内容精确的 sentinel 文件，再在同一 session 的第二个轮次中读取它，并校验外部文件行内容、最终响应、已完成的轮次结束原因、模型请求的工具调用，以及 session 日志存在且采用 Zstandard framing。解码后的记录内容与已完成轮次的持久性是由 restart 快照负责的确定性 keyless 要求，不从压缩后的 live 提供方字节推断。
+可信拉取请求与 master 推送会在各自选定的原生目标上运行第二项安装后 wheel 检查，并且只在预检与 live 测试步骤中把 `DEEPSEEK_API_KEY_EXTERNAL` 映射进去。密钥为空时预检失败，因此提供方测试不能通过自行 skip 产生假绿。该测试通过公开 SDK 访问 `https://api.deepseek.com`，要求模型通过当前平台 shell 写入内容精确的 sentinel 文件，再在同一 session 的第二个轮次中读取它，并校验外部文件行内容、最终响应、已完成的轮次结束原因、模型请求的工具调用，以及 session 日志存在且采用 Zstandard framing。解码后的记录内容与已完成轮次的持久性是由 restart 快照负责的确定性 keyless 要求，不从压缩后的 live 提供方字节推断。
 
 Fork 与 Dependabot 拉取请求永远不会获得仓库密钥。它们的原生 job 运行完整 keyless 路径并跳过两个带密钥的步骤；禁止使用 `pull_request_target`，因为它会让不可信代码带着密钥执行。
 
 ### 必需目标
 
-拉取请求的 `python-runtime` job 会针对 Linux x64、Linux arm64、macOS arm64、macOS x64 与 Windows x64 调用可复用构建器。其聚合结果仍是 `all checks passed` 的依赖项，因此任一原生载体失败、取消或缺失都会阻止必需判定通过。[Windows x64 运行时决策](../architecture/2026-08-23-python-sdk-windows-x64-runtime.zh.md)负责 Windows 目标及其 PowerShell 专属极简快照。
+拉取请求的 `python-runtime` job 针对 Linux x64 与 Windows x64 调用可复用构建器；master 推送根据[仅 master 平台策略](../process/2026-09-06-master-only-platform-ci.zh.md)选择 Linux arm64 与两种 macOS 架构。其聚合结果仍是 `all checks passed` 的依赖项，因此任一原生载体失败、取消或缺失都会阻止必需判定通过。[sdk-runtime README](../../../../python/sdk-runtime/README.zh.md) 负责 Windows 目标及其 PowerShell 专属极简快照。
 
 ## Existing decisions and supersession
 
-本决策取代已归档的[必需 Python 运行时拉取请求验证](../../archived/testing/2026-08-12-required-python-runtime-pull-request-ci.md)中的单目标拓扑，同时保留真实可执行文件、快照、wheel 包与干净安装必须在合并前相遇的要求。[Python SDK dsh profile 运行时](../architecture/2026-08-23-python-sdk-dsh-profile-runtime.zh.md)负责启动应用与自定义接口；[单文件 Python SDK 运行时 distribution](../architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.zh.md)继续负责 SEA 打包、原生 sidecar、wheel 包标签与发布产物。
+本决策取代已归档的[必需 Python 运行时拉取请求验证](../../archived/testing/2026-08-12-required-python-runtime-pull-request-ci.md)中的单目标拓扑，同时保留真实可执行文件、快照、wheel 包与干净安装必须在各选定目标的检查中相遇的要求。[docs/architecture.md](../../../../docs/architecture.zh.md) 负责启动应用与自定义接口；[单文件 Python SDK 运行时 distribution](../architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.zh.md)继续负责 SEA 打包、原生 sidecar、wheel 包标签与发布产物。
 
 ## Alternatives considered
 
@@ -48,4 +48,4 @@ Fork 与 Dependabot 拉取请求永远不会获得仓库密钥。它们的原生
 
 ## Consequences
 
-每个拉取请求都会承担五个原生可执行文件及 wheel 包构建，并运行确定性的安装后产物场景。可信的同仓库拉取请求还会在每个目标上承担一次双轮 DeepSeek 任务。相应地，必需结果描述 Python 用户实际安装的文件，在合并前证明每个已发布载体，并且不能通过导入 checkout 或静默跳过真实提供方而通过。
+每个拉取请求都会承担两个原生可执行文件及 wheel 包构建，并运行确定性的安装后产物场景。可信的同仓库拉取请求还会在每个目标上承担一次双轮 DeepSeek 任务。相应地，必需结果描述 Python 用户实际安装的文件，在合并前证明选定载体，并且不能通过导入 checkout 或静默跳过真实提供方而通过。

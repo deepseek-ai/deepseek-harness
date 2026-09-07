@@ -74,7 +74,7 @@ The deque stores entries in a circular array. Removing an entry clears that slot
 ## Further Exploration
 
 - [Utility package map](../README.md) — the other zero-dependency primitives shared across package groups.
-- [Linear stream queue decision](../../../.agents/notes/implemented/bug-fix/2026-08-28-linear-stream-queue-drain.md) — why production streams use this deque instead of array head removal.
+- [Linear stream queue decision](../../../.agents/notes/archived/bug-fix/2026-08-28-linear-stream-queue-drain.md) — why production streams use this deque instead of array head removal.
 
 -----
 

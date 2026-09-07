@@ -1,5 +1,5 @@
 ---
-description: "The spill storage service: how deployments and plugin authors save oversized tool text and get back a retrievable locator."
+description: "The spill storage service: save oversized tool text or captured session references and return a retrievable locator."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-spill` lets any plugin or tool save oversized text through `ctx.spillStore` and receive an opaque locator, the exact byte count, and retrieval guidance the model can act on. It defines what a spill backend does, not how it stores — a deployment mounts a backend such as `dsh-spill-local` for real persistence, and the `dsh-spill-policy` plugin decides when a tool result is too large. Choose it when a deployment must keep oversized tool output retrievable without flooding the model's context. The service owns storage only: no retention policy, no tool-result replacement, and no retrieval or search API. A real storage failure rejects loudly, so the caller decides how to degrade.
+`dsh-spill` lets any plugin or tool save oversized text through `ctx.spillStore` and receive an opaque locator, the exact byte count, and retrieval guidance the model can act on. It defines what a spill backend does, not how it stores — a deployment mounts a backend such as `dsh-spill-local` for real persistence, and the `dsh-spill-policy` plugin decides when a tool result is too large. Choose it when a deployment must keep oversized text retrievable without flooding the model's context. The service owns storage only: no retention policy, no tool-result replacement, and no retrieval or search API. A real storage failure rejects loudly, so the caller decides how to degrade.
 
 ## Table of Contents
 
@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-A composition that spills tool output mounts one spill backend — this package alone stores nothing — and the `dsh-spill-policy` plugin decides when to spill. Plugin and tool authors call `ctx.spillStore.saveText()` directly to persist text under the current session.
+A composition that saves spill artifacts mounts one backend — this package alone stores nothing. `dsh-spill-policy` decides when tool results spill; `dsh-session-reference` directly saves truncated reference transcripts without requiring that policy. Callers use `ctx.spillStore.saveText()` with an explicit owner; optional consumers discover the backend with `ctx.get("spillStore")`.
 
 ### When to choose it
 
-Choose spill storage when a deployment needs to keep oversized tool output retrievable after the model has only seen a bounded preview — for example a fetched page body the model may want to read or grep later. You do not need this package when no tool in the composition produces results large enough to matter, or when the deployment has no local filesystem the model's tools can read; a backend whose locator is meaningful in that environment is a prerequisite.
+Choose spill storage when a deployment needs to keep full text retrievable after the model sees a bounded preview, such as a fetched page body or a captured session-reference transcript. A backend whose locator and retrieval hint are usable in the deployment is a prerequisite; local filesystem access is not a service requirement.
 
 ### Smallest working composition
 
@@ -49,7 +49,7 @@ With a backend mounted, call `ctx.spillStore.saveText()` with the owning session
 ```text
 const ref = await ctx.spillStore.saveText({
   owner: { sessionId: 'session-1' },
-  source: { toolName: 'web_fetch', callId: 'call-1', label: 'result' },
+  source: { kind: 'tool', toolName: 'web_fetch', callId: 'call-1', label: 'result' },
   suggestedName: 'web_fetch.txt',
   content: fullText,
 })
@@ -59,7 +59,7 @@ The returned `SpillRef` carries three fields: `locator`, an opaque model-facing 
 
 ### Ownership and boundaries
 
-Storage is grouped by the owning session: forked sessions inherit existing locators from the seeded log without copying or re-owning them, and new spills after a fork use the child session id. `suggestedName` is only a hint — backends sanitize it to one safe segment and never trust it as a path. The service deliberately excludes what other packages own: retention and preview decisions (`dsh-output-retention`), when to spill (`dsh-spill-policy`), and retrieval or search (the backend's `retrievalHint` tells the model what to do with the locator).
+Storage is grouped by the owning session: forked sessions inherit existing locators from the seeded log without copying or re-owning them, and new spills after a fork use the child session id. A session-reference artifact belongs to the target session receiving the context, not the referenced source session. `suggestedName` is only a hint — backends sanitize it to one safe segment and never trust it as a path. Consumers own preview and spill decisions; the backend owns storage and artifact expiry.
 
 ### Failures and recovery
 
@@ -93,7 +93,7 @@ The package is built on one separation and a deliberate minimum:
 
 ### Data model
 
-`SaveTextSpill` (owner, source, suggestedName, content) is the request; `SpillRef` (locator, bytes, retrievalHint) is the result. `SpillLocator` is a branded string so consumers cannot treat it as a path without the backend's intent; `SpillOwner.sessionId` is the save-time storage namespace, and `SpillSource` records the producing tool, call id, and label for readable filenames — descriptive only, never access control.
+`SaveTextSpill` separates storage ownership from descriptive provenance. `SpillSource` accepts either the tool source `{ kind: "tool", toolName, callId, label }` or `{ kind: "session-reference", sessionId, label }`, whose id names the captured source session. Session references never fabricate tool call ids. Neither provenance nor the owner namespace grants read access. Consumers treat the returned locator as opaque and present it with its retrieval hint.
 
 ### Lifecycle
 
@@ -150,6 +150,6 @@ The seam has only `saveText`; a save-file or link/copy path for existing executo
 
 #### Future: non-local backends and cleanup
 
-Remote or database backends for ACP or remote environments, and a cleanup or retention policy for old spill files (likely tied to session cleanup), remain open. A predictable, world-readable spill root would let other local users read spilled tool output, which is why the shipped backend keeps files private.
+Remote or database backends remain open. The local backend applies its [startup-cleanup policy](../spill-local/README.md#startup-cleanup); the service defines no per-session cleanup or locator-refresh API.
 
 </details>

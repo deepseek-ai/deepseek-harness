@@ -9,7 +9,6 @@ import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SubagentRuntime from '@deepseek-ai/dsh-subagent'
 import * as SubagentFork from '@deepseek-ai/dsh-subagent-fork-in-process'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
@@ -62,7 +61,6 @@ async function setupWith(adapter: MockAdapter | GatedAdapter, park = true) {
   await ctx.plugin(JsonlSessionPersistence, { root })
   await ctx.plugin(TestSessionQuery)
   await ctx.plugin(AgentLoop, { agents: [] })
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
   await ctx.plugin(SubagentFork, { providerName: 'fork' })
@@ -221,7 +219,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: started.childId,
     })
     expect(delivered[0]?.message.content).toEqual([
-      { type: 'text', text: `Agent ${started.childId} sent a message:` },
+      { type: 'text', text: `Agent ${started.childId} sent a message: ` },
       { type: 'text', text: 'CHILD_FINDING' },
     ])
 
@@ -257,7 +255,7 @@ describe('dsh-tool-subagent-control', () => {
       senderSessionId: parent.id,
     })
     expect(followUp?.type === 'user/message' && followUp.data.content).toEqual([
-      { type: 'text', text: `Agent ${parent.id} sent a message:` },
+      { type: 'text', text: `Agent ${parent.id} sent a message: ` },
       { type: 'text', text: 'and then?' },
     ])
   })
@@ -288,7 +286,7 @@ describe('dsh-tool-subagent-control', () => {
       : [])
     expect(prompts).toEqual([
       'long work',
-      `Agent ${parent.id} sent a message:`,
+      `Agent ${parent.id} sent a message: `,
       'also consider Y',
     ])
   })
@@ -333,7 +331,6 @@ describe('dsh-tool-subagent-control', () => {
     const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
     await ctx.plugin(AgentLoop, { agents: [] })
-    await ctx.plugin(SessionProjectionRegistry)
     await ctx.plugin(SubagentRuntime)
     const fiber = await ctx.plugin(tool)
     expect(ctx.tools.schemas().some(schema => schema.name === 'send_message')).toBe(true)
@@ -411,9 +408,9 @@ describe('dsh-tool-subagent-control interrupt_agent', () => {
       : [])
     expect(prompts).toEqual([
       'long work',
-      `Agent ${parent.id} sent a message:`,
+      `Agent ${parent.id} sent a message: `,
       'parked follow-up',
-      `Agent ${parent.id} sent a message:`,
+      `Agent ${parent.id} sent a message: `,
       'wake up',
     ])
   })

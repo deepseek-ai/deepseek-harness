@@ -1,0 +1,28 @@
+{
+  "name": "@deepseek-ai/dsh-desktop-host",
+  "description": "Private upstream-Node host process for the Electron desktop application",
+  "version": "0.1.3-alpha.2",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "files": [
+    "lib/index.js",
+    "config/desktop.cordis.patch.yml"
+  ],
+  "dependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/dsh": "workspace:^",
+    "@deepseek-ai/dsh-api-gateway": "workspace:^",
+    "@deepseek-ai/dsh-app-boot": "workspace:^",
+    "@deepseek-ai/dsh-client-connection": "workspace:^",
+    "@deepseek-ai/dsh-client-modules": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
+    "@deepseek-ai/dsh-cmdline": "workspace:^",
+    "@deepseek-ai/dsh-host-directory-picker-native": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^",
+    "@deepseek-ai/dsh-launch-environment": "workspace:^",
+    "@deepseek-ai/dsh-web-frontend": "workspace:^"
+  }
+}

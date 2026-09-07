@@ -106,10 +106,8 @@ The parse path is one small family with two owners: `provideCmdline` freezes the
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these pages when the package-level contract is not enough. They move from the handoff mechanism to the apps that consume it and the decisions behind it.
+Read these pages when the package-level contract is not enough. They move from the handoff mechanism to the apps that consume it.
 
-- [App-owned command-line decision](../../../.agents/notes/implemented/architecture/2026-08-06-app-owned-command-line.md) — why apps own their flag family and how the handoff works.
-- [Command-line seam trim](../../../.agents/notes/implemented/architecture/2026-08-11-cmdline-seam-trim.md) — the seams reduced to existing interfaces.
 - [dsh-app-boot](../app-boot/README.md) — the boot sequence that provides these launcher values.
 - [dsh-web-app bundle](../../bundle/web-app/README.md) — an app that owns the Web flag family through this package.
 - [dsh-headless bundle](../../bundle/headless/README.md) — the one-shot runner that reads its task from the command line.

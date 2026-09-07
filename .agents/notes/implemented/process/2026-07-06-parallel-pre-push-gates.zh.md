@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-06-parallel-pre-push-gates.md) | 中文
 
-本记录中的本地钩子部分已由[快速本地 Git 钩子](2026-07-22-fast-local-git-hooks.zh.md) 取代。有界门禁调度器和包级 `publint` 并行机制仍用于 CI、`doc-sync` 和显式本地命令。调度器的快速失败选项记录在[门禁运行器快速失败](2026-08-27-gate-runner-fail-fast.zh.md)。
+本记录中的本地钩子部分已由[快速本地 Git 钩子](../../archived/process/2026-07-22-fast-local-git-hooks.md) 取代。有界门禁调度器和包级 `publint` 并行机制仍用于 CI、`doc-sync` 和显式本地命令。调度器的快速失败选项记录在[门禁运行器快速失败](../../archived/process/2026-08-27-gate-runner-fail-fast.md)。
 
 ## 问题
 

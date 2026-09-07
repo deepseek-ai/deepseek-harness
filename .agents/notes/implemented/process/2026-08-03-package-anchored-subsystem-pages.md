@@ -6,7 +6,7 @@ English | [中文](2026-08-03-package-anchored-subsystem-pages.zh.md)
 
 ## Problem
 
-The [subsystems catalog](2026-06-20-core-data-structures-catalog.md) scoped its front page by the spine-vs-seam rule: a type was "core" if the loop holds, derives, streams, or logs it on every turn. That rule selected types, not packages, so as the folder grew to forty-plus pages the front page became a cross-package grab-bag: LLM conversation vocabulary sat above the agent contracts, the creation/ownership vocabulary (`AgentHandle`, `CreateAgentOptions`, `ResumeAgentOptions`, `AgentFactory`) was documented nowhere in the folder because the generator exempted it to a package README, and a reader could not predict which page documents a type from where the type lives. Package-group READMEs meanwhile had no common shape — some carried sectioned tables, stray design essays, or trailing paragraphs that belonged on a subsystem page.
+The [subsystems catalog](../../archived/process/2026-06-20-core-data-structures-catalog.md) scoped its front page by the spine-vs-seam rule: a type was "core" if the loop holds, derives, streams, or logs it on every turn. That rule selected types, not packages, so as the folder grew to forty-plus pages the front page became a cross-package grab-bag: LLM conversation vocabulary sat above the agent contracts, the creation/ownership vocabulary (`AgentHandle`, `CreateAgentOptions`, `ResumeAgentOptions`, `AgentFactory`) was documented nowhere in the folder because the generator exempted it to a package README, and a reader could not predict which page documents a type from where the type lives. Package-group READMEs meanwhile had no common shape — some carried sectioned tables, stray design essays, or trailing paragraphs that belonged on a subsystem page.
 
 ## Decision
 
@@ -24,7 +24,7 @@ The [subsystems README](../../../../docs/subsystems/README.md) indexes every pag
 
 **Keep the spine-vs-subsystem scoping rule.** It answered "is this type core?" per type, which is why the front page accumulated types from four packages while missing half of `packages/core/agent`'s public API. Predictability by repository layout won.
 
-**A flat single-document catalog.** Already rejected in the [original catalog note](2026-06-20-core-data-structures-catalog.md); the growth to forty-one pages confirmed that verdict.
+**A flat single-document catalog.** Already rejected in the [original catalog note](../../archived/process/2026-06-20-core-data-structures-catalog.md); the growth to forty-one pages confirmed that verdict.
 
 **Document ownership vocabulary only in package READMEs (the exemption status quo).** This left `AgentHandle` and the create/resume options invisible to the folder that claims to be the type reference, and the generated `Types:` footers could not link them.
 
@@ -34,4 +34,4 @@ The [subsystems README](../../../../docs/subsystems/README.md) indexes every pag
 - Every package group makes its subsystem owner or justified absence reviewable, and `verify-subsystem-pages` rejects unclassified additions and stale exemptions.
 - Generated signature footers link the agent ownership vocabulary instead of silently exempting it.
 - `verify-type-equiv`'s 1:1 manifest keeps each paste single-homed; the duplicate `SessionEvent` paste is gone.
-- The [original catalog note](2026-06-20-core-data-structures-catalog.md) remains the owner of the `ts type-equiv` drift-gate mechanism; only its page-scoping rule is superseded here.
+- The [original catalog note](../../archived/process/2026-06-20-core-data-structures-catalog.md) remains the owner of the `ts type-equiv` drift-gate mechanism; only its page-scoping rule is superseded here.

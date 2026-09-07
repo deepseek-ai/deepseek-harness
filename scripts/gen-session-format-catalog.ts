@@ -3,21 +3,15 @@
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import type { DshSessionFormatMigrationManifest } from '@deepseek-ai/dsh-package-manifest'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'packages/session/session-format-catalog/src/generated.ts'
 
-/** One adjacent migration declaration read from a workspace manifest. */
-export interface SessionFormatMigrationManifest {
+/** Validated adjacent migration metadata with its resolved package import path. */
+export interface SessionFormatMigrationManifest extends Readonly<Omit<DshSessionFormatMigrationManifest, 'export'>> {
   readonly packageName: string
   readonly importPath: string
-  readonly from: number
-  readonly to: number
-  readonly migration: string
-  readonly sourceCodec: string
-  readonly targetCodec: string
-  readonly targetHeaderValidator: string
-  readonly targetRestorer: string
 }
 
 interface RawManifest {
@@ -78,7 +72,7 @@ export function collectSessionFormatMigrations(
     if (metadata === undefined) {
       throw new Error(`gen-session-format-catalog: ${rel} lacks dsh.sessionFormatMigration`)
     }
-    const allowed = new Set([
+    const allowed: ReadonlySet<string> = new Set<keyof DshSessionFormatMigrationManifest>([
       'from', 'to', 'export', 'migration', 'sourceCodec', 'targetCodec',
       'targetHeaderValidator', 'targetRestorer',
     ])
@@ -197,12 +191,15 @@ export function renderSessionFormatCatalog(
     'export const sessionFormatCatalog = createSessionFormatCatalog({',
     `  currentVersion: ${currentVersion},`,
     `  codecs: [${codecs.join(', ')}],`,
-    `  encodeCurrentArtifact: artifact => ${currentCodec}.encodeArtifact(artifact),`,
+    `  currentEncoder: ${currentCodec},`,
     `  migrations: [${declarations.map(item => item.migration).join(', ')}],`,
     '  restoreCurrent(artifact) {',
     `    const restored = ${restorer}(artifact, KNOWN_SESSION_EVENT_TYPES)`,
     '    validateInstalledCurrentSessionArtifact(restored)',
     '    return restored',
+    '  },',
+    '  restoreTransformedCurrent(artifact) {',
+    `    return ${restorer}(artifact, KNOWN_SESSION_EVENT_TYPES)`,
     '  },',
     '  restoreCurrentHeader(header) {',
     `    ${headerValidator}(header)`,

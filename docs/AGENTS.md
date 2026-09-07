@@ -72,4 +72,4 @@ Hunt these in any doc; [dsh-doc](../.agents/skills/dsh-doc/SKILL.md) runs this l
 
 ## Cross-reference with machine-checkable links, never free prose
 
-Link repository references with relative Markdown paths, never bare filenames or Agent Note numbers. `verify-md-links` rejects missing targets and dead `#fragment` anchors ([rationale](../.agents/notes/implemented/process/2026-06-18-markdown-cross-link-lint.md)).
+Link repository references with relative Markdown paths, never bare filenames or Agent Note numbers. `verify-md-links` rejects missing targets and dead `#fragment` anchors.

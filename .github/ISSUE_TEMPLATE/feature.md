@@ -1,20 +1,13 @@
 ---
 name: Feature
 about: 新增或有意改变可观察行为
-title: ''
-labels: ''
-assignees: ''
 type: Feature
 ---
 
-<!-- 标题写中文行动或结果句；外露正文不超过 50 单位。 -->
-一句话说明预期结果。
+## Motivation
 
-<details>
-<summary>验收与细节</summary>
+<!-- 说明当前问题、受影响的用户，以及为什么需要这项变化。 -->
 
-- 验收条件：
-- 用户或模型可见变化：
-- 测试证据：
+## Behavior
 
-</details>
+<!-- 说明预期的用户、模型或系统可观察行为。 -->

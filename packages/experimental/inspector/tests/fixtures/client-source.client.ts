@@ -35,6 +35,8 @@ interface ClientFixtureRequest {
     | 'refresh-tree'
     | 'remove-fiber'
     | 'set-global'
+    | 'set-ingest-paused'
+  readonly paused?: boolean
   readonly name?: string
   readonly value?: InspectorJsonValue
   readonly marker?: string
@@ -106,6 +108,13 @@ async function dispatch(message: ClientFixtureRequest): Promise<unknown> {
       return undefined
     case 'get-tree':
       return await service.cordis.getTree()
+    case 'set-ingest-paused': {
+      const socket = Reflect.get(source, 'socket') as WebSocket | undefined
+      if (socket === undefined) throw new Error('Inspector Client ingest socket is unavailable')
+      if (message.paused) socket.pause()
+      else socket.resume()
+      return undefined
+    }
     case 'disconnect': {
       const socket = Reflect.get(source, 'socket') as WebSocket | undefined
       socket?.terminate()

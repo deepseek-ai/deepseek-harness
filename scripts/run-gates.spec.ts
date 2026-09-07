@@ -141,6 +141,7 @@ describe('gate graph validation', () => {
     'ci-static',
     'ci-lint-contracts-ready',
     'ci-coverage',
+    'ci-bench',
     'ci-snapshot',
     'ci-artifacts',
     'ci-consumers',
@@ -547,6 +548,7 @@ describe('Node 24 lane ownership', () => {
     })
     expect(subject.find(item => item.id === 'built-bin-smoke')?.args).toEqual(
       expect.arrayContaining([
+        'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
         'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
         'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
         'packages/experimental/agent-team/tests/built-lib.e2e.ts',

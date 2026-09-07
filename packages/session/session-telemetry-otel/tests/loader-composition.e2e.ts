@@ -1,10 +1,7 @@
 /**
- * REAL-composition tier: boot the examples-owned telemetry Loader fixture as
- * a subprocess (per testing policy, through the same app/boot path a
- * deployment uses), run one mocked-model turn with a real bash round trip,
- * and assert against what the mock OTLP collector actually received on the
- * wire: ledger mirroring, the deployment-mounted redact rule applied to the
- * exported copy, ops markers, and the untouched canonical log.
+ * REAL-composition tier: explicit feedback through the shipped headless
+ * Loader profile with a mock model and real shell. The collector observes
+ * only the redacted authorized prefix; the canonical log keeps every event.
  */
 
 import { readFile, readdir } from 'node:fs/promises'
@@ -76,7 +73,21 @@ function eventTypes(captures: OtlpCapture[]): string[] {
 }
 
 describe('session-telemetry-otel through the production headless profile', () => {
-  it('exports redacted ledger records to the collector while the canonical log keeps the secret', async () => {
+  it('rejects FULL before any session can be uploaded', async () => {
+    const { stdout, stderr } = await runLoaderSmoke({
+      label: 'session-telemetry-otel rejected FULL loader smoke',
+      tempDirPrefix: 'telemetry-otel-full-e2e-',
+      binScript: driver,
+      libBinScript: driver,
+      configPath,
+      tsconfigPath: repoTsconfig,
+      env: { DSH_TELEMETRY_E2E_MODE: 'FULL' },
+      expectedExitCode: 1,
+    })
+    expect(stdout + stderr).toContain('FULL')
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('exports the redacted feedback-authorized prefix while the canonical log keeps the secret', async () => {
     let output!: FixtureOutput
     const { stderr } = await runLoaderSmoke({
       label: 'session-telemetry-otel loader smoke',
@@ -96,41 +107,46 @@ describe('session-telemetry-otel through the production headless profile', () =>
     for (const expected of ['turn/start', 'user/message', 'tool/call', 'tool/result', 'assistant/message', 'turn/end']) {
       expect(types, expected).toContain(expected)
     }
-    expect(records.some(({ scope }) => scope.endsWith('/ops'))).toBe(true)
+    const canonicalEvents = output.logContent.trim().split('\n')
+      .map(line => JSON.parse(line) as { type: string; seq?: number })
+      .filter(event => event.seq !== undefined)
+    const feedbackIndex = canonicalEvents.findIndex(event => event.type === 'feedback/record')
+    expect(feedbackIndex).toBeGreaterThanOrEqual(0)
+    expect(types).toEqual(canonicalEvents.slice(0, feedbackIndex + 1).map(event => event.type))
+    expect(types.at(-1)).toBe('feedback/record')
+    expect(records.some(({ scope }) => scope.endsWith('/ops'))).toBe(false)
 
-    // The deployment-mounted rule on the wire: the fixture credential never
-    // leaves the process, its surrounding prose does, and the placeholder
-    // marks the spot — the seam itself ships no rules.
     const wire = JSON.stringify(output.captures)
     expect(wire).not.toContain(FIXTURE_SECRET)
     expect(wire).toContain(FIXTURE_PLACEHOLDER)
     expect(wire).toContain('prove telemetry with key')
+    expect(wire).toContain('fixture feedback')
+    expect(wire).not.toContain('post-feedback private suffix')
+    expect(wire).not.toContain('private operational error')
+    expect(wire).not.toContain('telemetry.op')
 
-    // The canonical session log is never rewritten.
+    expect(output.logContent).toContain('post-feedback private suffix')
     expect(output.logContent).toContain(FIXTURE_SECRET)
     expect(output.logContent).not.toContain(FIXTURE_PLACEHOLDER)
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
-  it('exports only prefixes ending in feedback under feedback-only mode', async () => {
+  it('never captures ordinary turns or shutdown without new feedback', async () => {
     let output!: FixtureOutput
     const { stderr } = await runLoaderSmoke({
-      label: 'session-telemetry-otel feedback-only loader smoke',
-      tempDirPrefix: 'telemetry-otel-feedback-e2e-',
+      label: 'session-telemetry-otel no-feedback loader smoke',
+      tempDirPrefix: 'telemetry-otel-no-feedback-e2e-',
       binScript: driver,
       libBinScript: driver,
       configPath,
       tsconfigPath: repoTsconfig,
-      env: { DSH_TELEMETRY_E2E_MODE: 'FEEDBACK_ONLY' },
+      env: { DSH_TELEMETRY_E2E_FEEDBACK: 'none' },
       inspect: async (cwd) => { output = await readFixtureOutput(cwd) },
     })
     expect(stderr).not.toContain('UNHANDLED')
-
-    const wire = JSON.stringify(output.captures)
-    expect(eventTypes(output.captures)).toContain('feedback/record')
-    expect(wire).toContain('fixture feedback')
-    expect(wire).toContain('prove telemetry with key')
-    expect(wire).not.toContain('post-feedback private suffix')
+    expect(output.captures).toEqual([])
+    expect(output.logContent).toContain('prove telemetry with key')
     expect(output.logContent).toContain('post-feedback private suffix')
+    expect(output.logContent).not.toContain('feedback/record')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('keeps disabled feedback local and prints the stable warning', async () => {
@@ -148,7 +164,7 @@ describe('session-telemetry-otel through the production headless profile', () =>
 
     expect(output.captures).toEqual([])
     expect(output.logContent).toContain('fixture feedback')
-    expect(stdout.match(/session telemetry is DISABLED; nothing will be shared and this feedback remains local/)?.[0])
-      .toMatchInlineSnapshot('"session telemetry is DISABLED; nothing will be shared and this feedback remains local"')
+    expect(stdout.match(/OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry/)?.[0])
+      .toMatchInlineSnapshot('"OpenTelemetry session upload is DISABLED; this feedback is not uploaded through OpenTelemetry"')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 })

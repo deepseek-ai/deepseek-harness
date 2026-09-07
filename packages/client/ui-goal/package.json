@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-goal",
   "description": "Session goal surface: GoalBar docked above the composer, read from the goal session projection",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

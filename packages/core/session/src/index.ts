@@ -9,14 +9,13 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { isAbsolute } from 'node:path'
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { deepEqualJson, deepFreeze, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
+import { assertNever, deepFreeze, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { scopeOf, scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
-import { BlockAssembler, expandAssistantStream } from '@deepseek-ai/dsh-llm'
 import type { Message } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from './types.ts'
 import type { TypertLookup } from '@deepseek-ai/dsh-typert-protocol'
-import type { CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SessionId, SurfaceIntent, SurfaceEventType } from './types.ts'
+import type { CreateSessionOptions, EpochHeader, PrepareSessionOptions, RequestContext, SessionEvent, SessionEventMap, SessionEventType, SessionHeader, SessionId, SessionSeedEventState, SurfaceIntent, SurfaceEventType } from './types.ts'
 import { deriveEventMessage, SurfaceManager } from './surface.ts'
 import type { SessionSurface } from './surface.ts'
 import { foldRequestHeader } from './request-header.ts'
@@ -192,22 +191,6 @@ export function snapshotSessionEvent<T extends SessionEvent>(event: T): T {
   return adoptSessionEvent(structuredClone(event))
 }
 
-/** Deep-freeze one acyclic JSON tree without consuming the JavaScript call stack. */
-function freezeRestoredObject<T extends object>(value: T): T {
-  const pending: object[] = [value]
-  while (pending.length > 0) {
-    // The non-empty check proves an object remains to visit.
-    // oxlint-disable-next-line typescript/no-non-null-assertion
-    const current = pending.pop()!
-    Object.freeze(current)
-    for (const key in current) {
-      const child = (current as Record<string, unknown>)[key]
-      if (child !== null && typeof child === 'object') pending.push(child)
-    }
-  }
-  return value
-}
-
 /** Validate the fixed event envelope after one-pass JSON materialization. */
 function assertSessionEventEnvelope(value: Record<string, unknown>, index: number): asserts value is SessionEvent {
   const event = value
@@ -276,41 +259,29 @@ function assertCurrentLlmShape(event: Record<string, unknown>, index: number): v
   }
   const type = event['type']
   if (type === 'assistant/attempt') {
-    assertCurrentAssistantStream(record, type, index)
+    assertAssistantSettlementShape(record, type, index)
     return
   }
   if (type !== 'user/message' && type !== 'assistant/message'
     && type !== 'tool/result') return
   assertMessageEventShape(event, `seed ${type} at index ${index}`)
-  if (type === 'assistant/message') assertCurrentAssistantStream(record, type, index)
+  if (type === 'assistant/message') {
+    assertAssistantSettlementShape(record, type, index)
+  }
 }
 
-/** Validate the current settlement stream and its duplicated message fields at a durable restore boundary. */
-function assertCurrentAssistantStream(
+/** Validate fields used directly by restored Session lifecycle logic without replaying the embedded stream. */
+function assertAssistantSettlementShape(
   data: Record<string, unknown> | undefined,
   type: 'assistant/attempt' | 'assistant/message',
   index: number,
 ): void {
-  const assembler = new BlockAssembler()
-  let timed: ReturnType<typeof expandAssistantStream>
-  try {
-    timed = expandAssistantStream(data?.['stream'] as never)
-    for (const member of timed) assembler.push(member.chunk)
-  } catch (error: unknown) {
-    throw new Error(`seed ${type} at index ${index} has an invalid embedded stream`, { cause: error })
-  }
-  if (type === 'assistant/attempt' || timed.length === 0) return
-  const message = data?.['message'] as Record<string, unknown>
-  const content = data?.['interrupted'] === true ? assembler.interruptedBlocks() : assembler.blocks()
-  if (!deepEqualJson(message['content'], content)) {
-    throw new Error(`seed assistant/message at index ${index} content disagrees with its embedded stream`)
-  }
-  if (!deepEqualJson(data?.['usage'], assembler.usage)) {
-    throw new Error(`seed assistant/message at index ${index} usage disagrees with its embedded stream`)
-  }
-  const source = message['source'] as Record<string, unknown>
-  if (!deepEqualJson(source['replayState'], assembler.replayState)) {
-    throw new Error(`seed assistant/message at index ${index} replay state disagrees with its embedded stream`)
+  const turn = data?.['turn']
+  const step = data?.['step']
+  if (typeof turn !== 'number' || !Number.isSafeInteger(turn) || turn < 0 || Object.is(turn, -0)
+    || typeof step !== 'number' || !Number.isSafeInteger(step) || step < 0 || Object.is(step, -0)
+    || !Array.isArray(data?.['stream'])) {
+    throw new Error(`seed ${type} at index ${index} has invalid settlement fields`)
   }
 }
 
@@ -520,13 +491,16 @@ export class Session {
   }
 
   /**
-   * Restore a detached session by taking ownership of fresh persistence values.
-   * The storage format, event envelopes, sequence continuity, surface transitions,
-   * and header fields are validated before the restored objects are frozen.
+   * Restore a detached session by adopting an independently owned or deeply frozen seed.
+   * Runtime-required event fields, event envelopes, sequence continuity, surface
+   * transitions, and header fields are validated without copying or freezing events.
+   * Embedded Assistant streams remain opaque until a stream consumer or storage
+   * verifier reads them.
    * @param id - restored session identity.
-   * @param seed - fresh detached events whose ownership is transferred.
-   * @param header - fresh detached metadata whose ownership is transferred.
+   * @param seed - independently owned or deeply frozen events.
+   * @param header - independently owned storage metadata.
    * @param inheritedEventCount - exact fork-inherited prefix length decoded from storage.
+   * @param eventState - aliasing state carried from the operation that produced the seed.
    * @returns a restored detached session.
    */
   static fromRestore(
@@ -534,20 +508,25 @@ export class Session {
     seed: readonly SessionEvent[],
     header: SessionHeader,
     inheritedEventCount: SessionLogOffset,
+    eventState: SessionSeedEventState,
   ): Session {
-    return new Session(id, seed, header, 'restore', inheritedEventCount)
+    return new Session(
+      id,
+      seed,
+      header,
+      eventState,
+      inheritedEventCount,
+    )
   }
 
   private constructor(
     id: SessionId,
     seed?: readonly SessionEvent[],
     header?: SessionHeader,
-    mode: 'snapshot' | 'restore' = 'snapshot',
+    mode: 'snapshot' | SessionSeedEventState = 'snapshot',
     suppliedInheritedEventCount?: SessionLogOffset,
   ) {
-    const restoredHeader = mode === 'restore'
-      ? validateRestoredSessionHeader(id, header)
-      : undefined
+    const restoredHeader = mode === 'snapshot' ? undefined : validateRestoredSessionHeader(id, header)
     if (seed !== undefined) {
       // Validate the seed to the SAME invariants `append` enforces, so a
       // replay/fork (`ctx.sessions.create(id, { seed })`) cannot construct a
@@ -559,7 +538,7 @@ export class Session {
       for (const [index, source] of seed.entries()) {
         // The seed is a persistence/replay boundary: validate and detach the
         // complete event in one lossless-JSON pass.
-        const snapshot = mode === 'restore' ? source : snapshotJsonValue(source)
+        const snapshot = mode === 'snapshot' ? snapshotJsonValue(source) : source
         if (snapshot === undefined) {
           throw new Error(`seed event at index ${index} is not losslessly JSON-serializable`)
         }
@@ -575,7 +554,7 @@ export class Session {
         } catch (error: unknown) {
           throw new Error(`invalid seed event at index ${index}: ${error instanceof Error ? error.message : 'invalid surface metadata'}`)
         }
-        this.log.push(mode === 'restore' ? freezeRestoredObject(snapshot) : deepFreeze(snapshot))
+        this.log.push(mode === 'snapshot' ? deepFreeze(snapshot) : snapshot)
       }
     }
     this.firstLiveSeq = SessionLogOffset(this.log.length)
@@ -946,10 +925,9 @@ export class SessionStore extends Service {
    *
    * @param id - the session id; omitted, the store mints `session-<n>`.
    * @param options - seed events and/or creation metadata for the header. With
-   *   `seedSource: 'persistence'`, metadata and events must be fresh detached
-   *   graphs whose ownership transfers to this call: they are validated and
-   *   frozen in place through {@link Session.fromRestore}, so the caller must
-   *   retain no mutable aliases.
+   *   `eventState`, every seed event is either independently owned or any
+   *   shared value is deeply frozen; {@link Session.fromRestore} validates and
+   *   adopts those values without copying or freezing them.
    * @returns the constructed session, NOT yet in the store.
    * @throws if a session with `id` already exists, metadata is not a plain
    *   lossless-JSON record with valid scalar fields, or `meta.cwd` is a
@@ -964,8 +942,24 @@ export class SessionStore extends Service {
       sessionId = brandString<SessionId>(id)
     }
     if (this.store.has(sessionId)) throw new Error(`session "${sessionId}" already exists`)
-    if (options?.seedSource === 'persistence') {
-      return Session.fromRestore(sessionId, options.seed, options.meta, options.inheritedEventCount)
+    if (options !== undefined) {
+      const { eventState } = options
+      switch (eventState) {
+        case 'detached':
+        case 'shared-frozen':
+          return Session.fromRestore(
+            sessionId,
+            options.seed,
+            options.meta,
+            options.inheritedEventCount,
+            eventState,
+          )
+        case undefined:
+          break
+        /* v8 ignore next -- closed-union exhaustiveness guard */
+        default:
+          assertNever(eventState, 'SessionStore.prepare event state')
+      }
     }
     const seed = options?.seed
     const meta = options?.meta

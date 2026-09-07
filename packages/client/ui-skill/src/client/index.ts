@@ -4,7 +4,7 @@
  * projection's sessionId (sessions are always agent-backed; the host
  * resolves cwd from the session header). A pick lands the literal `/name `
  * text and the prompt ships the same literal (plain-text-reference decision;
- * see .agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md);
+ * see .agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md);
  * determinism
  * lives host-side — the pre-step boundary (`dsh-tool-skill`) recognizes a
  * leading `/name` naming a user-invocable skill and injects the rendered

@@ -25,7 +25,7 @@ async function harness(adapter: MockAdapter, toolOrder?: SystemPromptConfig['too
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, { persona: 'stable base', ...toolOrder !== undefined ? { toolOrder } : {} })
+  await ctx.plugin(SystemPrompt, { personaPrefix: 'stable base', ...toolOrder !== undefined ? { toolOrder } : {} })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })

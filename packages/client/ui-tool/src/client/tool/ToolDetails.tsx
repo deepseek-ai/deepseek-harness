@@ -16,7 +16,7 @@ import css from './ToolDetails.module.css'
 
 /**
  * Render the selected Tool call's structured output when its raw fields form a
- * supported root card, otherwise preserve the flattened result text.
+ * supported card, otherwise preserve the flattened result text.
  * @param props - selected call slice, workspace root, host home, and locale seat.
  * @returns the details output body.
  */

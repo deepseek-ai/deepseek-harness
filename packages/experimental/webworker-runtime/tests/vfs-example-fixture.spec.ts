@@ -117,6 +117,7 @@ describe('WebWorker preview VFS example', () => {
       events,
       meta,
       inheritedEventCount,
+      'detached',
     )).not.toThrow()
 
     const messages = events.filter(event =>
@@ -158,6 +159,7 @@ describe('WebWorker preview VFS example', () => {
         events,
         meta,
         inheritedEventCount,
+        'detached',
       )).not.toThrow()
     }
   })

@@ -83,7 +83,7 @@ function readHandle(stored: StoredLog): SessionHandle {
     header: stored.header,
     access: 'read',
     inheritedEventCount: 0,
-    read: async () => stored.events,
+    read: async () => ({ eventState: 'detached', events: structuredClone(stored.events) }),
     close: async () => {},
   } as unknown as SessionHandle
 }

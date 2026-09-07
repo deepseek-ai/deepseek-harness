@@ -2,7 +2,7 @@
 
 [English](adding-a-vendored-package.md) | 中文
 
-当 harness 需要引入另一个上游 Cordis 包（如 `@cordisjs/plugin-http`）时，应将其作为固定版本的源码 **vendor** 到 `vendor/` 下，而非作为 NPM 依赖添加——原因见[vendoring 决策](../../.agents/notes/implemented/process/2026-06-11-vendor-cordis-as-source.zh.md)。[vendor/README.md](../../vendor/README.md) 介绍如何*更新*已有的 vendored 包；本指南是添加**新** vendored 包的逐文件清单。（已对照现有 vendored 集合验证；如有偏差，请在此修正。）
+当 harness 需要引入另一个上游 Cordis 包（如 `@cordisjs/plugin-http`）时，应将其作为固定版本的源码 **vendor** 到 `vendor/` 下，而非作为 NPM 依赖添加。[vendor/README.md](../../vendor/README.md) 说明其原因并介绍如何*更新*已有的 vendored 包；本指南是添加**新** vendored 包的逐文件清单。（已对照现有 vendored 集合验证；如有偏差，请在此修正。）
 
 ## 1. 复制源码
 

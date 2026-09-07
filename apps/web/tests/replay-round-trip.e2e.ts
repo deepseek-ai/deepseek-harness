@@ -101,17 +101,22 @@ describe('web e2e: fresh round trip through the real assembly', () => {
     }
   }, 200_000)
 
-  it('records the Web surface, source checkout, and session cwd in the request header', async () => {
+  it('ends the request header with the source checkout, Web surface, and session cwd', async () => {
     if (settledSessionId === undefined) throw new Error('the drive turn did not publish a session id')
     const agent = scaffold.ctx.agents.get(settledSessionId)
     if (agent === undefined) throw new Error(`the settled Web agent ${settledSessionId} is no longer live`)
     const system = agent.session.requestHeader()?.system
     if (system === undefined) throw new Error('the settled Web request has no system prompt')
-    const prefix = system.split('\n\n').slice(0, 4).join('\n\n')
+    const paragraphs = system.split('\n\n')
+    expect(paragraphs.slice(0, 2)).toEqual([
+      'You are an AI agent powered by DeepSeek Harness.',
+      'You are a coding agent powered by the deepseek-v4-flash model.',
+    ])
+    const suffix = paragraphs.slice(-3).join('\n\n')
       .split(REPO_ROOT).join('{{sourceRoot}}')
       .split(join(scaffold.workspaceCwd, 'workspace')).join('{{cwd}}')
       .split(scaffold.baseUrl).join('{{webUrl}}')
-    await compareOrRefreshGolden(WEB_CONTEXT_EXPECTED, prefix, MODE)
+    await compareOrRefreshGolden(WEB_CONTEXT_EXPECTED, suffix, MODE)
   })
 
   it('exposes the assembled Web URL to the real bash tool', async () => {

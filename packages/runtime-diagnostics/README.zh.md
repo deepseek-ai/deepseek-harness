@@ -32,7 +32,6 @@ runtime-diagnostics 组为 DeepSeek Harness 组合提供运行时自检：一个
 ## 相关文档
 
 - [运行时不变式子系统](../../docs/subsystems/invariants.zh.md)——生成的服务参考：选择、installer 与配套入口约定。
-- [包自有不变式服务 Agent Note](../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.zh.md)——检查为何放在归属者旁边，以及注册表为何拥有选择与生命周期。
 - [不变式运行时约定 Agent Note](../../.agents/notes/implemented/architecture/2026-07-19-package-invariant-runtime-contracts.zh.md)——运行时不变量可以断言什么，以及强制配套入口接线的机械门禁。
 - [包约定](../AGENTS.md)——每个包都必须遵循的 `./invariant` 配套入口规则。
 

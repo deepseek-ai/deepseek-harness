@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-26-todo-parallel-in-progress.md
-2026-07-26-todo-parallel-in-progress.md: 244b75b3890553df2185b7d79b21057126b6371d
-2026-07-26-todo-parallel-in-progress.zh.md: c8d1c246bae38f9f4eb60db8f73edbf3a9278271

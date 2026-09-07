@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-`Agent.cancel(cause, { keepInbox: true })` 在触发 abort 信号后立即返回，但活动 driver 可能尚未收敛到 `idle`：LLM（大语言模型）流拆除、工具取消与 `turn/end` 落盘都会在 `abort()` 返回后异步展开。在该窗口内到达的唤醒 send 被放入 `next-turn`，而 `wakeDriver()` 对仍处于 `running` 的 phase 直接返回，退出的 driver 也从不重放这次唤醒——消息会一直停放到下一条唤醒 send 到达。被中止的 `runMaintenance` 活动周围也存在同样的唤醒丢失窗口。多个测试固化了停放行为（「等待下一次唤醒」）；该缺陷同时破坏了 `session.cancel` 与 `subagent.interrupt` 组合路径（issue #1838）。取消与发送约定由以下既有决策定义：[显式轮次取消](../architecture/2026-07-16-explicit-turn-cancellation.zh.md)与[统一发送](../architecture/2026-07-22-unified-send-and-coalesced-user-messages.zh.md)；生产环境中的 `keepInbox` 消费方是[Web 停止保留队列](2026-07-31-web-stop-preserves-queue.zh.md)。
+`Agent.cancel(cause, { keepInbox: true })` 在触发 abort 信号后立即返回，但活动 driver 可能尚未收敛到 `idle`：LLM（大语言模型）流拆除、工具取消与 `turn/end` 落盘都会在 `abort()` 返回后异步展开。在该窗口内到达的唤醒 send 被放入 `next-turn`，而 `wakeDriver()` 对仍处于 `running` 的 phase 直接返回，退出的 driver 也从不重放这次唤醒——消息会一直停放到下一条唤醒 send 到达。被中止的 `runMaintenance` 活动周围也存在同样的唤醒丢失窗口。多个测试固化了停放行为（「等待下一次唤醒」）；该缺陷同时破坏了 `session.cancel` 与 `subagent.interrupt` 组合路径（issue #1838）。取消与发送约定由以下既有决策定义：[显式轮次取消](../architecture/2026-07-16-explicit-turn-cancellation.zh.md)与[统一发送](../../archived/architecture/2026-07-22-unified-send-and-coalesced-user-messages.md)；生产环境中的 `keepInbox` 消费方是[Web 停止保留队列](../../archived/bug-fix/2026-07-31-web-stop-preserves-queue.md)。
 
 ## 决策
 

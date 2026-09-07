@@ -17,6 +17,7 @@ import type {
   SessionAccess,
   SessionHandle,
   SessionHandleReadOptions,
+  SessionHandleReadResult,
   SessionPersistenceListOptions,
   SessionPersistenceSnapshot,
 } from '@deepseek-ai/dsh-session-persistence'
@@ -86,7 +87,7 @@ class TestHandle implements SessionHandle {
     readonly access: SessionAccess,
   ) {}
 
-  async read(_offset = 0, _length?: number, options?: SessionHandleReadOptions): Promise<readonly SessionEvent[]> {
+  async read(_offset = 0, _length?: number, options?: SessionHandleReadOptions): Promise<SessionHandleReadResult> {
     TestPersistence.reads.set(this.id, (TestPersistence.reads.get(this.id) ?? 0) + 1)
     TestPersistence.readSignals.push(options?.signal)
     if (TestPersistence.failure !== undefined) throw TestPersistence.failure
@@ -94,7 +95,7 @@ class TestHandle implements SessionHandle {
     if (entry === undefined) throw new SessionPersistenceNotFoundError(this.id)
     await TestPersistence.readEffect?.(entry, options?.signal)
     TestPersistence.readEffect = undefined
-    return structuredClone(entry.events)
+    return { eventState: 'detached', events: structuredClone(entry.events) }
   }
 
   append(events: readonly SessionEvent[]): Promise<void> {
@@ -1814,7 +1815,7 @@ describe('SQLite schema, cancellation, and real persistence integration', () => 
     await search.dispose()
     const reader = await ctx.sessionPersistence.open(meta.id, 'read')
     expect(reader.header).toMatchObject(meta)
-    await expect(reader.read()).resolves.toMatchObject([{ seq: SessionSeq(0) }])
+    await expect(reader.read()).resolves.toMatchObject({ events: [{ seq: SessionSeq(0) }] })
     await reader.close()
     await persistence.dispose()
   })

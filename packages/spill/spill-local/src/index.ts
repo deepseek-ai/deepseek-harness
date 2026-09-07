@@ -1,6 +1,6 @@
 /**
  * `LocalSpillStore`: the host-filesystem implementation of the
- * `@deepseek-ai/dsh-spill` storage seam. Persists a tool's oversized text to a
+ * `@deepseek-ai/dsh-spill` storage seam. Persists oversized text to a
  * private, session-scoped file (see `./store.ts` for the traversal-safe naming
  * and exclusive owner-only write) and returns a path locator plus local
  * read/grep retrieval guidance. After activation it runs one best-effort

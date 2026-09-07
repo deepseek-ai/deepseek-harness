@@ -51,10 +51,10 @@ export interface IConversation {
    */
   send(text: string): Promise<void>
   /**
-   * Apply one edit, remove, or strict steer operation to a pending queue occurrence.
+   * Apply one edit, remove, or Steer operation to a pending queue occurrence.
    * @param itemId - agent-owned inbox occurrence identity.
    * @param action - requested queue operation.
-   * @returns completion; converged strict-steer races resolve, while other failures reject.
+   * @returns completion; converged QueueDock races resolve, while other failures reject.
    */
   updateQueue(itemId: QueueItemId, action: QueueAction): Promise<void>
   /**

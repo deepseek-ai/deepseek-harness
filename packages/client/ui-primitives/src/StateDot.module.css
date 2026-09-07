@@ -44,6 +44,12 @@
   color: var(--dsw-alias-state-error-primary);
 }
 
+/* Idle is the absence of activity, not a fourth outcome: it stays on the
+ * tertiary label color so it recedes beside the three outcome colors. */
+.dot[data-state='idle'] {
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* Pixel chase: each outer cell holds a discrete brightness step (flat keyframe
  * holds, no tweening — the retro feel), peaking when the chase hits it and
  * decaying over the next three cells. Phase offsets come from per-rect

@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-20-todo-event-ownership.md
-2026-07-20-todo-event-ownership.md: f3f7f872b24d8f20b6b9acb57710fae388c8b9d8
-2026-07-20-todo-event-ownership.zh.md: a05622dc39163c4f5b30a93190d9d56bb02cf29a

@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { sessionFormatV1ToV2 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
-import type { SessionFormatArtifact, SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
+import {
+  assertReleasedV2Header,
+  releasedV2SessionFormatCodec,
+  sessionFormatV1ToV2,
+} from '@deepseek-ai/dsh-session-format-v1-to-v2'
+import { assertReleasedV2Artifact } from '../src/testing/validation.ts'
+import {
+  releasedV0SessionFormatCodec,
+  releasedV1SessionFormatCodec,
+  sessionFormatV0ToV1,
+} from '@deepseek-ai/dsh-session-format-v0-to-v1'
+import type {
+  SessionFormatArtifact,
+  SessionFormatEvent,
+  SessionFormatEventRun,
+  SessionFormatHeader,
+  SessionFormatJsonObject,
+} from '@deepseek-ai/dsh-session-format'
+import { createSessionFormatCatalog, SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
 
 const message = {
   id: 'assistant-1',
@@ -20,6 +37,94 @@ function event(type: string, seq: number, time: number, data: SessionFormatEvent
   return { type, seq, time, data }
 }
 
+const catalog = createSessionFormatCatalog({
+  currentVersion: 2,
+  codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec],
+  currentEncoder: releasedV2SessionFormatCodec,
+  migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2],
+  restoreCurrent(artifact) {
+    assertReleasedV2Artifact(artifact)
+    return artifact
+  },
+  restoreTransformedCurrent(artifact) {
+    assertReleasedV2Artifact(artifact)
+    return artifact
+  },
+  restoreCurrentHeader(header) {
+    assertReleasedV2Header(header)
+    return header
+  },
+})
+
+function physicalV1Header(header: SessionFormatHeader, inheritedEventCount: number) {
+  return {
+    type: 'session',
+    version: 1,
+    id: header.id,
+    createdAt: header.createdAt,
+    ...(header.cwd === undefined ? {} : { cwd: header.cwd }),
+    ...(header.parentSession === undefined ? {} : { parentSession: header.parentSession }),
+    ...(header.isSeeded ? { seedLength: inheritedEventCount } : {}),
+    ...(header.origin === undefined ? {} : { origin: header.origin }),
+    delegationDepth: header.delegationDepth,
+    ...(header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset }),
+  }
+}
+
+function migrateV1ToV2(source: SessionFormatArtifact): SessionFormatArtifact {
+  const restore = catalog.createRestore(
+    physicalV1Header(source.header, source.inheritedEventCount),
+    { recovery: 'strict', validation: 'current' },
+  )
+  for (const row of source.events) restore.decodeRow(row)
+  return restore.finish()
+}
+
+function stageHarness(options: {
+  readonly id?: string
+  readonly sourceCut?: number
+  readonly seeded?: boolean
+  readonly sourceKind?: 'decoded' | 'transformed'
+} = {}) {
+  const sourceHeader: SessionFormatHeader = {
+    version: 1,
+    id: options.id ?? 'stage',
+    createdAt: 1,
+    ...(options.seeded === true ? { parentSession: 'parent' } : {}),
+    isSeeded: options.seeded === true,
+    delegationDepth: 0,
+  }
+  const stage = sessionFormatV1ToV2.createStage({
+    sourceHeader,
+    targetHeader: sessionFormatV1ToV2.migrateHeader(sourceHeader),
+    sourceInheritedEventCount: options.sourceCut ?? 0,
+    sourceKind: options.sourceKind ?? 'decoded',
+  })
+  return { stage, output: new SessionFormatEventCollector() }
+}
+
+function packedRun(options: {
+  readonly firstSeq: number
+  readonly eventCount?: number
+  readonly turn?: number
+  readonly step?: number
+  readonly lastTime: number
+  readonly stream: SessionFormatJsonObject
+}): SessionFormatEventRun {
+  const eventCount = options.eventCount ?? 1
+  return {
+    runType: 'released-assistant-chunks',
+    firstSeq: options.firstSeq,
+    eventCount,
+    turn: options.turn ?? 1,
+    step: options.step ?? 1,
+    lastSeq: options.firstSeq + eventCount - 1,
+    lastTime: options.lastTime,
+    stream: options.stream,
+    *expand() {},
+  } as SessionFormatEventRun
+}
+
 describe('sessionFormatV1ToV2', () => {
   it('migrates one exact released-v1 header without reading events', () => {
     const header = {
@@ -31,6 +136,346 @@ describe('sessionFormatV1ToV2', () => {
     }
     expect(sessionFormatV1ToV2.migrateHeader(header)).toStrictEqual({ ...header, version: 2 })
     expect(() => sessionFormatV1ToV2.migrateHeader({ ...header, version: 0 })).toThrow(/v1 header/)
+  })
+
+  it('validates a directly decoded v1 source before transforming it', () => {
+    const header = {
+      version: 1, id: 'source-validation', createdAt: 1, isSeeded: false, delegationDepth: 0,
+    }
+    expect(() => migrateV1ToV2({
+      header,
+      inheritedEventCount: 0,
+      events: [event('external/post-v1', 0, 1, null)],
+    })).toThrow(/unknown event type/)
+    expect(() => migrateV1ToV2({
+      header,
+      inheritedEventCount: 0,
+      events: [{
+        type: 'turn/start', seq: 0, time: 1, data: { turn: 1, postReleaseMember: true },
+      }],
+    })).toThrow(/unexpected member/)
+  })
+
+  it.each([
+    ['unexpected member', { ...event('assistant/chunk', 0, 1, {}), extra: true }, /unexpected member extra/],
+    ['missing member', { type: 'assistant/chunk', seq: 0, time: 1 }, /lacks required member data/],
+    ['invalid ignorable marker', { ...event('assistant/chunk', 0, 1, {}), ignorable: false }, /ignorable must be true/],
+  ])('refuses an Assistant chunk envelope with an %s', (_name, candidate, expected) => {
+    const { stage, output } = stageHarness({ sourceKind: 'transformed' })
+    expect(() => { stage.transformEvent(candidate as SessionFormatEvent, output) }).toThrow(expected)
+  })
+
+  it('checks own-generation delivery markers but accepts inherited markers', () => {
+    const marker = (sessionId: string): SessionFormatEvent => event(
+      'session-log-deepseek/delivery-accepted',
+      1,
+      2,
+      { sessionId, throughSeq: 0, sessionFormatVersion: 1 },
+    )
+    const own = stageHarness({ id: 'child' })
+    expect(() => { own.stage.transformEvent(marker('other'), own.output) }).toThrow(/wrong Session/)
+
+    const inherited = stageHarness({ id: 'child', seeded: true, sourceCut: 2 })
+    inherited.stage.transformEvent(marker('parent'), inherited.output)
+    expect(inherited.output.values).toEqual([{ ...marker('parent'), seq: 0 }])
+  })
+
+  it('expands generic runs and refuses a packed run split by the inherited cut', () => {
+    const generic = stageHarness({ sourceKind: 'transformed' })
+    const retained = event('feedback/record', 0, 1, { text: 'retained' })
+    generic.stage.transformRun({
+      runType: 'test-run', firstSeq: 0, eventCount: 1, *expand() { yield retained },
+    }, generic.output)
+    expect(generic.output.values).toEqual([retained])
+
+    const split = stageHarness({ seeded: true, sourceCut: 1 })
+    expect(() => { split.stage.transformRun(packedRun({
+      firstSeq: 0,
+      eventCount: 2,
+      lastTime: 2,
+      stream: { type: 'text-chunks', time0: 1, index: 0, dt: [1], texts: ['a', 'b'] },
+    }), split.output) }).toThrow(/splits one Assistant attempt/)
+  })
+
+  it('coalesces adjacent packed text and tool-call runs without expanding them', () => {
+    const text = stageHarness()
+    text.stage.transformRun(packedRun({
+      firstSeq: 0, lastTime: 1,
+      stream: { type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['a'] },
+    }), text.output)
+    text.stage.transformRun(packedRun({
+      firstSeq: 1, eventCount: 2, lastTime: 4,
+      stream: { type: 'text-chunks', time0: 3, index: 0, dt: [1], texts: ['b', 'c'] },
+    }), text.output)
+    text.stage.finish(text.output)
+    expect(text.output.values[0]?.data).toMatchObject({
+      stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [2, 1], texts: ['a', 'b', 'c'] }],
+    })
+
+    const tool = stageHarness()
+    tool.stage.transformEvent(event('assistant/chunk', 0, 1, {
+      turn: 1, step: 1,
+      chunk: { type: 'tool-call-delta', index: 0, id: 'call', name: 'read', argumentsDelta: '{' },
+    }), tool.output)
+    tool.stage.transformRun(packedRun({
+      firstSeq: 1, eventCount: 2, lastTime: 3,
+      stream: {
+        type: 'tool-call-chunks', time0: 2, index: 0,
+        id: 'call', name: 'read', dt: [1], args: ['}', '!'],
+      },
+    }), tool.output)
+    tool.stage.finish(tool.output)
+    expect(tool.output.values[0]?.data).toMatchObject({
+      stream: [{
+        type: 'tool-call-chunks', time0: 1, index: 0,
+        id: 'call', name: 'read', dt: [1, 1], args: ['{', '}', '!'],
+      }],
+    })
+  })
+
+  it('keeps incompatible packed records and attempt groups separate', () => {
+    const mismatched = [
+      { index: 1, id: 'call', name: 'read', time0: 2 },
+      { index: 0, id: 'other', name: 'read', time0: 2 },
+      { index: 0, id: 'call', name: 'write', time0: 2 },
+      { index: 0, id: 'call', name: 'read', time0: Number.MAX_SAFE_INTEGER },
+    ] as const
+    for (const [index, next] of mismatched.entries()) {
+      const current = stageHarness()
+      current.stage.transformRun(packedRun({
+        firstSeq: 0,
+        lastTime: index === mismatched.length - 1 ? Number.MIN_SAFE_INTEGER : 1,
+        stream: {
+          type: 'tool-call-chunks', time0: index === mismatched.length - 1 ? Number.MIN_SAFE_INTEGER : 1,
+          index: 0, id: 'call', name: 'read', dt: [], args: ['a'],
+        },
+      }), current.output)
+      current.stage.transformRun(packedRun({
+        firstSeq: 1,
+        lastTime: next.time0,
+        stream: {
+          type: 'tool-call-chunks', time0: next.time0,
+          index: next.index, id: next.id, name: next.name, dt: [], args: ['b'],
+        },
+      }), current.output)
+      current.stage.finish(current.output)
+      expect((current.output.values[0]?.data as { stream: unknown[] }).stream).toHaveLength(2)
+    }
+
+    const groups = stageHarness()
+    groups.stage.transformRun(packedRun({
+      firstSeq: 0, lastTime: 1,
+      stream: { type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['a'] },
+    }), groups.output)
+    groups.stage.transformRun(packedRun({
+      firstSeq: 1, step: 2, lastTime: 2,
+      stream: { type: 'text-chunks', time0: 2, index: 0, dt: [], texts: ['b'] },
+    }), groups.output)
+    groups.stage.finish(groups.output)
+    expect(groups.output.values).toHaveLength(2)
+  })
+
+  it('copies incompatible accumulator records behind an owned packed prefix', () => {
+    const text = stageHarness()
+    text.stage.transformRun(packedRun({
+      firstSeq: 0, lastTime: 1,
+      stream: { type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['packed'] },
+    }), text.output)
+    text.stage.transformEvent(event('assistant/chunk', 1, 2, {
+      turn: 1, step: 1, chunk: { type: 'text-delta', index: 1, text: 'a' },
+    }), text.output)
+    text.stage.transformEvent(event('assistant/chunk', 2, 3, {
+      turn: 1, step: 1, chunk: { type: 'text-delta', index: 1, text: 'b' },
+    }), text.output)
+    text.stage.transformRun(packedRun({
+      firstSeq: 3, lastTime: 4,
+      stream: { type: 'reasoning-chunks', time0: 4, index: 0, dt: [], texts: ['flush'] },
+    }), text.output)
+    text.stage.finish(text.output)
+    expect((text.output.values[0]?.data as { stream: unknown[] }).stream).toHaveLength(3)
+
+    const tool = stageHarness()
+    tool.stage.transformRun(packedRun({
+      firstSeq: 0, lastTime: 1,
+      stream: { type: 'tool-call-chunks', time0: 1, index: 0, id: 'call', dt: [], args: ['a'] },
+    }), tool.output)
+    tool.stage.transformEvent(event('assistant/chunk', 1, 2, {
+      turn: 1, step: 1,
+      chunk: { type: 'tool-call-delta', index: 0, id: 'other', argumentsDelta: 'b' },
+    }), tool.output)
+    tool.stage.transformRun(packedRun({
+      firstSeq: 2, lastTime: 3,
+      stream: { type: 'text-chunks', time0: 3, index: 0, dt: [], texts: ['flush'] },
+    }), tool.output)
+    tool.stage.finish(tool.output)
+    expect((tool.output.values[0]?.data as { stream: unknown[] }).stream).toHaveLength(3)
+  })
+
+  it('separates a terminal packed successor and a message from another attempt', () => {
+    const terminal = stageHarness()
+    terminal.stage.transformEvent(event('assistant/chunk', 0, 1, {
+      turn: 1, step: 1, chunk: { type: 'finish', reason: { kind: 'stop' } },
+    }), terminal.output)
+    terminal.stage.transformRun(packedRun({
+      firstSeq: 1, lastTime: 2,
+      stream: { type: 'text-chunks', time0: 2, index: 0, dt: [], texts: ['next'] },
+    }), terminal.output)
+    terminal.stage.finish(terminal.output)
+    expect(terminal.output.values).toHaveLength(2)
+
+    const messageMismatch = stageHarness()
+    messageMismatch.stage.transformEvent(event('assistant/chunk', 0, 1, {
+      turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'partial' },
+    }), messageMismatch.output)
+    messageMismatch.stage.transformEvent({
+      ...event('assistant/message', 1, 2, { turn: 2, step: 1, message }),
+      surfaceOp: 'append',
+    }, messageMismatch.output)
+    expect(messageMismatch.output.values).toHaveLength(2)
+  })
+
+  it('settles incremental attempts and rejects ambiguous streamed input', () => {
+    const header = {
+      version: 1, id: 'streaming', createdAt: 1, isSeeded: false, delegationDepth: 0,
+    }
+    const chunk = (seq: number, value: string | undefined, turn = 1): SessionFormatEvent => event(
+      'assistant/chunk',
+      seq,
+      seq + 1,
+      {
+        turn,
+        step: 1,
+        chunk: value === undefined
+          ? { type: 'finish', reason: { kind: 'stop' } }
+          : { type: 'text-delta', index: 0, text: value },
+      },
+    )
+    const assistant = (
+      seq: number,
+      turn: number,
+      sourceEventSeqs?: readonly number[],
+    ): SessionFormatEvent => ({
+      ...event('assistant/message', seq, seq + 1, { turn, step: 1, message }),
+      ...(sourceEventSeqs === undefined ? {} : { sourceEventSeqs }),
+      surfaceOp: 'append',
+    })
+
+    const restarted = migrateV1ToV2({
+      header,
+      inheritedEventCount: 0,
+      events: [
+        event('turn/start', 0, 1, { turn: 1 }),
+        event('step/start', 1, 2, { turn: 1, step: 1 }),
+        chunk(2, 'first'),
+        chunk(3, undefined),
+        chunk(4, 'second'),
+        event('step/end', 5, 6, { turn: 1, step: 1 }),
+        event('turn/end', 6, 7, { turn: 1, reason: { kind: 'completed' } }),
+      ],
+    })
+    expect(restarted.events.filter(candidate => candidate.type === 'assistant/attempt')).toHaveLength(2)
+
+    expect(() => migrateV1ToV2({
+      header,
+      inheritedEventCount: 0,
+      events: [chunk(0, 'partial'), assistant(1, 1)],
+    })).toThrow(/does not cite/)
+
+    expect(() => migrateV1ToV2({
+      header,
+      inheritedEventCount: 0,
+      events: [chunk(0, 'partial'), assistant(1, 1, [1])],
+    })).toThrow(/complete ordered attempt/)
+    expect(() => migrateV1ToV2({
+      header,
+      inheritedEventCount: 0,
+      events: [event('external/unknown', 0, 1, null)],
+    })).toThrow(/unknown event type/)
+
+    const seededHeader = { ...header, parentSession: 'parent', isSeeded: true }
+    expect(migrateV1ToV2({ header: seededHeader, inheritedEventCount: 0, events: [] }).events).toEqual([{
+      type: 'session/end-seed', seq: 0, time: 1, data: { inherited: true },
+    }])
+    expect(migrateV1ToV2({
+      header: seededHeader,
+      inheritedEventCount: 0,
+      events: [event('turn/start', 0, 2, { turn: 1 })],
+    }).events[0]).toEqual({
+      type: 'session/end-seed', seq: 0, time: 2, data: { inherited: true },
+    })
+
+    expect(() => migrateV1ToV2({
+      header: seededHeader,
+      inheritedEventCount: 1,
+      events: [chunk(0, 'partial'), assistant(1, 1, [0])],
+    })).toThrow(/splits one Assistant attempt/)
+  })
+
+  it('splits a legacy goal mutation from its preserved model-visible message', () => {
+    const change = {
+      kind: 'goal/change', version: 1, operation: 'create',
+      goal: { id: 'goal-1', revision: 1, objective: 'finish', phase: 'active', maxGoalRounds: 2 },
+      roundsStarted: 0, createdAt: 1, updatedAt: 1,
+    }
+    const payload = {
+      goal: change.goal,
+      roundsStarted: change.roundsStarted,
+      createdAt: change.createdAt,
+      updatedAt: change.updatedAt,
+    }
+    const source: SessionFormatArtifact = {
+      header: { version: 1, id: 'legacy-goal', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0,
+      events: [
+        {
+          ...event('user/message', 0, 1, {
+            id: 'goal-message', role: 'user',
+            content: [{ type: 'text', text: `<goal_state>${JSON.stringify(payload)}</goal_state>` }],
+            source: { kind: 'goal', goalId: 'goal-1', revision: 1, round: 0, change },
+          }),
+          surfaceOp: 'append',
+        },
+      ],
+    }
+
+    expect(migrateV1ToV2(source).events).toMatchObject([
+      { type: 'goal/change', seq: 0, data: change },
+      { type: 'user/message', seq: 1, data: { source: { kind: 'plugin', plugin: 'goal' } } },
+    ])
+  })
+
+  it('closes the prior turn for the bounded legacy next-turn resume pattern', () => {
+    const source: SessionFormatArtifact = {
+      header: { version: 1, id: 'legacy-turn', createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0,
+      events: [
+        event('turn/start', 0, 1, { turn: 1 }),
+        event('step/start', 1, 2, { turn: 1, step: 1 }),
+        event('step/end', 2, 3, { turn: 1, step: 1 }),
+        event('agent/inbox/spliced', 3, 4, {
+          target: 'next-turn', start: 0, inserted: [userMessage],
+        }),
+        event('turn/start', 4, 5, { turn: 2 }),
+        event('turn/end', 5, 6, { turn: 2, reason: { kind: 'completed' } }),
+      ],
+    }
+
+    const migrated = migrateV1ToV2(source)
+    expect(migrated.events.map(candidate => candidate.type)).toEqual([
+      'turn/start', 'step/start', 'step/end', 'agent/inbox/spliced',
+      'turn/end', 'turn/start', 'turn/end',
+    ])
+    expect(migrated.events[4]).toMatchObject({
+      data: { turn: 1, reason: { kind: 'interrupted' } },
+    })
+
+    const invalid = {
+      ...source,
+      events: source.events.map(candidate => candidate.seq === 3
+        ? event('agent/inbox/spliced', 3, 4, { target: 'next-turn', start: 0, inserted: [] })
+        : candidate),
+    }
+    expect(() => migrateV1ToV2(invalid)).toThrow(/turn\/start 2/)
   })
 
   it('embeds an interleaved successful stream and densely remaps survivors', () => {
@@ -73,7 +518,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    expect(sessionFormatV1ToV2.migrate(source)).toStrictEqual({
+    expect(migrateV1ToV2(source)).toStrictEqual({
       header: { ...source.header, version: 2 },
       inheritedEventCount: 0,
       events: [
@@ -133,7 +578,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    expect(sessionFormatV1ToV2.migrate(source)).toStrictEqual({
+    expect(migrateV1ToV2(source)).toStrictEqual({
       header: { ...source.header, version: 2 },
       inheritedEventCount: 0,
       events: [
@@ -203,7 +648,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    const migrated = sessionFormatV1ToV2.migrate(source)
+    const migrated = migrateV1ToV2(source)
     expect(migrated.events.filter(event => event.type.startsWith('assistant/'))).toStrictEqual([
       event('assistant/attempt', 3, 110, {
         turn: 1,
@@ -260,7 +705,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    const migrated = sessionFormatV1ToV2.migrate(source)
+    const migrated = migrateV1ToV2(source)
     expect(migrated.inheritedEventCount).toBe(5)
     expect(migrated.events[5]).toStrictEqual({
       type: 'session/end-seed',
@@ -284,7 +729,7 @@ describe('sessionFormatV1ToV2', () => {
       events: [],
     }
 
-    expect(sessionFormatV1ToV2.migrate(source)).toStrictEqual({
+    expect(migrateV1ToV2(source)).toStrictEqual({
       header: { ...source.header, version: 2 },
       inheritedEventCount: 0,
       events: [{
@@ -305,7 +750,7 @@ describe('sessionFormatV1ToV2', () => {
       inheritedEventCount: 1,
       events: [event('feedback/record', 0, 9, { text: 'inherited' })],
     }
-    expect(sessionFormatV1ToV2.migrate(source)).toMatchObject({
+    expect(migrateV1ToV2(source)).toMatchObject({
       inheritedEventCount: 1,
       events: [
         { type: 'feedback/record', seq: 0 },
@@ -351,7 +796,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    expect(() => sessionFormatV1ToV2.migrate(source)).toThrow(/message content disagrees with its embedded stream/)
+    expect(() => migrateV1ToV2(source)).toThrow(/message content disagrees with its embedded stream/)
   })
 
   it('refuses an undeclared reference into the last consumed chunk of a failed attempt', () => {
@@ -391,7 +836,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    expect(() => sessionFormatV1ToV2.migrate(source)).toThrow(
+    expect(() => migrateV1ToV2(source)).toThrow(
       /command\/done 7 sourceEventSeq targets consumed assistant\/chunk 3/,
     )
   })
@@ -412,7 +857,7 @@ describe('sessionFormatV1ToV2', () => {
       }],
     }
 
-    expect(() => sessionFormatV1ToV2.migrate(source)).toThrow(
+    expect(() => migrateV1ToV2(source)).toThrow(
       /format v1 contains unknown event type "external\/info" at seq 0/,
     )
   })
@@ -438,7 +883,7 @@ describe('sessionFormatV1ToV2', () => {
           event('turn/end', 4, 5, { turn: 1, reason: { kind: 'completed' } }),
         ],
       }
-      const migrated = sessionFormatV1ToV2.migrate(source)
+      const migrated = migrateV1ToV2(source)
       expect(migrated.events[2]).toMatchObject({
         type: 'assistant/message', data: { stream: [] }, surfaceOp: 'append',
       })
@@ -470,9 +915,51 @@ describe('sessionFormatV1ToV2', () => {
         event('turn/end', 6, 7, { turn: 1, reason: { kind: 'completed' } }),
       ],
     })
-    expect(() => sessionFormatV1ToV2.migrate(build(undefined))).toThrow(/does not cite/)
-    expect(() => sessionFormatV1ToV2.migrate(build([2]))).toThrow(/complete ordered attempt/)
-    expect(() => sessionFormatV1ToV2.migrate(build([3, 2]))).toThrow(/complete ordered attempt/)
+    expect(() => migrateV1ToV2(build(undefined))).toThrow(/does not cite/)
+    expect(() => migrateV1ToV2(build([2]))).toThrow(/complete ordered attempt/)
+    expect(() => migrateV1ToV2(build([3, 2]))).toThrow(/complete ordered attempt/)
+  })
+
+  it.each([
+    ['a message after its attempt step has closed', [
+      event('turn/start', 0, 1, { turn: 1 }),
+      event('step/start', 1, 2, { turn: 1, step: 1 }),
+      event('assistant/chunk', 2, 3, {
+        turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'hello' },
+      }),
+      event('assistant/chunk', 3, 4, {
+        turn: 1, step: 1, chunk: { type: 'finish', reason: { kind: 'stop' } },
+      }),
+      event('step/end', 4, 5, { turn: 1, step: 1 }),
+      { ...event('assistant/message', 5, 6, { turn: 1, step: 1, message }), surfaceOp: 'append' },
+      event('turn/end', 6, 7, { turn: 1, reason: { kind: 'completed' } }),
+    ]],
+    ['a message that cites a different pending attempt', [
+      event('turn/start', 0, 1, { turn: 1 }),
+      event('step/start', 1, 2, { turn: 1, step: 1 }),
+      event('assistant/chunk', 2, 3, {
+        turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'hello' },
+      }),
+      event('assistant/chunk', 3, 4, {
+        turn: 1, step: 1, chunk: { type: 'finish', reason: { kind: 'stop' } },
+      }),
+      {
+        ...event('assistant/message', 4, 5, { turn: 1, step: 2, message }),
+        sourceEventSeqs: [2, 3],
+        surfaceOp: 'append',
+      },
+      event('step/end', 5, 6, { turn: 1, step: 1 }),
+      event('turn/end', 6, 7, { turn: 1, reason: { kind: 'completed' } }),
+    ]],
+  ] as const)('rejects %s during complete target validation', (_name, events) => {
+    expect(() => migrateV1ToV2({
+      header: {
+        version: 1, id: 'v1-final-validation', createdAt: 1,
+        isSeeded: false, delegationDepth: 0,
+      },
+      inheritedEventCount: 0,
+      events,
+    })).toThrow(/does not match an open turn and step/)
   })
 
   it('refuses a lineage cut between members of one interleaved stream', () => {
@@ -501,7 +988,7 @@ describe('sessionFormatV1ToV2', () => {
         event('turn/end', 7, 8, { turn: 1, reason: { kind: 'completed' } }),
       ],
     }
-    expect(() => sessionFormatV1ToV2.migrate(source)).toThrow(/cut 3 splits one Assistant attempt/)
+    expect(() => migrateV1ToV2(source)).toThrow(/cut 3 splits one Assistant attempt/)
   })
 
   it('refuses a lineage cut between a complete stream and its committed message', () => {
@@ -530,7 +1017,7 @@ describe('sessionFormatV1ToV2', () => {
         event('turn/end', 7, 8, { turn: 1, reason: { kind: 'completed' } }),
       ],
     }
-    expect(() => sessionFormatV1ToV2.migrate(source)).toThrow(/cut 4 splits one Assistant attempt/)
+    expect(() => migrateV1ToV2(source)).toThrow(/cut 4 splits one Assistant attempt/)
   })
 
   it('keeps referenced-session generation provenance frozen', () => {
@@ -565,7 +1052,7 @@ describe('sessionFormatV1ToV2', () => {
       events: [{ ...event('user/message', 0, 1, reference), surfaceOp: 'append' }],
     }
 
-    const migrated = sessionFormatV1ToV2.migrate(source)
+    const migrated = migrateV1ToV2(source)
     expect(migrated.events[0]?.data).toStrictEqual(reference)
   })
 
@@ -634,7 +1121,7 @@ describe('sessionFormatV1ToV2', () => {
         event('turn/end', 15, 16, { turn: 1, reason: { kind: 'completed' } }),
       ],
     }
-    const migrated = sessionFormatV1ToV2.migrate(source)
+    const migrated = migrateV1ToV2(source)
     expect(migrated.events.find(event => event.type === 'compaction/prune')?.data).toMatchObject({
       shadowedRange: { start: 2, end: 2 }, shadowedSeqs: [2],
     })
@@ -687,7 +1174,7 @@ describe('sessionFormatV1ToV2', () => {
       ],
     }
 
-    const migrated = sessionFormatV1ToV2.migrate(source)
+    const migrated = migrateV1ToV2(source)
     const titleRequest = migrated.events.find(event => event.type === 'session/title-llm-request')
 
     expect(titleRequest?.data).toMatchObject({
@@ -728,7 +1215,7 @@ describe('sessionFormatV1ToV2', () => {
         event('turn/end', 10, 11, { turn: 2, reason: { kind: 'completed' } }),
       ],
     }
-    expect(sessionFormatV1ToV2.migrate(source).events[3]?.data).toMatchObject({
+    expect(migrateV1ToV2(source).events[3]?.data).toMatchObject({
       shadowedRange: { start: 1, end: 1 }, shadowedSeqs: [1],
     })
   })
@@ -758,7 +1245,7 @@ describe('sessionFormatV1ToV2', () => {
         event('turn/end', 9, 10, { turn: 2, reason: { kind: 'error', error: failure } }),
       ],
     }
-    expect(sessionFormatV1ToV2.migrate(source).events.filter(event => event.type === 'assistant/attempt'))
+    expect(migrateV1ToV2(source).events.filter(event => event.type === 'assistant/attempt'))
       .toHaveLength(2)
   })
 })

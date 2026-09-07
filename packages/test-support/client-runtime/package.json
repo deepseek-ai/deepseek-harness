@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-test-runtime",
   "description": "jsdom slot test runtime: real Cordis Context + SlotRegistry + UI renderer with test-owned session/workspace doubles for feature specs",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

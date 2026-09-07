@@ -8,7 +8,7 @@ English | [中文](2026-07-08-tool-output-spill-files.zh.md)
 
 Tool outputs need bounded model-facing previews, but some oversized results are still useful later. A fetched page body or a verbose tool response should not consume the next model request in full, but the model should be able to inspect the complete formatted result later with existing file-reading tools.
 
-Before this change the behavior was uneven. `dsh-bash-local` already writes complete stdout/stderr streams to private temp spill files when its in-memory tail overflows, but ordinary text tool results were returned inline unless the tool hand-rolled its own cap. The [tool result retention library](2026-07-06-tool-result-retention-library.md) owns preview mechanics, but it does not own storage or an execution-pipeline policy that applies those mechanics to final tool results.
+Before this change the behavior was uneven. `dsh-bash-local` already writes complete stdout/stderr streams to private temp spill files when its in-memory tail overflows, but ordinary text tool results were returned inline unless the tool hand-rolled its own cap. The [tool result retention library](../../archived/architecture/2026-07-06-tool-result-retention-library.md) owns preview mechanics, but it does not own storage or an execution-pipeline policy that applies those mechanics to final tool results.
 
 The shape matches the timeout policy design: a tool author declares a canonical value plus Native renderer, and a policy plugin enforces the deployment's default context budget on rendered content. Tool-specific early spill remains possible for provider acquisition bounds; tool-owned presentation spill may retain a complete acquired canonical value while replacing only presentation. The [canonical tool-output contract](2026-07-20-canonical-tool-output-contract.md) owns that split.
 
@@ -22,7 +22,7 @@ A thin spill storage seam plus a default spill policy plugin, in a new `packages
 | `@deepseek-ai/dsh-spill-local` | Local backend: private, session-scoped file storage on the host filesystem. |
 | `@deepseek-ai/dsh-spill-policy` | Tool-result policy plugin: wraps final text results after dispatch and replaces oversized results with a retained preview plus a spill locator. |
 
-There is no dedicated model-facing Consumer package. The Consumer is the existing `ctx.tools` execution pipeline: `dsh-spill-policy` consumes final tool results through the `tools/post-execute` waterfall, and the model follows the backend-supplied retrieval hint for the returned locator.
+The tool-result Consumer is `dsh-spill-policy`, which consumes final tool results through the `tools/post-execute` waterfall. The model follows the backend-supplied retrieval hint for the returned locator. [Session-reference spill reuse](../bug-fix/2026-09-05-session-reference-spill-reuse.md) adds a direct storage consumer with separate preview, provenance, and failure semantics; it does not change the tool-result policy.
 
 ### Spill seam
 
@@ -33,9 +33,14 @@ interface SpillStore {
   saveText(input: SaveTextSpill): Promise<SpillRef>
 }
 
-interface SpillSource {
+type SpillSource = {
+  kind: 'tool'
   toolName: string
   callId: ToolCallId
+  label: string
+} | {
+  kind: 'session-reference'
+  sessionId: SessionId
   label: string
 }
 
@@ -57,7 +62,7 @@ interface SpillRef {
 
 `SpillLocator` is a [branded](../../../../packages/util/brand) model-facing handle returned by the backend. The local backend renders it as a filesystem path; a remote or database backend can render a URI, key, or command token. Consumers treat it as opaque and render it with `retrievalHint` instead of assuming `read` is always the right retrieval mechanism. `SpillOwner.sessionId` is the save-time storage namespace: forked sessions inherit existing spill locators from the seeded log without copying or re-owning them, and new spills after the fork use the child session id. A retention-period cleanup may expire old locators with other old session artifacts; the spill seam does not define a per-session cleanup policy.
 
-`dsh-spill-local` owns storage details: session-scoped directory selection, safe names, path-traversal protection, the write, local artifact lifetime, and returning `{ locator, bytes, retrievalHint }`. It does not own tool-result replacement, model-facing preview policy, search, file inspection, or a seam-wide/per-session retention policy. Files land at `<root>/session-<hash>/<random>-<safeName>`, where `root` is a configured path or a lazily-created private (0700) per-process temp dir, the session subdir is a short `sha256(sessionId)` prefix, and the leaf is a random hex prefix plus the caller's `suggestedName` sanitized to one path segment (mirrors the JSONL backend's `encodeSegment`). The write is `open(path, 'wx', 0o600)` — exclusive and owner-only, so a planted symlink cannot redirect it. The locator is the path, and the retrieval hint tells the model it can use `read` or `grep` on that path. Its one-shot startup cleanup applies the backend-specific artifact lifetime described in the [local spill cleanup note](./2026-07-17-local-spill-startup-cleanup.md).
+`dsh-spill-local` owns storage details: session-scoped directory selection, safe names, path-traversal protection, the write, local artifact lifetime, and returning `{ locator, bytes, retrievalHint }`. It does not own tool-result replacement, model-facing preview policy, search, file inspection, or a seam-wide/per-session retention policy. Files land at `<root>/session-<hash>/<random>-<safeName>`, where `root` is a configured path or a lazily-created private (0700) per-process temp dir, the session subdir is a short `sha256(sessionId)` prefix, and the leaf is a random hex prefix plus the caller's `suggestedName` sanitized to one path segment (mirrors the JSONL backend's `encodeSegment`). The write is `open(path, 'wx', 0o600)` — exclusive and owner-only, so a planted symlink cannot redirect it. The locator is the path, and the retrieval hint tells the model it can use `read` or `grep` on that path. Its one-shot startup cleanup applies the backend-specific artifact lifetime described in the [local spill cleanup note](../../archived/architecture/2026-07-17-local-spill-startup-cleanup.md).
 
 ### Spill policy
 
@@ -161,7 +166,7 @@ Those cases can consume `ctx.spillStore` directly in later work. They are not pa
 - Per-tool opt-out or per-tool policy declarations if the built-in `read` skip is insufficient.
 - Remote or database storage backends for ACP or remote environments where a local path is not meaningful.
 
-Cleanup shipped for the local backend as a one-shot startup sweep, not tied to session deletion — see the [startup-cleanup Agent Note](./2026-07-17-local-spill-startup-cleanup.md). The seam still defines no per-session cleanup policy; retention is a backend concern.
+Cleanup shipped for the local backend as a one-shot startup sweep, not tied to session deletion — see the [startup-cleanup Agent Note](../../archived/architecture/2026-07-17-local-spill-startup-cleanup.md). The seam still defines no per-session cleanup policy; retention is a backend concern.
 
 ## Testing
 

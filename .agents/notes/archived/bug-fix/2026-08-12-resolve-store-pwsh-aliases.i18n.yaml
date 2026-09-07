@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-12-resolve-store-pwsh-aliases.md
+2026-08-12-resolve-store-pwsh-aliases.md: 28426801cb42af78e4ce5abc2e58b7ce2ecdbded
+2026-08-12-resolve-store-pwsh-aliases.zh.md: 822c800e435e889cd1840c1a830fa29ff9821b7d

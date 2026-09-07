@@ -20,7 +20,7 @@ The active lifecycle tree is the working inventory: browse its lifecycle/class f
 
 ## Classification
 
-Each Agent Note belongs to one path-encoded class from the closed set in `scripts/agent-note-tree.ts`; the classification gate rejects other folders. Adding a class requires updating the canonical set and this section. See the [classification Agent Note](implemented/process/2026-06-20-agent-note-classification.md).
+Each Agent Note belongs to one path-encoded class from the closed set in `scripts/agent-note-tree.ts`; the classification gate rejects other folders. Adding a class requires updating the canonical set and this section.
 
 | Class | What it covers |
 |---|---|

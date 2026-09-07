@@ -1,5 +1,5 @@
 ---
-description: "纯函数式相邻 Session 格式规划、无损 JSON 快照、仅标头迁移与物理编解码分派。"
+description: "纯函数式相邻 Session 格式规划、无损 JSON 值检查、仅标头迁移与物理编解码分派。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-session-format` 让持久化代码可以直接还原当前 Session，或组合唯一的相邻全产物迁移序列。它会把每个持久化输入和输出快照为分离的无损 JSON，校验精确的版本推进，并把仅标头的列表读取与正文读取分开。物理分帧、压缩、不可变 generation 命名、排他发布和 Cordis 生命周期行为不属于这个纯函数库。
+`dsh-session-format` 让持久化代码可以直接还原当前 Session，或在只消费一次物理行的同时组合唯一的相邻迁移序列。一次还原会让调用方拥有的已解析值流经有状态 Stage，不复制或冻结中间 artifact。物理分帧、压缩、不可变 generation 命名、排他发布和 Cordis 生命周期行为不属于本库。
 
 ## 目录
 
@@ -27,16 +27,23 @@ kind: "package-library"
 
 ### 何时使用
 
-当持久化或格式目录代码需要分类物理 Session header、还原当前逻辑值或组合已发布相邻迁移时，使用本库。它不是 Cordis 插件，也没有 profile 挂载行。它不发布运行时不变式伴生入口，因为每个操作都会在返回前校验借入的完整 artifact，且不保留跨调用的可变状态。
+当持久化或格式目录代码需要分类物理 Session header、还原当前逻辑值或组合已发布相邻迁移时，使用本库。它不是 Cordis 插件，也没有 profile 挂载行。它不发布运行时不变式伴生入口，因为每个已完成操作都会校验结果；decoder 与 transformer 状态只属于一次尚未完成的流式还原，绝不在多次还原间共享。
 
 ### 入口
 
 ```text
-const catalog = createSessionFormatCatalog({ currentVersion, codecs, encodeCurrentArtifact, migrations, restoreCurrent, restoreCurrentHeader })
+const catalog = createSessionFormatCatalog({ currentVersion, codecs, currentEncoder, migrations, restoreCurrent, restoreTransformedCurrent, restoreCurrentHeader })
 const descriptor = catalog.readHeader(physicalHeader)
+const restore = catalog.createRestore(physicalHeader, { recovery: 'recoverable', validation: 'transformed' })
+for (const row of physicalRows) restore.decodeRow(row)
+const current = restore.finish()
+const headerRecord = catalog.encodeCurrentHeader(current.header, current.inheritedEventCount)
+const eventRecords = current.events.map(catalog.encodeCurrentEvent)
 ```
 
-`createSessionFormatCatalog()` 接收每个受支持版本的一个冻结解码器、当前格式的编码器、每组相邻版本的一个迁移，以及当前产物与标头还原器。`readHeader()` 在不读取事件的情况下返回 `current`、`migration-required`、`unsupported` 或 `malformed` 描述符。每个迁移边会先校验自己的目标标头，然后再运行最终的当前标头还原器。正文读取方调用 `decodeArtifact()` 或 `decodeRecoverableArtifact()`，然后调用 `migrate()`；写入方只使用经过校验的当前产物调用 `encodeCurrent()`。冻结的 v0/v1 编解码器导出会保留其格式专用的 `packChunks` 选项，但不会把这项历史控制加入当前 writer 或通用解码器接口。
+`createSessionFormatCatalog()` 接收每个受支持版本的一个冻结 codec、当前格式的逐记录 encoder、每组相邻版本的一个迁移，以及当前 artifact 与 header 还原器。`readHeader()` 在不读取事件的情况下返回 `current`、`migration-required`、`unsupported` 或 `malformed` 描述符。正文读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()` 获得当前 artifact。写入方逐条编码其 header 与事件。
+
+`recovery` 选项决定严格拒绝故障行，还是执行可恢复后缀处理。`validation: 'current'` 会执行已安装 current 格式的全部校验。`validation: 'transformed'` 会在历史迁移后执行已发布 current 格式校验；已经是 current 的输入则只接受其 codec 的物理校验。
 
 可恢复解码器返回已接受的逻辑前缀。编解码器可以丢弃一个格式错误或序号不连续的行及其未提交后缀，但后续成功解码的 `turn/end` 会使原始问题成为致命错误。
 
@@ -48,7 +55,7 @@ const descriptor = catalog.readHeader(physicalHeader)
 <details>
 <summary>实现细节——点击展开</summary>
 
-迁移链在构造时校验唯一且无缺口的顺序。当前产物绕过所有迁移回调，只经过当前格式还原器。旧产物在内存中依次运行每个相邻的全产物函数；只有调用方决定是否发布最终结果以及如何发布。
+迁移链在构造时校验唯一且无缺口的顺序。Catalog 把一个行 decoder 与有状态的相邻事件 transformer 组合起来，只保留其有界状态与最终当前事件，并在 `finish()` 时执行目标校验；只有调用方决定是否发布该结果以及如何发布。
 
 | 文件 | 职责 |
 |---|---|
@@ -91,7 +98,7 @@ const descriptor = catalog.readHeader(physicalHeader)
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **全产物内存占用**——受支持的迁移会物化完整逻辑 Session；只有实测产物规模提出要求时，才会引入流式转换。
+- **最终当前历史仍常驻内存**——流式处理只保留有界中间状态，但返回的当前事件数组和必需的序号重映射表仍为 O(事件数)。
 - **仅支持相邻整数版本**——本库不暴露 span、稳定事件身份或通用引用重写代数。
 
 <a id="dev-note"></a>

@@ -1,19 +1,24 @@
 import { createSessionFormatChain } from './chain.ts'
+import { SessionFormatEventCollector } from './context.ts'
 import { SessionFormatError, SessionFormatUnsupportedMigrationError } from './error.ts'
 import {
   inspectSessionFormatVersion,
-  snapshotSessionFormatArtifact,
   snapshotSessionFormatHeader,
-  snapshotSessionFormatJson,
   sessionFormatVersion,
 } from './json.ts'
 import type {
-  EncodedSessionFormatArtifact,
+  SessionFormatArtifact,
+  SessionFormatArtifactDecoder,
   SessionFormatCatalog,
   SessionFormatCatalogOptions,
   SessionFormatCodec,
+  SessionFormatEvent,
+  SessionFormatEventRun,
   SessionFormatHeaderReadResult,
-  SessionFormatJsonObject,
+  SessionFormatMigrationContext,
+  SessionFormatMigrationStream,
+  SessionFormatRestore,
+  SessionFormatRestoreOptions,
 } from './types.ts'
 
 /**
@@ -102,46 +107,183 @@ export function createSessionFormatCatalog(options: SessionFormatCatalogOptions)
     return { storedVersion, codec }
   }
 
-  function decodeArtifact(headerValue: unknown, rowValues: readonly unknown[]) {
-    const { storedVersion, codec } = artifactCodec(headerValue)
-    return snapshotSessionFormatArtifact(
-      codec.decodeArtifact(headerValue, rowValues),
-      `format v${storedVersion} decoded artifact`,
-    )
-  }
-
-  function decodeRecoverableArtifact(headerValue: unknown, rowValues: readonly unknown[]) {
-    const { storedVersion, codec } = artifactCodec(headerValue)
-    return snapshotSessionFormatArtifact(
-      codec.decodeRecoverableArtifact(headerValue, rowValues),
-      `format v${storedVersion} recoverable artifact`,
-    )
-  }
-
-  function encodeCurrent(
-    artifact: Parameters<SessionFormatCatalog['encodeCurrent']>[0],
-  ): EncodedSessionFormatArtifact {
-    if (inspectSessionFormatVersion(artifact.header) !== chain.currentVersion) {
+  function encodeCurrentHeader(
+    header: Parameters<SessionFormatCatalog['encodeCurrentHeader']>[0],
+    inheritedEventCount: number,
+  ) {
+    if (inspectSessionFormatVersion(header) !== chain.currentVersion) {
       throw new SessionFormatError(`encodeCurrent requires Session format v${chain.currentVersion}`)
     }
-    const encoded = options.encodeCurrentArtifact(artifact)
-    const header = snapshotSessionFormatJson(encoded.header, 'encoded current Session header') as SessionFormatJsonObject
-    const rows = Object.freeze(encoded.rows.map((row, index) =>
-      snapshotSessionFormatJson(row, `encoded current Session row ${index}`) as SessionFormatJsonObject))
-    if (inspectSessionFormatVersion(header) !== chain.currentVersion) {
+    const encoded = options.currentEncoder.encodeHeader(header, inheritedEventCount)
+    if (inspectSessionFormatVersion(encoded) !== chain.currentVersion) {
       throw new SessionFormatError('current Session codec returned a non-current header')
     }
-    return Object.freeze({ header, rows })
+    return encoded
+  }
+
+  function createRestore(
+    headerValue: unknown,
+    restoreOptions: SessionFormatRestoreOptions,
+  ): SessionFormatRestore {
+    const { storedVersion, codec } = artifactCodec(headerValue)
+    const decoder = codec.createDecoder(headerValue, restoreOptions.recovery)
+    const sourceCut = decoder.headerInheritedEventCount
+    if (storedVersion === chain.currentVersion) {
+      return new CurrentSessionFormatRestore(
+        decoder,
+        sourceCut,
+        restoreOptions.validation === 'current' ? options.restoreCurrent : identityArtifact,
+        chain.currentVersion,
+      )
+    }
+    const collector = new SessionFormatEventCollector()
+    const migration = chain.createStream(
+      decoder.header,
+      requiredHistoricalCut(storedVersion, sourceCut),
+      collector,
+    )
+    return new MigratingSessionFormatRestore(
+      decoder,
+      sourceCut,
+      migration,
+      collector,
+      restoreOptions.validation === 'current'
+        ? options.restoreCurrent
+        : options.restoreTransformedCurrent,
+      restoreOptions.validation,
+      storedVersion,
+      chain.currentVersion,
+    )
   }
 
   return Object.freeze({
     currentVersion: chain.currentVersion,
     readHeader,
-    decodeArtifact,
-    decodeRecoverableArtifact,
-    migrate: chain.migrate.bind(chain),
-    encodeCurrent,
+    createRestore,
+    encodeCurrentHeader,
+    encodeCurrentEvent: options.currentEncoder.encodeEvent.bind(options.currentEncoder),
   })
+}
+
+type SessionFormatArtifactRestorer = (artifact: SessionFormatArtifact) => SessionFormatArtifact
+
+class CurrentSessionFormatRestore implements SessionFormatRestore {
+  readonly header: SessionFormatArtifact['header']
+  private readonly collector = new SessionFormatEventCollector()
+
+  constructor(
+    private readonly decoder: SessionFormatArtifactDecoder,
+    private readonly sourceInheritedEventCount: number | undefined,
+    private readonly restoreArtifact: SessionFormatArtifactRestorer,
+    private readonly currentVersion: number,
+  ) {
+    this.header = decoder.header
+  }
+
+  decodeRow(rowValue: unknown): void {
+    this.decoder.decodeRow(rowValue, this.collector)
+  }
+
+  finish(): SessionFormatArtifact {
+    const inheritedEventCount = finishDecoder(
+      this.decoder,
+      this.collector,
+      this.sourceInheritedEventCount,
+    )
+    return restoreCurrentVersion(this.restoreArtifact({
+      header: this.header,
+      inheritedEventCount,
+      events: this.collector.values,
+    }), this.currentVersion)
+  }
+}
+
+class MigratingSessionFormatRestore implements
+  SessionFormatRestore,
+  SessionFormatMigrationContext {
+  readonly header: SessionFormatArtifact['header']
+
+  constructor(
+    private readonly decoder: SessionFormatArtifactDecoder,
+    private readonly sourceInheritedEventCount: number | undefined,
+    private readonly migration: SessionFormatMigrationStream,
+    private readonly collector: SessionFormatEventCollector,
+    private readonly restoreArtifact: SessionFormatArtifactRestorer,
+    private readonly validation: SessionFormatRestoreOptions['validation'],
+    private readonly sourceVersion: number,
+    private readonly currentVersion: number,
+  ) {
+    this.header = migration.header
+  }
+
+  decodeRow(rowValue: unknown): void {
+    this.decoder.decodeRow(rowValue, this)
+  }
+
+  emitEvent(event: SessionFormatEvent): void {
+    this.migration.emitEvent(event)
+  }
+
+  emitRun(run: SessionFormatEventRun): void {
+    this.migration.emitRun(run)
+  }
+
+  finish(): SessionFormatArtifact {
+    finishDecoder(this.decoder, this, this.sourceInheritedEventCount)
+    const artifact = {
+      header: this.header,
+      inheritedEventCount: this.migration.finish(),
+      events: this.collector.values,
+    }
+    let restored: SessionFormatArtifact
+    try {
+      restored = this.restoreArtifact(artifact)
+    } catch (error: unknown) {
+      if (this.validation === 'current'
+        || error instanceof SessionFormatUnsupportedMigrationError) throw error
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new SessionFormatUnsupportedMigrationError(
+        `Session migration from v${this.sourceVersion} to v${this.currentVersion} refuses the transformed artifact: ${detail}`,
+        { cause: error },
+      )
+    }
+    return restoreCurrentVersion(restored, this.currentVersion)
+  }
+}
+
+function finishDecoder(
+  decoder: SessionFormatArtifactDecoder,
+  context: SessionFormatMigrationContext,
+  sourceInheritedEventCount: number | undefined,
+): number {
+  const inheritedEventCount = decoder.finish(context)
+  if (sourceInheritedEventCount !== undefined && inheritedEventCount !== sourceInheritedEventCount) {
+    throw new SessionFormatError('streaming decoder changed its predeclared inherited cut')
+  }
+  return inheritedEventCount
+}
+
+function restoreCurrentVersion(
+  artifact: SessionFormatArtifact,
+  currentVersion: number,
+): SessionFormatArtifact {
+  if (artifact.header.version !== currentVersion) {
+    throw new SessionFormatError(
+      `current Session restorer returned v${artifact.header.version}; expected v${currentVersion}`,
+    )
+  }
+  return artifact
+}
+
+function identityArtifact(artifact: SessionFormatArtifact): SessionFormatArtifact {
+  return artifact
+}
+
+function requiredHistoricalCut(version: number, cut: number | undefined): number {
+  if (cut === undefined) {
+    throw new SessionFormatError(`format v${version} decoder must expose its inherited cut before migration`)
+  }
+  return cut
 }
 
 function malformed(targetVersion: number, error: unknown, storedVersion?: number): SessionFormatHeaderReadResult {

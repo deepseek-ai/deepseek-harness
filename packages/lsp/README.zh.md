@@ -36,7 +36,6 @@ lsp 组为 agent 提供精确的、由语言服务器支撑的代码导航：转
 ## 相关文档
 
 - [LSP 导航子系统](../../docs/subsystems/lsp.zh.md)——操作、坐标、请求与结果，以及 `LspError` code。
-- [LSP 能力 seam Agent Note](../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.zh.md)——设计原理、备选方案与刻意推迟的 API。
 - [生成的工具目录](../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-lsp)——模型接收的 `lsp` schema。
 
 -----

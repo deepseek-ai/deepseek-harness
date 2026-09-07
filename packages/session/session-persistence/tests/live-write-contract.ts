@@ -27,7 +27,7 @@ export interface LiveWriteBackend {
 async function readAll(persistence: SessionPersistence, id: ReturnType<typeof SessionId>): Promise<readonly SessionEvent[]> {
   const reader = await persistence.open(id, 'read')
   try {
-    return await reader.read()
+    return (await reader.read()).events
   } finally {
     await reader.close()
   }

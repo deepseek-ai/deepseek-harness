@@ -1,5 +1,5 @@
 ---
-description: "Pure adjacent Session format planning, lossless JSON snapshots, header-only migration, and physical codec dispatch."
+description: "Pure adjacent Session format planning, lossless JSON value checks, header-only migration, and physical codec dispatch."
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-format` lets persistence code restore a current Session directly or compose a unique sequence of adjacent whole-artifact migrations. It snapshots every durable input and output as detached lossless JSON, validates exact version progress, and keeps header-only listing separate from body reads. Physical framing, compression, immutable generation naming, exclusive publication, and Cordis lifecycle behavior remain outside this pure library.
+`dsh-session-format` lets persistence code restore a current Session directly or compose a unique sequence of adjacent migrations while consuming physical rows once. A restore transfers caller-owned parsed values through stateful stages without intermediate artifact copies or freezing. Physical framing, compression, immutable generation naming, exclusive publication, and Cordis lifecycle behavior remain outside this library.
 
 ## Table of Contents
 
@@ -27,16 +27,23 @@ English | [中文](README.zh.md)
 
 ### When to use it
 
-Use this library from persistence or format-catalog code that must classify a physical Session header, restore current logical values, or compose released adjacent migrations. It is not a Cordis plugin and has no profile mount row. No runtime invariant companion is published because every operation validates its borrowed artifact before returning and retains no cross-call mutable state.
+Use this library from persistence or format-catalog code that must classify a physical Session header, restore current logical values, or compose released adjacent migrations. It is not a Cordis plugin and has no profile mount row. No runtime invariant companion is published because each completed operation validates its result; decoder and transformer state belongs to one unfinished streaming restore and is never shared across restores.
 
 ### Entry point
 
 ```text
-const catalog = createSessionFormatCatalog({ currentVersion, codecs, encodeCurrentArtifact, migrations, restoreCurrent, restoreCurrentHeader })
+const catalog = createSessionFormatCatalog({ currentVersion, codecs, currentEncoder, migrations, restoreCurrent, restoreTransformedCurrent, restoreCurrentHeader })
 const descriptor = catalog.readHeader(physicalHeader)
+const restore = catalog.createRestore(physicalHeader, { recovery: 'recoverable', validation: 'transformed' })
+for (const row of physicalRows) restore.decodeRow(row)
+const current = restore.finish()
+const headerRecord = catalog.encodeCurrentHeader(current.header, current.inheritedEventCount)
+const eventRecords = current.events.map(catalog.encodeCurrentEvent)
 ```
 
-`createSessionFormatCatalog()` accepts one frozen decoder per supported version, the current format's encoder, one migration per adjacent version pair, and current artifact and header restorers. `readHeader()` returns a `current`, `migration-required`, `unsupported`, or `malformed` descriptor without reading events. Each edge validates its target header before the final current-header restorer runs. Body readers call `decodeArtifact()` or `decodeRecoverableArtifact()`, then `migrate()`; writers call `encodeCurrent()` only with a validated current artifact. Frozen v0/v1 codec exports retain their format-specific `packChunks` option without adding that historical control to the current writer or common decoder interface.
+`createSessionFormatCatalog()` accepts one frozen codec per supported version, the current record encoder, one migration per adjacent version pair, and current artifact and header restorers. `readHeader()` returns a `current`, `migration-required`, `unsupported`, or `malformed` descriptor without reading events. Body readers create one restore, push each parsed physical row through `decodeRow()`, and call `finish()` once for a current artifact. Writers encode its header and events record by record.
+
+The `recovery` option selects strict row failure or recoverable suffix handling. `validation: 'current'` applies all installed current-format validation. `validation: 'transformed'` applies released current-format validation after historical migration, while already-current input receives only its codec's physical validation.
 
 The recoverable decoder returns the accepted logical prefix. A codec may drop one malformed or sequence-gapped row and its uncommitted suffix, but a later decoded `turn/end` makes the original issue fatal.
 
@@ -48,7 +55,7 @@ The recoverable decoder returns the accepted logical prefix. A codec may drop on
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The chain validates unique gap-free ordering at construction. A current artifact bypasses every migration callback and passes through only the current restorer. An old artifact runs each adjacent whole-document function in memory; only the caller decides whether and how to publish the final result.
+The chain validates unique gap-free ordering at construction. The catalog composes one row decoder with stateful adjacent event transformers, retains only their bounded state and the final current events, and performs target validation at `finish()`; only the caller decides whether and how to publish that result.
 
 | File | Role |
 |---|---|
@@ -91,7 +98,7 @@ No direct effect. A migration that changes current history can change the cache 
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Whole-artifact memory use** — supported migrations materialize the complete logical Session; streamed transformation is deferred until measured artifacts require it.
+- **Final current history remains resident** — streaming retains only bounded intermediate state, but the returned current event array and any required sequence-remap table remain O(event count).
 - **Adjacent integer versions only** — the library does not expose spans, stable event identities, or a general reference-rewrite algebra.
 
 <a id="dev-note"></a>

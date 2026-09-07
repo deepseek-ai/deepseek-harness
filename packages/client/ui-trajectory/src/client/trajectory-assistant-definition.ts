@@ -5,7 +5,7 @@ import type {
   PartialAssistant, RequestView,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { trajectoryNode } from './trajectory-definition-common.ts'
 import {
   displayFailure, emptyAssistantBlock, isTokenDelta, toAssistantBlock, toAssistantBlocks,
@@ -191,15 +191,20 @@ function updateChunk(
   }
 }
 
-function updateEmbedded(
+function settleMessage(
   state: AssistantState,
-  event: Extract<ConversationMatch['event'], { type: 'assistant/message' | 'assistant/attempt' }>,
+  match: ConversationMatch,
+  event: SessionEvent<'assistant/message'>,
 ): AssistantState {
-  let next = state
-  for (const member of expandAssistantStream(event.data.stream)) {
-    next = updateChunk(next, member.chunk, event.seq, member.time)
+  const blocks = toAssistantBlocks(event.data.message.content)
+  return {
+    ...state,
+    sawChunk: false,
+    blocks,
+    visibleBlocks: countVisibleBlocks(blocks),
+    final: match,
+    usage: event.data.usage,
   }
-  return next
 }
 
 function closedBoundary(
@@ -221,18 +226,9 @@ function fallbackState(context: ConversationNodeContext<AssistantState>): Assist
     if (event.type === 'assistant/live-chunk') {
       state ??= initialState(event.data.turn, event.data.step, event.seq, event.time, false)
       state = updateChunk(state, event.data.chunk, event.seq, event.time)
-    } else if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
+    } else if (event.type === 'assistant/message') {
       state ??= initialState(event.data.turn, event.data.step, event.seq, event.time, false)
-      state = updateEmbedded(state, event)
-      if (event.type === 'assistant/attempt') continue
-      const blocks = toAssistantBlocks(event.data.message.content)
-      state = {
-        ...state,
-        blocks,
-        visibleBlocks: countVisibleBlocks(blocks),
-        final: match,
-        usage: state.usage ?? event.data.usage,
-      }
+      state = settleMessage(state, match, event)
     } else if (event.type === 'step/end' && state !== undefined) {
       state = { ...state, stepEnd: match }
     }
@@ -329,7 +325,6 @@ const trajectoryAssistantDefinition: ConversationNodeDefinition<AssistantState> 
     }
     if (event.type === 'assistant/live-chunk'
       || event.type === 'assistant/message'
-      || event.type === 'assistant/attempt'
       || event.type === 'llm/retry'
       || event.type === 'step/end') {
       return { id: `${event.data.turn}:${event.data.step}`, role: 'update' }
@@ -352,18 +347,7 @@ const trajectoryAssistantDefinition: ConversationNodeDefinition<AssistantState> 
     if (match.event.type === 'assistant/live-chunk') {
       return updateChunk(context.state, match.event.data.chunk, match.event.seq, match.event.time)
     }
-    if (match.event.type === 'assistant/attempt') return updateEmbedded(context.state, match.event)
-    if (match.event.type === 'assistant/message') {
-      const streamed = updateEmbedded(context.state, match.event)
-      const blocks = toAssistantBlocks(match.event.data.message.content)
-      return {
-        ...streamed,
-        blocks,
-        visibleBlocks: countVisibleBlocks(blocks),
-        final: match,
-        usage: streamed.usage ?? match.event.data.usage,
-      }
-    }
+    if (match.event.type === 'assistant/message') return settleMessage(context.state, match, match.event)
     if (match.event.type === 'step/end') return { ...context.state, stepEnd: match }
     if (match.event.type !== 'llm/retry') return context.state
     const data = match.event.data

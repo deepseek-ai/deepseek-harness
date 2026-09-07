@@ -13,12 +13,15 @@ import { assertReleasedV2Header, releasedV2SessionFormatCodec, restoreReleasedV2
 export const sessionFormatCatalog = createSessionFormatCatalog({
   currentVersion: 2,
   codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec],
-  encodeCurrentArtifact: artifact => releasedV2SessionFormatCodec.encodeArtifact(artifact),
+  currentEncoder: releasedV2SessionFormatCodec,
   migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2],
   restoreCurrent(artifact) {
     const restored = restoreReleasedV2Artifact(artifact, KNOWN_SESSION_EVENT_TYPES)
     validateInstalledCurrentSessionArtifact(restored)
     return restored
+  },
+  restoreTransformedCurrent(artifact) {
+    return restoreReleasedV2Artifact(artifact, KNOWN_SESSION_EVENT_TYPES)
   },
   restoreCurrentHeader(header) {
     assertReleasedV2Header(header)

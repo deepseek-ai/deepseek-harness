@@ -55,51 +55,39 @@ describe('CI workflow', () => {
     }
   })
 
-  it('keeps required Wine and split native Windows jobs with failover, plus a master-only standby', () => {
+  it('keeps split native Windows PR jobs with failover, plus a master-only standby', () => {
     const workflow = loadWorkflow('.github/workflows/ci.yml')
     const masterWorkflow = loadWorkflow('.github/workflows/ci-master.yml')
     if (!isRecord(workflow.jobs)
-      || !isRecord(workflow.jobs.windows)
       || !isRecord(workflow.jobs['windows-build'])
       || !isRecord(workflow.jobs['windows-coverage'])
       || !isRecord(workflow.jobs['windows-native-tests'])
       || !isRecord(workflow.jobs['windows-observational'])
       || !isRecord(workflow.jobs['node-24'])
       || !isRecord(workflow.jobs['node-24-coverage'])
+      || !isRecord(workflow.jobs['node-24-bench'])
       || !isRecord(workflow.jobs['node-24-consumers'])
       || !isRecord(workflow.jobs['node-compat'])
       || !isRecord(workflow.jobs['all-checks-passed'])
       || !isRecord(masterWorkflow.jobs)
-      || !isRecord(masterWorkflow.jobs['wine-apt-cache'])
       || !isRecord(masterWorkflow.jobs['serial-windows'])) {
-      throw new TypeError('CI workflow must define windows, windows-build, windows-coverage, windows-native-tests, windows-observational, node-24, node-24-coverage, node-24-consumers, node-compat, and all-checks-passed; ci-master must define wine-apt-cache and serial-windows')
+      throw new TypeError('CI workflow must define windows-build, windows-coverage, windows-native-tests, windows-observational, node-24, node-24-coverage, node-24-bench, node-24-consumers, node-compat, and all-checks-passed; ci-master must define serial-windows')
     }
 
-    const windows = workflow.jobs.windows
     const windowsBuild = workflow.jobs['windows-build']
     const windowsCoverage = workflow.jobs['windows-coverage']
     const windowsNativeTests = workflow.jobs['windows-native-tests']
     const windowsObservational = workflow.jobs['windows-observational']
-    const wineAptCache = masterWorkflow.jobs['wine-apt-cache']
     const serialWindows = masterWorkflow.jobs['serial-windows']
     const node24 = workflow.jobs['node-24']
     const node24Coverage = workflow.jobs['node-24-coverage']
+    const node24Bench = workflow.jobs['node-24-bench']
     const node24Consumers = workflow.jobs['node-24-consumers']
     const nodeCompat = workflow.jobs['node-compat']
     const aggregate = workflow.jobs['all-checks-passed']
-    if (!Array.isArray(windows.steps) || !Array.isArray(aggregate.needs)) {
-      throw new TypeError('Windows job must define steps and the aggregate must define needs')
+    if (!Array.isArray(aggregate.needs)) {
+      throw new TypeError('CI aggregate must define needs')
     }
-    const commandSteps = windows.steps.filter((step): step is Record<string, unknown> & { run: string } => (
-      isRecord(step) && typeof step.run === 'string'
-    ))
-
-    // Required PR job: Wine on ubuntu-latest, runs wine-windows-gates.sh.
-    expect(windows['runs-on']).toBe('ubuntu-latest')
-    expect(windows.name).toBe('windows node 24 / wine blocking')
-    expect(windows.if).toBe("github.event_name == 'pull_request'")
-    expect(commandSteps.some(step => step.run.includes('wine-windows-gates.sh'))).toBe(true)
-
     // The split native jobs all resolve their pool through the Windows switch.
     for (const [jobName, job] of [['windows-build', windowsBuild], ['windows-coverage', windowsCoverage], ['windows-native-tests', windowsNativeTests], ['windows-observational', windowsObservational]] as const) {
       expect(typeof job['runs-on']).toBe('string')
@@ -181,10 +169,6 @@ describe('CI workflow', () => {
     expect(windowsObservational.name).toBe('windows node 24 / observational')
     expect(windowsObservational['continue-on-error']).toBe(true)
 
-    // wine-apt-cache: master-only, seeds the Wine apt cache, lives in ci-master.
-    expect(wineAptCache.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
-    expect(wineAptCache['runs-on']).toBe('ubuntu-latest')
-
     // serial-windows: master-only standby, self-hosted, non-blocking, lives in ci-master.
     expect(serialWindows.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
     expect(serialWindows['runs-on']).toEqual(['self-hosted', 'dsh-win-ci', 'windows'])
@@ -218,17 +202,31 @@ describe('CI workflow', () => {
     expect(serialGate).toBeDefined()
     expect(serialGate!.env).toMatchObject({ DSH_COVERAGE_TEST_TIMEOUT_MS: '90000' })
 
-    // Aggregate: Wine and the required split native jobs are needed;
     // windows-coverage is temporarily non-blocking while Windows ACP
     // half-close tests are stabilized; observational stays out too.
-    expect(aggregate.needs).toContain('windows')
+    expect(aggregate.needs).not.toContain('windows')
     expect(aggregate.needs).toContain('windows-build')
+    // The benchmark lane is a required verdict input and runs alone so its
+    // wall-clock budgets never share a runner with a concurrent aggregate.
+    expect(aggregate.needs).toContain('node-24-bench')
+    expect(node24Bench.name).toBe('node 24 / benchmarks')
+    expect(node24Bench.env).toBeUndefined()
+    expect(node24Bench.steps).toContainEqual({
+      name: 'Install benchmark browser and hosted dependencies',
+      run: 'pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium',
+    })
+    expect(JSON.stringify(node24Bench.steps)).not.toContain('DSH_CI_FAILOVER_LINUX')
+    expect(node24Bench.steps).toContainEqual({
+      name: 'Run performance benchmarks',
+      env: { DSH_GATE_VERBOSE: '1' },
+      run: 'pnpm run check:ci:bench',
+    })
     expect(aggregate.needs).not.toContain('windows-coverage')
     expect(aggregate.needs).toContain('windows-native-tests')
     expect(aggregate.needs).not.toContain('windows-observational')
     expect(aggregate.needs).not.toContain('serial-windows')
 
-    // Linux failover is a separate switch: the three required Linux workers
+    // Linux failover is a separate switch: the three enterprise Linux workers
     // and the verdict job resolve their pool through DSH_CI_FAILOVER_LINUX,
     // never the Windows switch.
     for (const [jobName, job] of [['node-24', node24], ['node-24-coverage', node24Coverage], ['node-24-consumers', node24Consumers]] as const) {
@@ -260,6 +258,45 @@ describe('CI workflow', () => {
     // possible, so the first failure must not truncate the rest.
     expect(windowsObservational.env).toBeDefined()
     expect(windowsObservational.env).not.toMatchObject({ DSH_GATE_FAIL_FAST: '1' })
+  })
+
+  it('runs required benchmarks on standard hosted Linux independently of failover', () => {
+    const workflow = loadWorkflow('.github/workflows/ci.yml')
+    const benchmark = workflowJob(workflow, 'node-24-bench')
+    const aggregate = workflowJob(workflow, 'all-checks-passed')
+
+    expect(benchmark['runs-on']).toBe('ubuntu-24.04')
+    expect(benchmark.if).toBe("github.event_name == 'pull_request'")
+    expect(benchmark.needs).toBeUndefined()
+    expect(benchmark['continue-on-error']).toBeUndefined()
+    expect(benchmark.env).toBeUndefined()
+    expect(aggregate.needs).toContain('node-24-bench')
+  })
+
+  it('always restores the hosted benchmark pnpm cache', () => {
+    const benchmark = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-bench')
+    if (!Array.isArray(benchmark.steps)) throw new TypeError('benchmark job must define steps')
+    const caches = benchmark.steps.filter(step => isRecord(step) && step.uses === 'actions/cache/restore@v4')
+
+    expect(caches).toHaveLength(1)
+    expect(caches[0]).not.toHaveProperty('if')
+    expect(caches[0]).toMatchObject({
+      with: {
+        path: '${{ steps.pnpm-store.outputs.path }}',
+        key: "${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}",
+      },
+    })
+  })
+
+  it('bounds the complete benchmark job to fifteen minutes', () => {
+    const benchmark = workflowJob(loadWorkflow('.github/workflows/ci.yml'), 'node-24-bench')
+
+    expect(benchmark['timeout-minutes']).toBe(15)
+    expect(benchmark.steps).toContainEqual({
+      name: 'Run performance benchmarks',
+      env: { DSH_GATE_VERBOSE: '1' },
+      run: 'pnpm run check:ci:bench',
+    })
   })
 
   it('gives the Wine Host TypeScript compile the repository heap budget', () => {
@@ -316,9 +353,7 @@ describe('CI workflow', () => {
       expect(job.if).toBe("github.event_name == 'push' && github.ref == 'refs/heads/master'")
     }
 
-    // What bounds the cost of exempting push: a master push may only carry the
-    // cache seeder and the two drills. Any job reachable on push would start
-    // accumulating uncancelled runs, so the set is pinned here.
+    // Pin the post-merge runtime, Wine, and standby inventory.
     const NOT_PUSH_REACHABLE = new Set([
       "github.event_name == 'workflow_dispatch' && inputs.suite == 'larger-runner-benchmark'",
       "github.event_name == 'workflow_dispatch' && inputs.suite == 'consolidated-runner-benchmark'",
@@ -333,7 +368,7 @@ describe('CI workflow', () => {
       })
       .map(([name]) => name)
       .sort()
-    expect(pushReachable).toEqual(['serial-linux-selfhosted', 'serial-windows', 'wine-apt-cache'])
+    expect(pushReachable).toEqual(['python-runtime', 'serial-linux-selfhosted', 'serial-windows', 'windows'])
 
     // Why workflow_dispatch must keep cancelling: each benchmark fans out to a
     // dozen larger runners at once, in this same group on master. If it stopped
@@ -349,6 +384,36 @@ describe('CI workflow', () => {
     }
   })
 
+  it('redirects the Node compile cache to the data-volume runner temp before the first pnpm call', () => {
+    const prWorkflow = loadWorkflow('.github/workflows/ci.yml')
+    const masterWorkflow = loadWorkflow('.github/workflows/ci-master.yml')
+    const redirectLanes = [
+      [prWorkflow, 'node-24'],
+      [prWorkflow, 'node-24-coverage'],
+      [prWorkflow, 'node-24-consumers'],
+      [masterWorkflow, 'serial-linux-selfhosted'],
+    ] as const
+    for (const [workflow, jobKey] of redirectLanes) {
+      const job = workflowJob(workflow, jobKey)
+      if (!Array.isArray(job.steps)) throw new TypeError(`${jobKey} must define steps`)
+      const redirectStepIndex = job.steps.findIndex((step): step is Record<string, unknown> & { run: string } => (
+        isRecord(step) && typeof step.run === 'string'
+          && step.run.includes('NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache')
+          && step.run.includes('"$GITHUB_ENV"')
+      ))
+      // Removing this injection would send every pnpm call in the lane (setup,
+      // store-path probe, install, and the gate) back to the root partition's
+      // /tmp; rationale in
+      // .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      expect(redirectStepIndex, `${jobKey} must inject NODE_COMPILE_CACHE into GITHUB_ENV`).toBeGreaterThan(-1)
+      const pnpmSetupIndex = job.steps.findIndex((step): step is Record<string, unknown> & { uses: string } => (
+        isRecord(step) && typeof step.uses === 'string' && step.uses.includes('pnpm/action-setup')
+      ))
+      expect(pnpmSetupIndex, `${jobKey} must run pnpm/action-setup`).toBeGreaterThan(-1)
+      expect(redirectStepIndex, `${jobKey} must redirect before pnpm/action-setup runs pnpm`).toBeLessThan(pnpmSetupIndex)
+    }
+  })
+
   it('keeps supported LSP source under native Windows coverage', () => {
     const config = readFileSync(resolve(root, 'vitest.config.ts'), 'utf8')
 
@@ -357,7 +422,7 @@ describe('CI workflow', () => {
     expect(config).not.toContain('packages/lsp/lsp-stdio/src/instance.ts')
   })
 
-  it('requires release-shaped Python runtime validation on every published target', () => {
+  it('requires release-shaped Python runtime validation on Linux and Windows x64', () => {
     const workflow = loadWorkflow('.github/workflows/ci.yml')
     const pythonRuntime = workflowJob(workflow, 'python-runtime')
     const aggregate = workflowJob(workflow, 'all-checks-passed')
@@ -370,7 +435,7 @@ describe('CI workflow', () => {
       name: 'python runtime / release-shaped matrix',
       uses: './.github/workflows/build-exe-for-python-sdk.yml',
       with: {
-        targets: 'node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64',
+        targets: 'node24-linux-x64,node24-win-x64',
         ci: true,
       },
       secrets: {

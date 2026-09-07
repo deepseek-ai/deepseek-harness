@@ -34,7 +34,7 @@ Lefthook 生成的钩子会优先使用安装时从对应 worktree 记录的绝�
 
 ## 后果
 
-安装或移除任一 worktree 不再改变其他 worktree 的生效钩子、二进制文件路径或生成的钩子字节。并发安装会串行执行，重复安装保持幂等；[快速本地 Git 钩子](2026-07-22-fast-local-git-hooks.zh.md)所规定的任务与延迟边界保持不变。
+安装或移除任一 worktree 不再改变其他 worktree 的生效钩子、二进制文件路径或生成的钩子字节。并发安装会串行执行，重复安装保持幂等；[快速本地 Git 钩子](../../archived/process/2026-07-22-fast-local-git-hooks.md)所规定的任务与延迟边界保持不变。
 
 首次安装后，仓库会采用 Git 格式版本 1。安装程序需要 Git 2.26 来使用 `--show-scope`；worktree 配置扩展本身的出现早于该命令。自定义 worktree 钩子管理器需要明确选择集成方式；继承钩子路径可继续供其他 worktree 使用，但当前 worktree 显式启用 Lefthook 后，其中不会运行这些继承钩子，除非贡献者通过 `lefthook.yml` 将其串联起来。
 

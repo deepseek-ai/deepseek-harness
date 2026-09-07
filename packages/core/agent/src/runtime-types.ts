@@ -8,12 +8,11 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import type {
-  LlmAttemptId, LlmCallConfig, LlmFailure, ReasoningEffortId, ResolvedRetryPolicy, StreamChunk,
+  LlmAttemptId, LlmCallConfig, LlmFailure, MessageId, ReasoningEffortId, ResolvedRetryPolicy, StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import type { AgentCancelCause, Session, SessionSeq, UserMessage } from '@deepseek-ai/dsh-session'
 export type { AgentCancelCause } from '@deepseek-ai/dsh-session'
-import type { Inbox } from './inbox.ts'
-import type { Agent } from './types.ts'
+import type { Agent, InboxTarget } from './types.ts'
 export type { Agent } from './types.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 declare module '@deepseek-ai/dsh-system-prompt' {
@@ -43,6 +42,61 @@ export interface CancelOptions {
    * later turn and no canceled inbox splice is logged.
    */
   keepInbox?: boolean | undefined
+}
+
+/** Agent-owned access to pending work; concrete storage belongs to the driver. */
+export interface Inbox {
+  /** Prompts awaiting individual turns. */
+  readonly nextTurn: readonly UserMessage[]
+  /** Input awaiting the next step boundary. */
+  readonly nextStep: readonly UserMessage[]
+
+  /** Durably cancel all pending input, clearing next-step before next-turn. */
+  clear(): void
+
+  /**
+   * Append one message to a pending list.
+   * @param target - pending list to extend.
+   * @param message - message to append.
+   */
+  append(target: InboxTarget, message: UserMessage): void
+
+  /**
+   * Prepend one message to a pending list.
+   * @param target - pending list to extend.
+   * @param message - message to prepend.
+   */
+  prepend(target: InboxTarget, message: UserMessage): void
+
+  /**
+   * Replace one pending message in place.
+   * @param messageId - identity of the pending message to replace.
+   * @param newMessage - replacement message.
+   * @returns whether the message was still pending.
+   */
+  replace(messageId: MessageId, newMessage: UserMessage): boolean
+
+  /**
+   * Remove one pending message.
+   * @param messageId - identity of the pending message to remove.
+   * @returns whether the message was still pending.
+   */
+  remove(messageId: MessageId): boolean
+
+  /**
+   * Apply standard splice semantics and durably record the normalized result.
+   * @param target - pending list to mutate.
+   * @param start - splice position.
+   * @param deleteCount - maximum number of messages to remove.
+   * @param inserted - messages to insert at the resolved position.
+   * @returns messages removed by the splice.
+   */
+  splice(
+    target: InboxTarget,
+    start: number,
+    deleteCount: number,
+    inserted: UserMessage[],
+  ): UserMessage[]
 }
 
 /**
@@ -112,7 +166,7 @@ declare module './types.ts' {
     readonly options: AgentOptions
     /** The live session this agent drives; its log is the durable source of truth. */
     readonly session: Session
-    /** The agent-owned projection of durable pending work. */
+    /** Agent-owned access to durable pending work. */
     readonly inbox: Inbox
     /** The current lifecycle state, mirrored on every `agent/status` transition. */
     readonly status: AgentStatus

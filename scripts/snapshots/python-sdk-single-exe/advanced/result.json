@@ -1335,7 +1335,7 @@
             "provider": "deepseek-official",
             "model": "smoke-model"
           },
-          "id": "{{messageId}}"
+          "id": "{{message:1}}"
         },
         "usage": {
           "inputTokens": 3,
@@ -1409,8 +1409,79 @@
       }
     },
     {
-      "type": "turn/end",
+      "type": "command/run",
       "seq": 59,
+      "time": 0,
+      "data": {
+        "commandId": "{{command:1}}",
+        "name": "feedback",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "feedback/record",
+      "seq": 60,
+      "time": 0,
+      "data": {
+        "text": "The session needs a clearer explanation."
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 61,
+      "time": 0,
+      "data": {
+        "commandId": "{{command:1}}",
+        "kind": "success",
+        "text": "Feedback recorded for session {{parent}}\nAnonymous user: {{anonymous-user}}."
+      }
+    },
+    {
+      "type": "feedback/message-put",
+      "seq": 62,
+      "time": 0,
+      "data": {
+        "sessionId": "{{parent}}",
+        "item": {
+          "messageId": "{{message:1}}",
+          "rating": "negative",
+          "note": "Explain the result.",
+          "version": "{{feedback-version:1}}",
+          "createdAt": 0,
+          "updatedAt": 0
+        }
+      }
+    },
+    {
+      "type": "feedback/message-put",
+      "seq": 63,
+      "time": 0,
+      "data": {
+        "sessionId": "{{parent}}",
+        "item": {
+          "messageId": "{{message:1}}",
+          "rating": "positive",
+          "note": "The explanation is clear now.",
+          "version": "{{feedback-version:2}}",
+          "createdAt": 0,
+          "updatedAt": 0
+        }
+      }
+    },
+    {
+      "type": "feedback/message-delete",
+      "seq": 64,
+      "time": 0,
+      "data": {
+        "sessionId": "{{parent}}",
+        "messageId": "{{message:1}}"
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 65,
       "time": 0,
       "data": {
         "turn": 1,
@@ -3942,7 +4013,7 @@
                 "provider": "deepseek-official",
                 "model": "smoke-model"
               },
-              "id": "{{messageId}}"
+              "id": "{{message:1}}"
             },
             "usage": {
               "inputTokens": 3,
@@ -4028,8 +4099,115 @@
       "payload": {
         "sessionId": "{{parent}}",
         "event": {
-          "type": "turn/end",
+          "type": "command/run",
           "seq": 59,
+          "time": 0,
+          "data": {
+            "commandId": "{{command:1}}",
+            "name": "feedback",
+            "source": {
+              "kind": "user"
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "feedback/record",
+          "seq": 60,
+          "time": 0,
+          "data": {
+            "text": "The session needs a clearer explanation."
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "command/done",
+          "seq": 61,
+          "time": 0,
+          "data": {
+            "commandId": "{{command:1}}",
+            "kind": "success",
+            "text": "Feedback recorded for session {{parent}}\nAnonymous user: {{anonymous-user}}."
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "feedback/message-put",
+          "seq": 62,
+          "time": 0,
+          "data": {
+            "sessionId": "{{parent}}",
+            "item": {
+              "messageId": "{{message:1}}",
+              "rating": "negative",
+              "note": "Explain the result.",
+              "version": "{{feedback-version:1}}",
+              "createdAt": 0,
+              "updatedAt": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "feedback/message-put",
+          "seq": 63,
+          "time": 0,
+          "data": {
+            "sessionId": "{{parent}}",
+            "item": {
+              "messageId": "{{message:1}}",
+              "rating": "positive",
+              "note": "The explanation is clear now.",
+              "version": "{{feedback-version:2}}",
+              "createdAt": 0,
+              "updatedAt": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "feedback/message-delete",
+          "seq": 64,
+          "time": 0,
+          "data": {
+            "sessionId": "{{parent}}",
+            "messageId": "{{message:1}}"
+          }
+        }
+      }
+    },
+    {
+      "method": "session.event",
+      "payload": {
+        "sessionId": "{{parent}}",
+        "event": {
+          "type": "turn/end",
+          "seq": 65,
           "time": 0,
           "data": {
             "turn": 1,

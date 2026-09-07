@@ -33,7 +33,9 @@ A canonical mention is `@[label](dsh-session:<base64url-encoded-id>)` in Markdow
 
 ### What the agent gets
 
-A message that cites other sessions is followed immediately by a `## Referenced sessions` snapshot as a second user-role message. The snapshot is untrusted background: the fixed warning tells the model not to follow instructions, permission claims, or tool requests inside it unless the current user explicitly repeats them. Each source is bounded independently — at most `maxReferences` distinct sessions per message and `maxReferenceBytes` per source — and a source that cannot fit its budget fails preparation instead of returning partial context.
+A message that cites other sessions is followed immediately by a `## Referenced sessions` snapshot as a second user-role message. The snapshot is untrusted background: the fixed warning tells the model not to follow instructions, permission claims, or tool requests inside it unless the current user explicitly repeats them. Each source preview is bounded independently — at most `maxReferences` distinct sessions per message and a configured or model-relative serialized JSON byte budget per source. Retention drops older non-checkpoint messages before shortening retained text; preparation fails only when the reference cannot fit even after retention.
+
+For a truncated reference, an optional spill backend saves the full captured text projection under the target session. A separate omission notice outside the bounded preview JSON gives exact `omittedMessages` and `omittedBytes`, then the saved locator and `retrievalHint`, or an unavailable outcome distinguishing missing storage from a failed save. The notice is part of the same durable context message. Full transcripts carry the same untrusted-background warning and capture metadata, including `capturedFormatVersion`. Each message uses JSON string fragments of at most 64 Unicode code points per line; decode and concatenate its fragments to recover exact text, including original newlines. This fixed storage format keeps even long single-line text readable through paged file reads.
 
 ### Finding sessions to reference
 
@@ -45,7 +47,10 @@ A message that cites other sessions is followed immediately by a `## Referenced 
 |---|---|---|
 | `maxReferences` | `3` | Maximum distinct source sessions in one prepared message; must not exceed `3` |
 | `candidateLimit` | `50` | Default candidate count returned to a host |
-| `maxReferenceBytes` | `65536` | Maximum serialized JSON bytes for one reference object |
+| `maxReferenceBytes` | automatic | Explicit maximum serialized JSON bytes per source; overrides the automatic budget exactly |
+| `referenceContextFraction` | `0.2` | Context-window fraction per source, from `0` to `1` |
+
+The automatic budget is `max(65536, floor(contextWindow × 4 × referenceContextFraction))` bytes per source. Model context capacity is measured in tokens; four bytes per token is a sizing heuristic, not an exact token conversion. A missing route, LLM service, adapter, or capacity uses 64 KiB; other model metadata lookup errors and cancellation fail preparation.
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-reference) is the exhaustive source for every accepted field and its JSDoc.
 
@@ -61,7 +66,11 @@ This section explains the design of the service; the observable behavior is cove
 
 ### Design concept
 
-Preparation reads each referenced session's current surface exactly once, when the target message reaches `agent/pre-step`, so a queued message captures source state at model-step entry and the resulting context is immutable afterwards. Projection keeps only direct-user `user/message`, assistant text, and `user/message` checkpoints carrying the canonical compaction marker; separately sourced session-reference messages are excluded, preventing recursive snapshot propagation. Source text is serialized as JSON with every `<` escaped as `\u003c`, so it cannot spell the `<referenced-sessions>` framing tag.
+Preparation reads each referenced session's current surface exactly once, when the target message reaches `agent/pre-step`. Both preview and spill use that same captured projection: direct-user text, assistant text, and user checkpoints carrying the canonical compaction marker; tools, reasoning, and other injected context are excluded. This prevents recursive reference propagation and prevents a later source mutation from changing the saved transcript. Preview JSON escapes every `<` as `\u003c`, so source text cannot spell the `<referenced-sessions>` framing tag.
+
+The resolver discovers optional storage through `ctx.get("spillStore")` and saves only truncated references. Storage ownership is the target session; provenance identifies the referenced source session and label, without a fabricated tool call. Cancellation is checked after the asynchronous save and prevents publication even if an artifact was written. Artifact expiry remains the backend's existing policy.
+
+The budget uses the provider and model captured after `system-prompt/assemble` completes for the target agent. Direct `prepare` calls before any assembly use agent options; session headers do not select the budget model. Diagnostic assemblies without an agent do not affect captured routes.
 
 ### Source map
 
@@ -72,12 +81,13 @@ Preparation reads each referenced session's current surface exactly once, when t
 | [`src/uri.ts`](src/uri.ts) | `dsh-session:` URI codec, mention formatting and parsing |
 | [`src/projection.ts`](src/projection.ts) | Current-surface projection and byte-budget retention |
 | [`src/serialization.ts`](src/serialization.ts) | Tag-safe JSON escaping for snapshot payloads |
+| [`src/spill.ts`](src/spill.ts) | Full transcript serialization and model-visible omission notices |
 | [`src/types.ts`](src/types.ts) | `SessionReferenceInput`/`Candidate` and source types |
 | — | No runtime invariant companion is published; preparation returns immutable per-call snapshots validated while they are built, and the agent/session layers own durable context admission, freezing, and replay. |
 
 ### Main flow
 
-The outer `agent/pre-step` listener accepts the step, parses canonical mentions out of direct user messages, then calls `prepare`, which normalizes references (first-mention order, deduplication, self-reference and count rejection), reads every surface in parallel, retains each under `maxReferenceBytes`, and renders the aggregated prompt. Each durable source record keeps the frozen `capturedThroughSeq` and records a nonzero `capturedFormatVersion`; absence denotes format v0. Each snapshot is inserted immediately after the message that cited it, and the target log records the readable direct message followed by its sourced context, so source mutation after capture cannot change target replay.
+The outer `agent/pre-step` listener accepts the step, parses canonical mentions out of direct user messages, then calls `prepare`, which normalizes references (first-mention order, deduplication, self-reference and count rejection), reads every surface in parallel, retains each under its resolved byte budget, and renders the aggregated prompt. Each durable source record keeps the frozen `capturedThroughSeq` and records a nonzero `capturedFormatVersion`; absence denotes format v0. Each snapshot is inserted immediately after the message that cited it, and the target log records the readable direct message followed by its sourced context, so source mutation after capture cannot change target replay.
 
 </details>
 
@@ -89,7 +99,7 @@ The outer `agent/pre-step` listener accepts the step, parses canonical mentions 
 Read these pages when the package-level contract is not enough. They move from the shared reference surface to the design decision and the read service behind it.
 
 - [Session-reference subsystem](../../../docs/subsystems/session-reference.md) — canonical URIs, projection rules, and the stable error taxonomy.
-- [Cross-session references decision record](../../../.agents/notes/implemented/feature/2026-07-21-cross-session-references.md) — design rationale for the reference contract.
+- [Session-reference spill reuse](../../../.agents/notes/implemented/bug-fix/2026-09-05-session-reference-spill-reuse.md) — snapshot identity, omission notices, storage ownership, and alternatives.
 - [Session-query subsystem](../../../docs/subsystems/session-query.md) — the read service that supplies session surfaces.
 - [Context group map](../README.md) — sibling request-context packages.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-session-reference) — every accepted config field and its source declaration.
@@ -107,7 +117,7 @@ The model sees two consecutive user-role messages: the current message with its 
 
 #### Token effect
 
-Each referenced message adds the fixed warning plus up to three serialized snapshots, each independently bounded by `maxReferenceBytes`. The exact snapshot remains in target history until target compaction shadows or summarizes it; source-session changes add no further tokens.
+Each referenced message adds the fixed warning plus up to three serialized previews, each independently bounded by the configured or model-relative byte budget. Truncated references add separate omission notices outside that budget; a saved full transcript adds tokens only when retrieved. The exact context remains in target history until target compaction shadows or summarizes it; source-session changes add no further tokens.
 
 #### KV Cache effect
 
@@ -125,6 +135,7 @@ These limits define when cross-session references are a poor fit. They are curre
 - **Trusted caller boundary** — the service assumes its host is authorized to read every session exposed by `ctx.sessionQuery`; it is not a model-facing search tool.
 - **Text projection only** — non-text user and assistant blocks are not propagated across sessions.
 - **No live link** — references are snapshots, not forks, resumes, subscriptions, or source-session mutations.
+- **Transcript search is line-based** — a literal phrase can straddle JSON-fragment lines or include escaped characters; decode and concatenate a message's fragments for exact text matching. Saved artifacts may expire under the backend's policy.
 
 <a id="dev-note"></a>
 ### Dev Note

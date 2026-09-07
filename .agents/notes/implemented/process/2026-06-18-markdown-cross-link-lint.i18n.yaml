@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-06-18-markdown-cross-link-lint.md
-2026-06-18-markdown-cross-link-lint.md: 37e0a41c08e068d6b3128300f078c8e417f1f337
-2026-06-18-markdown-cross-link-lint.zh.md: 56a1c9e90debe06d313fd5aaf03f771b60327dcb

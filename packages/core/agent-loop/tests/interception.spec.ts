@@ -292,7 +292,8 @@ describe('agent/pre-step', () => {
 
     decision.resolve({ kind: 'enter', messages: claimed })
     await idle
-    expect(agent.inbox.hasPending).toBe(false)
+    expect(agent.inbox.nextTurn).toEqual([])
+    expect(agent.inbox.nextStep).toEqual([])
 
     const staged = events(agent).filter(event =>
       event.type === 'turn/start' || event.type === 'user/message')
@@ -472,7 +473,8 @@ describe('agent/pre-step', () => {
       send(agent, 'blocked prompt')
     }).toThrow('append unavailable')
     expect(events(agent)).toEqual([])
-    expect(agent.inbox.hasPending).toBe(false)
+    expect(agent.inbox.nextTurn).toEqual([])
+    expect(agent.inbox.nextStep).toEqual([])
     expect(agent.status).toBe('idle')
   })
 

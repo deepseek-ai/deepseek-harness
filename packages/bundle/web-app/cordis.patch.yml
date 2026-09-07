@@ -15,8 +15,9 @@
 
 - id: system-prompt
   config:
-    persona: >-
-      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+    personaSuffix: Your working directory is {{cwd}}.
+    personaPrefix: >-
+      You are a coding agent powered by the {{model}} model.
 
 # Full-text session search is opt-in (the base row's `openAt: never`). This
 # restatement keeps the Web values on one ephemeral in-memory index; a
@@ -57,6 +58,19 @@
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download
       name: '@deepseek-ai/dsh-session-log-export'
+
+    # Session-header "Open In..." split button over the host application
+    # resolution (macOS/Windows/Linux; a host with no resolved application
+    # renders no button). Two halves: the host routes and the browser surface.
+    - id: open-in-app
+      name: '@deepseek-ai/dsh-host-open-in-app'
+      config:
+        probeTimeoutMs: 10000
+        iconTimeoutMs: 10000
+        launchWatchMs: 1000
+
+    - id: ui-open-in-app
+      name: '@deepseek-ai/dsh-client-ui-open-in-app'
 
     - id: workspace
       name: '@deepseek-ai/dsh-workspace'
@@ -350,9 +364,6 @@
   disabled: true
 
 - id: tool-fs-search
-  disabled: true
-
-- id: tool-str-replace-editor
   disabled: true
 
 # The `skill` REGISTRY stays in the host plane. It is host+per-scope layered

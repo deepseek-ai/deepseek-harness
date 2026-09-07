@@ -48,13 +48,8 @@ interface ParsedSessionFixture {
   readonly createdAt: number
   readonly inheritedEventCount: SessionLogOffsetType
   readonly events: SessionEvent[]
-  readonly artifact: ReturnType<typeof sessionFormatCatalog.migrate>
+  readonly artifact: ReturnType<ReturnType<typeof sessionFormatCatalog.createRestore>['finish']>
   readonly sourceHeader: Readonly<Record<string, unknown>>
-}
-
-interface FixtureJsonLine {
-  readonly lineNumber: number
-  readonly value: Record<string, unknown>
 }
 
 /**
@@ -210,7 +205,13 @@ export function parseSessionLog(text: string): SessionEvent[] {
 
 /** Parse, complete, decode, and migrate one projected snapshot artifact without writing its source. */
 function parseSessionFixture(text: string): ParsedSessionFixture {
-  const parsed: FixtureJsonLine[] = []
+  let headerLineNumber: number | undefined
+  let sourceHeader: Record<string, unknown> | undefined
+  let restore: ReturnType<typeof sessionFormatCatalog.createRestore> | undefined
+  const rowLines: number[] = []
+  const eventLines: number[] = []
+  let bodyKind: 'complete' | 'projected' | undefined
+  let nextSeq = 0
   for (const [index, line] of text.split(/\r?\n/).entries()) {
     if (line.trim().length === 0) continue
     let value: unknown
@@ -222,19 +223,22 @@ function parseSessionFixture(text: string): ParsedSessionFixture {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error(`session snapshot line ${index + 1} must be a JSON object`)
     }
-    parsed.push({ lineNumber: index + 1, value: value as Record<string, unknown> })
-  }
-  const headerLine = parsed[0]
-  if (headerLine === undefined) throw new Error('session snapshot must start with a session header')
-
-  const header = normalizeProjectedHeader(headerLine.value)
-  const rows: Record<string, unknown>[] = []
-  const rowLines: number[] = []
-  const eventLines: number[] = []
-  let bodyKind: 'complete' | 'projected' | undefined
-  let nextSeq = 0
-  for (const source of parsed.slice(1)) {
-    const record = normalizeProjectedRow(source.value)
+    const lineNumber = index + 1
+    const recordValue = value as Record<string, unknown>
+    if (restore === undefined) {
+      headerLineNumber = lineNumber
+      sourceHeader = recordValue
+      try {
+        restore = sessionFormatCatalog.createRestore(normalizeProjectedHeader(recordValue), {
+          recovery: 'strict',
+          validation: 'current',
+        })
+      } catch (error: unknown) {
+        throw fixtureFormatError(error, lineNumber, [], [])
+      }
+      continue
+    }
+    const record = normalizeProjectedRow(recordValue)
     const packed = PACKED_CHUNK_ROW_TYPES.has(record.type as string)
     const seqKey = packed ? 'seq0' : 'seq'
     const timeKey = packed ? 'time0' : 'time'
@@ -242,12 +246,12 @@ function parseSessionFixture(text: string): ParsedSessionFixture {
     const hasTime = Object.hasOwn(record, timeKey)
     if (hasSeq !== hasTime) {
       throw new Error(
-        `session snapshot line ${source.lineNumber} must contain both ${seqKey} and ${timeKey}, or neither`,
+        `session snapshot line ${lineNumber} must contain both ${seqKey} and ${timeKey}, or neither`,
       )
     }
     const currentKind = hasSeq ? 'complete' : 'projected'
     if (bodyKind !== undefined && currentKind !== bodyKind) {
-      throw new Error(`session snapshot line ${source.lineNumber} cannot mix projected and complete body rows`)
+      throw new Error(`session snapshot line ${lineNumber} cannot mix projected and complete body rows`)
     }
     bodyKind = currentKind
     if (currentKind === 'projected') {
@@ -255,36 +259,28 @@ function parseSessionFixture(text: string): ParsedSessionFixture {
       record[timeKey] = 0
     }
     const cardinality = physicalRowCardinality(record)
-    rows.push(record)
-    rowLines.push(source.lineNumber)
-    eventLines.push(...Array.from({ length: cardinality }, () => source.lineNumber))
+    rowLines.push(lineNumber)
+    eventLines.push(...Array.from({ length: cardinality }, () => lineNumber))
     nextSeq += cardinality
+    try {
+      restore.decodeRow(record)
+    } catch (error: unknown) {
+      throw fixtureFormatError(error, headerLineNumber as number, rowLines, eventLines, rowLines.length - 1)
+    }
   }
-
-  let decoded: ReturnType<typeof sessionFormatCatalog.decodeArtifact>
-  try {
-    decoded = sessionFormatCatalog.decodeArtifact(header, rows)
-  } catch (error: unknown) {
-    const physicalRow = locateUnlabelledPhysicalFailure(error, header, rows)
-    throw fixtureFormatError(
-      error,
-      headerLine.lineNumber,
-      rowLines,
-      eventLines,
-      physicalRow,
-    )
+  if (restore === undefined || sourceHeader === undefined || headerLineNumber === undefined) {
+    throw new Error('session snapshot must start with a session header')
   }
   try {
-    const current = sessionFormatCatalog.migrate(decoded)
-    return parsedSessionFixture(current, headerLine.value)
+    return parsedSessionFixture(restore.finish(), sourceHeader)
   } catch (error: unknown) {
-    throw fixtureFormatError(error, headerLine.lineNumber, rowLines, eventLines)
+    throw fixtureFormatError(error, headerLineNumber, rowLines, eventLines)
   }
 }
 
 /** Materialize the common replay view from a migrated artifact. */
 function parsedSessionFixture(
-  artifact: ReturnType<typeof sessionFormatCatalog.decodeArtifact>,
+  artifact: ParsedSessionFixture['artifact'],
   sourceHeader: Readonly<Record<string, unknown>>,
 ): ParsedSessionFixture {
   return {
@@ -410,17 +406,16 @@ function migrateWrappedEventGroup(
     time: 0,
     data: { text: `comparison prefix ${String(seq)}` },
   }))
-  const migrated = sessionFormatCatalog.migrate({
-    header: {
-      version: 1,
-      id: first.sessionId,
-      createdAt: 0,
-      isSeeded: false,
-      delegationDepth: 0,
-    },
-    inheritedEventCount: 0,
-    events: [...prefix, ...entries.map(entry => normalizeProjectedRow(entry.event))] as never,
-  }).events.slice(prefix.length) as readonly Readonly<Record<string, unknown>>[]
+  const restore = sessionFormatCatalog.createRestore({
+    type: 'session',
+    version: 1,
+    id: first.sessionId,
+    createdAt: 0,
+    delegationDepth: 0,
+  }, { recovery: 'strict', validation: 'current' })
+  for (const event of prefix) restore.decodeRow(event)
+  for (const entry of entries) restore.decodeRow(normalizeProjectedRow(entry.event))
+  const migrated = restore.finish().events.slice(prefix.length) as readonly Readonly<Record<string, unknown>>[]
 
   const assigned = new Map<number, Readonly<Record<string, unknown>>[]>()
   let migratedIndex = 0
@@ -498,11 +493,18 @@ export function prepareSessionEventNotificationsForComparison(text: string): str
 
 /** Encode one migrated fixture while retaining a projected cwd token. */
 function encodeCurrentSessionSnapshotFixture(text: string, parsed: ParsedSessionFixture): string {
-  const encoded = sessionFormatCatalog.encodeCurrent(parsed.artifact)
-  const header = { ...encoded.header }
+  const header = {
+    ...sessionFormatCatalog.encodeCurrentHeader(
+      parsed.artifact.header,
+      parsed.artifact.inheritedEventCount,
+    ),
+  }
   const sourceCwd = parsed.sourceHeader['cwd']
   if (typeof sourceCwd === 'string' && /^\{\{cwd\}\}(?:\/|$)/.test(sourceCwd)) header['cwd'] = sourceCwd
-  const output = [header, ...encoded.rows].map(record => JSON.stringify(record)).join('\n')
+  const output = [
+    JSON.stringify(header),
+    ...parsed.artifact.events.map(event => JSON.stringify(sessionFormatCatalog.encodeCurrentEvent(event))),
+  ].join('\n')
   return text.endsWith('\n') ? `${output}\n` : output
 }
 
@@ -564,38 +566,20 @@ function fixtureFormatError(
   const locationDetail = error instanceof Error && error.cause instanceof Error
     ? error.cause.message
     : detail
-  const row = /released (?:Session|(?:text|reasoning|tool-call)-chunks) row (\d+)/.exec(locationDetail)
+  const storedRow = /^released Session row (\d+)/.exec(locationDetail)
   const event = /Session event (\d+)/.exec(locationDetail)
     ?? / at seq (\d+)/.exec(locationDetail)
-    ?? /^[^ ]+ (\d+) /.exec(locationDetail)
-  const line = physicalRow === undefined && row === null
-    ? event === null ? headerLine : eventLines[Number(event[1])] ?? headerLine
-    : rowLines[physicalRow ?? Number(row?.[1])] ?? headerLine
+    ?? /inherited Session cut (\d+)/.exec(locationDetail)
+  let line: number
+  if (physicalRow !== undefined) line = rowLines[physicalRow] as number
+  else if (storedRow !== null) line = rowLines[Number(storedRow[1])] ?? headerLine
+  else if (event === null) line = headerLine
+  else line = eventLines[Number(event[1])] ?? headerLine
   const message = `session snapshot line ${line}: ${detail}`
   if (error instanceof SessionFormatUnsupportedMigrationError) {
     return new SessionFormatUnsupportedMigrationError(message, { cause: error })
   }
   return new Error(message, { cause: error })
-}
-
-/** Locate range-decoder failures whose frozen diagnostic predates physical-row labels. */
-function locateUnlabelledPhysicalFailure(
-  error: unknown,
-  header: Readonly<Record<string, unknown>>,
-  rows: readonly Readonly<Record<string, unknown>>[],
-): number | undefined {
-  const detail = error instanceof Error ? error.message : String(error)
-  if (!detail.startsWith('sourceEventSeqs ')) return undefined
-  const diagnosticHeader = Object.hasOwn(header, 'seedLength') ? { ...header, seedLength: 0 } : header
-  for (let index = 0; index < rows.length; index += 1) {
-    try {
-      sessionFormatCatalog.decodeArtifact(diagnosticHeader, rows.slice(0, index + 1))
-    } catch (candidate: unknown) {
-      const candidateDetail = candidate instanceof Error ? candidate.message : String(candidate)
-      if (candidateDetail === detail) return index
-    }
-  }
-  return undefined
 }
 
 /**

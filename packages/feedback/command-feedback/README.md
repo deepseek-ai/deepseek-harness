@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-command-feedback` lets a user tell the harness what they think of a session: type `/feedback` plus a remark, and the remark is recorded and acknowledged. Recording is immediate and never starts model work, so it is safe at any point in a conversation — the model neither sees the remark nor is interrupted by it. The acknowledgement names the session and the anonymous user, and reports how the session is shared under the deployment's telemetry policy. The command ships with the Web client and needs no configuration; headless, ACP, and JSON-RPC entry points do not provide slash commands and cannot run it.
+`dsh-command-feedback` lets a user tell the harness what they think of a session: type `/feedback` plus a remark, and the remark is recorded and acknowledged. Recording is immediate and never starts model work, so it is safe at any point in a conversation — the model neither sees the remark nor is interrupted by it. The acknowledgement names the session and the anonymous user. The command ships with the Web client and needs no configuration; headless, ACP, and JSON-RPC entry points do not provide slash commands and cannot run it.
 
 ## Table of Contents
 
@@ -29,27 +29,14 @@ Users can record feedback from the Web client out of the box: the `/feedback` co
 
 ### The `/feedback` command
 
-Type `/feedback` followed by your remark and send it. A successful entry is acknowledged with the receiving session id, the anonymous user id, and the session-sharing policy:
+Type `/feedback` followed by your remark and send it. A successful entry is acknowledged with the receiving session id and the anonymous user id:
 
 | Input | Result |
 |---|---|
-| `/feedback the diff view is unreadable` | Record the remark and acknowledge: `Feedback recorded for session {sessionId}`, `Anonymous user: {userId}`, plus the sharing disclosure. |
+| `/feedback the diff view is unreadable` | Record the remark and acknowledge with two lines: `Feedback recorded for session {sessionId}` and `Anonymous user: {userId}.` |
 | `/feedback` | A usage error: `Feedback text is required. Usage: /feedback <text>`. Whitespace-only input counts as empty. |
 
 Surrounding whitespace is trimmed, but the remark is otherwise kept exactly as typed: no truncation, case folding, or command parsing — `/feedback /plan felt slow` records that literal text. Each command records its own entry; nothing is merged or replaced.
-
-### The sharing disclosure
-
-The acknowledgement also states how the session is shared under the deployment's telemetry policy:
-
-| Disclosed status | Acknowledgement sentence |
-|---|---|
-| `full` | `Session sharing is enabled.` |
-| `feedback-only` | `Session sharing is feedback-gated; recording feedback uploads the session records not yet shared.` |
-| `disabled` | `Session sharing is disabled.` |
-| no telemetry service | `Session sharing is not configured.` |
-
-The sentence reports the current policy only; it never claims the feedback or the session was delivered anywhere. The disclosure records nothing itself and never reaches the model.
 
 ### Recording feedback from your own UI
 
@@ -74,7 +61,7 @@ The Web client ships the command. Headless mode, ACP automation, and JSON-RPC pr
 
 ### Design concept
 
-The remark is one append-only fact in the session log, owned by the event rather than by the command that produced it: feedback can arrive from any trigger, so the fact must not depend on the slash command. The command keeps its own bookkeeping payload-free, so the remark text exists in exactly one place in the log, and the event never surfaces to the model. The sharing disclosure reads the optional telemetry service through the plugin context, so the command still works when no backend is mounted, and its sentence set mirrors the telemetry status union so an unknown status fails closed.
+The remark is one append-only fact in the session log, owned by the event rather than by the command that produced it: feedback can arrive from any trigger, so the fact must not depend on the slash command. The command keeps its own bookkeeping payload-free, so the remark text exists in exactly one place in the log, and the event never surfaces to the model.
 
 ### How a remark is recorded
 
@@ -94,10 +81,8 @@ The producer trims the text, rejects empty input, and writes one event into the 
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these pages when the package-level contract is not enough. They move from the sharing policy and command registry behind this capture path to the persistence and identity facts the acknowledgement relies on.
+Read these pages when the package-level contract is not enough. They cover the command registry, persistence, and identity facts this capture path relies on.
 
-- [Session telemetry subsystem](../../../docs/subsystems/session-telemetry.md) — the `SessionTelemetrySharingStatus` vocabulary and backend contract behind the disclosure.
-- [dsh-session-telemetry](../../session/session-telemetry/README.md) — the seam whose `sharing` member drives the acknowledgement sentence.
 - [dsh-commands](../../interaction/commands/README.md) — the registry that discovers the global command and its `recordInput` semantics.
 - [Session persistence subsystem](../../../docs/subsystems/persistence.md) — how appended events become durable and what a flush barrier means.
 - [Anonymous user identity](../../identity/anonymous-user-id/README.md) — the id the acknowledgement reports.
@@ -129,7 +114,7 @@ Independent of the model request path. Recording appends to the session log only
 
 These limits define where `/feedback` is a poor fit or behaves differently than a user might expect. They are current package constraints, not a task backlog.
 
-- **No feedback retrieval or management surface** — the optional OTel plugin uses the event only as a sharing trigger. There is no retrieval, aggregation, categorization, or model-facing tool for `feedback/record`.
+- **No feedback retrieval or management surface** — there is no retrieval, aggregation, categorization, or model-facing tool for `feedback/record`.
 - **No structured fields** — an entry is one free-text string with no category, severity, or referenced-event link, so feedback cannot be filtered by subject without re-reading its text.
 - **No amend or withdraw** — the session log is append-only and this package adds no tombstone, so a mistaken entry stays recorded and can only be superseded by a later one.
 - **No explicit durability barrier** — the acknowledgement follows the append, not a flush, so an entry recorded immediately before a crash can be lost with any other unflushed tail. A consumer that needs a barrier awaits `ctx.sessions.flush(session)`.
@@ -144,7 +129,7 @@ These limits define where `/feedback` is a poor fit or behaves differently than 
 
 This Dev Note is working context for maintainers; it is explicitly non-authoritative. Shipped behavior, limits, and rationale live in the sections above and the package code.
 
-- The acknowledgement sentences are pinned by [`tests/command-feedback.spec.ts`](tests/command-feedback.spec.ts); changing them changes user-visible copy and the disclosure tests.
+- The acknowledgement sentences are pinned by [`tests/command-feedback.spec.ts`](tests/command-feedback.spec.ts); changing them changes user-visible copy.
 - Structured fields and a retrieval surface remain the open direction behind the first two limitations; nothing in the current contract reserves a format for them.
 
 </details>

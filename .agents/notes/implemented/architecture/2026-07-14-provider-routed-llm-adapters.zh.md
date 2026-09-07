@@ -20,7 +20,7 @@ Status: implemented
 
 `GenerateOptions` 与 `LlmCallConfig` 在 `model: string` 之外携带 `provider: string`，`AgentOptions` 则携带对应的可选创建字段。只有两个值都非空时，agent loop（智能体循环）请求才有效；两个值也都会写入请求头日志。`agent/request` 可以在任意步骤返回替换后的字段组合，因此会话可以切换提供方与模型，无需改变 Cordis 插件生命周期。
 
-`LlmRuntime` 按提供方注册和解析适配器。`registerAdapter(providers, adapter)` 在修改注册表前检查整个提供方列表，遇到重复项时返回 `DUPLICATE_ADAPTER`，并以一个 effect 为单位整体 dispose（资源释放）。模型 ID 不作为注册键；仍由选中的适配器负责验证或转发。后续的 [LLM 目录与 ACP 模型选择 Agent Note](2026-07-15-llm-model-catalog-and-acp-selection.zh.md) 增加了建议性的 `listProviders()` / `listModels()` 发现接口，但不会把目录成员关系变成请求校验规则。
+`LlmRuntime` 按提供方注册和解析适配器。`registerAdapter(providers, adapter)` 在修改注册表前检查整个提供方列表，遇到重复项时返回 `DUPLICATE_ADAPTER`，并以一个 effect 为单位整体 dispose（资源释放）。模型 ID 不作为注册键；仍由选中的适配器负责验证或转发。后续的 [LLM 目录与 ACP 模型选择 Agent Note](../../archived/architecture/2026-07-15-llm-model-catalog-and-acp-selection.md) 增加了建议性的 `listProviders()` / `listModels()` 发现接口，但不会把目录成员关系变成请求校验规则。
 
 在一个 Cordis 上下文中，一个提供方只能有一个适配器所有者。`dsh-llm-deepseek` 注册 `deepseek`；`dsh-llm-pi-ai` 也可以注册 `deepseek`，但同时加载两个所有者属于配置错误，不采用顺序规则或回退行为。若部署选择手写的 DeepSeek 实现，需从 pi-ai 配置中排除 `deepseek`；若部署选择 pi-ai 的 DeepSeek 实现，则不挂载 `dsh-llm-deepseek`。
 
@@ -40,9 +40,9 @@ pi-ai 的通用流选项不支持停止序列。若 Harness `stop` 选项已定�
 
 助手消息携带请求的 `provider` 和 `model`，以及可选的 JSON 可序列化适配器回放状态。成功的 `assistant/message` 会话事件记录这些字段，`deriveMessages()` 返回助手消息时也会包含它们。用户、系统、上下文与工具结果消息不携带助手路由字段。提供方/模型字段是 agent loop 的权威数据；适配器仅拥有其不透明回放状态 payload。
 
-成功的终止 `finish` 分片可以以 `ReplayEnvelope` 形式携带回放状态：不透明的响应级元数据，加上与发射块序列对齐的可选逐块条目。`BlockAssembler` 对内容与元数据只做一次保留/丢弃决定——max-token 组装丢弃工具调用时，数据同一位置的条目一并丢弃——因此 agent loop 附加到已组装助手消息模型来源中的状态始终描述存储的块，见 [max-token 回放状态对齐决定](../bug-fix/2026-08-15-max-token-replay-state-alignment.zh.md)。agent loop 不公开响应改写钩子。错误或中止响应不会生成正常助手消息，因此不会进入后续模型历史。
+成功的终止 `finish` 分片可以以 `ReplayEnvelope` 形式携带回放状态：不透明的响应级元数据，加上与发射块序列对齐的可选逐块条目。`BlockAssembler` 对内容与元数据只做一次保留/丢弃决定——max-token 组装丢弃工具调用时，数据同一位置的条目一并丢弃——因此 agent loop 附加到已组装助手消息模型来源中的状态始终描述存储的块，见 [max-token 回放状态对齐决定](../../archived/bug-fix/2026-08-15-max-token-replay-state-alignment.md)。agent loop 不公开响应改写钩子。错误或中止响应不会生成正常助手消息，因此不会进入后续模型历史。
 
-pi-ai 回放状态用其成功 `AssistantMessage` 的带版本最小投影填充该结构：一个响应半区（源 API/提供方/模型、响应 ID/模型、停止原因），以及逐块的文本签名、thinking 签名和工具调用签名。它不会重复 Harness 内容块中已有的文本或工具参数，也不包含诊断信息、时间戳、用量或错误。后续请求中，只有历史提供方和目标提供方当前归同一个适配器实例所有时，`LlmRuntime` 才会把回放状态交给目标适配器。适配器在能够恢复历史响应时，将 Harness 记录的内容与回放状态组合，并负责所需的跨模型或跨提供方转换。持久化内容保持权威：适配器收到无法使用的回放状态——未知 kind 或版本、格式错误的元数据、或与内容不再匹配的块结构——会把该消息降级为提供方无关转换并带出诊断；其他适配器只能收到提供方无关的内容以及提供方/模型字段。
+pi-ai 回放状态用其成功 `AssistantMessage` 的带版本最小投影填充该结构：一个响应半区（源 API/提供方/模型、响应 ID/模型、可选的提供方原生 effort、停止原因），以及逐块的文本签名、thinking 签名和工具调用签名。[pi-ai 升级兼容性决定](../bug-fix/2026-09-05-pi-ai-upgrade-compatibility.zh.md#decision) 定义请求模型与 Anthropic 原生模型身份的区别，以及 effort 的保留规则。它不会重复 Harness 内容块中已有的文本或工具参数，也不包含诊断信息、时间戳、用量或错误。后续请求中，只有历史提供方和目标提供方当前归同一个适配器实例所有时，`LlmRuntime` 才会把回放状态交给目标适配器。适配器在能够恢复历史响应时，将 Harness 记录的内容与回放状态组合，并负责所需的跨模型或跨提供方转换。持久化内容保持权威：适配器收到无法使用的回放状态——未知 kind 或版本、格式错误的元数据、或与内容不再匹配的块结构——会把该消息降级为提供方无关转换并带出诊断；其他适配器只能收到提供方无关的内容以及提供方/模型字段。
 
 该状态属于模型可见的回放输入，因此遵循现有的[请求可重建规则](2026-07-05-reconstructable-requests.zh.md)：它同时存在于终止 `finish` 分片和驱动派生的已组装 `assistant/message` 模型来源中。恢复和 fork 会原样保留该状态。压缩（compaction）遮蔽助手消息时，也会从活动 surface 中移除其回放状态；摘要属于普通的提供方无关内容。
 

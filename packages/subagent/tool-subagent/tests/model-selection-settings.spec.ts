@@ -61,7 +61,6 @@ async function boot(): Promise<Context> {
   await ctx.plugin(MemorySettings)
   await ctx.plugin(SubagentModelSelectionConfig)
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(SubagentRuntime)
   await ctx.plugin(SubagentSpawn, { providerName: 'spawn' })
@@ -327,7 +326,6 @@ describe('SubagentModelSelectionConfig', () => {
   it('requires both the Host setting owner and a composition scope', async () => {
     const withoutSettings = new Context()
     await mountAgentLoopTestDependencies(withoutSettings)
-    await withoutSettings.plugin(SessionProjectionRegistry)
     await withoutSettings.plugin(SubagentRuntime)
     expect(() => {
       tool.apply(withoutSettings, {

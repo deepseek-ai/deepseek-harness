@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-system-prompt` assembles the system prompt and tool schemas the model receives before each step. Plugins contribute ordered prompt sections, dynamic runtime context, tool-schema providers, and named variables; the loop calls `assemble()` once per step and renders the result into the complete model prompt. The package provides the fixed harness identity and the global deployment persona, while an agent-scoped contribution shadows the global default for one agent. Config controls the harness identity opener, dynamic runtime context, the deployment persona, and an explicit model-facing tool order. Choose it when you need to add a prompt section, a prompt variable, or a tool-schema source — it is the assembly point all model-facing prose flows through.
+`dsh-system-prompt` assembles the system prompt and tool schemas the model receives before each step. Plugins contribute ordered prompt sections, dynamic runtime context, tool-schema providers, and named variables; the loop calls `assemble()` once per step and renders the result into the complete model prompt. The package provides the fixed harness identity and the global deployment persona prefix and suffix, while an agent-scoped contribution shadows the global default for one agent. Config controls the harness identity opener, dynamic runtime context, the deployment persona prefix and suffix, and an explicit model-facing tool order. Choose it when you need to add a prompt section, a prompt variable, or a tool-schema source — it is the assembly point all model-facing prose flows through.
 
 ## Table of Contents
 
@@ -27,16 +27,17 @@ English | [中文](README.zh.md)
 
 Mount `dsh-system-prompt` wherever agents run: it provides `ctx.systemPrompt`, the registry every prompt contribution lands in. Contributions are scoped — registering through `agent.ctx` affects that agent alone and shadows a same-named global.
 
+<a id="configure-the-prompt"></a>
 ### Configure the prompt
 
-The config owns the fixed opener, runtime context, deployment persona, and tool order; everything else comes from registered contributions.
+The config owns the fixed opener, runtime context, deployment persona prefix and suffix, and tool order; everything else comes from registered contributions.
 
 ```yaml
 - name: '@deepseek-ai/dsh-system-prompt'
   config:
     includeHarnessIdentity: true
     includeRuntimeContext: true
-    persona: 'You are the deployment assistant.'
+    personaPrefix: 'You are the deployment assistant.'
     toolOrder: ['<unlisted-tools>']
 ```
 
@@ -44,7 +45,8 @@ The config owns the fixed opener, runtime context, deployment persona, and tool 
 |---|---|---|
 | `includeHarnessIdentity` | `true` | Include the fixed `You are an AI agent powered by DeepSeek Harness.` first-party opener at order −1000. Set false only when a compatibility deployment owns the complete system prompt. |
 | `includeRuntimeContext` | `true` | Include ordered dynamic runtime context in assembly |
-| `persona` | `''` | The global deployment-persona prompt fragment, rendered at order `0` |
+| `personaPrefix` | `''` | Global persona prefix template at order `0`, before first-party guidance |
+| `personaSuffix` | `''` | Global `deployment:persona-suffix` template at order `10200`, after first-party guidance |
 | `toolOrder` | — | Explicit model-facing tool order with one `'<unlisted-tools>'` rest entry |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-system-prompt) is the exhaustive source for every accepted field. A `toolOrder` list without exactly one rest entry or with duplicates fails at load; a listed name with no registered tool rejects every `assemble()`.
@@ -118,8 +120,7 @@ The package-level contract is enough for most consumers; read these when you nee
 - [System-prompt subsystem](../../../docs/subsystems/system-prompt.md) — the exact cross-package types and generated service API.
 - [tools package](../tools/README.md) — the tool registry whose schemas flow into assembly.
 - [Prompt variables Agent Note](../../../.agents/notes/implemented/architecture/2026-07-05-prompt-variables-and-tool-guidance-ownership.md) — who owns which prompt facts.
-- [First-party prompt order Agent Note](../../../.agents/notes/implemented/architecture/2026-08-25-sparse-first-party-prompt-section-orders.md) — the sparse named order allocation.
-- [Explicit tool order Agent Note](../../../.agents/notes/implemented/feature/2026-07-06-explicit-tool-order.md) — why the central order list exists.
+- [First-party prompt order Agent Note](../../../.agents/notes/archived/architecture/2026-08-25-sparse-first-party-prompt-section-orders.md) — the sparse named order allocation.
 - [Core group map](../README.md) — how the core packages compose.
 
 -----
@@ -131,7 +132,7 @@ The package-level contract is enough for most consumers; read these when you nee
 
 #### What the model sees
 
-By default every assembly starts with the harness identity below, then the configured persona and ordered plugin sections after strict variable interpolation. `includeHarnessIdentity: false` omits only that fixed opener. Empty sections disappear; scoped sections and variables can shadow globals for one agent. The `system-prompt/assemble` waterfall determines the delivered prompt and tool schemas unless one effective section declares itself complete — that exact section then becomes the whole system prompt while the waterfall's contexts, tools, and variables remain. Ordered dynamic contexts are separate from sections and become sourced user-role snapshots only when present; `includeRuntimeContext: false` or a scoped suppressor removes them all.
+First-party sections render the harness identity, deployment persona prefix (including the model-name introduction), reusable instructions (including the generated tools SDK and structured-output guidance), then the environment-bearing suffix: harness source (`10000`), Web surface (`10100`), and deployment persona suffix (`10200`). External section orders and assembly listeners remain authoritative. `includeHarnessIdentity: false` omits only that fixed opener. Empty sections disappear; scoped sections and variables can shadow globals for one agent. The `system-prompt/assemble` waterfall determines the delivered prompt and tool schemas unless one effective section declares itself complete — that exact section then becomes the whole system prompt while the waterfall's contexts, tools, and variables remain. Ordered dynamic contexts are separate from sections and become sourced user-role snapshots only when present; `includeRuntimeContext: false` or a scoped suppressor removes them all.
 
 ##### Harness identity
 
@@ -141,11 +142,11 @@ You are an AI agent powered by DeepSeek Harness.
 
 #### Token effect
 
-Identity is a fixed per-request cost when enabled. Persona and plugin text are repeated per request and scale with their rendered content.
+Identity is a fixed per-request cost when enabled. Persona prefixes, suffixes, and plugin text are repeated per request and scale with their rendered content.
 
 #### KV Cache effect
 
-Prefix-stable while identity, persona, variables, section text, and order render identically. Any change may invalidate reuse from the first changed system-prompt token.
+With the same model, persona prefix, tools, and preceding instructions, different source paths, local Web URLs, or persona suffix values leave the reusable first-party prefix unchanged. Persona prefix changes can alter the early prefix. Any change may invalidate reuse from the first changed token; provider cache sharing and measured hit rates are not guaranteed.
 
 ### Tool schemas
 
@@ -168,7 +169,7 @@ Prefix-stable while the visible schema set, rendering, and order are unchanged. 
 
 These limits define when prompt assembly needs special care. They are current package constraints, not a task backlog.
 
-- **Deployment-authored prompt text is config/composition only** — this plugin owns the global persona default, creator plugins may register agent-scoped shadows, and other sections come from the plugin that owns the fact; there is no end-user prompt-editing API.
+- **Deployment-authored prompt text is config/composition only** — this plugin owns the global persona prefix and suffix defaults, creator plugins may register agent-scoped shadows, and other sections come from the plugin that owns the fact; there is no end-user prompt-editing API.
 - **No escape syntax for literal `{{…}}` braces** — every complete group is interpolated against registered variables; an escape is deferred until a real prompt needs one.
 - **`toolOrder` misconfiguration surfaces at prompt assembly (the first turn), not at boot** — only shape violations throw at config load.
 

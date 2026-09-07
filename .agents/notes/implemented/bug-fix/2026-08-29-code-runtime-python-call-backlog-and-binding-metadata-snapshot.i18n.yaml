@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-29-code-runtime-python-call-backlog-and-binding-metadata-snapshot.md
-2026-08-29-code-runtime-python-call-backlog-and-binding-metadata-snapshot.md: afdad301a4853754184b75668d167e71420c2480
-2026-08-29-code-runtime-python-call-backlog-and-binding-metadata-snapshot.zh.md: 48d6e0748979b09053aa51a94788fdd95d997179

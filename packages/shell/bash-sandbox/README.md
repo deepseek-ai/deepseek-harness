@@ -61,7 +61,7 @@ A denied command is reported, not retried silently: the result carries `sandbox:
 
 ### Failures and recovery
 
-If no runner can enforce a confined mode, the foreground call fails with `SANDBOX_UNAVAILABLE` and a background process records a runner-failure fact — never a silent unconfined run. A runner-attributable spawn failure carries the original spawn error as detail; other spawn rejections keep the local executor's ordinary command-start semantics.
+If no runner can enforce a confined mode, the foreground call fails with `SANDBOX_UNAVAILABLE` and a background process records a runner-failure fact — never a silent unconfined run. A provider rejection is attributed to the confinement runner only when its `ENOENT`/`EACCES` path or syscall independently names `argv[0]`; otherwise it keeps the local executor's stage-neutral provider-failure semantics.
 
 -----
 
@@ -151,7 +151,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 #### What the model sees
 
-If no runner can enforce a confined mode, the foreground call propagates the `SANDBOX_UNAVAILABLE` error from the sandbox seam. A runner-attributable spawn failure supplies the original spawn error as detail; a rejection without `ENOENT`/`EACCES` path or syscall evidence that names `argv[0]` remains an ordinary command-start error. A settled runner failure supplies the matched fatal stderr line and preserves the original stderr collection; the appended `Runner failure: <detail>` is the authoritative diagnosis over the generic `SANDBOX_UNAVAILABLE` prefix.
+If no runner can enforce a confined mode, the foreground call propagates the `SANDBOX_UNAVAILABLE` error from the sandbox seam. A provider rejection with `ENOENT`/`EACCES` path or syscall evidence that names `argv[0]` supplies the original error as runner-failure detail; another rejection remains a stage-neutral provider error. A settled runner failure supplies the matched fatal stderr line and preserves the original stderr collection; the appended `Runner failure: <detail>` is the authoritative diagnosis over the generic `SANDBOX_UNAVAILABLE` prefix.
 
 #### Token effect
 

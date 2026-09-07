@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-12-hero-fish-hover-swim-morph.md
-2026-08-12-hero-fish-hover-swim-morph.md: c485f94e244040d7e72838065f977e698391c00d
-2026-08-12-hero-fish-hover-swim-morph.zh.md: 46fa50732bf98aa5e3afb503e84f8e23001499b2

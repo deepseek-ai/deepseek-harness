@@ -19,7 +19,7 @@ async function harness(adapter: MockAdapter, persona = '') {
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, { persona })
+  await ctx.plugin(SystemPrompt, { personaPrefix: persona })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -556,7 +556,7 @@ describe('agent loop', () => {
 
     expect(adapter.requests).toHaveLength(0) // the request was never sent
     expect(errors.map(error => error.message)).toEqual([
-      'prompt variable "{{cwd}}" has no value for this assembly (section "deployment:persona")',
+      'prompt variable "{{cwd}}" has no value for this assembly (section "deployment:persona-prefix")',
     ])
     const turnEnd = agent.session.snapshotEvents().find(e => e.type === 'turn/end')
     expect(turnEnd?.type === 'turn/end' && turnEnd.data.reason.kind).toBe('error')

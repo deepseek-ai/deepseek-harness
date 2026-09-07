@@ -1,6 +1,6 @@
 /**
  * Service Definition for the subprocess capability seam (`ctx.subprocess`): execution-world executable lookup,
- * fully specified managed process trees with raw or
+ * fully specified provider-managed process ranges with raw or
  * collected stdio, and one terminal-process primitive. Command defaulting,
  * shell semantics, deadlines, protocol framing, terminal readiness, and
  * presentation belong to consumers. The local implementation lives in
@@ -92,17 +92,18 @@ declare module '@deepseek-ai/cordis' {
  * Implementations must honor these semantics:
  * - Executable paths belong to one execution world shared with the mounted
  *   filesystem provider.
- * - {@link spawn} returns immediately with a live handle; `done` resolves at
- *   process close with exit facts and rejects only for spawn-level failures.
+ * - {@link spawn} returns a live handle synchronously. Target identity remains
+ *   provider-private; `done` resolves with the spawned command's exit facts and
+ *   may reject for spawn or provider failures.
  * - Collect-mode readers are offset-based and non-consuming, so independent
  *   readers never consume one another's output; lossy reads report truncation
  *   and the spill file holding the complete stream when one exists. Piped
  *   streams are handed to the caller raw and never buffered here.
- * - {@link SubprocessHandle.terminate} (and the spec's abort signal) escalates
- *   SIGTERM→grace→SIGKILL — the only termination verb — tree-scoped on every
- *   platform. {@link SubprocessHandle.waitForExit} observes whole-tree
- *   liveness, so a consumer-owned teardown ladder can hold each tier on real
- *   quiescence.
+ * - {@link SubprocessHandle.terminate} (and the spec's abort signal) starts the
+ *   provider's documented procedure against its managed range.
+ *   {@link SubprocessHandle.waitForExit} observes that same range so a
+ *   consumer-owned teardown ladder can hold each tier on real quiescence; each
+ *   provider documents its signalling and observability limits.
  * - Disposal of the service terminates all still-running managed processes
  *   and awaits their exit.
  * - {@link spawnTerminal} owns terminal allocation, text transport,
@@ -138,13 +139,14 @@ export abstract class SubprocessRuntime extends Service {
    * applies no defaults.
    * @param spec - argv, directory, stdio dispositions, grace, cancellation, and environment.
    * @returns the live process handle (streams/readers, signalling, outcome promise).
+   * @throws synchronously when pre-aborted or when argv, cwd, environment, or grace is invalid before handle creation.
    */
   abstract spawn(spec: SubprocessSpawnSpec): SubprocessHandle
 
   /**
    * Allocate a real terminal and start one owned process session. This is the
    * only non-pipe process primitive: implementations own terminal byte I/O,
-   * foreground groups, signals, and complete session-tree cleanup.
+   * foreground groups, signals, and whole-session quiescence.
    * @param spec - fully specified argv, cwd, environment, dimensions, grace, and allocation cancellation.
    * @returns the live terminal handle after allocation succeeds.
    */

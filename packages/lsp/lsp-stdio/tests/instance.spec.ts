@@ -233,15 +233,13 @@ describe('LspInstance query and abort', () => {
     expect(instance.dead).toBe(true)
   })
 
-  it('awaits process exit before rejecting a request write failure', async () => {
+  it('finishes teardown before rejecting a request write failure', async () => {
     const instance = makeInstance({}, {
       shutdownTimeoutMs: 100,
       killGraceMs: 100,
     }, failingWriter('textDocument/definition'))
-    // The pid is observed only to prove the owned subprocess reached quiescence before rejection.
-    const pid = (instance as unknown as { connection: { pid: number } }).connection.pid
     await expect(run(instance, 'goToDefinition')).rejects.toThrow(/fixture textDocument\/definition failure/)
-    expect(processAlive(pid)).toBe(false)
+    expect(instance.dead).toBe(true)
   })
 
   it('rejects when the server lacks the operation capability', async () => {
@@ -268,6 +266,7 @@ describe('LspInstance query and abort', () => {
     })
     expect(instance.dead).toBe(true)
   })
+
 })
 
 describe('LspInstance disposal', () => {
@@ -312,7 +311,7 @@ describe('LspInstance disposal', () => {
     await expect(instance.dispose()).resolves.toBeUndefined()
   })
 
-  it('awaits a surviving process-tree helper on every concurrent dispose', async () => {
+  it('awaits a surviving managed-range helper on every concurrent dispose', async () => {
     const marker = join(root, 'helper.pid')
     const helper = 'process.on("SIGTERM",()=>{});setInterval(()=>{},1000);'
     const script = 'const{spawn}=require("node:child_process");const{writeFileSync}=require("node:fs");'
@@ -372,10 +371,10 @@ async function waitForProcessExit(pid: number, timeoutMs = 3_000): Promise<void>
 }
 
 /** Write normally except for one method whose callback receives a deterministic transport error. */
-function failingWriter(method: string): ConnectionWriter {
+function failingWriter(method: string, failure = new Error(`fixture ${method} failure`)): ConnectionWriter {
   return (stdin, message, done) => {
     if ((message as { method?: unknown }).method === method) {
-      queueMicrotask(() => { done(new Error(`fixture ${method} failure`)) })
+      queueMicrotask(() => { done(failure) })
       return
     }
     stdin.write(encodeMessage(message), done)

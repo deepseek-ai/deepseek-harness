@@ -43,7 +43,9 @@ export class TestSessionQuery extends SessionQueryEngine {
       return cut(
         'prepared',
         handle.header,
-        await handle.read(0, undefined, options.signal === undefined ? {} : { signal: options.signal }),
+        (await handle.read(
+          0, undefined, options.signal === undefined ? {} : { signal: options.signal },
+        )).events,
       )
     } finally {
       await handle.close()

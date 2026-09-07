@@ -28,11 +28,11 @@ First materialization compresses the two initial frames before opening the tempo
 
 ### Read, listing, and crash recovery
 
-A frame-boundary scanner reads the standard magic, variable header fields, block headers and payload sizes, and optional checksum trailer. It does not interpret compressed blocks. Complete frames are independently checksum-validated and passed through the [large-session restore pipeline](2026-08-05-large-session-jsonl-restore-pipeline.md), which owns decoder reuse, cooperative yielding, and incremental JSONL scanning. A checksum/decompression failure in any complete frame, a malformed complete-frame JSONL tail, or invalid frame structure is corruption and rejects.
+A frame-boundary scanner reads the standard magic, variable header fields, block headers and payload sizes, and optional checksum trailer. It does not interpret compressed blocks. Complete frames are independently checksum-validated and passed through the [large-session restore pipeline](../../archived/architecture/2026-08-05-large-session-jsonl-restore-pipeline.md), which owns decoder reuse, cooperative yielding, and incremental JSONL scanning. A checksum/decompression failure in any complete frame, a malformed complete-frame JSONL tail, or invalid frame structure is corruption and rejects.
 
 Listing reads in bounded chunks only until the first complete frame is available, validates and decompresses that header frame, and never reads an event frame. The dedicated header frame therefore preserves metadata-only listing even for very large session logs.
 
-EOF inside the final frame is a torn tail. The frame belongs to an append that never resolved, so none of its records were acknowledged durable: repair truncates from that frame's starting byte, retains all prior complete frames, and appends the coordinator's synthetic tool, step, and turn closers as one new checksummed frame ([export and pre-release trims](../simplification/2026-08-27-persistence-export-and-pre-release-trims.md) owns dropping the earlier partial-plaintext salvage).
+EOF inside the final frame is a torn tail. The frame belongs to an append that never resolved, so none of its records were acknowledged durable: repair truncates from that frame's starting byte, retains all prior complete frames, and appends the coordinator's synthetic tool, step, and turn closers as one new checksummed frame ([export and pre-release trims](../../archived/simplification/2026-08-27-persistence-export-and-pre-release-trims.md) owns dropping the earlier partial-plaintext salvage).
 
 ### Consumers and verification
 
@@ -53,5 +53,5 @@ The shared persistence and coordinator contracts run against both encodings. Bac
 - Ordinary session roots store `.jsonl.zstd` and retain append-only, fsync, rollback, and interrupted-turn recovery semantics.
 - Raw JSONL remains a deliberate configuration, but changing encoding requires a fresh/separate root or selecting the mode that matches existing artifacts.
 - One frame per durable batch adds bounded framing/checksum overhead and allows header-only listing plus repair from an exact append boundary.
-- External tools must understand concatenated Zstandard frames or consume raw-mode artifacts; generic one-shot Node decompression reads only the first independent frame, so backend reads walk frames through the [restore pipeline](2026-08-05-large-session-jsonl-restore-pipeline.md).
+- External tools must understand concatenated Zstandard frames or consume raw-mode artifacts; generic one-shot Node decompression reads only the first independent frame, so backend reads walk frames through the [restore pipeline](../../archived/architecture/2026-08-05-large-session-jsonl-restore-pipeline.md).
 - The implementation depends on Node's experimental built-in Zstandard API without an npm dependency; the supported-version compatibility gate makes drift visible.

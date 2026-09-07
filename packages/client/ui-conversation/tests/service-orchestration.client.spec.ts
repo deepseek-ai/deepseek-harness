@@ -78,7 +78,7 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
-  it('treats strict-steer races as converged Queue delivery', async () => {
+  it('treats QueueDock Steer pre-admission races as converged Queue delivery', async () => {
     const b = await bench()
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: new RemoteError('session/steer-unavailable', 'closed', { itemId: 'item-1' as QueuedMessage['id'] }),
@@ -822,7 +822,7 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
     expect(b.shell.notices.getSnapshot()).toBeNull()
 
     // A row the host already claimed (e.g. a repeated empty-draft chord):
-    // the duplicate strict steer is a silent no-op.
+    // the duplicate Steer is a silent no-op.
     await b.runtime.sessions.updateSessionSnapshot('s1', (draft) => {
       draft.queue = [row('q-3')]
     })

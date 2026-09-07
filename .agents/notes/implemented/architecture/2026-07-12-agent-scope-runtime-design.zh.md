@@ -74,7 +74,7 @@ Receiver 是一个小型载体而非领域对象的透明代理。需要 agent �
 
 ### 注册表读取叠加一个精确 layer
 
-作用域感知的注册表使用 `ScopedLayers`，拥有一个即时创建的全局 aggregate 和按标识键惰性创建的 aggregate。读取解析全局 layer 和至多一个精确局部 layer；它不创建状态，也从不遍历父级链。注册可见性与 Cordis effect 所有权都从同一个上下文派生，而回收会等待具体 layer 的完整 aggregate 变空（见[决策](2026-07-12-scoped-layers-store.zh.md)）。
+作用域感知的注册表使用 `ScopedLayers`，拥有一个即时创建的全局 aggregate 和按标识键惰性创建的 aggregate。读取解析全局 layer 和至多一个精确局部 layer；它不创建状态，也从不遍历父级链。注册可见性与 Cordis effect 所有权都从同一个上下文派生，而回收会等待具体 layer 的完整 aggregate 变空（见[决策](../../archived/architecture/2026-07-12-scoped-layers-store.md)）。
 
 每个服务保留其领域规则。命名 command 和提示词视图使用共享的、保持插入顺序的 shadow 合并；工具保留更丰富的 resolver，因为限制会在加入局部工具前过滤全局工具，保留的 PTC mode transport 则单独插入。提示词变量和工具 guard 保持实时迭代，而工具提供方成员关系按每次 assembly 物化。Scope 提供存储生命周期和命名遮蔽，而非通用的注册表视图。
 
@@ -274,7 +274,7 @@ subagent 启动有一次所有权转移。提供方拥有未发布资源，直�
 
 ### 服务约定有一个取消通道
 
-`SubagentProvider.start()` 和 `SubagentRuntime.start()` 返回 `Promise<SubagentRun>`。Promise 会在后端跨过发布边界后兑现，因此调用方和 `subagent/start` 观察者从不需要第二个 `run.started` promise。提供方工作如果在发布前失败，`start()` 就会被拒绝；发布后的提示词、轮次、取消与基础设施结果会通过 `SubagentRun.result` 结算，且不会隐藏 child id，这也是[持久化目录决策](../feature/2026-07-22-durable-subagent-catalog-and-list-agents.zh.md)所要求的约定。
+`SubagentProvider.start()` 和 `SubagentRuntime.start()` 返回 `Promise<SubagentRun>`。Promise 会在后端跨过发布边界后兑现，因此调用方和 `subagent/start` 观察者从不需要第二个 `run.started` promise。提供方工作如果在发布前失败，`start()` 就会被拒绝；发布后的提示词、轮次、取消与基础设施结果会通过 `SubagentRun.result` 结算，且不会隐藏 child id，这也是[持久化目录决策](../../archived/feature/2026-07-22-durable-subagent-catalog-and-list-agents.md)所要求的约定。
 
 `SubagentStartRequest.signal` 是必需的。中止它会在启动期间，以及已发布 run 的剩余就绪或轮次工作中请求取消。`SubagentRun.dispose()` 也请求取消并等待完全停稳。没有单独的公开 `run.cancel()` 通道。
 
@@ -340,7 +340,7 @@ TypeScript 无法管控 JavaScript 强制转换、直接 Cordis dispatch、进�
 
 ### 生成的产物使公开约定保持对齐
 
-事件目录、服务目录、生产者/消费方矩阵、配置目录、模块图、工具目录、type-equiv 块和作用域事件解析器映射都是从源码生成或受新鲜度门禁约束的。[TypeScript 语义门禁 Agent Note](../process/2026-07-14-typescript-program-backed-semantic-gates.zh.md) 拥有 Program 构造、语义事件发现和解析器生成规则。
+事件目录、服务目录、生产者/消费方矩阵、配置目录、模块图、工具目录、type-equiv 块和作用域事件解析器映射都是从源码生成或受新鲜度门禁约束的。[TypeScript 语义门禁 Agent Note](../../archived/process/2026-07-14-typescript-program-backed-semantic-gates.md) 拥有 Program 构造、语义事件发现和解析器生成规则。
 
 行为测试固定了作用域路由和 dispose、最终写入注册表时的碰撞清理、发布回滚、有序完全停稳、持久化前/后提交行为、跨展示和执行的活跃工具过滤、协作式提示词组装、原生和 PTC mode 中的结构化输出提交、异步 subagent 启动和信号取消、worker 终端仲裁、ACP 结算和进程拆除。
 

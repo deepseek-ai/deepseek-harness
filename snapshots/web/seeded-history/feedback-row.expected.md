@@ -58,10 +58,10 @@
   - text: Context injection AGENTS.md
 - img
 - text: permission preset read-only
-- 'button "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}. Session sharing is not configured." [expanded]':
+- 'button "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}." [expanded]':
   - img
-  - text: "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}. Session sharing is not configured."
-- text: "Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}. Session sharing is not configured."
+  - text: "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}."
+- text: "Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}."
 - textbox "Message or run a task... / commands, @ files or sessions"
 - button "Commands":
   - img

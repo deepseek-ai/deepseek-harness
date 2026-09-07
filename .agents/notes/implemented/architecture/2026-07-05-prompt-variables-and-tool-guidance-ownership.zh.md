@@ -32,7 +32,7 @@ Status: implemented
 
 ### Persona 作为 order-0 section
 
-`dsh-system-prompt` 拥有 first-party order 为 `-1000` 的 `harness:identity` 和 order 为 0 的配置 `deployment:persona`，因此两者在循环被替换时仍然存活。提示词渲染只有一条路径 `renderPrompt(assembly)`，已路由请求 header 因此会记录准确的提示词，稍后由 `ctx.tokenMeter` 为压缩（compaction）压力回放。agent 作用域的 `deployment:persona` 遮蔽全局默认值，允许 subagent 提供方在发布前安装 persona。[first-party 顺序分配](2026-08-25-sparse-first-party-prompt-section-orders.zh.md)规定身份、策略、工具指导、生成协议和最终输出义务的稀疏具名位置。
+`dsh-system-prompt` 拥有 first-party order 为 `-1000` 的 `harness:identity` 和 order 为 0 的配置 `deployment:persona-prefix`，因此两者在循环被替换时仍然存活。提示词渲染只有一条路径 `renderPrompt(assembly)`，已路由请求 header 因此会记录准确的提示词，稍后由 `ctx.tokenMeter` 为压缩（compaction）压力回放。agent 作用域的 `deployment:persona-prefix` 遮蔽全局默认值，允许 subagent 提供方在发布前安装 persona。[`dsh-system-prompt` README](../../../../packages/core/system-prompt/README.zh.md)规定身份、策略、工具指导、生成协议和最终输出义务的稀疏具名位置。
 
 ### 工具指导归属
 
@@ -40,7 +40,7 @@ Status: implemented
 
 ### Subagent 对话历史描述符
 
-`SubagentProvider.inheritsParentContext` 描述的是对话历史初始化，而非作用域、服务、工具或权限。spawn 和 ACP 将其设为 `false`；fork 设为 `true`。`dsh-tool-subagent` 根据该标志派生工具描述和提示词参数描述，包括 fork 继承已完成轮次但不继承进行中轮次这一点。提供方生命周期事件使该措辞与响应式提供方注册保持同步；其设计动机见[提供方生命周期事件 Agent Note](2026-07-05-subagent-provider-lifecycle-events.zh.md)。
+`SubagentProvider.inheritsParentContext` 描述的是对话历史初始化，而非作用域、服务、工具或权限。spawn 和 ACP 将其设为 `false`；fork 设为 `true`。`dsh-tool-subagent` 根据该标志派生工具描述和提示词参数描述，包括 fork 继承已完成轮次但不继承进行中轮次这一点。提供方生命周期事件使该措辞与响应式提供方注册保持同步；其设计动机见[提供方生命周期事件 Agent Note](../../archived/architecture/2026-07-05-subagent-provider-lifecycle-events.md)。
 
 ## 曾考虑的替代方案
 
@@ -49,7 +49,7 @@ Status: implemented
 - **在每个 persona 中手写模型名称**：与上方一行的 `model:` 键重复，配置修改后静默失实；正是本决策要治愈的病症。
 - **宽松插值（未知引用保留原样或替换为空）**：一个拼写错误 `{{modle}}`（或一个空洞）会被发送给模型，直到 transcript（文本记录）审查时才会被发现。
 - **在配置中为每个 subagent 实例编写措辞**：面向模型的行文回到每个部署 × 实例中，重蹈在 leaf YAML 中手写指导的漂移。**根据提供方名称选择措辞**：`providerName` 本身是配置，重命名提供方后会静默获得错误的措辞。
-- **在 `apply` 时解析提供方（加载顺序要求）**与**仅用 section 承载 subagent 措辞（在 assemble 时惰性解析）**：提供方生命周期事件的替代方案；两者均在[提供方生命周期事件 Agent Note](2026-07-05-subagent-provider-lifecycle-events.zh.md)中被否决。
+- **在 `apply` 时解析提供方（加载顺序要求）**与**仅用 section 承载 subagent 措辞（在 assemble 时惰性解析）**：提供方生命周期事件的替代方案；两者均在[提供方生命周期事件 Agent Note](../../archived/architecture/2026-07-05-subagent-provider-lifecycle-events.md)中被否决。
 
 ## 不在范围内
 

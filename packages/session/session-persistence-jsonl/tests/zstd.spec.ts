@@ -5,7 +5,7 @@ import type { FileHandle } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
-import { SESSION_FORMAT_VERSION, SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
+import { SessionSeq, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
 import type { SessionPersistence } from '@deepseek-ai/dsh-session-persistence'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
@@ -68,7 +68,7 @@ async function writeLog(persistence: SessionPersistence, m: SessionHeader, event
 async function readAll(persistence: SessionPersistence, id: SessionId): Promise<{ meta: SessionHeader; events: readonly SessionEvent[] }> {
   const handle = await persistence.open(id, 'read')
   try {
-    return { meta: handle.header, events: await handle.read() }
+    return { meta: handle.header, events: (await handle.read()).events }
   } finally {
     await handle.close()
   }
@@ -411,7 +411,7 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
     expect((await readAll(ctx.sessionPersistence, header.id)).events).toEqual(oneTurnLog())
   })
 
-  it('publishes v2 beside an unchanged compressed v0 source before returning a read handle', async () => {
+  it('serves a migrated compressed v0 read without publishing a successor', async () => {
     const root = await freshRoot()
     const ctx = await mount(root)
     const header = meta('zstd-v0-read', '/work')
@@ -428,13 +428,8 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
       meta: { ...header, delegationDepth: 0 },
       events: oneTurnLog(),
     })
-
     expect(await readFile(sourcePath)).toEqual(source)
-    const current = (await decodeCompleteFrames(await readFile(currentPath))).toString().split('\n')
-    expect(JSON.parse(current[0] as string)).toMatchObject({
-      id: header.id,
-      version: SESSION_FORMAT_VERSION,
-    })
+    await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
 

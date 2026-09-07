@@ -97,7 +97,7 @@ A violation throws an `InvariantError` from the context that reported it: it car
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-This section explains the design behind the registry; the observable behavior is covered in [Use this package](#use-this-package). The full decision rationale lives in the [invariant-service Agent Note](../../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.md).
+This section explains the design behind the registry; the observable behavior is covered in [Use this package](#use-this-package).
 
 ### Design philosophy
 
@@ -128,7 +128,6 @@ Read these pages when the package-level contract is not enough. They move from t
 
 - [Runtime invariants subsystem](../../../docs/subsystems/invariants.md) — the generated reference for `Config`, the installer, the service, and the companion contract.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-invariants) — every accepted config field and its source declaration.
-- [Package-owned invariant service Agent Note](../../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.md) — why checks live beside their owners and the registry owns selection and lifecycle.
 - [Invariant runtime contracts Agent Note](../../../.agents/notes/implemented/architecture/2026-07-19-package-invariant-runtime-contracts.md) — what a runtime invariant may assert and the mechanical gate that enforces companion wiring.
 - [Runtime-diagnostics group map](../../README.md) — adjacent diagnostics packages.
 

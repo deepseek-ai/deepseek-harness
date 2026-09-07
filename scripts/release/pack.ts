@@ -10,6 +10,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
+import { pnpmInvocation } from '../pnpm-invocation.ts'
 import { releaseFamily, tarballName, type ReleaseFamily, type ReleaseMember } from './families.ts'
 import { isEntry, runConcurrent } from './process.ts'
 import { PUBLISH_ORDER_FILE, tarballFiles } from './tarball.ts'
@@ -25,7 +26,8 @@ const DEFAULT_OUTPUT = 'dist/npm'
  * @returns The tarball filename.
  */
 async function packMember(family: ReleaseFamily, member: ReleaseMember, destination: string): Promise<string> {
-  await runConcurrent('pnpm', ['--dir', member.directory, 'pack', '--pack-destination', destination])
+  const invocation = pnpmInvocation(['--dir', member.directory, 'pack', '--pack-destination', destination])
+  await runConcurrent(invocation.command, invocation.args)
 
   const filename = tarballName(member)
   const tarball = join(destination, filename)

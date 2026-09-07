@@ -99,17 +99,22 @@
     "apps/web/tests/workflow-run.e2e.ts",
     "apps/web/stress-tests/reasoning-chunks.stress.ts",
     "apps/cli/tests/**/*.ts",
+    "apps/desktop/scripts/**/*.ts",
+    "apps/desktop/tests/**/*.ts",
+    "benchmarks/**/*.ts",
     "packages/*/*/tests/**/*.ts",
     "scripts/**/*.ts",
     "website/**/*.ts",
     "website/.vitepress/**/*.ts"
   ],
-  // Under packages/client a test file names the face it covers: `*.client.*`
-  // belongs to the Client aggregate, `*.host.spec.ts` to this one. The two
+  // Under packages/client and benchmarks, a test file names the face it covers:
+  // `*.client.*` belongs to the Client aggregate, `*.host.spec.ts` to this one. The two
   // suffixes are mutually exclusive, so each aggregate excludes the other's
   // and the package test glob above needs no per-file entry.
   "exclude": [
     "packages/client/*/src/**",
+    "benchmarks/**/*.client.ts",
+    "benchmarks/**/*.client.tsx",
     "packages/*/*/tests/**/*.client.ts",
     "packages/*/*/tests/**/*.client.tsx",
     "packages/*/*/tests/**/*.client.spec.ts",
@@ -131,6 +136,7 @@
     { "path": "./vendor/hmr" },
     { "path": "./vendor/logger-console" },
     { "path": "./packages/util/brand" },
+    { "path": "./packages/util/package-manifest" },
     { "path": "./packages/util/http-proxy" },
     { "path": "./packages/util/launch-environment" },
     { "path": "./packages/util/native-command" },
@@ -330,6 +336,7 @@
     { "path": "./packages/host/directory-picker-browse" },
     { "path": "./packages/host/directory-picker-native" },
     { "path": "./packages/host/frontend-static" },
+    { "path": "./packages/host/open-in-app" },
     { "path": "./packages/host/plugin-inventory" },
     { "path": "./packages/llm/plugin-package-inventory-deepseek" },
     { "path": "./packages/host/webserver" },
@@ -338,6 +345,8 @@
     { "path": "./packages/lsp/lsp" },
     { "path": "./packages/lsp/lsp-stdio" },
     { "path": "./packages/lsp/tool-lsp" },
-    { "path": "./apps/cli" }
+    { "path": "./apps/cli" },
+    { "path": "./apps/desktop-host" },
+    { "path": "./apps/desktop" }
   ]
 }

@@ -14,8 +14,8 @@ on:
           - larger-runner-benchmark
           - consolidated-runner-benchmark
 
-# A master push may carry only the two self-hosted standby drills and the Wine
-# apt cache seeder; those drills outlast the interval between master merges, so
+# Master runs platform runtime checks, Wine, and two self-hosted standby drills.
+# The drills outlast the interval between master merges, so
 # push is exempt from cancellation (see ci-failover-runbook). workflow_dispatch
 # keeps cancelling: a re-dispatched runner benchmark holds up to 12 larger
 # runners for 15 minutes in this same group.
@@ -33,34 +33,95 @@ env:
   DSH_TELEMETRY_DISABLED: '1'
 
 jobs:
-  # Master seeds the Wine apt-archive cache in the default-branch scope,
-  # which every pull request's windows job can restore; saves from
-  # pull-request runs are scoped to their own merge ref and help nobody
-  # else. Runs in seconds when the image version already has a cache.
-  wine-apt-cache:
+  # These native runtime carriers are post-merge checks; release keeps all targets.
+  python-runtime:
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    name: wine apt cache
+    name: python runtime / macOS and Linux ARM64
+    uses: ./.github/workflows/build-exe-for-python-sdk.yml
+    with:
+      targets: node24-linux-arm64,node24-macos-arm64,node24-macos-x64
+      ci: true
+    secrets:
+      DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
+
+  # Wine runs once here, independently of the native serial standby aggregates.
+  windows:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    name: windows node 24 / wine
+    timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      # Master CI restores and seeds the image-specific Wine dependency cache.
       - name: Compose Wine apt cache key
         id: wine-cache-key
         run: echo "key=wine-debs-${ImageOS:-linux}-${ImageVersion:-v0}" >> "$GITHUB_OUTPUT"
 
       - uses: actions/cache@v4
-        id: wine-cache
         with:
           path: ~/wine-debs
           key: ${{ steps.wine-cache-key.outputs.key }}
 
-      - name: Download the Wine dependency closure
-        if: steps.wine-cache.outputs.cache-hit != 'true'
+      # Runner provisioning only — a developer machine installs Wine through
+      # its own package manager; the gate script assumes a wine binary and
+      # fails loud without one. Wine from the apt cache when present; else
+      # download the full dependency closure once and keep it for the next
+      # run. The `wine` dispatcher package (not bare `wine64`) is what puts a
+      # binary on PATH.
+      - name: Install Wine
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends --download-only wine
-          mkdir -p "$HOME/wine-debs"
-          cp /var/cache/apt/archives/*.deb "$HOME/wine-debs/"
-          du -sh "$HOME/wine-debs"
+          if compgen -G "$HOME/wine-debs/*.deb" > /dev/null; then
+            # The restored archive is the full --download-only closure of
+            # `wine` for this runner image, so installing the .debs directly
+            # with dpkg needs no repository access. apt-get would instead
+            # re-download the same 100+ MB closure from the mirror, which has
+            # stalled the job past its budget on a degraded runner network.
+            # If the archive cannot satisfy the closure, fall back to the apt
+            # network install.
+            if ! sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$HOME"/wine-debs/*.deb; then
+              sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
+              sudo apt-get install -y --no-install-recommends "$HOME"/wine-debs/*.deb
+            fi
+          else
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends --download-only wine
+            mkdir -p "$HOME/wine-debs"
+            cp /var/cache/apt/archives/*.deb "$HOME/wine-debs/" 2>/dev/null || true
+            sudo apt-get install -y --no-install-recommends wine
+          fi
+
+      - name: Run the Wine Windows gates
+        run: bash scripts/wine-windows-gates.sh
+
+      - name: Shut down wineserver
+        if: always()
+        run: wineserver -k 2>/dev/null || true
 
   # Hot-standby drill for the in-house self-hosted pool: every master move
   # re-runs the complete unsharded aggregate on the persistent 64-core VM,
@@ -84,6 +145,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane —
+      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:

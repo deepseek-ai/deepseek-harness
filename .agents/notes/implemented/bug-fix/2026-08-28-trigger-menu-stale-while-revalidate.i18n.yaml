@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-28-trigger-menu-stale-while-revalidate.md
-2026-08-28-trigger-menu-stale-while-revalidate.md: 12541ba3ec6ee82ac6c12da85f99c0d8e044b9e8
-2026-08-28-trigger-menu-stale-while-revalidate.zh.md: 69b3d1b6a304562e1bb1835b1de2f09f8f38c5a4

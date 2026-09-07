@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/process/2026-07-22-fast-local-git-hooks.md
+2026-07-22-fast-local-git-hooks.md: b13708a96cda088342b6991ff6d9ab797065fc53
+2026-07-22-fast-local-git-hooks.zh.md: 9f7f872c845a5210537701a3c09eb59e820cd62f

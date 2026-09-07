@@ -29,7 +29,7 @@ kind: "package-library"
 
 ### 选择并挂载后端
 
-只加载一个后端插件；它把捕获协调器与自己的投递流水线注册为 `ctx.sessionTelemetry`，重复加载会抛出异常。已挂载后端通过必需的 [`sharing` 成员](#the-sharing-disclosure) 披露共享策略，`/feedback` 的确认文本会渲染它；只有在未挂载任何遥测服务时，消费方才渲染「未配置」。
+只加载一个后端插件；它把捕获协调器与投递流水线注册为 `ctx.sessionTelemetry`。重复加载会抛出异常。必需的 [`sharing` 成员](#the-sharing-disclosure) 报告部署模式，不代表会话准入或投递。只有在未挂载任何遥测服务时，消费方才可报告「未配置」。`/feedback` 命令确认记录，不读取此策略。
 
 ### 后端约定
 
@@ -37,13 +37,13 @@ kind: "package-library"
 
 ### 捕获内容
 
-捕获以两种模式之一运行。`live` 捕获在追加时跟随会话事件、在挂载时回放已存活会话并记录生命周期标记；`on-demand` 捕获只在后端通过 `captureSession(session, throughSeq?)` 请求前缀时读取权威会话日志。每条权威会话事件都按顺序映射为一条 ledger 记录。`assistant/message` 或 `assistant/attempt` 记录会携带完整的嵌入式紧凑 stream，包括失败和重试输出。每条 ledger 记录还携带 `session.id`、`session.format_version`、数值事件身份、可选 header 事实与预先映射的严重级别（`tool/result.isError`、`turn/end` 的错误原因与 `agent-error` 映射为 `error`；其余为 `info`）。
+捕获以两种模式之一运行。`live` 捕获在追加时跟随会话事件、在挂载时回放已存活会话并记录生命周期标记；`on-demand` 捕获只在后端通过 `captureSession(session, throughSeq?)` 请求前缀时读取权威会话日志。协调器选项决定是否包含存储历史。每条权威会话事件都按顺序映射为一条 ledger 记录。`assistant/message` 或 `assistant/attempt` 记录会携带完整的嵌入式紧凑 stream，包括失败和重试输出。每条 ledger 记录还携带 `session.id`、`session.format_version`、数值事件身份、可选 header 事实与预先映射的严重级别（`tool/result.isError`、`turn/end` 的错误原因与 `agent-error` 映射为 `error`；其余为 `info`）。
 
 ### 共享披露
 
 <a id="the-sharing-disclosure"></a>
 
-每个后端都通过 seam 的 `sharing` 词汇披露其部署级共享策略：`full`（每个事件在发生时立即交接）、`feedback-only`（在 `feedback/record` 事件释放其之前的未释放前缀之前，不交接任何内容）或 `disabled`（完全不交接任何内容）。已记录反馈条目的确认文本会报告该状态；披露从不声称投递——交接是非阻塞入队，批处理、重试与丢失策略仍归后端 SDK。
+每个后端通过 `sharing` 披露部署模式：`full`、`feedback-only` 或 `disabled`。后端还可限制符合条件的 Session。该属性不是投递回执；交接是非阻塞入队，批处理、重试与丢失策略属于后端 SDK。
 
 ### 脱敏记录
 
@@ -74,11 +74,11 @@ seam 建立在一个边界之上：harness 的职责止于 `emit()`。完整事�
 
 ### 捕获流程
 
-live 捕获通过组合方 fiber 的 effect 注册：`session/created` 收养会话并从 handoff 游标起回放其生命周期本地日志后缀；`session/event` 深拷贝、脱敏并交接每个事件，零 I/O；`session/flush` 转发可选的提示并返回 void，使循环所等待的并行任务绝不等待遥测；`session/disposed` 捕获会话的 `shutdown` 标记并退役它；`agent/error` 是唯一的实时总线转发，因为会话事件词汇有意不包含运维错误记录。dispose 会为仍存活的会话捕获 shutdown 标记，然后等待后端的 `shutdown()`。on-demand 捕获只注册 dispose effect，并在请求时读取所请求的生命周期本地权威日志前缀。每个同步处理器都运行在异常隔离之内，使失败的后端或规则永远不会饿死其他监听器，也永远不会触及 agent loop。
+实时捕获通过组合 fiber 的 effect 注册 Session 事件、刷新提示、关闭标记与 agent/error 观察器。按需捕获只注册释放 effect，并按历史策略读取请求的权威日志前缀。同步处理器隔离失败，避免影响 agent loop 或其他监听器。
 
 ### handoff 游标
 
-一个模块作用域的 `WeakMap<Session, seq>` 按 Session 对象记录已交接（而非已投递）的最高 seq。live 捕获在追加时推进它；on-demand 捕获只在交接所请求的前缀时推进它。重新收养同一对象时会从该游标之后继续，且不会重复交接其 ledger 记录。新 Session 对象从 `firstLiveSeq` 之前开始：全新对象从 seq 0 开始，而 fork、resume 或迁移对象会跳过 constructor seed，从本生命周期的 `session/end-seed` 边界开始。这样，继承历史与此前持久化历史不会进入新生命周期的共享动作。接收端基于 `(session.id, session.format_version, event.seq)` 对 SDK 重试去重。这个以对象为键的 map 是对「注册即 effect」纪律的一次有意且有文档说明的窄例外：条目随其 Session 消亡；丢失条目最多只会回放当前生命周期后缀。
+模块作用域的 `WeakMap<Session, seq>` 记录已交接而非已投递的最高序号。重新收养同一对象时从该游标之后继续。捕获通常从 `firstLiveSeq` 开始；显式 `includeHistory: true` 从未交接对象的 seq 0 开始，包含恢复或分叉历史。后端负责捕获授权。存储的历史本身不授权捕获；OTel 后端等待新的显式反馈。接收方按 `(session.id, session.format_version, event.seq)` 对重复记录去重。
 
 </details>
 

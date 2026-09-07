@@ -440,13 +440,16 @@ declare class Session {
     inheritedEventCount?: SessionLogOffset,
   ): Session;
   /**
-   * Restore a detached session by taking ownership of fresh persistence values.
-   * The storage format, event envelopes, sequence continuity, surface transitions,
-   * and header fields are validated before the restored objects are frozen.
+   * Restore a detached session by adopting an independently owned or deeply frozen seed.
+   * Runtime-required event fields, event envelopes, sequence continuity, surface
+   * transitions, and header fields are validated without copying or freezing events.
+   * Embedded Assistant streams remain opaque until a stream consumer or storage
+   * verifier reads them.
    * @param id - restored session identity.
-   * @param seed - fresh detached events whose ownership is transferred.
-   * @param header - fresh detached metadata whose ownership is transferred.
+   * @param seed - independently owned or deeply frozen events.
+   * @param header - independently owned storage metadata.
    * @param inheritedEventCount - exact fork-inherited prefix length decoded from storage.
+   * @param eventState - aliasing state carried from the operation that produced the seed.
    * @returns a restored detached session.
    */
   static fromRestore(
@@ -454,6 +457,7 @@ declare class Session {
     seed: readonly SessionEvent[],
     header: SessionHeader,
     inheritedEventCount: SessionLogOffset,
+    eventState: SessionSeedEventState,
   ): Session;
   /**
    * Return the immutable event stored at one exact sequence number.
@@ -651,7 +655,7 @@ A plugin may declaration-merge extra `SessionEventMap` types. These are **log-on
 
 When several events in one plugin-owned family assemble into one Web Client Conversation Node, every start, update, result, resource, or interruption event in that family carries or independently derives the same stable business id. This requirement applies to correlated Node families, not to every Session event; it lets the client group each event without guessing from adjacency or scanning history. See the [Conversation subsystem](conversation.md).
 
-The hook bridges' `hook/invoked` / `hook/result` pairs (from `@deepseek-ai/dsh-hook-protocol`) correlate by `handlerId`. `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` fire inside the loop's open turn, so their `hook/*` records are turn-enclosed by construction. `SessionStart` gets no `hook/*` record because it runs before turn 1; its context remains pending in the inbox until a waking delivery opens a turn (see [the hook-bridges Agent Note](../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.md)).
+The hook bridges' `hook/invoked` / `hook/result` pairs (from `@deepseek-ai/dsh-hook-protocol`) correlate by `handlerId`. `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, and `Stop` fire inside the loop's open turn, so their `hook/*` records are turn-enclosed by construction. `SessionStart` gets no `hook/*` record because it runs before turn 1; its context remains pending in the inbox until a waking delivery opens a turn.
 
 ## Durability contract
 
@@ -861,10 +865,9 @@ create(id?: SessionId, options?: CreateSessionOptions): Session
  *
  * @param id - the session id; omitted, the store mints `session-<n>`.
  * @param options - seed events and/or creation metadata for the header. With
- *   `seedSource: 'persistence'`, metadata and events must be fresh detached
- *   graphs whose ownership transfers to this call: they are validated and
- *   frozen in place through {@link Session.fromRestore}, so the caller must
- *   retain no mutable aliases.
+ *   `eventState`, every seed event is either independently owned or any
+ *   shared value is deeply frozen; {@link Session.fromRestore} validates and
+ *   adopts those values without copying or freezing them.
  * @returns the constructed session, NOT yet in the store.
  * @throws if a session with `id` already exists, metadata is not a plain
  *   lossless-JSON record with valid scalar fields, or `meta.cwd` is a

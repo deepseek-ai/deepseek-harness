@@ -72,6 +72,7 @@ kind: "package-group"
 | [`ui-message-feedback/`](ui-message-feedback/README.zh.md) | 向助手消息操作条贡献逐消息反馈控件 | — |
 | [`ui-directory-picker-browse/`](ui-directory-picker-browse/README.zh.md) | 面向工作区目录流程的应用内目录浏览界面 | — |
 | [`ui-directory-picker-native/`](ui-directory-picker-native/README.zh.md) | 驱动宿主 OS 选择器的原生目录选择界面 | — |
+| [`ui-open-in-app/`](ui-open-in-app/README.zh.md) | 在已安装应用中打开 workspace 目录的会话头部分体按钮 | — |
 
 -----
 

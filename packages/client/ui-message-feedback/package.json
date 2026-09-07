@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-message-feedback",
   "description": "Per-message feedback controls contributed to the assistant-message action strip, backed by the messageFeedback Host Remote",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

@@ -216,10 +216,37 @@ describe('terminalCardModel', () => {
     })
   })
 
-  it('returns null without a paired call and for Code Dispatch children', () => {
+  it('returns null without a paired call', () => {
     expect(terminalCardModel(settled({ call: null }))).toBeNull()
-    expect(terminalCardModel(settled({ parentCallId: 'parent' }))).toBeNull()
-    expect(terminalCardModel(running({ parentCallId: 'parent' }))).toBeNull()
+  })
+
+  it('derives the same terminal card for root calls and Code Dispatch children', () => {
+    expect(terminalCardModel(settled({ parentCallId: 'parent' }))).toEqual(terminalCardModel(settled()))
+    expect(terminalCardModel(running({ parentCallId: 'parent' }))).toEqual(terminalCardModel(running()))
+  })
+
+  it.each(['bash', 'pwsh'])('keeps nested persistent %s running cards and settled generic results', (name) => {
+    const argsRaw = JSON.stringify({ command: 'pwd' })
+    expect(terminalCardModel(running({ name, argsRaw, parentCallId: 'parent' })))
+      .toEqual(terminalCardModel(running({ name, argsRaw })))
+    expect(terminalCardModel(settled({ call: { name, argsRaw }, parentCallId: 'parent' }))).toBeNull()
+  })
+
+  it.each(['bash', 'pwsh'])('does not infer %s exit status from a spilled preview', (name) => {
+    const notice = '(Omitted 50000 bytes. Full formatted result stored at: /spill/output.txt. Read the file.)'
+    for (const parentCallId of [undefined, 'parent']) {
+      for (const preview of ['failed\n[exit code: 7]', 'killed\n[killed by signal: SIGTERM]', 'partial', '']) {
+        expect(terminalCardModel(settled({
+          ...parentCallId === undefined ? {} : { parentCallId },
+          call: { name, argsRaw: ARGS },
+          content: [{ type: 'text', text: preview === '' ? notice : `${preview}\n\n${notice}` }],
+        }))).toBeNull()
+      }
+    }
+    expect(terminalCardModel(settled({
+      call: { name, argsRaw: ARGS },
+      content: [{ type: 'text', text: `${notice}\nordinary output` }],
+    }))).not.toBeNull()
   })
 
   it('returns null for background, errors, malformed args, unsupported tools, and non-text results', () => {
@@ -463,6 +490,18 @@ describe('BashRow terminal card', () => {
       .toBe('a.ts  b.ts\nc.ts  d.ts\n')
   })
 
+  it('expands a spilled child result without a successful terminal indicator', () => {
+    const output = 'failed\n[exit code: 7]\n\n(Omitted 50000 bytes. Full formatted result stored at: /spill/output.txt. Read the file.)'
+    const view = render(<BashRow {...rowProps(settled({
+      parentCallId: 'parent', content: [{ type: 'text', text: output }],
+    }))} />)
+    const row = view.container.querySelector('[data-sample="bash"]')!
+    expect(row.getAttribute('role')).toBe('button')
+    fireEvent.click(row)
+    expect(view.container.querySelector('[data-terminal]')).toBeNull()
+    expect(view.container.querySelectorAll('[class*="_ioText_"]')[1]?.textContent).toBe(output)
+  })
+
   it('a non-terminal bash call (background start) renders the summary row alone', () => {
     const view = render(<BashRow {...rowProps(settled({
       call: { name: 'bash', argsRaw: shellArgs({ command: 'sleep 30', description: 'Wait', run_in_background: true }) },
@@ -632,19 +671,17 @@ describe('DetailsPanel Output section', () => {
     expect(pre?.textContent).toBe('permission denied')
   })
 
-  it('a Code Dispatch child keeps the flattened form despite valid terminal raw fields', () => {
+  it('a Code Dispatch child renders its terminal output in Details', () => {
     const child = settled({ callId: 'c1', parentCallId: 'p1' })
     const view = mount(snapshot({
       runningCalls: [running({ callId: 'p1', subCalls: [child] })],
     }), target)
-    // No terminal card: the generic path renders the result text in the Output
-    // section's <pre> (the Input section has its own, hence the scoping).
-    expect(view.container.querySelector('[data-terminal]')).toBeNull()
-    const output = view.getByText('输出').closest('section')
-    expect(output?.querySelector('pre')?.textContent).toContain('a.ts  b.ts')
+    expect(view.container.querySelector('[data-terminal]')?.textContent).toContain('a.ts  b.ts')
+    expect(view.getByText('ls -la')).toBeTruthy()
+    expect(runStateOf(view.container)).toBe('done')
   })
 
-  it('a running Code Dispatch child keeps the running placeholder', () => {
+  it('a running Code Dispatch child renders its terminal prompt in Details', () => {
     const view = mount(snapshot({
       // The leading non-matching sub-call exercises the scan's skip.
       runningCalls: [running({
@@ -655,8 +692,9 @@ describe('DetailsPanel Output section', () => {
         ],
       })],
     }), target)
-    expect(view.getByText('运行中…')).toBeTruthy()
-    expect(view.container.querySelector('[data-terminal]')).toBeNull()
+    expect(view.queryByText('运行中…')).toBeNull()
+    expect(view.getByText('ls -la')).toBeTruthy()
+    expect(runStateOf(view.container)).toBe('ongoing')
   })
 
   it('a window-truncated call head titles the panel by callId and drops the Input section', () => {

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-28-ctx-remote-failure-vocabulary.md
-2026-08-28-ctx-remote-failure-vocabulary.md: fe8cafb6116d73797e1dae07fb28fe52d42c9285
-2026-08-28-ctx-remote-failure-vocabulary.zh.md: 6b75aae454fb9e4d7c4622525220d1949c45404d
+2026-08-28-ctx-remote-failure-vocabulary.md: 7238ae23b4581ab645b2bc9a780b77dc4a59d574
+2026-08-28-ctx-remote-failure-vocabulary.zh.md: db0b2969bc94c3d9c848b187a0521ce5ec387492

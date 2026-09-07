@@ -113,7 +113,7 @@ export interface Config {
 包级约定不够用时阅读以下页面。它们从指令文件格式逐步进入设计决策与穷尽式配置。
 
 - [文档标准](../../../docs/AGENTS.md)——`AGENTS.md` 指令文件包含什么、如何维护。
-- [工作区上下文决策记录](../../../.agents/notes/implemented/feature/2026-06-24-workspace-context.zh.md)——按 agent／会话隔离与生命周期理由。
+- [工作区上下文决策记录](../../../.agents/notes/archived/feature/2026-06-24-workspace-context.md)——按 agent／会话隔离与生命周期理由。
 - [context 组地图](../README.zh.md)——相邻的请求上下文包。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-instructions)——每个受支持配置字段及其源声明。
 

@@ -18,7 +18,7 @@ Question and approval register in `interaction`, retaining their current within-
 
 The phase vocabulary belongs to the declaring slot, not to the slot framework globally. `SlotMap` carries the exact phase tuple for compile-time registration, and the runtime `SlotSpec` repeats that tuple as the sorting authority. Other chains acquire no composer terminology and need no migration unless they deliberately declare phases.
 
-This proposal extends the [Web subagent conversation](../../implemented/feature/2026-07-27-web-subagent-conversations.md), [Web permission and approval](../../implemented/feature/2026-07-23-web-permission-and-approval.md), and [plan-review presentation](../../implemented/feature/2026-07-30-plan-review-presentation-intent.md) contracts; it supersedes none of them. The [runtime-owned child guard](../../implemented/bug-fix/2026-08-01-ask-user-delegated-caller-guard.md) remains the authority that prevents new child-owned human waits. No active Agent Note should be archived when this proposal lands.
+This proposal extends the [Web subagent conversation](../../implemented/feature/2026-07-27-web-subagent-conversations.md), [Web permission and approval](../../archived/feature/2026-07-23-web-permission-and-approval.md), and [plan-review presentation](../../archived/feature/2026-07-30-plan-review-presentation-intent.md) contracts; it supersedes none of them. The [runtime-owned child guard record](../../archived/bug-fix/2026-08-01-ask-user-delegated-caller-guard.md) introduced the guard that prevents new child-owned human waits. No active Agent Note should be archived when this proposal lands.
 
 ## Alternatives considered
 

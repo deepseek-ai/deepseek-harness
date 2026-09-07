@@ -7,7 +7,7 @@ export { assertReleasedPayloadSemantics } from './payload-validation.ts'
 export { assertReleasedArtifactRelationships } from './relationships.ts'
 export {
   assertReleasedSurfaceMetadata,
-  assertReleasedV1Artifact,
+  assertReleasedEventPayload,
   assertReleasedV1Header,
   restoreReleasedV1Artifact,
 } from './validation.ts'

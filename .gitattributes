@@ -1,10 +1,10 @@
 # The repo's canonical text form is LF, enforced at checkout too: no smudge
 # boundary between working tree and repo, so byte-level gates (verify-*
 # comparisons, blob hashing, coverage offsets) see one form on every host.
-# If a file class ever genuinely needs CRLF in the working tree (.bat/.cmd
-# for cmd.exe), add a `*.bat text eol=crlf` override AFTER this line — the
-# in-repo form stays LF; CRLF becomes checkout-time presentation only.
+# Windows command scripts require CRLF in the working tree for cmd.exe; the
+# override after the default keeps the in-repo form normalized as text.
 * text=auto eol=lf
+*.cmd text eol=crlf
 
 *.pdf binary
 

@@ -61,7 +61,7 @@ A denied command is reported as a fact: the result carries `sandbox: { mode, den
 
 ### Failures and recovery
 
-If no runner can enforce a confined mode, the foreground call fails with `SANDBOX_UNAVAILABLE` and a background process records a runner-failure fact — never a silent unconfined run. A runner-attributable spawn failure carries the original spawn error as detail; other spawn rejections keep the local executor's ordinary command-start semantics.
+If no runner can enforce a confined mode, the foreground call fails with `SANDBOX_UNAVAILABLE` and a background process records a runner-failure fact — never a silent unconfined run. A provider rejection is attributed to the confinement runner only when its `ENOENT`/`EACCES` path or syscall independently names `argv[0]`; otherwise it keeps the local executor's stage-neutral provider-failure semantics.
 
 -----
 
@@ -110,7 +110,7 @@ Read these pages when the executor contract is not enough. They move from the se
 - [pwsh-local](../pwsh-local/README.md) — the process mechanics this executor inherits.
 - [sandbox-windows-acl](../../sandbox/sandbox-windows-acl/README.md) — the Windows restricted-token runner chain.
 - [Bash executor subsystem](../../../docs/subsystems/shell.md) — request/spec vocabulary, results, and the service contract in full.
-- [pwsh executor and tool note](../../../.agents/notes/implemented/feature/2026-08-01-pwsh-tool-and-executor.md) — the decision behind the pwsh executor and tool pair.
+- [pwsh executor and tool note](../../../.agents/notes/archived/feature/2026-08-01-pwsh-tool-and-executor.md) — the decision behind the pwsh executor and tool pair.
 
 -----
 

@@ -196,11 +196,11 @@ describe('registration', () => {
     // withdraw both, not just the schemas.
     expect(ctx.tools.schemas()).toHaveLength(3)
     const sectionNames = (a: { sections: { name: string }[] }) => a.sections.map(s => s.name).sort()
-    expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona', 'harness:identity', 'tool:edit', 'tool:read', 'tool:write'])
+    expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix', 'harness:identity', 'tool:edit', 'tool:read', 'tool:write'])
     await fiber.dispose()
     expect(ctx.tools.schemas()).toHaveLength(0)
     // Only the system-prompt plugin's own built-in sections remain.
-    expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona', 'harness:identity'])
+    expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona-prefix', 'deployment:persona-suffix', 'harness:identity'])
   })
 })
 

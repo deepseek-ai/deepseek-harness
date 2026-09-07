@@ -32,7 +32,7 @@ fresh child 不继承对话。fork child 只捕获一次 Lead 已完成 turn 前
 
 Peer 通讯使用 Lead 日志 mailbox。投递前先追加并 flush `team/message/queued`。target message 会在持久 source metadata 与短模型可见前缀中同时携带稳定 message id 和 sender identity。只有 pending inbox 条目或已记录用户消息完成 flush，Lead 日志才写入 `team/message/delivered` acknowledgement。即时准入按 target 和 queued 日志顺序串行化，恢复按同一顺序重试 queued-minus-delivered，并在冷恢复前折叠 live 或 persisted target 的 inbox／历史状态。每个当前版本 Team payload 都会经过运行时验证后才进入 replay state。Team runtime 从同步准入到 settlement 全程跟踪 dispatch 与异步 acknowledgement 工作；dispose 会关闭准入，并在移除服务前等待两者。当前 waiter 只在所属 Team event flush 成功后被唤醒。
 
-`send_message` 始终尝试 Steer 投递。running target 在最近的步骤边界收到消息，idle target 启动一个轮次，inactive teammate 则冷恢复。即使临时投递失败让消息保持 queued，成功也表示消息已经持久化。该机制提供进程内重试与 target Session 去重，不宣称跨进程 exactly-once。[Team Steer 消息决策](../simplification/2026-08-30-team-send-message-steer.zh.md)负责单工具调度的理由。
+`send_message` 始终尝试 Steer 投递。running target 在最近的步骤边界收到消息，idle target 启动一个轮次，inactive teammate 则冷恢复。即使临时投递失败让消息保持 queued，成功也表示消息已经持久化。该机制提供进程内重试与 target Session 去重，不宣称跨进程 exactly-once。[Team Steer 消息决策](../../archived/simplification/2026-08-30-team-send-message-steer.md)负责单工具调度的理由。
 
 共享 task 是带 Team-local id 与单调 revision 的完整快照。每次变更都携带 `expectedRevision`。任意 member 可以创建、读取或 claim ready 且无 owner 的任务；Owner 或 Lead 可以编辑和转换；只有 Lead 可以分配给另一个 member。数字 task id 保持在安全整数分配范围内；该范围耗尽时会失败，不会复用 id。依赖必须指向未删除任务，并形成完整 DAG。删除任务保留为 tombstone。`writeScopes` 是规范化路径前缀，只产生重叠诊断，绝不会阻止 claim 或授予写权限。
 

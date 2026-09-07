@@ -7,6 +7,8 @@ packages:
   - native/landlock-run/packages/*
   # Product assemblies over the package tier; apps/cli owns the `dsh` bin.
   - apps/*
+  # Private package owning repository-level benchmark dependencies.
+  - benchmarks
   - website
   # Deploy root of the single-exe build: a pure dependency manifest whose
   # closure is what the exe bundles and what the Python runtime distributes.
@@ -48,11 +50,18 @@ allowBuilds:
   # The Python runtime deploy includes the reviewed workspace postinstall that
   # restores the executable bit on node-pty's macOS spawn helper.
   '@deepseek-ai/dsh-subprocess-local@file:packages/subprocess/subprocess-local': true
+  # electron-builder pulls in the optional Squirrel.Windows helper, whose
+  # install script only selects its bundled 7-Zip executable. Desktop ships
+  # Windows through NSIS, so that mutation is not part of our build.
+  electron-winstaller: false
+  # Store-index rewriting only needs msgpackr's portable JavaScript codec.
+  msgpackr-extract: false
 
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole
   # point of bumping it; waiting out the release age would defeat that.
-  - '@earendil-works/pi-ai@0.84.2'
+  - '@earendil-works/pi-ai@0.85.1'
+  - '@earendil-works/pi-telemetry@0.85.1'
   - node-addon-native-custom-loader@0.1.4
   - node-addon-require-builtin-darwin-arm64@0.1.4
   - node-addon-require-builtin-darwin-x64@0.1.4

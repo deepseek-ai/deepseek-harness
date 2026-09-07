@@ -10,7 +10,7 @@ Status: proposed
 
 ### 语义正确性可以在没有现行归属者的情况下通过检查
 
-这些门禁证明结构和生成内容的新鲜度，却不能证明维护中的正文仍指向实际机制。以前的 `dsh-doc-site-sync` 技能曾要求作者复用并不存在的 `en-docs` 侧边栏，还要求把章节加入已经移除的 `sectionOrder`；[website/docs.ts](../../../../website/docs.ts)实际拥有 `en-guide`、`en-develop`、`en-reference` 和 `sections`。已实现的[产品优先 README 决策](../../implemented/process/2026-07-22-product-first-root-readme.zh.md)描述了内部测试说明，以及 ACP、Python 与 JSON-RPC 界面章节，但[根 README](../../../../README.zh.md)并无这些内容；与此同时，已实现 Agent Note 必须跟随已交付事实。
+这些门禁证明结构和生成内容的新鲜度，却不能证明维护中的正文仍指向实际机制。以前的 `dsh-doc-site-sync` 技能曾要求作者复用并不存在的 `en-docs` 侧边栏，还要求把章节加入已经移除的 `sectionOrder`；[website/docs.ts](../../../../website/docs.ts)实际拥有 `en-guide`、`en-develop`、`en-reference` 和 `sections`。已实现的[产品优先 README 决策](../../archived/process/2026-07-22-product-first-root-readme.md)描述了内部测试说明，以及 ACP、Python 与 JSON-RPC 界面章节，但[根 README](../../../../README.zh.md)并无这些内容；与此同时，已实现 Agent Note 必须跟随已交付事实。
 
 预算策略也存在相同的分裂。[docs/AGENTS.md](../../../../docs/AGENTS.md#wordcount-budgets)为 `architecture.md` 规定 1,800 词目标和 5% 余量，但[预算 manifest（元数据清单）](../../../../scripts/doc-budgets.manifest.json)允许 2,400 词，而该文件实际包含 1,313 词。预算门禁之所以通过，是因为它只检查 manifest 上限，不检查目标或棘轮规则。因此，高影响正文需要一个具名真源或消费真源的聚焦检查；第二份手写副本不是新鲜度机制。
 

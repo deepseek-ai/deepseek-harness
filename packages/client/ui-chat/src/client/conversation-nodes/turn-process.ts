@@ -4,8 +4,6 @@ import type {
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
-import { expandAssistantStream } from '@deepseek-ai/dsh-llm/assistant-stream'
-import { isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type {} from '@deepseek-ai/dsh-tools/types'
 import { hasAssistantReplyContent } from '../contract/assistant-content.ts'
 import type { AssistantChatData, ChatNode, FinalAssistantChatData } from '../contract/chat-nodes.ts'
@@ -63,11 +61,9 @@ function visibleChunk(chunk: StreamChunk): boolean {
 
 function visibleAssistantEvent(event: ConversationEvent): boolean {
   if (event.type === 'assistant/live-chunk') return visibleChunk(event.data.chunk)
-  if (event.type === 'assistant/attempt') {
-    return expandAssistantStream(event.data.stream).some(member => visibleChunk(member.chunk))
-  }
+  if (event.type === 'assistant/attempt') return false
   return event.type === 'assistant/message'
-    && isAppendSurfaceEvent(event)
+    && event.surfaceOp === 'append'
     && toAssistantBlocks(event.data.message.content).some((block) => {
       if (block.kind === 'tool-call') return false
       if (block.kind === 'text' || block.kind === 'reasoning') return block.text.trim() !== ''
@@ -87,7 +83,7 @@ function processEvidence(event: ConversationEvent): ProcessEvidence | undefined 
     return { kind: 'assistant', seq: event.seq, step: event.data.step }
   }
   if (event.type === 'tool/call'
-    || (event.type === 'tool/result' && isAppendSurfaceEvent(event))
+    || (event.type === 'tool/result' && event.surfaceOp === 'append')
     || event.type === 'llm/retry') return { kind: 'other', seq: event.seq }
   return undefined
 }
@@ -174,7 +170,7 @@ function processSpec(state: TurnProcessState, turn: TurnLocation): TurnProcessSp
 function updateProcessState(state: TurnProcessState, event: ConversationEvent): TurnProcessState {
   let current = state
   if (event.type === 'assistant/message'
-    && isAppendSurfaceEvent(event)
+    && event.surfaceOp === 'append'
     && hasAssistantReplyContent(toAssistantBlocks(event.data.message.content))) {
     const messageCountByStep = new Map(current.messageCountByStep)
     messageCountByStep.set(event.data.step, (messageCountByStep.get(event.data.step) ?? 0) + 1)
@@ -219,7 +215,6 @@ export const turnProcessDefinition: ConversationNodeDefinition<TurnProcessState>
     if (turn === undefined) return null
     if (event.type === 'assistant/live-chunk'
       || event.type === 'assistant/message'
-      || event.type === 'assistant/attempt'
       || event.type === 'tool/call'
       || event.type === 'tool/result'
       || event.type === 'llm/retry'

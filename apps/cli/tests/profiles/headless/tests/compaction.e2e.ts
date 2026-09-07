@@ -33,7 +33,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
 
     // Reasoning tokens require a larger generation cap than the retained checkpoint.
     ctx = await codingHarness(workdir, {
-      persona: SYSTEM_PROMPT,
+      personaPrefix: SYSTEM_PROMPT,
       modelContextWindow: 2000,
       compact: {
         thresholdRatio: 0.5,

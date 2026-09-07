@@ -47,7 +47,7 @@ dsh --profile <name>
 | `model` | Codex 原生设置 | 为本提供方实例的每个线程固定的可选非空模型名称；省略时不发送 app-server 覆盖 |
 | `env` | `{}` | 叠加在已清理凭据的父环境之上的显式子进程环境 |
 | `permissionMode` | `never` | 为本提供方实例的每个线程固定的原生非交互审批与沙箱模式 |
-| `disposeGraceMs` | `3000` | 共享进程树责任方各终止层级之间的宽限 |
+| `disposeGraceMs` | `3000` | 共享 managed-range owner 各终止层级之间的宽限 |
 
 | `permissionMode` 值 | `thread/start` 字段 | 原生行为 |
 |---|---|---|
@@ -192,4 +192,4 @@ Codex 子级会在一个全新的临时线程中，以单个轮次接收这些�
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。生命周期配对属于共享 subagent service，process-tree 所有权属于 subprocess service。
+**运行时不变式：** 不发布伴生入口。生命周期配对属于共享 subagent service，受管范围的所有权属于 subprocess service。

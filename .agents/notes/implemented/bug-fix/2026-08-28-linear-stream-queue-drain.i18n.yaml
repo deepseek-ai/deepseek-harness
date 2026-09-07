@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-28-linear-stream-queue-drain.md
-2026-08-28-linear-stream-queue-drain.md: 3ec9ff3ae0f4df1265bc38dd86e44c126ea7e3e9
-2026-08-28-linear-stream-queue-drain.zh.md: c71b1da07408a8c502a60c84a38d8f009721d7bc

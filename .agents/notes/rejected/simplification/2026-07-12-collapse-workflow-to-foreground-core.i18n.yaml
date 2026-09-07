@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/rejected/simplification/2026-07-12-collapse-workflow-to-foreground-core.md
-2026-07-12-collapse-workflow-to-foreground-core.md: 506a71593f6d81a23b2e3e1dc0b5a0e620f30ac3
-2026-07-12-collapse-workflow-to-foreground-core.zh.md: 4d15df5513e9a1bdb7105fac83b67d94a60d708f

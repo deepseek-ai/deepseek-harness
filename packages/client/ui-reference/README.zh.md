@@ -67,7 +67,7 @@ kind: "package-reference"
 - [ui-input-trigger](../ui-input-trigger/README.zh.md)——该 source 注册进的行内建议机制。
 - [file-reference](../../context/file-reference/README.zh.md)——`@file` seam 及其提供方约定。
 - [session-reference](../../context/session-reference/README.zh.md)——`@session` seam 与准备后快照的语义。
-- [Web 输入机器与 slash 流水线](../../../.agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.zh.md)——引用与命令如何共享输入机器。
+- [Web 输入机器与 slash 流水线](../../../.agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md)——引用与命令如何共享输入机器。
 
 -----
 

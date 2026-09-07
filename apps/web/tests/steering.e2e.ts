@@ -110,8 +110,8 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
       { timeout: 10_000 },
     ).toBe(true)
 
-    // Enter remains the Queue gesture. The row action then atomically moves
-    // this exact occurrence into the current turn's steering outbox.
+    // Enter remains the Queue gesture. In this live window the row action
+    // atomically moves this exact occurrence into the current turn's steering outbox.
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
     await input.fill(STEER)
     await input.press('Enter')
@@ -121,8 +121,8 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
     await expect.poll(() => steerButton.isEnabled(), { timeout: 10_000 }).toBe(true)
     await steerButton.click({ timeout: 10_000 })
     const pendingSteering = page.locator('[data-pending-steering]').filter({ hasText: STEER })
-    // A timeout while the Queue row remains means strict steer lost to a
-    // closing window (`steer-unavailable`); inspect replay pacing first.
+    // A timeout while the Queue row remains means the command observed a
+    // stopped Agent (`steer-unavailable`); inspect replay pacing first.
     await pendingSteering.waitFor({ timeout: 10_000 })
 
     // The blocked composer keeps steering pending long enough to observe the

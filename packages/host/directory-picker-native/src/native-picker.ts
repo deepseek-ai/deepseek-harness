@@ -71,7 +71,7 @@ export async function pickNativeDirectory(
     // per-monitor-v2 DPI and abort support. koffi is a packaged dependency
     // whose availability the install guarantees, so there is no fallback
     // tier: any failure surfaces as-is (no PowerShell fallback tier; see
-    // .agents/notes/implemented/simplification/2026-08-04-drop-windows-powershell-picker-fallback.md).
+    // .agents/notes/archived/simplification/2026-08-04-drop-windows-powershell-picker-fallback.md).
     const pickDialog = internals.pickWin32Dialog ?? pickWin32Directory
     return await pickDialog(signal)
   }

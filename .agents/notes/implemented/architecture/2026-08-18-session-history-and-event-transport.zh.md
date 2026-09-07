@@ -64,7 +64,8 @@ API Proxy 不拥有 Session 或 Workspace Remote namespace，也不拥有 Host �
 
 Host 按配置的 `websocketHeartbeatIntervalMs` 间隔（默认 2 秒）向每条已打开的 mux socket 发送一个 RFC 6455 Ping 控制帧；浏览器在协议层回复 Pong。两种控制帧都不进入 Remote stream JSON union，也不改变 Connection generation 状态。每次 Ping 前，Host 把 socket 标记为等待 Pong；若到下一间隔仍未收到 Pong，Host 会终止该 socket。
 
-首次建连失败或已连接 socket 丢失后，已打开的 logical stream 会以 `RemoteStreamCarrierError` 结束当前物理 generation。`ConnectionController` 拥有持续且间隔封顶的指数 retry 调度；每次尝试都要求 mux 恰好一次替换候选或活动 socket，再重开 `$events`。用户要求的重连通过同一路径重置 attempt 序列并跳过等待（见[决策](../feature/2026-08-28-web-connection-recovery-control.zh.md)）。
+首次建连失败或已连接 socket 丢失后，已打开的 logical stream 会以 `RemoteStreamCarrierError` 结束当前物理 generation。`ConnectionController` 拥有持续且间隔封顶的指数 retry 调度；每次尝试都要求 mux 恰好一次替换候选或活动 socket，再重开 `$events`。用户要求的重连通过同一路径重置 attempt 序列并跳过等待（见[决策](../../archived/feature/2026-08-28-web-connection-recovery-control.md)）。
+
 
 浏览器网络状态事件是同一 Controller 的输入。`offline` 会撤回 Connection generation 并暂停自动 retry；下一次 `online` 转换会从基础退避档重新开始。这些事件不会建立连接；只有新的 `$events` ready 帧才会发布 Connection generation。
 
@@ -380,4 +381,4 @@ Remote waterfall 保留多 Client 首个 claim、全体 `next` 后继续 Host ch
 
 本决定扩展[Remote 事件投递](2026-08-10-remote-event-delivery.zh.md)的 allowlist 与单一 Cordis 签名设计：普通通知继续使用 `emit`，Agent-scoped async waterfall 使用同一 `ctx.remote.$on` 面和显式 `waterfall` mode；不建立第二套 invocation map。
 
-本决定接管[简单一元 API Proxy 迁移](2026-08-10-unary-apiproxy-remote-migration.zh.md)中保留的 Session、Workspace 与 Host event carrier，并保留[后台任务展示](../feature/2026-08-08-web-background-job-display.zh.md)所要求的完整 jobs snapshot、进程内生命周期和“观察不恢复 Agent”语义。
+本决定接管[简单一元 API Proxy 迁移](../../archived/architecture/2026-08-10-unary-apiproxy-remote-migration.md)中保留的 Session、Workspace 与 Host event carrier，并保留[后台任务展示](../feature/2026-08-08-web-background-job-display.zh.md)所要求的完整 jobs snapshot、进程内生命周期和“观察不恢复 Agent”语义。

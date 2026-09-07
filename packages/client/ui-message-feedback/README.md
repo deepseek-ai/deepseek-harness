@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package adds per-message feedback to the Web GUI: a Like/Dislike pair plus an optional note, contributed as the `feedback` entry of the finalized assistant message's action strip. It renders on the closing assistant message of each turn — earlier steps of a multi-step turn produce tool rows rather than a rateable body. One controller per Session backs every message control in that Session, so a single list read seeds the whole transcript. Feedback is a sidecar: ratings and notes never enter the session log, the model context, or telemetry.
+This package adds per-message feedback to the Web GUI: a Like/Dislike pair plus an optional note, contributed as the `feedback` entry of the finalized assistant message's action strip. It renders on the closing assistant message of each turn — earlier steps of a multi-step turn produce tool rows rather than a rateable body. One controller per Session backs every message control in that Session, so a single list read seeds the whole transcript. Ratings and notes are log-only Session events: they never enter model context. Deletion retracts the current item without erasing its earlier log entries.
 
 ## Table of Contents
 
@@ -48,9 +48,9 @@ The package contributes the `feedback` entry (order 10) of `conversation.chat.as
 <a id="further-exploration"></a>
 ## Further Exploration
 
-Read these pages when the feedback surface is not enough. They move from the browser strip to the sidecar backend and the conversation shell.
+Read these pages when the feedback surface is not enough. They move from the browser strip to the Session-log backend and the conversation shell.
 
-- [dsh-message-feedback](../../feedback/message-feedback/README.md) — the sidecar backend that owns per-item compare-and-set.
+- [dsh-message-feedback](../../feedback/message-feedback/README.md) — the Session-log backend that owns per-item compare-and-set and persistence.
 - [ui-conversation](../ui-conversation/README.md) — declares the assistant-actions strip and renders the action row.
 - [Client package map](../README.md) — adjacent browser UI packages.
 
@@ -59,11 +59,11 @@ Read these pages when the feedback surface is not enough. They move from the bro
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as feedback is a sidecar that never enters the append-only Session log, the model context, or telemetry; no rating or note is ever visible to the model.
+None, as ratings and notes are log-only events, not model input. Optional Session-log delivery uses request metadata rather than model context.
 
 #### KV Cache effect
 
-None; no feedback mutation touches the history tail.
+None; feedback mutations leave the model-visible history unchanged.
 
 ## Known Limitations and Deferred Work
 
@@ -73,7 +73,7 @@ None; no feedback mutation touches the history tail.
 These limits define the current feedback surface. They are current package constraints, not a general rating comparison or a task backlog.
 
 - **Note size is a Host policy** — the deployment configures `maxNoteBytes` (8192 in the Web bundle) and the Host rejects an oversized note with `note-too-large`. The editor does not pre-check the limit, so an oversized note fails on save rather than while typing.
-- **No cross-tab push** — a second tab's rating becomes visible on reconnect or on the next conflict reply, not immediately; the sidecar publishes no live frames.
+- **No cross-tab push** — a second tab's rating becomes visible on reconnect or on the next conflict reply, not immediately; the controller does not consume feedback log events.
 - **Chat view only** — the trajectory and waterfall views render no feedback controls even though their assistant nodes carry the same `messageId`.
 
 <a id="dev-note"></a>

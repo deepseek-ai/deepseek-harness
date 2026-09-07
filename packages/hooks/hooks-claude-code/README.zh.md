@@ -106,7 +106,7 @@ matcher subject 是工具名称（`PreToolUse`／`PostToolUse`）、会话源（
 - **dispose 必须达到完全停稳。** 脱离运行会被跟踪并在释放时排空，因此不会有 hook 进程或迟到回调超出 fiber 存活。
 - **串行而非并发。** 匹配 hook 按配置顺序串行运行：每个 `hook/invoked`／`hook/result` 对在日志中保持相邻，且决策折叠与顺序无关，因此结果与参考引擎的并发启动一致，代价是串行化的延迟。
 
-[hook-bridges Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.zh.md) 记录了桥接设计与延期缺口；[hook-protocol-lib Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-protocol-lib.zh.md) 记录了共享与逐方言的划分。
+[hook-bridges Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md) 记录了桥接设计与延期缺口；[hook-protocol-lib Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-protocol-lib.md) 记录了共享与逐方言的划分。
 
 ### 源码地图
 
@@ -127,7 +127,7 @@ matcher subject 是工具名称（`PreToolUse`／`PostToolUse`）、会话源（
 
 - [hooks 组地图](../README.zh.md)——同级组页面及其包表。
 - [hook 协议库](../hook-protocol/README.zh.md)——本桥接应用的共享钩子规则。
-- [钩子桥接 Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-hook-bridges.zh.md)——桥接设计、决策映射与延期缺口。
+- [钩子桥接 Agent Note](../../../.agents/notes/archived/feature/2026-06-30-hook-bridges.md)——桥接设计、决策映射与延期缺口。
 - [拦截扩展点 Agent Note](../../../.agents/notes/implemented/feature/2026-06-30-interception-extension-points.zh.md)——桥接所映射的类型化 Decision 接口面。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-hooks-claude-code)——每个受支持配置字段及其源声明。
 

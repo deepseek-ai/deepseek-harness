@@ -10,7 +10,7 @@
 
 import { isAbsolute, join } from 'node:path'
 import {
-  decodeSeqRanges, encodeSeqRanges, SESSION_FORMAT_VERSION,
+  SESSION_FORMAT_VERSION,
   SessionLogOffset,
 } from '@deepseek-ai/dsh-session'
 import type {
@@ -20,6 +20,9 @@ import type {
   SessionLogOffset as SessionLogOffsetType,
 } from '@deepseek-ai/dsh-session'
 import { parseSessionFormatLogFilename, sessionFormatLogFilename } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
+import type { SessionFormatRecovery, SessionFormatRestore } from '@deepseek-ai/dsh-session-format'
+import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
 import {
   SessionFormatUnsupportedError,
   sessionFormatVersionRefusal,
@@ -122,18 +125,10 @@ export function toHeaderLine(
   if (!header.isSeeded && cut !== 0) {
     throw new Error('unseeded session header inherited event count must be 0')
   }
-  return {
-    type: 'session',
-    version: header.version,
-    id: header.id,
-    createdAt: header.createdAt,
-    ...header.cwd !== undefined ? { cwd: header.cwd } : {},
-    ...header.parentSession !== undefined ? { parentSession: header.parentSession } : {},
-    isSeeded: header.isSeeded,
-    ...header.origin !== undefined ? { origin: header.origin } : {},
+  return sessionFormatCatalog.encodeCurrentHeader({
+    ...header,
     delegationDepth: header.delegationDepth ?? 0,
-    ...header.agentPreset !== undefined ? { agentPreset: header.agentPreset } : {},
-  }
+  }, cut) as unknown as HeaderLine
 }
 
 /**
@@ -314,38 +309,16 @@ export function logPath(
  * @returns the batch's JSONL text; the writer adds the final newline.
  */
 export function eventLines(events: readonly SessionEvent[]): string {
-  return events.map(record => JSON.stringify(encodeProvenanceForStorage(record))).join('\n')
+  return events.map(eventLine).join('\n')
 }
 
 /**
- * Losslessly shrink a record's `sourceEventSeqs` for the log: consecutive
- * runs of at least three seqs become `[start, end]` pairs, and any other list
- * stays verbatim.
- * @param record - one stored record (event or packed row).
- * @returns the record with its provenance in storage form (widened from the
- *   in-memory `SessionSeq[]`; {@link expandProvenanceFromStorage} restores it).
+ * Serialize one v2 event as one JSONL record without its trailing newline.
+ * @param event - current event to encode.
+ * @returns one physical JSON record.
  */
-function encodeProvenanceForStorage(record: SessionEvent): unknown {
-  if (!('sourceEventSeqs' in record)) return record
-  return { ...record, sourceEventSeqs: encodeSeqRanges(record.sourceEventSeqs) }
-}
-
-/**
- * Expand a parsed line's storage-form provenance back to `SessionSeq[]`.
- * @param parsed - the JSON-parsed value of one stored line.
- * @returns the value with provenance expanded.
- * @throws when the record or its storage-form provenance is malformed.
- */
-function expandProvenanceFromStorage(parsed: unknown): unknown {
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    throw new TypeError('stored session records must be objects')
-  }
-  const record = parsed as { seq?: unknown; sourceEventSeqs?: unknown }
-  if (record.sourceEventSeqs === undefined) return parsed
-  if (!Number.isSafeInteger(record.seq) || (record.seq as number) < 0) {
-    throw new TypeError('stored session event seq must be a non-negative safe integer')
-  }
-  return { ...record, sourceEventSeqs: decodeSeqRanges(record.sourceEventSeqs, record.seq as number) }
+export function eventLine(event: SessionEvent): string {
+  return JSON.stringify(sessionFormatCatalog.encodeCurrentEvent(event as unknown as SessionFormatEvent))
 }
 
 interface SessionLogScan {
@@ -355,21 +328,6 @@ interface SessionLogScan {
   committedBytes: number
 }
 
-/** Derive the v2 fork cut from the last lineage-tagged seed marker. */
-function inheritedCut(meta: SessionHeader, events: readonly SessionEvent[]): SessionLogOffsetType {
-  let cut: SessionLogOffsetType | undefined
-  for (const event of events) {
-    if (event.type === 'session/end-seed' && event.data.inherited === true) cut = SessionLogOffset(event.seq)
-  }
-  if (meta.isSeeded && cut === undefined) {
-    throw new Error('corrupt session log: seeded v2 header lacks an inherited end-seed marker')
-  }
-  if (!meta.isSeeded && cut !== undefined) {
-    throw new Error('corrupt session log: unseeded v2 header contains an inherited end-seed marker')
-  }
-  return cut ?? SessionLogOffset(0)
-}
-
 /**
  * Refuse a header carrying a format version this build does not read BEFORE
  * validating the current header shape or decoding any event row: a future
@@ -377,8 +335,7 @@ function inheritedCut(meta: SessionHeader, events: readonly SessionEvent[]): Ses
  * must see "upgrade the harness", never "corrupt session log".
  * @param parsed - the JSON-parsed first line of a session artifact.
  */
-function refuseForeignFormatVersion(parsed: unknown): void {
-  if (typeof parsed !== 'object' || parsed === null) return
+function refuseForeignFormatVersion(parsed: object): void {
   const { version, id } = parsed as { version?: unknown; id?: unknown }
   if (typeof version !== 'number' || version === SESSION_FORMAT_VERSION) return
   throw new SessionFormatUnsupportedError(
@@ -387,7 +344,7 @@ function refuseForeignFormatVersion(parsed: unknown): void {
 }
 
 /** Parse one complete header record supplied independently from event rows. */
-function parseHeaderRecord(record: Buffer): ReturnType<typeof fromHeaderLine> {
+function parseHeaderRecord(record: Buffer): { readonly meta: SessionHeader; readonly restore: SessionFormatRestore } {
   if (record.length === 0 || record.at(-1) !== 0x0A || record.indexOf(0x0A) !== record.length - 1) {
     throw new Error('empty or header-less session log')
   }
@@ -397,12 +354,25 @@ function parseHeaderRecord(record: Buffer): ReturnType<typeof fromHeaderLine> {
   } catch {
     throw new Error('corrupt session log: header line is not valid JSON')
   }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error('corrupt session log: first line is not a JSON object')
+  }
   refuseForeignFormatVersion(parsed)
   assertNoRetiredHeaderFields(parsed)
   if (!isHeaderLine(parsed)) {
     throw new Error('corrupt session log: first line is not a session header')
   }
-  return fromHeaderLine(parsed)
+  let restore: SessionFormatRestore
+  try {
+    restore = sessionFormatCatalog.createRestore(parsed, {
+      recovery: 'strict',
+      validation: 'transformed',
+    })
+  } catch {
+    /* v8 ignore next -- isHeaderLine matches the current codec; this preserves classification if it tightens. */
+    throw new Error('corrupt session log: first line is not a session header')
+  }
+  return { meta: fromHeaderLine(parsed).meta, restore }
 }
 
 /**
@@ -413,7 +383,8 @@ function parseHeaderRecord(record: Buffer): ReturnType<typeof fromHeaderLine> {
  */
 export class SessionLogScanner {
   private readonly meta: SessionHeader
-  private readonly events: SessionEvent[] = []
+  private readonly restore: SessionFormatRestore
+  private eventCount = 0
   private fragments: Buffer[] = []
   private fragmentBytes = 0
   private inputBytes: number
@@ -426,9 +397,13 @@ export class SessionLogScanner {
    * Create an event scanner from exactly one newline-terminated header record.
    * @param headerRecord - the complete first JSONL record, including its newline.
    */
-  constructor(headerRecord: Buffer) {
+  constructor(
+    headerRecord: Buffer,
+    private readonly recovery: SessionFormatRecovery = 'recoverable',
+  ) {
     const parsed = parseHeaderRecord(headerRecord)
     this.meta = parsed.meta
+    this.restore = parsed.restore
     this.inputBytes = headerRecord.length
     this.committedBytes = headerRecord.length
   }
@@ -477,7 +452,7 @@ export class SessionLogScanner {
     return {
       inputBytes: this.inputBytes,
       committedBytes: this.committedBytes,
-      eventCount: SessionLogOffset(this.events.length),
+      eventCount: SessionLogOffset(this.eventCount),
     }
   }
 
@@ -487,10 +462,11 @@ export class SessionLogScanner {
    */
   finish(): SessionLogScan {
     this.finished = true
+    const artifact = this.restore.finish()
     return {
       meta: this.meta,
-      inheritedEventCount: inheritedCut(this.meta, this.events),
-      events: this.events,
+      inheritedEventCount: SessionLogOffset(artifact.inheritedEventCount),
+      events: artifact.events as unknown as SessionEvent[],
       committedBytes: this.committedBytes,
     }
   }
@@ -498,33 +474,36 @@ export class SessionLogScanner {
   /** Decode one complete event row and update the contiguous prefix. */
   private consumeEventLine(line: Buffer, endByte: number): void {
     this.eventLine += 1
-    let decoded: SessionEvent[]
+    let decoded: unknown
     try {
-      decoded = [expandProvenanceFromStorage(JSON.parse(line.toString('utf8'))) as SessionEvent]
+      decoded = JSON.parse(line.toString('utf8')) as unknown
     } catch {
-      this.issue ??= new Error(`corrupt session log: unparsable committed event at line ${this.eventLine}`)
+      const issue = new Error(`corrupt session log: unparsable committed event at line ${this.eventLine}`)
+      if (this.recovery === 'strict') throw issue
+      this.issue ??= issue
       return
     }
 
     if (this.issue !== undefined) {
-      if (decoded.some(event => event.type === 'turn/end')) throw this.issue
+      if (typeof decoded === 'object' && decoded !== null
+        && (decoded as { type?: unknown }).type === 'turn/end') throw this.issue
       return
     }
-
-    const rowStart = this.events.length
-    for (const event of decoded) {
-      if (event.seq !== this.events.length) {
-        const expected = this.events.length
-        this.events.length = rowStart
-        this.issue = new Error(
-          `corrupt session log: seq gap in committed region at line ${this.eventLine} `
-          + `(expected ${expected}, got ${event.seq})`,
-        )
-        if (decoded.some(candidate => candidate.type === 'turn/end')) throw this.issue
-        return
-      }
-      this.events.push(event)
+    try {
+      this.restore.decodeRow(decoded)
+    } catch (error: unknown) {
+      /* v8 ignore next -- every production Session format decoder rejects with Error. */
+      const detail = error instanceof Error ? error.message : String(error)
+      const issue = new Error(`corrupt session log: invalid committed event at line ${this.eventLine}: ${detail}`, {
+        cause: error,
+      })
+      if (this.recovery === 'strict') throw issue
+      this.issue = issue
+      if (typeof decoded === 'object' && decoded !== null
+        && (decoded as { type?: unknown }).type === 'turn/end') throw issue
+      return
     }
+    this.eventCount += 1
     this.committedBytes = endByte
   }
 }

@@ -584,7 +584,9 @@ export class AgentLoop extends Service implements AgentFactory {
         // Disposal IS a disposed-cause cancel followed by quiescence. New work
         // sent after this point is the sender's bug — the registries are about
         // to drop the agent, so nothing should still hold it.
+        /* v8 ignore next -- Cordis effect teardown waits for synchronous setup before observing the machine slot. */
         if (machine === undefined) await machineReady.promise
+        /* v8 ignore next -- setup failure untracks this disposer before resolving without a machine. */
         if (machine !== undefined) {
           machine.cancel({ kind: 'disposed' })
           await machine.whenIdle()
@@ -617,15 +619,21 @@ export class AgentLoop extends Service implements AgentFactory {
     const untrack = this.ownership.track(dispose)
     let unfollowOwner: () => Promise<void> | void
     try {
-      unfollowOwner = ownerCtx.effect(() => () => {
-        // Owner disposal owns the same quiescence boundary. Its teardown skips
-        // unregistering this already-running owner effect from inside itself.
-        if (disposing !== undefined) return
-        abort.abort(new Error(`agent "${id}" setup aborted: owner disposed during setup`))
-        return dispose(true)
+      unfollowOwner = ownerCtx.effect(function* () {
+        machine = new ReactLoopAgent(loopCtx, id, options, session)
+        machineReady.resolve()
+        yield machine.scope.rawDispose
+        yield () => {
+          // Owner disposal owns the same quiescence boundary. Its teardown skips
+          // unregistering this already-running owner effect from inside itself.
+          if (disposing !== undefined) return
+          abort.abort(new Error(`agent "${id}" setup aborted: owner disposed during setup`))
+          return dispose(true)
+        }
       }, `agentLoop.lifecycle(${id})`)
       /* v8 ignore start -- ctx.effect throws only on an inactive fiber, which assertActive() above already rejected */
     } catch (error: unknown) {
+      machineReady.resolve()
       untrack()
       callerSignal?.removeEventListener('abort', onCallerAbort)
       this.ownership.signal.removeEventListener('abort', onFactoryTeardown)
@@ -642,8 +650,9 @@ export class AgentLoop extends Service implements AgentFactory {
       throw abort.signal.reason instanceof Error ? abort.signal.reason : new Error(String(abort.signal.reason))
     }
     try {
-      const agent = machine = new ReactLoopAgent(loopCtx, id, options, session)
-      machineReady.resolve()
+      /* v8 ignore next -- a synchronous effect exhausts the generator before returning */
+      if (machine === undefined) throw new Error(`agent "${id}" lifecycle did not construct its driver`)
+      const agent = machine
       assertLive()
 
       return {
@@ -873,15 +882,16 @@ export class AgentLoop extends Service implements AgentFactory {
           // back the physically valid log; an interrupted final turn receives
           // synthetic closers (missing tool errors, step/end, turn/end) that
           // are appended through the same handle as an ordinary batch.
-          const persisted = await handle.read(0, undefined, { signal: fused })
+          const coldRead = await handle.read(0, undefined, { signal: fused })
           fused.throwIfAborted()
+          const persisted = coldRead.events
           const closers = interruptedTurnClosers(persisted)
           if (closers.length > 0) await handle.append(closers)
           preparation = SessionPreparation.create(this.runtime.ctx.sessions.prepare(id, {
             seed: [...persisted, ...closers],
             meta: structuredClone(handle.header),
             inheritedEventCount: handle.inheritedEventCount,
-            seedSource: 'persistence',
+            eventState: coldRead.eventState,
           }))
           stored = { handle, storedCount: persisted.length + closers.length }
           await this.appendUnstoredSuffix(stored, preparation.session)

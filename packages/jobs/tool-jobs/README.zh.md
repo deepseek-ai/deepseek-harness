@@ -108,7 +108,7 @@ kind: "package-reference"
 - [进程本地注册表](../jobs-local/README.zh.md)——任务在本进程中的运行位置。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-jobs)——`job_output`、`job_list` 与 `job_kill` 的确切 schema。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-jobs)——每个受支持配置字段及其源声明。
-- [任务注册表 seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-26-job-registry-seam.zh.md)——按所有者隔离的注册表约定及其理由。
+- [任务注册表 seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md)——按所有者隔离的注册表约定及其理由。
 
 -----
 

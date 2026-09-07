@@ -4,7 +4,6 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { agentEvents } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionHeader } from '@deepseek-ai/dsh-session'
@@ -64,7 +63,7 @@ class PersistenceProbe extends SessionPersistence {
       inheritedEventCount: SessionLogOffset(0),
       access,
       read: async (offset = 0, length = Number.MAX_SAFE_INTEGER) =>
-        entry.events.slice(offset, offset + length),
+        ({ eventState: 'detached', events: structuredClone(entry.events.slice(offset, offset + length)) }),
       append: async (events) => { entry.events.push(...events) },
       flush: async () => {},
       close: async () => {},
@@ -76,7 +75,6 @@ class PersistenceProbe extends SessionPersistence {
 async function harness(): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(PersistenceProbe)
   ctx.on('session/flush', () => {})
   await ctx.plugin(AgentLoop, { agents: [] })

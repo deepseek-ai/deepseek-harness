@@ -40,6 +40,7 @@
       "@deepseek-ai/node-addon-landlock-run": ["./native/landlock-run/packages/entry/src/index.ts"],
       "@deepseek-ai/dsh-invariants": ["./packages/runtime-diagnostics/invariants/src/index.ts"],
       "@deepseek-ai/dsh-tool-call-timeout-policy": ["./packages/guard/timeout-policy/src"],
+      "@deepseek-ai/dsh-spill-policy/notice": ["./packages/spill/spill-policy/src/notice.ts"],
       "@deepseek-ai/dsh-typert-registry": ["./packages/typert/registry/src/index.ts"],
       "@deepseek-ai/dsh-typert-registry/client": ["./packages/typert/registry/src/client/index.ts"],
       "@deepseek-ai/dsh-api-gateway": ["./packages/api/gateway/src/index.ts"],
@@ -144,6 +145,8 @@
       "@deepseek-ai/dsh-host-directory-picker-native/*": ["./packages/host/directory-picker-native/src/*"],
       "@deepseek-ai/dsh-host-directory-picker-auto": ["./packages/host/directory-picker-auto/src"],
       "@deepseek-ai/dsh-host-directory-picker-auto/*": ["./packages/host/directory-picker-auto/src/*"],
+      "@deepseek-ai/dsh-host-open-in-app": ["./packages/host/open-in-app/src"],
+      "@deepseek-ai/dsh-host-open-in-app/shared": ["./packages/host/open-in-app/src/shared.ts"],
       "@deepseek-ai/dsh-host-webserver": ["./packages/host/webserver/src"],
       "@deepseek-ai/dsh-host-frontend-static": ["./packages/host/frontend-static/src"],
       "@deepseek-ai/dsh-host-plugin-inventory": ["./packages/host/plugin-inventory/src"],
@@ -210,6 +213,7 @@
       "@deepseek-ai/dsh-schedule/client": ["./packages/schedule/schedule/src/client.ts"],
       "@deepseek-ai/dsh-client-ui-directory-picker-browse": ["./packages/client/ui-directory-picker-browse/src"],
       "@deepseek-ai/dsh-client-ui-directory-picker-native": ["./packages/client/ui-directory-picker-native/src"],
+      "@deepseek-ai/dsh-client-ui-open-in-app": ["./packages/client/ui-open-in-app/src"],
       // sdk/ folders are role-named without their npm-side sdk/jsonrpc prefixes,
       // so their names do not match their directories and the generated aliases
       // below cannot map them; these three stay hand-written.
@@ -310,6 +314,7 @@
       "@deepseek-ai/dsh-message-feedback": ["./packages/feedback/message-feedback/src"],
       "@deepseek-ai/dsh-native-command": ["./packages/util/native-command/src"],
       "@deepseek-ai/dsh-output-retention": ["./packages/util/output-retention/src"],
+      "@deepseek-ai/dsh-package-manifest": ["./packages/util/package-manifest/src"],
       "@deepseek-ai/dsh-permission-presets": ["./packages/interaction/permission-presets/src"],
       "@deepseek-ai/dsh-permission-presets/invariant": ["./packages/interaction/permission-presets/src/invariant.ts"],
       "@deepseek-ai/dsh-persona": ["./packages/preset/persona/src"],

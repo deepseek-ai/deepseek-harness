@@ -157,23 +157,29 @@ export interface CreateSessionOptions {
 }
 
 /**
- * Fresh storage values transferred to {@link SessionStore.prepare} without a
- * second serialization copy. Callers retain no mutable aliases.
+ * Aliasing state of an adoptable Session seed. `shared-frozen` permits deeply
+ * frozen aliases plus independently owned unfrozen values in the same seed.
+ */
+export type SessionSeedEventState = 'detached' | 'shared-frozen'
+
+/**
+ * Adoptable storage values transferred to {@link SessionStore.prepare}
+ * without another copy or freeze pass.
  */
 export interface RestoredSessionOptions {
-  /** Fresh detached storage events to validate and freeze in place. */
+  /** Events that are independently owned or already deeply frozen. */
   readonly seed: SessionEvent[]
-  /** Fresh detached storage metadata to validate and freeze in place. */
+  /** Independently owned storage metadata to validate and freeze in place. */
   readonly meta: SessionHeader
   /** Exact number of fork-inherited leading events decoded from storage. */
   readonly inheritedEventCount: SessionLogOffset
-  /** Select the persistence ownership-transfer path. */
-  readonly seedSource: 'persistence'
+  /** Aliasing state carried from the operation that produced the seed. */
+  readonly eventState: SessionSeedEventState
 }
 
 /** Inputs accepted while constructing an unpublished Session. */
 export type PrepareSessionOptions =
-  | (CreateSessionOptions & { readonly seedSource?: undefined })
+  | (CreateSessionOptions & { readonly eventState?: undefined })
   | RestoredSessionOptions
 
 /** Why an active agent driver was cancelled. */

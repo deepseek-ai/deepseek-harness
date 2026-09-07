@@ -108,7 +108,7 @@ kind: "package-reference"
 - [注册表约定](../jobs/README.zh.md)——本包实现的抽象 `ctx.jobs` 服务。
 - [模型侧任务控制](../tool-jobs/README.zh.md)——`job_output`、`job_list` 与 `job_kill` 工具及完成通知。
 - [通用长时间运行工具运行时 Agent Note](../../../.agents/notes/implemented/architecture/2026-06-20-generic-long-running-tool-runtime.zh.md)——后台任务运行时背后的设计。
-- [任务注册表 seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-26-job-registry-seam.zh.md)——按所有者隔离的注册表约定及其理由。
+- [任务注册表 seam Agent Note](../../../.agents/notes/archived/architecture/2026-07-26-job-registry-seam.md)——按所有者隔离的注册表约定及其理由。
 
 -----
 

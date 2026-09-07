@@ -32,7 +32,7 @@ TypeScript readonly 类型不是充分的运行时边界。它们在程序运行
 
 ### 包拥有的不变式配套插件检查关系
 
-`dsh-invariants` 注册可配置的 `ctx.invariants` 服务，本身不包含产品检查。只有拥有可独立观察的运行时关系时，包才发布 `./invariant` 所有权配套插件；没有该关系的包会省略 companion 并在 README 中记录原因。`dsh-session`、`dsh-agent`、`dsh-scope` 和 `dsh-agent-loop` 提供首批需要跟踪状态或观察另一个 seam 的规则：单调递增的序列号、轮次与步骤嵌套、工具调用/结果配对、合法的 agent（智能体）状态转换、主体正确的作用域分发，以及循环构建的请求与从其会话日志前缀重建的请求之间的相等性。全局启用和包名 regex 过滤器归该服务所有（见[包拥有的不变式服务](2026-07-19-package-owned-invariant-service.zh.md)与[省略决策](../simplification/2026-08-28-omit-unneeded-invariant-companions.zh.md)）。
+`dsh-invariants` 注册可配置的 `ctx.invariants` 服务，本身不包含产品检查。只有拥有可独立观察的运行时关系时，包才发布 `./invariant` 所有权配套插件；没有该关系的包会省略 companion 并在 README 中记录原因。`dsh-session`、`dsh-agent`、`dsh-scope` 和 `dsh-agent-loop` 提供首批需要跟踪状态或观察另一个 seam 的规则：单调递增的序列号、轮次与步骤嵌套、工具调用/结果配对、合法的 agent（智能体）状态转换、主体正确的作用域分发，以及循环构建的请求与从其会话日志前缀重建的请求之间的相等性。全局启用和包名 regex 过滤器归该服务所有（见[包拥有的不变式服务](../../archived/architecture/2026-07-19-package-owned-invariant-service.md)与[省略决策](../simplification/2026-08-28-omit-unneeded-invariant-companions.zh.md)）。
 
 当会话配套插件附加到已有会话或以种子记录初始化的会话时，它回放不可变日志以重建跟踪状态。服务为每项贡献提供一个可 dispose（资源释放）的子 fiber，因此轮次中途热重载是安全的，同时不赋予诊断逻辑对会话存储的所有权。
 

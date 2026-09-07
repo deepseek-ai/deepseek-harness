@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { SessionFormatEventCollector } from '@deepseek-ai/dsh-session-format'
 import type {
   SessionFormatArtifact,
+  SessionFormatArtifactDecoder,
   SessionFormatEvent,
   SessionFormatJsonObject,
+  SessionFormatRecovery,
 } from '@deepseek-ai/dsh-session-format'
 import { decodeSeqRanges as decodeCurrentSeqRanges } from '@deepseek-ai/dsh-session'
 import { releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v1-to-v2'
@@ -20,6 +23,10 @@ const fullPhysicalHeader = {
 } as const
 
 const textBlock = { type: 'text', text: 'text' } as const
+
+function throwUnknown(value: unknown): never {
+  throw value
+}
 
 function feedback(seq: number): SessionFormatEvent {
   return { type: 'feedback/record', seq, time: seq + 1, data: { text: `feedback-${seq}` } }
@@ -50,6 +57,27 @@ function artifact(
   }
 }
 
+function decodeV2(
+  header: unknown,
+  rows: readonly unknown[],
+  recovery: SessionFormatRecovery = 'strict',
+): SessionFormatArtifact {
+  const decoder: SessionFormatArtifactDecoder = releasedV2SessionFormatCodec.createDecoder(header, recovery)
+  const context = new SessionFormatEventCollector()
+  for (const row of rows) decoder.decodeRow(row, context)
+  return { header: decoder.header, inheritedEventCount: decoder.finish(context), events: context.values }
+}
+
+function encodeV2(source: SessionFormatArtifact): {
+  readonly header: SessionFormatJsonObject
+  readonly rows: readonly SessionFormatJsonObject[]
+} {
+  return {
+    header: releasedV2SessionFormatCodec.encodeHeader(source.header, source.inheritedEventCount),
+    rows: source.events.map(event => releasedV2SessionFormatCodec.encodeEvent(event)),
+  }
+}
+
 describe('releasedV2SessionFormatCodec headers', () => {
   it('round-trips the minimal and complete optional header images', () => {
     expect(releasedV2SessionFormatCodec.version).toBe(2)
@@ -68,7 +96,7 @@ describe('releasedV2SessionFormatCodec headers', () => {
       agentPreset: 'default',
     })
 
-    const encodedMinimal = releasedV2SessionFormatCodec.encodeArtifact(artifact([]))
+    const encodedMinimal = encodeV2(artifact([]))
     expect(encodedMinimal).toStrictEqual({ header: minimalPhysicalHeader, rows: [] })
     const complete = artifact([], {
       header: {
@@ -83,8 +111,12 @@ describe('releasedV2SessionFormatCodec headers', () => {
         agentPreset: 'default',
       },
     })
-    expect(releasedV2SessionFormatCodec.encodeArtifact(complete).header)
+    expect(encodeV2(complete).header)
       .toStrictEqual(fullPhysicalHeader)
+    expect(() => releasedV2SessionFormatCodec.encodeHeader(
+      artifact([]).header,
+      1,
+    )).toThrow(/unseeded.*inherited events/)
   })
 
   it.each([
@@ -117,14 +149,14 @@ describe('releasedV2SessionFormatCodec rows', () => {
       userMessage(2, [0, 1]),
       userMessage(3, [0, 1, 2]),
     ])
-    const encoded = releasedV2SessionFormatCodec.encodeArtifact(source)
+    const encoded = encodeV2(source)
     expect(encoded.rows.map(row => row['sourceEventSeqs'])).toStrictEqual([
       undefined,
       [0],
       [0, 1],
       [[0, 2]],
     ])
-    expect(releasedV2SessionFormatCodec.decodeArtifact(encoded.header, encoded.rows)).toStrictEqual(source)
+    expect(decodeV2(encoded.header, encoded.rows)).toStrictEqual(source)
   })
 
   it('keeps non-monotonic provenance scalar-only for the current backend reader', () => {
@@ -134,12 +166,12 @@ describe('releasedV2SessionFormatCodec rows', () => {
       userMessage(6, sourceEventSeqs),
     ])
 
-    const encoded = releasedV2SessionFormatCodec.encodeArtifact(source)
+    const encoded = encodeV2(source)
     const stored = encoded.rows[6]?.['sourceEventSeqs']
 
     expect(stored).toStrictEqual(sourceEventSeqs)
     expect(decodeCurrentSeqRanges(stored, 6)).toStrictEqual(sourceEventSeqs)
-    expect(releasedV2SessionFormatCodec.decodeArtifact(encoded.header, encoded.rows)).toStrictEqual(source)
+    expect(decodeV2(encoded.header, encoded.rows)).toStrictEqual(source)
   })
 
   it('keeps the v2 physical codec vocabulary-neutral for current growth and a future source freeze', () => {
@@ -149,9 +181,9 @@ describe('releasedV2SessionFormatCodec rows', () => {
       { type: 'turn/start', seq: 2, time: 3, data: { turn: 1, postReleaseMember: true } },
     ])
 
-    const encoded = releasedV2SessionFormatCodec.encodeArtifact(source)
+    const encoded = encodeV2(source)
 
-    expect(releasedV2SessionFormatCodec.decodeArtifact(encoded.header, encoded.rows)).toStrictEqual(source)
+    expect(decodeV2(encoded.header, encoded.rows)).toStrictEqual(source)
   })
 
   it('expands mixed stored ranges and preserves non-provenance rows', () => {
@@ -159,10 +191,10 @@ describe('releasedV2SessionFormatCodec rows', () => {
       ...userMessage(5),
       sourceEventSeqs: [[0, 2], 4],
     }]
-    const decoded = releasedV2SessionFormatCodec.decodeArtifact(minimalPhysicalHeader, rows)
+    const decoded = decodeV2(minimalPhysicalHeader, rows)
     expect(decoded.events[0]).toStrictEqual(feedback(0))
     expect(decoded.events[5]?.sourceEventSeqs).toStrictEqual([0, 1, 2, 4])
-    const descending = releasedV2SessionFormatCodec.decodeArtifact(minimalPhysicalHeader, [
+    const descending = decodeV2(minimalPhysicalHeader, [
       feedback(0), feedback(1), { ...userMessage(2), sourceEventSeqs: [1, 0] },
     ])
     expect(descending.events[2]?.sourceEventSeqs).toStrictEqual([1, 0])
@@ -185,42 +217,61 @@ describe('releasedV2SessionFormatCodec rows', () => {
     const rows = [feedback(0), feedback(1), feedback(2), feedback(3), {
       ...userMessage(4), sourceEventSeqs,
     }]
-    expect(() => releasedV2SessionFormatCodec.decodeArtifact(minimalPhysicalHeader, rows)).toThrow(message)
+    expect(() => decodeV2(minimalPhysicalHeader, rows)).toThrow(message)
   })
 
   it('contains ordinary and non-SessionFormatError row failures in a recoverable tail', () => {
-    const explosive = new Proxy({}, { ownKeys: () => { throw new Error('proxy failure') } })
-    expect(releasedV2SessionFormatCodec.decodeRecoverableArtifact(
+    const explosive = new Proxy(feedback(1), { ownKeys: () => { throw new Error('proxy failure') } })
+    const primitiveFailure = new Proxy(feedback(1), {
+      ownKeys: () => throwUnknown('primitive proxy failure'),
+    })
+    expect(decodeV2(
       minimalPhysicalHeader,
       [feedback(0), explosive],
+      'recoverable',
     ).events).toStrictEqual([feedback(0)])
-    expect(releasedV2SessionFormatCodec.decodeRecoverableArtifact(
+    expect(decodeV2(
       minimalPhysicalHeader,
       [feedback(0), null],
+      'recoverable',
     ).events).toStrictEqual([feedback(0)])
-    expect(releasedV2SessionFormatCodec.decodeRecoverableArtifact(
+    expect(decodeV2(
+      minimalPhysicalHeader,
+      [feedback(0), primitiveFailure],
+      'recoverable',
+    ).events).toStrictEqual([feedback(0)])
+    expect(decodeV2(
       minimalPhysicalHeader,
       [null, [], feedback(0)],
+      'recoverable',
     ).events).toStrictEqual([])
   })
 
   it('refuses malformed strict rows, strict gaps, and terminal recoverable tails', () => {
-    expect(() => releasedV2SessionFormatCodec.decodeArtifact(minimalPhysicalHeader, [null]))
+    expect(() => decodeV2(minimalPhysicalHeader, [null]))
       .toThrow(/row 0/)
-    expect(() => releasedV2SessionFormatCodec.decodeArtifact(minimalPhysicalHeader, [feedback(1)]))
+    expect(() => decodeV2(minimalPhysicalHeader, [feedback(1)]))
       .toThrow(/seq gap/)
-    expect(() => releasedV2SessionFormatCodec.decodeRecoverableArtifact(minimalPhysicalHeader, [{
+    expect(() => decodeV2(minimalPhysicalHeader, [{
       type: 'turn/end', seq: 1, time: 1, data: { turn: 1, reason: { kind: 'completed' } },
-    }])).toThrow(/seq gap/)
-    expect(() => releasedV2SessionFormatCodec.decodeRecoverableArtifact(minimalPhysicalHeader, [null, {
+    }], 'recoverable')).toThrow(/seq gap/)
+    expect(() => decodeV2(minimalPhysicalHeader, [null, {
       type: 'turn/end', seq: 0, time: 1, data: { turn: 1, reason: { kind: 'completed' } },
-    }])).toThrow(/row 0/)
+    }], 'recoverable')).toThrow(/row 0/)
+    expect(() => decodeV2(minimalPhysicalHeader, [{ ...feedback(0), extra: true }]))
+      .toThrow(/unexpected field extra/)
+    expect(() => decodeV2(minimalPhysicalHeader, [{ type: 'feedback/record', seq: 0, time: 1 }]))
+      .toThrow(/lacks required field data/)
+    expect(() => decodeV2(minimalPhysicalHeader, [{ ...feedback(0), type: 1 }]))
+      .toThrow(/type must be a string/)
+    expect(() => decodeV2(minimalPhysicalHeader, [{ ...feedback(0), ignorable: false }]))
+      .toThrow(/ignorable must be true/)
   })
 
   it('keeps the prefix before a recoverable non-terminal seq gap', () => {
-    expect(releasedV2SessionFormatCodec.decodeRecoverableArtifact(minimalPhysicalHeader, [
+    expect(decodeV2(minimalPhysicalHeader, [
       feedback(0), feedback(3), feedback(1),
-    ]).events).toStrictEqual([feedback(0)])
+    ], 'recoverable').events).toStrictEqual([feedback(0)])
   })
 
   it('derives the last tagged seed marker and rejects lineage disagreements', () => {
@@ -230,13 +281,13 @@ describe('releasedV2SessionFormatCodec rows', () => {
       { type: 'session/end-seed', seq: 1, time: 2, data: {} },
       { type: 'session/end-seed', seq: 2, time: 3, data: { inherited: true } },
     ]
-    expect(releasedV2SessionFormatCodec.decodeArtifact(seededHeader, markers).inheritedEventCount).toBe(2)
-    expect(releasedV2SessionFormatCodec.decodeArtifact(seededHeader, [markers[0]]).inheritedEventCount).toBe(0)
-    expect(() => releasedV2SessionFormatCodec.decodeArtifact(seededHeader, []))
+    expect(decodeV2(seededHeader, markers).inheritedEventCount).toBe(2)
+    expect(decodeV2(seededHeader, [markers[0]]).inheritedEventCount).toBe(0)
+    expect(() => decodeV2(seededHeader, []))
       .toThrow(/lacks an inherited end-seed marker/)
-    expect(() => releasedV2SessionFormatCodec.decodeArtifact(minimalPhysicalHeader, [markers[0]]))
+    expect(() => decodeV2(minimalPhysicalHeader, [markers[0]]))
       .toThrow(/unseeded Session contains an inherited end-seed marker/)
-    expect(() => releasedV2SessionFormatCodec.decodeArtifact(seededHeader, [{
+    expect(() => decodeV2(seededHeader, [{
       type: 'session/end-seed', seq: 0, time: 1, data: null,
     }])).toThrow(/must be an object/)
   })

@@ -56,6 +56,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane —
+      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -113,6 +119,12 @@ jobs:
         with:
           persist-credentials: false
 
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane —
+      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
+
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
@@ -156,6 +168,52 @@ jobs:
       - name: Run exhaustive coverage
         run: pnpm run check:ci:coverage
 
+  node-24-bench:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    name: node 24 / benchmarks
+    # Wall-clock budgets need an otherwise idle runner, so this job runs the
+    # benchmark lane alone instead of joining a concurrent gate aggregate.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+
+      - name: Configure pnpm store path
+        id: pnpm-store
+        run: |
+          store_root="$HOME/.local/share/pnpm/store"
+          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
+          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
+          echo "path=$store_path" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
+
+      - name: Install (immutable)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install benchmark browser and hosted dependencies
+        run: pnpm --filter @deepseek-ai/dsh-benchmarks exec playwright install --with-deps chromium
+
+      - name: Run performance benchmarks
+        env:
+          DSH_GATE_VERBOSE: '1'
+        run: pnpm run check:ci:bench
+
   node-24-consumers:
     if: github.event_name == 'pull_request'
     runs-on: >-
@@ -180,6 +238,12 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+
+      # Redirect the Node compile cache (enabled by pnpm and TypeScript) off
+      # the root partition's /tmp before the first pnpm call in this lane —
+      # see .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md.
+      - name: Redirect Node compile cache to runner temp
+        run: echo "NODE_COMPILE_CACHE=${{ runner.temp }}/node-compile-cache" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:
@@ -248,8 +312,14 @@ jobs:
 
   node-compat:
     if: github.event_name == 'pull_request'
-    # Each compatibility contract receives an independent standard hosted job.
-    runs-on: ${{ matrix.runner }}
+    # This job admits only repository-owned PR code to the persistent shared VM.
+    runs-on: >-
+      ${{ vars.DSH_CI_FAILOVER_LINUX == 'selfhosted'
+          && github.event.pull_request.head.repo.full_name == github.repository
+          && github.event.pull_request.head.repo.fork == false
+          && github.event.pull_request.user.login != 'dependabot[bot]'
+          && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
+          || matrix.runner }}
     name: ${{ matrix.name }}
     env:
       DSH_GATE_CONCURRENCY: ${{ matrix.gate_concurrency }}
@@ -278,15 +348,39 @@ jobs:
             gate_concurrency: '1'
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Shared hosts keep version installs and generated caches inside runner temp.
+      - name: Isolate compatibility caches
+        if: runner.environment == 'self-hosted'
+        run: |
+          echo "NODE_COMPILE_CACHE=$RUNNER_TEMP/node-compile-cache" >> "$GITHUB_ENV"
+          echo "npm_config_devdir=$RUNNER_TEMP/node-gyp" >> "$GITHUB_ENV"
+          echo "PNPM_CONFIG_STORE_DIR=$HOME/.local/share/pnpm/store" >> "$GITHUB_ENV"
 
       - uses: pnpm/action-setup@v4
         with:
           dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
 
       - uses: actions/setup-node@v6
+        env:
+          # The runner overwrites RUNNER_* step env before starting JavaScript actions.
+          NODE_OPTIONS: ${{ runner.environment == 'self-hosted' && '--import=./scripts/ci-compatible-toolcache.mjs' || '' }}
         with:
           node-version: ${{ matrix.node }}
-          cache: pnpm
+          cache: ${{ runner.environment == 'github-hosted' && 'pnpm' || '' }}
+          package-manager-cache: false
+
+      - name: Verify isolated Node installation
+        if: runner.environment == 'self-hosted'
+        run: |
+          node_path=$(node -p process.execPath)
+          echo "Node executable: $node_path"
+          case "$node_path" in
+            "$RUNNER_TEMP/node-compat-toolcache/"*) ;;
+            *) echo "::error::Node compatibility installation is outside runner temp"; exit 1 ;;
+          esac
 
       - name: Install (immutable)
         run: pnpm install --frozen-lockfile
@@ -321,107 +415,17 @@ jobs:
         run: uv run --python 3.10 --group test --project python/sdk pytest
 
   # The reusable builder owns each published executable, wheel, clean-install,
-  # keyless black-box, and trusted real-API path. All native release targets are
-  # required because a platform wheel cannot be validated by another carrier.
+  # keyless black-box, and trusted real-API path. Linux/Windows x64 block PRs;
+  # Linux ARM64 and both macOS architectures run in ci-master.yml.
   python-runtime:
     if: github.event_name == 'pull_request'
     name: python runtime / release-shaped matrix
     uses: ./.github/workflows/build-exe-for-python-sdk.yml
     with:
-      targets: node24-linux-x64,node24-linux-arm64,node24-macos-arm64,node24-macos-x64,node24-win-x64
+      targets: node24-linux-x64,node24-win-x64
       ci: true
     secrets:
       DEEPSEEK_API_KEY_EXTERNAL: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
-
-  # The required pull-request Windows signal: the two blocking win32 surfaces
-  # (workspace build, production site) execute with real, checksum-verified
-  # Windows Node under Wine on standard hosted Linux. The independent
-  # windows-native job below keeps the complete native-kernel inventory —
-  # including the observational portability gates this lane does not run —
-  # on real Windows. This job only provisions runner state (caches,
-  # apt); scripts/wine-windows-gates.sh owns the gate logic and is the same
-  # script the optional local gate `pnpm run check:windows-wine` runs.
-  # Current topology and fidelity limits live in
-  # .agents/notes/implemented/process/2026-08-08-native-windows-pull-request-ci.md
-  windows:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    name: windows node 24 / wine blocking
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@v4
-        with:
-          dest: ${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.PRIMARY_NODE_VERSION }}
-
-      - name: Configure pnpm store path
-        id: pnpm-store
-        run: |
-          store_root="$HOME/.local/share/pnpm/store"
-          echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"
-          store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)
-          echo "path=$store_path" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache/restore@v4
-        with:
-          path: ${{ steps.pnpm-store.outputs.path }}
-          key: ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-node-${{ env.PRIMARY_NODE_VERSION }}-pnpm-
-
-      # Master's wine-apt-cache job in ci-master.yml seeds the default-branch
-      # scope every pull request can read; a save from this job only reaches
-      # reruns of the same merge ref.
-      - name: Compose Wine apt cache key
-        id: wine-cache-key
-        run: echo "key=wine-debs-${ImageOS:-linux}-${ImageVersion:-v0}" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@v4
-        with:
-          path: ~/wine-debs
-          key: ${{ steps.wine-cache-key.outputs.key }}
-
-      # Runner provisioning only — a developer machine installs Wine through
-      # its own package manager; the gate script assumes a wine binary and
-      # fails loud without one. Wine from the apt cache when present; else
-      # download the full dependency closure once and keep it for the next
-      # run. The `wine` dispatcher package (not bare `wine64`) is what puts a
-      # binary on PATH.
-      - name: Install Wine
-        run: |
-          if compgen -G "$HOME/wine-debs/*.deb" > /dev/null; then
-            # The restored archive is the full --download-only closure of
-            # `wine` for this runner image, so installing the .debs directly
-            # with dpkg needs no repository access. apt-get would instead
-            # re-download the same 100+ MB closure from the mirror, which has
-            # stalled the job past its budget on a degraded runner network.
-            # If the archive cannot satisfy the closure, fall back to the apt
-            # network install.
-            if ! sudo DEBIAN_FRONTEND=noninteractive dpkg -i "$HOME"/wine-debs/*.deb; then
-              sudo DEBIAN_FRONTEND=noninteractive dpkg --configure -a || true
-              sudo apt-get install -y --no-install-recommends "$HOME"/wine-debs/*.deb
-            fi
-          else
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends --download-only wine
-            mkdir -p "$HOME/wine-debs"
-            cp /var/cache/apt/archives/*.deb "$HOME/wine-debs/" 2>/dev/null || true
-            sudo apt-get install -y --no-install-recommends wine
-          fi
-
-      - name: Run the Wine Windows gates
-        run: bash scripts/wine-windows-gates.sh
-
-      - name: Shut down wineserver
-        if: always()
-        run: wineserver -k 2>/dev/null || true
 
   # Every pull request also gets real Windows-kernel signals. The former
   # monolithic windows-native job is split into smaller jobs so one slow
@@ -644,10 +648,9 @@ jobs:
   # Single stable required check for branch protection: require "all checks
   # passed" instead of enumerating matrix legs whose names change as lanes and
   # node versions evolve. Every blocking job in THIS workflow must be listed in
-  # `needs`. The required Wine job is listed as `windows`; `windows-native` is
-  # deliberately absent so its independent result never delays or changes this
-  # verdict. (`needs` cannot reach across workflow files; the master-only jobs in
-  # ci-master.yml are intentionally not part of this PR verdict.)
+  # `needs`. Native Windows build and process checks are required; Wine and
+  # the deferred Python runtime targets live in ci-master.yml and do not
+  # participate in this PR verdict. `needs` cannot cross workflow files.
   # `if: always()` is load-bearing: without it a failed dependency
   # would SKIP this job, and GitHub counts a skipped required check as passing
   # — so this job always runs and fails on any non-success result, including
@@ -665,7 +668,7 @@ jobs:
           && github.event.pull_request.user.login != 'dependabot[bot]'
           && fromJSON('["self-hosted", "linux", "x64", "vm-backup"]')
           || 'ubuntu-latest' }}
-    needs: [node-24, node-24-coverage, node-24-consumers, node-compat, python-sdk, python-runtime, windows, windows-build, windows-native-tests]
+    needs: [node-24, node-24-coverage, node-24-bench, node-24-consumers, node-compat, python-sdk, python-runtime, windows-build, windows-native-tests]
     if: always() && github.event_name == 'pull_request'
     steps:
       - name: Fail if any needed job did not succeed

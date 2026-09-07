@@ -101,7 +101,12 @@ export function redactSessionSnapshotIds(logs: readonly string[]): string[] {
     }
   }
   for (const log of parsed) {
-    for (const record of log.records) collect(record, record.type)
+    for (const record of log.records) {
+      if (record.type === 'feedback/message-put' && isRecord(record.data) && isRecord(record.data.item)) {
+        claim(record.data.item.version, 'id')
+      }
+      collect(record, record.type)
+    }
   }
 
   const replacements = [...tokenByValue]

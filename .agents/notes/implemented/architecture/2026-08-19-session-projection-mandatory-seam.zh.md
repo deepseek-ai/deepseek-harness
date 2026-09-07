@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-本决策建立在[会话投影的 host 状态与客户端视图](2026-08-19-session-projection-state-and-client-views.zh.md)所定义的拆分之上。
+本决策建立在[会话投影的 host 状态与客户端视图](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md)所定义的拆分之上。
 
 每个 host 读取方都把投影注册表及其所需 key 视为必需状态。插件要么把 `sessionProjections` 声明为必需注入，要么显式解析注册表与 key，并在第一次依赖它们的访问时抛错。正式组合在这些插件之前挂载注册表。`ApiProxyService` 采用必需注入形式；较低层的 `createApiProxy` factory 对隔离测试和诊断保持容错。
 

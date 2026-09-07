@@ -12,11 +12,11 @@ Status: implemented
 
 ## 决策
 
-**组合结果是一棵平铺配置树。** `apps/cli/config/base.cordis.yml` 与 `apps/cli/config/web.cordis.yml` 共同持有全部行——host 运行时（32 行）、`api-gateway` 行、`webserver` 行、`dsh.client` 行（浏览器 roster；modules 行同时是 host 行）。不做主干 bundle：每插件一行、每个 config 字段 yml 可改。这一立场后来推广到全仓：两个 surface 共享的配置项被抽取进 `apps/cli/config/base.cordis.yml`，各 surface 则收敛为一份 overlay（[共享 base overlay](../simplification/2026-07-29-shared-base-config-overlays.zh.md)）。`dsh-client-hmr` 行是普通的始终启用的 bundle 行（最初由 `--dev` 在代码中追加；该旗标已废除）。行序无装载语义；激活由服务可用性驱动。共享 audit 会拒绝没有 fiber 的 import、仅等待失败的 fiber 以恢复原始激活错误，并报告让 fiber 停在 `PENDING` 的服务；抛出错误前，审计会通过一个进程级检查点标记这些 rejection 的确切原因，从而让 `installFailLoud` 将 Loader 的重复通知合并为一次，而无关的未处理 rejection 仍然致命。Node app-boot 产物内嵌 `@cordisjs/plugin-include`，但将 `@cordisjs/plugin-loader` 保持为外部依赖，因此 include 的 `EntryTree` 与 host 会绑定到同一个 Loader peer，而不会让一棵配置树横跨两个 Loader 实现。
+**组合结果是一棵平铺配置树。** `apps/cli/config/base.cordis.yml` 与 `apps/cli/config/web.cordis.yml` 共同持有全部行——host 运行时（32 行）、`api-gateway` 行、`webserver` 行、`dsh.client` 行（浏览器 roster；modules 行同时是 host 行）。不做主干 bundle：每插件一行、每个 config 字段 yml 可改。这一立场后来推广到全仓：两个 surface 共享的配置项被抽取进 `apps/cli/config/base.cordis.yml`，各 surface 则收敛为一份 overlay（[共享 base overlay](../../archived/simplification/2026-07-29-shared-base-config-overlays.md)）。`dsh-client-hmr` 行是普通的始终启用的 bundle 行（最初由 `--dev` 在代码中追加；该旗标已废除）。行序无装载语义；激活由服务可用性驱动。共享 audit 会拒绝没有 fiber 的 import、仅等待失败的 fiber 以恢复原始激活错误，并报告让 fiber 停在 `PENDING` 的服务；抛出错误前，审计会通过一个进程级检查点标记这些 rejection 的确切原因，从而让 `installFailLoud` 将 Loader 的重复通知合并为一次，而无关的未处理 rejection 仍然致命。Node app-boot 产物内嵌 `@cordisjs/plugin-include`，但将 `@cordisjs/plugin-loader` 保持为外部依赖，因此 include 的 `EntryTree` 与 host 会绑定到同一个 Loader peer，而不会让一棵配置树横跨两个 Loader 实现。
 
 **boot 胶水由两个类组成。** `AppCLIEntry`（apps/cli）与 `AppWebEntry`（壳内核）只持有那些必须独立于 cordis、提前存在的东西：argv 事实、合成的 patch 集、解析出的 boot manifest（元数据清单）、模块系统实例、loading 页句柄——其余一律进插件。`AppCLIEntry.run()` 三段：分层 env（ambient > cwd `.env` > `$DSH_HOME/.env`，顺手关掉上述缺陷）→ patch 合成 → Loader include boot 加 activation audit。`AppWebEntry.run()` 在浏览器侧镜像它：把 `window.__DSH_BOOT__` 解析成 `BootManifest`（双视角：npm 包行给模块表、cordis 插件行给 entry 组合；畸形 wire 大声抛）、建模块系统、渲染 loading 页、immediately 层预取与 Context/Loader 准备并行、**create entry 之前等预取齐**（物化是 `tree.import` 的同步 require，不受 fiber inject 等待保护；i18n → runtime/client 这类跨包 require 边要求 immediately 层工厂全部注册完——否则有实测 10–25% 的 boot 竞态）、收编 modules entry、逐一创建图行、settle、sweep。
 
-**每个配置源有唯一声明位置。** 组合包 yml 值是工程默认，Settings 分节是可写的用户偏好，CLI（命令行界面）flags 面向其归属的启动器配置行，env 值则通过 yml `!!js` 表达式进入。patch 会整体替换一行的 config。解析后的前端 `distIndex` 通过同一条 patch 通道作为组装事实传递。与传输无关的提供方／模型默认值归 `ctx.agentDefaultModel` 所有；[直接 headless 入口](2026-08-09-headless-direct-core-entry-point.zh.md)与 Session Controller 消费同一份状态。
+**每个配置源有唯一声明位置。** 组合包 yml 值是工程默认，Settings 分节是可写的用户偏好，CLI（命令行界面）flags 面向其归属的启动器配置行，env 值则通过 yml `!!js` 表达式进入。patch 会整体替换一行的 config。解析后的前端 `distIndex` 通过同一条 patch 通道作为组装事实传递。与传输无关的提供方／模型默认值归 `ctx.agentDefaultModel` 所有；[直接 headless 入口](../../archived/architecture/2026-08-09-headless-direct-core-entry-point.md)与 Session Controller 消费同一份状态。
 
 **传输职责各有明确 owner。** `dsh-client-connection` 持有 `/api` 路由、请求与响应 envelope、浏览器认证、Host/Origin 检查、精确 Fetch 路由注册以及共享 Typert interceptor 席位。`dsh-api-gateway` 持有类型化 Remote 分发和多路复用 WebSocket。`dsh-host-webserver` 是朴素的路由注册插件：`WebServer` provide `ctx.webServer`（`register(route) → disposer`、重复 pattern 即抛、`renderIndex` 渲染——先结构化 `webserver/index-inject` 行、后原始 `tapIndex` 按注册序应用——与 `port`），激活即 listen，单请求失败时答 400 并记日志，且不认识任何 harness 概念。其基于 socket 的 Node HTTP 入口可以通过受维护的中间件应用已配置的 gzip，无需新增响应写出服务方法或改变 route owner；Web Worker 隧道传递 identity 字节。modules node 半（`ClientModuleRegistry`，provide `ctx.clientModules`）持有单包增量扫描、bundle 路由、启动注入行与 `onRebuilt`/`onGraphChanged` 通知。HMR（热模块替换）node 半通过 `fs.watchFile` membership 与 `/plugins/events` SSE 路由持有开发期重载。
 
@@ -25,7 +25,7 @@ Status: implemented
 ## 后果
 
 - 重组一个 web 部署 = 改 yml/patch；退役件（`mountWebPlugins`、`CLIENT_PACKAGES`、`createHostWebPluginRegistry`、`startWebServer`、webserver 的图/SSE/api 知识）全部删除。
-- [Headless 是直接 core 入口](2026-08-09-headless-direct-core-entry-point.zh.md)：其随附 profile 包含共享的 base Agent 能力，并省去 Host、HTTP、Web 与浏览器层。本笔记的传输划分是浏览器 surface 的约定。
+- [Headless 是直接 core 入口](../../archived/architecture/2026-08-09-headless-direct-core-entry-point.md)：其随附 profile 包含共享的 base Agent 能力，并省去 Host、HTTP、Web 与浏览器层。本笔记的传输划分是浏览器 surface 的约定。
 - 一个值得记住的 TypeScript 坑：`declare module 'cordis'` augmentation 所在文件若**没有任何 cordis import**，会被降级成独立模块声明，无声打散全程序的 `Context` merge（`ctx.on`/`ctx.effect` 全程序消失）。用 `import type {} from 'cordis'` 锚定。
 
 ## 考虑过的替代方案

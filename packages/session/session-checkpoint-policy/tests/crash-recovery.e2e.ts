@@ -74,7 +74,7 @@ async function load(root: string): Promise<SessionEvent[]> {
   try {
     const handle = await ctx.sessionPersistence.open(sessionId, 'read')
     try {
-      const events = await handle.read()
+      const { events } = await handle.read()
       return [...events, ...interruptedTurnClosers(events)]
     } finally {
       await handle.close()

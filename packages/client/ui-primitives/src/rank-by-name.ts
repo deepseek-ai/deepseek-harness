@@ -3,7 +3,7 @@
  * case-insensitive ordered subsequence of the candidate name. Prefix hits
  * rank first, then the strongest alignment score, then the source order of
  * the input. Decision record:
- * .agents/notes/implemented/feature/2026-08-04-web-slash-command-fuzzy-discovery.md
+ * .agents/notes/archived/feature/2026-08-04-web-slash-command-fuzzy-discovery.md
  */
 
 /** One match with its stable source position. */

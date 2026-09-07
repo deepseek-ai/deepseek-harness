@@ -72,7 +72,7 @@ The receiver is a small carrier rather than a transparent proxy for the domain o
 
 ### Registry reads overlay one exact layer
 
-Scope-aware registries use `ScopedLayers` to own one eager global aggregate and lazily created identity-keyed aggregates. A read resolves the global layer and at most one exact local layer; it never creates state or traverses parentage. Registration visibility and Cordis effect ownership derive from the same context, and reclamation waits until the concrete layer's complete aggregate is empty ([decision](2026-07-12-scoped-layers-store.md)).
+Scope-aware registries use `ScopedLayers` to own one eager global aggregate and lazily created identity-keyed aggregates. A read resolves the global layer and at most one exact local layer; it never creates state or traverses parentage. Registration visibility and Cordis effect ownership derive from the same context, and reclamation waits until the concrete layer's complete aggregate is empty ([decision](../../archived/architecture/2026-07-12-scoped-layers-store.md)).
 
 Each service retains its domain rule. Named command and prompt views use the shared insertion-ordered shadow merge; tools keep a richer resolver because restrictions filter globals before local tools are added and the reserved PTC mode transport is inserted separately. Prompt variables and tool guards retain live iteration, while tool-provider membership is materialized per assembly. Scope supplies storage lifecycle and named shadowing, not a universal registry view.
 
@@ -266,7 +266,7 @@ Subagent startup has one ownership transfer. The provider owns unpublished resou
 
 ### The service contract has one cancellation channel
 
-`SubagentProvider.start()` and `SubagentRuntime.start()` return `Promise<SubagentRun>`. The promise fulfills after the backend crosses its publication boundary, so callers and `subagent/start` observers never need a second `run.started` promise. Provider work that fails before publication rejects `start()`; prompt, turn, cancellation, and infrastructure outcomes after publication settle through `SubagentRun.result` without hiding the child id, as required by the [durable catalog decision](../feature/2026-07-22-durable-subagent-catalog-and-list-agents.md).
+`SubagentProvider.start()` and `SubagentRuntime.start()` return `Promise<SubagentRun>`. The promise fulfills after the backend crosses its publication boundary, so callers and `subagent/start` observers never need a second `run.started` promise. Provider work that fails before publication rejects `start()`; prompt, turn, cancellation, and infrastructure outcomes after publication settle through `SubagentRun.result` without hiding the child id, as required by the [durable catalog decision](../../archived/feature/2026-07-22-durable-subagent-catalog-and-list-agents.md).
 
 `SubagentStartRequest.signal` is required. Aborting it requests cancellation during startup and across the published run's remaining readiness or turn work. `SubagentRun.dispose()` also requests cancellation and awaits quiescence. There is no separate public `run.cancel()` channel.
 
@@ -330,7 +330,7 @@ The plugin does not police trusted setup by scanning registries or reject prompt
 
 ### Generated artifacts keep public contracts aligned
 
-The event catalog, service catalog, producer/consumer matrix, configuration catalog, module graph, tool catalog, type-equivalence blocks, and scoped-event resolver map are generated or freshness-gated from source. The [TypeScript semantic-gates Agent Note](../process/2026-07-14-typescript-program-backed-semantic-gates.md) owns Program construction, semantic event discovery, and resolver-generation rules.
+The event catalog, service catalog, producer/consumer matrix, configuration catalog, module graph, tool catalog, type-equivalence blocks, and scoped-event resolver map are generated or freshness-gated from source. The [TypeScript semantic-gates Agent Note](../../archived/process/2026-07-14-typescript-program-backed-semantic-gates.md) owns Program construction, semantic event discovery, and resolver-generation rules.
 
 Behavioral tests pin scoped routing and disposal, final-entry collision cleanup, publication rollback, ordered quiescence, durable pre/post-commit behavior, live tool filtering across presentation and execution, cooperative prompt assembly, structured-output commit in native and PTC mode, async subagent startup and signal cancellation, worker terminal arbitration, ACP settlement, and process teardown.
 

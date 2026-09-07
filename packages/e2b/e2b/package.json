@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-e2b",
   "description": "Shared E2B sandbox lifecycle for DeepSeek Harness provider adapters",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -37,6 +37,7 @@
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-app-boot": "workspace:^",
     "@deepseek-ai/dsh-bash-local": "workspace:^",
     "@deepseek-ai/dsh-fs-e2b": "workspace:^",

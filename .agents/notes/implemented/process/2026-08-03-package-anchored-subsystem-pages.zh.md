@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-[子系统目录](2026-06-20-core-data-structures-catalog.zh.md)最初用主干-vs-seam 规则界定首页范围：如果循环在每个轮次都持有、派生、流式传输或记录某个类型，它就是「核心」。该规则选择的是类型而非包，因此当目录增长到四十多页后，首页变成了跨包大杂烩：LLM（大语言模型）对话词汇排在 agent（智能体）约定之前，创建/所有权词汇（`AgentHandle`、`CreateAgentOptions`、`ResumeAgentOptions`、`AgentFactory`）在目录中无处记录（生成器把它们豁免给了某个包 README），读者无法根据类型所在位置预测哪一页记录它。与此同时，各包分组 README 没有统一形状——有的带分节表格、游离的设计短文，或本应属于子系统页面的尾部段落。
+[子系统目录](../../archived/process/2026-06-20-core-data-structures-catalog.md)最初用主干-vs-seam 规则界定首页范围：如果循环在每个轮次都持有、派生、流式传输或记录某个类型，它就是「核心」。该规则选择的是类型而非包，因此当目录增长到四十多页后，首页变成了跨包大杂烩：LLM（大语言模型）对话词汇排在 agent（智能体）约定之前，创建/所有权词汇（`AgentHandle`、`CreateAgentOptions`、`ResumeAgentOptions`、`AgentFactory`）在目录中无处记录（生成器把它们豁免给了某个包 README），读者无法根据类型所在位置预测哪一页记录它。与此同时，各包分组 README 没有统一形状——有的带分节表格、游离的设计短文，或本应属于子系统页面的尾部段落。
 
 ## 决策
 
@@ -24,7 +24,7 @@ Status: implemented
 
 **保留主干-vs-子系统界定规则。**它逐类型回答「这个类型是核心吗？」，这正是首页积累了四个包的类型、却缺失 `packages/core/agent` 一半公开接口的原因。按仓库布局进行预测的方案胜出。
 
-**扁平的单文档目录。**在[原目录 Agent Note](2026-06-20-core-data-structures-catalog.zh.md) 中已被否决；增长到四十一页证实了该结论。
+**扁平的单文档目录。**在[原目录 Agent Note](../../archived/process/2026-06-20-core-data-structures-catalog.md) 中已被否决；增长到四十一页证实了该结论。
 
 **只在包 README 中记录所有权词汇（豁免的现状）。**这让 `AgentHandle` 与创建/恢复选项在自称类型参考的目录中不可见，生成的 `Types:` 页脚也无法链接它们。
 
@@ -34,4 +34,4 @@ Status: implemented
 - 每个包分组都会将其子系统拥有方或合理的缺席原因暴露给评审，且 `verify-subsystem-pages` 会拒绝未分类的新增项和陈旧豁免。
 - 生成的签名页脚链接 agent 所有权词汇，而不是静默豁免。
 - `verify-type-equiv` 的 1:1 manifest（元数据清单）保证每个粘贴单一归属；重复的 `SessionEvent` 粘贴已移除。
-- [原目录 Agent Note](2026-06-20-core-data-structures-catalog.zh.md) 仍拥有 `ts type-equiv` 漂移检查机制；此处仅取代其页面范围界定规则。
+- [原目录 Agent Note](../../archived/process/2026-06-20-core-data-structures-catalog.md) 仍拥有 `ts type-equiv` 漂移检查机制；此处仅取代其页面范围界定规则。

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-acp-app",
   "description": "The dsh ACP profile bundle: automation-only JSON-RPC stdio and process lifecycle over dsh-base",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

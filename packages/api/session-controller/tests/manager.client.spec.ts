@@ -320,6 +320,7 @@ describe('subagent catalogs', () => {
         requestId: expect.any(String) as unknown as string,
         parentSessionId: S1, childSessionId: S2,
         mode: 'continuable',
+        delivery: 'queue',
         content: [{ type: 'text', text: 'continue' }],
         clientTimeZone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
       },

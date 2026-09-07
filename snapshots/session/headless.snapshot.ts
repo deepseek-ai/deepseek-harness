@@ -281,11 +281,7 @@ function taskFromSession(log: string): string | undefined {
       ? blocks[0].text
       : undefined
   }
-  for (const record of records(log)) {
-    if (record.type !== 'user/message') continue
-    const task = text(record.data)
-    if (task !== undefined) return task
-  }
+  // Inbox text retains canonical mentions that pre-step renders as readable labels.
   for (const record of records(log)) {
     if (record.type !== 'agent/inbox/spliced') continue
     const data = record.data as JsonObject | undefined
@@ -294,6 +290,11 @@ function taskFromSession(log: string): string | undefined {
       const task = text(message)
       if (task !== undefined) return task
     }
+  }
+  for (const record of records(log)) {
+    if (record.type !== 'user/message') continue
+    const task = text(record.data)
+    if (task !== undefined) return task
   }
   return undefined
 }
@@ -671,6 +672,17 @@ describe('headless recorded-session snapshots', () => {
       ]
     }
     expect(logical(packed)).toStrictEqual(logical(source))
+  })
+
+  it('replays original inbox mentions before normalized user messages', () => {
+    const message = (text: string) => ({ source: { kind: 'user' }, content: [{ type: 'text', text }] })
+    const original = 'Use @[Research](dsh-session:InJlZmVyZW5jZS1zb3VyY2Ui)'
+    const log = [
+      { type: 'agent/inbox/spliced', data: { inserted: [message(original)] } },
+      { type: 'user/message', data: message('Use @Research') },
+    ].map(record => JSON.stringify(record)).join('\n')
+    expect(taskFromSession(log)).toBe(original)
+    expect(taskFromSession(JSON.stringify({ type: 'user/message', data: message('legacy task') }))).toBe('legacy task')
   })
 
   it('reconstructs reasoning stderr across packed output boundaries', () => {

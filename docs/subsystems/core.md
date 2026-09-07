@@ -65,7 +65,7 @@ interface Agent {
   readonly options: AgentOptions
   /** The live session this agent drives; its log is the durable source of truth. */
   readonly session: Session
-  /** The agent-owned projection of durable pending work. */
+  /** Agent-owned access to durable pending work. */
   readonly inbox: Inbox
   /** The current lifecycle state, mirrored on every `agent/status` transition. */
   readonly status: AgentStatus
@@ -206,16 +206,73 @@ interface AgentOptions {
 }
 ```
 
-Dispatch requires `provider` and `model` after `agent/request`. An explicit `reasoningEffort` seeds the first request on that route; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona` prompt section may shadow the global default persona.
+Dispatch requires `provider` and `model` after `agent/request`. An explicit `reasoningEffort` seeds the first request on that route; exact-model resolution validates it, while omission allows the adapter default to materialize. When present, `maxTokens` must be a positive safe integer and caps every conversation-model request; omission allows the exact-model adapter default to materialize before the request header, or otherwise leaves provider behavior unchanged. An agent-scoped `deployment:persona-prefix` prompt section may shadow the global default persona.
 
 The inbox is the delivery vocabulary — two ordered pending-message lists the agent owns as a durable projection:
+
+```ts type-equiv
+/** Agent-owned access to pending work; concrete storage belongs to the driver. */
+interface Inbox {
+  /** Prompts awaiting individual turns. */
+  readonly nextTurn: readonly UserMessage[]
+  /** Input awaiting the next step boundary. */
+  readonly nextStep: readonly UserMessage[]
+
+  /** Durably cancel all pending input, clearing next-step before next-turn. */
+  clear(): void
+
+  /**
+   * Append one message to a pending list.
+   * @param target - pending list to extend.
+   * @param message - message to append.
+   */
+  append(target: InboxTarget, message: UserMessage): void
+
+  /**
+   * Prepend one message to a pending list.
+   * @param target - pending list to extend.
+   * @param message - message to prepend.
+   */
+  prepend(target: InboxTarget, message: UserMessage): void
+
+  /**
+   * Replace one pending message in place.
+   * @param messageId - identity of the pending message to replace.
+   * @param newMessage - replacement message.
+   * @returns whether the message was still pending.
+   */
+  replace(messageId: MessageId, newMessage: UserMessage): boolean
+
+  /**
+   * Remove one pending message.
+   * @param messageId - identity of the pending message to remove.
+   * @returns whether the message was still pending.
+   */
+  remove(messageId: MessageId): boolean
+
+  /**
+   * Apply standard splice semantics and durably record the normalized result.
+   * @param target - pending list to mutate.
+   * @param start - splice position.
+   * @param deleteCount - maximum number of messages to remove.
+   * @param inserted - messages to insert at the resolved position.
+   * @returns messages removed by the splice.
+   */
+  splice(
+    target: InboxTarget,
+    start: number,
+    deleteCount: number,
+    inserted: UserMessage[],
+  ): UserMessage[]
+}
+```
 
 ```ts type-equiv
 /** One of the two ordered pending-message lists owned by an agent. */
 type InboxTarget = 'next-turn' | 'next-step'
 ```
 
-Every pending occurrence is its `UserMessage`; `MessageId` is the sole identity. `Inbox.append`, `prepend`, `replace`, `remove`, `clear`, `splice`, and `claim` record normalized durable `agent/inbox/spliced` mutations and reject duplicate pending ids. `replace(messageId, newMessage)` and `remove(messageId)` locate the pending message across both lists; replacement may change identity and emits the old message as discarded followed by the new message as inserted. Ordinary removals and `clear()` are cancellations. `claim(target)` removes the proposed step batch — all `next-step` input plus, at a turn boundary, one `next-turn` message — through pure deletion splices without emitting discarded notifications, and the loop separately emits per-message claimed notifications. Whole-queue consumers such as UI projections reconstruct `nextTurn` and `nextStep` from the durable splices, while consumers following one message use the exact `agent/inbox/inserted`, `claimed`, and `discarded` notifications.
+Every pending occurrence is its `UserMessage`; `MessageId` is the sole identity. The structural `Inbox` methods record normalized durable `agent/inbox/spliced` mutations and reject duplicate pending ids. `replace(messageId, newMessage)` and `remove(messageId)` locate the pending message across both lists; replacement may change identity and emits the old message as discarded followed by the new message as inserted. Ordinary removals and `clear()` are cancellations. At a step boundary, dsh-agent-loop's package-internal `ReactLoopInbox` removes the proposed batch — all `next-step` input plus, at a turn boundary, one `next-turn` message — through pure deletion splices without discarded notifications, then emits per-message claimed notifications. Loop-only pending detection and claiming are not part of `Agent.inbox`. Each `ReactLoopInbox` constructor contributes the standard `inbox` projection from its agent scope; the registry shares that definition across agents by reference count, and its cell is the sole live state while the same fold serves cold consumers. The fold rejects unsafe or out-of-range splice coordinates and duplicate identities across both lists, identifying malformed durable history by event seq. Consumers following one message use the exact `agent/inbox/inserted`, `claimed`, and `discarded` notifications.
 
 Cancellation:
 

@@ -93,7 +93,7 @@ kind: "package-reference"
 - **诚实的能力与配置状态。** `initialize` 只公布已挂载支持，拓扑变化会发布完整配置选项，提示词则固定其准入时的确切路由。
 - **停稳后才结算。** 提示词与关闭操作只在其拥有的准入、Agent 活动、有序更新、后代、持久化与释放达到所需终态后才结算。
 
-决策历史记录在 [ACP 作为仅面向自动化的协议笔记](../../../.agents/notes/implemented/simplification/2026-07-23-acp-automation-only-protocol.zh.md) 与[多会话笔记](../../../.agents/notes/implemented/feature/2026-06-14-acp-multi-session.zh.md) 中。
+决策历史记录在 [ACP 作为仅面向自动化的协议笔记](../../../.agents/notes/implemented/simplification/2026-07-23-acp-automation-only-protocol.zh.md) 与[多会话笔记](../../../.agents/notes/archived/feature/2026-06-14-acp-multi-session.md) 中。
 
 ### 源码地图
 
@@ -123,7 +123,7 @@ kind: "package-reference"
 
 - [dsh-subagent-acp](../../subagent/subagent-acp/README.zh.md)——spawn 并驱动本服务器的进程外 ACP 客户端。
 - [ACP 作为仅面向自动化的协议](../../../.agents/notes/implemented/simplification/2026-07-23-acp-automation-only-protocol.zh.md)——自动化约定及其协议边界的决策记录。
-- [在单个连接上多路复用并发 ACP 会话](../../../.agents/notes/implemented/feature/2026-06-14-acp-multi-session.zh.md)——按会话隔离、归属与清理决策。
+- [在单个连接上多路复用并发 ACP 会话](../../../.agents/notes/archived/feature/2026-06-14-acp-multi-session.md)——按会话隔离、归属与清理决策。
 - [扩展实操手册](../../../docs/cookbook/extension-cookbook.zh.md)——本包作为扩展作者的仅自动化完整示例。
 
 -----

@@ -8,14 +8,15 @@ import { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SessionStore from '@deepseek-ai/dsh-session'
-import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import { SessionHistoryController } from '@deepseek-ai/dsh-api-session-controller/src/history.ts'
 import { subagentIdentityProjectionDefinition } from '@deepseek-ai/dsh-subagent/src/projection.ts'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import { createUserMessage, MessageId } from '@deepseek-ai/dsh-llm'
 import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
-import type { Agent } from '@deepseek-ai/dsh-agent'
-import type { Session, SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
+import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
+import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import {
   SessionPersistenceRevision,
@@ -42,8 +43,8 @@ function promptRequest(
   }
 }
 
-function inboxFor(session: Session): Inbox {
-  return new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} })
+function inboxFor(): Inbox {
+  return createInboxStub()
 }
 
 function header(id: string, createdAt: number, extra: Partial<SessionHeader> = {}): SessionHeader {
@@ -545,7 +546,7 @@ describe('subagent ownership fence', () => {
     })
     const followup = vi.fn()
     const agent = {
-      id: session.id, session, inbox: inboxFor(session), status: 'idle', ctx, followup,
+      id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
     } as unknown as Agent
     ctx.agents.register(agent)
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
@@ -566,7 +567,7 @@ describe('subagent ownership fence', () => {
     const session = ctx.sessions.create(sid('session-browser-zone'), { meta: { cwd: '/proj' } })
     const followup = vi.fn()
     const agent = {
-      id: session.id, session, inbox: inboxFor(session), status: 'idle', ctx, followup,
+      id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
     } as unknown as Agent
     ctx.agents.register(agent)
     const remote = createSessionTestRemote(ctx, {
@@ -687,7 +688,7 @@ describe('sessions.prompt synchronous rejection', () => {
     ctx.agents.register({
       id: session.id,
       session,
-      inbox: inboxFor(session),
+      inbox: inboxFor(),
       status: 'idle',
       ctx,
       followup: () => { throw new Error('agent "session-throwing" lifecycle disposed') },

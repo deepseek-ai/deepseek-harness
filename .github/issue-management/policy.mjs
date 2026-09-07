@@ -7,9 +7,7 @@ import { pathToFileURL } from 'node:url'
 import config from './config.json' with { type: 'json' }
 
 const API_VERSION = '2026-03-10'
-const BODY_LIMIT = 50
 const AUDIT_MARKER = '<!-- dsh-issue-policy -->'
-const OWNER_LINE = /^Owner: @([A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?)$/
 const TYPES = new Set(['Idea', 'Feature', 'Bug', 'Research', 'Task'])
 const PRIORITIES = ['p0', 'p1', 'p2', 'p3']
 const PR_KINDS = new Set([
@@ -62,107 +60,6 @@ if (typeof config.projectTimeZone !== 'string' || !config.projectTimeZone) {
   throw new Error('config.projectTimeZone 未设置')
 }
 Intl.DateTimeFormat('en-US', { timeZone: config.projectTimeZone })
-
-/**
- * Return Markdown outside balanced details elements.
- * @param {string} body Markdown body.
- * @returns {{text: string, balanced: boolean, detailsCount: number, allCollapsed: boolean}} Visible source and details shape.
- */
-export function extractOutsideDetails(body) {
-  const source = body.replace(/<!--[\s\S]*?-->/g, '')
-  const tag = /<\/?details\b[^>]*>/gi
-  let depth = 0
-  let cursor = 0
-  let balanced = true
-  let text = ''
-  let detailsCount = 0
-  let allCollapsed = true
-
-  for (const match of source.matchAll(tag)) {
-    const index = match.index ?? 0
-    if (depth === 0) text += source.slice(cursor, index)
-    if (/^<\//.test(match[0])) {
-      if (depth === 0) balanced = false
-      else depth -= 1
-    } else {
-      depth += 1
-      detailsCount += 1
-      if (/\sopen(?:\s|=|>)/i.test(match[0])) allCollapsed = false
-    }
-    cursor = index + match[0].length
-  }
-
-  if (depth === 0) text += source.slice(cursor)
-  if (depth !== 0) balanced = false
-  return { text, balanced, detailsCount, allCollapsed }
-}
-
-/**
- * Count Chinese characters and contiguous Latin, numeric, or code tokens.
- * @param {string} body Markdown body.
- * @returns {{units: number, balanced: boolean, detailsCount: number, allCollapsed: boolean}} Visible unit count and details shape.
- */
-export function countVisibleUnits(body) {
-  const outside = extractOutsideDetails(body)
-  const visible = outside.text
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\[[^\]]*\]/g, '$1')
-    .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/gi, '$1')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&(?:[A-Za-z]+|#\d+|#x[0-9A-Fa-f]+);/g, ' ')
-    .replace(/[\u0060*~\[\]{}()<>#!|]/g, ' ')
-  const han = visible.match(/\p{Script=Han}/gu)?.length ?? 0
-  const tokens = visible.match(/[\p{Script=Latin}\p{Number}_./:@+-]+/gu)?.length ?? 0
-  return {
-    units: han + tokens,
-    balanced: outside.balanced,
-    detailsCount: outside.detailsCount,
-    allCollapsed: outside.allCollapsed,
-  }
-}
-
-function firstNonblankLine(body) {
-  return body
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .find(Boolean)
-}
-
-/**
- * Validate required body sections and check Owner against assignees.
- * @param {{body: string, assignees: string[], allowUnassignedOwner?: boolean}} input Body input.
- * @returns {string[]} Validation errors.
- */
-export function validateBody({
-  body,
-  assignees,
-  allowUnassignedOwner = config.allowUnassignedOwner ?? false,
-}) {
-  const errors = []
-  const count = countVisibleUnits(body)
-  const owner = firstNonblankLine(body)?.match(OWNER_LINE)?.[1] ?? null
-  const normalized = [...new Set(assignees.map((login) => login.toLowerCase()))]
-
-  if (!count.balanced) errors.push('details 标签必须成对闭合')
-  if (count.detailsCount === 0) errors.push('正文必须包含默认收起的 <details> 区域')
-  if (!count.allCollapsed) errors.push('details 必须默认收起，不得设置 open')
-  if (count.units > BODY_LIMIT) {
-    errors.push(`正文外露部分为 ${count.units} 单位，超过 50 单位`)
-  }
-  if (normalized.length >= 2 && !owner) {
-    errors.push('多个 Assignees 时首个非空行必须是 Owner: @login')
-  } else if (normalized.length >= 2 && !normalized.includes(owner.toLowerCase())) {
-    errors.push('Owner 必须属于 Assignees')
-  } else if (
-    normalized.length < 2 &&
-    owner &&
-    !(normalized.length === 0 && allowUnassignedOwner)
-  ) {
-    errors.push('零或一个 Assignee 时不得写 Owner 行')
-  }
-  return errors
-}
 
 /**
  * Decide whether the human-review policy applies to a PR.
@@ -315,26 +212,18 @@ export function retainIssueReferences(references, issues) {
 
 /**
  * Validate one Issue with its Project status.
- * @param {{title: string, body: string, assignees: string[], labels: string[], type: string|null, priority: string|null, status: string|null, state: string, stateReason: string|null}} issue Issue snapshot.
+ * @param {{labels: string[], type: string|null, priority: string|null, status: string|null, state: string, stateReason: string|null}} issue Issue snapshot.
  * @returns {string[]} Validation errors.
  */
 export function validateIssue(issue) {
-  const errors = validateBody(issue)
+  const errors = []
   const status = issue.status
   const invalidLabels = issue.labels.filter(
     (label) => label.startsWith('kind/') || LEGACY_LABELS.has(label),
   )
 
-  if (!/\p{Script=Han}/u.test(issue.title)) errors.push('Issue 标题必须包含中文')
   if (invalidLabels.length > 0) {
     errors.push(`Issue 不得使用 PR kind 或旧版标签：${invalidLabels.join(', ')}`)
-  }
-  if (
-    /^\s*(?:\[(?:Idea|Feature|Bug|Research|Task|P[0-3]|Inbox|Backlog|Ready|In progress|In review|Done|No action|Owner|area\/[^\]]+)[^\]]*\]|(?:Idea|Feature|Bug|Research|Task|P[0-3]|Inbox|Backlog|Ready|In progress|In review|Done|No action|Owner|area\/[^:： ]+)\s*[:：-])/iu.test(
-      issue.title,
-    )
-  ) {
-    errors.push('Issue 标题不得带 Type、Priority、Status、area 或 Owner 前缀')
   }
   if (!TYPES.has(issue.type ?? '')) errors.push('Type 必须是五种原生英文 Type 之一')
   if (!status || !config.statuses.includes(status)) errors.push('Issue 必须在 Project 中且具有合法 Status')
@@ -468,9 +357,6 @@ export async function issueSnapshot(number, status = undefined) {
   return {
     number,
     nodeId: issue.node_id,
-    title: issue.title,
-    body: issue.body ?? '',
-    assignees: issue.assignees.map((assignee) => assignee.login),
     labels: issue.labels.map((label) => label.name),
     type: issue.type?.name ?? null,
     priority: context.item?.priorityValue?.name ?? null,

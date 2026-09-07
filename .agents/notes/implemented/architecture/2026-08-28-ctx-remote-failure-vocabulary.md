@@ -85,4 +85,4 @@ The type of `details` follows from the code, so a code-and-details mismatch is r
 
 `RemoteError` is an `Error`, so it keeps `message` and `cause` through any logger and through `errorChain()`; but `cause` holds only in-process, and the wire carries exactly `code`, `message`, and `details`. Cross-realm discrimination always reads the structural marker, and any new transport (a worker, a bundle split) must carry that marker or an equivalent marker frame across, or failure values degrade into plain `Error`s.
 
-Consumer signatures for Remote methods are uniformly `Promise<RemoteResult<T>>`, matching the generated projection described in [the method-call surface](2026-08-02-typert-remote-method-calls.md); the ledger for the unary endpoints is [the unary endpoint migration](2026-08-10-unary-apiproxy-remote-migration.md).
+Consumer signatures for Remote methods are uniformly `Promise<RemoteResult<T>>`, matching the generated projection described in [the method-call surface](2026-08-02-typert-remote-method-calls.md); the ledger for the unary endpoints is [the unary endpoint migration](../../archived/architecture/2026-08-10-unary-apiproxy-remote-migration.md).

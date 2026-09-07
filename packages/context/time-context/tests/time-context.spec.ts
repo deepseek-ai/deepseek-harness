@@ -4,11 +4,11 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import { createUserMessage, ToolCallId, LlmAdapter } from '@deepseek-ai/dsh-llm'
 import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
-import AgentRegistry, { agentEvents, Inbox, type Agent } from '@deepseek-ai/dsh-agent'
+import AgentRegistry, { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { defineContentToolFixture } from '@deepseek-ai/dsh-tools'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { unsupportedInbox, mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import * as timeContext from '@deepseek-ai/dsh-time-context'
 import type { Config } from '@deepseek-ai/dsh-time-context'
 
@@ -38,11 +38,11 @@ async function mount(config: Config = {}) {
 }
 
 function sessionAgent(session: Session, id = 'agent'): Agent {
-  return {
+  const agent: Agent = {
     id: SessionId(id),
     options: {},
     session,
-    inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+    inbox: unsupportedInbox(),
     status: 'running',
     ctx: new Context(),
     send: () => {},
@@ -53,6 +53,7 @@ function sessionAgent(session: Session, id = 'agent'): Agent {
     runMaintenance: task => task(new AbortController().signal),
     whenIdle: () => Promise.resolve(),
   }
+  return agent
 }
 
 function openMessageTurn(session: Session, turn: number, clientTimeZone?: string): void {
@@ -139,7 +140,6 @@ class ScriptedAdapter extends LlmAdapter {
 async function loopHarness(adapter: ScriptedAdapter, config: Config = {}): Promise<Context> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
-  await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(timeContext, config)
   ctx.llm.registerAdapter(['mock'], adapter)

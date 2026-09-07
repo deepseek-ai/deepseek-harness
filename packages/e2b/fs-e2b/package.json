@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-fs-e2b",
   "description": "E2B filesystem implementation for DeepSeek Harness",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

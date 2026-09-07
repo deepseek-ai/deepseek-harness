@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-07-31-web-default-search.zh.md)
 
-The [shared-base Web fetch default](2026-09-01-shared-base-web-fetch-default.md) supersedes this record's fetch opt-in decision. This record remains authoritative for the default search provider, credential resolution, endpoint, timeout, and the separation between provider availability and model-tool registration.
+The [shared-base Web fetch default](../../archived/feature/2026-09-01-shared-base-web-fetch-default.md) supersedes this record's fetch opt-in decision. This record remains authoritative for the default search provider, credential resolution, endpoint, timeout, and the separation between provider availability and model-tool registration.
 
 ## Problem
 
@@ -12,7 +12,7 @@ The harness had a complete Web capability family—provider registry, DeepSeek/E
 
 ## Decision
 
-`packages/bundle/base/cordis.patch.yml` explicitly mounts `dsh-web` with `searchProvider: deepseek-official` and `fetchProvider: http`, `dsh-web-search-deepseek`, `dsh-web-fetch-http`, and `dsh-tool-web` with `searchTimeoutMs: 60000`. The [shared-base Web fetch default](2026-09-01-shared-base-web-fetch-default.md) owns the current `fetch: true`; this record continues to own provider selection, search credentials, and timeout. Explicit provider ids keep selection independent of registration order and leave personal or `--patch` overlays able to replace or disable the rows. The one-minute shipped budget covers an auxiliary DeepSeek Messages request plus server-side retrieval while leaving `dsh-tool-web`'s provider-neutral 30-second default unchanged for custom compositions. The [Web capability seam decision](../architecture/2026-06-24-web-capability-seam.md) owns the public-fetch security policy.
+`packages/bundle/base/cordis.patch.yml` explicitly mounts `dsh-web` with `searchProvider: deepseek-official` and `fetchProvider: http`, `dsh-web-search-deepseek`, `dsh-web-fetch-http`, and `dsh-tool-web` with `searchTimeoutMs: 60000`. The [shared-base Web fetch default](../../archived/feature/2026-09-01-shared-base-web-fetch-default.md) owns the current `fetch: true`; this record continues to own provider selection, search credentials, and timeout. Explicit provider ids keep selection independent of registration order and leave personal or `--patch` overlays able to replace or disable the rows. The one-minute shipped budget covers an auxiliary DeepSeek Messages request plus server-side retrieval while leaving `dsh-tool-web`'s provider-neutral 30-second default unchanged for custom compositions. The [Web capability seam decision](../architecture/2026-06-24-web-capability-seam.md) owns the public-fetch security policy.
 
 DeepSeek search uses the same `DEEPSEEK_API_KEY` credential reference as the official conversation adapter. The provider resolves that reference inside every search through the optional `ctx.credentials` service; only a composition without the seam falls back to the launching process environment, and a non-empty literal `apiKey` remains the programmatic last resort. A stored or rotated Web Models key therefore reaches the next search without restarting or retaining the value on the provider. Because `WebSearchProvider.available()` is synchronous, it treats an installed resolver as locally usable and missing dynamic credentials fail the operation with the provider-specific `WEB_PROVIDER_CREDENTIAL_MISSING` code while the stable tool schema stays registered.
 
@@ -32,7 +32,7 @@ The default mount does not create a Web-specific permission policy. `web_search`
 
 **Raise `dsh-tool-web`'s provider-neutral timeout.** Rejected because custom providers and deployments own different latency expectations; the shipped DeepSeek composition owns this deployment budget.
 
-**Enable fetch on every shared-base surface.** This record rejected the alternative because shared-base products could require different network policies. The [shared-base Web fetch default](2026-09-01-shared-base-web-fetch-default.md) supersedes that rejection after the shipped products converged on one full tool roster; its public-destination and no-approval constraints remain current.
+**Enable fetch on every shared-base surface.** This record rejected the alternative because shared-base products could require different network policies. The [shared-base Web fetch default](../../archived/feature/2026-09-01-shared-base-web-fetch-default.md) supersedes that rejection after the shipped products converged on one full tool roster; its public-destination and no-approval constraints remain current.
 
 ## Consequences
 

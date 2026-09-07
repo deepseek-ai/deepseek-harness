@@ -156,8 +156,6 @@ flowchart LR
   cfg --> plugin_dsh_base_tool_goal
   plugin_dsh_base_tool_ralph["tool-ralph<br/>@deepseek-ai/dsh-tool-ralph"]
   cfg --> plugin_dsh_base_tool_ralph
-  plugin_dsh_base_tool_str_replace_editor["tool-str-replace-editor<br/>@deepseek-ai/dsh-tool-str-replace-editor"]
-  cfg --> plugin_dsh_base_tool_str_replace_editor
   plugin_dsh_base_repeat_tool_reminder["repeat-tool-reminder<br/>@deepseek-ai/dsh-repeat-tool-reminder"]
   cfg --> plugin_dsh_base_repeat_tool_reminder
   plugin_dsh_base_web["web<br/>@deepseek-ai/dsh-web"]
@@ -256,7 +254,6 @@ flowchart LR
 | `tool-todo` | `@deepseek-ai/dsh-tool-todo` |
 | `tool-goal` | `@deepseek-ai/dsh-tool-goal` |
 | `tool-ralph` | `@deepseek-ai/dsh-tool-ralph` |
-| `tool-str-replace-editor` | `@deepseek-ai/dsh-tool-str-replace-editor` |
 | `repeat-tool-reminder` | `@deepseek-ai/dsh-repeat-tool-reminder` |
 | `web` | `@deepseek-ai/dsh-web` |
 | `web-search-deepseek` | `@deepseek-ai/dsh-web-search-deepseek` |

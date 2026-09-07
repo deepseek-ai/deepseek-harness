@@ -1,8 +1,11 @@
 import clsx from 'clsx'
 import css from './StateDot.module.css'
 
-/** Four-color state semantic (green done / amber user-attention / blue running ring / red error). */
-export type StateDotState = 'done' | 'warning' | 'ongoing' | 'error'
+/**
+ * State semantic: green done / amber user-attention / blue running ring /
+ * red error / grey idle for a tracked subject with nothing in progress.
+ */
+export type StateDotState = 'done' | 'warning' | 'ongoing' | 'error' | 'idle'
 
 /** Outer 3x3 matrix cells (2px pixels on a 10px grid), clockwise from top-left. */
 const MATRIX_CELLS: readonly (readonly [number, number])[] = [
@@ -11,7 +14,7 @@ const MATRIX_CELLS: readonly (readonly [number, number])[] = [
 
 /**
  * Render a state dot.
- * @param props.state - which of the four states to show.
+ * @param props.state - which of `done`, `warning`, `ongoing`, `error`, or `idle` to show.
  * @param props.size - outer diameter in px (default 10, the figma size).
  * @param props.className - extra class for layout placement.
  * @returns the dot element (aria-hidden; pair with text for accessibility).

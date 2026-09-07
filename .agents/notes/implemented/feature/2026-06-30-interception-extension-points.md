@@ -16,7 +16,7 @@ The canonical surface separates transformable policy, around-dispatch control, a
 
 **Agent events** (`dsh-agent`):
 - `agent/session-start({ agent, source })` — emit, once before turn 1, carrying a `SessionStartSource` (`startup` for a fresh/forked create, `resume` for a reloaded persisted session; `clear`/`compact` reserved). A pure notification — it CANNOT block startup (a deliberate gap: a bridge logs/injects, it does not gate startup). A listener seeds context via `agent.inject()`.
-- `agent/pre-step({ agent, messages, turn, step, signal }, next) → PreStepDecision` — waterfall, fired before every proposed step after the loop has atomically removed its exclusive inbox batch. The payload carries the request's `turn`, `step`, and cancellation `signal` (the retired `PreStepContext` fields live in the payload; see the [payload-object events decision](../architecture/2026-08-06-agent-event-payload-objects.md)); `messages` is empty for a tool continuation with no intervening input. `enter` returns the complete message batch, including any current-request context a listener contributes; `reject` opens no step and leaves the claimed messages removed.
+- `agent/pre-step({ agent, messages, turn, step, signal }, next) → PreStepDecision` — waterfall, fired before every proposed step after the loop has atomically removed its exclusive inbox batch. The payload carries the request's `turn`, `step`, and cancellation `signal` (the retired `PreStepContext` fields live in the payload; see the [payload-object events decision](../../archived/architecture/2026-08-06-agent-event-payload-objects.md)); `messages` is empty for a tool continuation with no intervening input. `enter` returns the complete message batch, including any current-request context a listener contributes; `reject` opens no step and leaves the claimed messages removed.
 
 **`agent/turn-stopping`** is an awaited notification at the natural stop boundary. A listener that needs another step calls `agent.steer()` with explicitly sourced model-facing content; the loop then re-reads the outbox and either continues or closes the turn.
 
@@ -52,7 +52,7 @@ The Service Definition package does **not** declare `hook/*` session events (the
 ## Alternatives considered
 
 - **Shipping pre-tool INPUT rewrite as part of this extension-point set** — deferred as the over-reach signal; the section above carries the consistency problem (audit, history, and presentation all read `tool/call.arguments` logged before execution), and [the pre-tool input-rewrite proposal](../../proposed/feature/2026-06-30-pre-tool-input-rewrite.md) owns the design.
-- **Declaring the durable `hook/*` SessionEvents alongside the extension points** — rejected: a native plugin uses the typed Decisions with no hook log at all (the worked example proves it), so the durable log belongs to [the hook-protocol library](2026-06-30-hook-protocol-lib.md), not the extension surface.
+- **Declaring the durable `hook/*` SessionEvents alongside the extension points** — rejected: a native plugin uses the typed Decisions with no hook log at all (the worked example proves it), so the durable log belongs to [the hook-protocol library](../../../../packages/hooks/hook-protocol/README.md), not the extension surface.
 
 ## Consequences
 

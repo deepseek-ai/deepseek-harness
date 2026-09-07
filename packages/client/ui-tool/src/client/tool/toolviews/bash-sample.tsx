@@ -8,6 +8,7 @@ import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallViewProps } from '../../contract/slots.ts'
 import {
   isSettledPersistentShellCall,
+  isSpilledShellCall,
   localizeTerminalCardModel,
   terminalBlockLabels,
   terminalCardModel,
@@ -53,11 +54,10 @@ export function BashRow({ toolName, block, sessionId, useSessions, inspect, t }:
     : model.state
   const status = stateStatus(state, t)
   const [expanded, setExpanded] = useState(false)
-  // Execution failures and persistent-shell results have no terminal card.
-  // Keep their recorded args and complete output reachable through the generic
-  // body; background acknowledgements and malformed calls remain collapsed.
+  // Failures, persistent-shell results, and spill previews use a generic body;
+  // background acknowledgements and malformed calls remain collapsed.
   const genericBody = terminal === null
-    && (model.state === 'error' || isSettledPersistentShellCall(block))
+    && (model.state === 'error' || isSettledPersistentShellCall(block) || isSpilledShellCall(block))
     && (model.bodyRaw !== null || model.output !== null)
   const expandable = terminal !== null || genericBody
   const open = expanded && expandable

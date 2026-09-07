@@ -12,7 +12,7 @@ An experimental directory without a current package previously imposed placement
 
 ## Decision
 
-`packages/experimental/agent-team`, `packages/experimental/tool-agent-team`, `packages/experimental/agent-team-profile`, `packages/experimental/client-ui-agent-team`, and `packages/experimental/agent-team-web-profile` are private workspace packages. The [experimental package naming decision](2026-08-19-experimental-package-name-prefix.md) owns their npm names and promotion rename; this note owns their placement, release exclusion, and dependency isolation.
+`packages/experimental/agent-team`, `packages/experimental/tool-agent-team`, `packages/experimental/agent-team-profile`, `packages/experimental/client-ui-agent-team`, and `packages/experimental/agent-team-web-profile` are private workspace packages. The [experimental package rules](../../../../packages/experimental/AGENTS.md) own their npm names and promotion rename; this note owns their placement, release exclusion, and dependency isolation.
 
 The dsh pack and publish set and the local baseline publisher exclude every manifest below `packages/experimental/`. `release:dsh` still advances their manifest versions with the shared dsh version without creating release tags. Workspace constraints require each experimental package to set `private: true` and omit `publishConfig`. The same top-level check rejects `dependencies`, `optionalDependencies`, and `peerDependencies` from release packages, release apps, or the Python runtime to an experimental package. Experimental packages may depend on release packages and each other; tests may use them through `devDependencies`, and examples may load them explicitly.
 
@@ -36,4 +36,4 @@ Experimental status changes publication and compatibility expectations only. The
 
 Agent Teams can use the full repository graph and quality checks without entering official tarballs or becoming a supported runtime dependency. A release package cannot expose Team until the Team packages are promoted, so the CLI experiment installs an explicit private profile layer instead of changing shipped bundles. The generic profile launcher accepts that layer without making its plugin dependencies part of the dsh release closure.
 
-The product-role grouping is less direct while the packages incubate. Promotion creates path and npm-name churn as specified by the experimental package naming decision.
+The product-role grouping is less direct while the packages incubate. Promotion creates path and npm-name churn as specified by the experimental package rules.

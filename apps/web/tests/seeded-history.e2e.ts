@@ -520,7 +520,7 @@ describe('web e2e: seeded history renders through cold resume', () => {
       if (done?.type !== 'command/done') throw new Error('feedback command did not settle')
       const [sessionLine, userLine, extraLine] = done.data.text?.split('\n') ?? []
       expect(sessionLine).toBe(`Feedback recorded for session ${SEED_ID}`)
-      expect(userLine).toMatch(/^Anonymous user: [0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\./i)
+      expect(userLine).toMatch(/^Anonymous user: [0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.$/i)
       expect(extraLine).toBeUndefined()
       const userId = userLine?.match(/^Anonymous user: ([0-9a-f-]+)/i)?.[1]
       if (userId === undefined) throw new Error('feedback command omitted the user id')

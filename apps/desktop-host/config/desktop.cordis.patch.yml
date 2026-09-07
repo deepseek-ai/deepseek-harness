@@ -1,0 +1,34 @@
+# Electron reuses the browser composition without its network and browser-launch rows.
+
+- id: web-startup
+  disabled: true
+
+- id: webserver
+  disabled: true
+
+- id: web-runtime
+  disabled: true
+
+- id: client-hmr
+  disabled: true
+
+- id: open-in-app
+  disabled: true
+
+- id: ui-open-in-app
+  disabled: true
+
+- id: directory-picker
+  disabled: true
+
+- id: connection
+  inject:
+    - credentials
+  config: {}
+
+- insert:
+    - id: directory-picker-native
+      name: '@deepseek-ai/dsh-host-directory-picker-native'
+
+    - id: ui-directory-picker-native
+      name: '@deepseek-ai/dsh-client-ui-directory-picker-native'

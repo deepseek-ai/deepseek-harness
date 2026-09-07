@@ -8,7 +8,7 @@ Status: implemented
 
 harness 的凭据平面只能表达一种机密：藏在某个环境变量名之后的值。`CredentialRef` 是一个 POSIX 标识符，解析时按进程环境、受管文件、`.env` 回退分层，每个消费方按操作读取。这恰好覆盖 API key，此外什么都不覆盖。
 
-有些凭据不是"可以让部署方去存"的值。它们是被**取得**的——与人对话：对方打开页面、批准账号、把码粘回来——产出的是一份带 refresh 半边、会在用户背后轮换的 token 文档。pi-ai 直接建模了这一点（`Credential = ApiKeyCredential | OAuthCredential`、由应用拥有的 `CredentialStore`、`Models.login()`），而 harness 无处安放其中任何一项。`PiAiAdapter` 用不带参数的 `createModels()` 构造集合，于是那个 store 就是 pi-ai 的内存默认实现：每次启动为空，每次配置变更被丢弃。只以 OAuth 认证的 `openai-codex` 因此每个请求都以 `Provider is not configured` 失败——[被目录withheld](../bug-fix/2026-08-13-oauth-only-providers-withheld.zh.md) 作为发布前修复，它移除了错误的供给，但没有补上能力。
+有些凭据不是"可以让部署方去存"的值。它们是被**取得**的——与人对话：对方打开页面、批准账号、把码粘回来——产出的是一份带 refresh 半边、会在用户背后轮换的 token 文档。pi-ai 直接建模了这一点（`Credential = ApiKeyCredential | OAuthCredential`、由应用拥有的 `CredentialStore`、`Models.login()`），而 harness 无处安放其中任何一项。`PiAiAdapter` 用不带参数的 `createModels()` 构造集合，于是那个 store 就是 pi-ai 的内存默认实现：每次启动为空，每次配置变更被丢弃。只以 OAuth 认证的 `openai-codex` 因此每个请求都以 `Provider is not configured` 失败——[被目录withheld](../../archived/bug-fix/2026-08-13-oauth-only-providers-withheld.md) 作为发布前修复，它移除了错误的供给，但没有补上能力。
 
 同一处缺失还带来另外两个缺口。提供方自带的凭据发现是对着裸进程环境跑的，因此凭据 seam 保管的密钥对它不可见，本地凭据文件更是从未被查找过。而登录没有任何界面可以发起，因为 harness 里没有任何东西能代替插件向人发问。
 

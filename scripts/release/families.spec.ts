@@ -49,10 +49,20 @@ describe('release families', () => {
     expect(members.map(member => member.name)).not.toContain('@deepseek-ai/dsh-experimental-agent-team')
   })
 
-  it('bumps private dsh packages without adding release tags', () => {
+  it('excludes private applications from the publish set', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-release-private-'))
+    roots.push(root)
+    write(join(root, 'apps/public/package.json'), '{"name":"@deepseek-ai/dsh-public","version":"0.0.1"}\n')
+    write(join(root, 'apps/private/package.json'), '{"name":"@deepseek-ai/dsh-private","version":"0.0.1","private":true}\n')
+
+    expect(releaseFamily('dsh').members(root).map(entry => entry.name)).toEqual(['@deepseek-ai/dsh-public'])
+  })
+
+  it('bumps private dsh workspaces without adding release tags', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-release-version-'))
     roots.push(root)
     write(join(root, 'package.json'), '{"version":"0.0.1"}\n')
+    write(join(root, 'apps/desktop/package.json'), '{"version":"0.0.1","private":true}\n')
     write(join(root, 'packages/experimental/prototype/package.json'), '{"version":"0.0.1","private":true}\n')
     write(join(root, 'packages/core/unselected/package.json'), '{"version":"0.0.1"}\n')
 
@@ -63,6 +73,7 @@ describe('release families', () => {
     expect(planned.map(entry => ({ path: entry.manifestPath, tag: entry.tag }))).toEqual([
       { path: 'package.json', tag: undefined },
       { path: 'packages/core/published/package.json', tag: 'dsh-v0.0.2' },
+      { path: 'apps/desktop/package.json', tag: undefined },
       { path: 'packages/experimental/prototype/package.json', tag: undefined },
     ])
   })

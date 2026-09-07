@@ -83,7 +83,7 @@ The chooser is a pure decision plus a mount: `resolveDirectoryPickerBackend` sam
 Read these when the chooser's contract is not enough: the seam definition first, then the two backends it mounts.
 
 - [Directory-picker seam](../directory-picker/README.md) — the capability contract the chooser composes.
-- [Directory-picker capability seam decision](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.md) — why backends differ in interaction shape.
+- [Directory-picker capability seam decision](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md) — why backends differ in interaction shape.
 - [Native backend](../directory-picker-native/README.md) — the interaction mounted for a local operator.
 - [Browse backend](../directory-picker-browse/README.md) — the interaction mounted everywhere else.
 

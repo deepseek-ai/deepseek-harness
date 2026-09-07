@@ -14,7 +14,7 @@ Status: implemented
 
 ## 决策
 
-**完成的一轮以它产出的文件收尾。** 该行是独立插件 `@deepseek-ai/dsh-client-ui-deliverables`，注册进 chat 视图在收尾消息正文与其 IconActions 之间渲染的 `conversation.chat.turnTail` 空位——ui-conversation 拥有空位与 owner 通货（节点、收尾 seq、`openFile`），插件拥有全部策略。`producedForClosing` 从改写工具自身的跟随文件 `locations` 中读出路径——diff 卡片，或 `kind` 为 `edit` 的 generic 卡片（即 `str_replace_editor` 的 insert 所呈现的形状）——因此无论收尾消息是否点名，这一轮的产出都会被列出；新的改写工具靠声明自己做了什么加入，而不是靠被加进某张名单。read、删除与失败的调用不贡献任何条目；同一路径在一轮内按首见顺序只出现一次；累积在 turn 边界重置，因此一轮若先改写文件、随后没有正文内容就结束，不会溢进下一轮的行里。CSS 容器宽度档位会选择前六条路径中的一个前缀及其匹配的 `+ N 个文件` 标签，flexbox 则收缩可见的 basename 并用 ellipsis 省略；组件不执行 JavaScript 布局观察（[决策](../simplification/2026-09-01-css-produced-file-layout.zh.md)）。cordis.yml 中的一行即可把该交互面组合进来或去掉；未注册的空位什么也不渲染。
+**完成的一轮以它产出的文件收尾。** 该行是独立插件 `@deepseek-ai/dsh-client-ui-deliverables`，注册进 chat 视图在收尾消息正文与其 IconActions 之间渲染的 `conversation.chat.turnTail` 空位——ui-conversation 拥有空位与 owner 通货（节点、收尾 seq、`openFile`），插件拥有全部策略。`producedForClosing` 从改写工具自身的跟随文件 `locations` 中读出路径——diff 卡片，或 `kind` 为 `edit` 的 generic 卡片（即 `str_replace_editor` 的 insert 所呈现的形状）——因此无论收尾消息是否点名，这一轮的产出都会被列出；新的改写工具靠声明自己做了什么加入，而不是靠被加进某张名单。read、删除与失败的调用不贡献任何条目；同一路径在一轮内按首见顺序只出现一次；累积在 turn 边界重置，因此一轮若先改写文件、随后没有正文内容就结束，不会溢进下一轮的行里。CSS 容器宽度档位会选择前六条路径中的一个前缀及其匹配的 `+ N 个文件` 标签，flexbox 则收缩可见的 basename 并用 ellipsis 省略；组件不执行 JavaScript 布局观察（[决策](../../archived/simplification/2026-09-01-css-produced-file-layout.md)）。cordis.yml 中的一行即可把该交互面组合进来或去掉；未注册的空位什么也不渲染。
 
 **路径链接读得出是链接。** 静止状态下就带下划线，而不只在悬停时。这是本次改动中更小的那一半，却是修复中更大的那一半。
 

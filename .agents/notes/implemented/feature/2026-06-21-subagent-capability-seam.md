@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-06-21-subagent-capability-seam.zh.md)
 
-> The full seam is shipped: the `dsh-subagent` interface and `dsh-tool-subagent` consumer; the two in-process backends (`dsh-subagent-spawn-in-process`, `dsh-subagent-fork-in-process`); the nested-agent snapshot infrastructure ([per-session snapshot replay](../testing/2026-06-22-subagent-snapshot-replay.md)); and the out-of-process ACP, Codex, and Claude Code backends ([ACP Agent Note](2026-06-22-acp-subagent-backend.md), [product-provider Agent Note](2026-08-04-claude-code-and-codex-subagent-backends.md)).
+> The full seam is shipped: the `dsh-subagent` interface and `dsh-tool-subagent` consumer; the two in-process backends (`dsh-subagent-spawn-in-process`, `dsh-subagent-fork-in-process`); the nested-agent snapshot infrastructure ([per-session snapshot replay](../../archived/testing/2026-06-22-subagent-snapshot-replay.md)); and the out-of-process ACP, Codex, and Claude Code backends ([ACP Agent Note](../../archived/feature/2026-06-22-acp-subagent-backend.md), [product-provider Agent Note](2026-08-04-claude-code-and-codex-subagent-backends.md)).
 
 ## Problem
 
@@ -66,7 +66,7 @@ Each in-process subagent runs in its **own `Session`** (own id, `parentSession` 
 
 ## Testing
 
-Registry and tool tests replace only the nondeterministic child with a package-local scripted provider while exercising the real `SubagentRuntime`, lifecycle, task integration, and model-facing tool. Loader regression tests still cover the provider and consumer exports for the failure described in [postmortem 0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.md). Registry tests cover reload safety, duplicate names, and start-time capability rejection; nested-agent scenarios replay keylessly through [per-session snapshot replay](../testing/2026-06-22-subagent-snapshot-replay.md); in-process backends also have real-loop unit tests and a with-key e2e.
+Registry and tool tests replace only the nondeterministic child with a package-local scripted provider while exercising the real `SubagentRuntime`, lifecycle, task integration, and model-facing tool. Loader regression tests still cover the provider and consumer exports for the failure described in [postmortem 0001](../../../../docs/postmortem/0001-acp-default-export-drops-inject.md). Registry tests cover reload safety, duplicate names, and start-time capability rejection; nested-agent scenarios replay keylessly through [per-session snapshot replay](../../archived/testing/2026-06-22-subagent-snapshot-replay.md); in-process backends also have real-loop unit tests and a with-key e2e.
 
 ## Consequences
 

@@ -225,7 +225,7 @@ type StreamChunk =
 
 `snapshot()` 返回分离且不可变的 stream。`expandAssistantStream()` 会严格检查 record key、成员数、index、时间戳、tool-call identity 与无损 JSON，再重建精确的带时间 chunk 序列。Session 日志会把该 stream 嵌入作为 surface result 的 `assistant/message`，或嵌入没有 surface message 的 `assistant/attempt`。
 
-进程本地 `agent/assistant-stream` frame 承载实时呈现。持久回放、遥测、token 记账与历史 UI 组装会展开嵌入式 settlement，而不会把 live frame 当作持久事实。
+进程本地 `agent/assistant-stream` frame 承载实时呈现。持久回放与恢复校验仍会展开内嵌 settlement；遥测、token 记账与 Host 折叠直接读取紧凑记录。记录级读取器（`assistantStreamFirstTokenTime`、`assistantStreamHasVisibleContent`、`assistantStreamHasVisibleText`、`lastAssistantStreamChunk`、`assistantStreamChunks`、`joinAssistantStreamText`、`assembleAssistantStream` 以及按 run 的 `runFirstTokenTime` 与 `runFirstVisibleTime`）以提前退出在一次扫描内回答消费方问题，因此大历史每次结算的代价为 O(records) 而非 O(members) 展开（[折叠决策](../../.agents/notes/implemented/architecture/2026-09-06-embedded-stream-record-readers.zh.md)）。`expandAssistantStream()` 仍是持久边界读取记录与需要每个成员的消费方的校验路径。
 
 <a id="llmfailure"></a>
 
@@ -297,7 +297,7 @@ interface LlmImageRequestPricing {
 - **一次适配器调用就是一次提供方尝试。** 适配器禁用库重试。agent 层恢复会打开另一个持久、带编号的轮次；直接调用 `ctx.llm.stream()` 的调用方仍然只尝试一次。
 - **提供方停顿在传输层受到时限约束。** 两个已交付的远程适配器都暴露正数且有限的 `streamIdleTimeoutMs`，默认五分钟。watchdog 只在 iterator `next()` 尚未完成时启动，整个请求使用同一个稳定 signal，把自身到期映射为 `TIMEOUT`，并把更早发生的调用方中止保留为 `ABORTED`。
 - **上下文溢出只有一个规范 code。** 两个 DeepSeek 适配器都通过 `isContextWindowExceededError()` 对提供方的显式细节分类并暴露 `CONTEXT_WINDOW_EXCEEDED`，无论失败以抛出的 HTTP `LlmError` 还是带内 finish error 到达。消费方按 code 路由，绝不依赖提供方文本。
-- **空 completion 是可重试错误，而不是静默的成功结果。** 两个适配器都把没有携带任何内容块的终止性 `stop` 结束映射为携带规范 `EMPTY_RESPONSE` code 的 `finish {kind:'error'}`，`dsh-llm-retry` 默认会重试它；详见[空模型响应可重试](../../.agents/notes/implemented/bug-fix/2026-07-24-empty-model-response-is-retryable.zh.md)。
+- **空 completion 是可重试错误，而不是静默的成功结果。** 两个适配器都把没有携带任何内容块的终止性 `stop` 结束映射为携带规范 `EMPTY_RESPONSE` code 的 `finish {kind:'error'}`，`dsh-llm-retry` 默认会重试它。
 - **每个提供方 HTTP 请求都携带应用归属头。** 适配器发送 `attributionHeaders()`（见下文）作为 `User-Agent` 基线，并通过协议级测试加以证明。
 - **回放状态归适配器所有；其切分是共享词汇。** 成功的 `finish` 可以携带一个 `ReplayEnvelope`：不透明的响应级元数据，加上与发射块序列对齐的可选逐块条目。对齐关系是 harness 的词汇——组装丢弃某个块时，同一位置的条目一并丢弃，因此存储的元数据始终描述存储的内容。循环把裁剪后的数据与组装后的 assistant 消息一起存储。后续请求中，仅当历史提供方与目标提供方当前注册到完全相同的适配器实例时，`LlmRuntime` 才会传递该状态。该适配器负责校验状态并拥有所有跨模型或跨提供方转换；其他适配器只会收到提供方无关的内容以及提供方／模型字段，不会收到私有状态。持久化内容保持权威：读取适配器无法使用的已存状态只会把这一条消息降级为提供方无关转换并带出诊断，而不是让请求失败。
 

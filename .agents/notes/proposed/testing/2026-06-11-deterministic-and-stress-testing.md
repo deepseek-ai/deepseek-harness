@@ -4,7 +4,7 @@ Status: proposed
 
 English | [中文](2026-06-11-deterministic-and-stress-testing.zh.md)
 
-The [CI test reliability skill](../../implemented/testing/2026-08-28-ci-test-reliability-skill.md) provides current authoring and diagnosis guidance without implementing the lint rule, universal replay fixture, or nightly stress job proposed here. Those mechanisms remain proposed.
+The [CI test reliability skill](../../../skills/dsh-ci-test-reliability/SKILL.md) provides current authoring and diagnosis guidance without implementing the lint rule, universal replay fixture, or nightly stress job proposed here. Those mechanisms remain proposed.
 
 ## Problem
 

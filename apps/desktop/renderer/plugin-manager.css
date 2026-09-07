@@ -1,0 +1,108 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: Canvas;
+  color: CanvasText;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 32px;
+}
+
+header,
+.install-row,
+li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+header {
+  justify-content: space-between;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+header p {
+  color: GrayText;
+}
+
+form,
+section {
+  margin-top: 28px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid ButtonBorder;
+  border-radius: 7px;
+  background: Field;
+  color: FieldText;
+}
+
+button {
+  padding: 9px 14px;
+  border: 1px solid ButtonBorder;
+  border-radius: 7px;
+  background: AccentColor;
+  color: AccentColorText;
+  cursor: pointer;
+}
+
+button.quiet,
+li button {
+  background: ButtonFace;
+  color: ButtonText;
+}
+
+button:disabled,
+input:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+#status {
+  min-height: 1.5em;
+  margin-top: 16px;
+  color: GrayText;
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+li {
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid ButtonBorder;
+}
+
+.package-version {
+  color: GrayText;
+  margin-left: 8px;
+}
+
+.package-actions {
+  display: flex;
+  gap: 8px;
+}

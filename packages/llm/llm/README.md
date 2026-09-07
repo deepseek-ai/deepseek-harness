@@ -63,6 +63,7 @@ After a successful mount, `ctx.llm.listProviders()` reports the registered route
 - **Expose and activate providers through configuration** — adapters declare configurable-provider routes plus a settings namespace, so configuration surfaces can activate dormant providers and edit connection facts without a restart.
 - **Discover and resolve models** — list the models an adapter advertises, interrogate an endpoint for the models it serves, and resolve one exact model's context window, output default, reasoning efforts, and input modalities.
 - **Validate call config** — an explicit or configured reasoning effort is checked against the exact model before any provider I/O, and an adapter-configured output cap is materialized when the request omits one.
+- **Read an embedded Assistant stream without expanding it** — `assistantStreamFirstTokenTime` (first token), `assistantStreamHasVisibleContent` (any visible content), and `assistantStreamHasVisibleText` (any visible text) answer their questions from the compact records with early exit; `lastAssistantStreamChunk` scans backward to the last raw chunk of one type, `assistantStreamChunks` and `joinAssistantStreamText` scan the whole stream, and `assembleAssistantStream` feeds a `BlockAssembler` one joined delta per run with the same blocks, usage, and replay state as the per-member expansion. `runFirstTokenTime` and `runFirstVisibleTime` do the early-exit scan for one packed run, and `isTokenDelta`, `isVisibleChunk`, and `chunkHasVisibleText` define the token and visibility rules for a single chunk. `expandAssistantStream` remains the validating path for records read at a durable boundary; it is not memoized, because a retained expansion costs roughly ten times the compact stream for as long as the event lives.
 
 ### Failures and recovery
 
@@ -90,7 +91,7 @@ The service is built on one separation: **the logical contract is provider-neutr
 | [`src/types.ts`](src/types.ts) | The `StreamChunk` protocol, content-block map, finish reasons, and shared vocabulary |
 | [`src/message.ts`](src/message.ts) | Immutable message constructors shared by delivery, history, and requests |
 | [`src/assembler.ts`](src/assembler.ts) | `BlockAssembler`: incremental chunk-to-block assembly |
-| [`src/assistant-stream.ts`](src/assistant-stream.ts) | Compact timed Assistant stream accumulation, strict validation, and exact expansion |
+| [`src/assistant-stream.ts`](src/assistant-stream.ts) | Compact timed Assistant stream accumulation, strict validation, exact expansion, and record-level readers |
 | [`src/call-config.ts`](src/call-config.ts) | Call-config validation, adapter-default materialization, and request freezing |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | Provider-owned retry policy resolution (normal and always modes) |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` taxonomy and provider-neutral failure codes |

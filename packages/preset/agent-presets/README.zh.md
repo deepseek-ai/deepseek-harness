@@ -149,7 +149,6 @@ agent-presets:
 - [会话包映射](../../session/README.zh.md)——preset 切换所追加的持久会话记录。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-presets)——每个受支持配置字段及其源声明。
 - [按会话组装 agent preset 的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.zh.md)——设计理由与备选方案。
-- [按 preset 常驻挂载的 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-08-per-preset-standing-mounts.zh.md)——挂载为何是常驻且共享的。
 
 -----
 

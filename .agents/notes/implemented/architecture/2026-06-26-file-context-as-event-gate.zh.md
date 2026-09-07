@@ -33,7 +33,7 @@ provider      dsh-fs-local      local implementation of ctx.fs
 
 该模型是叠加式的：裸 `ctx.fs` 执行原子化、无约束的文本 I/O，而 `dsh-fs-observation-policy` 叠加观测状态、先读后编辑和版本守卫。因此移除策略层后工具仍可用，只是不受约束。正式发布的 agent（智能体）配置会加载策略；裸模式的存在是为了让策略在服务边界保持可选，而非作为正常部署姿态。
 
-[文件系统缺失观测后续决策](../bug-fix/2026-08-09-filesystem-absence-observation.zh.md)把记录载荷从仅表示成功的版本细化为显式的存在/缺失状态，并要求带防护的创建以不替换方式发布。事件门控归属与无 I/O 策略边界保持不变。
+[文件系统缺失观测后续决策](../../archived/bug-fix/2026-08-09-filesystem-absence-observation.md)把记录载荷从仅表示成功的版本细化为显式的存在/缺失状态，并要求带防护的创建以不替换方式发布。事件门控归属与无 I/O 策略边界保持不变。
 
 `dsh-tool-fs` 不再注入 `fileContext`。它注入 `fs` 和 `tools`/`systemPrompt`。
 

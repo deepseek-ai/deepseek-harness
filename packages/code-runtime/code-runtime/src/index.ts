@@ -21,8 +21,7 @@ export type {
  * Binding globals EVERY backend refuses because SOME backend owns the slot in
  * the program's namespace: `console` (the worker's log capture), and
  * `__dsh_main__`/`__builtins__`/`__name__` (the Python backend's bootstrap
- * wrapper and seeded module globals; see the [portable-identifier Agent
- * Note](../../../../.agents/notes/implemented/architecture/2026-07-31-code-runtime-portable-identifier-seam.md)),
+ * wrapper and seeded module globals),
  * and `__debug__`. One shared set — rather than each backend refusing only its
  * own slots — keeps the portability promise real: a namespace list valid on
  * one backend is valid on all, so a caller cannot pick a name that works on

@@ -1,0 +1,50 @@
+/* The on/off appearance keys off aria-checked rather than a parallel class, so
+ * the visual state cannot disagree with the state assistive technology reads.
+ *
+ * The track is a capsule: its radius is half its height, so the corners consume
+ * the whole side and the global superellipse would square the ends off against
+ * the round thumb inside it. `corner-shape: round` opts the track out, the way
+ * every full-round radius does. The corner-shape spec does not catch this one —
+ * it recognizes 50%, 100%, and radii at or above 99px, not a radius that is
+ * full-round only relative to its own box. */
+.switch {
+  box-sizing: border-box;
+  position: relative;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 20px;
+  padding: 2px;
+  border: 0;
+  border-radius: 10px;
+  corner-shape: round;
+  background: var(--dsw-alias-border-l3);
+  cursor: pointer;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--dsw-alias-brand-primary);
+}
+
+.switch:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+.thumb {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-primary-foreground);
+  transition: transform 120ms ease;
+}
+
+.switch[aria-checked='true'] .thumb {
+  transform: translateX(16px);
+}

@@ -50,7 +50,7 @@ The stack has one-way knowledge, documented in the [Web Client architecture](../
 Non-negotiables across the layers:
 
 - **Business data lives in the object layer, never a store.** Entry-declared stores carry shared viewing/interaction state (selection, drafts, panel widths); sessions, frames, and connections stay in the object layer.
-- **rpcId is strictly bidirectional**: the initiator mints, the responder echoes, and minting stays in Connection ([unary Remote migration](../../.agents/notes/implemented/architecture/2026-08-10-unary-apiproxy-remote-migration.md)).
+- **rpcId is strictly bidirectional**: the initiator mints, the responder echoes, and minting stays in Connection ([Typert Gateway method calls](../../.agents/notes/implemented/architecture/2026-08-02-typert-remote-method-calls.md)).
 - **Notifier publication discipline**: `notifyNow` is only the direct echo of a user gesture; structural updates use microtask-batched `markDirty`, while visible streaming chunks use cumulative `markFrameDirty`. See `../api/session-controller/src/client/sessions/notifier.ts`.
 - **The web layer is pure presentation.** Nothing that is only "how to draw" enters the session log. Tool cards derive in the Client from raw call/result events and persisted result metadata; process-local control state uses its own snapshots and frames. Unknown or malformed tool data falls back to the generic form. A new *model-visible* input still requires a session event (repo-wide rule).
 
@@ -144,9 +144,11 @@ Bringing up a new `packages/client/<name>` plugin package (ui-workspace is a com
 
 ## New component checklist
 
-1. Compose through register: add the slot to `SlotMap`, declare it in its parent entry's `children`, and register your component — see the [Slots reference](../../docs/subsystems/slots.md). No other composition route exists.
-2. Type the props as the four shares (`PropsRuntime` & `PropsRenderSlots` & `PropsStore` & inject face) — derive, don't hand-write. Shared/surviving state goes in a `createXXXStore()` factory declared at register; component-private state stays local.
-3. Component tests feed props directly (`createXXXStore().create()` for the store data; plain stubs for framework hooks) and assert behavior without render machinery.
-4. Tokens only in CSS; product copy follows the localization rule above; English comments.
-5. `pnpm run test:gui` green; if the component changes visible assembled output, also run `DSH_SNAPSHOT=replay pnpm run test:web`.
-6. Non-trivial change? It needs an Agent Note in the same PR (repo-wide rule) — the GUI notes above are the precedents to extend.
+1. **Check the [ui-primitives catalog](ui-primitives/README.md#component-catalog) before writing a control.** A plugin cannot import another plugin's component, so `ui-primitives` is the only place a control can be shared; the catalog states when to reuse, when to promote, and when your own package is the right home.
+
+2. Compose through register: add the slot to `SlotMap`, declare it in its parent entry's `children`, and register your component — see the [Slots reference](../../docs/subsystems/slots.md). No other composition route exists.
+3. Type the props as the four shares (`PropsRuntime` & `PropsRenderSlots` & `PropsStore` & inject face) — derive, don't hand-write. Shared/surviving state goes in a `createXXXStore()` factory declared at register; component-private state stays local.
+4. Component tests feed props directly (`createXXXStore().create()` for the store data; plain stubs for framework hooks) and assert behavior without render machinery.
+5. Tokens only in CSS; product copy follows the localization rule above; English comments.
+6. `pnpm run test:gui` green; if the component changes visible assembled output, also run `DSH_SNAPSHOT=replay pnpm run test:web`.
+7. Non-trivial change? It needs an Agent Note in the same PR (repo-wide rule) — the GUI notes above are the precedents to extend.

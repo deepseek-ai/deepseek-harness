@@ -12,7 +12,7 @@ Status: implemented
 
 ## 决策
 
-普通的 `pnpm run test:coverage` 命令仍只启动一次 Vitest。Linux 覆盖率 CI 将 `DSH_COVERAGE_PARTITIONS` 固定为 4；原生 Windows 现在也固定为 4，以降低自托管高并发下的进程创建压力。运行期间不会由任何耗时触发器改变这两个数量。[覆盖率豁免重型套件](2026-07-31-coverage-exempt-heavy-suites.zh.md)仍作为独立的无插桩门禁与插桩工作并排运行。
+普通的 `pnpm run test:coverage` 命令仍只启动一次 Vitest。Linux 覆盖率 CI 将 `DSH_COVERAGE_PARTITIONS` 固定为 4；原生 Windows 现在也固定为 4，以降低自托管高并发下的进程创建压力。运行期间不会由任何耗时触发器改变这两个数量。[覆盖率豁免重型套件](../../archived/process/2026-07-31-coverage-exempt-heavy-suites.md)仍作为独立的无插桩门禁与插桩工作并排运行。
 
 启用分区后，`scripts/run-gates.ts` 为插桩门禁选择 `pnpm run test:coverage:partitioned`。`scripts/coverage-partitions.ts` 按配置数量并发启动 Vitest 子进程，每个进程只用 1 个 worker。协调器通过 `vitest list --filesOnly` 收集插桩清单（调用方过滤器会先收窄清单；exempt 重型套件需在此剔除，因为 list 不应用其排除），从协调器持久化的 gitignore 文件读取逐文件耗时（windows-coverage job 通过 GitHub cache 恢复并保存该文件，因为 checkout 会删除它且 Vitest 自身缓存无法在 CI 存活），并借最小堆按最长处理时间把文件分配到各分区，使重量级子进程密集型套件分散到不同子进程，而不是全部落入路径 hash 恰好命中的那一个分片。每个分区获得一个临时 Vitest 配置，其 include 按 project 拆分（命令行传文件会超过 Windows CreateProcess 上限；互斥的 thread-safe 与 process-bound project 只保留各自的文件，避免任何文件跑两次）；空分区会在任何子进程启动前被拒绝，最重的分区最先启动使其结论最早落地（fail-fast），耗时历史通过 GitHub cache 以每 run 唯一键恢复与保存（cache 条目不可变）。分区模式会在各子进程中关闭阈值与覆盖率报告器，为每个子进程分配独立报告目录，并让每个进程写出 1 份 blob 报告。
 
@@ -30,7 +30,7 @@ Status: implemented
 
 `scripts/coverage-partitions.spec.ts` 固定了参数构造、包脚本分隔符移除、单 worker 分区、加权最长处理时间分配（含一个在分配忽略记录权重时必然失败的用例）、唯一一次合并阈值命令、失败测试合并、完整 blob 校验前的失败诊断、spawn 失败后等待兄弟分区，以及链接安全清理。`scripts/run-gates.spec.ts` 固定了显式启用、非法数量拒绝、两道原生 Windows 覆盖率门禁对完整构建的依赖、完整 Windows 清单及其阻断性划分，以及不缓冲的流式输出。可能在分区间移动的 React fake-timer 用例会在 `act()` 内推进计时器；依赖几何位置的 portal 测试会固定元素矩形，使不同分片调度不会把延迟更新或 jsdom 坐标变成只在覆盖率运行中出现的失败。
 
-已完成的原生 Windows 对比中，双分区耗时约 405 秒，16 分区耗时 112.66–122.01 秒；这些数据来自先前的门禁顺序，只用于比较分区延迟，不代表当前峰值。当前的覆盖率阶段会让 4 个插桩分区进程与 2 个豁免 worker 并行，共形成 6 个覆盖率执行单元。若改为 16 个分区，则在尚未结束的生产网站工作或系统开销计入之前，该阶段就会达到 18 个执行单元。4 个分区保留独立进程隔离并与 Linux 对齐，代价是单 job 覆盖率墙钟更长；这是为了降低自托管高并发下 vitest worker 启动失败而接受的取舍。两个 Linux 样本中，保守的双分区配置耗时 276.68 秒和 282.27 秒；该配置运行稳定，却把普通路径原有的 4 个插桩 worker 减半。4 个分区恢复这份并发，使 16 核托管 runner 上的覆盖率执行单元总数为 6，故障切换虚拟机的 6 个 runner 实例最多合计 36 个执行单元。这些数值来自完整运行或固定容量上限；运行尚未结束时跨过任意耗时刻度，不构成增加并发的证据。
+已完成的原生 Windows 对比中，双分区耗时约 405 秒，16 分区耗时 112.66–122.01 秒；这些数据来自先前的门禁顺序，只用于比较分区延迟，不代表当前峰值。当前的覆盖率阶段会让 4 个插桩分区进程与 2 个豁免 worker 并行，共形成 6 个覆盖率执行单元。若改为 16 个分区，则在尚未结束的生产网站工作或系统开销计入之前，该阶段就会达到 18 个执行单元。4 个分区保留独立进程隔离并与 Linux 对齐，代价是单 job 覆盖率墙钟更长；这是为了降低自托管高并发下 vitest worker 启动失败而接受的取舍。两个 Linux 样本中，保守的双分区配置耗时 276.68 秒和 282.27 秒；该配置运行稳定，却把普通路径原有的 4 个插桩 worker 减半。4 个分区恢复这份并发，使 16 核托管 runner 上的覆盖率执行单元总数为 6，故障切换虚拟机的 32 个 runner 实例最多合计 192 个执行单元。这些数值来自完整运行或固定容量上限；运行尚未结束时跨过任意耗时刻度，不构成增加并发的证据。
 
 ## 曾考虑的替代方案
 

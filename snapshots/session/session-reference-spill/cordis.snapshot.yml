@@ -1,0 +1,54 @@
+# Replay patch shared by the ordinary headless snapshot composition. The model
+# script comes from the scenario's committed session JSONL.
+
+- id: llm-deepseek
+  name: '@deepseek-ai/dsh-llm-deepseek'
+  disabled: true
+
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+- id: session-title-llm
+  disabled: true
+
+- id: session-persistence-jsonl
+  name: '@deepseek-ai/dsh-session-persistence-jsonl'
+  config:
+    root: !!js dshHomePath('sessions')
+    compression: none
+
+- id: sandbox
+  name: '@deepseek-ai/dsh-sandbox-local'
+  config:
+    runnerCommand:
+      - bash
+      - -c
+      - while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
+      - passthrough-runner
+    runnerFailureSignatures:
+      - 'passthrough-runner: profile rejected'
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-official
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+              - id: deepseek-v4-pro
+
+- id: spill-local
+  name: '@deepseek-ai/dsh-spill-local'
+  config:
+    root: !!js process.env.DSH_SNAPSHOT_SPILL_ROOT ?? './.spill'
+    cleanupPeriodDays: 0
+
+- insert:
+    - id: session-reference
+      name: '@deepseek-ai/dsh-session-reference'
+      config:
+        maxReferenceBytes: 360
+    - id: reference-source-fixture
+      name: ../../../packages/context/session-reference/tests/fixtures/source-session.ts

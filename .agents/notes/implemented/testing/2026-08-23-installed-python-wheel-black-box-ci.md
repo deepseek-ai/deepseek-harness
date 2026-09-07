@@ -24,17 +24,17 @@ Linux additionally retains its manylinux 2.28 clean-install smoke and GLIBC chec
 
 ### Real DeepSeek API
 
-Trusted pull requests run a second installed-wheel check on every native target with `DEEPSEEK_API_KEY_EXTERNAL`, mapped only into a preflight and the live test step. The preflight fails when the secret is empty, so the provider suite cannot self-skip to green. The test starts the public SDK against `https://api.deepseek.com`, asks the model to write an exact sentinel file through the platform shell, asks a second turn in the same session to read it, and verifies the external line content, final responses, completed turn reasons, model-requested tool calls, and the existence and Zstandard framing of its session log. Decoded record content and completed-turn durability are deterministic keyless obligations owned by the restart snapshot rather than inferred from compressed live-provider bytes.
+Trusted pull requests and master pushes run a second installed-wheel check on each selected native target with `DEEPSEEK_API_KEY_EXTERNAL`, mapped only into a preflight and the live test step. The preflight fails when the secret is empty, so the provider suite cannot self-skip to green. The test starts the public SDK against `https://api.deepseek.com`, asks the model to write an exact sentinel file through the platform shell, asks a second turn in the same session to read it, and verifies the external line content, final responses, completed turn reasons, model-requested tool calls, and the existence and Zstandard framing of its session log. Decoded record content and completed-turn durability are deterministic keyless obligations owned by the restart snapshot rather than inferred from compressed live-provider bytes.
 
 Fork and Dependabot pull requests never receive the repository secret. Their native jobs run the complete keyless path and skip both secret-bearing steps; `pull_request_target` is forbidden because it would execute untrusted code with the key.
 
 ### Required targets
 
-The pull-request `python-runtime` job calls the reusable builder for Linux x64, Linux arm64, macOS arm64, macOS x64, and Windows x64. Its aggregate result remains a dependency of `all checks passed`, so a failed, cancelled, or missing native carrier blocks the required verdict. The [Windows x64 runtime decision](../architecture/2026-08-23-python-sdk-windows-x64-runtime.md) owns the Windows target and its PowerShell-specific minimal snapshot.
+The pull-request `python-runtime` job calls the reusable builder for Linux x64 and Windows x64; master pushes select Linux arm64 and both macOS architectures under the [master-only platform policy](../process/2026-09-06-master-only-platform-ci.md). Its aggregate result remains a dependency of `all checks passed`, so a failed, cancelled, or missing native carrier blocks the required verdict. The [sdk-runtime README](../../../../python/sdk-runtime/README.md) owns the Windows target and its PowerShell-specific minimal snapshot.
 
 ## Existing decisions and supersession
 
-This decision supersedes the single-target topology in the archived [required Python runtime pull-request validation](../../archived/testing/2026-08-12-required-python-runtime-pull-request-ci.md) while retaining its requirement that the real executable, snapshots, wheels, and clean installation meet before merge. The [Python SDK dsh profile runtime](../architecture/2026-08-23-python-sdk-dsh-profile-runtime.md) owns the launched application and customization surface; the [single-file Python SDK runtime distribution](../architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md) remains authoritative for SEA packaging, native sidecars, wheel tags, and release artifacts.
+This decision supersedes the single-target topology in the archived [required Python runtime pull-request validation](../../archived/testing/2026-08-12-required-python-runtime-pull-request-ci.md) while retaining its requirement that the real executable, snapshots, wheels, and clean installation meet in each selected target check. [docs/architecture.md](../../../../docs/architecture.md) owns the launched application and customization surface; the [single-file Python SDK runtime distribution](../architecture/2026-07-10-single-file-executable-sdk-runtime-distribution.md) remains authoritative for SEA packaging, native sidecars, wheel tags, and release artifacts.
 
 ## Alternatives considered
 
@@ -48,4 +48,4 @@ This decision supersedes the single-target topology in the archived [required Py
 
 ## Consequences
 
-Every pull request pays for five native executable and wheel builds plus deterministic installed-artifact scenarios. Trusted same-repository pull requests also pay for one two-turn DeepSeek task per target. In exchange, the required result describes the files Python users install, proves every published carrier before merge, and cannot pass by importing the checkout or silently skipping the real provider.
+Every pull request pays for two native executable and wheel builds plus deterministic installed-artifact scenarios. Trusted same-repository pull requests also pay for one two-turn DeepSeek task per target. In exchange, the required result describes the files Python users install, proves the selected carriers before merge, and cannot pass by importing the checkout or silently skipping the real provider.

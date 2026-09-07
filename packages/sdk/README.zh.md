@@ -39,9 +39,8 @@ kind: "package-group"
 
 - [Python SDK](../../python/README.zh.md) — 说同一种协议的 Python 对侧实现，并随附捆绑运行时。
 - [SDK 应用组合包](../bundle/sdk-app/README.zh.md) — 启动 JSON-RPC 服务器的 `dsh --profile sdk` 应用。
-- [Python profile 运行时决策](../../.agents/notes/implemented/architecture/2026-08-23-python-sdk-dsh-profile-runtime.zh.md) — 打包后的 Python 客户端为何启动相同的具名 profile。
-- [TypeScript SDK 与 SDK subagent 后端决策](../../.agents/notes/implemented/feature/2026-07-27-typescript-sdk-and-sdk-subagent-backend.zh.md) — 客户端约定及其上的 subagent 后端。
-- [SDK 项目工具链移除](../../.agents/notes/implemented/simplification/2026-08-11-remove-sdk-project-toolchain.zh.md) — 本组为何从不创建、配置或构建开发者项目。
+- [架构](../../docs/architecture.zh.md) — 打包后的 Python 客户端为何启动相同的具名 profile。
+- [SDK 项目工具链移除](../../.agents/notes/archived/simplification/2026-08-11-remove-sdk-project-toolchain.md) — 本组为何从不创建、配置或构建开发者项目。
 - [SDK subagent 提供方](../subagent/subagent-dsh-sdk/README.zh.md) — harness 内部消费 TypeScript 客户端的例子。
 
 <a id="dev-note"></a>

@@ -1,4 +1,4 @@
-# Agent Note: Dual Wine and native Windows pull-request CI
+# Agent Note: Wine and native Windows CI
 
 Status: implemented
 
@@ -6,13 +6,13 @@ English | [中文](2026-08-08-native-windows-pull-request-ci.zh.md)
 
 ## Problem
 
-The required pull-request Windows verdict needs a fast win32 toolchain signal without making the aggregate wait for scarce Windows capacity. Wine provides that critical-path signal but runs over a Linux kernel and case-sensitive ext4, uses a hoisted dependency layout, and cannot prove NTFS, DACL, ConPTY, crash durability, or native process behavior. With the native serial references disabled, every pull-request head also needs an automatic real Windows-kernel result.
+Wine checks the win32 toolchain over a Linux kernel and case-sensitive ext4 with a hoisted dependency layout. It cannot prove NTFS, DACL, ConPTY, crash durability, or native process behavior. Pull-request correctness therefore needs native Windows build and process checks independently of the post-merge Wine result.
 
 A coverage audit found that stale branch state had restored temporary exclusions for supported LSP sources. Native Windows therefore needed to execute the complete supported source inventory at the same 100%-per-file threshold instead of relying on a smaller platform-specific denominator.
 
 ## Decision
 
-The required `windows` job in [ci.yml](../../../../.github/workflows/ci.yml) remains `windows node 24 / wine blocking` on `ubuntu-latest`. It retains the checksum-verified Windows Node, Wine apt and pnpm caches, a hoisted install confined to a workspace snapshot, and the [shared Wine gate script](../../../../scripts/wine-windows-gates.sh) that runs the workspace build and production site. Node distribution transfers use bounded retries; when nodejs.org stalls on the large archive, a range-capable transport mirror resumes the same bytes, but nodejs.org remains the version and SHA-256 authority and the archive is never promoted before that checksum passes. The stable `windows` job id remains a dependency of `all checks passed`. The [archived Wine experiment](../../archived/process/2026-07-27-wine-windows-gates-experiment.md) preserves its measured trade-offs, while this note owns the current dual topology.
+The master-only `windows` job in [ci-master.yml](../../../../.github/workflows/ci-master.yml) runs `windows node 24 / wine` on `ubuntu-latest`. It retains the checksum-verified Windows Node, Wine apt and pnpm caches, a hoisted install confined to a workspace snapshot, and the [shared Wine gate script](../../../../scripts/wine-windows-gates.sh) that runs the workspace build and production site. Node distribution transfers use bounded retries; when nodejs.org stalls on the large archive, a range-capable transport mirror resumes the same bytes, but nodejs.org remains the version and SHA-256 authority and the archive is never promoted before that checksum passes. Wine is outside the PR aggregate under the [master-only platform policy](2026-09-06-master-only-platform-ci.md). The [archived Wine experiment](../../archived/process/2026-07-27-wine-windows-gates-experiment.md) preserves its measured trade-offs, while this note owns the current dual topology.
 
 Every pull request also starts four independent native jobs on the organization-owned `dsh-windows-2025-16core` runner: `windows-build`, `windows-coverage`, `windows-native-tests`, and `windows-observational`. Each job enables Developer Mode for workspace symlinks, provisions the repository-pinned pnpm through `pnpm/action-setup`, performs an immutable install without a transferred store archive, and runs its inventory under native PowerShell. The Windows failover variable retargets all four jobs to the in-house pool. Per-job deadlines range from 60 to 120 minutes and bound stuck work without treating a performance target as a correctness deadline.
 
@@ -50,7 +50,7 @@ Shiki disables lazy TextMate-regex compilation and warms each boot grammar befor
 
 ## Consequences
 
-Wine preserves the required aggregate's existing critical path and job identity. Native coverage and observational results can still be pending or red when `all checks passed` turns green, so branch protection consumes Wine plus the targeted native build and process checks while reviewers and follow-up automation consume the remaining native results.
+Wine provides post-merge toolchain evidence. Native coverage and observational results can still be pending or red when `all checks passed` turns green, so branch protection consumes the targeted native build and process checks while reviewers and follow-up automation consume the remaining native results.
 
 Every pull request nevertheless receives a real NT kernel, NTFS, PowerShell, Windows process, native addon, and supported-source coverage signal. The native jobs duplicate setup across the build, coverage, and observational workspaces and repeat builds in the build and observational ones, but they lower each job's process count and expose path, watcher, lifecycle, and fixture defects hidden by the compatibility lane.
 

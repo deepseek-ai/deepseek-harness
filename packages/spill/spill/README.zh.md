@@ -1,5 +1,5 @@
 ---
-description: "spill 存储服务：部署方与插件作者如何保存过大的工具文本并取回可检索的定位信息。"
+description: "spill 存储服务：保存超大工具文本或已捕获的会话引用，并返回可检索的定位信息。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-spill` 让任何插件或工具都能通过 `ctx.spillStore` 保存过大的文本，并拿到一个不透明定位信息、精确的字节数与模型可以直接依据的取回指引。它定义 spill 后端做什么，而不规定如何存储——部署需要挂载 `dsh-spill-local` 之类的后端才能真正持久化，由 `dsh-spill-policy` 插件决定工具结果何时过大。当部署必须在不让模型上下文泛滥的前提下保留超大工具输出时，选择它。该服务只负责存储：没有保留策略、没有工具结果替换，也没有取回或搜索 API。真实存储故障会以拒绝结束，由调用方决定如何降级。
+`dsh-spill` 让任何插件或工具都能通过 `ctx.spillStore` 保存过大的文本，并拿到一个不透明定位信息、精确的字节数与模型可以直接依据的取回指引。它定义 spill 后端做什么，而不规定如何存储——部署需要挂载 `dsh-spill-local` 之类的后端才能真正持久化，由 `dsh-spill-policy` 插件决定工具结果何时过大。当部署必须在不让模型上下文泛滥的前提下保留超大文本时，选择它。该服务只负责存储：没有保留策略、没有工具结果替换，也没有取回或搜索 API。真实存储故障会以拒绝结束，由调用方决定如何降级。
 
 ## 目录
 
@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-需要 spill 工具输出的组合会挂载一个 spill 后端——仅本包本身不存储任何内容——并由 `dsh-spill-policy` 插件决定何时 spill。插件与工具作者直接调用 `ctx.spillStore.saveText()`，在当前会话下持久化文本。
+保存 spill 产物的组合需要挂载一个后端——仅本包本身不存储任何内容。`dsh-spill-policy` 决定工具结果何时 spill；`dsh-session-reference` 直接保存被截断引用的转录，不需要该策略。调用方使用 `ctx.spillStore.saveText()` 并明确指定归属；可选消费方通过 `ctx.get("spillStore")` 获取后端。
 
 ### 何时选择
 
-当部署需要在模型只看到有界预览之后仍可检索超大的工具输出时，选择 spill 存储——例如模型稍后可能想读取或搜索的抓取页面正文。当组合中没有工具会产生大到值得处理的输出，或部署没有模型工具可读取的本地文件系统时，你不需要本包；此时需要的是一个在该环境中定位信息有明确含义的后端。
+当部署需要在模型看到有界预览后仍能取回全文时，选择 spill 存储，例如抓取的页面正文或已捕获的会话引用转录。前提是后端的定位信息与取回指引在部署环境中可用；该服务不要求本地文件系统访问。
 
 ### 最小可用组合
 
@@ -49,7 +49,7 @@ kind: "package-reference"
 ```text
 const ref = await ctx.spillStore.saveText({
   owner: { sessionId: 'session-1' },
-  source: { toolName: 'web_fetch', callId: 'call-1', label: 'result' },
+  source: { kind: 'tool', toolName: 'web_fetch', callId: 'call-1', label: 'result' },
   suggestedName: 'web_fetch.txt',
   content: fullText,
 })
@@ -59,7 +59,7 @@ const ref = await ctx.spillStore.saveText({
 
 ### 归属与边界
 
-存储按所属会话分组：fork 后的会话从种子日志继承既有定位信息，无需复制或更改归属，fork 后新产生的 spill 使用子会话 id。`suggestedName` 只是提示——后端会把它清理成单个安全路径段，绝不把它当作可信路径。该服务刻意排除其他包负责的内容：保留与预览决策（`dsh-output-retention`）、何时 spill（`dsh-spill-policy`），以及取回或搜索（后端的 `retrievalHint` 会告诉模型如何处理定位信息）。
+存储按所属会话分组：fork 后的会话从种子日志继承既有定位信息，无需复制或更改归属，fork 后新产生的 spill 使用子会话 id。会话引用产物归接收上下文的目标会话所有，而不是被引用的源会话。`suggestedName` 只是提示——后端会把它清理成单个安全路径段，绝不把它当作可信路径。预览与 spill 决策由消费方负责；存储与产物过期由后端负责。
 
 ### 故障与恢复
 
@@ -93,7 +93,7 @@ const ref = await ctx.spillStore.saveText({
 
 ### 数据模型
 
-`SaveTextSpill`（owner、source、suggestedName、content）是请求；`SpillRef`（locator、bytes、retrievalHint）是结果。`SpillLocator` 是带品牌类型的字符串，消费方无法在未获后端意图的情况下把它当作路径；`SpillOwner.sessionId` 是保存时存储命名空间，`SpillSource` 记录产生 spill 的工具、调用 id 与标签，用于可读文件名——仅作描述，绝非访问控制。
+`SaveTextSpill` 将存储归属与描述性来源信息分开。`SpillSource` 接受工具来源 `{ kind: "tool", toolName, callId, label }` 或 `{ kind: "session-reference", sessionId, label }`，后者的 id 标识被捕获的源会话。会话引用绝不伪造工具调用 id。来源信息与归属命名空间都不授予读取权限。消费方把返回的定位信息视为不透明值，并与取回指引一同展示。
 
 ### 生命周期
 
@@ -150,6 +150,6 @@ const ref = await ctx.spillStore.saveText({
 
 #### 未来：非本地后端与清理
 
-面向 ACP 或远程环境的远程或数据库后端，以及旧 spill 文件的清理或保留策略（很可能与会话清理挂钩），仍是开放问题。可预测且任何用户均可读取的 spill 根目录会让其他本地用户读到 spill 工具输出，这正是已交付后端把文件保持私有的原因。
+远程或数据库后端仍是开放方向。本地后端执行其[启动清理策略](../spill-local/README.zh.md#startup-cleanup)；该服务未定义按会话清理或刷新定位信息的 API。
 
 </details>

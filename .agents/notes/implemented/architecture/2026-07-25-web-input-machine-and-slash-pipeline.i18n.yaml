@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md
-2026-07-25-web-input-machine-and-slash-pipeline.md: 1b9e9d95b5a30efbf297be5fc5f788f9a1ac77c4
-2026-07-25-web-input-machine-and-slash-pipeline.zh.md: c9bee217da1dbffaeff69dfe5a2dcf8f0e8e3cb0

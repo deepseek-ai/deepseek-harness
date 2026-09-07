@@ -41,7 +41,6 @@ The llm group provides the harness's model-call capability: one provider-neutral
 - [Token meter subsystem](../../docs/subsystems/token-meter.md) — the measurement semantics behind `ctx.tokenMeter`.
 - [Twin LLM adapters](../../.agents/notes/implemented/architecture/2026-06-13-twin-llm-adapters.md) — why the DeepSeek route ships two structurally different adapters.
 - [Routed model context](../../.agents/notes/implemented/architecture/2026-07-20-routed-model-context-and-compaction-policy.md) — how the loop routes model requests and compacts context.
-- [Replay token meter service](../../.agents/notes/implemented/architecture/2026-07-15-replay-token-meter-service.md) — the design behind replay-aware measurement.
 
 <a id="dev-note"></a>
 ## Dev Note

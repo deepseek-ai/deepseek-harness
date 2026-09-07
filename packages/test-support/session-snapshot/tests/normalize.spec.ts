@@ -254,6 +254,14 @@ Additional instructions from: nested\AGENTS.md`,
 })
 
 describe('normalizeSessionLog', () => {
+  it('normalizes only message-feedback item clocks', () => {
+    const item = { messageId: 'answer', version: 'version', createdAt: 123, updatedAt: 456, note: 'keep 123' }
+    const input = ['feedback/message-put', 'tool/result'].map(type => JSON.stringify({ type, data: { item } })).join('\n')
+    const output = normalizeSessionLog(input, ctx)
+    expect(output).toContain('"createdAt":0,"updatedAt":0,"note":"keep 123"')
+    expect(output).toContain('"createdAt":123,"updatedAt":456,"note":"keep 123"')
+  })
+
   const header = (over: object) => JSON.stringify({ type: 'session', version: 0, id: 's', createdAt: 123, ...over })
   const event = (over: object) => JSON.stringify({ type: 'turn/start', seq: 1, time: 999, data: { turn: 1 }, ...over })
 
@@ -902,6 +910,36 @@ describe('tokenizeSessionFixtureCwd', () => {
 })
 
 describe('extractSnapshotSpillPaths', () => {
+  it.each([
+    ['/tmp', '/'],
+    ['/tmp', String.fromCharCode(92)],
+    ['C:/t', String.fromCharCode(92)],
+  ])('recognizes %s locators with %s separators in nested JSON omissions without scrubbing byte counts', (root, separator) => {
+    const locator = `${root}/dsh-acp-snap-123456789/session-123456abcdef/abcdef123456-session-reference-1.txt`.replaceAll('/', separator)
+    const notice = { sessionId: 'source', omittedBytes: 42, fullSnapshot: { status: 'saved', locator, bytes: 1234 } }
+    const log = JSON.stringify({ type: 'user/message', data: { content: [{ type: 'text', text: JSON.stringify([notice]) }] } })
+    const encodedLocator = JSON.stringify(JSON.stringify(locator).slice(1, -1)).slice(1, -1)
+    expect(extractSnapshotSpillPaths(log)).toEqual(new Map([['session-reference-1.txt', encodedLocator]]))
+    const normalized = normalizeSessionLog(log, ctx)
+    const unrelated = '/tmp/unrelated/session-123456abcdef/abcdef123456-session-reference-1.txt'
+    expect(normalizeSessionLog(log.replaceAll(encodedLocator, unrelated), ctx)).toContain(unrelated)
+    const expectedNotice = { ...notice, fullSnapshot: { ...notice.fullSnapshot, locator: '{{spillLocator:session-reference-1.txt}}' } }
+    expect(normalized).toBe(JSON.stringify({ type: 'user/message', data: { content: [{ type: 'text', text: JSON.stringify([expectedNotice]) }] } }) + '\n')
+    expect(normalized).toContain('{{spillLocator:session-reference-1.txt}}')
+    expect(normalized).toContain('omittedBytes\\":42')
+    expect(normalized).toContain('bytes\\":1234')
+  })
+
+  it.each(['canonical', 'native'] as const)('normalizes nested Windows local spill locators with %s paths', (cwdPathMode) => {
+    const locator = String.raw`{{cwd}}\.spill\session-123456abcdef\abcdef123456-session-reference-1.txt`
+    const notice = { locator, unrelated: String.raw`C:\work\literal\file.txt`, regex: String.raw`\d+\w` }
+    const log = JSON.stringify({ type: 'user/message', data: { text: JSON.stringify(notice) } })
+    const expected = { ...notice, locator: '{{spillLocator:session-reference-1.txt}}' }
+    expect(normalizeSessionLog(log, ctx, { cwdPathMode })).toBe(
+      JSON.stringify({ type: 'user/message', data: { text: JSON.stringify(expected) } }) + '\n',
+    )
+  })
+
   it('maps each spill filename to its full matched path, last match wins per name', () => {
     const log = [
       'Full formatted result stored at: /tmp/dsh-acp-snapshot-spill/session-c22bc3f1d2af/8a7b6c5d4e3f-bash.txt. Use read with offset/limit, or grep this path to search within it.',
@@ -972,6 +1010,19 @@ describe('scrubRequestHeaders', () => {
 })
 
 describe('scrubSessionSnapshot', () => {
+  it('writes stable feedback clocks while retaining notes and version identity', () => {
+    const input = [
+      { type: 'session', id: 's' },
+      { type: 'feedback/message-put', data: { item: { version: 'opaque-version', createdAt: 12, updatedAt: 34, note: 'keep 12' } } },
+      { type: 'feedback/message-put', data: null },
+      { type: 'feedback/message-put', data: { item: null } },
+      { type: 'feedback/message-put', data: { item: {} } },
+    ].map(record => JSON.stringify(record)).join('\n')
+    const output = scrubSessionSnapshot(input)
+    expect(output).toContain('"version":"opaque-version","createdAt":0,"updatedAt":0,"note":"keep 12"')
+    expect(scrubSessionSnapshot(output)).toBe(output)
+  })
+
   it('preserves the header while projecting and scrubbing each body record', () => {
     const header = '  {"type":"session","version":0,"id":"s","createdAt":7}  '
     const request = JSON.stringify({

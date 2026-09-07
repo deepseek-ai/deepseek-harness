@@ -235,7 +235,7 @@ describe('Session format package parity', () => {
 })
 
 describe('fixture format diagnostics', () => {
-  it('attaches the header line to a non-Error catalog failure', async () => {
+  it('attaches the header line to a restore-construction failure', async () => {
     vi.resetModules()
     vi.doMock('@deepseek-ai/dsh-session-format-catalog', async (importOriginal) => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
@@ -243,7 +243,7 @@ describe('fixture format diagnostics', () => {
         ...actual,
         sessionFormatCatalog: {
           ...actual.sessionFormatCatalog,
-          decodeArtifact(): never {
+          createRestore(): never {
             const failure: unknown = 'decoder exploded'
             throw failure
           },
@@ -261,6 +261,37 @@ describe('fixture format diagnostics', () => {
     }
   })
 
+  it('attaches the header line to a restore-finalization failure', async () => {
+    vi.resetModules()
+    vi.doMock('@deepseek-ai/dsh-session-format-catalog', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
+      return {
+        ...actual,
+        sessionFormatCatalog: {
+          ...actual.sessionFormatCatalog,
+          createRestore() {
+            return {
+              header: { version: 2, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
+              decodeRow() {},
+              finish(): never {
+                throw new Error('Session event 99 restore finalization failed')
+              },
+            }
+          },
+        },
+      }
+    })
+    try {
+      const replay = await import('../src/index.ts')
+
+      expect(() => replay.parseSessionLog(sessionJsonl([])))
+        .toThrow('session snapshot line 1: Session event 99 restore finalization failed')
+    } finally {
+      vi.doUnmock('@deepseek-ai/dsh-session-format-catalog')
+      vi.resetModules()
+    }
+  })
+
   it('falls back to the header when a source-range diagnostic has no matching physical prefix', async () => {
     vi.resetModules()
     vi.doMock('@deepseek-ai/dsh-session-format-catalog', async (importOriginal) => {
@@ -269,8 +300,14 @@ describe('fixture format diagnostics', () => {
         ...actual,
         sessionFormatCatalog: {
           ...actual.sessionFormatCatalog,
-          decodeArtifact(): never {
-            throw new Error('sourceEventSeqs synthetic unmatched failure')
+          createRestore() {
+            return {
+              header: { version: 2, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
+              decodeRow() {},
+              finish(): never {
+                throw new Error('sourceEventSeqs synthetic unmatched failure')
+              },
+            }
           },
         },
       }
@@ -286,22 +323,24 @@ describe('fixture format diagnostics', () => {
     }
   })
 
-  it('maps a matching non-Error source-range prefix failure to its physical row', async () => {
+  it('maps a non-Error row failure to its physical row', async () => {
     vi.resetModules()
     vi.doMock('@deepseek-ai/dsh-session-format-catalog', async (importOriginal) => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
-      let callCount = 0
+      let row = 0
       return {
         ...actual,
         sessionFormatCatalog: {
           ...actual.sessionFormatCatalog,
-          decodeArtifact(): never {
-            callCount += 1
-            if (callCount === 1) throw new Error('sourceEventSeqs synthetic prefix failure')
-            const failure: unknown = callCount === 2
-              ? 'sourceEventSeqs different prefix failure'
-              : 'sourceEventSeqs synthetic prefix failure'
-            throw failure
+          createRestore() {
+            return {
+              header: { version: 2, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
+              decodeRow(): void {
+                row += 1
+                if (row === 2) throw 'row decoder exploded'
+              },
+              finish(): never { throw new Error('unexpected finish') },
+            }
           },
         },
       }
@@ -314,14 +353,21 @@ describe('fixture format diagnostics', () => {
       ]
 
       expect(() => replay.parseSessionLog(sessionJsonl(events)))
-        .toThrow('session snapshot line 3: sourceEventSeqs synthetic prefix failure')
+        .toThrow('session snapshot line 3: row decoder exploded')
     } finally {
       vi.doUnmock('@deepseek-ai/dsh-session-format-catalog')
       vi.resetModules()
     }
   })
 
-  it('falls back to the header for an out-of-range physical-row diagnostic', async () => {
+  it.each([
+    ['physical row', 'released Session row 0 is malformed', 2],
+    ['logical event', 'Session event 0 is malformed', 2],
+    ['event seq', 'format v1 contains an invalid event at seq 0', 2],
+    ['inherited cut', 'inherited Session cut 0 splits one Assistant attempt', 2],
+    ['out-of-range physical row', 'released Session row 99 is malformed', 1],
+    ['out-of-range logical event', 'Session event 99 is malformed', 1],
+  ])('maps a %s finalization diagnostic to its source line', async (_label, message, line) => {
     vi.resetModules()
     vi.doMock('@deepseek-ai/dsh-session-format-catalog', async (importOriginal) => {
       const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
@@ -329,8 +375,12 @@ describe('fixture format diagnostics', () => {
         ...actual,
         sessionFormatCatalog: {
           ...actual.sessionFormatCatalog,
-          decodeArtifact(): never {
-            throw new Error('released Session row 99 is malformed')
+          createRestore() {
+            return {
+              header: { version: 2, id: 'fixture', createdAt: 0, isSeeded: false, delegationDepth: 0 },
+              decodeRow() {},
+              finish(): never { throw new Error(message) },
+            }
           },
         },
       }
@@ -340,33 +390,7 @@ describe('fixture format diagnostics', () => {
       const event: SessionEvent = { type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }
 
       expect(() => replay.parseSessionLog(sessionJsonl([event])))
-        .toThrow('session snapshot line 1: released Session row 99 is malformed')
-    } finally {
-      vi.doUnmock('@deepseek-ai/dsh-session-format-catalog')
-      vi.resetModules()
-    }
-  })
-
-  it('falls back to the header for an out-of-range logical-event diagnostic', async () => {
-    vi.resetModules()
-    vi.doMock('@deepseek-ai/dsh-session-format-catalog', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('@deepseek-ai/dsh-session-format-catalog')>()
-      return {
-        ...actual,
-        sessionFormatCatalog: {
-          ...actual.sessionFormatCatalog,
-          migrate(): never {
-            throw new Error('Session event 99 is malformed')
-          },
-        },
-      }
-    })
-    try {
-      const replay = await import('../src/index.ts')
-      const event: SessionEvent = { type: 'turn/start', seq: SessionSeq(0), time: 0, data: { turn: 1 } }
-
-      expect(() => replay.parseSessionLog(sessionJsonl([event])))
-        .toThrow('session snapshot line 1: Session event 99 is malformed')
+        .toThrow(`session snapshot line ${line}: ${message}`)
     } finally {
       vi.doUnmock('@deepseek-ai/dsh-session-format-catalog')
       vi.resetModules()

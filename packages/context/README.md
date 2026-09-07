@@ -37,7 +37,7 @@ The context group provides plugins that add model-visible context to each reques
 ## Related documentation
 
 - [Session-reference subsystem](../../docs/subsystems/session-reference.md) — canonical mention URIs, snapshot semantics, and the stable error taxonomy.
-- [Workspace-context decision record](../../.agents/notes/implemented/feature/2026-06-24-workspace-context.md) — why instruction context is per-agent/per-session and durably logged.
+- [Workspace-context decision record](../../.agents/notes/archived/feature/2026-06-24-workspace-context.md) — why instruction context is per-agent/per-session and durably logged.
 - [Generated configuration catalog](../../docs/config-catalog.md) — every config field the group's packages accept.
 
 -----

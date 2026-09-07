@@ -1,7 +1,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
-import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import * as FsPolicy from '@deepseek-ai/dsh-fs-observation-policy'
@@ -15,8 +14,7 @@ import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
  */
 export async function fsHarness(fsCwd: string, persona = ''): Promise<Context> {
   const ctx = new Context()
-  await ctx.plugin(SessionProjectionRegistry)
-  await mountAgentLoopTestDependencies(ctx, { systemPrompt: { persona } })
+  await mountAgentLoopTestDependencies(ctx, { systemPrompt: { personaPrefix: persona } })
   await ctx.plugin(AgentLoop, { agents: [] })
   await ctx.plugin(LlmDeepSeek)
   await ctx.plugin(LocalFileSystem, { cwd: fsCwd })

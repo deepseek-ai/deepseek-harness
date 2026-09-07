@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-05-large-session-jsonl-restore-pipeline.md
-2026-08-05-large-session-jsonl-restore-pipeline.md: e87777cc407e50a0e4808b77c3a7d554659d62e7
-2026-08-05-large-session-jsonl-restore-pipeline.zh.md: 32762bd19914423ef38c6472f0a8087e3e7e45fa

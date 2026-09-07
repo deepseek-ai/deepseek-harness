@@ -1,11 +1,14 @@
 /** One-shot cold session read through the handle-based persistence seam. */
 
 import { interruptedTurnClosers } from '@deepseek-ai/dsh-session'
-import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset, SessionSeedEventState } from '@deepseek-ai/dsh-session'
 import type SessionPersistence from '@deepseek-ai/dsh-session-persistence'
+import type { SessionHandleReadResult } from '@deepseek-ai/dsh-session-persistence'
 
 /** A stored session log balanced for read-only viewing. */
 export interface ColdSessionLog {
+  /** Aliasing state of the persisted events; synthetic closers are locally owned. */
+  readonly eventState: SessionSeedEventState
   /** The stored header, fixed when the read handle opened. */
   readonly header: SessionHeader
   /** Exact fork-inherited event count paired with {@link header}. */
@@ -23,7 +26,7 @@ export interface ColdSessionLog {
  * @param persistence - the mounted persistence service.
  * @param sessionId - the stored session to read.
  * @param signal - optional cancellation for the open and read work.
- * @returns the stored header and the balanced event log.
+ * @returns an adoptable seed in a caller-owned outer array, ready for in-place Session restoration.
  */
 export async function readColdSessionLog(
   persistence: SessionPersistence,
@@ -32,9 +35,9 @@ export async function readColdSessionLog(
 ): Promise<ColdSessionLog> {
   const options = signal === undefined ? undefined : { signal }
   const handle = await persistence.open(sessionId, 'read', options)
-  let events: readonly SessionEvent[]
+  let read: SessionHandleReadResult
   try {
-    events = await handle.read(0, undefined, options)
+    read = await handle.read(0, undefined, options)
   } catch (error: unknown) {
     try {
       await handle.close()
@@ -44,5 +47,11 @@ export async function readColdSessionLog(
     throw error
   }
   await handle.close()
-  return { header: handle.header, inheritedEventCount: handle.inheritedEventCount, events: [...events, ...interruptedTurnClosers(events)] }
+  const { events } = read
+  return {
+    eventState: read.eventState,
+    header: handle.header,
+    inheritedEventCount: handle.inheritedEventCount,
+    events: [...events, ...interruptedTurnClosers(events)],
+  }
 }

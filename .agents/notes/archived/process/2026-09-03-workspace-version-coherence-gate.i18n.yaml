@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/process/2026-09-03-workspace-version-coherence-gate.md
+2026-09-03-workspace-version-coherence-gate.md: 65c8a2e6c1eabd14d67a8dff10fc90c38d07eb64
+2026-09-03-workspace-version-coherence-gate.zh.md: 9c309e673945cbc6e9a3c73a6a48d9610ae868be

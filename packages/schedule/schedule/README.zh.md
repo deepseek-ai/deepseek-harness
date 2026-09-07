@@ -134,9 +134,9 @@ owner 把长等待拆分为有界的 timer 段，并在每次唤醒后重新读�
 - [仅限会话内的 Schedule 子系统](../../../docs/subsystems/schedule.zh.md)——带精确类型定义的持久记录、转换、视图与交付约定。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-schedule)——模型接收的 `schedule_create`、`schedule_list` 与 `schedule_delete` 完整 schema。
 - [持久 Web Schedule 决策](../../../.agents/notes/implemented/feature/2026-08-05-durable-web-schedule.zh.md)——本包背后的持久化与生命周期决策。
-- [对话式交付决策](../../../.agents/notes/implemented/simplification/2026-08-09-conversational-schedule-delivery.zh.md)——无回执边界与 follow-up 交付。
+- [对话式交付决策](../../../.agents/notes/archived/simplification/2026-08-09-conversational-schedule-delivery.md)——无回执边界与 follow-up 交付。
 - [显式时区边界](../../../.agents/notes/implemented/simplification/2026-08-09-explicit-schedule-time-zone.zh.md)——为什么模型必须始终传入显式时区。
-- [有界固定速率 Schedule](../../../.agents/notes/implemented/simplification/2026-08-09-bounded-fixed-rate-schedule.zh.md)——重复调度范围：只追赶最新一次与批次交付。
+- [有界固定速率 Schedule](../../../.agents/notes/archived/simplification/2026-08-09-bounded-fixed-rate-schedule.md)——重复调度范围：只追赶最新一次与批次交付。
 - [Schedule 用户指南](../../../docs/user/guide/schedule.zh.md)——挂载本包与 time-context 的官方配置路径。
 
 -----

@@ -12,6 +12,7 @@ import SessionPersistence, {
 import type {
   SessionAccess,
   SessionHandle,
+  SessionHandleReadResult,
   SessionPersistenceSnapshot,
 } from '@deepseek-ai/dsh-session-persistence'
 import { type SessionQueryErrorCode } from '@deepseek-ai/dsh-session-query'
@@ -49,12 +50,12 @@ class TraceHandle implements SessionHandle {
     readonly access: SessionAccess,
   ) {}
 
-  read(): Promise<readonly SessionEvent[]> {
+  read(): Promise<SessionHandleReadResult> {
     TracePersistence.readCalls += 1
     if (TracePersistence.readFailure !== undefined) return Promise.reject(TracePersistence.readFailure)
     const entry = TracePersistence.entries.get(this.id)
     if (entry === undefined) return Promise.reject(new SessionPersistenceNotFoundError(this.id))
-    return Promise.resolve(structuredClone(entry.events))
+    return Promise.resolve({ eventState: 'detached', events: structuredClone(entry.events) })
   }
 
   append(): Promise<void> {

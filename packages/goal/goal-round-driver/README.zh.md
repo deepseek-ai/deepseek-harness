@@ -96,7 +96,6 @@ Round 只在整个 agent 进入 idle 时启动；完成、暂停和阻塞会阻�
 
 - [goal 服务](../goal/README.zh.md)——本驱动器继续推进的 goal 状态与生命周期。
 - [goal 工具](../tool-goal/README.zh.md)——面向模型的工具及其执行时权限检查。
-- [同会话驱动器 Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-same-session-goal-round-driver.zh.md)——竞态与生命周期理由。
 
 -----
 

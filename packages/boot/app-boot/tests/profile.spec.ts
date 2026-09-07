@@ -17,6 +17,7 @@ import {
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
+  loadProfileDirectory,
   PROFILE_PATCH_FILENAME,
   PROFILE_TEMPLATES,
   readProfileManifest,
@@ -163,6 +164,16 @@ describe('resolveBundleDir', () => {
 })
 
 describe('loadProfile', () => {
+  it('loads an explicitly owned profile directory outside CLI discovery', () => {
+    const anchor = stageInstallation({ 'bundle-a': { patch: '[]\n' } })
+    const dir = join(tmp(), 'managed', 'desktop')
+    initProfile(dir, ['bundle-a'])
+    const profile = loadProfileDirectory('managed app', dir, anchor)
+    expect(profile.dir).toBe(dir)
+    expect(profile.name).toBe('desktop')
+    expect(profile.layers.map(layer => layer.packageName)).toEqual(['bundle-a'])
+  })
+
   it('resolves each dsh.profile.bundles entry to its patch layer in order, plus the user layer', () => {
     const anchor = stageInstallation({
       'bundle-a': { patch: '- insert:\n    - id: a\n      name: pkg-a\n' },

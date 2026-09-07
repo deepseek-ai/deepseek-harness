@@ -1,4 +1,4 @@
-# Agent Note（agent 决策记录）：没有独立观察时省略不变量伴生入口
+# Agent Note: 没有独立观察时省略不变量伴生入口
 
 Status: implemented
 

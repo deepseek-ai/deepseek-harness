@@ -6,7 +6,7 @@ English | [中文](2026-06-11-supply-chain-and-vendor-drift.zh.md)
 
 ## Problem
 
-The vendor manifest ([the vendoring decision](../../implemented/process/2026-06-11-vendor-cordis-as-source.md)) is enforced at commit time in the *forward* direction (vendored change ⇒ manifest update) but nothing verifies the manifest's *claims*: that vendor/ actually equals upstream-at-SHA plus exactly the logged modifications. And the handful of true npm dependencies have no advisory monitoring or update cadence.
+The vendor manifest ([the vendoring decision](../../archived/process/2026-06-11-vendor-cordis-as-source.md)) is enforced at commit time in the *forward* direction (vendored change ⇒ manifest update) but nothing verifies the manifest's *claims*: that vendor/ actually equals upstream-at-SHA plus exactly the logged modifications. And the handful of true npm dependencies have no advisory monitoring or update cadence.
 
 ## Proposal
 

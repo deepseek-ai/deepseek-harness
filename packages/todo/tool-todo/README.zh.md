@@ -74,7 +74,7 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 - **部署策略，而非编码规则。** `allowParallelInProgress` 是必填组合选择，因为工具无法观测运行时并发；持久日志不变式刻意不跟随它，因此一种策略下写入的日志在部署收紧另一种策略后仍可回放。
 - **校验让落库快照保持诚实。** schema 层拒绝未知键、`execute` 层拒绝空或重复 content，使持久快照与模型自认为写入的内容一致。
 
-[todo_write 工具 Agent Note](../../../.agents/notes/implemented/feature/2026-06-29-todo-write-tool.zh.md) 记录原始设计与备选方案；[并行 in-progress Agent Note](../../../.agents/notes/implemented/feature/2026-07-26-todo-parallel-in-progress.zh.md) 记录该策略决策。
+[todo_write 工具 Agent Note](../../../.agents/notes/archived/feature/2026-06-29-todo-write-tool.md) 记录原始设计与备选方案；[并行 in-progress Agent Note](../../../.agents/notes/archived/feature/2026-07-26-todo-parallel-in-progress.md) 记录该策略决策。
 
 ### 源码地图
 
@@ -91,11 +91,11 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 
 ### 会话投影
 
-当组合挂载 `ctx.sessionProjections`（[`@deepseek-ai/dsh-session-projection`](../../session/session-projection/README.zh.md)）时，本包在注入的子插件中注册 `todos` 单元：投影即有效计划——最新的整份 `todo/write` 列表，首次写入前为 `null`，下一轮次开始时清空，而 `turn/end` 保留刚完成的清单。该键在此处合并进 `SessionProjectionMap`；载体通过历史尾页与 `session/projection` 推送帧提供该值。未挂载注册表的组合不受影响；单元注册见 [src/index.ts](src/index.ts)。生命周期理由见 [todo 计划在下一轮次清空 Agent Note](../../../.agents/notes/implemented/feature/2026-07-28-todo-plan-clears-on-next-turn.zh.md)。
+当组合挂载 `ctx.sessionProjections`（[`@deepseek-ai/dsh-session-projection`](../../session/session-projection/README.zh.md)）时，本包在注入的子插件中注册 `todos` 单元：投影即有效计划——最新的整份 `todo/write` 列表，首次写入前为 `null`，下一轮次开始时清空，而 `turn/end` 保留刚完成的清单。该键在此处合并进 `SessionProjectionMap`；载体通过历史尾页与 `session/projection` 推送帧提供该值。未挂载注册表的组合不受影响；单元注册见 [src/index.ts](src/index.ts)。
 
 ### 持久日志不变式
 
-不变式伴生插件注册到 `ctx.invariants`，先分别校验既有会话与新公布会话一次，再为实时追加推进按会话提交的轮次轨迹。它会拒绝畸形条目、空或重复 content、未知状态，以及开放轮次之外的持久 `todo/write`；核心 session 通用处理声明合并事件，而本生产包拥有 todo 专用规则。它刻意不约束有多少条目处于 `in_progress`，因为那是工具按部署制定的策略，而非持久数据规则（见[事件归属](../../../.agents/notes/implemented/architecture/2026-07-20-todo-event-ownership.zh.md)）。
+不变式伴生插件注册到 `ctx.invariants`，先分别校验既有会话与新公布会话一次，再为实时追加推进按会话提交的轮次轨迹。它会拒绝畸形条目、空或重复 content、未知状态，以及开放轮次之外的持久 `todo/write`；核心 session 通用处理声明合并事件，而本生产包拥有 todo 专用规则。它刻意不约束有多少条目处于 `in_progress`，因为那是工具按部署制定的策略，而非持久数据规则。
 
 ### 调用机制
 
@@ -114,9 +114,8 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 - [todo 组映射](../README.zh.md)——同级组页面及其包表格。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-todo)——模型接收的 `todo_write` schema。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-todo)——每个受支持配置字段及其源声明。
-- [todo_write 工具 Agent Note](../../../.agents/notes/implemented/feature/2026-06-29-todo-write-tool.zh.md)——原始设计、备选方案与砍掉的字段。
-- [并行 in-progress Agent Note](../../../.agents/notes/implemented/feature/2026-07-26-todo-parallel-in-progress.zh.md)——为何活跃计数上限成为部署策略。
-- [todo 计划在下一轮次清空 Agent Note](../../../.agents/notes/implemented/feature/2026-07-28-todo-plan-clears-on-next-turn.zh.md)——投影的有效计划生命周期。
+- [todo_write 工具 Agent Note](../../../.agents/notes/archived/feature/2026-06-29-todo-write-tool.md)——原始设计、备选方案与砍掉的字段。
+- [并行 in-progress Agent Note](../../../.agents/notes/archived/feature/2026-07-26-todo-parallel-in-progress.md)——为何活跃计数上限成为部署策略。
 
 -----
 

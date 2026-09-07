@@ -140,7 +140,7 @@
 
     # Durable KV storage: the storage hub, the json backend, and the
     # schema-validated domain form over them. Session-layer persistence (the
-    # projection cache below; workspace and message-feedback in web layers)
+    # projection cache below; workspace in web layers)
     # routes through this stack, so it belongs to the shared base.
     - id: storage
       name: '@deepseek-ai/dsh-storage'
@@ -165,14 +165,8 @@
         writeEveryEvents: 200
         writeIntervalMs: 5000
 
-    # Session telemetry defaults to feedback-gated sharing: FEEDBACK_ONLY
-    # uploads only when the user records /feedback, releasing the session
-    # records since the last handoff through that event (a resumed session
-    # shares only its current lifecycle). DSH_TELEMETRY_MODE overrides to
-    # FULL or DISABLED; uploading mirrors session-log records onto OTLP/HTTP
-    # logs with no session-telemetry/record redaction rule, so exports are
-    # the raw captured copy. The deployment stance, env seams, and follow-ups
-    # are pinned in the feedback-gated-default Agent Note.
+    # OTel releases a Session-log prefix only after explicit user feedback,
+    # regardless of model provider. Ordinary activity never triggers capture.
     # DSH_TELEMETRY_OTLP_URL overrides the production endpoint. A non-empty
     # DSH_TELEMETRY_DISABLED — any value, including '0'/'false' — opts the
     # process out (the launchers patch the row disabled; config cannot disable
@@ -421,11 +415,6 @@
         subagentProvider: spawn
         maxRounds: 64
 
-    - id: tool-str-replace-editor
-      name: '@deepseek-ai/dsh-tool-str-replace-editor'
-      config:
-        maxOutputChars: 16000
-
     # Consecutive-repeat reminders on the tool chain.
     - id: repeat-tool-reminder
       name: '@deepseek-ai/dsh-repeat-tool-reminder'
@@ -476,7 +465,7 @@
     - id: system-prompt
       name: '@deepseek-ai/dsh-system-prompt'
       config:
-        persona: ''
+        personaPrefix: ''
 
     # Agents created at startup. The base stays empty; raw overlays may create
     # agents, while Web creates sessions on client request.

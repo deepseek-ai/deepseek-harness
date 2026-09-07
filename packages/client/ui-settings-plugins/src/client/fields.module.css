@@ -32,28 +32,6 @@
   gap: 8px;
 }
 
-.badge {
-  border-radius: 999px;
-  corner-shape: round;
-  padding: 1px 8px;
-  font-size: 11px;
-  line-height: 17px;
-  white-space: nowrap;
-  font-weight: 500;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-secondary);
-}
-
-.badgeMuted {
-  border-radius: 999px;
-  corner-shape: round;
-  padding: 1px 8px;
-  font-size: 11px;
-  line-height: 17px;
-  white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary);
-}
-
 .reset {
   border: none;
   background: none;

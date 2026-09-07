@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-08-29-plugin-inventory-agent-preset-scopes.md
-2026-08-29-plugin-inventory-agent-preset-scopes.md: a07f5a14a2c9f39e9a789aaf09d6fb4627618e92
-2026-08-29-plugin-inventory-agent-preset-scopes.zh.md: c7ef215c6ca7ee2e20ae1a7106076e1c37ae197b

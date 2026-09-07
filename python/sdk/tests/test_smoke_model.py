@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import runpy
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -262,3 +263,17 @@ def test_snapshot_generation_filename_must_match_header(tmp_path: Path) -> None:
 
     with pytest.raises(AssertionError, match="filename declares Session format v1"):
         SMOKE["selected_snapshot_session_files"](tmp_path)
+
+
+@pytest.mark.parametrize("returncode", [1, -1073741819, 3221225477])
+def test_profile_plugin_failure_reports_native_exit_status(monkeypatch: pytest.MonkeyPatch, returncode: int) -> None:
+    def failed_install(*args: object, **kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(args=[], returncode=returncode, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", failed_install)
+    with pytest.raises(AssertionError) as error:
+        SMOKE["smoke_sdk_profile_plugin"]("http://127.0.0.1:1")
+    message = str(error.value)
+    assert f"returncode={returncode}" in message
+    assert f"0x{returncode & 0xffffffff:08x}" in message
+    assert "stdout='' stderr=''" in message

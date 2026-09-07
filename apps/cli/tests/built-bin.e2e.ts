@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -424,9 +424,20 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
     }
   }, SPAWN_TIMEOUT_MS + 30_000)
 
-  it('serves the SDK protocol through the sdk profile and exits after shutdown', async () => {
+  it('serves the SDK protocol with an absolute-path overlay plugin and exits after shutdown', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-built-sdk-'))
-    const child = execa(process.execPath, [dshBin, '--profile', 'sdk'], {
+    const pluginPath = join(home, 'plugin #100%.mjs')
+    const marker = join(home, 'plugin-loaded')
+    writeFileSync(pluginPath, [
+      "import { writeFileSync } from 'node:fs'",
+      'export function apply(ctx, config) { writeFileSync(config.marker, "loaded") }',
+      '',
+    ].join('\n'))
+    const patch = join(home, 'absolute.patch.yml')
+    writeFileSync(patch, JSON.stringify([{ insert: [
+      { id: 'absolute-plugin', name: pluginPath, config: { marker } },
+    ] }]))
+    const child = execa(process.execPath, [dshBin, '--profile', 'sdk', '--patch', patch], {
       cwd: home,
       reject: false,
       timeout: SPAWN_TIMEOUT_MS,
@@ -462,7 +473,8 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
         method: 'initialize',
         params: { cwd: home, provider: 'deepseek-official', model: 'deepseek-v4-flash' },
       })}\n`)
-      expect(await response(1)).toMatchObject({
+      const initialized = await response(1)
+      expect(initialized, `${JSON.stringify(initialized)}\n${stderr}`).toMatchObject({
         jsonrpc: '2.0',
         id: 1,
         result: { serverInfo: { name: 'deepseek-harness-sdk-runtime' } },
@@ -470,8 +482,11 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'shutdown' })}\n`)
       expect(await response(2)).toEqual({ jsonrpc: '2.0', id: 2, result: {} })
       const result = await child
-      expect(result.exitCode, `signal=${String(result.signal)}; stderr=${stderr}`).toBe(0)
+      expect(result.timedOut, stderr).toBe(false)
+      expect(result.signal, stderr).toBeUndefined()
+      expect(result.exitCode, stderr).toBe(0)
       expect(stderr).toBe('')
+      expect(readFileSync(marker, 'utf8')).toBe('loaded')
     } finally {
       child.kill('SIGKILL')
       await child
@@ -602,6 +617,25 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
     }
   })
 
+  it.skipIf(process.platform === 'win32')('runs through an installed-style symlink', async () => {
+    const installation = mkdtempSync(join(tmpdir(), 'dsh-bin-link-'))
+    const installedBin = join(installation, 'dsh')
+    symlinkSync(dshBin, installedBin)
+    try {
+      const result = await execa(process.execPath, [installedBin, '--version'], {
+        input: '',
+        timeout: SPAWN_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
+        reject: false,
+      })
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toBe(cliVersion)
+      expect(result.stderr).toBe('')
+    } finally {
+      rmSync(installation, { recursive: true, force: true })
+    }
+  })
+
   it('fails loud on a nonexistent profile with the plugin-command hint', async () => {
     const home = mkdtempSync(join(tmpdir(), 'dsh-missing-profile-'))
     try {
@@ -658,7 +692,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
     // The HMR main watcher's initial scan once refreshed the include
     // mid-initial-apply, deadlocking the failing apply's rollback against the
     // refresh drain: dsh exited 13 with no diagnostic instead of settling
-    // ([Agent Note](../../../.agents/notes/implemented/bug-fix/2026-08-03-hmr-initial-scan-boot-deadlock.md)).
+    // ([vendor/README.md](../../../vendor/README.md)).
     const home = mkdtempSync(join(tmpdir(), 'dsh-invalid-patch-'))
     try {
       const result = await runBuiltBin(['--profile', 'web', '--patch', invalidProvider], {
@@ -712,13 +746,12 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       ].join('\n'))
       await waitForFile(fixture.ready)
       expect(readFileSync(configFile, 'utf8')).toBe('2')
-      // Removal reverts: the bundle's inserted row must return to its own
-      // default config, not keep the removed override — the insert-aliasing
-      // regression (a shared patch object mutated in place by a former
-      // generation would make this impossible).
+      // Unlink exercises layer removal without racing Chokidar's change-event
+      // suppression window after the preceding edit. The bundle default must return.
       rmSync(fixture.ready)
-      writeFileSync(profilePatch, '[]\n')
+      rmSync(profilePatch)
       await waitForFile(fixture.ready)
+      expect(existsSync(profilePatch)).toBe(false)
       expect(readFileSync(configFile, 'utf8')).toBe('bundle-default')
       // The home-level user layer ($DSH_HOME/cordis.patch.yml) is live too
       // and outranks the per-profile layer.
@@ -738,6 +771,7 @@ describe.skipIf(!existsSync(dshBin))('dsh BUILT bin (node lib/bin.js, no tsx)', 
       expect(existsSync(fixture.disposed)).toBe(true)
     } finally {
       child.kill('SIGKILL')
+      await child
       rmSync(fixture.home, { recursive: true, force: true })
     }
   }, SPAWN_TIMEOUT_MS + 30_000)

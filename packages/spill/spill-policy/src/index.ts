@@ -46,13 +46,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { TextRetainer, describeOmitted } from '@deepseek-ai/dsh-output-retention'
+import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import type { Omitted } from '@deepseek-ai/dsh-output-retention'
 import type { SaveTextSpill, SpillRef } from '@deepseek-ai/dsh-spill'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { PostToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { SpillPolicyExec } from './types.ts'
+import { formatSpillNotice } from './notice.ts'
 
 export type { SpillPolicyExec } from './types.ts'
 
@@ -101,12 +102,6 @@ function preview(text: string, budget: number): { text: string; omitted: Omitted
   return { text: kept.text, omitted: kept.omittedBytes }
 }
 
-/** The spill-notice line for a given omission + saved reference (no preview, no leading blank line). */
-function spillNotice(omitted: Omitted, ref: SpillRef): string {
-  const omission = describeOmitted(omitted, 'bytes')
-  return `(${omission} Full formatted result stored at: ${ref.locator}. ${ref.retrievalHint})`
-}
-
 export function apply(ctx: Context, config: Config): void {
   const maxInlineBytes = config.maxInlineBytes
   // Omitted ⇒ no automatic spill policy: register nothing at all.
@@ -146,7 +141,7 @@ export function apply(ctx: Context, config: Config): void {
     }
     const save: SaveTextSpill = {
       owner: { sessionId },
-      source: { toolName, callId, label },
+      source: { kind: 'tool', toolName, callId, label },
       suggestedName: `${toolName}.txt`,
       content: text,
     }
@@ -168,10 +163,10 @@ export function apply(ctx: Context, config: Config): void {
     // count (the full byte total): its digit count bounds the real count's, so
     // the reserved size is a safe upper bound and the final notice is never
     // longer than what we reserved. `\n\n` is the 2-byte join.
-    const reserve = Buffer.byteLength(spillNotice({ kind: 'exact', count: totalBytes }, ref), 'utf8') + 2
+    const reserve = Buffer.byteLength(formatSpillNotice({ kind: 'exact', count: totalBytes }, ref), 'utf8') + 2
     const previewBudget = Math.max(0, cap - reserve)
     const { text: previewText, omitted } = preview(text, previewBudget)
-    const notice = spillNotice(omitted, ref)
+    const notice = formatSpillNotice(omitted, ref)
     const replacedText = previewText.length > 0 ? `${previewText}\n\n${notice}` : notice
     // Invariant: the policy NEVER emits a replacement larger than the cap. When
     // the notice alone exceeds maxInlineBytes (a tiny cap or a long spill root),

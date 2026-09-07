@@ -37,7 +37,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('resume: continue a persisted ses
     // Run 1: a fresh agent on a KNOWN session id learns a secret, then we
     // dispose the whole context (simulating process exit) so only the JSONL
     // log on disk survives.
-    ctx = await codingHarness(process.cwd(), { persona: SYSTEM_PROMPT, persistenceRoot: root })
+    ctx = await codingHarness(process.cwd(), { personaPrefix: SYSTEM_PROMPT, persistenceRoot: root })
     const first = (await ctx.agents.create({
       sessionId: SESSION_ID,
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
@@ -50,7 +50,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('resume: continue a persisted ses
     // Run 2: a brand-new context over the SAME root resumes the persisted
     // session. The loaded event log seeds the live session, so the model sees
     // run 1's exchange as conversation history.
-    ctx = await codingHarness(process.cwd(), { persona: SYSTEM_PROMPT, persistenceRoot: root })
+    ctx = await codingHarness(process.cwd(), { personaPrefix: SYSTEM_PROMPT, persistenceRoot: root })
     const resumed = (await ctx.agents.resume({
       resumeSessionId: SESSION_ID,
       agentOptions: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },

@@ -1,16 +1,19 @@
 import { SessionFormatError, SessionFormatUnsupportedMigrationError } from './error.ts'
 import {
-  inspectSessionFormatVersion,
-  snapshotSessionFormatArtifact,
   snapshotSessionFormatHeader,
+  sessionFormatCount,
   sessionFormatVersion,
 } from './json.ts'
 import type {
-  SessionFormatArtifact,
   SessionFormatChain,
   SessionFormatChainOptions,
+  SessionFormatEvent,
+  SessionFormatEventRun,
   SessionFormatHeader,
   SessionFormatMigration,
+  SessionFormatMigrationContext,
+  SessionFormatMigrationStage,
+  SessionFormatMigrationStream,
 } from './types.ts'
 
 /**
@@ -33,7 +36,7 @@ export function defineSessionFormatMigration(migration: SessionFormatMigration):
 /**
  * Compile a unique, complete adjacent migration chain.
  * @param options - current version, adjacent declarations, and current restorer.
- * @returns immutable planner and whole-artifact runner.
+ * @returns immutable planner and streaming migration compiler.
  */
 export function createSessionFormatChain(options: SessionFormatChainOptions): SessionFormatChain {
   return new CompiledSessionFormatChain(options)
@@ -42,12 +45,10 @@ export function createSessionFormatChain(options: SessionFormatChainOptions): Se
 class CompiledSessionFormatChain implements SessionFormatChain {
   readonly currentVersion: number
   private readonly migrations: readonly SessionFormatMigration[]
-  private readonly restoreCurrent: SessionFormatChainOptions['restoreCurrent']
   private readonly restoreCurrentHeader: SessionFormatChainOptions['restoreCurrentHeader']
 
   constructor(options: SessionFormatChainOptions) {
     this.currentVersion = sessionFormatVersion(options.currentVersion, 'current Session format version')
-    this.restoreCurrent = options.restoreCurrent
     this.restoreCurrentHeader = options.restoreCurrentHeader
     const byFrom = new Map<number, SessionFormatMigration>()
     const names = new Set<string>()
@@ -75,7 +76,7 @@ class CompiledSessionFormatChain implements SessionFormatChain {
     this.migrations = Object.freeze(ordered)
   }
 
-  plan(fromVersion: number): readonly SessionFormatMigration[] {
+  private plan(fromVersion: number): readonly SessionFormatMigration[] {
     const from = sessionFormatVersion(fromVersion, 'stored Session format version')
     if (from > this.currentVersion) {
       throw new SessionFormatUnsupportedMigrationError(
@@ -85,54 +86,54 @@ class CompiledSessionFormatChain implements SessionFormatChain {
     return Object.freeze(this.migrations.slice(from))
   }
 
-  migrate(source: SessionFormatArtifact): SessionFormatArtifact {
-    const storedVersion = inspectSessionFormatVersion(source.header)
-    let current = snapshotSessionFormatArtifact(source, `format v${storedVersion} source`)
-    if (storedVersion === this.currentVersion) {
-      current = snapshotSessionFormatArtifact(this.restoreCurrent(current), 'current Session restoration')
-      this.assertCurrent(current)
-      return current
-    }
-    for (const migration of this.plan(storedVersion)) {
-      let migrated: SessionFormatArtifact
+  createStream(
+    sourceHeader: SessionFormatHeader,
+    sourceCut: number,
+    output: SessionFormatMigrationContext,
+  ): SessionFormatMigrationStream {
+    let header = sourceHeader
+    const validatedSourceCut = sessionFormatCount(sourceCut, 'Session inherited event count')
+    let inheritedEventCount = validatedSourceCut
+    const stages: Array<{
+      readonly migration: SessionFormatMigration
+      readonly stage: SessionFormatMigrationStage
+    }> = []
+    const plan = this.plan(header.version)
+    for (const [index, migration] of plan.entries()) {
+      const targetHeader = this.advanceHeader(migration, header)
+      let stage: SessionFormatMigrationStage
       try {
-        migrated = migration.migrate(snapshotSessionFormatArtifact(current, `${migration.name} input`))
+        stage = migration.createStage({
+          sourceHeader: header,
+          targetHeader,
+          sourceInheritedEventCount: inheritedEventCount,
+          sourceKind: index === 0 ? 'decoded' : 'transformed',
+        })
       } catch (error: unknown) {
         throwUnsupportedRefusal(migration, error)
       }
-      current = snapshotSessionFormatArtifact(migrated, `${migration.name} output`)
-      if (current.header.version !== migration.toVersion) {
-        throw new SessionFormatError(`${migration.name} returned v${current.header.version}; expected v${migration.toVersion}`)
-      }
-      try {
-        migration.validateTarget(current)
-      } catch (error: unknown) {
-        throwUnsupportedRefusal(migration, error)
+      header = targetHeader
+      stages.push({ migration, stage })
+      if (index + 1 < plan.length) {
+        const targetCut = stage.headerInheritedEventCount
+        if (targetCut === undefined) {
+          throw new SessionFormatError(`${migration.name} must expose its inherited cut before the next migration`)
+        }
+        inheritedEventCount = targetCut
       }
     }
-    current = snapshotSessionFormatArtifact(this.restoreCurrent(current), 'current Session restoration')
-    this.assertCurrent(current)
-    return current
+    return new CompiledSessionFormatMigrationStream(
+      header,
+      validatedSourceCut,
+      stages,
+      output,
+    )
   }
 
   migrateHeader(source: SessionFormatHeader): SessionFormatHeader {
     let current = snapshotSessionFormatHeader(source, 'stored Session header')
     for (const migration of this.plan(current.version)) {
-      let migrated: SessionFormatHeader
-      try {
-        migrated = migration.migrateHeader(snapshotSessionFormatHeader(current, `${migration.name} header input`))
-      } catch (error: unknown) {
-        throwUnsupportedRefusal(migration, error, 'Session header')
-      }
-      current = snapshotSessionFormatHeader(migrated, `${migration.name} header output`)
-      if (current.version !== migration.toVersion) {
-        throw new SessionFormatError(`${migration.name} header returned v${current.version}; expected v${migration.toVersion}`)
-      }
-      try {
-        migration.validateTargetHeader(current)
-      } catch (error: unknown) {
-        throwUnsupportedRefusal(migration, error, 'Session header')
-      }
+      current = this.advanceHeader(migration, current)
     }
     current = snapshotSessionFormatHeader(this.restoreCurrentHeader(current), 'current Session header restoration')
     if (current.version !== this.currentVersion) {
@@ -143,12 +144,104 @@ class CompiledSessionFormatChain implements SessionFormatChain {
     return current
   }
 
-  private assertCurrent(artifact: SessionFormatArtifact): void {
-    if (artifact.header.version !== this.currentVersion) {
-      throw new SessionFormatError(
-        `current Session restorer returned v${artifact.header.version}; expected v${this.currentVersion}`,
-      )
+  private advanceHeader(
+    migration: SessionFormatMigration,
+    source: SessionFormatHeader,
+  ): SessionFormatHeader {
+    let target: SessionFormatHeader
+    try {
+      target = migration.migrateHeader(snapshotSessionFormatHeader(source, `${migration.name} header input`))
+    } catch (error: unknown) {
+      throwUnsupportedRefusal(migration, error, 'Session header')
     }
+    const current = snapshotSessionFormatHeader(target, `${migration.name} header output`)
+    if (current.version !== migration.toVersion) {
+      throw new SessionFormatError(`${migration.name} header returned v${current.version}; expected v${migration.toVersion}`)
+    }
+    try {
+      migration.validateTargetHeader(current)
+    } catch (error: unknown) {
+      throwUnsupportedRefusal(migration, error, 'Session header')
+    }
+    return current
+  }
+}
+
+interface CompiledMigrationStage {
+  readonly migration: SessionFormatMigration
+  readonly stage: SessionFormatMigrationStage
+}
+
+class ChainedMigrationContext implements SessionFormatMigrationContext {
+  constructor(
+    private readonly entry: CompiledMigrationStage,
+    private readonly output: SessionFormatMigrationContext,
+  ) {}
+
+  emitEvent(event: SessionFormatEvent): void {
+    try {
+      this.entry.stage.transformEvent(event, this.output)
+    } catch (error: unknown) {
+      throwUnsupportedRefusal(this.entry.migration, error)
+    }
+  }
+
+  emitRun(run: SessionFormatEventRun): void {
+    try {
+      this.entry.stage.transformRun(run, this.output)
+    } catch (error: unknown) {
+      throwUnsupportedRefusal(this.entry.migration, error)
+    }
+  }
+
+  finish(): number {
+    let targetCut: number
+    try {
+      targetCut = this.entry.stage.finish(this.output)
+    } catch (error: unknown) {
+      throwUnsupportedRefusal(this.entry.migration, error)
+    }
+    if (this.entry.stage.headerInheritedEventCount !== undefined
+      && this.entry.stage.headerInheritedEventCount !== targetCut) {
+      throw new SessionFormatError(`${this.entry.migration.name} changed its predeclared inherited cut`)
+    }
+    return targetCut
+  }
+}
+
+class CompiledSessionFormatMigrationStream implements SessionFormatMigrationStream {
+  private readonly input: SessionFormatMigrationContext
+  private readonly stages: readonly ChainedMigrationContext[]
+
+  constructor(
+    readonly header: SessionFormatHeader,
+    private readonly sourceInheritedEventCount: number,
+    entries: readonly CompiledMigrationStage[],
+    output: SessionFormatMigrationContext,
+  ) {
+    const stages = new Array<ChainedMigrationContext>(entries.length)
+    let downstream = output
+    for (const [offset, entry] of entries.toReversed().entries()) {
+      const context = new ChainedMigrationContext(entry, downstream)
+      stages[entries.length - offset - 1] = context
+      downstream = context
+    }
+    this.input = downstream
+    this.stages = stages
+  }
+
+  emitEvent(event: SessionFormatEvent): void {
+    this.input.emitEvent(event)
+  }
+
+  emitRun(run: SessionFormatEventRun): void {
+    this.input.emitRun(run)
+  }
+
+  finish(): number {
+    let inheritedEventCount = this.sourceInheritedEventCount
+    for (const stage of this.stages) inheritedEventCount = stage.finish()
+    return inheritedEventCount
   }
 }
 

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-28-ci-node-compile-cache-data-disk.md
+2026-08-28-ci-node-compile-cache-data-disk.md: 3f5f7eb2f00a37b635b63093f60c66688b82316b
+2026-08-28-ci-node-compile-cache-data-disk.zh.md: c55a6c73cf98f0dd0b31b50d64e7937ee9e14305

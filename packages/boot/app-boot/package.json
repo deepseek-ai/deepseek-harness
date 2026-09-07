@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-app-boot",
   "description": "Shared boot glue for the app bins: .env loading, fail-loud Loader guards, snapshot-aware config resolution, and the Loader boot sequence",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -28,6 +28,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-atomic-write": "workspace:^",
+    "@deepseek-ai/dsh-package-manifest": "workspace:^",
     "js-yaml": "^4.2.0",
     "resolve.exports": "^2.0.3"
   },

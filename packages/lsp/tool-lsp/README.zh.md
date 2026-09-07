@@ -84,10 +84,9 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从面向模型的表层逐步进入 seam、提供方与决策证据。
+当包级约定不够用时阅读以下页面。它们从面向模型的表层逐步进入 seam 与提供方。
 
 - [LSP 导航子系统](../../../docs/subsystems/lsp.zh.md)——操作、坐标、请求与结果，以及 `LspError` code。
-- [LSP 能力 seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.zh.md)——设计原理、备选方案与刻意推迟的 API。
 - [dsh-lsp](../lsp/README.zh.md)——本工具查询的 seam。
 - [dsh-lsp-stdio](../lsp-stdio/README.zh.md)——应答这些查询的 stdio 提供方。
 - [lsp 组地图](../README.zh.md)——三个包的家族及其相关文档。
@@ -166,7 +165,7 @@ Use search/read for ordinary navigation. Use lsp when textual matches are ambigu
 
 这些限制说明该工具何时不太合适。它们是当前包约束，不是任务积压。
 
-- **UTF-16 光标坐标**——列坐标与协议精确一致，但模型难以在非 BMP 字符周围计数；未落在符号上的位置可能返回空结果，因此提示词解释了该约定，但不鼓励广泛使用 LSP（见 [seam Agent Note](../../../.agents/notes/implemented/architecture/2026-07-15-lsp-capability-seam.zh.md)）。
+- **UTF-16 光标坐标**——列坐标与协议精确一致，但模型难以在非 BMP 字符周围计数；未落在符号上的位置可能返回空结果，因此提示词解释了该约定，但不鼓励广泛使用 LSP。
 - **不承诺跨服务器完整性**——受支持的服务器仍可能根据索引就绪情况返回空或部分结果；该工具不承诺跨语言或服务器的完整性。
 
 <a id="dev-note"></a>

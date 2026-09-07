@@ -58,6 +58,51 @@ function validationHeader(value: unknown): unknown {
   return header
 }
 
+function validationRow(source: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  if (source.type !== 'request/header') return { ...source }
+  const data = source.data
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return { ...source }
+  const header = (data as Record<string, unknown>).header
+  if (header === null || typeof header !== 'object' || Array.isArray(header)) return { ...source }
+  if ((header as Record<string, unknown>).tools !== '{{tools}}') return { ...source }
+  return {
+    ...source,
+    data: {
+      ...data,
+      header: { ...header, tools: [] },
+    },
+  }
+}
+
+function restoreRequestHeaderTokens(
+  events: readonly SessionEvent[],
+  rows: readonly Readonly<Record<string, unknown>>[],
+): SessionEvent[] {
+  const sources = rows.filter(row => row.type === 'request/header')
+  let sourceIndex = 0
+  return events.map((event) => {
+    if (event.type !== 'request/header') return event
+    const source = sources[sourceIndex]
+    sourceIndex += 1
+    const sourceData = source?.data
+    const sourceHeader = sourceData !== null && typeof sourceData === 'object' && !Array.isArray(sourceData)
+      ? (sourceData as Record<string, unknown>).header
+      : undefined
+    if (sourceHeader === null || typeof sourceHeader !== 'object' || Array.isArray(sourceHeader)
+      || (sourceHeader as Record<string, unknown>).tools !== '{{tools}}') return event
+    return {
+      ...event,
+      data: {
+        ...event.data,
+        header: {
+          ...(event.data as unknown as { header: Record<string, unknown> }).header,
+          tools: '{{tools}}',
+        },
+      },
+    } as SessionEvent
+  })
+}
+
 function renderFixture(headerLine: string, events: readonly SessionEvent[]): string {
   return [
     headerLine,
@@ -95,6 +140,7 @@ function parseFixtureObjectLine(line: string, lineNumber: number): Record<string
 function parseFixtureRows(content: string, headerValue: unknown): SessionEvent[] {
   const rows: Record<string, unknown>[] = []
   const rowLines: number[] = []
+  const eventLines: number[] = []
   let nextSeq: SessionLogOffsetType = SessionLogOffset(0)
   let headerSkipped = false
   for (const [index, line] of content.split(/\r?\n/).entries()) {
@@ -113,7 +159,9 @@ function parseFixtureRows(content: string, headerValue: unknown): SessionEvent[]
     if (!Object.hasOwn(record, timeKey)) record[timeKey] = 0
     rows.push(record)
     rowLines.push(index + 1)
-    nextSeq = SessionLogOffset(nextSeq + projectedRowCardinality(record))
+    const cardinality = projectedRowCardinality(record)
+    for (let offset = 0; offset < cardinality; offset += 1) eventLines.push(index + 1)
+    nextSeq = SessionLogOffset(nextSeq + cardinality)
   }
   // Versionless protocol fixtures and current projected snapshots use scalar
   // event rows. Current snapshots may contain owner-restored scrub tokens such
@@ -143,16 +191,50 @@ function parseFixtureRows(content: string, headerValue: unknown): SessionEvent[]
       }
     })
   }
+  let restore: ReturnType<typeof sessionFormatCatalog.createRestore>
   try {
-    return [
-      ...sessionFormatCatalog.decodeArtifact(validationHeader(headerValue), rows).events,
-    ] as unknown as SessionEvent[]
+    restore = sessionFormatCatalog.createRestore(validationHeader(headerValue), {
+      recovery: 'strict',
+      validation: 'current',
+    })
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
-    const storedRow = /\brow (\d+)\b/.exec(detail)
-    const line = storedRow === null ? 1 : rowLines[Number(storedRow[1])] ?? 1
+    throw new Error(`session snapshot line 1: ${detail}`, { cause: error })
+  }
+  for (const [index, row] of rows.entries()) {
+    try {
+      restore.decodeRow(validationRow(row))
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      throw new Error(`session snapshot line ${rowLines[index] ?? 1}: ${detail}`, { cause: error })
+    }
+  }
+  try {
+    return restoreRequestHeaderTokens(
+      [...restore.finish().events] as unknown as SessionEvent[],
+      rows,
+    )
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    const line = fixtureDiagnosticLine(error, rowLines, eventLines)
     throw new Error(`session snapshot line ${line}: ${detail}`, { cause: error })
   }
+}
+
+function fixtureDiagnosticLine(
+  error: unknown,
+  rowLines: readonly number[],
+  eventLines: readonly number[],
+): number {
+  const detail = error instanceof Error && error.cause instanceof Error
+    ? error.cause.message
+    : error instanceof Error ? error.message : String(error)
+  const physicalRow = /^released Session row (\d+)/.exec(detail)
+  if (physicalRow !== null) return rowLines[Number(physicalRow[1])] ?? 1
+  const event = /Session event (\d+)/.exec(detail)
+    ?? / at seq (\d+)/.exec(detail)
+    ?? /inherited Session cut (\d+)/.exec(detail)
+  return event === null ? 1 : eventLines[Number(event[1])] ?? 1
 }
 
 function withoutEnvelope(events: readonly SessionEvent[]): Array<Omit<SessionEvent, 'seq' | 'time'>> {

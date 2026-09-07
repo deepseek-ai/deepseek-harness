@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
-import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
+import AgentRegistry from '@deepseek-ai/dsh-agent'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime, { renderToolsSdk } from '@deepseek-ai/dsh-tools'
@@ -12,13 +12,14 @@ import type { TerminalBackend, TerminalBackendSession, TerminalSendOperation, Te
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import * as ToolPty from '@deepseek-ai/dsh-tool-terminal'
+import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 function fakeAgent(ctx: Context, rawId: string): Agent {
   const scope = ctx.plugin(() => {})
   const id = SessionId(rawId)
   const session = Session.create(id)
   const agent: Agent = {
-    id, options: {}, session, inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+    id, options: {}, session, inbox: unsupportedInbox(),
     status: 'idle',
     ctx: scope.ctx,
     send: () => {},

@@ -25,7 +25,7 @@ explicit configured path  >  $DSH_HOME  >  ~/.dsh
 
 `@deepseek-ai/dsh-home` 被删除。拥有 home 配置的提供方与 boot 包从 `dsh-home-paths` 导入 `resolveDshHome`；组合包只包含解析后的配置行。
 
-`dsh-telemetry` 及其独立 home 策略已随 [SDK 项目工具链移除](../simplification/2026-08-11-remove-sdk-project-toolchain.zh.md)一并消失，因此该解析器是唯一的 home 策略。
+`dsh-telemetry` 及其独立 home 策略已随 [SDK 项目工具链移除](../../archived/simplification/2026-08-11-remove-sdk-project-toolchain.md)一并消失，因此该解析器是唯一的 home 策略。
 
 ## 备选方案
 

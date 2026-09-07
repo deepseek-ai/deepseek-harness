@@ -30,7 +30,7 @@ interface Bench {
 async function harness(withTodoTool: boolean): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(UserQuestionService)
   await ctx.plugin(AgentRegistry)

@@ -74,7 +74,7 @@ while (frames.size > 0) {
 ## 进一步探索
 
 - [工具包映射](../README.zh.md)——跨包组共享的其他零依赖原语。
-- [线性流队列决策](../../../.agents/notes/implemented/bug-fix/2026-08-28-linear-stream-queue-drain.zh.md)——生产流为何使用本双端队列而非数组头部移除。
+- [线性流队列决策](../../../.agents/notes/archived/bug-fix/2026-08-28-linear-stream-queue-drain.md)——生产流为何使用本双端队列而非数组头部移除。
 
 -----
 

@@ -2,7 +2,7 @@
 
 English | [中文](feedback.zh.md)
 
-[`@deepseek-ai/dsh-message-feedback`](../../packages/feedback/message-feedback) owns editable feedback for individual assistant messages. It is deliberately separate from the immutable Session-level `feedback/record` event: message feedback is a local storage-domain sidecar, not Session-log content or a projection, and it performs no telemetry handoff.
+[`@deepseek-ai/dsh-message-feedback`](../../packages/feedback/message-feedback) owns editable feedback for individual assistant messages. The canonical Session log stores `feedback/message-put` and `feedback/message-delete`; the immutable Session-level remark remains `feedback/record`. All three are log-only events that never enter model context.
 
 Source: [`packages/feedback/message-feedback/src/types.ts`](../../packages/feedback/message-feedback/src/types.ts)
 
@@ -37,9 +37,29 @@ interface MessageFeedbackItem {
 ```
 
 ```ts type-equiv
+/** A material creation or edit, retaining its complete current value. */
+interface MessageFeedbackPut {
+  /** Owning Session; inherited feedback in a fork belongs to its parent. */
+  readonly sessionId: SessionId
+  /** Value after this mutation, including the original creation time. */
+  readonly item: MessageFeedbackItem
+}
+```
+
+```ts type-equiv
+/** A material deletion of one current feedback item. */
+interface MessageFeedbackDelete {
+  /** Session that owns the deleted feedback. */
+  readonly sessionId: SessionId
+  /** Message whose feedback was removed. */
+  readonly messageId: MessageId
+}
+```
+
+```ts type-equiv
 /** Read all message feedback belonging to one persisted Session lifecycle. */
 interface MessageFeedbackListRequest {
-  /** Persisted Session whose sidecar should be read. */
+  /** Session whose feedback events should be read. */
   readonly sessionId: SessionId
 }
 ```
@@ -71,7 +91,7 @@ interface MessageFeedbackPutRequest {
 ```ts type-equiv
 /** Delete feedback for one message after observing its current version. */
 interface MessageFeedbackDeleteRequest {
-  /** Persisted Session that owns the sidecar. */
+  /** Session that owns the feedback. */
   readonly sessionId: SessionId
   /** Message whose feedback should be absent after this operation. */
   readonly messageId: MessageId
@@ -185,21 +205,23 @@ type MessageFeedbackDeleteResult =
 
 ## Data and concurrency
 
-One Session sidecar row contains its header identity `{createdAt, cwd}` and feedback items keyed by `MessageId`. Each item carries a positive or negative rating, an optional note, Host-assigned `createdAt`/`updatedAt` timestamps, and its own opaque version. Versions are compared only for equality and only against the addressed message; callers do not order or synthesize them.
+Current items are folded from canonical feedback events whose payload `sessionId` matches the owning Session. Each item carries a positive or negative rating, an optional note, Host-assigned `createdAt`/`updatedAt` timestamps, and its own opaque version. Versions are compared only for equality and only against the addressed message; callers do not order or synthesize them.
 
-`put` uses strict optimistic concurrency: every request for an existing item must match its current `ifVersion`, including a no-op. A conflict returns the authoritative current item (or `null`), so a caller can reconcile a lost response or a concurrent edit without another read. Deleting an already absent item succeeds. A per-Session queue encloses inspection, read, conflict evaluation, and whole-row write, so these guarantees cover concurrent calls in one Host process.
+`put` uses strict optimistic concurrency: every request for an existing item must match its current `ifVersion`, including a no-op. A conflict returns the authoritative current item (or `null`), so a caller can reconcile a lost response or a concurrent edit without another read. Deleting an already absent item succeeds. A per-Session queue serializes reads and mutations; cold mutations hold a persistence write handle across read, comparison, append, and flush. Matching no-ops append no event.
 
 ## Target and lifecycle authority
 
-A live owner's in-memory log supplies the target Session observation directly; a cold target is read through a `SessionPersistence.open(id, 'read')` handle without publishing or resuming an Agent and without writing recovery. A `stat(id)` preflight classifies definite absence; a read failure for a Session `stat` confirmed propagates as infrastructure failure. `put` accepts only a non-empty, append-origin `assistant/message` with the requested `MessageId`; replacement-origin, usage-only empty, and non-assistant records are not feedback targets.
+A live owner's in-memory log supplies the target Session observation directly; cold reads use a `SessionPersistence.open(id, 'read')` handle, while mutations use a write handle. Neither path constructs a Session or Agent. A `stat(id)` preflight classifies definite absence; a read failure for a Session `stat` confirmed propagates as infrastructure failure. `put` accepts only a non-empty, append-origin `assistant/message` with the requested `MessageId`; replacement-origin, usage-only empty, and non-assistant records are not feedback targets.
 
-The stored `{createdAt, cwd}` identity must match the inspected header. A mismatch is treated as absence: `list` returns no items, while `put` may replace the stale row with one bound to the current header identity. Forks use a new Session identity and receive no sidecar copy even when their seed contains the same messages.
+Fork seeds can contain parent feedback events, but their payload retains the parent `sessionId`, so they do not become current feedback for the child. Deleting an item appends a tombstone; earlier ratings and notes remain in the log.
 
 ## Persistence and Remote contract
 
-The service stores whole Session rows in the `message_feedback` storage domain through `ctx.storageDomain`. Before `put` commits a row that references a target message, a matching live target passes through the canonical `ctx.sessions.flush` checkpoint; both live and cold paths are then physically read from sequence zero through a fresh read handle, which observes at least the flushed prefix by the seam's freshness guarantee. The resulting observation is revalidated before the sidecar write, so the durable target log always precedes its sidecar commit. `maxNoteBytes` is required and bounds note text by UTF-8 bytes; the Web Host composition sets `8192`. The package publishes the Host `messageFeedback.list`, `messageFeedback.put`, and `messageFeedback.delete` unary Remote contract through `TypertRemoteService` and `@Remote`; the generated Cordis API below is the method-level authority.
+Successful message-feedback mutations await canonical persistence: live operations append through the owning Session and require a participating `ctx.sessions.flush` listener; cold operations append and flush through their write handle. Persistence failures propagate rather than reporting success. `maxNoteBytes` is required and bounds note text by UTF-8 bytes; the Web Host composition sets `8192`. The package publishes the Host `messageFeedback.list`, `messageFeedback.put`, and `messageFeedback.delete` unary Remote contract through `TypertRemoteService` and `@Remote`; the generated Cordis API below is the method-level authority.
 
-Plugin disposal closes mutation admission, drains accepted per-Session queue work, and then closes the storage domain.
+Plugin disposal closes operation admission and drains accepted per-Session queue work.
+
+When explicitly enabled, [`session-log-deepseek`](../../packages/session/session-log-deepseek/README.md) carries feedback as part of the ordinary `dsh_session_log` suffix on subsequent eligible DeepSeek requests. Recording feedback does not trigger an LLM request or a separate `dsh_feedback` upload. For non-DeepSeek routes, the [OTel backend](../../packages/session/session-telemetry-otel/README.md) can release the canonical prefix through recorded feedback. The command acknowledgement confirms recording and identifies the Session and anonymous user; it reports neither telemetry policy nor delivery.
 
 ## Web surface
 
@@ -211,14 +233,13 @@ One `MessageFeedbackController` per Session backs every message control in that 
 
 ## Boundaries and limitations
 
-- The mutation queue is process-local. Storage-domain has no cross-process conditional write, so multiple Host writers to one storage root have no compare-and-swap or lost-update guarantee.
-- Session persistence has no durable deletion API. The service does not treat `session/disposed` or `api-session/removed` as deletion and therefore performs no fake cascade; orphan sidecar rows may remain after out-of-band log removal.
+- The operation queue is process-local; cold writer exclusion relies on the selected persistence provider.
+- Deletion removes the current item, not earlier note text from the append-only log or an already delivered suffix.
 - A request in the narrow interval after live detach but before the persistence catalog materializes the header can receive `session-not-found`; callers retry after retirement materialization.
-- Cold requests scan the complete Session snapshot catalog because persistence has no lookup-by-id metadata operation. One Session row also has no item-count or aggregate-byte cap; `maxNoteBytes` bounds only each note until a concrete consumer owns a row policy.
-- Header identity detects a reused id only when `{createdAt, cwd}` differs; a cloned log retaining the same header identity is indistinguishable by this contract.
+- Cold requests read the complete log; the service has no item-count or aggregate-byte cap. `maxNoteBytes` bounds only each note.
 - The Host contract records no authenticated actor or audit identity and therefore assumes a trusted caller boundary.
 - The Web controls appear in the chat view only. The trajectory and waterfall views render no feedback entry even though their assistant nodes carry the same `messageId`.
-- The sidecar publishes no live frames, so a second tab's rating becomes visible on reconnect or on the next conflict reply rather than immediately.
+- The Web controller does not consume feedback log events, so a second tab's rating becomes visible on reconnect or on the next conflict reply rather than immediately.
 - The note editor does not pre-check `maxNoteBytes`; an oversized note fails on save with `note-too-large` rather than while typing.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
@@ -233,34 +254,57 @@ Generated from source by `scripts/gen-cordis-catalog.ts` (verified fresh by `pnp
 
 ### `ctx.messageFeedback` — `MessageFeedbackService`
 
-Storage-domain sidecar service. It inspects persisted Session history and never creates or resumes an Agent or Session.
+Session-log service; cold operations never construct a Session or Agent.
 
 ```ts cordis-catalog
 /**
- * Read feedback belonging to the current persisted Session lifecycle.
- * A stale row from a reused Session id is invisible.
- * @param request - Session identity to inspect and list.
- * @returns current immutable items or `session-not-found`.
+ * Read current feedback from the canonical log.
+ * @param request - Session to inspect.
+ * @returns immutable items or a definite persistence miss.
  */
-@Remote('list') async list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>
+@Remote('list') list(request: MessageFeedbackListRequest): Promise<MessageFeedbackListResult>
 
 /**
- * Create or replace feedback for one derived append-origin assistant
- * message. Every request must match the addressed item's current version;
- * a matching no-op returns the stored item without changing its revision.
- * @param request - target, desired value, and observed item version.
- * @returns the committed item or an explicit business failure.
+ * Create or replace feedback after checking its current version.
+ * Matching no-ops retain the version and append no event.
+ * @param request - Target, desired value, and observed item version.
+ * @returns the durable item or an explicit business failure.
  */
 @Remote('put') put(request: MessageFeedbackPutRequest): Promise<MessageFeedbackPutResult>
 
 /**
- * Delete one feedback item. Absence is successful regardless of the
- * supplied version; an existing item requires an exact version match.
+ * Delete one item after checking its version; absence succeeds without an event.
  * @param request - Session, message, and observed item version.
- * @returns the stable absent postcondition, or an explicit failure.
+ * @returns the stable absent postcondition or an explicit failure.
  */
 @Remote('delete') delete(request: MessageFeedbackDeleteRequest): Promise<MessageFeedbackDeleteResult>
 ```
+
+Source: [`packages/feedback/message-feedback/src/index.ts`](../../packages/feedback/message-feedback/src/index.ts)
+
+<a id="feedback-events"></a>
+
+### `feedback/*` events
+
+<a id="feedbackcommitted--parallel"></a>
+
+#### `feedback/committed` — parallel
+
+Observe a durable cold feedback mutation without publishing a live Session. Observers run before write ownership is released and must not await another message-feedback operation for this Session. The payload is borrowed read-only; deep-clone it before transferring ownership (for example, to Session.fromRestore).
+
+```ts cordis-catalog
+/**
+ * Observe a durable cold feedback mutation without publishing a live Session.
+ * Observers run before write ownership is released and must not await
+ * another message-feedback operation for this Session. The payload is borrowed
+ * read-only; deep-clone it before transferring ownership (for example, to Session.fromRestore).
+ * @param inspection - committed canonical prefix, including the feedback as its last event.
+ * @mode parallel
+ */
+'feedback/committed'(inspection: SessionInspection): void
+```
+
+Types: [SessionInspection](persistence.md)
 
 Source: [`packages/feedback/message-feedback/src/index.ts`](../../packages/feedback/message-feedback/src/index.ts)
 <!-- END GENERATED cordis-surface -->

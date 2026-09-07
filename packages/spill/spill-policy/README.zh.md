@@ -86,11 +86,17 @@ kind: "package-reference"
 
 `tools/post-execute` waterfall（瀑布式事件）监听器（以 `prepend` 注册、通过 `next()` 委托）约束面向模型的结果；`tools/ptc-dispatch-log` 监听器约束每个 `run_code` 子调用的持久日志副本。两者共享同一个替换辅助函数，因此两个投影字节一致。post-execute 分支跳过 `read` 以避免 read → spill → read 循环；dispatch-log 分支约束 `read` 子调用，因为日志副本不是模型上下文。
 
+<a id="shared-notice-ownership"></a>
+### 共享通知的所有权
+
+浏览器安全入口 `@deepseek-ai/dsh-spill-policy/notice` 同时负责生产方使用的 `formatSpillNotice(omitted, ref)` 和展示消费方使用的 `hasSpillNotice(text)`。格式化与识别共用通知分隔符；省略信息通过现有的 `describeOmitted` 格式化函数校验，而非复制一套文案。识别支持预览之后或单独出现的完整末尾通知，并保留持久化通知的原有拼写。它只读取已记录的文本，不改写文本。
+
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` 校验、两个 waterfall 监听器、共享替换辅助函数 |
+| [`src/notice.ts`](src/notice.ts) | 浏览器安全的通知格式化与识别，以 `./notice` 发布 |
 | [`src/types.ts`](src/types.ts) | `SpillPolicyExec`：策略读取所属会话 id 所需的最小结构化工具执行视图 |
 | — | 不发布运行时不变式伴生入口；约定在 seam 处强制执行。 |
 
@@ -111,7 +117,6 @@ kind: "package-reference"
 - [dsh-spill-local](../spill-local/README.zh.md)——保存 spill 文本的本地后端。
 - [dsh-output-retention](../../util/output-retention/README.zh.md)——策略组合的预览机制（`TextRetainer`）。
 - [工具输出 spill 决策](../../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.zh.md)——能力边界与设计依据。
-- [PTC dispatch-log spill 决策](../../../.agents/notes/implemented/feature/2026-07-26-ptc-dispatch-log-spill.zh.md)——为何持久日志副本同样设界。
 
 -----
 
@@ -139,6 +144,7 @@ kind: "package-reference"
 
 这些限制说明策略在哪些情况下无法提供帮助。它们是当前的包约束。
 
+- **文本识别无法认证输出来源**——工具也能打印相同的通知文本；`hasSpillNotice` 识别的是文本约定，不能证明策略保存过结果。
 - **只能对最终纯文本结果执行 spill**——混合内容结果、阻止反馈与 `read` 会原样通过；此前已经发生的提供方截断或工具自有保留无法在此恢复。
 - **通知无法容纳时会禁用该次调用的替换**——上限极小或定位信息很长时，后端已经保存了无引用的 spill，但过大的原始结果仍留在内联位置。
 

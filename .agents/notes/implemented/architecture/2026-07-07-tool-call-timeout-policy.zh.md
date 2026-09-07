@@ -16,7 +16,7 @@ Status: implemented
 
 - `@deepseek-ai/dsh-timeout` 仍是拥有 `deadline()` 和 `timeoutOf()` 的共享库。
 - `@deepseek-ai/dsh-tools` 在 `tools/pre-execute` 和 `tools/post-execute` 之间有一个环绕分发的 waterfall（瀑布式事件）`tools/execute`。
-- [仓库命名约定](2026-08-11-repository-naming-contract-and-rename-ledger.zh.md)使用 `@deepseek-ai/dsh-tool-call-timeout-policy`，准确说明该策略所限制的操作。插件从 runtime 读取每个工具声明的 `timeoutMs`，并通过派生新的 `exec.signal` 来包装有此声明的调用。
+- [仓库命名约定](../../archived/architecture/2026-08-11-repository-naming-contract-and-rename-ledger.md)使用 `@deepseek-ai/dsh-tool-call-timeout-policy`，准确说明该策略所限制的操作。插件从 runtime 读取每个工具声明的 `timeoutMs`，并通过派生新的 `exec.signal` 来包装有此声明的调用。
 
 执行流水线如下：
 

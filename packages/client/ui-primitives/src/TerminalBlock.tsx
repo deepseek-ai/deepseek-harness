@@ -103,7 +103,7 @@ function statusText(
  * Run-state indicator for the command, shown at the head of the prompt line so
  * the card states whether the command is still running without the reader
  * having to infer it from the presence of output. Three of {@link StateDotState}'s
- * four states are reachable: the running chase (the same
+ * five states are reachable: the running chase (the same
  * indicator a running tool row's leading icon uses, so the row and its card
  * never disagree), green for a clean settle, red for a signal or a non-zero
  * exit — the same status distinction {@link statusText} draws for the pill. A

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Test driver: start a mock OTLP/HTTP collector, boot the telemetry Loader
- * composition against it, run one turn whose prompt carries a fixture
- * credential, then persist everything the collector captured to
+ * composition against it, explicitly share feedback on a credential-bearing
+ * turn, then persist everything the collector captured to
  * `./otlp-captures.json` for the e2e's inspect step.
  */
 
@@ -35,29 +35,33 @@ const address = server.address()
 if (address === null || typeof address === 'string') throw new Error('collector has no port')
 process.env.DSH_TELEMETRY_E2E_URL = `http://127.0.0.1:${address.port}/v1/logs`
 process.env.DSH_TELEMETRY_OTLP_URL = process.env.DSH_TELEMETRY_E2E_URL
-process.env.DSH_TELEMETRY_MODE = process.env.DSH_TELEMETRY_E2E_MODE ?? 'FULL'
+process.env.DSH_TELEMETRY_MODE = process.env.DSH_TELEMETRY_E2E_MODE ?? 'FEEDBACK_ONLY'
 
-const ctx = await bootProductionProfile({
-  binName: 'telemetry-otel-e2e',
-  profile: 'headless',
-  overlayPaths: [resolveConfigPath(configPath, undefined)],
-})
 try {
-  // The fixture credential rides the model-visible user message; the exported
-  // copy must scrub it while the canonical log keeps the original bytes.
-  await runFixtureTurn(ctx, { task: 'prove telemetry with key sk-e2efixture1234567890' })
-  const mode = process.env.DSH_TELEMETRY_E2E_MODE ?? 'FULL'
-  if (mode !== 'FULL') {
+  const ctx = await bootProductionProfile({
+    binName: 'telemetry-otel-e2e',
+    profile: 'headless',
+    overlayPaths: [resolveConfigPath(configPath, undefined)],
+  })
+  try {
+    await runFixtureTurn(ctx, { task: 'prove telemetry with key sk-e2efixture1234567890' })
     const [agent] = ctx.get('agents')?.roots() ?? []
     if (agent === undefined) throw new Error('session-telemetry-otel driver requires one root agent')
-    recordFeedback(agent.session, 'fixture feedback')
-    if (mode === 'FEEDBACK_ONLY') {
-      await runFixtureTurn(ctx, { task: 'post-feedback private suffix' })
+    if (process.env.DSH_TELEMETRY_E2E_FEEDBACK !== 'none') {
+      recordFeedback(agent.session, 'fixture feedback')
     }
+    await runFixtureTurn(ctx, { task: 'post-feedback private suffix' })
+    ctx.emit('agent/error', { agent, turn: 2, step: 1, error: new Error('private operational error') })
+  } finally {
+    await ctx.fiber.dispose()
   }
+  await writeFile('./otlp-captures.json', JSON.stringify(captures))
 } finally {
-  await ctx.fiber.dispose()
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error === undefined) resolve()
+      else reject(error)
+    })
+    server.closeAllConnections()
+  })
 }
-await writeFile('./otlp-captures.json', JSON.stringify(captures))
-server.close()
-server.closeAllConnections()

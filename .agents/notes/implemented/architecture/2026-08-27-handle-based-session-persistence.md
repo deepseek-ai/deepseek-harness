@@ -37,6 +37,6 @@ Resume, fork, subagent, ACP, webhook, and SDK sessions all persist through one e
 ## Related
 
 - [Session persistence as an abstract service](2026-06-14-session-persistence.md) — the seam this reshapes; its interface list reflects the handle API.
-- [Persistence export() and pre-release trims](../simplification/2026-08-27-persistence-export-and-pre-release-trims.md) — the preparatory removals, including the retired cold blank probe.
+- [Persistence export() and pre-release trims](../../archived/simplification/2026-08-27-persistence-export-and-pre-release-trims.md) — the preparatory removals, including the retired cold blank probe.
 - [Retain ignorable external session events](2026-08-30-retain-ignorable-external-session-events.md) — the read-side refusal contract, now shared through `storage-contract` helpers.
-- [Bounded session-persistence write batching](2026-08-08-bounded-session-persistence-write-batching.md) — the batching semantics the routed write path preserves as internal scheduling policy.
+- [Bounded session-persistence write batching](../../archived/architecture/2026-08-08-bounded-session-persistence-write-batching.md) — the batching semantics the routed write path preserves as internal scheduling policy.

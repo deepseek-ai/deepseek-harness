@@ -128,7 +128,7 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 - [Workspace 子系统](../../../docs/subsystems/workspace.zh.md)——项目及其会话的功能约定，以及 workspace 服务的生成 API。
 - [Workspace 包映射](../README.zh.md)——本组唯一的包及其仓库位置。
 - [领域 KV 存储 Agent Note](../../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)——为什么项目记录使用领域数据形式。
-- [Workspace UI 产品流 Agent Note](../../../.agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.zh.md)——首次启动如何从会话历史构建项目，以及 GUI 如何排序。
+- [Workspace UI 产品流 Agent Note](../../../.agents/notes/archived/feature/2026-07-25-workspace-ui-product-flow.md)——首次启动如何从会话历史构建项目，以及 GUI 如何排序。
 - [删除 Workspace 注册记录决策](../../../.agents/notes/implemented/feature/2026-07-27-workspace-registration-deletion.zh.md)——为什么移除项目绝不会删除其文件夹或会话。
 
 -----
@@ -173,6 +173,6 @@ ctx.workspaceRegistry.list() // shows the project, newest first
 
 #### 开放：`create(path, title?)` 的 title 参数
 
-网关的按名称创建分支移除后，`title` 参数已无生产调用方；代码中的 TODO 提议把该参数与其 `@param` 子句一并移除（参见[笔记](../../../.agents/notes/implemented/simplification/2026-07-31-one-route-to-add-a-workspace.zh.md)）。
+网关的按名称创建分支移除后，`title` 参数已无生产调用方；代码中的 TODO 提议把该参数与其 `@param` 子句一并移除（参见[笔记](../../../.agents/notes/archived/simplification/2026-07-31-one-route-to-add-a-workspace.md)）。
 
 </details>

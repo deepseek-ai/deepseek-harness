@@ -29,7 +29,7 @@ Normal completion deliberately avoids `process.exit()`: an immediately forced ex
 
 Headless preserves exit 0 for a completed turn, exit 1 for another turn-end reason or API business error, 130 for SIGINT, and 143 for SIGTERM. Web preserves its existing SIGTERM exit 0 and SIGINT exit 130 behavior.
 
-This supersedes the [telemetry deployment Note's](../feature/2026-07-31-web-telemetry-default-mount.md) assumption that SDK exporter/processor timeouts bound complete provider shutdown, and its earlier decision to defer a process-level backstop. The backend owns its export loss/latency policy and closes the known SDK `forceFlush()` gap; the launcher owns the outer guarantee that no plugin can trap the process indefinitely.
+This supersedes the [telemetry deployment Note's](../../archived/feature/2026-07-31-web-telemetry-default-mount.md) assumption that SDK exporter/processor timeouts bound complete provider shutdown, and its earlier decision to defer a process-level backstop. The backend owns its export loss/latency policy and closes the known SDK `forceFlush()` gap; the launcher owns the outer guarantee that no plugin can trap the process indefinitely.
 
 ## Alternatives considered
 

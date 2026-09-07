@@ -11,7 +11,7 @@ import type {
 import type { FileUploadReceiptId } from '@deepseek-ai/dsh-client-file-upload/types'
 import type {} from '@deepseek-ai/dsh-client-file-upload'
 import {
-  ReasoningEffortId, createUserMessage, expandAssistantStream, freezeMessage,
+  ReasoningEffortId, assistantStreamChunks, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
 import type { MessageSource } from '@deepseek-ai/dsh-llm'
 import { SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -19,6 +19,7 @@ import type { SessionEvent, SessionHeader, SessionId, UserMessage } from '@deeps
 import { SessionQueryError, type SessionObservation } from '@deepseek-ai/dsh-session-query'
 import { SessionTitleInvalidError } from '@deepseek-ai/dsh-session-title'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
 import { RemoteError, remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import type { Workspace } from '@deepseek-ai/dsh-workspace'
 import {
@@ -415,11 +416,17 @@ export class SessionCommandController {
       )
     }
     const agent = this.ctx.agents.get(request.sessionId)
-    if (agent !== undefined && hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
-      throw apiSessionSubagentOwnershipError(request.sessionId)
-    }
     if (agent === undefined) {
       throw new RemoteError('session/queue-item-not-found', 'queued item is no longer pending', { itemId: request.itemId })
+    }
+    if (hasApiSessionSubagentOwner(this.ctx, agent.session, agent)) {
+      const identity = this.ctx.sessionProjections
+        .snapshot(agent.session, ['subagent'])
+        .values.subagent
+      if (identity?.mode !== 'continuable'
+        || !agent.session.isOwnSeq(identity.seq)) {
+        throw apiSessionSubagentOwnershipError(request.sessionId)
+      }
     }
     const nextTurn = agent.inbox.nextTurn.find(message => message.id === request.itemId)
     const nextStep = agent.inbox.nextStep.find(message => message.id === request.itemId)
@@ -433,20 +440,28 @@ export class SessionCommandController {
     if (request.action.kind === 'steer' && (target !== 'next-turn' || agent.status !== 'running')) {
       throw new RemoteError('session/steer-unavailable', 'current turn no longer accepts steering', { itemId: request.itemId })
     }
-    if (request.action.kind === 'edit') {
-      agent.inbox.replace(request.itemId, freezeMessage<UserMessage>({
-        ...message,
-        content: [...request.action.content],
-      }))
-    } else {
-      agent.inbox.remove(request.itemId)
-      if (request.action.kind === 'remove') {
+    switch (request.action.kind) {
+      case 'edit':
+        agent.inbox.replace(request.itemId, freezeMessage<UserMessage>({
+          ...message,
+          content: [...request.action.content],
+        }))
+        break
+      case 'remove': {
+        agent.inbox.remove(request.itemId)
         const source = message.source
         if (source.kind === 'user' && 'rpcId' in source) {
           this.ctx.fileUploads.retirePrompt(agent, source.rpcId)
         }
+        break
       }
-      if (request.action.kind === 'steer') agent.steer(message)
+      case 'steer':
+        agent.inbox.remove(request.itemId)
+        agent.steer(message)
+        break
+      /* v8 ignore next 2 -- closed-union exhaustiveness guard */
+      default:
+        assertNever(request.action, 'queue action')
     }
     return { accepted: true }
   }
@@ -593,8 +608,7 @@ function imageInEvent(
     if (found !== undefined) return found
   }
   if (event.type === 'assistant/message' || event.type === 'assistant/attempt') {
-    for (const { chunk } of expandAssistantStream(event.data.stream)) {
-      if (chunk.type !== 'block-end') continue
+    for (const chunk of assistantStreamChunks(event.data.stream, 'block-end')) {
       const found = imageBlockIn([chunk.block], match)
       if (found !== undefined) return found
     }

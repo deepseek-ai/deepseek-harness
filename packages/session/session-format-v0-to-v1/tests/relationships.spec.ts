@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { SessionFormatUnsupportedMigrationError } from '@deepseek-ai/dsh-session-format'
 import {
-  releasedV0SessionFormatCodec,
-  releasedV1SessionFormatCodec,
-  assertReleasedV1Artifact,
-  sessionFormatV0ToV1,
+  assertReleasedArtifactRelationships,
 } from '../src/index.ts'
+import { restoreV0ToV1, restoreV1 } from '../src/testing/restore.ts'
 
 const header = {
   type: 'session', version: 1, id: 'relationships', createdAt: 1, delegationDepth: 0,
@@ -15,9 +13,7 @@ const user = (id: string, source: object = { kind: 'user' }) => ({
 })
 
 function decode(rows: readonly unknown[], physicalHeader: unknown = header) {
-  const artifact = releasedV1SessionFormatCodec.decodeArtifact(physicalHeader, rows)
-  assertReleasedV1Artifact(artifact)
-  return artifact
+  return restoreV1(physicalHeader, rows)
 }
 
 describe('released v1 whole-artifact relationships', () => {
@@ -299,6 +295,7 @@ describe('released v1 whole-artifact relationships', () => {
     })
     expect(() => decode([...prefix, retry({ maxRetries: undefined })])).toThrow()
     expect(() => decode([...prefix, retry({ retry: 2, maxRetries: 1 })])).toThrow()
+    expect(() => decode([...prefix, retry({ turn: 2 })])).toThrow(/current turn/)
     expect(() => decode([...prefix, retry({ provider: 'q' })])).toThrow(/provider/)
     expect(() => decode([...prefix, retry({ failure: { message: 'x', code: 'X', status: 99 } })])).toThrow(/status/)
     expect(() => decode([...prefix, retry({ delayMs: -0.5 })])).toThrow(/non-negative/)
@@ -307,6 +304,25 @@ describe('released v1 whole-artifact relationships', () => {
     expect(decode([...prefix, retry({ delayMs: 1.5 })]).events).toHaveLength(4)
     expect(decode([...prefix, retry({ failure: { message: 'x', code: 'X', providerRetryAfterMs: 1.5 } })]).events)
       .toHaveLength(4)
+  })
+
+  it('accepts a legacy retry scheduled immediately after its step closes', () => {
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      { type: 'request/header', seq: 2, time: 3, data: { header: { config: { provider: 'p', model: 'm' } }, reason: 'initial' } },
+      { type: 'step/end', seq: 3, time: 4, data: { turn: 1, step: 1 } },
+      {
+        type: 'llm/retry', seq: 4, time: 5,
+        data: {
+          retryId: 'r', turn: 1, step: 1, provider: 'p', mode: 'normal', policyKey: 'k', retry: 1,
+          maxRetries: 2, delayMs: 1, failure: { message: 'retry', code: 'SERVER' },
+        },
+      },
+      { type: 'turn/end', seq: 5, time: 6, data: { turn: 1, reason: { kind: 'completed' } } },
+    ]
+
+    expect(decode(rows).events).toHaveLength(rows.length)
   })
 
   it('enforces command pairing and authoritative source-event rules', () => {
@@ -366,7 +382,9 @@ describe('released v1 whole-artifact relationships', () => {
     }
     const decoded = decode([...prefix, inertV0])
     expect(decoded.events[1]).toEqual(inertV0)
-    expect(() => { sessionFormatV0ToV1.validateTarget(decoded) }).not.toThrow()
+    expect(() => {
+      assertReleasedArtifactRelationships(decoded, { legacyInterruptedTurnRestart: true })
+    }).not.toThrow()
   })
 
   it('validates versioned subagent descriptors by source/current policy', () => {
@@ -376,7 +394,7 @@ describe('released v1 whole-artifact relationships', () => {
     }
     expect(decode([future]).events).toEqual([future])
     const v0Header = { ...header, version: 0 }
-    expect(() => sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(v0Header, [future])))
+    expect(() => restoreV0ToV1(v0Header, [future]))
       .toThrow(SessionFormatUnsupportedMigrationError)
   })
 
@@ -465,8 +483,28 @@ describe('released v1 whole-artifact relationships', () => {
         data: { sessionId: 'wrong', throughSeq: 0 },
       },
     ]
-    expect(() => sessionFormatV0ToV1.migrate(releasedV0SessionFormatCodec.decodeArtifact(v0, rows)))
+    expect(() => restoreV0ToV1(v0, rows))
       .toThrow(/wrong Session/)
+  })
+
+  it('accepts the released interrupted-turn restart sequence during v0 migration', () => {
+    const v0 = { ...header, version: 0 }
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      { type: 'step/end', seq: 2, time: 3, data: { turn: 1, step: 1 } },
+      {
+        type: 'agent/inbox/spliced', seq: 3, time: 4,
+        data: { target: 'next-turn', start: 0, inserted: [user('queued')] },
+      },
+      { type: 'turn/start', seq: 4, time: 5, data: { turn: 2 } },
+      { type: 'turn/end', seq: 5, time: 6, data: { turn: 2, reason: { kind: 'completed' } } },
+    ]
+
+    expect(restoreV0ToV1(v0, rows).events).toEqual(rows)
+    expect(() => restoreV0ToV1(v0, rows.map(candidate => candidate.seq === 3
+      ? { ...candidate, data: { ...candidate.data, inserted: [] } }
+      : candidate))).toThrow(/does not open expected turn/)
   })
 
   it('accepts recoverable open tails for later interrupted-turn repair', () => {
@@ -500,8 +538,7 @@ describe('released v1 whole-artifact relationships', () => {
       },
       { type: 'compaction/start', seq: 7, time: 8, data: { compactionId: 'c', turn: 1 } },
     ]
-    const recovered = releasedV0SessionFormatCodec.decodeRecoverableArtifact(v0, rows)
-    expect(sessionFormatV0ToV1.migrate(recovered).events).toHaveLength(rows.length)
+    expect(restoreV0ToV1(v0, rows, 'recoverable').events).toHaveLength(rows.length)
   })
 
   it('refuses invalid core openings, request placement, and replacement placement', () => {

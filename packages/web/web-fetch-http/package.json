@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-fetch-http",
   "description": "Anonymous public HTTP(S) fetch provider for the DeepSeek Harness web capability seam (ctx.web)",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

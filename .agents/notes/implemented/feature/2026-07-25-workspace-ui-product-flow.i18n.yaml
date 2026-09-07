@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-07-25-workspace-ui-product-flow.md
-2026-07-25-workspace-ui-product-flow.md: 0dd58905c9f396256749cdcf5204202f3a8c9f12
-2026-07-25-workspace-ui-product-flow.zh.md: ab73e631d94baee65c74e70b75151691f16f2ca9

@@ -24,7 +24,7 @@ The cache domain's own contract is "a stale or unreadable cache costs a longer t
 | 6 | pre-v1 mainline | per-record | same as v5 | same as v5 | same |
 | 7 | current | per-record | same as v5 | + `formatVersion`; current writes also require both lineage fields | same |
 
-The only substantive v4→v5 difference is the two lineage identity fields; v6 changed only the write stamp. The `ver/seq/val` row representation is identical across these predecessor generations, and `seq` numbering did not change ([the 2026-08-31 seq/offset brands note](2026-08-31-session-sequence-and-log-offset-brands.md) pins the on-disk numbers as unchanged). v3→v4 was a layout migration with identical record content. Version 7 adds the Session format generation to the cache identity because row semantics cannot be inferred from the domain stamp.
+The only substantive v4→v5 difference is the two lineage identity fields; v6 changed only the write stamp. The `ver/seq/val` row representation is identical across these predecessor generations, and `seq` numbering did not change ([the 2026-08-31 seq/offset brands note](../../archived/architecture/2026-08-31-session-sequence-and-log-offset-brands.md) pins the on-disk numbers as unchanged). v3→v4 was a layout migration with identical record content. Version 7 adds the Session format generation to the cache identity because row semantics cannot be inferred from the domain stamp.
 
 One derived shape also exists: a v3 home that ran the v5 build once (the poisoned state) — its new tree holds documents **stamped 5 whose content is a v3 record** (no lineage fields).
 

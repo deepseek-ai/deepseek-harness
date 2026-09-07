@@ -75,7 +75,7 @@ kind: "package-reference"
 - **一个模型边界净化器。** 每个可信 `ctx.sessionQuery` 调用都经过服务边界，它保留取消并包含诊断与分类失败。
 - **不引入第二种截断格式。** 结果保持完整；通用 spill 策略负责有界内联输出。
 
-设计历史记录在[面向模型的会话查询工具笔记](../../../.agents/notes/implemented/feature/2026-07-24-model-facing-session-query-tools.zh.md)与 [session-search-not-shipped-default 笔记](../../../.agents/notes/implemented/feature/2026-08-02-session-search-not-shipped-default.zh.md)中。
+设计历史记录在[面向模型的会话查询工具笔记](../../../.agents/notes/archived/feature/2026-07-24-model-facing-session-query-tools.md)与 [session-search-not-shipped-default 笔记](../../../.agents/notes/archived/feature/2026-08-02-session-search-not-shipped-default.md)中。
 
 ### 源码地图
 
@@ -105,7 +105,7 @@ kind: "package-reference"
 - [dsh-session-query](../session-query/README.zh.md)——这些工具调用的服务。
 - [dsh-session-query-sqlite](../session-query-sqlite/README.zh.md)——两个搜索工具背后的全文后端。
 - [会话查询子系统参考](../../../docs/subsystems/session-query.zh.md)——工具之下的类型级约定。
-- [面向模型的会话查询工具](../../../.agents/notes/implemented/feature/2026-07-24-model-facing-session-query-tools.zh.md)——工作区授权、无游标结果与 spill 决策。
+- [面向模型的会话查询工具](../../../.agents/notes/archived/feature/2026-07-24-model-facing-session-query-tools.md)——工作区授权、无游标结果与 spill 决策。
 
 -----
 

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-telemetry-otel` 通过 OpenTelemetry 日志投递会话记录，是[会话遥测 seam](../session-telemetry/README.zh.md) 的后端，也是部署方唯一要加载的条目。其 `mode` 决定会话记录是跟随实时流、仅在记录反馈时释放，还是留在本地：`FULL` 把每条记录立即交给 OTel SDK，`FEEDBACK_ONLY` 在 `feedback/record` 落地时回放权威日志，`DISABLED`（默认值）不构造任何内容也不共享任何内容。上传模式会原样组合 OTel JS SDK——`LoggerProvider` → `BatchLogRecordProcessor` → OTLP/HTTP 日志导出器——并把每条记录映射到 `logger.emit()`，因此批处理、重试、排队与丢失策略都遵循 SDK。记录携带 seam 脱敏 waterfall（瀑布式事件）返回的完整事件数据，因此向可信边界之外导出的部署方要挂载自己的脱敏规则。模式、配置与导出面在前；实现内部细节放在下方可折叠的开发者章节中。
+`dsh-session-telemetry-otel` 仅在新的显式反馈后通过 OTel JS SDK 导出会话记录，适用于所有用户和提供方，包括 `deepseek-official`。`FEEDBACK_ONLY` 释放截至该反馈的权威日志前缀，包含上下文；后续记录等待下一次显式反馈。`DISABLED` 不构造传输。SDK 批处理可完成已授权的上传，无需另一次用户交互或模型调用。部署方负责脱敏规则。
 
 ## 目录
 
@@ -31,11 +31,10 @@ kind: "package-reference"
 
 | `mode` | 行为 |
 |---|---|
-| `FULL` | 每条已捕获记录都立即交给 OTel SDK，包括每条权威事件与生命周期运维记录 |
-| `FEEDBACK_ONLY` | 每个 `feedback/record` 都会回放、复制并脱敏 handoff 游标之后直至该事件的每条权威事件；后续记录等待下一个反馈事件；如果没有后续反馈，则留在本地 |
-| `DISABLED` | 默认值。不构造协调器、提供方、处理器或导出器；没有遥测记录会离开进程，`feedback/record` 会记录「不会共享任何内容」 |
+| `FEEDBACK_ONLY` | 默认值。文本反馈、评分创建或修改、备注修改和撤回释放尚未交接的前缀，截止该权威反馈事件；后续记录等待 |
+| `DISABLED` | 不构造协调器、提供方、处理器或导出器；没有遥测记录离开进程。活跃会话反馈在本地告警；冷会话修改保持静默 |
 
-程序化 TypeScript 配置使用导出的 `SessionTelemetryMode` 枚举；原始字符串字面量不可赋值。已挂载服务通过 seam 的 [`SessionTelemetrySharingStatus`](../session-telemetry/README.zh.md#the-sharing-disclosure) `sharing` 属性披露解析后的模式（`full` / `feedback-only` / `disabled`），因此 `/feedback` 的确认文本可以报告会话是否以及如何被共享——即使 `DISABLED` 也会披露 `disabled`。
+程序化 TypeScript 配置使用导出的 `SessionTelemetryMode` 枚举；原始字符串字面量不可赋值。`FULL` 会被拒绝，不是别名。[`sharing` 属性](../session-telemetry/README.zh.md#the-sharing-disclosure)报告 `feedback-only` 或 `disabled`，不代表投递回执。`/feedback` 确认文本只确认记录。
 
 ### 最小配置
 
@@ -45,7 +44,7 @@ kind: "package-reference"
 - id: sessionTelemetry-otel
   name: '@deepseek-ai/dsh-session-telemetry-otel'
   config:
-    mode: FULL                # explicit opt-in; default: DISABLED
+    mode: FEEDBACK_ONLY       # optional; defaults to FEEDBACK_ONLY
     shutdownTimeoutMillis: 3000 # optional; defaults to 3000
     exporter:                # passed verbatim to the SDK's OTLP/HTTP log exporter
       url: https://collector.example.com/v1/logs
@@ -56,12 +55,14 @@ kind: "package-reference"
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
-| `mode` | `DISABLED` | 共享策略：`FULL`、`FEEDBACK_ONLY` 或 `DISABLED` |
+| `mode` | `FEEDBACK_ONLY` | 共享策略：`FEEDBACK_ONLY` 或 `DISABLED` |
 | `exporter.url` | 上传模式必填 | 完整 OTLP 日志端点；必须能解析为 `http(s)` |
 | `exporter`、`processor` | — | 原样传给 SDK 导出器与批处理器 |
 | `shutdownTimeoutMillis` | `3,000` | SDK 完整关闭序列的外层截止时间 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-telemetry-otel)是每个受支持字段的穷尽式真源。上传授权采用显式许可，且为 fail-closed：通过直接构造传入未知模式时会在读取传输配置前失败，只有 `FULL` 接受对 `ctx.sessionTelemetry.emit()` 的直接调用，`FEEDBACK_ONLY` 只把权威日志中已存储的精确 `feedback/record` 对象视为同意。
+直接调用 `ctx.sessionTelemetry.emit()` 在任何模式下都是空操作，不能绕过反馈授权。继承的父会话反馈不授权子会话导出：子会话需要新的自身反馈。授权后的前缀包含继承的上下文。
+
+模型请求、请求头、Session 创建或接纳、恢复，以及插件挂载或 HMR（热模块替换） 均不授权捕获。仅有存储的反馈不会触发任何上传。SDK 定时刷新和关闭可以完成先前已授权的批次，但绝不捕获新记录。
 
 ### 哪些数据会离开本机
 
@@ -83,7 +84,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-后端是对 OTel JS SDK 的薄适配层：它拥有捕获模式、资源身份与一个外层关闭截止时间，其余全部原样透传。两个插桩作用域区分记录通道——ledger 记录挂在 `@deepseek-ai/dsh-session-telemetry-otel` 下，运维记录挂在 `@deepseek-ai/dsh-session-telemetry-otel/ops` 下——使接收端可以在不累加它们的情况下对运维记录告警。资源身份携带 `service.name`/`service.version`（来自 `dsh-llm` 的 `APP_IDENTITY`）以及本包的匿名 `user.id`（来自 `$DSH_HOME/.anonymous-user-id`），按导出批次携带一次，而非逐条记录。
+后端是对 OTel JS SDK 的薄适配层：它拥有反馈授权、资源身份与外层关闭截止时间。权威 ledger 记录使用 `@deepseek-ai/dsh-session-telemetry-otel` 插桩作用域；此后端不捕获运维记录。资源身份携带 `service.name`/`service.version`（来自 `dsh-llm` 的 `APP_IDENTITY`）以及匿名 `user.id`（来自 `$DSH_HOME/.anonymous-user-id`），按导出批次携带一次，而非逐条记录。
 
 ### 源码地图
 
@@ -93,11 +94,11 @@ kind: "package-reference"
 
 ### 捕获接线
 
-`FULL` 以 `live` 模式组装协调器，并放行直接服务调用；`FEEDBACK_ONLY` 以 `on-demand` 模式组装协调器，给协调器一个私有后端能力，并且仅在 `session.eventAt(event.seq) === event` 确认精确的权威反馈记录时触发 `captureSession(session, event.seq)`；`DISABLED` 除了在 `feedback/record` 上发出警告外不注册任何内容。后端刻意不实现 `flush()`：常规 flush 由批处理器负责，把提示转发给 `forceFlush()` 会成为并发 flush 的唯一来源，而它与关闭排空的交互没有文档。
+后端使用包含存储历史的按需捕获。只有新的自身 `feedback/record`、`feedback/message-put` 或 `feedback/message-delete` 事件触发活跃会话捕获，并以该事件为上限。冷会话 `feedback/committed` 通知提供已提交的权威快照，不发布存活 Session 或 Agent。同对象交接游标抑制重复捕获。后端不实现 `flush()`；SDK 负责批处理和关闭排空。
 
 ### 字段映射
 
-每条 seam 记录映射为一条 SDK 日志记录：`time` 与 `severity` 变为 SDK 的时间戳与严重级别字段，`body` 与 `attributes` 原样照搬；确切字段映射见 [`src/index.ts`](src/index.ts)。在 `FULL` 中，接收端可通过缺少 `shutdown` 记录检测崩溃——该标记在会话自身 dispose（资源释放）或应用关闭时发出，标记之后出现更多事件说明遥测发生了重载。在 `FEEDBACK_ONLY` 中，已释放的前缀通常不包含随后的 `shutdown` 标记，因此缺少该标记不是崩溃信号。
+每条遥测记录映射为一条 SDK 日志记录，携带捕获的时间戳、严重级别、正文和属性。反馈授权的是尚未交接的完整前缀，而非只有反馈载荷。
 
 </details>
 
@@ -133,7 +134,9 @@ kind: "package-reference"
 
 - **上游实验性源码树**——`@opentelemetry/sdk-logs` 从上游实验性源码树发布；SDK API 的变动只会落在本包，也仅落在本包，而 seam 约定不动。
 - **真实 collector 行为属于 SDK 导出器**——身份验证、TLS、限流及其他真实 OTLP 部署行为遵循上游 SDK，不由本包自有兼容层处理。
-- **反馈时快照**——`FEEDBACK_ONLY` 在反馈前不保留遥测自有副本；记录反馈时读取并脱敏当前的权威日志，因此反馈前崩溃时什么都不上传，反馈前的策略变更会影响该次回放的导出内容。
+- **尽力交接**——新冷快照以及重启后的新反馈提交可能重复前缀；接收方按 Session id、格式版本和事件 seq 去重。没有持久化 outbox、投递水位、自动重试承诺或采集端接受保证。OTel 与需显式启用的 DeepSeek API 路径可能重叠。撤回导出删除事件，不是远端擦除。
+
+- **后端可用性**——本插件禁用或卸载期间提交的反馈会记录在本地，但恢复插件不会自动重放。捕获要求订阅方保持挂载直到观察到提交；在冷写入尚未完成时卸载，可能错过其 flush 后通知。
 
 <a id="dev-note"></a>
 ### 开发备注

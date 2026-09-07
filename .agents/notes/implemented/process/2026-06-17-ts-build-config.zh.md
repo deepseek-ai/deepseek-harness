@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-06-17-ts-build-config.md) | 中文
 
-> 根项目拓扑由一个 solution 根文件统辖两个 aggregate program；见 [solution 根文件 Agent Note](2026-07-22-tsconfig-solution-root-two-aggregates.zh.md)。Host 生成 Remote 约定后再编译 Client 的当前命令顺序见 [API Remotes 构建 Agent Note](2026-08-08-api-remotes-generated-contract-build.zh.md)。本文确定的 tsc-first 职责保持不变。
+> 根项目拓扑由一个 solution 根文件统辖两个 aggregate program；见 [solution 根文件 Agent Note](../../archived/process/2026-07-22-tsconfig-solution-root-two-aggregates.md)。Host 生成 Remote 约定后再编译 Client 的当前命令顺序见 [API Remotes 构建 Agent Note](../../archived/process/2026-08-08-api-remotes-generated-contract-build.md)。本文确定的 tsc-first 职责保持不变。
 
 ## 问题
 

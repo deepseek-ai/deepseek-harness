@@ -83,7 +83,6 @@ kind: "package-reference"
 - [工具包](../tool-cordis/README.zh.md)——运行请求到达本页的模型侧工具。
 - [UI 包](../ui-cordis/README.zh.md)——操作这个面的面板与卡片。
 - [extensions 子系统](../../../docs/subsystems/extensions.zh.md)——生成的 `ctx.dynamicCordisRunner` API 与 `cordis/*` 事件。
-- [动态客户端渲染与附件归属 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-17-dynamic-client-render-and-attachment-ownership.zh.md)——浏览器插件如何拥有自己的渲染与 CSS。
 - [客户端外壳与动态包 Agent Note](../../../.agents/notes/implemented/architecture/2026-08-15-client-shells-and-dynamic-packages.zh.md)——浏览器半的包归属与构建面。
 
 -----

@@ -224,7 +224,7 @@ describe('Trajectory conversation Definitions', () => {
     }])
   })
 
-  it('folds packed Assistant runs to the same Trajectory state as scalar deltas', () => {
+  it('uses live Assistant deltas without replaying settled embedded streams', () => {
     const runningHistory = [
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
@@ -267,29 +267,20 @@ describe('Trajectory conversation Definitions', () => {
     if (runningAttempt?.type !== 'assistant/attempt') throw new Error('expected packed running attempt')
     expect(runningAttempt.data.stream.length).toBeGreaterThan(0)
     const runningPacked = snapshot(assembler(packedHistory))
-    expect(runningPacked).toEqual(runningScalar)
-    expect(runningPacked.partial?.blocks).toEqual([
+    expect(runningScalar.partial?.blocks).toEqual([
       { kind: 'text', text: '  answer' },
       { kind: 'reasoning', text: 'thinking' },
       { kind: 'tool-call', callId: 'call-1', name: '', argsRaw: '{"x":1}' },
     ])
+    expect(runningPacked.partial).toBeNull()
 
     const partialHistory = [
       ...runningHistory.slice(2),
       at(12, 'step/end', { turn: 1, step: 1 }),
     ]
-    const partialScalar = snapshot(assembler(partialHistory))
     const partialPacked = snapshot(assembler(packedInputs(partialHistory)))
-    expect(partialPacked).toEqual(partialScalar)
-    expect(partialPacked.eventNodes).toMatchObject([{
-      kind: 'assistant',
-      interrupted: true,
-      blocks: [
-        { kind: 'text', text: '  answer' },
-        { kind: 'reasoning', text: 'thinking' },
-        { kind: 'tool-call', callId: 'call-1', name: '', argsRaw: '{"x":1}' },
-      ],
-    }])
+    expect(partialPacked.partial).toBeNull()
+    expect(partialPacked.eventNodes).toEqual([])
 
     const finalizedHistory = [
       at(20, 'turn/start', { turn: 2 }),
@@ -325,20 +316,18 @@ describe('Trajectory conversation Definitions', () => {
       }),
       at(31, 'step/end', { turn: 2, step: 1 }),
     ]
-    const finalizedScalar = snapshot(assembler(finalizedHistory))
     const finalizedInputs = packedInputs(finalizedHistory)
     expect(finalizedInputs.filter(input => input.event.type === 'assistant/attempt')).toHaveLength(1)
     const finalizedMessage = finalizedInputs.find(input => input.event.type === 'assistant/message')?.event
     if (finalizedMessage?.type !== 'assistant/message') throw new Error('expected packed final message')
     expect(finalizedMessage.data.stream.length).toBeGreaterThan(0)
     const finalizedPacked = snapshot(assembler(finalizedInputs))
-    expect(finalizedPacked).toEqual(finalizedScalar)
     expect(finalizedPacked.eventNodes.find(node => node.kind === 'assistant')).toMatchObject({
-      timing: { firstTokenTime: 3_000 },
+      blocks: [{ kind: 'text', text: 'done' }],
+      timing: { firstTokenTime: null },
     })
     expect(finalizedPacked.requests).toMatchObject([{
       purpose: 'assistant',
-      usage: { inputTokens: 10, outputTokens: 3 },
       retry: 1,
     }])
 
@@ -358,15 +347,14 @@ describe('Trajectory conversation Definitions', () => {
         },
       }),
     ]
-    const namedToolScalar = snapshot(assembler(namedToolHistory))
     const namedToolInputs = packedInputs(namedToolHistory)
     const namedToolMessage = namedToolInputs.find(input => input.event.type === 'assistant/message')?.event
     if (namedToolMessage?.type !== 'assistant/message') throw new Error('expected packed named-tool message')
     expect(namedToolMessage.data.stream.length).toBeGreaterThan(0)
     const namedToolPacked = snapshot(assembler(namedToolInputs))
-    expect(namedToolPacked).toEqual(namedToolScalar)
     expect(namedToolPacked.eventNodes.find(node => node.kind === 'assistant')).toMatchObject({
-      timing: { firstTokenTime: 4_000 },
+      blocks: [{ kind: 'tool-call', callId: 'call-2', name: 'read', argsRaw: '' }],
+      timing: { firstTokenTime: null },
     })
   })
 

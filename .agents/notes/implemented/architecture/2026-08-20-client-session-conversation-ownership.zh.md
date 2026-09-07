@@ -302,7 +302,7 @@ Draft 与输入状态属于 Conversation UI，不进入 Session snapshot。Queue
 
 Chat activity 只由可见且非 command 的 Chat Node 激活。普通 command-only history 保持 Hero，`/goal` 的 `command-input` Node 激活 fresh Conversation。
 
-历史图片 cache 已移入 `ui-conversation`（`ctx.uiConversation.imageUrl`），Chat 与 Trajectory 对同一会话附件共享一次授权读取和一个浏览器 URL（[Trajectory 持久化图片附件](../feature/2026-08-24-trajectory-image-attachments.zh.md)）；Draft 图片仍属于 Conversation input。
+历史图片 cache 已移入 `ui-conversation`（`ctx.uiConversation.imageUrl`），Chat 与 Trajectory 对同一会话附件共享一次授权读取和一个浏览器 URL（[Trajectory 持久化图片附件](../../archived/feature/2026-08-24-trajectory-image-attachments.md)）；Draft 图片仍属于 Conversation input。
 
 ### Trajectory owner
 

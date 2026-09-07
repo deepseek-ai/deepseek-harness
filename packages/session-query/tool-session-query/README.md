@@ -75,7 +75,7 @@ The consumer is built on one separation and three commitments:
 - **One model-boundary sanitizer.** Every trusted `ctx.sessionQuery` call goes through the service boundary, which preserves cancellation and contains diagnostic and classification failures.
 - **No second truncation format.** Results stay complete; the generic spill policy owns bounded inline output.
 
-The design history lives in the [model-facing session query tools note](../../../.agents/notes/implemented/feature/2026-07-24-model-facing-session-query-tools.md) and the [session-search-not-shipped-default note](../../../.agents/notes/implemented/feature/2026-08-02-session-search-not-shipped-default.md).
+The design history lives in the [model-facing session query tools note](../../../.agents/notes/archived/feature/2026-07-24-model-facing-session-query-tools.md) and the [session-search-not-shipped-default note](../../../.agents/notes/archived/feature/2026-08-02-session-search-not-shipped-default.md).
 
 ### Source map
 
@@ -105,7 +105,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [dsh-session-query](../session-query/README.md) — the service these tools call.
 - [dsh-session-query-sqlite](../session-query-sqlite/README.md) — the full-text backend behind the two search tools.
 - [Session Query subsystem reference](../../../docs/subsystems/session-query.md) — the type-level contract under the tools.
-- [Model-facing session query tools](../../../.agents/notes/implemented/feature/2026-07-24-model-facing-session-query-tools.md) — workspace authority, cursor-free results, and spill decisions.
+- [Model-facing session query tools](../../../.agents/notes/archived/feature/2026-07-24-model-facing-session-query-tools.md) — workspace authority, cursor-free results, and spill decisions.
 
 -----
 

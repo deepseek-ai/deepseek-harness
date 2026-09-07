@@ -74,7 +74,7 @@ web GUI 宿主通过一份约定让操作者选择工作区目录：一个只提
 
 当 seam 约定不够用时阅读以下内容：先看决策记录，再看组合它的两个后端与自适应选择器。
 
-- [目录选择能力 seam 决策](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.zh.md)——设计依据、`ctx.fs` 切分与策略裁决。
+- [目录选择能力 seam 决策](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md)——设计依据、`ctx.fs` 切分与策略裁决。
 - [原生后端](../directory-picker-native/README.zh.md)——OS 选择器交互及其平台工具。
 - [浏览后端](../directory-picker-browse/README.zh.md)——面向远程客户端的应用内列举与创建交互。
 - [自适应选择器](../directory-picker-auto/README.zh.md)——两个后端之间的启动时判定。

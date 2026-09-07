@@ -46,5 +46,5 @@ The message and helper unit tests pin immediate identity, detachment, deep immut
 
 ## Related
 
-- [Unified agent delivery routing and coalesced injected context](2026-07-22-unified-send-and-coalesced-user-messages.md) — this note supersedes its input-representation and agent-assigned-id details while retaining its routing decision.
+- [Unified agent delivery routing and coalesced injected context](../../archived/architecture/2026-07-22-unified-send-and-coalesced-user-messages.md) — this note supersedes its input-representation and agent-assigned-id details while retaining its routing decision.
 - [Reconstructable requests](2026-07-05-reconstructable-requests.md) — the session log remains the authority for every model-visible input.

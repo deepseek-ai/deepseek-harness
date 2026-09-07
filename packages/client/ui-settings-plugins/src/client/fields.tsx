@@ -6,6 +6,7 @@
  * card's save is the single point where a draft becomes a document mutation.
  */
 
+import { Tag } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './fields.module.css'
 
 /** What every field control needs regardless of its value type. */
@@ -56,7 +57,7 @@ export function ValueField(props: FieldProps & {
         {props.overridden
           ? (
             <span className={css.badges}>
-              <span className={css.badge}>{props.overriddenLabel}</span>
+              <Tag tone="neutral">{props.overriddenLabel}</Tag>
               <button
                 type="button"
                 className={css.reset}
@@ -105,7 +106,7 @@ export function SecretField(props: Pick<FieldProps, 'id' | 'label' | 'hint' | 't
       <div className={css.head}>
         <label className={css.label} htmlFor={props.id}>{props.label}</label>
         <span className={css.badges}>
-          <span className={props.configured ? css.badge : css.badgeMuted}>{props.stateLabel}</span>
+          <Tag tone={props.configured ? 'neutral' : 'quiet'}>{props.stateLabel}</Tag>
         </span>
       </div>
       <input

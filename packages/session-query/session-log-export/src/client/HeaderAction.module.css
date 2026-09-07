@@ -2,18 +2,17 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 111px;
-  height: 32px;
-  padding: 6px 12px;
-  gap: 4px;
+  height: 26px;
+  padding: 5px 10px;
+  gap: 5px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 18px;
+  border-radius: 13px;
   color: var(--dsw-alias-label-primary);
   background: transparent;
   font-family: var(--dsw-font-family);
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 400;
-  line-height: 20px;
+  line-height: 16px;
   cursor: pointer;
 }
 
@@ -29,6 +28,10 @@
 .sessionLogButton span,
 .sessionLogButton svg {
   flex: none;
+}
+
+.sessionLogButton svg {
+  color: var(--dsw-alias-label-secondary);
 }
 
 .sessionLogButton span {

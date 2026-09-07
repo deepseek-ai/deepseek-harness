@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/simplification/2026-06-20-public-agent-stop-api.md
+2026-06-20-public-agent-stop-api.md: 07666e354cfc316e45ab9fd019929b92bf57f608
+2026-06-20-public-agent-stop-api.zh.md: a80ae4ae0bf5e6f9aa78ce2b4ccd87b995adec27

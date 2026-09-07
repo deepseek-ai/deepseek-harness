@@ -66,7 +66,6 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 
 以下页面覆盖引擎、渲染器与组合模型。
 
-- [Slot 声明注入决策](../../../.agents/notes/implemented/architecture/2026-08-05-slot-declaration-injection.zh.md)——`ctx.slots.inject` 背后的生命周期规则。
 - [ui-renderer](../ui-renderer/README.zh.md)——实现本包安装约定的 React slot 渲染器。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——权威组合模型。
 - [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——本注册表接入的加载链与对象层。

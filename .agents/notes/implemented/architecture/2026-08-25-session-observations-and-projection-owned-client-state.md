@@ -51,7 +51,7 @@ Every owner disposes its observation. `retain()` creates another lease over the 
 
 ### Source resolution and lifetime
 
-An observation binds all returned fields to one lifecycle witness. Callers do not combine a header from corpus listing, events from persistence, and projections from a later live Session. The selected header and event prefix produce the cursor and projection snapshot together.
+An observation binds all returned fields to one lifecycle witness. Callers do not combine a header from corpus listing, events from persistence, and projections from a later live Session. The selected header and event prefix produce the cursor and projection snapshot together. A live observation fixes its cut as the log length at read time and materializes `events` on the first access; the log only appends, so that prefix is identical however late a consumer reads it, and a consumer that needs only the header, cursor, or projections never copies the log.
 
 Live preference is checked both before and after a cold borrow. The second check closes the race in which an Agent attaches while persistence is loading. If persistence itself reports that a live source won but that source has already detached by the time SessionQuery examines it, resolution restarts instead of publishing an unowned reference.
 
@@ -164,10 +164,10 @@ These rules apply to new Session-derived Client state even when a direct event s
 
 ### Relationship to existing decisions
 
-- [Reusable Session preparation](2026-08-05-session-preparation.md) owns cold materialization, repair, reservation, and publication. Observation adds a shared read lease over that prepared object; it does not move preparation into SessionQuery.
+- [Reusable Session preparation](../../archived/architecture/2026-08-05-session-preparation.md) owns cold materialization, repair, reservation, and publication. Observation adds a shared read lease over that prepared object; it does not move preparation into SessionQuery.
 - [Session history and Remote event transport](2026-08-18-session-history-and-event-transport.md) owns stream generations and replacement semantics. This decision supplies the exact snapshot that opens each journal generation.
-- [Projection state and Client views](2026-08-19-session-projection-state-and-client-views.md) owns the distinction between Host fold state and Client values. This decision governs where those values are consumed and how partial list hints differ from a complete baseline.
-- [Subagent identity projection](2026-08-06-subagent-list-identity-projection.md) continues to own descriptor folding, the serializable `null` sentinel, and the own-suffix sequence check. This decision supersedes only its independent corpus merge and direct cold-inspection path: listing now uses SessionQuery's corpus and observation.
+- [Projection state and Client views](../../archived/architecture/2026-08-19-session-projection-state-and-client-views.md) owns the distinction between Host fold state and Client values. This decision governs where those values are consumed and how partial list hints differ from a complete baseline.
+- [Subagent identity projection](../../archived/architecture/2026-08-06-subagent-list-identity-projection.md) continues to own descriptor folding, the serializable `null` sentinel, and the own-suffix sequence check. This decision supersedes only its independent corpus merge and direct cold-inspection path: listing now uses SessionQuery's corpus and observation.
 - The broader [session projection and command-log proposal](../../proposed/architecture/2026-07-27-session-projection-and-command-log.md) remains proposed for the portions not represented by shipped code. This decision records the shipped observation and Client-ownership subset.
 
 ## Verification

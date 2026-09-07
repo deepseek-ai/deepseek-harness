@@ -36,7 +36,7 @@ ctx.slots.register({
 
 对等原则：**声明子 slot 的 entry 独占渲染这些子 slot 的权力**，全部在 register 时确定（配置错误会在装载时明确失败；渲染热路径不再校验）。装载即炸的情形：第二个 entry 声明已被声明的 slot；向未声明的 slot register；同一个 store 句柄挂到两个 scope 之下；chain 注册缺 `select`。
 
-激活顺序独立于声明条目的贡献方使用 `ctx.slots.inject(key, callback)`，并让直接调用 `register()` 继续大声失败。声明、贡献方、替换与失败各自的生命周期由 [slot 声明注入决策](2026-08-05-slot-declaration-injection.zh.md) 规定。
+激活顺序独立于声明条目的贡献方使用 `ctx.slots.inject(key, callback)`，并让直接调用 `register()` 继续大声失败。声明、贡献方、替换与失败各自的生命周期由 [slot 声明注入决策](../../archived/architecture/2026-08-05-slot-declaration-injection.md) 规定。
 
 `SlotMap` 声明合并仍是类型权威，且 entry 只声明自己的轴加 **owner 份额**——注册方注入的 props 永不进入全局表（「谁注入的，类型归谁」）。
 

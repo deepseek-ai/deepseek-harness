@@ -84,7 +84,7 @@ pnpm dsh plugin --profile web add ./packages/experimental/agent-team-web-profile
 <a id="known-limitations-and-deferred-work"></a>
 
 - **有序组合**——`dsh-base`、`dsh-web-app`、`dsh-experimental-agent-team-profile` 与本包必须保持这个顺序。
-- **Preset-scoped 旧控制项**——稳定 Web preset 仍会在 preset scope 内挂载 continuable Subagent 控制项。顶层 Host profile override 不会替换这些 scoped registration，因此在 Web 获得 Team-aware preset 前，Team roster 与旧 child 控制项可能同时出现。[Web Agent Teams 决策](../../../.agents/notes/implemented/feature/2026-08-06-agent-teams-web.zh.md)记录了这项暂缓的 composition 工作。
+- **Preset-scoped 旧控制项**——稳定 Web preset 仍会在 preset scope 内挂载 continuable Subagent 控制项。顶层 Host profile override 不会替换这些 scoped registration，因此在 Web 获得 Team-aware preset 前，Team roster 与旧 child 控制项可能同时出现。[Web Agent Teams 决策](../../../.agents/notes/archived/feature/2026-08-06-agent-teams-web.md)记录了这项暂缓的 composition 工作。
 - **仅限源码 checkout**——正式 CLI、Web、npm 与 Python 发布产物都不包含这个私有包。
 
 <a id="dev-note"></a>

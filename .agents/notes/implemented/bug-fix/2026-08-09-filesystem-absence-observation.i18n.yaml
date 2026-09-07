@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-09-filesystem-absence-observation.md
-2026-08-09-filesystem-absence-observation.md: 40338c4806607b262b93222b4a73a34538414e51
-2026-08-09-filesystem-absence-observation.zh.md: 4544424800844e61f839d5af1f92cef3b3655a27

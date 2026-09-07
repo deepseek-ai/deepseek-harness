@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/simplification/2026-08-28-remove-hero-input-glow.md
+2026-08-28-remove-hero-input-glow.md: 43ef64cabca2dd07c4ac5a65f8098823b3291dfc
+2026-08-28-remove-hero-input-glow.zh.md: 9ae9e1ac83326ee09a545a8d5b0057e2e1b84330

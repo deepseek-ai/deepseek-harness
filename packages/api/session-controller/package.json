@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-session-controller",
   "description": "Session Remote commands, cold reads, and live control transport",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },
@@ -99,6 +99,7 @@
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/dsh-typert-registry": "workspace:^",
     "@deepseek-ai/dsh-util-time": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:^",
     "@deepseek-ai/dsh-workspace": "workspace:^"
   },
@@ -117,6 +118,8 @@
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-default-model": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop": "workspace:^",
+    "@deepseek-ai/dsh-agent-loop-testkit": "workspace:^",
     "@deepseek-ai/dsh-agent-presets": "workspace:^",
     "@deepseek-ai/dsh-api-gateway": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
@@ -145,6 +148,7 @@
     "@deepseek-ai/dsh-typert-registry": "workspace:^",
     "@deepseek-ai/dsh-util-crypto": "workspace:^",
     "@deepseek-ai/dsh-util-time": "workspace:^",
+    "@deepseek-ai/dsh-util-values": "workspace:^",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:^",
     "@deepseek-ai/dsh-workspace": "workspace:^"
   }

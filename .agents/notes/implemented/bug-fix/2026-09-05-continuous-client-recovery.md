@@ -16,7 +16,7 @@ Retry caps grow from 500ms through 1s, 2s, 4s, and 8s to 10s, with the existing 
 
 The Host Connection plugin validates `recovery` in its configuration and injects the resolved, non-secret timing into each page through `webserver/index-inject`. The Client validates that bootstrap input before providing Connection; direct loop options may override it. Timer values must be positive integers within the browser timer range, and the backoff factor must be finite and at least one. The shared resolver explicitly rejects `NaN`, which range comparisons alone cannot exclude. A factor of one selects continuous fixed-cap retries. Changes to Host timing apply to subsequently loaded pages.
 
-The Settings indicator labels active recovery **Reconnecting** and keeps **Reconnect now** available. This decision supersedes the terminal retry policy in [Web connection recovery control](../feature/2026-08-28-web-connection-recovery-control.md). That note still owns manual recovery, browser offline suspension, the single-scheduler rule, and indicator presentation. A fresh `$events` ready frame alone establishes connectivity; domain streams retain their own baseline and cursor recovery.
+The Settings indicator labels active recovery **Reconnecting** and keeps **Reconnect now** available. This decision supersedes the terminal retry policy in [Web connection recovery control](../../archived/feature/2026-08-28-web-connection-recovery-control.md). That note still owns manual recovery, browser offline suspension, the single-scheduler rule, and indicator presentation. A fresh `$events` ready frame alone establishes connectivity; domain streams retain their own baseline and cursor recovery.
 
 ## Alternatives considered
 

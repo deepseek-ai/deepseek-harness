@@ -40,4 +40,4 @@ landstrip 评估在实现前已被否决（未经实战检验；自建 launcher 
 
 ## Related
 
-[pwsh 执行器决策](2026-08-01-pwsh-tool-and-executor.zh.md)拥有本档所消费的 pwsh-sandbox/tool-pwsh 方言划分。
+[pwsh 执行器决策](../../archived/feature/2026-08-01-pwsh-tool-and-executor.md)拥有本档所消费的 pwsh-sandbox/tool-pwsh 方言划分。

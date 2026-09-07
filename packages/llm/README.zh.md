@@ -41,7 +41,6 @@ llm 组提供 harness 的模型调用能力：一个提供方无关的服务，�
 - [Token 计量子系统](../../docs/subsystems/token-meter.zh.md)——`ctx.tokenMeter` 背后的测量语义。
 - [孪生 LLM 适配器](../../.agents/notes/implemented/architecture/2026-06-13-twin-llm-adapters.zh.md)——为什么 DeepSeek 路由交付两个结构不同的适配器。
 - [按路由的模型上下文](../../.agents/notes/implemented/architecture/2026-07-20-routed-model-context-and-compaction-policy.zh.md)——loop 如何路由模型请求并压缩上下文。
-- [回放 token 计量服务](../../.agents/notes/implemented/architecture/2026-07-15-replay-token-meter-service.zh.md)——具备回放感知的计量背后的设计。
 
 <a id="dev-note"></a>
 ## 开发备注

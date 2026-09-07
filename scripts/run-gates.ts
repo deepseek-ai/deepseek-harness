@@ -27,6 +27,7 @@ export type Mode =
   | 'ci-static'
   | 'ci-lint-contracts-ready'
   | 'ci-coverage'
+  | 'ci-bench'
   | 'ci-snapshot'
   | 'ci-artifacts'
   | 'ci-consumers'
@@ -137,6 +138,7 @@ function parseMode(raw: string | undefined): Mode {
     case 'ci-static':
     case 'ci-lint-contracts-ready':
     case 'ci-coverage':
+    case 'ci-bench':
     case 'ci-snapshot':
     case 'ci-artifacts':
     case 'ci-consumers':
@@ -151,7 +153,7 @@ function parseMode(raw: string | undefined): Mode {
       return raw
     default:
       throw new Error(
-        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational | node-compat | check-all | hygiene | doc-sync | doc-quick, got ${JSON.stringify(raw)}.`,
+        `run-gates: expected mode ci-primary | ci-linux-primary | ci-static | ci-lint-contracts-ready | ci-coverage | ci-bench | ci-snapshot | ci-artifacts | ci-consumers | ci-windows-blocking | ci-windows-complete | ci-windows-observational | node-compat | check-all | hygiene | doc-sync | doc-quick, got ${JSON.stringify(raw)}.`,
       )
   }
 }
@@ -242,6 +244,8 @@ export function gatesForMode(selected: Mode): Gate[] {
       ]
     case 'ci-coverage':
       return coverageGates()
+    case 'ci-bench':
+      return [pnpmScript('bench', 'test:bench', { label: 'performance benchmarks' })]
     case 'ci-snapshot':
       return [ciBuildGate(), snapshotGate()]
     case 'ci-artifacts':
@@ -778,6 +782,7 @@ function builtBinSmokeGate(needs: string[] = ['build']): Gate {
     'apps/cli/tests/built-bin.e2e.ts',
     'packages/host/directory-picker-native/tests/built-worker.e2e.ts',
     'packages/sdk/server/tests/built-scope-carrier.e2e.ts',
+    'packages/subprocess/subprocess-local/tests/spawn-runner-built.e2e.ts',
     'packages/subagent/subagent-codex/tests/loader-composition.e2e.ts',
     'packages/subagent/subagent-claude-code/tests/loader-composition.e2e.ts',
     'packages/api/remotes/tests/built-lib.e2e.ts',
@@ -787,6 +792,7 @@ function builtBinSmokeGate(needs: string[] = ['build']): Gate {
     // unbuilt, so these files self-skip there.
     'packages/workflow/workflow-worker-thread/tests/built-worker.e2e.ts',
     'packages/code-runtime/code-runtime-worker-thread/tests/built-lib.e2e.ts',
+    'packages/session/session-persistence-jsonl/tests/built-migration-worker.e2e.ts',
     'packages/lsp/lsp-stdio/tests/built-lib.e2e.ts',
   ], {
     label: 'built-bin smoke',

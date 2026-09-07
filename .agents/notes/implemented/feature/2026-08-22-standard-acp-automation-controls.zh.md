@@ -1,6 +1,6 @@
-# Agent Note：标准 ACP v1 自动化控制
+# Agent Note: 标准 ACP v1 自动化控制
 
-状态：已实现
+Status: implemented
 
 [English](2026-08-22-standard-acp-automation-controls.md) | 中文
 

@@ -192,7 +192,7 @@ describe('Session', () => {
       .toEqual([unrelatedPrimitiveData])
   })
 
-  it('rejects malformed current Assistant streams at the restore boundary', () => {
+  it('validates Assistant settlement fields without replaying embedded streams', () => {
     const id = SessionId('invalid-restored-assistant-stream')
     const header = {
       version: SESSION_FORMAT_VERSION,
@@ -201,18 +201,30 @@ describe('Session', () => {
       isSeeded: false,
       delegationDepth: 0,
     } as const
-    const invalidAttempt = {
-      type: 'assistant/attempt',
-      seq: 0,
-      time: 1,
-      data: {
-        turn: 1,
-        step: 1,
-        stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [1], texts: ['only'] }],
-      },
-    } as unknown as SessionEvent
-    expect(() => Session.fromRestore(id, [invalidAttempt], header, SessionLogOffset(0)))
-      .toThrow(/invalid embedded stream/)
+    for (const data of [
+      null,
+      { turn: '1', step: 1, stream: [] },
+      { turn: -1, step: 1, stream: [] },
+      { turn: -0, step: 1, stream: [] },
+      { turn: 1.5, step: 1, stream: [] },
+      { turn: 1, step: '1', stream: [] },
+      { turn: 1, step: -1, stream: [] },
+      { turn: 1, step: -0, stream: [] },
+      { turn: 1, step: 1.5, stream: [] },
+      { turn: 1, step: 1, stream: null },
+    ]) {
+      const invalidAttempt = {
+        type: 'assistant/attempt', seq: 0, time: 1, data,
+      } as unknown as SessionEvent
+      expect(() => Session.fromRestore(
+        id,
+        [invalidAttempt],
+        header,
+        SessionLogOffset(0),
+        'detached',
+      ))
+        .toThrow(/invalid settlement fields/)
+    }
 
     const mismatchedMessage = {
       type: 'assistant/message',
@@ -231,57 +243,15 @@ describe('Session', () => {
       },
       surfaceOp: 'append',
     } as unknown as SessionEvent
-    expect(() => Session.fromRestore(id, [mismatchedMessage], header, SessionLogOffset(0)))
-      .toThrow(/disagrees with its embedded stream/)
-
-    const mismatchedUsage = {
-      type: 'assistant/message',
-      seq: 0,
-      time: 1,
-      data: {
-        turn: 1,
-        step: 1,
-        message: {
-          id: 'usage-message',
-          role: 'assistant',
-          content: [],
-          source: { kind: 'model', provider: 'mock', model: 'mock' },
-        },
-        stream: [{
-          type: 'chunk', time: 1,
-          chunk: { type: 'usage', usage: { inputTokens: 3, outputTokens: 2 } },
-        }],
-        usage: { inputTokens: 4, outputTokens: 2 },
-      },
-      surfaceOp: 'append',
-    } as unknown as SessionEvent
-    expect(() => Session.fromRestore(id, [mismatchedUsage], header, SessionLogOffset(0)))
-      .toThrow(/usage disagrees with its embedded stream/)
-
-    const mismatchedReplayState = {
-      type: 'assistant/message',
-      seq: 0,
-      time: 1,
-      data: {
-        turn: 1,
-        step: 1,
-        message: {
-          id: 'replay-state-message',
-          role: 'assistant',
-          content: [],
-          source: {
-            kind: 'model', provider: 'mock', model: 'mock', replayState: { response: { id: 'stored' } },
-          },
-        },
-        stream: [{
-          type: 'chunk', time: 1,
-          chunk: { type: 'finish', reason: { kind: 'stop' }, replayState: { response: { id: 'streamed' } } },
-        }],
-      },
-      surfaceOp: 'append',
-    } as unknown as SessionEvent
-    expect(() => Session.fromRestore(id, [mismatchedReplayState], header, SessionLogOffset(0)))
-      .toThrow(/replay state disagrees with its embedded stream/)
+    const restored = Session.fromRestore(
+      id,
+      [mismatchedMessage],
+      header,
+      SessionLogOffset(0),
+      'detached',
+    )
+    expect(restored.eventAt(SessionSeq(0))).toBe(mismatchedMessage)
+    expect(Object.isFrozen(mismatchedMessage)).toBe(false)
   })
 
   it('rejects historical or malformed request-header lifecycle markers on seed/load', () => {
@@ -1044,37 +1014,6 @@ describe('Session', () => {
     expect(() => { (appendedEvent.data.content[0] as { text: string }).text = 'mutated' }).toThrow(TypeError)
   })
 
-  it('iteratively freezes deeply nested restored event data', () => {
-    const depth = 20_000
-    const data: Record<string, unknown> = {}
-    let tail = data
-    for (let index = 0; index < depth; index += 1) {
-      const child: Record<string, unknown> = {}
-      tail['child'] = child
-      tail = child
-    }
-    const event = {
-      type: 'test/deep-restore', seq: 0, time: 1, data,
-    } as unknown as SessionEvent
-
-    expect(() => Session.fromRestore(SessionId('deep-restore'), [event], {
-      version: SESSION_FORMAT_VERSION,
-      id: SessionId('deep-restore'),
-      createdAt: 1,
-      isSeeded: false,
-    }, SessionLogOffset(0))).not.toThrow()
-
-    let current: unknown = event
-    let frozenNodes = 0
-    for (let index = 0; index <= depth + 1; index += 1) {
-      if (!Object.isFrozen(current)) break
-      frozenNodes += 1
-      current = (current as Record<string, unknown>)['data']
-        ?? (current as Record<string, unknown>)['child']
-    }
-    expect(frozenNodes).toBe(depth + 2)
-  })
-
   it('returns cached frozen event-array snapshots that do not grow after append', () => {
     const session = Session.create(SessionId('events-snapshot'))
     session.append('turn/start', { turn: 1 })
@@ -1150,7 +1089,13 @@ describe('Session', () => {
 
     expect(() => Session.create(SessionId('header-invalid'), undefined, new ExoticHeader()))
       .toThrow(/not losslessly JSON-serializable/)
-    expect(() => Session.fromRestore(SessionId('header-invalid'), [], new ExoticHeader(), SessionLogOffset(0)))
+    expect(() => Session.fromRestore(
+      SessionId('header-invalid'),
+      [],
+      new ExoticHeader(),
+      SessionLogOffset(0),
+      'detached',
+    ))
       .toThrow(/not a plain JSON record/)
     for (const header of [null, 1, []]) {
       expect(() => Session.fromRestore(
@@ -1158,6 +1103,7 @@ describe('Session', () => {
         [],
         header as unknown as SessionHeader,
         SessionLogOffset(0),
+        'detached',
       )).toThrow(/not a plain JSON record/)
     }
     expect(() => Session.create(SessionId('header-invalid'), undefined, {

@@ -36,7 +36,6 @@ preset 组提供按会话的 agent（智能体）组装：agent preset 是一个
 - [Scope 子系统](../../docs/subsystems/scope.zh.md)——scope key 与挂载用以加入 agent 的父链。
 - [系统提示词子系统](../../docs/subsystems/system-prompt.zh.md)——preset 提示词段落如何注册与组装。
 - [按会话组装 agent preset 的 Agent Note](../../.agents/notes/implemented/architecture/2026-08-03-per-session-agent-presets.zh.md)——设计理由与备选方案。
-- [按 preset 常驻挂载的 Agent Note](../../.agents/notes/implemented/architecture/2026-08-08-per-preset-standing-mounts.zh.md)——挂载为何是常驻且共享的。
 
 部署交付的 preset 位于 [`agent-presets/presets/`](agent-presets/presets)——一个 preset 一个目录，那份目录列表就是名单；在这里再列一遍只会多出一份需要同步的名单。
 

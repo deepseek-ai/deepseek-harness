@@ -302,7 +302,7 @@ It registers the `chat` target source through `ctx.uiSession.provide()`. `ChatVi
 
 Only visible non-command Chat Nodes activate Chat. Ordinary command-only history keeps the Hero visible; the `/goal` `command-input` Node activates a fresh Conversation.
 
-The historical-image cache moved to `ui-conversation` (`ctx.uiConversation.imageUrl`), so Chat and Trajectory share one authorized read and one browser URL per session attachment ([Trajectory durable image attachments](../feature/2026-08-24-trajectory-image-attachments.md)); draft images remain part of Conversation input.
+The historical-image cache moved to `ui-conversation` (`ctx.uiConversation.imageUrl`), so Chat and Trajectory share one authorized read and one browser URL per session attachment ([Trajectory durable image attachments](../../archived/feature/2026-08-24-trajectory-image-attachments.md)); draft images remain part of Conversation input.
 
 ### Trajectory owner
 

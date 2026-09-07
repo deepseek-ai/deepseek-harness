@@ -84,7 +84,7 @@ Every filesystem await races the caller's signal (`raceAbort`), so a stalled net
 Read these when the backend contract is not enough: the seam definition first, then the decision record and the native alternative.
 
 - [Directory-picker seam](../directory-picker/README.md) — the `browse` capability contract and the typed error vocabulary.
-- [Directory-picker capability seam decision](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.md) — the policy decisions behind listing and creation.
+- [Directory-picker capability seam decision](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md) — the policy decisions behind listing and creation.
 - [Native backend](../directory-picker-native/README.md) — the OS-chooser alternative for local operators.
 - [Adaptive chooser](../directory-picker-auto/README.md) — boot-time resolution between the two backends.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-host-directory-picker-browse) — every accepted config field and its source declaration.

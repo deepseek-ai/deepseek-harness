@@ -72,6 +72,8 @@ defineAcpSnapshotSuite({
 
 `normalizeSessionSnapshot` 在规范化路径并清理 request header 后，会保留完整 Session header 与事件 payload，但从已提交 fixture 中省略顶层 `seq`/`time` envelope；它还会规范化嵌入式 stream clock 与历史 packed-row 的 `seq0`/`time0` envelope。Replay 只在内存中合成顶层 envelope，而运行时持久化仍写入完整日志。多 Session 比较会先通过当前构建期静态 Session 格式目录恢复每个选定的持久化或投影 fixture，再进行身份脱敏与规范化，因此保留的 v0/v1 replay 输入与新生成的 `session.v2.jsonl` writer 输出会作为同一个 v2 logical Session 比较，且不会重写或重命名历史文件。预期日志与收集日志使用同一条严格恢复路径；来源文件名不能改变格式校验。无版本的协议适配器单元测试 fixture 不属于已发布 Session 格式语料。当前 v2 fixture 每个事件占一行；保留的 v0/v1 fixture 可以使用规范 packed row。[临时仓库迁移器](../../../scripts/migrate-packed-session-fixtures.ts)（`pnpm run migrate:packed-session-fixtures`）会改写更旧的历史布局，由其[移除提案](../../../.agents/notes/proposed/process/2026-07-26-remove-packed-session-fixture-migrator.zh.md)负责删除该迁移器。
 
+已知的快照 spill 路径会规范化为稳定的定位信息 token，包括 JSON 省略通知中带引号、使用 JSON 转义 Windows 分隔符的路径。刷新提取会保留匹配路径的序列化写法，以便进行字面替换。规范化只改变定位信息：保存字节数与省略计数仍作为比较证据。
+
 ### 录制、回放与刷新
 
 `pnpm run test:snapshot:record` 调用在线 LLM（大语言模型），并在规范具名版本文件下写入收集到的当前 generation。record 与 refresh 绝不重命名或删除已完成的 generation，即使后续运行不再产生某个 child 角色也一样；受审阅的源树整理只有在同角色存在已验证的当前替代文件后才移除前代。显式声明 `sessionFormat` 的场景在录制模式下保持只读。`pnpm run test:snapshot:refresh` 保持无密钥，运行选定的最高 replay 输入，并写入 stdout、各 pin 自有的 prompt 与工具 schema sidecar；只有 manifest 未保留历史 generation 时，才写入新鲜当前 generation 的可比较 Session 输出。每个组合 owner 把 replay patch 放在 live patch 旁；顶层 `snapshots/` 拥有 Session 驱动场景，其他预期输出留在其 package owner 旁。[`dsh-llm-replay`](../llm-replay/README.zh.md) 提供通过 `DSH_SNAPSHOT_*` 环境值选择的已记录流。

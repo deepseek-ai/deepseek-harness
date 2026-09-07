@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-07-26-pnpm-action-setup-for-symmetric-ci-caching.md
-2026-07-26-pnpm-action-setup-for-symmetric-ci-caching.md: 2519b9e8bc565790acbd02f0a01491fcc136bbe6
-2026-07-26-pnpm-action-setup-for-symmetric-ci-caching.zh.md: 2157541c4b503d4acd38073263b6b69050a239bc

@@ -1,0 +1,5 @@
+# The test-only driver changes the selection captured for the second step so
+# installModelSelection emits its durable notice before the changed request.
+- insert:
+    - id: model-switch-driver
+      name: './model-switch-driver.mjs'

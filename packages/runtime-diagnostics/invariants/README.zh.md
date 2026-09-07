@@ -97,7 +97,7 @@ ctx.plugin(SessionInvariant)
 <details>
 <summary>实现细节——点击展开</summary>
 
-本节解释注册表背后的设计；可观察行为已在[使用本包](#use-this-package)中说明。完整决策理由见[不变式服务 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.zh.md)。
+本节解释注册表背后的设计；可观察行为已在[使用本包](#use-this-package)中说明。
 
 ### 设计理念
 
@@ -128,7 +128,6 @@ ctx.plugin(SessionInvariant)
 
 - [运行时不变式子系统](../../../docs/subsystems/invariants.zh.md)——`Config`、installer、服务与配套入口约定的生成参考。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-invariants)——每个受支持配置字段及其源声明。
-- [包自有不变式服务 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-19-package-owned-invariant-service.zh.md)——检查为何放在归属者旁边，以及注册表为何拥有选择与生命周期。
 - [不变式运行时约定 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-19-package-invariant-runtime-contracts.zh.md)——运行时不变量可以断言什么，以及强制配套入口接线的机械门禁。
 - [runtime-diagnostics 组地图](../../README.zh.md)——相邻的诊断包。
 

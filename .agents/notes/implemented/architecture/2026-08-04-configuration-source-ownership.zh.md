@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-`$DSH_HOME/.env` 刚刚[变成普通环境层](2026-08-04-credentials-yaml-and-user-environment-layer.zh.md)，这使得 harness 解析面向用户的值时面对的是一个压平的 `process.env`，再也说不清某个值来自哪里。由此产生三个后果。
+`$DSH_HOME/.env` 刚刚[变成普通环境层](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md)，这使得 harness 解析面向用户的值时面对的是一个压平的 `process.env`，再也说不清某个值来自哪里。由此产生三个后果。
 
 通过 Web 页面存下的密钥仍然被用户自己 `.env` 里更旧的密钥遮蔽，因为凭据提供方是拿「环境」与自己的文件比较，而现在环境包含了那个文件。这次拆分本该消除的迁移死路，只是换了个位置。
 
@@ -28,7 +28,7 @@ explicit for this run     per-operation override, CLI argument
 ```
 
 
-settings 在 composition 之上，因为 [settings seam](2026-07-28-user-settings-seam.zh.md) 就是这么做的：插件把自己的 cordis entry config 注册为 `base` 层，用户 section 叠加其上，而 seam 无法区分某个值是 profile 的 bundle 设的，还是它的用户 patch 层或某个 `--patch` overlay 设的——它们都以 entry config 的形式抵达。产品 CLI（命令行界面）没有高于已存 settings 的手段，因此需要把某字段钉死、不被用户已存 settings 覆盖的部署方，应自带 bin 或 loader 配置树，或者干脆不挂载 settings 提供方。composition 仍然高于环境，所以 shell 里陈旧的 `DEEPSEEK_BASE_URL` 无法改写已配置的 endpoint。
+settings 在 composition 之上，因为 [settings seam](../../archived/architecture/2026-07-28-user-settings-seam.md) 就是这么做的：插件把自己的 cordis entry config 注册为 `base` 层，用户 section 叠加其上，而 seam 无法区分某个值是 profile 的 bundle 设的，还是它的用户 patch 层或某个 `--patch` overlay 设的——它们都以 entry config 的形式抵达。产品 CLI（命令行界面）没有高于已存 settings 的手段，因此需要把某字段钉死、不被用户已存 settings 覆盖的部署方，应自带 bin 或 loader 配置树，或者干脆不挂载 settings 提供方。composition 仍然高于环境，所以 shell 里陈旧的 `DEEPSEEK_BASE_URL` 无法改写已配置的 endpoint。
 
 **凭据保留一条更窄的独立顺序**，本 Note 不把它并入上表：
 

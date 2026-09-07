@@ -1182,7 +1182,7 @@ describe('dsh-tool-subagent continuable background mode', () => {
 
   /** Boot the real continuable stack without any model-facing follow-up adapter. */
   async function continuableSetup() {
-    const ctx = await projectedContext()
+    const ctx = new Context()
     await mountAgentLoopTestDependencies(ctx)
     const root = mkdtempSync(path.join(tmpdir(), 'dsh-tool-subagent-continuable-'))
     roots.push(root)

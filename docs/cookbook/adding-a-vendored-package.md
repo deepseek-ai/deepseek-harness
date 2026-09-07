@@ -2,7 +2,7 @@
 
 English | [中文](adding-a-vendored-package.zh.md)
 
-When the harness needs another upstream Cordis package (e.g. `@cordisjs/plugin-http`), it is **vendored** as pinned source under `vendor/`, not added as an npm dependency — see [the vendoring decision](../../.agents/notes/implemented/process/2026-06-11-vendor-cordis-as-source.md) for why. [vendor/README.md](../../vendor/README.md) covers *updating* an already-vendored package; this guide is the file-by-file checklist for adding a **new** one. (Verified against the existing vendored set; if it drifts, fix it here.)
+When the harness needs another upstream Cordis package (e.g. `@cordisjs/plugin-http`), it is **vendored** as pinned source under `vendor/`, not added as an npm dependency. [vendor/README.md](../../vendor/README.md) states why and covers *updating* an already-vendored package; this guide is the file-by-file checklist for adding a **new** one. (Verified against the existing vendored set; if it drifts, fix it here.)
 
 ## 1. Copy the source in
 

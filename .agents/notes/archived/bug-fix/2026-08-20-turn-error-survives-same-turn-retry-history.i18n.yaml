@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/bug-fix/2026-08-20-turn-error-survives-same-turn-retry-history.md
+2026-08-20-turn-error-survives-same-turn-retry-history.md: 4d329728740e6ee8366a4c121430fff778b0e4ff
+2026-08-20-turn-error-survives-same-turn-retry-history.zh.md: 48af846c18009a718e94d463f2a5a50bf55fae01

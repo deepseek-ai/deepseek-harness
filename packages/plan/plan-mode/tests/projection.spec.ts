@@ -22,7 +22,7 @@ interface Bench {
 async function harness(withPlanMode: boolean): Promise<Bench> {
   const ctx = new Context()
   await ctx.plugin(SessionStore)
-  await ctx.plugin(SystemPrompt, { persona: '' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: '' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(UserQuestionService)
   await ctx.plugin(AgentRegistry)
@@ -64,7 +64,7 @@ function commitPlanMode(session: Session, active: boolean, turn: number): void {
 describe('plan projection unit', () => {
   it('serves inactive/not-pending for the empty log', async () => {
     const bench = await harness(true)
-    expect(bench.values()).toEqual({ plan: { active: false, pending: false } })
+    expect(bench.values().plan).toEqual({ active: false, pending: false })
   })
 
   it('a logged /plan selection reads pending until plan/mode records it', async () => {

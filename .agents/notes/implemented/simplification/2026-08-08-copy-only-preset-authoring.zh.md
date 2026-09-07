@@ -15,7 +15,7 @@ agent-preset 设置页带着一个网页 YAML 编辑器：`agentPreset.write` �
 ## 后果
 
 - 创作两个方向都没有组装文本或路径跨越浏览器传输层；`entryListSchema`/`!!js` 的顾虑随 `assertComposition` 本身（已删除）一并消解。创作操作是 `read`/`copy`/`openDocument`/`remove`——没有一个接收文件系统目标，且 Connection 用完整 Host API 的同一会话认证它们。
-- 编辑器移除后，手改 `agent.cordis.yml` 成为唯一的组装编辑方式，因此常驻挂载层增加了以 stamp 为键的代际：`ensureStanding` 比对文件的 mtime+大小，为后续会话开启下一代际（[常驻挂载 note](../architecture/2026-08-08-per-preset-standing-mounts.zh.md)，已就地更新）。没有它，改过的文件要等进程重启才生效。
+- 编辑器移除后，手改 `agent.cordis.yml` 成为唯一的组装编辑方式，因此常驻挂载层增加了以 stamp 为键的代际：`ensureStanding` 比对文件的 mtime+大小，为后续会话开启下一代际（[常驻挂载 note](../../archived/architecture/2026-08-08-per-preset-standing-mounts.md)，已就地更新）。没有它，改过的文件要等进程重启才生效。
 - 副本是完整快照，会随随附来源升级而漂移——接受；preset 层没有 patch 语义（那是 bundle 层 `cordis.patch.yml` 的能力），随附集合自己也为「一个文件读完整份组装」付了同样的代价（`cordis`/`code` 就是 `standard` 的完整副本）。
 - `read` 去掉了 `writable`（没有编辑器可门控），内置目录绝不被打开（`openDocument` 与 `remove` 一样拒绝非 `user` 信任）：安装目录会被升级覆盖，把编辑器指向它等于招揽会被升级悄悄丢弃的编辑。
 

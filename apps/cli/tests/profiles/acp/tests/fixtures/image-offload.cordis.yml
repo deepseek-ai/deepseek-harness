@@ -35,7 +35,7 @@
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:
-    persona: |
+    personaPrefix: |
       You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}.
 
       Keep answers brief and factual.

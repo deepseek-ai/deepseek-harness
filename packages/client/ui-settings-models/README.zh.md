@@ -82,7 +82,7 @@ kind: "package-reference"
 - [settings](../../settings/README.zh.md)——持久化用户设置 seam 及其文件提供方。
 - [credentials](../../credentials/README.zh.md)——本页写入密钥所经的凭据引用 seam。
 - [llm](../../llm/README.zh.md)——本页所配置提供方所在的适配器注册表。
-- [Web 配置平面](../../../.agents/notes/implemented/architecture/2026-07-30-web-config-plane.zh.md)——手写编辑器的设计依据。
+- [Web 配置平面](../../../.agents/notes/archived/architecture/2026-07-30-web-config-plane.md)——手写编辑器的设计依据。
 
 -----
 

@@ -296,7 +296,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'storage-domain',
     title: 'Domain data facility',
     mode: 'core',
-    consumers: ['workspace', 'message-feedback'],
+    consumers: ['workspace'],
     note: 'Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state.',
   },
   {
@@ -304,7 +304,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'message-feedback',
     title: 'Lifecycle-bound message feedback',
     mode: 'core',
-    note: 'Owns local per-assistant-message feedback, lifecycle and target validation, per-item compare-and-set, and the Host unary Remote contract without entering Session history or telemetry.',
+    note: 'Owns per-assistant-message feedback in the canonical Session log, target validation, per-item compare-and-set, and the Host unary Remote contract. Feedback stays outside model history; log export follows the consumer policy.',
   },
   {
     key: 'workspaceRegistry',

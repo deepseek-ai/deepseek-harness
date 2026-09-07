@@ -61,7 +61,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 
 ### 后台进程
 
-调用 `start` 即可在后台运行命令；它立即返回句柄，且不应用任何超时。`readOutput()` 把流增量合并为一次消费式读取，并在 `[stderr]` 分段下标记 stderr；`kill()` 停止进程组；`done` 在进程关闭时结算且绝不 reject。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
+调用 `start` 即可在后台运行命令；它立即返回句柄，且不应用任何超时。`readOutput()` 把流增量合并为一次消费式读取，并在 `[stderr]` 分段下标记 stderr；`kill()` 终止提供方管理的 range；`done` 在直接命令关闭时结算且绝不 reject。job id、所有权、轮询与通知属于通用 `ctx.jobs` 运行时，工具层会把句柄注册进去。
 
 <a id="adjusting-budgets-at-runtime"></a>
 ### 运行时调整预算
@@ -80,7 +80,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 
 ### 设计概念
 
-本执行器是基于 subprocess 能力的 `ctx.shell` seam 的 Service Provider：它负责所有 bash 层职责——命令默认化与上限、deadline 融合与原因分类、面向模型的终端环境，以及后台读取合并——而进程组机制（有界 spill 输出、凭据清除、终止升级、dispose（资源释放））属于 subprocess 服务。每次调用都 spawn 全新的非登录 `bash -c`，不读取 rc 文件，因此命令是确定性的，shell 状态绝不会在调用之间泄漏。
+本执行器是基于 subprocess 能力的 `ctx.shell` seam 的 Service Provider：它负责所有 bash 层职责——命令默认化与上限、deadline 融合与原因分类、面向模型的终端环境，以及后台读取合并——而 managed-range 机制（有界 spill 输出、凭据清除、终止升级、完全停稳与 dispose（资源释放））属于 subprocess 服务。每次调用都 spawn 全新的非登录 `bash -c`，不读取 rc 文件，因此命令是确定性的，shell 状态绝不会在调用之间泄漏。
 
 ### 源码地图
 
@@ -114,7 +114,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 - [bash-sandbox](../bash-sandbox/README.zh.md) —— 需要沙箱能力时替换组合的受限执行器。
 - [tool-bash](../tool-bash/README.zh.md) —— 基于本执行器的面向模型 `bash` 工具。
 - [Bash 执行器子系统](../../../docs/subsystems/shell.zh.md) —— 请求/spec 词汇、结果与完整的服务约定。
-- [subprocess-local](../../subprocess/subprocess-local/README.zh.md) —— 本执行器背后的进程组机制。
+- [subprocess-local](../../subprocess/subprocess-local/README.zh.md) —— 本执行器背后的 managed-range 机制。
 
 -----
 
@@ -137,7 +137,7 @@ if (result.timedOut) console.log('timed out after', result.timeoutMs)
 - **自身不提供隔离**——命令以 harness 进程的权限运行；需要隔离的部署组合 `dsh-bash-sandbox`，每次调用的 allow/deny/ask 策略则属于工具的 `pre-execute` waterfall。
 - **没有持久 shell 或 PTY**——每次调用都启动全新的非登录 `bash -c`；仅持久化 cwd 与交互式终端会话均继续延期，直到真实工作流需要它们。
 - **仅支持 POSIX**——`bash` 二进制已硬编码，底层服务的进程组语义也是 POSIX 的；不支持 Windows。
-- **后台 spawn 失败提示只交付一次**——subprocess 服务不会为从未真正运行的进程缓冲任何输出，因此执行器把 `spawn failed: …` 注入恰好一个 `readOutput()` 增量；丢弃了该增量的读取方无法再恢复它。
+- **后台 provider failure 提示只交付一次**——`SubprocessHandle.done` 可能在 target 开始执行前或后 reject，因此执行器把不声明失败阶段的 `subprocess failed before reporting an outcome: …` 注入恰好一个 `readOutput()` 增量；丢弃了该增量的读取方无法再恢复它。
 
 <a id="dev-note"></a>
 ### 开发备注

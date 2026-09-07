@@ -132,10 +132,7 @@ export interface SessionTelemetrySink {
 }
 
 /**
- * Deployment-selected session-sharing policy disclosed by a mounted
- * {@link SessionTelemetryBackend} backend to human-facing acknowledgement surfaces (the
- * `/feedback` command's confirmation text). The Service Definition owns the
- * vocabulary so consumers and backends do not depend on a specific provider.
+ * Deployment-selected session-sharing mode, not confirmation of SDK delivery.
  */
 export type SessionTelemetrySharingStatus = 'full' | 'feedback-only' | 'disabled'
 
@@ -151,11 +148,7 @@ export abstract class SessionTelemetryBackend extends Service implements Session
   }
 
   /**
-   * Deployment-selected session-sharing policy, disclosed for acknowledgement
-   * surfaces that report whether recorded feedback leaves the process. Every
-   * backend must disclose its policy; a consumer renders "not configured" only
-   * when no telemetry service is mounted. The seam owns this vocabulary so the
-   * disclosure is backend-independent.
+   * Deployment-selected sharing mode, independent of SDK delivery.
    */
   abstract readonly sharing: SessionTelemetrySharingStatus
 
@@ -175,4 +168,4 @@ export abstract class SessionTelemetryBackend extends Service implements Session
   abstract shutdown(): Promise<void>
 }
 
-export { SessionTelemetryCoordinator, type SessionTelemetryCapture } from './coordinator.ts'
+export { SessionTelemetryCoordinator, type SessionTelemetryCapture, type SessionTelemetryCaptureOptions } from './coordinator.ts'

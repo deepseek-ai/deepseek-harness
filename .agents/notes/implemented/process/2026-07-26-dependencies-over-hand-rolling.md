@@ -6,7 +6,7 @@ English | [中文](2026-07-26-dependencies-over-hand-rolling.zh.md)
 
 ## Problem
 
-The harness hand-rolls a lot of infrastructure that mature external packages already provide. Some of that is deliberate — vendored Cordis ([vendoring decision](2026-06-11-vendor-cordis-as-source.md)), the [twin LLM adapters](../architecture/2026-06-13-twin-llm-adapters.md), schemastery as the config-schema standard — but much of it accreted from an unstated "avoid new dependencies" reflex: the repo-wide external dependency list stayed tiny while packages grew their own SSE parsers, protocol framers, retry loops, and glob matchers. Nothing in `AGENTS.md` actually stated a dependency policy, so agents inferred one from the existing pattern, and the inferred rule ("don't add deps") is stricter than anyone decided. That is the "Not Invented Here" fallacy operating by default: every hand-rolled clone of a well-maintained library is code we test, document, review, and debug ourselves, with none of the ecosystem's accumulated edge-case fixes.
+The harness hand-rolls a lot of infrastructure that mature external packages already provide. Some of that is deliberate — vendored Cordis ([vendoring decision](../../archived/process/2026-06-11-vendor-cordis-as-source.md)), the [twin LLM adapters](../architecture/2026-06-13-twin-llm-adapters.md), schemastery as the config-schema standard — but much of it accreted from an unstated "avoid new dependencies" reflex: the repo-wide external dependency list stayed tiny while packages grew their own SSE parsers, protocol framers, retry loops, and glob matchers. Nothing in `AGENTS.md` actually stated a dependency policy, so agents inferred one from the existing pattern, and the inferred rule ("don't add deps") is stricter than anyone decided. That is the "Not Invented Here" fallacy operating by default: every hand-rolled clone of a well-maintained library is code we test, document, review, and debug ourselves, with none of the ecosystem's accumulated edge-case fixes.
 
 ## Decision
 
@@ -27,7 +27,7 @@ Dependency-swap proposals are recorded as `proposed/simplification` Agent Notes 
 
 - **Keep the implicit no-new-deps culture.** Rejected: it was never a recorded decision, and its cost is concrete — hand-rolled protocol and parsing code duplicates battle-tested libraries, inflates the per-file coverage burden, and slows every reviewer who must re-derive edge cases the ecosystem already fixed.
 - **A hard allowlist of approved packages.** Rejected: the repo is pre-release and the dependency set is small; a per-PR evidence bar (net deletion, health, fit) plus review keeps judgment where the context is, without a standing committee artifact that would itself need maintenance.
-- **Vendor every new dependency like Cordis.** Rejected: vendoring is for packages we must patch or pin against upstream churn ([vendoring decision](2026-06-11-vendor-cordis-as-source.md)); applying it broadly recreates the maintenance burden the dependency was meant to shed. Ordinary npm dependencies with lockfile pinning are the default.
+- **Vendor every new dependency like Cordis.** Rejected: vendoring is for packages we must patch or pin against upstream churn ([vendoring decision](../../archived/process/2026-06-11-vendor-cordis-as-source.md)); applying it broadly recreates the maintenance burden the dependency was meant to shed. Ordinary npm dependencies with lockfile pinning are the default.
 
 ## Consequences
 

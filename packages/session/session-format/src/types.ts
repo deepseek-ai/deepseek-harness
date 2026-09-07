@@ -41,65 +41,126 @@ export interface SessionFormatArtifact {
   readonly events: readonly SessionFormatEvent[]
 }
 
-/** One independently maintained adjacent whole-artifact migration. */
+/** One independently maintained adjacent streaming migration. */
 export interface SessionFormatMigration {
   readonly name: string
   readonly fromVersion: number
   readonly toVersion: number
   /** Convert one header without reading event bodies. */
   migrateHeader(header: SessionFormatHeader): SessionFormatHeader
-  /** Convert one detached complete artifact to exactly {@link toVersion}. */
-  migrate(artifact: SessionFormatArtifact): SessionFormatArtifact
-  /** Refuse any artifact that the adjacent target writer cannot emit. */
-  validateTarget(artifact: SessionFormatArtifact): void
+  /** Create the stateful body stage for one source artifact. */
+  createStage(input: SessionFormatMigrationStageInput): SessionFormatMigrationStage
   /** Refuse any header that the adjacent target writer cannot emit. */
   validateTargetHeader(header: SessionFormatHeader): void
+}
+
+/** Headers and inherited cut supplied when one adjacent body stage is created. */
+export interface SessionFormatMigrationStageInput {
+  /** Validated source metadata for this adjacent edge. */
+  readonly sourceHeader: SessionFormatHeader
+  /** Validated target metadata produced by this edge's header migration. */
+  readonly targetHeader: SessionFormatHeader
+  /** Exact inherited prefix length in source coordinates. */
+  readonly sourceInheritedEventCount: number
+  /** Whether this edge consumes physical decode output or a prior migration's validated output. */
+  readonly sourceKind: 'decoded' | 'transformed'
 }
 
 /** Inputs that compile the unique complete migration chain. */
 export interface SessionFormatChainOptions {
   readonly currentVersion: number
   readonly migrations: readonly SessionFormatMigration[]
-  /** Restore and validate a detached current artifact through the current parser. */
-  readonly restoreCurrent: (artifact: SessionFormatArtifact) => SessionFormatArtifact
   /** Restore and validate a detached current header without reading event bodies. */
   readonly restoreCurrentHeader: (header: SessionFormatHeader) => SessionFormatHeader
 }
 
-/** Pure adjacent planner and whole-artifact migration runner. */
+/** Pure adjacent planner and streaming migration compiler. */
 export interface SessionFormatChain {
   readonly currentVersion: number
-  /** Return the complete ordered plan from one supported stored version. */
-  plan(fromVersion: number): readonly SessionFormatMigration[]
-  /** Restore current input directly or migrate old input entirely in memory. */
-  migrate(artifact: SessionFormatArtifact): SessionFormatArtifact
+  /** Compile the complete migration stage chain for one decoded source artifact. */
+  createStream(
+    header: SessionFormatHeader,
+    inheritedEventCount: number,
+    context: SessionFormatMigrationContext,
+  ): SessionFormatMigrationStream
   /** Convert only a supported header to the current logical representation. */
   migrateHeader(header: SessionFormatHeader): SessionFormatHeader
 }
 
-/** Physical JSON records emitted by one format-specific codec. */
-export interface EncodedSessionFormatArtifact {
-  readonly header: SessionFormatJsonObject
-  readonly rows: readonly SessionFormatJsonObject[]
-}
-
-/** Options that affect only physical row layout, never logical contents. */
-export interface SessionFormatEncodeOptions {
-  readonly packChunks: boolean
-}
+/** Physical-row failure policy selected once for one restore. */
+export type SessionFormatRecovery = 'strict' | 'recoverable'
 
 /** Pure physical JSON codec frozen with one released Session format. */
 export interface SessionFormatCodec {
   readonly version: number
   /** Decode one physical header into body-independent logical metadata. */
   decodeHeader(value: unknown): SessionFormatHeader
-  /** Decode one complete physical header and row sequence into logical events. */
-  decodeArtifact(headerValue: unknown, rowValues: readonly unknown[]): SessionFormatArtifact
-  /** Decode the row-atomic recoverable prefix used by crash-tail repair. */
-  decodeRecoverableArtifact(
-    headerValue: unknown,
-    rowValues: readonly unknown[],
-  ): SessionFormatArtifact
+  /** Create one row-at-a-time decoder with an explicit failure policy. */
+  createDecoder(headerValue: unknown, recovery: SessionFormatRecovery): SessionFormatArtifactDecoder
+}
+
+/** Stateful physical-row decoder used by streaming persistence restores. */
+export interface SessionFormatArtifactDecoder {
+  readonly header: SessionFormatHeader
+  /** Inherited cut known before body decoding; current formats may derive it at EOF. */
+  readonly headerInheritedEventCount?: number
+  /** Decode one physical row and synchronously emit its events or compact run. */
+  decodeRow(
+    rowValue: unknown,
+    context: SessionFormatMigrationContext,
+  ): void
+  /** Finish row validation and return the exact inherited cut. */
+  finish(context: SessionFormatMigrationContext): number
+}
+
+/** Stateless physical record encoder for the installed current format. */
+export interface SessionFormatCurrentEncoder {
+  /** Encode the physical header record for one current artifact. */
+  encodeHeader(header: SessionFormatHeader, inheritedEventCount: number): SessionFormatJsonObject
+  /** Encode one current logical event as one physical record. */
+  encodeEvent(event: SessionFormatEvent): SessionFormatJsonObject
+}
+
+/** A codec-owned compact run that adjacent migrations may consume without expanding. */
+export interface SessionFormatEventRun {
+  readonly runType: string
+  readonly firstSeq: number
+  readonly eventCount: number
+  /** Expand the run for a migration that has no direct handler. */
+  expand(): Iterable<SessionFormatEvent>
+}
+
+/** Synchronous output channel owned by a compiled migration stream. */
+export interface SessionFormatMigrationContext {
+  /** Deliver one settled event to the next stage before returning. */
+  emitEvent(event: SessionFormatEvent): void
+  /** Deliver one compact event run to the next stage before returning. */
+  emitRun(run: SessionFormatEventRun): void
+}
+
+/** Stateful adjacent migration stage used by streaming persistence restores. */
+export interface SessionFormatMigrationStage {
+  /** Target inherited cut when it is unchanged and known before EOF. */
+  readonly headerInheritedEventCount?: number
+  /** Transform one source event and synchronously emit every settled target item. */
+  transformEvent(
+    event: SessionFormatEvent,
+    context: SessionFormatMigrationContext,
+  ): void
+  /** Transform one compact source run without requiring an intermediate expansion array. */
+  transformRun(
+    run: SessionFormatEventRun,
+    context: SessionFormatMigrationContext,
+  ): void
+  /** Emit trailing target items and return the exact target inherited cut. */
+  finish(context: SessionFormatMigrationContext): number
+}
+
+/** One composed migration chain that emits settled current events to its owner. */
+export interface SessionFormatMigrationStream extends SessionFormatMigrationContext {
+  readonly header: SessionFormatHeader
+  /** Settle all migration stages and return the exact current inherited cut. */
+  finish(): number
 }
 
 /** Header-only classification that never inspects event rows. */
@@ -127,8 +188,22 @@ export type SessionFormatHeaderReadResult =
 /** Inputs for a build-static physical codec and migration catalog. */
 export interface SessionFormatCatalogOptions extends SessionFormatChainOptions {
   readonly codecs: readonly SessionFormatCodec[]
-  /** Encode one already-restored current artifact through its format-specific writer. */
-  readonly encodeCurrentArtifact: (artifact: SessionFormatArtifact) => EncodedSessionFormatArtifact
+  /** Restore and validate a complete current artifact. */
+  readonly restoreCurrent: (artifact: SessionFormatArtifact) => SessionFormatArtifact
+  /** Encode current records without materializing an artifact-sized row array. */
+  readonly currentEncoder: SessionFormatCurrentEncoder
+  /** Validate an exclusively owned transformed artifact without copying or freezing it. */
+  readonly restoreTransformedCurrent: (artifact: SessionFormatArtifact) => SessionFormatArtifact
+}
+
+/** Policies applied by one physical-row restore. */
+export interface SessionFormatRestoreOptions {
+  readonly recovery: SessionFormatRecovery
+  /**
+   * `current` applies all installed current-format validation. `transformed` applies
+   * released current-format validation only after migration; current input receives only codec validation.
+   */
+  readonly validation: 'transformed' | 'current'
 }
 
 /** Build-static physical dispatch and adjacent migration catalog. */
@@ -136,15 +211,20 @@ export interface SessionFormatCatalog {
   readonly currentVersion: number
   /** Classify and translate one header without reading event rows. */
   readHeader(headerValue: unknown): SessionFormatHeaderReadResult
-  /** Dispatch a complete physical JSON artifact through its frozen version codec. */
-  decodeArtifact(headerValue: unknown, rowValues: readonly unknown[]): SessionFormatArtifact
-  /** Dispatch a physical artifact through its released row-prefix recovery rules. */
-  decodeRecoverableArtifact(
-    headerValue: unknown,
-    rowValues: readonly unknown[],
-  ): SessionFormatArtifact
-  /** Restore current input directly or run all required adjacent migrations in memory. */
-  migrate(artifact: SessionFormatArtifact): SessionFormatArtifact
-  /** Encode one current artifact that `migrate` returned or a live Session produced; it is not re-validated here. */
-  encodeCurrent(artifact: SessionFormatArtifact): EncodedSessionFormatArtifact
+  /** Create one single-pass physical-row restore into current logical events. */
+  createRestore(headerValue: unknown, options: SessionFormatRestoreOptions): SessionFormatRestore
+  /** Encode one current physical header record. */
+  encodeCurrentHeader(header: SessionFormatHeader, inheritedEventCount: number): SessionFormatJsonObject
+  /** Encode one current physical event record. */
+  encodeCurrentEvent(event: SessionFormatEvent): SessionFormatJsonObject
+}
+
+/** One caller-owned physical-row restore whose final value is a current logical artifact. */
+export interface SessionFormatRestore {
+  /** Current logical header available before body decoding. */
+  readonly header: SessionFormatHeader
+  /** Decode one physical row in file order. */
+  decodeRow(rowValue: unknown): void
+  /** Finish every decoder and migration stage and return the current artifact. */
+  finish(): SessionFormatArtifact
 }

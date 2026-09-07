@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 import {
   link,
   mkdir,
@@ -11,21 +12,29 @@ import {
   stat,
   symlink,
   writeFile,
+  type FileHandle,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 import {
-  __jsonlGenerationTest,
-  ensureJsonlGenerationCurrent,
-  JsonlGenerationNewerVersionError,
+  JsonlGenerationSourceChangedError,
   JsonlGenerationTargetConflictError,
   JsonlGenerationUnsupportedMigrationError,
-  type EnsureJsonlGenerationOptions,
-  type JsonlCurrentGeneration,
+  prepareJsonlMigration,
+  verifyJsonlCurrentGeneration,
   type JsonlGenerationFormatAdapter,
+  type PrepareJsonlMigrationOptions,
 } from '../src/generation.ts'
+import { createJsonlGenerationTestRuntime } from '../src/testing/generation.ts'
 import { compressZstdFrame, decompressZstdFrame, scanZstdFrames } from '../src/zstd.ts'
 import type { JsonlCompression } from '../src/format.ts'
+import type {
+  SessionFormatArtifact,
+  SessionFormatEvent,
+  SessionFormatJsonValue,
+  SessionFormatRestore,
+} from '@deepseek-ai/dsh-session-format'
 
 const roots: string[] = []
 
@@ -66,23 +75,122 @@ function posixSimulationFs<T extends Record<string, unknown>>(
 }
 
 function header(version: number, id = 'generation-test'): Record<string, unknown> {
-  return { type: 'session', version, id, createdAt: 1, delegationDepth: 0 }
+  return {
+    type: 'session', version, id, createdAt: 1, delegationDepth: 0,
+    ...(version >= 2 ? { isSeeded: false } : {}),
+  }
 }
 
 const event0 = { type: 'turn/start', seq: 0, time: 2, data: { turn: 1 } }
 const event1 = { type: 'turn/end', seq: 1, time: 3, data: { turn: 1, reason: { kind: 'completed' } } }
+const assistantUsage = { inputTokens: 3, outputTokens: 2 }
+const assistantReplayState = { response: { id: 'response' } }
 
-function adapter(overrides: Partial<JsonlGenerationFormatAdapter> = {}): JsonlGenerationFormatAdapter {
+function assistantData(
+  overrides: {
+    readonly content?: readonly SessionFormatJsonValue[]
+    readonly stream?: SessionFormatJsonValue
+    readonly usage?: SessionFormatJsonValue
+    readonly replayState?: SessionFormatJsonValue
+    readonly interrupted?: true
+  } = {},
+): SessionFormatJsonValue {
+  const replayState = overrides.replayState === undefined
+    ? assistantReplayState
+    : overrides.replayState
   return {
-    currentVersion: 1,
-    migrate: (source): JsonlCurrentGeneration => ({
-      header: { ...source.header, version: 1 },
-      rows: source.rows,
-    }),
-    validateCurrent: (candidate) => {
-      if (candidate.header.version !== 1) throw new Error('candidate is not v1')
+    turn: 1,
+    step: 1,
+    message: {
+      id: 'assistant',
+      role: 'assistant',
+      content: overrides.content ?? [{ type: 'text', text: 'hello' }],
+      source: {
+        kind: 'model', provider: 'mock', model: 'mock',
+        ...(replayState === null ? {} : { replayState }),
+      },
     },
+    stream: overrides.stream ?? [
+      { type: 'text-chunks', time0: 3, index: 0, dt: [], texts: ['hello'] },
+      { type: 'chunk', time: 4, chunk: { type: 'usage', usage: assistantUsage } },
+      { type: 'chunk', time: 5, chunk: { type: 'finish', reason: { kind: 'stop' }, replayState: assistantReplayState } },
+    ],
+    ...(overrides.usage === null ? {} : { usage: overrides.usage ?? assistantUsage }),
+    ...(overrides.interrupted === undefined ? {} : { interrupted: overrides.interrupted }),
+  }
+}
+
+function assistantLifecycle(
+  type: 'assistant/message' | 'assistant/attempt',
+  data: SessionFormatJsonValue,
+): SessionFormatEvent[] {
+  return [
+    { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+    { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+    {
+      type,
+      seq: 2,
+      time: 5,
+      data,
+      ...(type === 'assistant/message' ? { surfaceOp: 'append' as const } : {}),
+    },
+    { type: 'step/end', seq: 3, time: 6, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: 4, time: 7, data: { turn: 1, reason: { kind: 'completed' } } },
+  ]
+}
+
+interface TestGenerationFormatAdapter extends JsonlGenerationFormatAdapter {
+  createRestore(header: Record<string, unknown>): SessionFormatRestore
+}
+
+function adapter(overrides: Partial<TestGenerationFormatAdapter> = {}): TestGenerationFormatAdapter {
+  const currentVersion = overrides.currentVersion ?? 2
+  return {
+    currentVersion,
+    createRestore(headerValue) {
+      const events: SessionFormatArtifact['events'][number][] = []
+      const header = {
+        ...headerValue,
+        version: currentVersion,
+        isSeeded: false,
+      } as SessionFormatArtifact['header']
+      return {
+        header,
+        decodeRow(row) { events.push(row as SessionFormatArtifact['events'][number]) },
+        finish: () => ({ header, inheritedEventCount: 0, events }),
+      }
+    },
+    encodeHeader(value) {
+      const { isSeeded: _isSeeded, ...header } = value
+      return currentVersion === 0 ? header : {
+        ...header,
+        type: 'session',
+        version: currentVersion,
+        ...(currentVersion >= 2 ? { isSeeded: value.isSeeded } : {}),
+      }
+    },
+    encodeEvent: event => event,
     ...overrides,
+  }
+}
+
+function streamingAdapter(): JsonlGenerationFormatAdapter & {
+  createRestore(header: Record<string, unknown>): SessionFormatRestore
+} {
+  return adapter()
+}
+
+function verifier(): PrepareJsonlMigrationOptions['verifyCurrentFile'] {
+  return (path, compression, expectedId, expectedEventCount, expectedPrefix) =>
+    verifyJsonlCurrentGeneration(path, compression, expectedId, expectedEventCount, expectedPrefix)
+}
+
+const byteVerifier: PrepareJsonlMigrationOptions['verifyCurrentFile'] = async (path) => {
+  const [bytes, identity] = await Promise.all([readFile(path), stat(path, { bigint: true })])
+  return {
+    identity,
+    bytes: bytes.length,
+    digest: createHash('sha256').update(bytes).digest('hex'),
   }
 }
 
@@ -96,7 +204,7 @@ function options(
   compression: JsonlCompression = 'none',
   format: JsonlGenerationFormatAdapter = adapter(),
   sourceVersion = 0,
-): EnsureJsonlGenerationOptions {
+): Omit<PrepareJsonlMigrationOptions, 'verifyCurrentFile'> {
   return {
     sourcePath: generationPath(root, sourceVersion, compression),
     sourceVersion,
@@ -104,6 +212,47 @@ function options(
     compression,
     format,
   }
+}
+
+type TestMigrationOptions = ReturnType<typeof options> & {
+  readonly signal?: AbortSignal
+  readonly verifyCurrentFile?: PrepareJsonlMigrationOptions['verifyCurrentFile']
+}
+type TestGenerationOverrides = Parameters<typeof createJsonlGenerationTestRuntime>[0]
+
+async function ensureWithOverrides(
+  request: TestMigrationOptions,
+  overrides: TestGenerationOverrides,
+) {
+  const runtime = createJsonlGenerationTestRuntime(overrides)
+  const verifyCurrentFile = request.verifyCurrentFile ?? (
+    (path: string, compression: JsonlCompression, expectedId: string, expectedEventCount: number, expectedPrefix) =>
+      runtime.verify(
+        path,
+        compression,
+        expectedId,
+        expectedEventCount,
+        expectedPrefix,
+      )
+  )
+  const prepared = await runtime.prepare({
+    ...request,
+    verifyCurrentFile,
+  })
+  const identity = await prepared.publish()
+  const bytes = await readFile(request.currentPath)
+  return {
+    status: 'migrated' as const,
+    fromVersion: request.sourceVersion,
+    toVersion: request.format.currentVersion,
+    path: request.currentPath,
+    sourcePath: request.sourcePath,
+    snapshot: { identity, bytes },
+  }
+}
+
+function ensureJsonlGenerationCurrent(request: TestMigrationOptions) {
+  return ensureWithOverrides(request, {})
 }
 
 async function encodeZstd(version: number, rows: readonly unknown[]): Promise<Buffer> {
@@ -125,7 +274,371 @@ async function decodeZstdJsonl(path: string): Promise<string> {
 }
 
 describe('JSONL immutable generation publication', () => {
-  it('publishes v1 beside an immutable suffixless v0 source', async () => {
+  it('returns migrated events while publication is still waiting for verification', async () => {
+    const root = await tempRoot()
+    const request = options(root, 'none', streamingAdapter())
+    const boundaryBase = { ...event0, data: { turn: 1, text: '' } }
+    const boundaryEvent = {
+      ...boundaryBase,
+      data: { ...boundaryBase.data, text: 'x'.repeat(1024 * 1024 - JSON.stringify(boundaryBase).length) },
+    }
+    const largeEvent = { ...event0, seq: 1, data: { turn: 1, text: 'y'.repeat(1024 * 1024) } }
+    const finalEvent = { ...event1, seq: 2 }
+    await writeFile(request.sourcePath, line(header(0)) + line(boundaryEvent) + line(largeEvent) + line(finalEvent))
+    let now = 0
+    vi.spyOn(performance, 'now').mockImplementation(() => now += 600)
+    const entered = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+
+    const prepared = await prepareJsonlMigration({
+      ...request,
+      verifyCurrentFile: async (path, compression, expectedId, expectedEventCount) => {
+        entered.resolve(undefined)
+        await release.promise
+        return verifyJsonlCurrentGeneration(path, compression, expectedId, expectedEventCount)
+      },
+    })
+    expect(prepared.artifact.events).toEqual([boundaryEvent, largeEvent, finalEvent])
+    const publication = prepared.publish()
+    expect(prepared.publish()).toBe(publication)
+    await entered.promise
+    await expect(readFile(request.currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
+
+    release.resolve(undefined)
+    await publication
+    const [writtenHeader, ...writtenEvents] = (await readFile(request.currentPath, 'utf8')).trimEnd().split('\n')
+    expect(JSON.parse(writtenHeader as string)).toEqual({ ...header(2), isSeeded: false })
+    expect(writtenEvents.map(row => JSON.parse(row) as unknown)).toEqual([boundaryEvent, largeEvent, finalEvent])
+  })
+
+  it('batches exact-threshold encoded rows without retaining a final partial write', async () => {
+    const root = await tempRoot()
+    const mib = 1024 * 1024
+    const widths = [4 * mib - 3, mib - 3, mib - 3, mib - 3, mib - 3]
+    const format = adapter({
+      encodeEvent: event => 'x'.repeat(widths[event.seq] as number),
+    })
+    const request = options(root, 'none', format)
+    const events = widths.map((_, seq) => ({ ...event0, seq }))
+    await writeFile(request.sourcePath, line(header(0)) + events.map(line).join(''))
+
+    const prepared = await prepareJsonlMigration({
+      ...request,
+      verifyCurrentFile: byteVerifier,
+    })
+    await prepared.publish()
+
+    expect((await stat(request.currentPath)).size).toBeGreaterThan(8 * mib)
+  })
+
+  it('fails publication without rerunning migration when the source changes', async () => {
+    const root = await tempRoot()
+    const base = streamingAdapter()
+    const sourceStreams = vi.fn()
+    const request = options(root, 'none', {
+      ...base,
+      createRestore: (value) => {
+        if (value.version === 0) sourceStreams()
+        return base.createRestore(value)
+      },
+    })
+    const source = line(header(0)) + line(event0)
+    await writeFile(request.sourcePath, source)
+
+    const prepared = await prepareJsonlMigration({
+      ...request,
+      verifyCurrentFile: async (path, compression, expectedId, expectedEventCount) => {
+        const verified = await verifyJsonlCurrentGeneration(path, compression, expectedId, expectedEventCount)
+        await writeFile(request.sourcePath, source + line(event1))
+        return verified
+      },
+    })
+
+    await expect(prepared.publish()).rejects.toBeInstanceOf(JsonlGenerationSourceChangedError)
+    expect(sourceStreams).toHaveBeenCalledOnce()
+    await expect(readFile(request.currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('refuses malformed streaming inputs before publication', async () => {
+    const root = await tempRoot()
+    const request = options(root, 'none', streamingAdapter())
+
+    await writeFile(request.sourcePath, '')
+    await expect(prepareJsonlMigration({ ...request, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow('empty or header-less')
+
+    await writeFile(request.sourcePath, line(header(1)))
+    await expect(prepareJsonlMigration({ ...request, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow(/filename identifies v0.*header identifies v1/)
+
+    await writeFile(request.sourcePath, line(header(0)) + '{bad json}\n' + line(event1))
+    await expect(prepareJsonlMigration({ ...request, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow('row 1 is not valid JSON')
+
+    await writeFile(request.sourcePath, line(header(0)) + '{bad json}\n' + line(event0))
+    const dropped = await prepareJsonlMigration({
+      ...request,
+      verifyCurrentFile: verifier(),
+    })
+    expect(dropped.artifact.events).toEqual([])
+    await dropped.publish()
+
+  })
+
+  it('verifies exact current identity, completeness, and event count', async () => {
+    const root = await tempRoot()
+    const path = generationPath(root, 2, 'none')
+    await writeFile(path, line({ ...header(2), isSeeded: false }) + line(event0))
+
+    await expect(verifyJsonlCurrentGeneration(path, 'none', 'other', 1))
+      .rejects.toThrow('expected "other"')
+    await expect(verifyJsonlCurrentGeneration(path, 'none', 'generation-test', 2))
+      .rejects.toThrow('contains 1 events')
+    await writeFile(path, line({ ...header(2), isSeeded: false }) + JSON.stringify(event0))
+    await expect(verifyJsonlCurrentGeneration(path, 'none', 'generation-test', 1))
+      .rejects.toThrow('torn physical tail')
+
+    await writeFile(path, Buffer.alloc(0))
+    await expect(verifyJsonlCurrentGeneration(path, 'none', 'generation-test', 0))
+      .rejects.toThrow('empty or header-less')
+    await expect(verifyJsonlCurrentGeneration(path, 'zstd', 'generation-test', 0))
+      .rejects.toThrow('empty or header-less Zstandard')
+    const headerFrame = await compressZstdFrame(line({ ...header(2), isSeeded: false }))
+    await writeFile(path, Buffer.concat([headerFrame, await compressZstdFrame(JSON.stringify(event0))]))
+    await expect(verifyJsonlCurrentGeneration(path, 'zstd', 'generation-test', 1))
+      .rejects.toThrow('torn physical tail')
+    await writeFile(path, Buffer.concat([
+      headerFrame,
+      (await compressZstdFrame(line(event0))).subarray(0, -3),
+    ]))
+    await expect(verifyJsonlCurrentGeneration(path, 'zstd', 'generation-test', 1))
+      .rejects.toThrow('torn physical tail')
+  })
+
+  it('keeps complete Assistant stream checks in current-generation verification', async () => {
+    const root = await tempRoot()
+    const path = generationPath(root, 2, 'none')
+    const verify = async (events: readonly SessionFormatEvent[]) => {
+      await writeFile(path, line(header(2)) + events.map(line).join(''))
+      return verifyJsonlCurrentGeneration(path, 'none', 'generation-test', events.length)
+    }
+
+    const valid = [
+      assistantLifecycle('assistant/message', assistantData()),
+      assistantLifecycle('assistant/message', assistantData({
+        interrupted: true,
+        stream: [{ type: 'text-chunks', time0: 3, index: 0, dt: [], texts: ['hello'] }],
+        usage: null,
+        replayState: null,
+      })),
+      assistantLifecycle('assistant/message', assistantData({
+        content: [], stream: [], usage: null, replayState: null,
+      })),
+      assistantLifecycle('assistant/attempt', {
+        turn: 1,
+        step: 1,
+        stream: [{ type: 'text-chunks', time0: 3, index: 0, dt: [1], texts: ['a', 'b'] }],
+      }),
+    ]
+    for (const events of valid) expect((await verify(events)).bytes).toBeGreaterThan(0)
+
+    await expect(verify(assistantLifecycle('assistant/attempt', {
+      turn: 1, step: 1, stream: [{ type: 'future' }],
+    }))).rejects.toThrow(/invalid embedded stream/)
+    await expect(verify(assistantLifecycle('assistant/message', assistantData({
+      content: [{ type: 'text', text: 'different' }],
+    })))).rejects.toThrow(/content disagrees/)
+    await expect(verify(assistantLifecycle('assistant/message', assistantData({
+      usage: { inputTokens: 9, outputTokens: 2 },
+    })))).rejects.toThrow(/usage disagrees/)
+    await expect(verify(assistantLifecycle('assistant/message', assistantData({
+      replayState: { response: { id: 'different' } },
+    })))).rejects.toThrow(/replay state disagrees/)
+  })
+
+  it('accepts an identical publication winner and rejects different bytes', async () => {
+    const identicalRoot = await tempRoot()
+    const identical = options(identicalRoot, 'none', streamingAdapter())
+    await writeFile(identical.sourcePath, line(header(0)) + line(event0))
+    const prepared = await prepareJsonlMigration({
+      ...identical,
+      verifyCurrentFile: async (path, compression, expectedId, expectedEventCount) => {
+        const verified = await verifyJsonlCurrentGeneration(path, compression, expectedId, expectedEventCount)
+        if (path !== identical.currentPath) await link(path, identical.currentPath)
+        return verified
+      },
+    })
+    expect((await prepared.publish()).size).toBeGreaterThan(0n)
+
+    const differentRoot = await tempRoot()
+    const different = options(differentRoot, 'none', streamingAdapter())
+    await writeFile(different.sourcePath, line(header(0)) + line(event0))
+    await writeFile(different.currentPath, line({ ...header(2), isSeeded: false }) + line({ ...event0, time: 99 }))
+    const conflicted = await prepareJsonlMigration({
+      ...different,
+      verifyCurrentFile: verifier(),
+    })
+    await expect(conflicted.publish()).rejects.toBeInstanceOf(JsonlGenerationTargetConflictError)
+
+    const uncheckedRoot = await tempRoot()
+    const unchecked = options(uncheckedRoot, 'none', streamingAdapter())
+    await writeFile(unchecked.sourcePath, line(header(0)) + line(event0))
+    await writeFile(
+      unchecked.currentPath,
+      line({ ...header(2), isSeeded: false }) + line({ ...event0, time: 99 }),
+    )
+    const uncheckedPublication = await prepareJsonlMigration({
+      ...unchecked,
+      verifyCurrentFile: byteVerifier,
+    })
+    await expect(uncheckedPublication.publish())
+      .rejects.toThrow(/target bytes differ from the migrated generation/)
+  })
+
+  it('handles empty, incomplete-record, and torn Zstandard migration sources', async () => {
+    const emptyRoot = await tempRoot()
+    const empty = options(emptyRoot, 'zstd', streamingAdapter())
+    await writeFile(empty.sourcePath, Buffer.alloc(0))
+    await expect(prepareJsonlMigration({ ...empty, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow('empty or header-less Zstandard')
+
+    const incompleteRoot = await tempRoot()
+    const incomplete = options(incompleteRoot, 'zstd', streamingAdapter())
+    await writeFile(incomplete.sourcePath, Buffer.concat([
+      await compressZstdFrame(line(header(0))),
+      await compressZstdFrame(JSON.stringify(event0)),
+    ]))
+    await expect(prepareJsonlMigration({ ...incomplete, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow('complete frame contains a torn JSONL record')
+
+    const tornRoot = await tempRoot()
+    const torn = options(tornRoot, 'zstd', streamingAdapter())
+    const tornBody = await compressZstdFrame(line(event0) + line(event1))
+    await writeFile(torn.sourcePath, Buffer.concat([
+      await compressZstdFrame(line(header(0))),
+      tornBody.subarray(0, -3),
+    ]))
+    const recovered = await prepareJsonlMigration({
+      ...torn,
+      verifyCurrentFile: verifier(),
+    })
+    expect(recovered.artifact.events).toEqual([event0, event1])
+    await recovered.publish()
+
+    const emptyTailRoot = await tempRoot()
+    const emptyTail = options(emptyTailRoot, 'zstd', streamingAdapter())
+    await writeFile(emptyTail.sourcePath, Buffer.concat([
+      await compressZstdFrame(line(header(0))),
+      tornBody.subarray(0, 8),
+    ]))
+    const withoutTail = await prepareJsonlMigration({
+      ...emptyTail,
+      verifyCurrentFile: verifier(),
+    })
+    expect(withoutTail.artifact.events).toEqual([])
+    await withoutTail.publish()
+  })
+
+  it('checks migration and verification identities exactly', async () => {
+    const verifyRoot = await tempRoot()
+    const currentPath = generationPath(verifyRoot, 2, 'none')
+    await writeFile(currentPath, line(header(2)))
+    let statCount = 0
+    await expect(createJsonlGenerationTestRuntime({
+      fs: { stat: async path => ({ ...await stat(path, { bigint: true }), ctimeNs: BigInt(++statCount) }) },
+    }).verify(
+      currentPath,
+      'none',
+      'generation-test',
+      0,
+    )).rejects.toThrow('changed during verification')
+
+    const mismatchRoot = await tempRoot()
+    const mismatch = options(mismatchRoot, 'none', streamingAdapter())
+    await writeFile(mismatch.sourcePath, line(header(0)))
+    const mismatched = await prepareJsonlMigration({
+      ...mismatch,
+      verifyCurrentFile: async (path, compression, expectedId, expectedEventCount) => ({
+        ...await verifyJsonlCurrentGeneration(path, compression, expectedId, expectedEventCount),
+        digest: 'different',
+      }),
+    })
+    await expect(mismatched.publish()).rejects.toThrow('changed during verification')
+
+    const current = options(await tempRoot(), 'none', streamingAdapter(), 2)
+    await expect(prepareJsonlMigration({ ...current, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow('requires a historical source')
+
+    const wrongRoot = await tempRoot()
+    const wrongFormat = streamingAdapter()
+    const wrong = options(wrongRoot, 'none', {
+      ...wrongFormat,
+      createRestore: headerValue => ({
+        header: { ...headerValue, version: 0, isSeeded: false } as SessionFormatArtifact['header'],
+        decodeRow: () => {},
+        finish: () => ({
+          header: { ...headerValue, version: 0, isSeeded: false } as SessionFormatArtifact['header'],
+          inheritedEventCount: 0,
+          events: [],
+        }),
+      }),
+    })
+    await writeFile(wrong.sourcePath, line(header(0)))
+    await expect(prepareJsonlMigration({ ...wrong, verifyCurrentFile: vi.fn() }))
+      .rejects.toThrow('migration returned v0')
+  })
+
+  it('propagates a streamed compressor write failure through stage cleanup', async () => {
+    const failedRoot = await tempRoot()
+    const failed = options(failedRoot, 'zstd', streamingAdapter())
+    await writeFile(failed.sourcePath, await encodeZstd(0, [event0]))
+    let writes = 0
+    const failedHandle = {
+      writeFile: async () => { if (++writes > 1) throw new Error('write failed') },
+      sync: async () => {},
+      close: async () => { throw new Error('close failed') },
+    } as unknown as FileHandle
+    const failedPreparation = await createJsonlGenerationTestRuntime({
+      fs: { open: async () => failedHandle },
+    }).prepare({
+      ...failed,
+      verifyCurrentFile: vi.fn(),
+    })
+    await expect(failedPreparation.publish()).rejects.toBeInstanceOf(AggregateError)
+  })
+
+  it('propagates a streamed encoder failure through the Zstandard pipeline', async () => {
+    const root = await tempRoot()
+    const failure = new Error('event encoder failed')
+    const request = options(root, 'zstd', adapter({
+      encodeEvent: () => { throw failure },
+    }))
+    await writeFile(request.sourcePath, await encodeZstd(0, [event0]))
+
+    const prepared = await prepareJsonlMigration({
+      ...request,
+      verifyCurrentFile: vi.fn(),
+    })
+    await expect(prepared.publish()).rejects.toBe(failure)
+    expect(await readdir(root)).toEqual(['session.jsonl.zstd'])
+  })
+
+  it('publishes a prepared stage through the Windows no-overwrite path', async () => {
+    const winRoot = await tempRoot()
+    const win = options(winRoot, 'none', streamingAdapter())
+    await writeFile(win.sourcePath, line(header(0)))
+    const winPrepared = await createJsonlGenerationTestRuntime({
+      platform: 'win32',
+      publishNewWin32: rename,
+    }).prepare({
+      ...win,
+      verifyCurrentFile: verifier(),
+    })
+    await winPrepared.publish()
+    expect(await readFile(win.currentPath, 'utf8')).toContain('"version":2')
+  })
+
+  it('publishes v2 beside an immutable suffixless v0 source', async () => {
     const root = await tempRoot()
     const request = { ...options(root), signal: new AbortController().signal }
     const source = Buffer.from(line(header(0)) + line(event0))
@@ -136,59 +649,13 @@ describe('JSONL immutable generation publication', () => {
     expect(result).toMatchObject({
       status: 'migrated',
       fromVersion: 0,
-      toVersion: 1,
+      toVersion: 2,
       path: request.currentPath,
       sourcePath: request.sourcePath,
     })
     expect(await readFile(request.sourcePath)).toEqual(source)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
-    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v1.jsonl'])
-  })
-
-  it('takes the current fast path with one read and no format callback', async () => {
-    const root = await tempRoot()
-    const migrate = vi.fn()
-    const validateCurrent = vi.fn()
-    const validateHistoricalHeader = vi.fn()
-    const request = {
-      ...options(root, 'none', adapter({ migrate, validateCurrent }), 1),
-      validateHistoricalHeader,
-    }
-    const contents = line(header(1)) + line(event0)
-    await writeFile(request.sourcePath, contents)
-    const readStableFile = vi.fn(async (path: string, signal?: AbortSignal) =>
-      readFile(path, signal === undefined ? undefined : { signal }))
-
-    const result = await __jsonlGenerationTest.ensure(request, { fs: { readFile: readStableFile } })
-
-    expect(result).toMatchObject({ status: 'current', version: 1, path: request.sourcePath })
-    expect(readStableFile).toHaveBeenCalledOnce()
-    expect(migrate).not.toHaveBeenCalled()
-    expect(validateCurrent).not.toHaveBeenCalled()
-    expect(validateHistoricalHeader).not.toHaveBeenCalled()
-    expect(await readFile(request.sourcePath, 'utf8')).toBe(contents)
-  })
-
-  it('bounds current snapshot retries under continuous revision churn', async () => {
-    const root = await tempRoot()
-    const request = options(root, 'none', adapter(), 1)
-    const contents = line(header(1)) + line(event0)
-    await writeFile(request.sourcePath, contents)
-    let revision = 0n
-    const statFile = vi.fn(async (path: string) => {
-      const value = await stat(path, { bigint: true })
-      revision += 1n
-      return { ...value, mtimeNs: value.mtimeNs + revision }
-    })
-    const readChangingFile = vi.fn(async () => Buffer.from(contents + line(event1)))
-
-    const result = await __jsonlGenerationTest.ensure(request, {
-      fs: { stat: statFile, readFile: readChangingFile },
-    })
-
-    expect(result.snapshot.bytes.toString('utf8')).toBe(contents)
-    expect(readChangingFile).toHaveBeenCalledTimes(2)
-    expect(statFile).toHaveBeenCalledTimes(3)
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
+    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v2.jsonl'])
   })
 
   it.each(['none', 'zstd'] as const)(
@@ -201,17 +668,18 @@ describe('JSONL immutable generation publication', () => {
         : Buffer.from(line(header(0)) + line(event0))
       await writeFile(request.sourcePath, source)
       const failure = new Error('selected path does not match source header identity')
-      const migrate = vi.fn()
+      const base = adapter()
+      const createRestore = vi.fn((value: Record<string, unknown>) => base.createRestore(value))
       const validateHistoricalHeader = vi.fn(() => { throw failure })
 
       await expect(ensureJsonlGenerationCurrent({
         ...request,
-        format: adapter({ migrate }),
+        format: { ...base, createRestore },
         validateHistoricalHeader,
       })).rejects.toBe(failure)
 
       expect(validateHistoricalHeader).toHaveBeenCalledWith(expect.objectContaining({ id: 'generation-test' }))
-      expect(migrate).not.toHaveBeenCalled()
+      expect(createRestore).not.toHaveBeenCalled()
       expect(await readFile(request.sourcePath)).toEqual(source)
       expect(await readdir(root)).toEqual([basename(request.sourcePath)])
     },
@@ -222,13 +690,14 @@ describe('JSONL immutable generation publication', () => {
     const request = options(root)
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
     const order: string[] = []
+    const base = adapter()
 
     await ensureJsonlGenerationCurrent({
       ...request,
       format: adapter({
-        migrate: (source) => {
-          order.push('migrate')
-          return { header: { ...source.header, version: 1 }, rows: source.rows }
+        createRestore: (value) => {
+          order.push('restore')
+          return base.createRestore(value)
         },
       }),
       validateHistoricalHeader: async () => {
@@ -237,7 +706,7 @@ describe('JSONL immutable generation publication', () => {
       },
     })
 
-    expect(order).toEqual(['validate', 'migrate'])
+    expect(order).toEqual(['validate', 'restore'])
   })
 
   it('rejects a resolver/header version disagreement before migration', async () => {
@@ -251,24 +720,15 @@ describe('JSONL immutable generation publication', () => {
     expect(await readdir(root)).toEqual(['session.jsonl'])
   })
 
-  it('rejects malformed and future version discriminators before migration', async () => {
+  it('rejects a malformed version discriminator before migration', async () => {
     const root = await tempRoot()
     const malformed = options(join(root, 'malformed'))
-    const future = options(join(root, 'future'), 'none', adapter(), 2)
     await mkdir(join(root, 'malformed'))
-    await mkdir(join(root, 'future'))
     await writeFile(malformed.sourcePath, line(header(-1)))
-    await writeFile(future.sourcePath, line(header(2, 'future-id')))
 
     await expect(ensureJsonlGenerationCurrent(malformed)).rejects.toThrow(
       'header version is not a non-negative safe integer',
     )
-    await expect(ensureJsonlGenerationCurrent(future)).rejects.toMatchObject({
-      name: 'JsonlGenerationNewerVersionError',
-      storedVersion: 2,
-      currentVersion: 1,
-      storedId: 'future-id',
-    } satisfies Partial<JsonlGenerationNewerVersionError>)
   })
 
   it.each([
@@ -309,7 +769,7 @@ describe('JSONL immutable generation publication', () => {
     }
 
     await expect(ensureJsonlGenerationCurrent(options(blockedRoot, 'none', adapter({
-      migrate: () => { throw blocked },
+      createRestore: () => { throw blocked },
       isUnsupportedMigrationError: (error): error is Error => error === blocked,
     })))).rejects.toMatchObject({
       name: 'JsonlGenerationUnsupportedMigrationError',
@@ -317,11 +777,22 @@ describe('JSONL immutable generation publication', () => {
       reason: blocked,
     } satisfies Partial<JsonlGenerationUnsupportedMigrationError>)
     await expect(ensureJsonlGenerationCurrent(options(ordinaryRoot, 'none', adapter({
-      migrate: () => { throw ordinary },
+      createRestore: () => { throw ordinary },
     })))).rejects.toBe(ordinary)
+    const wrongBase = adapter()
     await expect(ensureJsonlGenerationCurrent(options(wrongRoot, 'none', adapter({
-      migrate: source => ({ header: { ...source.header, version: 2 }, rows: source.rows }),
-    })))).rejects.toThrow('format migration returned v2, expected v1')
+      createRestore: (value) => {
+        const restore = wrongBase.createRestore(value)
+        return {
+          header: { ...restore.header, version: 3 },
+          decodeRow: (row) => { restore.decodeRow(row) },
+          finish: () => {
+            const artifact = restore.finish()
+            return { ...artifact, header: { ...artifact.header, version: 3 } }
+          },
+        }
+      },
+    })))).rejects.toThrow('format migration returned v3, expected v2')
     expect(await readdir(blockedRoot)).toEqual(['session.jsonl'])
     expect(await readdir(ordinaryRoot)).toEqual(['session.jsonl'])
     expect(await readdir(wrongRoot)).toEqual(['session.jsonl'])
@@ -342,24 +813,18 @@ describe('JSONL immutable generation publication', () => {
       await expect(ensureJsonlGenerationCurrent({
         ...request,
         format: adapter({
-          migrate: source => ({ header: { ...source.header, version: 1 }, rows: [value] }),
+          encodeEvent: () => value as never,
         }),
-      })).rejects.toThrow('migrated session row 1 is not lossless JSON')
+      })).rejects.toThrow('migrated Session event 0 is not lossless JSON')
       expect(await readdir(root), name).toEqual(['session.jsonl'])
     }
   })
 
   it('publishes only the final generation across a multi-edge migration', async () => {
     const root = await tempRoot()
-    const format = adapter({
-      currentVersion: 3,
-      migrate: source => ({ header: { ...source.header, version: 3 }, rows: source.rows }),
-      validateCurrent: (candidate) => {
-        if (candidate.header.version !== 3) throw new Error('candidate is not v3')
-      },
-    })
-    const request = options(root, 'none', format, 1)
-    const source = Buffer.from(line(header(1)) + line(event0))
+    const format = adapter()
+    const request = options(root, 'none', format)
+    const source = Buffer.from(line(header(0)) + line(event0))
     await writeFile(request.sourcePath, source)
     const sourceBefore = await stat(request.sourcePath, { bigint: true })
 
@@ -368,8 +833,8 @@ describe('JSONL immutable generation publication', () => {
     expect(await readFile(request.sourcePath)).toEqual(source)
     const sourceAfter = await stat(request.sourcePath, { bigint: true })
     expect([sourceAfter.dev, sourceAfter.ino]).toEqual([sourceBefore.dev, sourceBefore.ino])
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(3)) + line(event0))
-    expect((await readdir(root)).sort()).toEqual(['session.v1.jsonl', 'session.v3.jsonl'])
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line({ ...header(2), isSeeded: false }) + line(event0))
+    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v2.jsonl'])
   })
 
   it.each(['none', 'zstd'] as const)(
@@ -393,7 +858,7 @@ describe('JSONL immutable generation publication', () => {
       const currentText = compression === 'zstd'
         ? await decodeZstdJsonl(request.currentPath)
         : await readFile(request.currentPath, 'utf8')
-      expect(currentText).toBe(line(header(1)) + line(event0))
+      expect(currentText).toBe(line(header(2)) + line(event0))
     },
   )
 
@@ -419,9 +884,9 @@ describe('JSONL immutable generation publication', () => {
     await ensureJsonlGenerationCurrent(emptyTailRequest)
     await ensureJsonlGenerationCurrent(tornRequest)
 
-    expect(await decodeZstdJsonl(headerRequest.currentPath)).toBe(line(header(1)))
-    expect(await decodeZstdJsonl(emptyTailRequest.currentPath)).toBe(line(header(1)))
-    expect(await decodeZstdJsonl(tornRequest.currentPath)).toBe(line(header(1)) + line(event0) + line(event1))
+    expect(await decodeZstdJsonl(headerRequest.currentPath)).toBe(line(header(2)))
+    expect(await decodeZstdJsonl(emptyTailRequest.currentPath)).toBe(line(header(2)))
+    expect(await decodeZstdJsonl(tornRequest.currentPath)).toBe(line(header(2)) + line(event0) + line(event1))
   })
 
   it('rejects header-less raw and Zstandard sources and a non-independent Zstandard header frame', async () => {
@@ -479,7 +944,7 @@ describe('JSONL immutable generation publication', () => {
     await expect(ensureJsonlGenerationCurrent(refused)).rejects.toThrow('row 2 is not valid JSON')
 
     expect(await readFile(dropped.sourcePath, 'utf8')).toBe(incomplete)
-    expect(await readFile(dropped.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(dropped.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
     expect(await readFile(refused.sourcePath, 'utf8')).toBe(committed)
     expect(await readdir(refusedRoot)).toEqual(['session.jsonl'])
   })
@@ -493,7 +958,7 @@ describe('JSONL immutable generation publication', () => {
     await ensureJsonlGenerationCurrent(request)
 
     expect(await readFile(request.sourcePath)).toEqual(source)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('validates canonical lowercase generation filenames and one shared directory', async () => {
@@ -507,11 +972,11 @@ describe('JSONL immutable generation publication', () => {
         message: 'source path must end with "session.jsonl"',
       },
       {
-        request: { ...options(root), currentPath: join(root, 'session.V1.jsonl') },
-        message: 'current JSONL generation path must end with "session.v1.jsonl"',
+        request: { ...options(root), currentPath: join(root, 'session.V2.jsonl') },
+        message: 'current JSONL generation path must end with "session.v2.jsonl"',
       },
       {
-        request: { ...options(root), currentPath: generationPath(other, 1, 'none') },
+        request: { ...options(root), currentPath: generationPath(other, 2, 'none') },
         message: 'must share one Session directory',
       },
     ]
@@ -522,7 +987,7 @@ describe('JSONL immutable generation publication', () => {
     }
   })
 
-  it('retries a bracketed physical read and a source changed before publication', async () => {
+  it('bounds a bracketed physical read and does not rerun migration after a publication race', async () => {
     const root = await tempRoot()
     const request = options(root)
     const first = Buffer.from(line(header(0)) + line(event0))
@@ -535,21 +1000,21 @@ describe('JSONL immutable generation publication', () => {
       stats += 1
       return stats === 2 ? { ...value, mtimeNs: value.mtimeNs + 1n } : value
     }
-    const migrate = vi.fn((source: Parameters<JsonlGenerationFormatAdapter['migrate']>[0]) =>
-      adapter().migrate(source))
+    const base = adapter()
+    const createRestore = vi.fn((value: Record<string, unknown>) => base.createRestore(value))
     const barrier = vi.fn(async (phase: string, attempt: number) => {
       if (phase === 'before-source-check' && attempt === 1) await writeFile(request.sourcePath, second)
     })
 
-    await __jsonlGenerationTest.ensure(
-      { ...request, format: adapter({ migrate }) },
+    await expect(ensureWithOverrides(
+      { ...request, format: { ...base, createRestore } },
       { fs: { stat: statFile }, barrier },
-    )
+    )).rejects.toBeInstanceOf(JsonlGenerationSourceChangedError)
 
     expect(stats).toBeGreaterThan(2)
-    expect(migrate).toHaveBeenCalledTimes(2)
+    expect(createRestore).toHaveBeenCalledOnce()
     expect(await readFile(request.sourcePath)).toEqual(second)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0) + line(event1))
+    await expect(readFile(request.currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
     expect((await readdir(root)).every(name => !name.includes('.tmp'))).toBe(true)
   })
 
@@ -564,7 +1029,7 @@ describe('JSONL immutable generation publication', () => {
       if (phase === 'before-source-check' && attempt === 1) await writeFile(request.sourcePath, second)
     }
 
-    await expect(__jsonlGenerationTest.ensure(request, {
+    const failure = await ensureWithOverrides(request, {
       barrier,
       fs: {
         rm: async (path: string) => {
@@ -572,7 +1037,10 @@ describe('JSONL immutable generation publication', () => {
           await rm(path, { force: true })
         },
       },
-    })).rejects.toBe(cleanup)
+    }).then(() => undefined, (error: unknown) => error)
+    if (!(failure instanceof AggregateError)) throw new Error('expected source and cleanup failures')
+    expect(failure.errors[0]).toBeInstanceOf(JsonlGenerationSourceChangedError)
+    expect(failure.errors[1]).toBe(cleanup)
     expect(await readFile(request.sourcePath)).toEqual(second)
     await expect(readFile(request.currentPath)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -585,14 +1053,14 @@ describe('JSONL immutable generation publication', () => {
     await writeFile(collision, 'owned-by-another-attempt\n')
     const randomToken = vi.fn().mockReturnValueOnce('collision').mockReturnValue('stage')
 
-    await __jsonlGenerationTest.ensure(request, { randomToken })
+    await ensureWithOverrides(request, { randomToken })
 
     expect(randomToken).toHaveBeenCalledTimes(2)
     expect(await readFile(collision, 'utf8')).toBe('owned-by-another-attempt\n')
     expect((await readdir(root)).sort()).toEqual([
       'session.jsonl',
       'session.migration.collision.jsonl.tmp',
-      'session.v1.jsonl',
+      'session.v2.jsonl',
     ])
   })
 
@@ -600,7 +1068,7 @@ describe('JSONL immutable generation publication', () => {
     const root = await tempRoot()
     const request = options(root)
     const source = Buffer.from(line(header(0)) + line(event0))
-    const current = Buffer.from(line(header(1)) + line(event0))
+    const current = Buffer.from(line(header(2)) + line(event0))
     await writeFile(request.sourcePath, source)
     await writeFile(request.currentPath, current)
 
@@ -609,7 +1077,7 @@ describe('JSONL immutable generation publication', () => {
     expect(result).toMatchObject({ status: 'migrated', path: request.currentPath })
     expect(await readFile(request.sourcePath)).toEqual(source)
     expect(await readFile(request.currentPath)).toEqual(current)
-    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v1.jsonl'])
+    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v2.jsonl'])
   })
 
   it.each(['none', 'zstd'] as const)(
@@ -621,8 +1089,8 @@ describe('JSONL immutable generation publication', () => {
         ? await encodeZstd(0, [event0])
         : Buffer.from(line(header(0)) + line(event0))
       const expected = compression === 'zstd'
-        ? await encodeZstd(1, [event0])
-        : Buffer.from(line(header(1)) + line(event0))
+        ? await encodeZstd(2, [event0])
+        : Buffer.from(line(header(2)) + line(event0))
       const appended = compression === 'zstd'
         ? await compressZstdFrame(line(event1))
         : Buffer.from(line(event1))
@@ -643,11 +1111,11 @@ describe('JSONL immutable generation publication', () => {
     const request = options(root)
     const expected = join(root, 'expected.jsonl')
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
-    await writeFile(expected, line(header(1)) + line(event0))
+    await writeFile(expected, line(header(2)) + line(event0))
     await link(expected, request.currentPath)
 
     await expect(ensureJsonlGenerationCurrent(request)).resolves.toMatchObject({ path: request.currentPath })
-    expect(await readFile(expected, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(expected, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it.each(['different', 'malformed', 'symlink', 'directory'] as const)(
@@ -657,7 +1125,7 @@ describe('JSONL immutable generation publication', () => {
       const request = options(root)
       const source = Buffer.from(line(header(0)) + line(event0))
       await writeFile(request.sourcePath, source)
-      if (kind === 'different') await writeFile(request.currentPath, line(header(1)) + line(event1))
+      if (kind === 'different') await writeFile(request.currentPath, line(header(2)) + line(event1))
       if (kind === 'malformed') await writeFile(request.currentPath, '{not-json}\n')
       if (kind === 'symlink') await symlink(request.sourcePath, request.currentPath)
       if (kind === 'directory') await mkdir(request.currentPath)
@@ -674,15 +1142,17 @@ describe('JSONL immutable generation publication', () => {
   it('normalizes a non-Error rejection while reopening an existing target', async () => {
     const root = await tempRoot()
     let validations = 0
-    const format = adapter({
-      validateCurrent: () => {
+    const format = adapter()
+    const request = {
+      ...options(root, 'none', format),
+      verifyCurrentFile: async (...args: Parameters<PrepareJsonlMigrationOptions['verifyCurrentFile']>) => {
         validations += 1
         if (validations === 2) throw 'non-error rejection'
+        return verifier()(...args)
       },
-    })
-    const request = options(root, 'none', format)
+    }
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
-    await writeFile(request.currentPath, line(header(1)) + line(event0))
+    await writeFile(request.currentPath, line(header(2)) + line(event0))
 
     const failure = await ensureJsonlGenerationCurrent(request).then(
       () => undefined,
@@ -690,46 +1160,6 @@ describe('JSONL immutable generation publication', () => {
     )
     if (!(failure instanceof JsonlGenerationTargetConflictError)) throw new Error('expected target conflict')
     expect(failure.reason.message).toBe('current-generation validation failed with a non-Error rejection')
-  })
-
-  it('leaves source and published target immutable when committed reopen rejects it', async () => {
-    const root = await tempRoot()
-    let validations = 0
-    const format = adapter({
-      validateCurrent: (candidate) => {
-        adapter().validateCurrent(candidate)
-        validations += 1
-        if (validations === 2) throw new Error('committed reopen rejected')
-      },
-    })
-    const request = options(root, 'none', format)
-    const source = Buffer.from(line(header(0)) + line(event0))
-    await writeFile(request.sourcePath, source)
-
-    const failure = await ensureJsonlGenerationCurrent(request).then(
-      () => undefined,
-      (error: unknown) => error,
-    )
-    if (!(failure instanceof JsonlGenerationTargetConflictError)) throw new Error('expected target conflict')
-    expect(failure.reason.message).toBe('committed reopen rejected')
-
-    expect(await readFile(request.sourcePath)).toEqual(source)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
-  })
-
-  it('reopens the target after publication instead of trusting staged validation', async () => {
-    const root = await tempRoot()
-    const validateCurrent = vi.fn((candidate: JsonlCurrentGeneration) => {
-      adapter().validateCurrent(candidate)
-    })
-    const barrier = vi.fn()
-    const request = options(root, 'none', adapter({ validateCurrent }))
-    await writeFile(request.sourcePath, line(header(0)) + line(event0))
-
-    await __jsonlGenerationTest.ensure(request, { barrier })
-
-    expect(validateCurrent).toHaveBeenCalledTimes(2)
-    expect(barrier).toHaveBeenCalledWith('after-publication', 1)
   })
 
   it('retains a POSIX publication after the directory sync fails', async () => {
@@ -747,29 +1177,48 @@ describe('JSONL immutable generation publication', () => {
       return handle
     }
 
-    await expect(__jsonlGenerationTest.ensure(
+    await expect(ensureWithOverrides(
       request,
       { platform: 'darwin', fs: { open: openFile } },
     )).rejects.toBe(directorySyncFailure)
-    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v1.jsonl'])
+    expect((await readdir(root)).sort()).toEqual(['session.jsonl', 'session.v2.jsonl'])
 
     await expect(ensureJsonlGenerationCurrent(request)).resolves.toMatchObject({ path: request.currentPath })
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
-  it('rethrows the exact abort reason after publication and leaves the committed target', async () => {
+  it('retains a committed generation when its post-publication stat fails', async () => {
+    const root = await tempRoot()
+    const request = options(root)
+    const statFailure = new Error('published target stat failed')
+    await writeFile(request.sourcePath, line(header(0)) + line(event0))
+    let targetStats = 0
+
+    await expect(ensureWithOverrides(request, {
+      fs: {
+        stat: async (path) => {
+          if (path === request.currentPath && ++targetStats === 1) throw statFailure
+          return stat(path, { bigint: true })
+        },
+      },
+    })).rejects.toBe(statFailure)
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
+    expect((await readdir(root)).every(name => !name.includes('.tmp'))).toBe(true)
+  })
+
+  it('finishes a committed publication despite later caller cancellation', async () => {
     const root = await tempRoot()
     const controller = new AbortController()
     const reason = new Error('stop after publication')
     const request = { ...options(root), signal: controller.signal }
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
 
-    await expect(__jsonlGenerationTest.ensure(request, {
+    await expect(ensureWithOverrides(request, {
       barrier: (phase) => {
         if (phase === 'after-publication') controller.abort(reason)
       },
-    })).rejects.toBe(reason)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    })).resolves.toMatchObject({ status: 'migrated', path: request.currentPath })
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('rejects a noncanonical case-insensitive collision instead of accepting its bytes', async () => {
@@ -777,16 +1226,16 @@ describe('JSONL immutable generation publication', () => {
     const request = options(root)
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
 
-    const failure = await __jsonlGenerationTest.ensure(request, {
+    const failure = await ensureWithOverrides(request, {
       platform: 'darwin',
       fs: posixSimulationFs({
         link: async () => { throw fsError('EEXIST') },
-        readdir: async () => ['session.V1.jsonl'],
+        readdir: async () => ['session.V2.jsonl'],
       }),
     }).then(() => undefined, (error: unknown) => error)
 
     if (!(failure instanceof JsonlGenerationTargetConflictError)) throw new Error('expected target conflict')
-    expect(failure.reason.message).toContain('noncanonical directory entry "session.V1.jsonl"')
+    expect(failure.reason.message).toContain('noncanonical directory entry "session.V2.jsonl"')
     expect((await readdir(root)).every(name => !name.includes('.tmp'))).toBe(true)
   })
 
@@ -795,45 +1244,28 @@ describe('JSONL immutable generation publication', () => {
     const request = options(root)
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
 
-    await expect(__jsonlGenerationTest.ensure(request, {
+    await expect(ensureWithOverrides(request, {
       platform: 'darwin',
       fs: posixSimulationFs({ link: async () => { throw fsError('EEXIST') } }),
     })).rejects.toMatchObject({ code: 'ENOENT', path: request.currentPath })
   })
 
-  it('preserves a filesystem error while reopening a committed target', async () => {
+  it('does not reopen a target after exclusive publication', async () => {
     const root = await tempRoot()
     const request = options(root)
-    const failure = fsError('EACCES', 'current target is unreadable')
-    failure.path = request.currentPath
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
+    const reads: string[] = []
 
-    await expect(__jsonlGenerationTest.ensure(request, {
+    await expect(ensureWithOverrides(request, {
       fs: {
         readFile: async (path, signal) => {
-          if (path === request.currentPath) throw failure
+          reads.push(path)
           return readFile(path, signal === undefined ? undefined : { signal })
         },
       },
-    })).rejects.toBe(failure)
-  })
-
-  it('rethrows the exact abort reason during committed reopen and leaves the target', async () => {
-    const root = await tempRoot()
-    const controller = new AbortController()
-    const reason = new Error('stop during committed reopen')
-    const request = { ...options(root), signal: controller.signal }
-    await writeFile(request.sourcePath, line(header(0)) + line(event0))
-
-    await expect(__jsonlGenerationTest.ensure(request, {
-      fs: {
-        readFile: async (path, signal) => {
-          if (path === request.currentPath) controller.abort(reason)
-          return readFile(path, signal === undefined ? undefined : { signal })
-        },
-      },
-    })).rejects.toBe(reason)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    })).resolves.toMatchObject({ status: 'migrated', path: request.currentPath })
+    expect(reads).not.toContain(request.currentPath)
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('leaves a crash-style staging file inert', async () => {
@@ -846,7 +1278,7 @@ describe('JSONL immutable generation publication', () => {
     await ensureJsonlGenerationCurrent(request)
 
     expect(await readFile(crashStage, 'utf8')).toBe(line(header(99)))
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('removes an exclusively created stage when writing or syncing it fails', async () => {
@@ -863,7 +1295,7 @@ describe('JSONL immutable generation publication', () => {
       return handle
     }
 
-    await expect(__jsonlGenerationTest.ensure(request, { fs: { open: openFile } })).rejects.toThrow(
+    await expect(ensureWithOverrides(request, { fs: { open: openFile } })).rejects.toThrow(
       'simulated stage fsync failure',
     )
     expect(await readdir(root)).toEqual(['session.jsonl'])
@@ -891,7 +1323,7 @@ describe('JSONL immutable generation publication', () => {
         return handle
       }
 
-      await expect(__jsonlGenerationTest.ensure(request, { fs: { open: openFile } })).rejects.toThrow(
+      await expect(ensureWithOverrides(request, { fs: { open: openFile } })).rejects.toThrow(
         mode === 'open'
           ? 'stage open denied'
           : mode === 'close'
@@ -916,11 +1348,11 @@ describe('JSONL immutable generation publication', () => {
       await rm(path, { force: true })
     }
 
-    await expect(__jsonlGenerationTest.ensure(
+    await expect(ensureWithOverrides(
       request,
       { fs: { open: openFile, rm: removeFile } },
     )).rejects.toThrow(cleanupFails
-      ? 'failed to clean migration stage'
+      ? 'failed to clean migration temporary'
       : 'migration stage write failed with a non-Error rejection')
   })
 
@@ -935,7 +1367,7 @@ describe('JSONL immutable generation publication', () => {
       await rm(path, { force: true })
     }
 
-    const failure = await __jsonlGenerationTest.ensure(
+    const failure = await ensureWithOverrides(
       request,
       {
         platform: 'darwin',
@@ -957,7 +1389,7 @@ describe('JSONL immutable generation publication', () => {
     const cleanup = new Error('published stage cleanup failed')
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
 
-    await expect(__jsonlGenerationTest.ensure(request, {
+    await expect(ensureWithOverrides(request, {
       platform: 'darwin',
       fs: posixSimulationFs({
         rm: async (path: string) => {
@@ -967,18 +1399,19 @@ describe('JSONL immutable generation publication', () => {
       }),
     })).resolves.toMatchObject({ status: 'migrated', path: request.currentPath })
 
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('surfaces candidate validation errors and cleanup errors without publishing', async () => {
     const root = await tempRoot()
-    const request = options(root, 'none', adapter({
-      validateCurrent: () => { throw new Error('candidate validation failed') },
-    }))
+    const request = {
+      ...options(root),
+      verifyCurrentFile: async () => { throw new Error('candidate validation failed') },
+    }
     const cleanup = new Error('cleanup failed')
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
 
-    const failure = await __jsonlGenerationTest.ensure(request, {
+    const failure = await ensureWithOverrides(request, {
       fs: {
         rm: async () => { throw cleanup },
       },
@@ -1001,18 +1434,18 @@ describe('JSONL immutable generation publication', () => {
         if (!path.includes('.tmp')) return bytes
         if (mode === 'torn') return bytes.subarray(0, -1)
         if (mode === 'old') return Buffer.from(line(header(0)) + line(event0))
-        return Buffer.from(line(header(1)) + '{not-json}\n')
+        return Buffer.from(line(header(2)) + '{not-json}\n')
       }
 
-      await expect(__jsonlGenerationTest.ensure(
+      await expect(ensureWithOverrides(
         request,
         { fs: { readFile: readFileForStage } },
       )).rejects.toThrow(
         mode === 'torn'
-          ? 'staged current session generation has a torn physical tail'
+          ? 'current session generation has a torn physical tail'
           : mode === 'old'
-            ? 'staged session generation is not current v1'
-            : 'row 1 is not valid JSON',
+            ? 'uses log format v0, older than the supported v2'
+            : 'unparsable committed event at line 1',
       )
       expect(await readdir(root)).toEqual(['session.jsonl'])
     },
@@ -1025,12 +1458,12 @@ describe('JSONL immutable generation publication', () => {
     await writeFile(request.sourcePath, source)
     const publishNewWin32 = vi.fn(async (from: string, to: string) => { await rename(from, to) })
 
-    await __jsonlGenerationTest.ensure(request, { platform: 'win32', publishNewWin32 })
+    await ensureWithOverrides(request, { platform: 'win32', publishNewWin32 })
 
     expect(publishNewWin32).toHaveBeenCalledOnce()
     expect(publishNewWin32.mock.calls[0]?.[1]).toBe(request.currentPath)
     expect(await readFile(request.sourcePath)).toEqual(source)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('accepts an identical target that wins Windows publication', async () => {
@@ -1038,11 +1471,11 @@ describe('JSONL immutable generation publication', () => {
     const request = options(root)
     await writeFile(request.sourcePath, line(header(0)) + line(event0))
     const publishNewWin32 = vi.fn(async (_from: string, to: string) => {
-      await writeFile(to, line(header(1)) + line(event0))
+      await writeFile(to, line(header(2)) + line(event0))
       throw fsError('EEXIST')
     })
 
-    await expect(__jsonlGenerationTest.ensure(
+    await expect(ensureWithOverrides(
       request,
       { platform: 'win32', publishNewWin32 },
     )).resolves.toMatchObject({ path: request.currentPath })
@@ -1056,7 +1489,7 @@ describe('JSONL immutable generation publication', () => {
       const failure = new Error(`${platform} publication failed`)
       await writeFile(request.sourcePath, line(header(0)) + line(event0))
 
-      await expect(__jsonlGenerationTest.ensure(request, platform === 'win32'
+      await expect(ensureWithOverrides(request, platform === 'win32'
         ? { platform, publishNewWin32: async () => { throw failure } }
         : { platform, fs: posixSimulationFs({ link: async () => { throw failure } }) }))
         .rejects.toBe(failure)
@@ -1075,13 +1508,13 @@ describe('JSONL immutable generation publication', () => {
       throw fsError('EEXIST')
     }
 
-    await __jsonlGenerationTest.ensure(
+    await ensureWithOverrides(
       request,
       { platform: 'darwin', fs: posixSimulationFs({ link: linkFile }) },
     )
 
     expect(raced).toBe(true)
-    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(1)) + line(event0))
+    expect(await readFile(request.currentPath, 'utf8')).toBe(line(header(2)) + line(event0))
   })
 
   it('honors cancellation before reading a generation', async () => {

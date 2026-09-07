@@ -16,7 +16,7 @@ Status: implemented
 - **`run_in_background` 经通用任务运行时接线**，与 bash 工具完全一致：预检、owner 注册、`job_output`/`job_kill` 控制与相同的结果映射。其背后是 `pwsh-local` 早已镜像好的 `start()` 句柄。
 - **`DSH_*` 环境共享而非复制**：`ShellEnvRegistry` 从 `dsh-tool-bash` 迁入新的工具无关包 `@deepseek-ai/dsh-shell-env`（`ctx.shellEnv` + 内置事实 + 会话持久化贡献方），两个 shell 工具都注入它。contributor 对 pwsh 调用与 bash 调用一视同仁；因此，共享环境的所有权不属于任何一个面向模型的 shell 工具。
 - **Windows 现实在 bash 无对应处钉死**：每条命令都在 UTF-8 输出前置代码下运行，使 Windows PowerShell 5.1 兜底无法经 UTF-8 解码的 collector 破坏非 ASCII 输出；提示词说明 Windows 强制终止以 exit 1 结算，不产生 signal marker。
-- **范围外，不变**：持久 PTY shell（后端仅限 Linux/macOS；ConPTY 属路线图）。沙箱升级随 [Windows ACL 沙箱决策](2026-08-08-windows-acl-restricted-token-sandbox.zh.md) 稍后交付——pwsh 工具现在携带沙箱拒绝渲染与同轮次 `sandbox_permissions` 升级面，外加其描述中的 Windows ConstrainedLanguage 约定。带退出 pill 的 pwsh 专属 terminal 卡已随 [pwsh UI 呈现与 bash 对齐](2026-08-05-pwsh-ui-bash-parity.zh.md) 决策另行交付。
+- **范围外，不变**：持久 PTY shell（后端仅限 Linux/macOS；ConPTY 属路线图）。沙箱升级随 [Windows ACL 沙箱决策](2026-08-08-windows-acl-restricted-token-sandbox.zh.md) 稍后交付——pwsh 工具现在携带沙箱拒绝渲染与同轮次 `sandbox_permissions` 升级面，外加其描述中的 Windows ConstrainedLanguage 约定。带退出 pill 的 pwsh 专属 terminal 卡已随 [pwsh UI 呈现与 bash 对齐](../../archived/feature/2026-08-05-pwsh-ui-bash-parity.md) 决策另行交付。
 
 ## 备选方案
 
@@ -33,4 +33,4 @@ Status: implemented
 - `@deepseek-ai/dsh-shell-env` 成为新的交付包；`dsh-tool-bash` 的 `dshHome` 配置迁往那里，因此挂载 shell 工具的组合也必须挂载 `shell-env`（主干组合包已如此）。
 - Windows 专属语义（CRLF 归一化、强制终止 exit-1/signal-null、仅 POSIX 的自信号）一如既往由测试钉住。
 - pwsh 工具的逐文件覆盖率门禁由可脚本化的 fake 执行器套件（`tests/tools.spec.ts`）承担；真实 pwsh 的集成与 Loader 组合套件在无 `pwsh` 的宿主自跳过，与 bash 套件的分工一致。
-- 路线图提案的 parity 阶段已交付；terminal 卡呈现阶段随 [pwsh UI 呈现与 bash 对齐](2026-08-05-pwsh-ui-bash-parity.zh.md) 决策交付（TUI 本身已移除），剩余阶段是 Windows 默认组合。
+- 路线图提案的 parity 阶段已交付；terminal 卡呈现阶段随 [pwsh UI 呈现与 bash 对齐](../../archived/feature/2026-08-05-pwsh-ui-bash-parity.md) 决策交付（TUI 本身已移除），剩余阶段是 Windows 默认组合。

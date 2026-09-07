@@ -11,7 +11,7 @@
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:
-    persona: 'Return the scripted DSH SDK failure.'
+    personaPrefix: 'Return the scripted DSH SDK failure.'
 
 - insert:
     - id: child-mock-llm

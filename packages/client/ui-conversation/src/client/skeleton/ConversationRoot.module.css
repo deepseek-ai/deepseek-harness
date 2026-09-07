@@ -334,7 +334,7 @@
   /* Reserved unconditionally: the composer seat rides this box's content box in
      Chat and its padding box under a view's composer overlay, so an `auto`
      gutter moves the input card sideways by the bar's width whenever the two
-     differ ([decision](../../../../../../.agents/notes/implemented/bug-fix/2026-08-04-composer-tab-gutter-reservation.md)). */
+     differ ([decision](../../../../../../.agents/notes/archived/bug-fix/2026-08-04-composer-tab-gutter-reservation.md)). */
   scrollbar-gutter: stable;
 }
 
@@ -385,7 +385,7 @@
      view), so this box never scrolls here; reserving a gutter would only
      narrow the view's content by the bar's width. Chat keeps the reservation
      on the same element, so the seat below compensates with the bar's width
-     ([decision](../../../../../../.agents/notes/implemented/bug-fix/2026-08-04-composer-tab-gutter-reservation.md)). */
+     ([decision](../../../../../../.agents/notes/archived/bug-fix/2026-08-04-composer-tab-gutter-reservation.md)). */
   scrollbar-gutter: auto;
 }
 
@@ -404,7 +404,7 @@
      bar's layout width. Chat reserves the engine-resolved width, so on an
      engine where the resolved width differs from this fixed 8px the card
      drifts by half the difference — accepted residual risk, recorded in
-     ([decision](../../../../../../.agents/notes/implemented/bug-fix/2026-08-12-composer-overlay-seat-width-compensation.md)). */
+     ([decision](../../../../../../.agents/notes/archived/bug-fix/2026-08-12-composer-overlay-seat-width-compensation.md)). */
   right: var(--dsh-scrollbar-width);
   bottom: 0;
   left: 0;

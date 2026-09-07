@@ -1,5 +1,5 @@
 ---
-description: "The local filesystem spill backend: how spilled tool output is saved to private session-scoped files and retrieved with read or grep."
+description: "The local filesystem spill backend: how spilled text is saved to private session-scoped files and retrieved with read or grep."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-spill-local` saves a tool's oversized text to a private, session-scoped file on the host filesystem and returns that file's path as the locator, with retrieval guidance telling the model to read or grep it. Mount it whenever a composition needs spill storage on the same machine the agent runs on. Files are private to the current user, names are unpredictable, and each session's files group under a stable directory, so a shared root cannot leak output or be redirected by a planted symlink. Configuration selects the root and the startup-cleanup retention period; previews and spill decisions live in other packages.
+`dsh-spill-local` saves a caller's oversized text to a private, session-scoped file on the host filesystem and returns that file's path as the locator, with retrieval guidance telling the model to read or grep it. Mount it whenever a composition needs spill storage on the same machine the agent runs on. Files are private to the current user, names are unpredictable, and each session's files group under a stable directory, so a shared root cannot leak output or be redirected by a planted symlink. Configuration selects the root and the startup-cleanup retention period; previews and spill decisions live in other packages.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this backend in a composition that spills tool output to the local filesystem. It registers as the `ctx.spillStore` service that the `dsh-spill-policy` plugin and other callers use.
+Mount this backend in a composition that spills text to the local filesystem. It registers as the `ctx.spillStore` service that the `dsh-spill-policy` plugin and other callers use.
 
 ### Minimal configuration
 
@@ -53,6 +53,7 @@ Each `saveText` call writes the full text to a fresh file and returns three fiel
 
 Files are stored at `<root>/session-<hash>/<random>-<safeName>`, where `session-<hash>` is a short hash of the owning session id (so one session's files group together) and `<random>-<safeName>` pairs an unpredictable hex prefix with the caller's suggested name sanitized to one safe path segment. A relative `root` resolves from the process working directory.
 
+<a id="startup-cleanup"></a>
 ### Startup cleanup
 
 One best-effort sweep starts after activation without delaying service availability. It scans the configured root and prior default `dsh-spill-*` roots under the OS temp directory, deletes regular files whose modification time is strictly older than the configured cutoff, prunes empty session directories, and removes only empty prior-default roots. A long-lived process does not sweep again until restart. Disposal waits for the sweep, and a concurrent write recreates a session directory if cleanup removes it.
@@ -75,7 +76,7 @@ This section explains the design decisions behind the backend; the observable be
 
 ### Design philosophy
 
-The backend owns storage details only, on one principle: **a spilled tool result must be private and unredirectable**. The root is private (0700), the session directory is a stable hash, the leaf name is unpredictable, and the write is exclusive and owner-only. The storage mechanics live in a Cordis-free module so they are unit-testable without a context.
+The backend owns storage details only, on one principle: **a spilled artifact must be private and unredirectable**. The root is private (0700), the session directory is a stable hash, the leaf name is unpredictable, and the write is exclusive and owner-only. The storage mechanics live in a Cordis-free module so they are unit-testable without a context.
 
 ### Source map
 
@@ -104,7 +105,6 @@ Read these pages when the package-level contract is not enough.
 - [dsh-spill-policy](../spill-policy/README.md) — the policy that calls this backend when a result is too large.
 - [Spill subsystem](../../../docs/subsystems/spill.md) — the exhaustive vocabulary and ownership.
 - [Tool output spill decision](../../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.md) — the capability boundary and design rationale.
-- [Local spill startup cleanup](../../../.agents/notes/implemented/architecture/2026-07-17-local-spill-startup-cleanup.md) — retention, race handling, and safe deletion rules.
 
 -----
 

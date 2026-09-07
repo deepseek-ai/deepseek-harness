@@ -42,7 +42,7 @@ Status: implemented
 | `@deepseek-ai/dsh-command-goal` | `packages/goal/command-goal/`，人类命令生产方 | 为 TUI 注册构建在目标领域之上的 `/goal` 状态、创建、编辑、暂停、恢复与清除。 |
 | `@deepseek-ai/dsh-tool-ralph` | `packages/workflow/tool-ralph/`，固定工作流消费方 | 注册 `ralph({ objective, maxRounds? })`，验证全新结构化提供方与有界 `RalphRoundReport`，并返回 `complete`、`blocked` 或 `budget-limited`。 |
 
-详细约定见[目标领域](2026-07-19-persisted-same-session-goal-domain.zh.md)、[目标自有事件](../architecture/2026-07-31-goal-owned-durable-events.zh.md)、[模型目标工具](2026-07-19-model-facing-goal-tools.zh.md)、[Goal Round 驱动器](2026-07-19-same-session-goal-round-driver.zh.md)、[命令注册表](2026-07-19-plugin-command-registration.zh.md)、[人类目标命令](2026-07-19-human-goal-command.zh.md)与 [Ralph 工作流工具](2026-07-19-fresh-agent-ralph-workflow-tool.zh.md) Agent Note。
+详细约定见[目标领域](2026-07-19-persisted-same-session-goal-domain.zh.md)、[目标自有事件](../architecture/2026-07-31-goal-owned-durable-events.zh.md)、[模型目标工具](2026-07-19-model-facing-goal-tools.zh.md)、[Goal Round 驱动器](../../archived/feature/2026-07-19-same-session-goal-round-driver.md)、[命令注册表](2026-07-19-plugin-command-registration.zh.md)、[人类目标命令](../../archived/feature/2026-07-19-human-goal-command.md)与 [Ralph 工作流工具](../../archived/feature/2026-07-19-fresh-agent-ralph-workflow-tool.md) Agent Note。
 
 ### 持久目标状态与实时权限
 

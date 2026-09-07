@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-directory-picker-native",
   "description": "Native-OS-chooser backend of the directory-picker seam for the DeepSeek Harness web GUI host",
-  "version": "0.1.3-alpha.1",
+  "version": "0.1.3-alpha.2",
   "publishConfig": {
     "access": "public"
   },

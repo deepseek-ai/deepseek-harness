@@ -2,13 +2,13 @@
 
 English | [中文](spill.zh.md)
 
-The spill storage seam — a [capability seam](../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.md) that persists a tool's oversized text and returns a model-facing locator plus retrieval guidance, split across packages: Service Definition ([dsh-spill](../../packages/spill/spill), `ctx.spillStore`), Service Provider ([dsh-spill-local](../../packages/spill/spill-local), private session-scoped files on the host filesystem), and Consumer ([dsh-spill-policy](../../packages/spill/spill-policy), the `tools/post-execute` policy). Spill is **one optional capability**, not part of the agent-loop spine — so its vocabulary lives here, not in [core.md](core.md). Preview mechanics stay in [dsh-output-retention](../../packages/util/output-retention); this seam only saves the final text the policy hands it.
+The spill storage [capability seam](../../.agents/notes/implemented/architecture/2026-07-08-tool-output-spill-files.md) persists caller-provided text and returns a model-facing locator with retrieval guidance. Its Service Definition is [dsh-spill](../../packages/spill/spill) (`ctx.spillStore`), and its local Service Provider is [dsh-spill-local](../../packages/spill/spill-local). Consumers include the [tool-result policy](../../packages/spill/spill-policy) and [session references](../../packages/context/session-reference/README.md). Spill is optional, not part of the [agent-loop spine](core.md); consumers own preview and spill decisions, while storage saves the supplied text verbatim.
 
 Source: [`packages/spill/spill/src/types.ts`](../../packages/spill/spill/src/types.ts)
 
 ## The save request
 
-`saveText` is the sole service operation: persist `content` verbatim, return an opaque locator, a backend-supplied retrieval hint, and the exact byte count. The request carries the save-time storage namespace (`owner`), the tool and call that produced it (`source`, used for naming and inspection — not access control), and a `suggestedName` the backend may use as a naming hint (it is not a path).
+`saveText` is the sole service operation: persist `content` verbatim, return an opaque locator, a backend-supplied retrieval hint, and the exact byte count. The request carries the save-time storage namespace (`owner`), descriptive producer provenance (`source`, never access control), and a `suggestedName` the backend may use as a naming hint, not a path. Tool provenance identifies the actual tool call; session-reference provenance identifies the captured source session, while its owner is the target session receiving the context.
 
 ```ts type-equiv
 /** One request to persist text to a spill artifact. */
@@ -42,16 +42,23 @@ A retention-period cleanup may expire old locators with other old session artifa
 
 ```ts type-equiv
 /**
- * Tool and call that produced one spilled artifact — recorded by the backend for a readable
- * filename and inspection. Not interpreted for access control; purely
- * descriptive.
+ * Producer of a spilled artifact. Tool results carry their model-issued call id;
+ * session references identify the captured source session instead. Descriptive
+ * provenance only, never access control.
  */
-interface SpillSource {
+type SpillSource = {
+  kind: 'tool'
   /** The tool whose result was spilled (e.g. `web_fetch`). */
   toolName: string
   /** The model-issued call id the result belongs to. */
   callId: ToolCallId
   /** A short human label for the artifact (e.g. `result`). */
+  label: string
+} | {
+  kind: 'session-reference'
+  /** Session whose projected conversation was captured. */
+  sessionId: SessionId
+  /** Host-provided label for the referenced session. */
   label: string
 }
 ```

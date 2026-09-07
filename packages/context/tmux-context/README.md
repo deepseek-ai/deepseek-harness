@@ -85,7 +85,7 @@ At the first step of a turn, the listener checks whether an injection is due, qu
 
 Read these pages when the package-level contract is not enough. They move from the design decision to the executor the query runs through and the exhaustive configuration.
 
-- [Tmux location context decision record](../../../.agents/notes/implemented/feature/2026-07-27-tmux-location-context.md) — design rationale for the tty-based detection and reading shape.
+- [Tmux location context decision record](../../../.agents/notes/archived/feature/2026-07-27-tmux-location-context.md) — design rationale for the tty-based detection and reading shape.
 - [Shell subsystem](../../../docs/subsystems/shell.md) — the executor service the read-only query runs through.
 - [Context group map](../README.md) — sibling request-context packages.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tmux-context) — every accepted config field and its source declaration.

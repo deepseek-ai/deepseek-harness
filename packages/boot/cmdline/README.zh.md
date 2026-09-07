@@ -106,10 +106,8 @@ kind: "package-library"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从交接机制逐步进入消费它的应用及其背后的决策。
+当包级约定不够用时阅读以下页面。它们从交接机制逐步进入消费它的应用。
 
-- [应用持有命令行决策](../../../.agents/notes/implemented/architecture/2026-08-06-app-owned-command-line.zh.md)——为什么 flag 家族由应用持有，以及交接如何运作。
-- [命令行 seam 精简](../../../.agents/notes/implemented/architecture/2026-08-11-cmdline-seam-trim.zh.md)——缩减到既有接口的各 seam。
 - [dsh-app-boot](../app-boot/README.zh.md)——提供这些启动器值的启动序列。
 - [dsh-web-app 组合包](../../bundle/web-app/README.zh.md)——通过此包持有 Web flag 家族的应用。
 - [dsh-headless 组合包](../../bundle/headless/README.zh.md)——从命令行读取任务的一次性 runner。

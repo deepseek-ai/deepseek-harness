@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-session-format-catalog` 为持久化提供一个确定性的 Session 格式读取器，且无需查询已挂载插件。它把冻结的 v0、v1 与 v2 编解码器和相邻的 v0 到 v1、v1 到 v2 迁移边装配起来，在模块初始化时校验完整且无缺口的迁移链，并通过 `sessionFormatCatalog` 暴露物理分派、仅标头分类、迁移和当前格式编码。
+`dsh-session-format-catalog` 为持久化提供一个确定性的 Session 格式读取器，且无需查询已挂载插件。它把冻结的 v0、v1 与 v2 编解码器和相邻的 v0 到 v1、v1 到 v2 迁移边装配起来，在模块初始化时校验完整且无缺口的迁移链，并通过 `sessionFormatCatalog` 暴露物理分派、仅 header 分类、单遍行还原和当前格式逐记录编码。
 
 ## 目录
 
@@ -27,16 +27,22 @@ kind: "package-library"
 
 ### 何时使用
 
-当持久化与测试支持读取方需要在任何功能插件挂载前取得完整第一方已发布格式清单时，导入本库。功能组合不会注册或重排其条目。它不发布运行时不变式伴生入口，因为构造过程会拒绝无效静态清单，每次读取也会校验完整结果；目录不保留可独立分叉的运行时可变关系。
+当持久化与测试支持读取方需要在任何功能插件挂载前取得完整第一方已发布格式清单时，导入本库。功能组合不会注册或重排其条目。它不发布运行时不变式伴生入口，因为构造过程会拒绝无效静态清单，每次完成的还原也会校验结果；可变行 decoder 状态只属于一次由调用方持有的流式还原。
 
 ### 入口
 
 ```text
 const descriptor = sessionFormatCatalog.readHeader(physicalHeader)
-const current = sessionFormatCatalog.migrate(sessionFormatCatalog.decodeArtifact(physicalHeader, rows))
+const restore = sessionFormatCatalog.createRestore(physicalHeader, { recovery: 'recoverable', validation: 'transformed' })
+for (const row of physicalRows) restore.decodeRow(row)
+const current = restore.finish()
+const headerRecord = sessionFormatCatalog.encodeCurrentHeader(current.header, current.inheritedEventCount)
+const eventRecords = current.events.map(sessionFormatCatalog.encodeCurrentEvent)
 ```
 
-从包根导入 `sessionFormatCatalog`。JSONL 读取方把解析后的标头与行 JSON 值传给 `decodeArtifact()` 或 `decodeRecoverableArtifact()`，使用 `migrate()` 迁移逻辑结果，并且只使用 `encodeCurrent()` 序列化经过校验的当前产物。列表读取调用 `readHeader()`，绝不打开事件正文。标头读取会校验每个相邻目标，然后通过已安装的当前 Session 包还原最终标头。
+从包根导入 `sessionFormatCatalog`。JSONL 与 fixture 读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()`。Writer 通过 `encodeCurrentHeader()` 与 `encodeCurrentEvent()` 序列化返回的当前 artifact。列表读取调用 `readHeader()`，绝不打开事件正文。
+
+Production 历史读取使用 `{ recovery: 'recoverable', validation: 'transformed' }`。Worker 与 fixture 校验使用 `{ recovery: 'strict', validation: 'current' }`。Transformed validation 会在迁移后执行已发布 current 规则，但对已经是 current 的输入有意跳过已安装语义校验。
 
 该目录直接包含所有受支持的历史读取器。Profile 无法通过挂载功能插件来添加、移除或重新排列迁移边。它通过对 `dsh-session` 的 peer 依赖获得已安装的当前事件词表与当前还原规则，而历史迁移边校验器保持冻结。
 

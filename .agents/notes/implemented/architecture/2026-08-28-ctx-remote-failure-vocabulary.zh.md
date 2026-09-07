@@ -85,4 +85,4 @@ envelope 不变：wire 上仍是 `{ code, message, details }` 数据，`RemoteEr
 
 `RemoteError` 是 `Error`，所以它进任何日志与 `errorChain()` 都保留 `message` 与 `cause`；但 `cause` 只在进程内成立，wire 上只有 `code`、`message`、`details` 三个字段。跨 realm 的判别永远读结构标记，任何新增的传输（worker、bundle 分片）都必须把标记或等价的 marker 帧带过去，否则失败值会退化为普通 `Error`。
 
-Remote 方法的消费端签名统一为 `Promise<RemoteResult<T>>`，与[方法调用面](2026-08-02-typert-remote-method-calls.zh.md)描述的生成投影一致；一元调用的迁移账本见[一元端点迁移](2026-08-10-unary-apiproxy-remote-migration.zh.md)。
+Remote 方法的消费端签名统一为 `Promise<RemoteResult<T>>`，与[方法调用面](2026-08-02-typert-remote-method-calls.zh.md)描述的生成投影一致；一元调用的迁移账本见[一元端点迁移](../../archived/architecture/2026-08-10-unary-apiproxy-remote-migration.md)。

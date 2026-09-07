@@ -1,0 +1,44 @@
+{
+  "mode": "FEEDBACK_ONLY",
+  "feedback": [
+    {
+      "type": "feedback/record",
+      "text": "the diff view is unreadable"
+    },
+    {
+      "type": "feedback/record",
+      "text": "the second remark"
+    },
+    {
+      "type": "feedback/message-put",
+      "rating": "positive"
+    },
+    {
+      "type": "feedback/message-put",
+      "rating": "positive",
+      "note": "Read both files before answering."
+    },
+    {
+      "type": "feedback/message-delete"
+    }
+  ],
+  "laterSubmissionSuffixes": [
+    [
+      "command/done",
+      "model/selection",
+      "model/selection",
+      "command/run",
+      "feedback/record"
+    ],
+    [
+      "command/done",
+      "feedback/message-put"
+    ],
+    [
+      "feedback/message-put"
+    ],
+    [
+      "feedback/message-delete"
+    ]
+  ]
+}

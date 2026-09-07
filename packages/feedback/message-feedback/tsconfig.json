@@ -30,12 +30,6 @@
       "path": "../../session/session-persistence"
     },
     {
-      "path": "../../storage/storage"
-    },
-    {
-      "path": "../../storage/storage-domain"
-    },
-    {
       "path": "../../typert/protocol"
     }
   ]

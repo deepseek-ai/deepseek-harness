@@ -82,7 +82,7 @@ These pages cover the settings base, the seams this page joins, and the design r
 - [settings](../../settings/README.md) — the durable user-settings seam and its file provider.
 - [credentials](../../credentials/README.md) — the credential-reference seam this page writes keys through.
 - [llm](../../llm/README.md) — the adapter registry whose providers this page configures.
-- [Web config plane](../../../.agents/notes/implemented/architecture/2026-07-30-web-config-plane.md) — the hand-written editor's design rationale.
+- [Web config plane](../../../.agents/notes/archived/architecture/2026-07-30-web-config-plane.md) — the hand-written editor's design rationale.
 
 -----
 

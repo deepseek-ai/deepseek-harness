@@ -1,7 +1,7 @@
 /**
  * One-shot Claude Code lifecycle: invoke the official Agent SDK, place its
  * real CLI process under the shared subprocess owner, map only strict SDK
- * success to completion, and dispose to whole-tree quiescence.
+ * success to completion, and dispose to whole-range quiescence.
  *
  * @module @deepseek-ai/dsh-subagent-claude-code/run
  */
@@ -156,7 +156,7 @@ export interface ClaudeCodeRunSpec {
   readonly permissionMode: ClaudeCodePermissionMode
   /** Explicit deployment/test environment layered after shared scrubbing. */
   readonly env: Record<string, string>
-  /** Subprocess termination grace passed to the shared process-tree owner. */
+  /** Subprocess termination grace passed to the shared managed-range owner. */
   readonly disposeGraceMs: number
   /** Shared subprocess service spawn operation. */
   readonly spawn: (spec: SubprocessSpawnSpec) => SubprocessHandle
@@ -261,17 +261,22 @@ export async function consumeClaudeQuery(
 }
 
 /**
- * Close the official query, terminate the managed process tree, and wait for
- * the subprocess owner to prove it is gone.
+ * Close the official query, terminate the managed range, and wait for the
+ * subprocess owner to prove it is quiescent.
  * @param query - official SDK query, when creation reached that point.
- * @param child - live shared-service handle that owns the CLI process tree;
- * spawn-failed handles settle at the startup boundary instead.
+ * @param child - shared-service handle that owns the CLI managed range, including
+ * a published handle whose direct result later rejects.
  */
 export async function disposeClaudeCodeChild(
   query: Pick<Query, 'close'> | undefined,
   child: SubprocessHandle,
 ): Promise<void> {
   const failures: Error[] = []
+  let outcome: SubprocessOutcome | undefined
+  void child.done.then(
+    (value) => { outcome = value },
+    () => {},
+  )
   try {
     query?.close()
   } catch (error: unknown) {
@@ -284,7 +289,6 @@ export async function disposeClaudeCodeChild(
   } catch (error: unknown) {
     failures.push(thrown(error))
   }
-  const outcome = await child.done
 
   const firstFailure = failures[0]
   if (firstFailure !== undefined) {
@@ -298,6 +302,7 @@ export async function disposeClaudeCodeChild(
       : new AggregateError(failures, 'Claude Code teardown failures')
     throw new ClaudeCodeFailure(facts, cause)
   }
+  await child.done.catch(() => {})
 }
 
 /**
@@ -375,7 +380,7 @@ export function claudeQueryOptions(
  * Start one official Claude Agent SDK query and publish its one-shot run.
  * @param request - resolved shared subagent request.
  * @param spec - Workspace, environment, process service, and diagnostic policy.
- * @returns the published run after both Query and real CLI handle exist.
+ * @returns the published run after both Query and the real CLI handle exist.
  */
 export async function startClaudeCodeRun(
   request: SubagentStartRequest,
@@ -403,6 +408,8 @@ export async function startClaudeCodeRun(
   }
 
   let child: SubprocessHandle | undefined
+  let childFailure: Error | undefined
+  let childProcessFailure: Promise<never> | undefined
   let query: Query | undefined
   let managedProcess: ManagedClaudeCodeProcess | undefined
   let diagnostic: string | undefined
@@ -421,6 +428,14 @@ export async function startClaudeCodeRun(
   ): void => {
     child = captured
     managedProcess = process
+    childProcessFailure = captured.done.then(
+      () => new Promise<never>(() => {}),
+      (error: unknown) => {
+        childFailure = thrown(error)
+        throw childFailure
+      },
+    )
+    void childProcessFailure.catch(() => {})
   }
   try {
     query = officialQuery({
@@ -432,12 +447,12 @@ export async function startClaudeCodeRun(
         capturePermissionDiagnostic,
       ),
     })
-    if (child === undefined || child.pid <= 0) {
+    if (child === undefined || childProcessFailure === undefined) {
       throw new Error(
         'subagent-claude-code: official SDK did not publish a controllable Claude Code process',
       )
     }
-    if (controller.signal.aborted) {
+    if (isAborted(controller.signal)) {
       throw new Error('subagent-claude-code: request was aborted before SDK startup')
     }
   } catch (error: unknown) {
@@ -451,46 +466,11 @@ export async function startClaudeCodeRun(
       category: 'unknown',
       outcome: startupOutcome,
     } as const
-    const startupFailure = (cause: unknown = error): ClaudeCodeFailure => new ClaudeCodeFailure(
+    const startupFailure = (cause: unknown = childFailure ?? error): ClaudeCodeFailure => new ClaudeCodeFailure(
       startupFacts,
       thrown(cause),
     )
     requestCancel()
-    if (child !== undefined && child.pid <= 0) {
-      let closeError: Error | undefined
-      try {
-        query?.close()
-      } catch (disposeError: unknown) {
-        closeError = thrown(disposeError)
-      }
-
-      let spawnError = thrown(error)
-      try {
-        await child.done
-      } catch (childError: unknown) {
-        spawnError = thrown(childError)
-      }
-
-      if (closeError !== undefined) {
-        const failure = startupFailure(spawnError)
-        const cleanupFailure = new ClaudeCodeFailure({
-          stage: 'teardown',
-          category: 'unknown',
-        }, closeError)
-        const aggregate = new AggregateError(
-          [failure, cleanupFailure],
-          `${failure.message}; ${cleanupFailure.message}`,
-        )
-        reportFailure(aggregate)
-        throw aggregate
-      }
-      if (cancelledBeforeCleanup || isAborted(request.signal)) {
-        throw new Error('subagent-claude-code: request was aborted before SDK startup')
-      }
-      const failure = startupFailure(spawnError)
-      reportFailure(failure)
-      throw failure
-    }
     if (child !== undefined) {
       try {
         await disposeClaudeCodeChild(query, child)
@@ -504,6 +484,12 @@ export async function startClaudeCodeRun(
         reportFailure(aggregate)
         throw aggregate
       }
+      if (cancelledBeforeCleanup || isAborted(request.signal)) {
+        throw new Error('subagent-claude-code: request was aborted before SDK startup')
+      }
+      const failure = startupFailure()
+      reportFailure(failure)
+      throw failure
     } else if (query !== undefined) {
       try {
         query.close()
@@ -531,20 +517,24 @@ export async function startClaudeCodeRun(
 
   const publishedQuery = query
   const publishedChild = child
+  const publishedProcessFailure = childProcessFailure
   let receivedResult = false
   const result = settleRunResult({
     attempt: async () => {
       try {
-        return await consumeClaudeQuery(publishedQuery, () => {
-          capturePermissionDiagnostic(unattendedDiagnostic(
-            spec.permissionMode,
-            'tool permission',
-            'denied',
-            'Claude Code denied the request before an interactive prompt',
-          ))
-        }, () => {
-          receivedResult = true
-        })
+        return await Promise.race([
+          consumeClaudeQuery(publishedQuery, () => {
+            capturePermissionDiagnostic(unattendedDiagnostic(
+              spec.permissionMode,
+              'tool permission',
+              'denied',
+              'Claude Code denied the request before an interactive prompt',
+            ))
+          }, () => {
+            receivedResult = true
+          }),
+          publishedProcessFailure,
+        ])
       } catch (error: unknown) {
         const processOutcome = managedProcess?.outcome
         let facts: ClaudeCodeFailureFacts

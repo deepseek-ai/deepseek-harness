@@ -94,13 +94,11 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-先从子系统参考文档了解共享词汇，再看 seam 约定、跨家族决策与模型上下文决策。
+先从子系统参考文档了解共享词汇，再看 seam 约定与跨家族决策。
 
 - [进程沙箱子系统](../../../docs/subsystems/sandbox.zh.md)——模式、逐调用策略与强制执行语义。
 - [沙箱 seam 包](../sandbox/README.zh.md)——每个强制执行能力实现的隔离约定。
 - [跨家族文件沙箱决策](../../../.agents/notes/implemented/feature/2026-07-14-cross-family-fs-sandbox.zh.md)——为何存在统一的共享策略归属位置。
-- [当前沙箱策略上下文决策](../../../.agents/notes/implemented/feature/2026-07-30-current-sandbox-policy-context.zh.md)——策略如何在每次请求前到达模型。
-- [与具体能力无关的策略上下文决策](../../../.agents/notes/implemented/simplification/2026-07-31-capability-neutral-sandbox-policy-context.zh.md)——为何贡献不点名已挂载能力。
 
 -----
 

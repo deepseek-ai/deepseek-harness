@@ -63,6 +63,7 @@ for await (const chunk of ctx.llm.stream({
 - **通过配置暴露并激活提供方**——适配器声明可配置提供方路由与 settings namespace，配置界面因此可以激活休眠提供方并编辑连接事实，无需重启。
 - **发现与解析模型**——列出适配器公布的模型、询问端点它提供哪些模型，并解析某个精确模型的上下文窗口、输出默认值、推理（reasoning）强度与输入模态。
 - **校验调用配置**——显式或配置的推理强度会在任何提供方 I/O 之前对照精确模型校验；请求省略输出上限时，会填入适配器配置的输出上限。
+- **不展开即读取内嵌 Assistant 流**——`assistantStreamFirstTokenTime`（首 token）、`assistantStreamHasVisibleContent`（任一可见内容）与 `assistantStreamHasVisibleText`（任一可见文本）以提前退出从紧凑记录回答各自的问题；`lastAssistantStreamChunk` 反向扫描到某一类型的最后一个原始 chunk，`assistantStreamChunks` 与 `joinAssistantStreamText` 扫描整个流，`assembleAssistantStream` 向 `BlockAssembler` 每个 run 喂一段拼接 delta，blocks／usage／replayState 与逐成员展开相同。`runFirstTokenTime` 与 `runFirstVisibleTime` 对单个打包 run 做提前退出扫描，`isTokenDelta`、`isVisibleChunk` 与 `chunkHasVisibleText` 定义单个 chunk 的 token 与可见性规则。`expandAssistantStream` 仍是持久边界读取记录的校验路径；它不被记忆化，因为保留的展开在事件生命周期内约花费紧凑流的十倍内存。
 
 ### 失败与恢复
 
@@ -90,7 +91,7 @@ for await (const chunk of ctx.llm.stream({
 | [`src/types.ts`](src/types.ts) | `StreamChunk` 协议、内容块映射、结束原因与共享词汇 |
 | [`src/message.ts`](src/message.ts) | 投递、历史与请求共享的不可变消息构造函数 |
 | [`src/assembler.ts`](src/assembler.ts) | `BlockAssembler`：分片到块的增量组装 |
-| [`src/assistant-stream.ts`](src/assistant-stream.ts) | 紧凑带时间 Assistant stream 的累积、严格校验与精确展开 |
+| [`src/assistant-stream.ts`](src/assistant-stream.ts) | 紧凑带时间 Assistant stream 的累积、严格校验、精确展开与记录级读取器 |
 | [`src/call-config.ts`](src/call-config.ts) | 调用配置校验、适配器默认值填入与请求冻结 |
 | [`src/retry-policy.ts`](src/retry-policy.ts) | 提供方自有重试策略解析（normal 与 always 模式） |
 | [`src/error.ts`](src/error.ts) | `HarnessError`/`LlmError` 分类体系与提供方无关失败 code |

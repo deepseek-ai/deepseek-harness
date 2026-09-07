@@ -118,6 +118,11 @@
     },
     {
       "doc": "docs/subsystems/core.md",
+      "symbol": "Inbox",
+      "source": "packages/core/agent/src/runtime-types.ts"
+    },
+    {
+      "doc": "docs/subsystems/core.md",
       "symbol": "InboxTarget",
       "source": "packages/core/agent/src/types.ts"
     },
@@ -547,6 +552,11 @@
     },
     {
       "doc": "docs/subsystems/persistence.md",
+      "symbol": "SessionHandleReadResult",
+      "source": "packages/session/session-persistence/src/handle.ts"
+    },
+    {
+      "doc": "docs/subsystems/persistence.md",
       "symbol": "SessionHandle",
       "source": "packages/session/session-persistence/src/handle.ts"
     },
@@ -558,6 +568,11 @@
     {
       "doc": "docs/subsystems/persistence.md",
       "symbol": "CreateSessionOptions",
+      "source": "packages/core/session/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/persistence.md",
+      "symbol": "SessionSeedEventState",
       "source": "packages/core/session/src/types.ts"
     },
     {
@@ -1339,22 +1354,22 @@
     {
       "doc": "docs/subsystems/subagent.md",
       "symbol": "AgentMessageSource",
-      "source": "packages/subagent/subagent/src/continuation.ts"
+      "source": "packages/subagent/subagent/src/continuation-messages.ts"
     },
     {
       "doc": "docs/subsystems/subagent.md",
       "symbol": "SubagentSettledMessageSource",
-      "source": "packages/subagent/subagent/src/continuation.ts"
+      "source": "packages/subagent/subagent/src/continuation-messages.ts"
     },
     {
       "doc": "docs/subsystems/subagent.md",
       "symbol": "SubagentSendMessageOptions",
-      "source": "packages/subagent/subagent/src/continuation.ts"
+      "source": "packages/subagent/subagent/src/types.ts"
     },
     {
       "doc": "docs/subsystems/subagent.md",
       "symbol": "SubagentInterruptAuthority",
-      "source": "packages/subagent/subagent/src/continuation.ts"
+      "source": "packages/subagent/subagent/src/types.ts"
     },
     {
       "doc": "docs/subsystems/subagent.md",
@@ -1364,7 +1379,7 @@
     {
       "doc": "docs/subsystems/subagent.md",
       "symbol": "ContinuableStart",
-      "source": "packages/subagent/subagent/src/continuation.ts"
+      "source": "packages/subagent/subagent/src/types.ts"
     },
     {
       "doc": "docs/subsystems/subagent.md",
@@ -1813,6 +1828,16 @@
     },
     {
       "doc": "docs/subsystems/session-telemetry.md",
+      "symbol": "SessionTelemetryCapture",
+      "source": "packages/session/session-telemetry/src/coordinator.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-telemetry.md",
+      "symbol": "SessionTelemetryCaptureOptions",
+      "source": "packages/session/session-telemetry/src/coordinator.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-telemetry.md",
       "symbol": "SessionTelemetrySharingStatus",
       "source": "packages/session/session-telemetry/src/index.ts"
     },
@@ -1949,6 +1974,16 @@
     {
       "doc": "docs/subsystems/feedback.md",
       "symbol": "MessageFeedbackItem",
+      "source": "packages/feedback/message-feedback/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/feedback.md",
+      "symbol": "MessageFeedbackPut",
+      "source": "packages/feedback/message-feedback/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/feedback.md",
+      "symbol": "MessageFeedbackDelete",
       "source": "packages/feedback/message-feedback/src/types.ts"
     },
     {

@@ -17,7 +17,7 @@
 1. 在行动之前先就事论事地审视每条评论：对照代码验证其论断——评审者指出了正确的症状，但仍可能误诊原因。
 2. 将每个被接受的发现映射到引入该问题的 PR，并在那里修复。
 3. 将修复后的层按顺序传播到每个受影响的子 PR：
-   - **Merge-forward：** 将修复后的父分支合并到其子分支，验证子分支，然后继续沿堆叠向上传播。依照[增量更新 base 的决策](../../.agents/notes/implemented/process/2026-07-26-incremental-pr-base-retargeting.zh.md)，保留每个正在处理的检查点。
+   - **Merge-forward：** 将修复后的父分支合并到其子分支，验证子分支，然后继续沿堆叠向上传播。保留每个正在处理的检查点。
    - **原生级联 rebase：** 使用 `gh stack rebase`，验证所有已改写的层，然后通过 `gh stack push` 发布；也可以使用 `gh stack sync`，该命令可能先发布，因此必须按照 [dsh-pre-push-checks](../../.agents/skills/dsh-pre-push-checks/SKILL.md) 在同步后立即验证。
 4. 委派的修复需要信任但验证：subagent 的报告描述的是意图，不一定是实际落地的内容。请亲自在实际代码树上重新运行门禁；对于回归守卫，要证明它在未修复的代码上**失败**（引入回归、观察变红、再还原）——两种情况都通过的守卫什么也守不住。subagent 将问题重新定性为「已处理」时，这是一个需要亲自深入的信号。
 5. 在评审线程中回复（`gh api repos/{owner}/{repo}/pulls/{pr}/comments/{id}/replies`），而非发顶层评论；说明修复内容及当前承载修复的 commit 或 head。

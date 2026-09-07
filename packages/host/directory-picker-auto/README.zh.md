@@ -83,7 +83,7 @@ kind: "package-reference"
 当选择器的约定不够用时阅读以下内容：先看 seam 定义，再看它挂载的两个后端。
 
 - [目录选择 seam](../directory-picker/README.zh.md)——选择器所组合的能力约定。
-- [目录选择能力 seam 决策](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.zh.md)——后端为何在交互形态上彼此不同。
+- [目录选择能力 seam 决策](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md)——后端为何在交互形态上彼此不同。
 - [原生后端](../directory-picker-native/README.zh.md)——为本地操作者挂载的交互。
 - [浏览后端](../directory-picker-browse/README.zh.md)——在其他任何地方挂载的交互。
 

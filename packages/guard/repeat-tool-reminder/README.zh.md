@@ -181,6 +181,6 @@ The repeated calls are not making progress. Do not call this tool with these exa
 
 本开发备注是维护者的工作上下文：开放问题与尚未决定的探索方向。它明确不具权威性——已交付的行为、限制与既定理由以上文、包代码和相关 Agent Note 为准。
 
-[repeat-tool-guard Agent Note](../../../.agents/notes/archived/feature/2026-07-08-repeat-tool-guard.md) 以旧包名记录了原始设计与备选方案；[改名台账](../../../.agents/notes/implemented/architecture/2026-08-11-repository-naming-contract-and-rename-ledger.zh.md) 记录了改名为 `repeat-tool-reminder` 及其原因。
+[repeat-tool-guard Agent Note](../../../.agents/notes/archived/feature/2026-07-08-repeat-tool-guard.md) 以旧包名记录了原始设计与备选方案；[改名台账](../../../.agents/notes/archived/architecture/2026-08-11-repository-naming-contract-and-rename-ledger.md) 记录了改名为 `repeat-tool-reminder` 及其原因。
 
 </details>

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/archived/feature/2026-08-06-web-queue-steer-all-gesture.md
+2026-08-06-web-queue-steer-all-gesture.md: 3589c01edaa28e0a07fabeb685a0771e4cbdef7a
+2026-08-06-web-queue-steer-all-gesture.zh.md: 65d62b69e15dfa37cbb2a1fa2c86118c80b5a863

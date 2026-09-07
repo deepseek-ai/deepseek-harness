@@ -209,8 +209,8 @@ export function applyChildComposition(
   })
   if (composition.persona !== undefined) {
     childCtx.systemPrompt.section({
-      name: 'deployment:persona',
-      order: childCtx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA'),
+      name: 'deployment:persona-prefix',
+      order: childCtx.systemPrompt.getSectionOrder('DEPLOYMENT_PERSONA_PREFIX'),
       text: composition.persona,
     })
   }

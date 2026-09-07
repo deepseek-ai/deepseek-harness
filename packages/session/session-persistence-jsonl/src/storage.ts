@@ -28,6 +28,7 @@ import type {
   SessionHandleAppendOptions,
   SessionHandleFlushOptions,
   SessionHandleReadOptions,
+  SessionHandleReadResult,
 } from '@deepseek-ai/dsh-session-persistence'
 import type { SessionWriteLease } from './lease.ts'
 
@@ -47,10 +48,10 @@ export interface JsonlHandleStorage {
   persistHeader(header: SessionHeader, inheritedEventCount: SessionLogOffset): Promise<void>
   /** Truncate a torn physical tail before the first new append lands. */
   truncateTornTail(header: SessionHeader, truncateTo: number): Promise<void>
-  /** Resolve the session's artifact path, or `undefined` before materialization. */
-  resolveLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined>
-  /** Read and validate the stored log at `path`. */
-  readStoredLog(path: string, expectedId: SessionId, signal?: AbortSignal): Promise<{ events: SessionEvent[] }>
+  /** Resolve the current-generation artifact path, or `undefined` when absent. */
+  resolveCurrentLog(id: SessionId, signal?: AbortSignal): Promise<string | undefined>
+  /** Read and validate the stored log at `path`, including its established event aliasing state. */
+  readStoredLog(path: string, expectedId: SessionId, signal?: AbortSignal): Promise<SessionHandleReadResult>
   /** Whether the id is still a created-but-unmaterialized session here. */
   hasPendingSession(id: SessionId): boolean
   /** Acquire the session's cross-process write lock in its artifact directory. */
@@ -72,7 +73,7 @@ export interface StorageHandleState {
   /** Exact fork-inherited prefix length stored with the log; `0` when unseeded. */
   inheritedEventCount: SessionLogOffset
   /** The validated stored prefix from a write open, served to reads until the first append. */
-  primed?: SessionEvent[] | undefined
+  primed?: SessionHandleReadResult | undefined
 }
 
 /**
@@ -112,9 +113,9 @@ export class JsonlSessionHandle implements SessionHandle {
    * @param offset - first logical seq to include (default 0).
    * @param length - maximum events returned (default: the rest).
    * @param options - optional cancellation.
-   * @returns the requested slice.
+   * @returns a slice carrying the aliasing state established by its producer.
    */
-  async read(offset = 0, length = Number.MAX_SAFE_INTEGER, options?: SessionHandleReadOptions): Promise<readonly SessionEvent[]> {
+  async read(offset = 0, length = Number.MAX_SAFE_INTEGER, options?: SessionHandleReadOptions): Promise<SessionHandleReadResult> {
     // Closed-handle refusal precedes argument validation: a closed handle
     // rejects SessionHandleClosedError regardless of the arguments.
     this.assertOpen('read')
@@ -125,24 +126,57 @@ export class JsonlSessionHandle implements SessionHandle {
       throw new TypeError(`read length must be a non-negative safe integer, got ${String(length)}`)
     }
     options?.signal?.throwIfAborted()
-    if (this.state.primed !== undefined) {
-      this.observedLength = Math.max(this.observedLength, this.state.primed.length)
-      return this.state.primed.slice(offset, offset + length)
+    let result: SessionHandleReadResult
+    const primed = this.state.primed
+    if (primed !== undefined) {
+      if (this.access === 'write') {
+        result = this.readPrimed(primed, offset, length)
+      } else {
+        const currentPath = await this.storage.resolveCurrentLog(this.id, options?.signal)
+        if (currentPath === undefined) {
+          result = this.readPrimed(primed, offset, length)
+        } else {
+          this.state.primed = undefined
+          result = await this.readCurrent(currentPath, offset, length, options?.signal)
+        }
+      }
+    } else if (this.access === 'write' && !this.state.materialized) {
+      result = { eventState: 'detached', events: [] }
+    } else {
+      const currentPath = await this.storage.resolveCurrentLog(this.id, options?.signal)
+      if (currentPath !== undefined) {
+        result = await this.readCurrent(currentPath, offset, length, options?.signal)
+      } else if (this.storage.hasPendingSession(this.id)) {
+        result = { eventState: 'detached', events: [] }
+      } else {
+        throw new SessionPersistenceNotFoundError(this.id)
+      }
     }
-    // A write handle knows its own materialization; a read handle asks the
-    // backend so a writer's later materialization becomes visible here.
-    if (this.access === 'write' && !this.state.materialized) return []
-    const path = await this.storage.resolveLog(this.id, options?.signal)
-    if (path === undefined) {
-      if (this.storage.hasPendingSession(this.id)) return []
-      throw new SessionPersistenceNotFoundError(this.id)
+    return result
+  }
+
+  /** Read one slice from the prepared historical prefix retained by this handle. */
+  private readPrimed(source: SessionHandleReadResult, offset: number, length: number): SessionHandleReadResult {
+    this.observedLength = Math.max(this.observedLength, source.events.length)
+    return { eventState: source.eventState, events: source.events.slice(offset, offset + length) }
+  }
+
+  /** Read one current physical generation and enforce this handle's monotonic view. */
+  private async readCurrent(
+    path: string,
+    offset: number,
+    length: number,
+    signal?: AbortSignal,
+  ): Promise<SessionHandleReadResult> {
+    const source = await this.storage.readStoredLog(path, this.id, signal)
+    if (source.events.length < this.observedLength) {
+      throw new Error(`session "${this.id}": stored log shrank below a previously observed prefix (${source.events.length} < ${this.observedLength})`)
     }
-    const { events } = await this.storage.readStoredLog(path, this.id, options?.signal)
-    if (events.length < this.observedLength) {
-      throw new Error(`session "${this.id}": stored log shrank below a previously observed prefix (${events.length} < ${this.observedLength})`)
+    this.observedLength = source.events.length
+    return {
+      eventState: source.eventState,
+      events: source.events.slice(offset, offset + length),
     }
-    this.observedLength = events.length
-    return events.slice(offset, offset + length)
   }
 
   /**

@@ -1004,8 +1004,7 @@ export class ToolRuntime extends Service {
    * reads return the same flavor — but a reload that swapped in a second
    * language between them would hand a program written against one SDK to the
    * other. Binding it is deferred until a second backend ships (the first
-   * point it is testable); rationale in the
-   * [language-dispatch note](../../../../.agents/notes/implemented/feature/2026-07-31-ptc-language-dispatch.md).
+   * point it is testable).
    */
   private requireCodeRuntime(mode: ToolPresentationMode): CodeRuntime {
     const runtime = this.ctx.get('codeRuntime')

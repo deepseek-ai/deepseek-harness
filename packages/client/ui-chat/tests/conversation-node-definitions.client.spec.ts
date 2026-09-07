@@ -163,55 +163,6 @@ function node(value: ChatSnapshot, kind: string): ChatConversationViewNode | und
   return value.nodes.values().find(candidate => candidate.kind === kind)
 }
 
-function comparableSnapshot(value: ChatSnapshot) {
-  const nodes = value.nodes.values()
-  return {
-    order: value.order,
-    nodes: nodes.map(candidate => ({
-      ...candidate,
-      location: candidate.location.kind === 'step'
-        ? {
-          kind: 'step',
-          turn: candidate.location.turn.turn,
-          turnStatus: candidate.location.turn.status,
-          step: candidate.location.step.step,
-          stepStatus: candidate.location.step.status,
-        }
-        : candidate.location.kind === 'turn'
-          ? {
-            kind: 'turn',
-            turn: candidate.location.turn.turn,
-            turnStatus: candidate.location.turn.status,
-          }
-          : { kind: candidate.location.kind },
-    })),
-    processes: nodes.map(candidate => [
-      candidate.key,
-      value.nodes.processSource(candidate.key).getSnapshot(),
-    ]),
-    navigation: value.navigation.items(),
-    legacy: value.legacy,
-  }
-}
-
-function withoutEmbeddedSequenceAnchors(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(withoutEmbeddedSequenceAnchors)
-  if (value instanceof Map) {
-    return new Map([...value].map(([key, entry]) => [key, withoutEmbeddedSequenceAnchors(entry)]))
-  }
-  if (typeof value !== 'object' || value === null) return value
-  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [
-    key,
-    key === 'anchorSeq' || key === 'controlAnchorSeq' || key === 'processStartSeq'
-      ? '<representation-owned-seq>'
-      : withoutEmbeddedSequenceAnchors(entry),
-  ]))
-}
-
-function comparableEmbeddedSnapshot(value: ChatSnapshot): unknown {
-  return withoutEmbeddedSequenceAnchors(comparableSnapshot(value))
-}
-
 function textMessage(id: string, text: string) {
   return {
     id,
@@ -954,7 +905,7 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
-  it('folds packed Assistant runs to the same Chat content and Turn Tail state as scalar deltas', () => {
+  it('uses live Assistant deltas without replaying settled embedded streams', () => {
     const runningHistory = [
       at(1, 'turn/start', { turn: 1 }),
       at(2, 'step/start', { turn: 1, step: 1 }),
@@ -1001,9 +952,7 @@ describe('built-in conversation node Definitions', () => {
     expect(runningAttempt.data.stream.length).toBeGreaterThan(0)
     const packed = assembler(packedHistory)
 
-    expect(comparableEmbeddedSnapshot(snapshot(packed))).toEqual(comparableEmbeddedSnapshot(snapshot(scalar)))
-    const running = node(snapshot(packed), 'assistant-step')
-    expect(running).toMatchObject({ anchorSeq: 12 })
+    const running = node(snapshot(scalar), 'assistant-step')
     expect(running?.data).toMatchObject({
       time: 1_004,
       blocks: [
@@ -1012,25 +961,25 @@ describe('built-in conversation node Definitions', () => {
         { kind: 'tool-call', callId: 'call-1', name: '', argsRaw: '{"x":1}' },
       ],
     })
+    expect(snapshot(packed).legacy.partial).toBeNull()
+    expect(node(snapshot(packed), 'assistant-step')).toBeUndefined()
 
     for (const value of [scalar, packed]) {
       value.append(at(13, 'step/end', { turn: 1, step: 1 }))
       value.append(at(14, 'turn/end', { turn: 1, reason: { kind: 'completed' } }))
       value.flush()
     }
-    expect(comparableEmbeddedSnapshot(snapshot(packed))).toEqual(comparableEmbeddedSnapshot(snapshot(scalar)))
-    expect(node(snapshot(packed), 'turn-tail')?.anchorSeq).toBe(12.2)
+    expect(node(snapshot(scalar), 'assistant-step')?.data).toMatchObject({ status: 'interrupted' })
+    expect(node(snapshot(packed), 'assistant-step')).toBeUndefined()
 
     const partialHistory = [
       ...runningHistory.slice(2),
       at(13, 'step/end', { turn: 1, step: 1 }),
       at(14, 'turn/end', { turn: 1, reason: { kind: 'completed' } }),
     ]
-    const partialScalar = snapshot(assembler(partialHistory, true))
     const partialPacked = snapshot(assembler(packedInputs(partialHistory), true))
-    expect(comparableEmbeddedSnapshot(partialPacked)).toEqual(comparableEmbeddedSnapshot(partialScalar))
-    expect(node(partialPacked, 'assistant-step')?.data).toMatchObject({ status: 'interrupted' })
-    expect(node(partialPacked, 'turn-tail')?.anchorSeq).toBe(12.2)
+    expect(partialPacked.legacy.partial).toBeNull()
+    expect(node(partialPacked, 'assistant-step')).toBeUndefined()
 
     const finalizedHistory = [
       at(20, 'turn/start', { turn: 2 }),
@@ -1062,16 +1011,17 @@ describe('built-in conversation node Definitions', () => {
         turn: 2, step: 1, message: assistantMessage('packed-final', 'done'),
       }, { surfaceOp: 'append' }),
     ]
-    const finalizedScalar = snapshot(assembler(finalizedHistory))
     const finalizedInputs = packedInputs(finalizedHistory)
     expect(finalizedInputs.filter(input => input.event.type === 'assistant/attempt')).toHaveLength(1)
     const finalizedMessage = finalizedInputs.find(input => input.event.type === 'assistant/message')?.event
     if (finalizedMessage?.type !== 'assistant/message') throw new Error('expected packed final message')
     expect(finalizedMessage.data.stream.length).toBeGreaterThan(0)
     const finalizedPacked = snapshot(assembler(finalizedInputs))
-    expect(comparableEmbeddedSnapshot(finalizedPacked)).toEqual(comparableEmbeddedSnapshot(finalizedScalar))
     const finalNode = (node(finalizedPacked, 'assistant-step')?.data as AssistantChatData).finalNode
-    expect(finalNode?.timing?.firstTokenTime).toBe(1_999)
+    expect(finalNode).toMatchObject({
+      blocks: [{ kind: 'text', text: 'done' }],
+      timing: { firstTokenTime: null },
+    })
 
     const namedToolHistory = [
       at(40, 'turn/start', { turn: 3 }),
@@ -1089,15 +1039,16 @@ describe('built-in conversation node Definitions', () => {
         },
       }, { surfaceOp: 'append' }),
     ]
-    const namedToolScalar = snapshot(assembler(namedToolHistory))
     const namedToolInputs = packedInputs(namedToolHistory)
     const namedToolMessage = namedToolInputs.find(input => input.event.type === 'assistant/message')?.event
     if (namedToolMessage?.type !== 'assistant/message') throw new Error('expected packed named-tool message')
     expect(namedToolMessage.data.stream.length).toBeGreaterThan(0)
     const namedToolPacked = snapshot(assembler(namedToolInputs))
-    expect(comparableEmbeddedSnapshot(namedToolPacked)).toEqual(comparableEmbeddedSnapshot(namedToolScalar))
     const namedTool = (node(namedToolPacked, 'assistant-step')?.data as AssistantChatData).finalNode
-    expect(namedTool?.timing?.firstTokenTime).toBe(4_000)
+    expect(namedTool).toMatchObject({
+      blocks: [{ kind: 'tool-call', callId: 'call-2', name: 'read', argsRaw: '' }],
+      timing: { firstTokenTime: null },
+    })
   })
 
   it('keeps one keyed Tool node from running through settlement and replays nested dispatch after prepend', () => {

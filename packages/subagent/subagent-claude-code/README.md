@@ -47,7 +47,7 @@ Removing the package withdraws the provider and its private runtime closure on t
 | `model` | native Claude settings | Optional non-empty model name fixed for every run from this provider instance; omission sends no SDK override |
 | `env` | `{}` | Explicit SDK/CLI environment layered over the credential-scrubbed parent environment |
 | `permissionMode` | `dontAsk` | Native non-interactive permission policy fixed for every run from this provider instance |
-| `disposeGraceMs` | `3000` | Grace between the shared process-tree owner's termination tiers |
+| `disposeGraceMs` | `3000` | Grace between the shared managed-range owner's termination tiers |
 
 | `permissionMode` value | Native behavior |
 |---|---|
@@ -109,7 +109,7 @@ This section explains how the provider drives a real Claude Code CLI and where t
 |---|---|
 | [`src/index.ts`](src/index.ts) | Plugin entry: config schema, provider registration |
 | [`src/run.ts`](src/run.ts) | The SDK query lifecycle, result acceptance, and permission handling |
-| [`src/process.ts`](src/process.ts) | Process-tree termination escalation on disposal |
+| [`src/process.ts`](src/process.ts) | Managed-range termination escalation on disposal |
 | [`cordis.patch.yml`](cordis.patch.yml) | The Profile patch layer that registers the dormant provider |
 
 ### Run flow
@@ -194,4 +194,4 @@ This Dev Note is working context for maintainers: open questions and undecided d
 
 </details>
 
-**Runtime invariant:** No companion is published. Lifecycle pairing belongs to the shared subagent service and process-tree ownership belongs to the subprocess service.
+**Runtime invariant:** No companion is published. Lifecycle pairing belongs to the shared subagent service, and managed-range ownership belongs to the subprocess service.

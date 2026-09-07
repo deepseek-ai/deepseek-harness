@@ -97,7 +97,7 @@ The command is a thin adapter over the goal domain; read these pages for the sta
 
 - [Goal service](../goal/README.md) — the state and lifecycle the command mutates.
 - [Commands service](../../interaction/commands/README.md) — the command registry contract and dispatch.
-- [Human goal-command Agent Note](../../../.agents/notes/implemented/feature/2026-07-19-human-goal-command.md) — the UX and composition decisions.
+- [Harness-level goal-execution Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.md) — the UX and composition decisions.
 
 -----
 

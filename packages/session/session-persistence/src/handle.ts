@@ -4,7 +4,7 @@
  * @module @deepseek-ai/dsh-session-persistence/handle
  */
 
-import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SessionHeader, SessionId, SessionLogOffset, SessionSeedEventState } from '@deepseek-ai/dsh-session'
 
 /**
  * Log access granted by an open. `write` is read-write: the session's single
@@ -17,6 +17,17 @@ export type SessionAccess = 'read' | 'write'
 export interface SessionHandleReadOptions {
   /** Optional cancellation for backend read work. */
   readonly signal?: AbortSignal
+}
+
+/** One persistence event slice returned by {@link SessionHandle.read}. */
+export interface SessionHandleReadResult {
+  /**
+   * Whether event values are exclusively owned or shared only after deep
+   * freezing. Slicing preserves the producer's state even when no events remain.
+   */
+  readonly eventState: SessionSeedEventState
+  /** Event values in a caller-owned outer array. */
+  readonly events: readonly SessionEvent[]
 }
 
 /** Options for {@link SessionHandle.append}. */
@@ -67,9 +78,9 @@ export interface SessionHandle extends AsyncDisposable {
    * @param length - maximum number of events to return; defaults to the rest
    *   of the log. An offset at or past the end returns an empty list.
    * @param options - optional cancellation.
-   * @returns the events with `seq >= offset`, at most `length` of them.
+   * @returns the caller-owned outer slice plus the ownership state of its event values.
    */
-  read(offset?: number, length?: number, options?: SessionHandleReadOptions): Promise<readonly SessionEvent[]>
+  read(offset?: number, length?: number, options?: SessionHandleReadOptions): Promise<SessionHandleReadResult>
 
   /**
    * Append a contiguous batch continuing the current logical end. The first

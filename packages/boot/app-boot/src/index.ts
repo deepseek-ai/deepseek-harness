@@ -34,6 +34,7 @@ export {
   healProfilesModuleFallback,
   initProfile,
   loadProfile,
+  loadProfileDirectory,
   PROFILE_PATCH_FILENAME,
   PROFILE_TEMPLATES,
   PROFILES_DIR,
@@ -41,14 +42,10 @@ export {
   resolveBundleDir,
   resolveProfileDir,
   writeProfileManifest,
-  type DshBundleManifest,
-  type DshManifestSection,
-  type DshProfileManifest,
   type Profile,
   type ProfileLayer,
   type ProfileManifest,
   type ProfileModuleFallbackOptions,
-  type ProfilePatchReload,
   type ProfileTemplate,
 } from './profile.ts'
 
@@ -325,11 +322,11 @@ export function loadOverlayPatches(binName: string, file: string): PatchOptions[
   return parsePatchList(binName, file, content, 'overlay')
 }
 
-/** Resolve relative plugin paths in one patch file's `insert` rows without changing assertion names. */
+/** Convert inserted filesystem paths to file URLs, anchoring relative paths beside the patch; keep assertion names literal. */
 function anchorInsertedPluginNames(patches: PatchOptions[], file: string): PatchOptions[] {
   const base = dirname(resolve(file))
   const visit = (entry: EntryOptions): void => {
-    if (typeof entry.name === 'string' && (entry.name.startsWith('./') || entry.name.startsWith('../'))) {
+    if (typeof entry.name === 'string' && (isAbsolute(entry.name) || entry.name.startsWith('./') || entry.name.startsWith('../'))) {
       entry.name = pathToFileURL(resolve(base, entry.name)).href
     }
     if (entry.group && Array.isArray(entry.config)) entry.config.forEach(visit)
@@ -844,9 +841,10 @@ export const HARNESS_SOURCE_SECTION = 'harness:source'
  * explicitly distinguishing it from the task workspace and current working
  * directory. The self-referential `dsh-tool-cordis` toolset reads and edits this
  * checkout. Call once on the settled boot context ({@link boot}); the section
- * uses the shared first-party placement just after the harness identity opener
- * and before the deployment persona. A booted tree with no `systemPrompt` service has no prompt to
- * augment, so this is then a no-op that returns `undefined`. The section is
+ * uses the shared first-party placement after reusable instructions
+ * and before the Web surface and persona suffix. A booted tree with no
+ * `systemPrompt` service has no prompt to augment, so this is then a no-op
+ * that returns `undefined`. The section is
  * registered against the `systemPrompt` service's fiber, so a dev HMR reload of
  * that plugin drops it until the next boot.
  * @param ctx - the settled boot context whose global system prompt to augment.

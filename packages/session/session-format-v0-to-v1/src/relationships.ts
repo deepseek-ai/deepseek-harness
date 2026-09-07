@@ -34,6 +34,8 @@ export interface ReleasedRelationshipExtensions {
   readonly stepEvents?: ReadonlySet<string>
   /** Title-request model input was source-validated and preserved across sequence remapping. */
   readonly preservedSourceTitleRequestText?: true
+  /** Admit the released resume pattern whose next-turn inbox insert omitted the prior turn/end. */
+  readonly legacyInterruptedTurnRestart?: true
 }
 
 /**
@@ -75,7 +77,22 @@ export function assertReleasedArtifactRelationships(
     }
 
     switch (event.type) {
-      case 'turn/start':
+      case 'turn/start': {
+        const previous = artifact.events[event.seq - 1]
+        if (extensions.legacyInterruptedTurnRestart === true
+          && openTurn !== null
+          && openStep === null
+          && data['turn'] === openTurn + 1
+          && nextTurn === openTurn
+          && previous?.type === 'agent/inbox/spliced') {
+          const splice = releasedV0Record(previous.data, `agent/inbox/spliced ${previous.seq} data`)
+          if (splice['target'] === 'next-turn'
+            && Array.isArray(splice['inserted'])
+            && splice['inserted'].length > 0) {
+            openTurn = null
+            nextTurn += 1
+          }
+        }
         if (openTurn !== null || data['turn'] !== nextTurn) {
           throw new SessionFormatError(`turn/start ${JSON.stringify(data['turn'])} does not open expected turn ${nextTurn}`)
         }
@@ -84,6 +101,7 @@ export function assertReleasedArtifactRelationships(
         toolLifecycles.clear()
         nextStep = 1
         break
+      }
       case 'turn/end':
         if (openTurn !== data['turn']) {
           throw new SessionFormatError(`turn/end ${JSON.stringify(data['turn'])} has no matching open turn`)
@@ -200,7 +218,11 @@ export function assertReleasedArtifactRelationships(
         break
       }
       case 'llm/retry':
-        requireOpenStep(event, data, openTurn, openStep)
+        if (openTurn !== data['turn']
+          || data['step'] !== (openStep ?? nextStep - 1)
+          || openTurn === null) {
+          throw new SessionFormatError('llm/retry does not match the current turn and step')
+        }
         if (data['provider'] !== openStepProvider) {
           throw new SessionFormatError('llm/retry provider does not match the open request/header')
         }

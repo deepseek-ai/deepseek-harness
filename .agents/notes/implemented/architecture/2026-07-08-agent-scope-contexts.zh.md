@@ -66,7 +66,7 @@ const handle = await ctx.agents.create({
   agentOptions: { model: 'model-name' },
   setup(agentCtx) {
     agentCtx.systemPrompt.section({
-      name: 'deployment:persona',
+      name: 'deployment:persona-prefix',
       order: 0,
       text: 'Review code, but do not modify files.',
     })

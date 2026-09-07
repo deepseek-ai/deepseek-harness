@@ -190,6 +190,11 @@
   background: transparent;
 }
 
+/* Fill-mode selection: the row holds the hover fill instead of a check. */
+.selectedFill {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 /* Destructive row: error text/icon, danger hover fill. */
 .danger {
   color: var(--dsw-alias-state-error-primary);

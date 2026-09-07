@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-12-composer-overlay-seat-width-compensation.md
-2026-08-12-composer-overlay-seat-width-compensation.md: 35f1e25c2814d4123a7b70e1ba3fd35c90034da5
-2026-08-12-composer-overlay-seat-width-compensation.zh.md: 7979f25f2ff864f2212a675a2a8811043cdb482a

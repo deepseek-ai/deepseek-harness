@@ -73,7 +73,7 @@ kind: "package-reference"
 当后端约定不够用时阅读以下内容：先看 seam 定义，再看替代后端与在两者之间选择的那个选择器。
 
 - [目录选择 seam](../directory-picker/README.zh.md)——`native` 能力约定与类型化错误词汇。
-- [目录选择能力 seam 决策](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.zh.md)——后端为何在交互形态上彼此不同。
+- [目录选择能力 seam 决策](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md)——后端为何在交互形态上彼此不同。
 - [浏览后端](../directory-picker-browse/README.zh.md)——面向远程客户端的应用内替代方案。
 - [自适应选择器](../directory-picker-auto/README.zh.md)——native 与 browse 之间的启动时判定。
 - [免 shell 子进程运行器](../../util/native-command/README.zh.md)——选择器运行所依赖的共享子进程原语。

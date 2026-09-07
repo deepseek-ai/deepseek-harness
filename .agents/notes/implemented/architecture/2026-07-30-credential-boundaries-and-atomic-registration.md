@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-07-30-credential-boundaries-and-atomic-registration.zh.md)
 
-> Scope: hardening the [request-level LLM configuration boundary](2026-07-29-request-level-llm-config-credentials.md) — where a stored credential lives and who can read it, how one request's facts stay one generation, and how a route set changes without a window. Companion to the [settings write-path note](2026-07-30-settings-write-path-integrity.md), whose provider fixes this note applies to `credentials-local` and whose writer lock it promotes into `dsh-atomic-write`.
+> Scope: hardening the [request-level LLM configuration boundary](../../archived/architecture/2026-07-29-request-level-llm-config-credentials.md) — where a stored credential lives and who can read it, how one request's facts stay one generation, and how a route set changes without a window. Companion to the [settings write-path note](../../archived/architecture/2026-07-30-settings-write-path-integrity.md), whose provider fixes this note applies to `credentials-local` and whose writer lock it promotes into `dsh-atomic-write`.
 
 ## Problem
 
@@ -14,7 +14,7 @@ Two request-path defects sat beside them. DeepSeek resolved connection and crede
 
 ## Decision
 
-**The credential document belongs to the credential provider alone.** No surface loads it into `process.env`. It was `$DSH_HOME/.env` here; the [credentials document split](2026-08-04-credentials-yaml-and-user-environment-layer.md) later moved it to `$DSH_HOME/.credentials.yaml`, so `$DSH_HOME/.env` is the user's ordinary environment layer, holding no provider-managed secret. The genuine launch environment and the invoking directory's `.env` (loaded by the bin) stay the read-only ambient layer, so a composition without the provider resolves keys exactly as before, while a stored key stays file-sourced and writable across restarts — proven by a real restart in the loader composition rather than by a unit assertion about `describe()`.
+**The credential document belongs to the credential provider alone.** No surface loads it into `process.env`. It was `$DSH_HOME/.env` here; the [credentials document split](../../archived/architecture/2026-08-04-credentials-yaml-and-user-environment-layer.md) later moved it to `$DSH_HOME/.credentials.yaml`, so `$DSH_HOME/.env` is the user's ordinary environment layer, holding no provider-managed secret. The genuine launch environment and the invoking directory's `.env` (loaded by the bin) stay the read-only ambient layer, so a composition without the provider resolves keys exactly as before, while a stored key stays file-sourced and writable across restarts — proven by a real restart in the loader composition rather than by a unit assertion about `describe()`.
 
 **The stored credential has no boundary against the model, and the READMEs say so.** `0600` under a `0700` directory stops other OS users; the model's bash and filesystem tools run as that same user, and the shipped default confines nothing. What the harness does hold to is narrower and stated as exactly that: no surface hoists the document into `process.env`, and the model is never handed a resolved path to it, so reaching the value takes a deliberate read of a path it was not given. An OS-keychain provider — a store the model's processes cannot read at all — is recorded as the real answer rather than implied by a partial one.
 

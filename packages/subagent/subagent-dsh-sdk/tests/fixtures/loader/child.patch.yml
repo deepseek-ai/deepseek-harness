@@ -7,7 +7,7 @@
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'
   config:
-    persona: 'Echo where you run.'
+    personaPrefix: 'Echo where you run.'
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'

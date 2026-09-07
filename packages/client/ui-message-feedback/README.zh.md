@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包为 Web GUI 增加逐消息反馈：一对 Like/Dislike 按钮加一个可选备注，作为已定稿助手消息动作条的 `feedback` 条目贡献。它渲染在每个轮次的收尾助手消息上——多步骤轮次中较早的步骤产出工具行而非可评分正文。每个 Session 一个控制器支撑该 Session 内所有消息的控件，因此一次列表读取即可填充整段对话。反馈是 sidecar：评分与备注绝不进入会话日志、模型上下文或遥测。
+本包为 Web GUI 增加逐消息反馈：一对 Like/Dislike 按钮加一个可选备注，作为已定稿助手消息动作条的 `feedback` 条目贡献。它渲染在每个轮次的收尾助手消息上——多步骤轮次中较早的步骤产出工具行而非可评分正文。每个 Session 一个控制器支撑该 Session 内所有消息的控件，因此一次列表读取即可填充整段对话。评分与备注是仅写日志的 Session 事件：它们绝不进入模型上下文。删除会撤回当前条目，但不会抹除早先的日志记录。
 
 ## 目录
 
@@ -48,9 +48,9 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当反馈面不够用时阅读以下页面。它们从浏览器条带进入 sidecar 后端与会话外壳。
+当反馈面不够用时阅读以下页面。它们从浏览器条带进入 Session 日志后端与会话外壳。
 
-- [dsh-message-feedback](../../feedback/message-feedback/README.zh.md)——拥有按条目比较并交换的 sidecar 后端。
+- [dsh-message-feedback](../../feedback/message-feedback/README.zh.md)——拥有按条目比较并交换与持久化的 Session 日志后端。
 - [ui-conversation](../ui-conversation/README.zh.md)——声明助手动作条并渲染动作行。
 - [客户端包映射](../README.zh.md)——相邻的浏览器 UI 包。
 
@@ -59,11 +59,11 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-无。反馈是 sidecar，不进入 append-only 的 Session 日志、模型上下文或遥测；任何评分与备注对模型都不可见。
+无。评分与备注是仅写日志的事件，不是模型输入。可选的 Session 日志投递使用请求元数据，而非模型上下文。
 
 #### KV Cache 影响
 
-无；任何反馈变更都不触碰历史尾部。
+无；反馈变更不改变模型可见的历史。
 
 ## 已知限制与延期工作
 
@@ -73,7 +73,7 @@ kind: "package-reference"
 这些限制界定了当前反馈表面。它们是当前包约束，不是通用评分对比或任务积压。
 
 - **备注大小是宿主策略**——部署方配置 `maxNoteBytes`（Web bundle 中为 8192），超长备注由宿主以 `note-too-large` 拒绝。编辑器不预先校验该上限，因此超长备注在保存时才失败，而不是在输入过程中。
-- **无跨标签页推送**——另一个标签页的评分要等到重连或下一次冲突响应才可见，不会立即出现；该 sidecar 不发布实时帧。
+- **无跨标签页推送**——另一个标签页的评分要等到重连或下一次冲突响应才可见，不会立即出现；控制器不消费反馈日志事件。
 - **仅限对话视图**——trajectory 与 waterfall 视图不渲染反馈控件，尽管它们的助手节点也带有相同的 `messageId`。
 
 <a id="dev-note"></a>

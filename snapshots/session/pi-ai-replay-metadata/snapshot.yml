@@ -1,0 +1,7 @@
+version: 1
+scenario: pi-ai-replay-metadata
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default

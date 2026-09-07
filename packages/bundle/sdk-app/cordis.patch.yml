@@ -2,8 +2,9 @@
 
 - id: system-prompt
   config:
-    persona: >-
-      You are a coding agent powered by the {{model}} model. Your working directory is {{cwd}}.
+    personaSuffix: Your working directory is {{cwd}}.
+    personaPrefix: >-
+      You are a coding agent powered by the {{model}} model.
 
 - id: session-title-llm
   disabled: true

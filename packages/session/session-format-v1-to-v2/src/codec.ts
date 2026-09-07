@@ -1,40 +1,42 @@
 import {
   SessionFormatError,
   sessionFormatCount,
-  snapshotSessionFormatArtifact,
+  sessionFormatSafeInteger,
   snapshotSessionFormatJson,
 } from '@deepseek-ai/dsh-session-format'
 import type {
-  EncodedSessionFormatArtifact,
-  SessionFormatArtifact,
+  SessionFormatArtifactDecoder,
   SessionFormatCodec,
+  SessionFormatCurrentEncoder,
   SessionFormatEvent,
   SessionFormatHeader,
   SessionFormatJsonObject,
   SessionFormatJsonValue,
+  SessionFormatRecovery,
 } from '@deepseek-ai/dsh-session-format'
-import { assertReleasedV2Header, assertReleasedV2PhysicalArtifact } from './validation.ts'
+import { assertReleasedV2Header } from './validation.ts'
 
 const HEADER_REQUIRED = ['type', 'version', 'id', 'createdAt', 'isSeeded', 'delegationDepth'] as const
 const HEADER_OPTIONAL = ['cwd', 'parentSession', 'origin', 'agentPreset'] as const
+const EVENT_REQUIRED = ['type', 'seq', 'time', 'data'] as const
+const EVENT_OPTIONAL = ['ignorable', 'sourceEventSeqs', 'surfaceOp'] as const
+const EVENT_KEYS: ReadonlySet<string> = new Set([...EVENT_REQUIRED, ...EVENT_OPTIONAL])
 /** Frozen physical JSON codec for released v2. */
 export const releasedV2SessionFormatCodec = Object.freeze({
   version: 2,
   decodeHeader(value: unknown) {
     return decodePhysicalHeader(value)
   },
-  decodeArtifact(headerValue: unknown, rowValues: readonly unknown[]) {
-    return decodeArtifact(headerValue, rowValues, false)
+  createDecoder(headerValue: unknown, recovery: SessionFormatRecovery) {
+    return createDecoder(headerValue, recovery)
   },
-  decodeRecoverableArtifact(headerValue: unknown, rowValues: readonly unknown[]) {
-    return decodeArtifact(headerValue, rowValues, true)
+  encodeHeader(header: SessionFormatHeader, inheritedEventCount: number) {
+    return encodeHeader(header, inheritedEventCount)
   },
-  encodeArtifact(artifact: SessionFormatArtifact) {
-    return encodeArtifact(artifact)
+  encodeEvent(event: SessionFormatEvent) {
+    return encodeProvenance(event)
   },
-} satisfies SessionFormatCodec & {
-  encodeArtifact(artifact: SessionFormatArtifact): EncodedSessionFormatArtifact
-})
+} satisfies SessionFormatCodec & SessionFormatCurrentEncoder)
 
 function decodePhysicalHeader(value: unknown): SessionFormatHeader {
   const snapshot = snapshotSessionFormatJson(value, 'released v2 physical header')
@@ -70,78 +72,96 @@ function decodePhysicalHeader(value: unknown): SessionFormatHeader {
   return header
 }
 
-function decodeArtifact(
+function createDecoder(
   headerValue: unknown,
-  rowValues: readonly unknown[],
-  recoverable: boolean,
-): SessionFormatArtifact {
+  recovery: SessionFormatRecovery,
+): SessionFormatArtifactDecoder {
   const header = decodePhysicalHeader(headerValue)
-  const events: SessionFormatEvent[] = []
+  let rowIndex = 0
+  let eventCount = 0
+  let inheritedEventCount: number | undefined
   let issue: SessionFormatError | undefined
-  for (const [rowIndex, value] of rowValues.entries()) {
-    let event: SessionFormatEvent
-    try {
-      event = decodeEvent(value, rowIndex)
-    } catch (error: unknown) {
-      const current = error instanceof SessionFormatError
-        ? error
-        : new SessionFormatError(`released v2 row ${rowIndex} is malformed`, { cause: error })
-      if (!recoverable) throw current
-      issue ??= current
-      continue
-    }
-    if (issue !== undefined) {
-      if (event.type === 'turn/end') throw issue
-      continue
-    }
-    if (event.seq !== events.length) {
-      const gap = new SessionFormatError(
-        `released v2 row ${rowIndex} has seq gap (expected ${events.length}, got ${event.seq})`,
-      )
-      if (!recoverable) throw gap
-      issue = gap
-      if (event.type === 'turn/end') throw issue
-      continue
-    }
-    events.push(event)
+  return {
+    header,
+    decodeRow(value, context) {
+      const currentRow = rowIndex
+      rowIndex += 1
+      let event: SessionFormatEvent
+      try {
+        event = decodeEvent(value, currentRow)
+      } catch (error: unknown) {
+        const current = error instanceof SessionFormatError
+          ? error
+          : new SessionFormatError(`released v2 row ${currentRow} is malformed`, { cause: error })
+        if (recovery === 'strict') throw current
+        issue ??= current
+        return
+      }
+      if (issue !== undefined) {
+        if (event.type === 'turn/end') throw issue
+        return
+      }
+      if (event.seq !== eventCount) {
+        const gap = new SessionFormatError(
+          `released v2 row ${currentRow} has seq gap (expected ${eventCount}, got ${event.seq})`,
+        )
+        if (recovery === 'strict') throw gap
+        issue = gap
+        if (event.type === 'turn/end') throw issue
+        return
+      }
+      eventCount += 1
+      if (event.type === 'session/end-seed') {
+        const data = jsonRecord(event.data, `session/end-seed ${event.seq} data`)
+        if (data['inherited'] === true) inheritedEventCount = event.seq
+      }
+      context.emitEvent(event)
+    },
+    finish(_context) {
+      if (header.isSeeded && inheritedEventCount === undefined) {
+        throw new SessionFormatError('released v2 seeded Session lacks an inherited end-seed marker')
+      }
+      if (!header.isSeeded && inheritedEventCount !== undefined) {
+        throw new SessionFormatError('released v2 unseeded Session contains an inherited end-seed marker')
+      }
+      return inheritedEventCount ?? 0
+    },
   }
-  const inheritedEventCount = deriveInheritedEventCount(header, events)
-  const artifact = snapshotSessionFormatArtifact({ header, inheritedEventCount, events }, 'released v2 artifact')
-  assertReleasedV2PhysicalArtifact(artifact)
-  return artifact
 }
 
 function decodeEvent(value: unknown, rowIndex: number): SessionFormatEvent {
-  const snapshot = snapshotSessionFormatJson(value, `released v2 row ${rowIndex}`)
-  const record = jsonRecord(snapshot, `released v2 row ${rowIndex}`)
+  const record = jsonRecord(value as SessionFormatJsonValue, `released v2 row ${rowIndex}`)
+  const missing = EVENT_REQUIRED.find(key => !Object.hasOwn(record, key))
+  if (missing !== undefined) throw new SessionFormatError(`released v2 row ${rowIndex} lacks required field ${missing}`)
+  const unexpected = Object.keys(record).find(key => !EVENT_KEYS.has(key))
+  if (unexpected !== undefined) {
+    throw new SessionFormatError(`released v2 row ${rowIndex} has unexpected field ${unexpected}`)
+  }
+  if (typeof record['type'] !== 'string') {
+    throw new SessionFormatError(`released v2 row ${rowIndex} type must be a string`)
+  }
+  sessionFormatSafeInteger(record['time'], `released v2 row ${rowIndex} time`)
+  if (record['ignorable'] !== undefined && record['ignorable'] !== true) {
+    throw new SessionFormatError(`released v2 row ${rowIndex} ignorable must be true when present`)
+  }
   if (record['sourceEventSeqs'] === undefined) return record as unknown as SessionFormatEvent
   const seq = sessionFormatCount(record['seq'], `released v2 row ${rowIndex} seq`)
-  return snapshotSessionFormatJson({
+  return {
     ...record,
     sourceEventSeqs: decodeSeqRanges(record['sourceEventSeqs'], seq),
-  }, `released v2 row ${rowIndex} provenance`) as SessionFormatEvent
+  } as unknown as SessionFormatEvent
 }
 
-function deriveInheritedEventCount(header: SessionFormatHeader, events: readonly SessionFormatEvent[]): number {
-  let cut: number | undefined
-  for (const event of events) {
-    if (event.type !== 'session/end-seed') continue
-    const data = jsonRecord(event.data, `session/end-seed ${event.seq} data`)
-    if (data['inherited'] === true) cut = event.seq
+function encodeHeader(
+  header: SessionFormatHeader,
+  inheritedEventCount: number,
+): SessionFormatJsonObject {
+  assertReleasedV2Header(header)
+  const cut = sessionFormatCount(inheritedEventCount, 'format v2 inherited event count')
+  if (!header.isSeeded && cut !== 0) {
+    throw new SessionFormatError('unseeded format v2 Session has inherited events')
   }
-  if (header.isSeeded && cut === undefined) {
-    throw new SessionFormatError('released v2 seeded Session lacks an inherited end-seed marker')
-  }
-  if (!header.isSeeded && cut !== undefined) {
-    throw new SessionFormatError('released v2 unseeded Session contains an inherited end-seed marker')
-  }
-  return cut ?? 0
-}
-
-function encodeArtifact(artifact: SessionFormatArtifact): EncodedSessionFormatArtifact {
-  assertReleasedV2PhysicalArtifact(artifact)
-  const header = artifact.header
-  const physicalHeader = snapshotSessionFormatJson({
+  return {
     type: 'session',
     version: 2,
     id: header.id,
@@ -152,17 +172,15 @@ function encodeArtifact(artifact: SessionFormatArtifact): EncodedSessionFormatAr
     ...(header.origin === undefined ? {} : { origin: header.origin }),
     delegationDepth: header.delegationDepth,
     ...(header.agentPreset === undefined ? {} : { agentPreset: header.agentPreset }),
-  }, 'released v2 encoded header') as SessionFormatJsonObject
-  const rows = Object.freeze(artifact.events.map(event => encodeProvenance(event)))
-  return Object.freeze({ header: physicalHeader, rows })
+  }
 }
 
 function encodeProvenance(event: SessionFormatEvent): SessionFormatJsonObject {
   if (event.sourceEventSeqs === undefined) return event
-  return snapshotSessionFormatJson({
+  return {
     ...event,
     sourceEventSeqs: encodeSeqRanges(event.sourceEventSeqs as readonly number[]),
-  }, `released v2 event ${event.seq} provenance`) as SessionFormatJsonObject
+  }
 }
 
 function decodeSeqRanges(value: SessionFormatJsonValue, maxEntries: number): readonly number[] {

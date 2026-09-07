@@ -161,7 +161,7 @@ export async function readSessionLogText(
     throw error
   }
   try {
-    const events = await handle.read(0, undefined, options)
+    const { events } = await handle.read(0, undefined, options)
     return serializeSessionLog(handle.header, events)
   } finally {
     await handle.close()

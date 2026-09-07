@@ -1,6 +1,0 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-10-web-remove-steering-interjection-caption.md
-2026-08-10-web-remove-steering-interjection-caption.md: 2c396f54945fb1c3626f2e5fcc849e81893c23f0
-2026-08-10-web-remove-steering-interjection-caption.zh.md: 10a3f66d161f56111b0d1de207c05e6469a3e5bc

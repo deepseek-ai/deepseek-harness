@@ -19,7 +19,7 @@ async function harnessWithLoop(adapter: MockAdapter = new MockAdapter([textRespo
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
-  await ctx.plugin(SystemPrompt, { persona: 'You are the deployment.' })
+  await ctx.plugin(SystemPrompt, { personaPrefix: 'You are the deployment.' })
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(AgentRegistry)
   const loopFiber = await ctx.plugin(AgentLoop, { agents: [] })
@@ -174,25 +174,52 @@ describe('agent scope lifecycle', () => {
     const ctx = await harness()
     const handle = await ctx.agents.create({ sessionId: SessionId('s1'), agentOptions: { provider: 'mock', model: 'mock' } })
     const { agent } = handle
-    agent.ctx.systemPrompt.section({ name: 'deployment:persona', order: 0, text: 'You run tests.' })
+    agent.ctx.systemPrompt.section({ name: 'deployment:persona-prefix', order: 0, text: 'You run tests.' })
     agent.ctx.tools.register(defineContentToolFixture({
       name: 'mine', description: 'scoped', parameters: {},
       execute: () => Promise.resolve(text('ran')),
     }))
 
     const scopedAssembly = await ctx.systemPrompt.assemble(assembleContextFor(agent))
-    expect(scopedAssembly.sections.find(s => s.name === 'deployment:persona')?.text).toBe('You run tests.')
+    expect(scopedAssembly.sections.find(s => s.name === 'deployment:persona-prefix')?.text).toBe('You run tests.')
     expect(scopedAssembly.tools.map(t => t.name)).toContain('mine')
     // Other assemblies are untouched.
     const globalAssembly = await ctx.systemPrompt.assemble()
-    expect(globalAssembly.sections.find(s => s.name === 'deployment:persona')?.text).toBe('You are the deployment.')
+    expect(globalAssembly.sections.find(s => s.name === 'deployment:persona-prefix')?.text).toBe('You are the deployment.')
     expect(globalAssembly.tools.map(t => t.name)).not.toContain('mine')
 
     await handle.dispose()
     // The scoped world unwound with the agent: nothing leaked into the registries.
     expect(ctx.tools.get('mine', agent)).toBeUndefined()
     const after = await ctx.systemPrompt.assemble(assembleContextFor(agent))
-    expect(after.sections.find(s => s.name === 'deployment:persona')?.text).toBe('You are the deployment.')
+    expect(after.sections.find(s => s.name === 'deployment:persona-prefix')?.text).toBe('You are the deployment.')
+  })
+
+  it('keeps the inbox projection until the last owning agent fiber unloads', async () => {
+    const ctx = await harness()
+    let first!: Awaited<ReturnType<typeof ctx.agents.create>>
+    let second!: Awaited<ReturnType<typeof ctx.agents.create>>
+    const firstOwner = await ctx.plugin(Object.assign(async (inner: Context) => {
+      first = await inner.agents.create({
+        sessionId: SessionId('projection-owner-first'),
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+    }, { inject: ['agents'] }))
+    const secondOwner = await ctx.plugin(Object.assign(async (inner: Context) => {
+      second = await inner.agents.create({
+        sessionId: SessionId('projection-owner-second'),
+        agentOptions: { provider: 'mock', model: 'mock' },
+      })
+    }, { inject: ['agents'] }))
+
+    expect(ctx.sessionProjections.stateOf(first.agent.session, 'inbox')).toBeDefined()
+    await firstOwner.dispose()
+    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeDefined()
+    await secondOwner.dispose()
+    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeUndefined()
+
+    await Promise.all([first.dispose(), second.dispose()])
+    await ctx.fiber.dispose()
   })
 
   it('agent.ctx listeners hear only their own agent (scoped dispatch end to end)', async () => {
@@ -223,7 +250,7 @@ describe('agent scope lifecycle', () => {
       order.push('session-start')
       // The scoped section is already registered by the time session-start fires.
       void ctx.systemPrompt.assemble(assembleContextFor(agent)).then((assembly) => {
-        order.push(`persona:${assembly.sections.find(s => s.name === 'deployment:persona')?.text}`)
+        order.push(`persona:${assembly.sections.find(s => s.name === 'deployment:persona-prefix')?.text}`)
       })
     })
 
@@ -233,7 +260,7 @@ describe('agent scope lifecycle', () => {
       setup: async (agentCtx) => {
         order.push('setup')
         await Promise.resolve()
-        agentCtx.systemPrompt.section({ name: 'deployment:persona', order: 0, text: 'You are the child.' })
+        agentCtx.systemPrompt.section({ name: 'deployment:persona-prefix', order: 0, text: 'You are the child.' })
       },
     })
     await new Promise(resolve => setTimeout(resolve, 0))

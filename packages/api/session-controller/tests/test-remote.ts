@@ -141,7 +141,10 @@ function testReadHandle(
     access: 'read',
     read: (offset = 0, length?: number, options?: SessionHandleReadOptions) => {
       options?.signal?.throwIfAborted()
-      return Promise.resolve(events.slice(offset, length === undefined ? undefined : offset + length))
+      return Promise.resolve({
+        eventState: 'detached',
+        events: structuredClone(events.slice(offset, length === undefined ? undefined : offset + length)),
+      } as const)
     },
     append: () => Promise.reject(new SessionReadOnlyError(sessionId, 'append')),
     flush: () => Promise.reject(new SessionReadOnlyError(sessionId, 'flush')),

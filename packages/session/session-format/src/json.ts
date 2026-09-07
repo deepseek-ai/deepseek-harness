@@ -1,9 +1,7 @@
 import { deepFreeze, snapshotJsonValue } from '@deepseek-ai/dsh-util-values'
 import { SessionFormatError } from './error.ts'
 import type {
-  SessionFormatArtifact,
   SessionFormatHeader,
-  SessionFormatJsonObject,
   SessionFormatJsonValue,
 } from './types.ts'
 
@@ -76,42 +74,6 @@ export function snapshotSessionFormatJson(value: unknown, label = 'Session value
     throw new SessionFormatError(`${label} is not lossless JSON`)
   }
   return deepFreeze(snapshot) as SessionFormatJsonValue
-}
-
-/**
- * Snapshot one complete artifact and validate its shared coordinates.
- * @param artifact - borrowed logical artifact.
- * @param label - diagnostic subject.
- * @returns immutable detached artifact.
- */
-export function snapshotSessionFormatArtifact(
-  artifact: SessionFormatArtifact,
-  label = 'Session artifact',
-): SessionFormatArtifact {
-  const snapshot = snapshotSessionFormatJson(artifact, label) as SessionFormatJsonObject
-  const header = snapshot['header']
-  const inheritedEventCount = snapshot['inheritedEventCount']
-  const events = snapshot['events']
-  if (!isSessionFormatJsonObject(header)) throw new SessionFormatError(`${label} header must be a JSON object`)
-  inspectSessionFormatVersion(header)
-  sessionFormatCount(inheritedEventCount, `${label} inheritedEventCount`)
-  if (!Array.isArray(events)) throw new SessionFormatError(`${label} events must be an array`)
-  for (let index = 0; index < events.length; index += 1) {
-    const event: unknown = events[index]
-    if (!isSessionFormatJsonObject(event)) throw new SessionFormatError(`${label} event ${index} must be a JSON object`)
-    if (event['seq'] !== index) {
-      throw new SessionFormatError(`${label} event ${index} has non-dense seq ${String(event['seq'])}`)
-    }
-    if (typeof event['type'] !== 'string' || event['type'].length === 0) {
-      throw new SessionFormatError(`${label} event ${index} type must be a non-empty string`)
-    }
-    sessionFormatSafeInteger(event['time'], `${label} event ${index} time`)
-    if (!Object.hasOwn(event, 'data')) throw new SessionFormatError(`${label} event ${index} lacks data`)
-  }
-  if (inheritedEventCount as number > events.length) {
-    throw new SessionFormatError(`${label} inheritedEventCount exceeds its event count`)
-  }
-  return snapshot as unknown as SessionFormatArtifact
 }
 
 /**

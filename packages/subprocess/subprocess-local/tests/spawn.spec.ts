@@ -4,14 +4,17 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
+  bindManagedProcess,
   childEnv,
   killGroup,
   OutputCollector,
   spawnSubprocess,
   taskkillProcessTree,
+  validateSubprocessSpec,
 } from '../src/spawn.ts'
 import type { SubprocessHandle, SubprocessOutputReader } from '@deepseek-ai/dsh-subprocess'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import { waitWithAbort } from '../src/managed-owner.ts'
 
 vi.mock('node:child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:child_process')>()
@@ -179,7 +182,7 @@ describe('spawnSubprocess', () => {
   it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, MAX_TIMER_DELAY_MS + 1])(
     'rejects an invalid grace before spawning: %s',
     (graceMs) => {
-      expect(() => spawnSubprocess(spec('true', { graceMs })))
+      expect(() => { validateSubprocessSpec(spec('true', { graceMs })) })
         .toThrow(`subprocess graceMs must be a positive finite number no greater than ${MAX_TIMER_DELAY_MS}`)
     },
   )
@@ -267,10 +270,13 @@ describe('spawnSubprocess', () => {
     })
     const helper = await waitForPidFile(pidFile)
     const realKill: typeof process.kill = process.kill.bind(process)
+    let rootPid: number | undefined
     let termAt = 0
     let forceSignals = 0
     const killSpy = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
-      if (target !== -running.pid) return realKill(target, signal)
+      if (typeof target !== 'number' || target >= 0) return realKill(target, signal)
+      rootPid ??= -target
+      if (target !== -rootPid) return realKill(target, signal)
       if (signal === 'SIGTERM') {
         termAt = Date.now()
         return realKill(target, signal)
@@ -321,11 +327,25 @@ describe('spawnSubprocess', () => {
     expect(result.signal).toBe(process.platform === 'win32' ? null : 'SIGTERM')
   })
 
-  it('throws when the signal is already aborted before spawn', () => {
+  it('throws a stable Error when already aborted before spawn', () => {
+    for (const [reason, message] of [
+      ['too late', 'aborted before spawn: too late'],
+      [null, 'aborted before spawn: aborted'],
+    ] as const) {
+      const controller = new AbortController()
+      controller.abort(reason)
+      expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
+        .toThrow(new Error(message))
+    }
+
     const controller = new AbortController()
-    controller.abort('too late')
-    expect(() => spawnSubprocess(spec('echo hi', { signal: controller.signal })))
-      .toThrow(/aborted before spawn: too late/)
+    controller.abort({
+      [Symbol.toPrimitive]() {
+        throw new Error('reason formatting must not escape')
+      },
+    })
+    expect(() => { validateSubprocessSpec(spec('echo hi', { signal: controller.signal })) })
+      .toThrow(new Error('aborted before spawn: aborted'))
   })
 
   it('rejects with a spawn error for a nonexistent cwd', async () => {
@@ -595,15 +615,12 @@ describe('OutputCollector', () => {
 })
 
 describe('killGroup', () => {
-  it('ignores non-positive pids', () => {
-    expect(() => { killGroup(-1, 'SIGTERM') }).not.toThrow()
-    expect(() => { killGroup(0, 'SIGTERM') }).not.toThrow()
+  it('ignores an unpublished pid', () => {
+    expect(() => { killGroup(undefined, 'SIGTERM') }).not.toThrow()
   })
 
   it('swallows ESRCH for vanished groups', async () => {
-    const running = spawnSubprocess(spec('true'))
-    await running.done
-    expect(() => { killGroup(running.pid, 'SIGTERM') }).not.toThrow()
+    expect(() => { killGroup(2 ** 30, 'SIGTERM') }).not.toThrow()
   })
 
 })
@@ -685,7 +702,8 @@ describe('windows tree semantics (injected platform)', () => {
     })
     running.terminateForHostExit()
     await running.done
-    expect(killed).toEqual([running.pid])
+    expect(killed).toHaveLength(1)
+    expect(killed[0]).toBeGreaterThan(0)
   })
 
   it('terminate routes through taskkill by root pid', async () => {
@@ -705,7 +723,8 @@ describe('windows tree semantics (injected platform)', () => {
     })
     running.terminate()
     const outcome = await running.done
-    expect(killed).toContain(running.pid)
+    expect(killed).toHaveLength(1)
+    expect(killed[0]).toBeGreaterThan(0)
     expect(outcome.signal).toBe(process.platform === 'win32' ? null : 'SIGKILL')
   })
 
@@ -811,6 +830,173 @@ describe.skipIf(process.platform === 'win32')('tree-survivor escalation (termina
 })
 
 describe('coverage seams', () => {
+  it('preserves a non-Error managed direct rejection', async () => {
+    const direct = Promise.withResolvers<{ exitCode: number; signal: null }>()
+    const handle = bindManagedProcess(spec('true', {
+      graceMs: 1,
+      stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
+    }), {
+      stdin: null,
+      stdout: null,
+      stderr: null,
+      direct: direct.promise,
+      owner: {
+        signal: vi.fn(),
+        waitForExit: async () => { throw new Error('range unavailable') },
+        terminateForHostExit: vi.fn(),
+      },
+    })
+
+    direct.reject(null)
+    await expect(handle.done).rejects.toBeNull()
+    await Promise.resolve()
+  })
+
+  it('contains a managed-owner cleanup failure after direct and range settlement', async () => {
+    const direct = Promise.withResolvers<{ exitCode: number; signal: null }>()
+    const stopped = Promise.withResolvers<undefined>()
+    const cleanup = vi.fn(() => { throw new Error('protocol cleanup failed') })
+    const handle = bindManagedProcess(spec('true', {
+      stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
+    }), {
+      stdin: null,
+      stdout: null,
+      stderr: null,
+      direct: direct.promise,
+      owner: {
+        signal: vi.fn(),
+        waitForExit: () => stopped.promise,
+        terminateForHostExit: vi.fn(),
+        cleanup,
+      },
+    })
+
+    const waiting = handle.waitForExit()
+    stopped.resolve(undefined)
+    await expect(waiting).resolves.toBe(true)
+    expect(cleanup).not.toHaveBeenCalled()
+    direct.resolve({ exitCode: 0, signal: null })
+    await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
+    await vi.waitFor(() => { expect(cleanup).toHaveBeenCalledOnce() })
+  })
+
+  it('retries an early range read but cleans and retains a terminal range failure', async () => {
+    const direct = Promise.withResolvers<{ exitCode: number; signal: null }>()
+    const earlyFailure = new Error('temporary range read failure')
+    const terminalFailure = new Error('scope ended before launch request consumption')
+    const waitForExit = vi.fn()
+      .mockRejectedValueOnce(earlyFailure)
+      .mockRejectedValueOnce(terminalFailure)
+    const cleanup = vi.fn()
+    const handle = bindManagedProcess(spec('true', {
+      stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
+    }), {
+      stdin: null,
+      stdout: null,
+      stderr: null,
+      direct: direct.promise,
+      owner: {
+        signal: vi.fn(),
+        waitForExit,
+        terminateForHostExit: vi.fn(),
+        cleanup,
+      },
+    })
+
+    await expect(handle.waitForExit()).rejects.toBe(earlyFailure)
+    expect(cleanup).not.toHaveBeenCalled()
+
+    direct.resolve({ exitCode: 0, signal: null })
+    await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
+    await expect(handle.waitForExit()).rejects.toBe(terminalFailure)
+    await vi.waitFor(() => { expect(cleanup).toHaveBeenCalledOnce() })
+
+    await expect(handle.waitForExit()).rejects.toBe(terminalFailure)
+    expect(waitForExit).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not deliver a stale escalation after range exit wins the timer race', async () => {
+    vi.useFakeTimers()
+    const clearTimer = vi.spyOn(globalThis, 'clearTimeout').mockImplementation(() => {})
+    try {
+      const direct = Promise.withResolvers<{ exitCode: number; signal: null }>()
+      const stopped = Promise.withResolvers<undefined>()
+      const signal = vi.fn()
+      const handle = bindManagedProcess(spec('true', {
+        graceMs: 10,
+        stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
+      }), {
+        stdin: null,
+        stdout: null,
+        stderr: null,
+        direct: direct.promise,
+        owner: {
+          signal,
+          waitForExit: () => stopped.promise,
+          terminateForHostExit: vi.fn(),
+        },
+      })
+
+      handle.terminate()
+      expect(signal).toHaveBeenCalledExactlyOnceWith('SIGTERM', expect.any(Error))
+      stopped.resolve(undefined)
+      await expect(handle.waitForExit()).resolves.toBe(true)
+      await vi.advanceTimersByTimeAsync(10)
+      expect(signal).toHaveBeenCalledTimes(1)
+
+      direct.resolve({ exitCode: 0, signal: null })
+      await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
+    } finally {
+      clearTimer.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not restart managed termination after the escalation timer fires', async () => {
+    vi.useFakeTimers()
+    try {
+      const direct = Promise.withResolvers<{ exitCode: number; signal: null }>()
+      const stopped = Promise.withResolvers<undefined>()
+      const signal = vi.fn()
+      const handle = bindManagedProcess(spec('true', {
+        graceMs: 10,
+        stdio: { stdin: 'ignore', stdout: 'inherit', stderr: 'inherit' },
+      }), {
+        stdin: null,
+        stdout: null,
+        stderr: null,
+        direct: direct.promise,
+        owner: {
+          signal,
+          waitForExit: () => stopped.promise,
+          terminateForHostExit: vi.fn(),
+        },
+      })
+
+      handle.terminate()
+      await vi.advanceTimersByTimeAsync(10)
+      handle.terminate()
+      await vi.advanceTimersByTimeAsync(10)
+      expect(signal).toHaveBeenCalledTimes(2)
+      expect(signal).toHaveBeenNthCalledWith(1, 'SIGTERM', expect.any(Error))
+      expect(signal).toHaveBeenNthCalledWith(2, 'SIGKILL', undefined)
+
+      stopped.resolve(undefined)
+      await expect(handle.waitForExit()).resolves.toBe(true)
+      direct.resolve({ exitCode: 0, signal: null })
+      await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('contains a late wait rejection after an already-aborted observation', async () => {
+    const pending = Promise.withResolvers<never>()
+    await expect(waitWithAbort(pending.promise, AbortSignal.abort())).resolves.toBe(false)
+    pending.reject(new Error('late observation failure'))
+    await Promise.resolve()
+  })
+
   it('hides the taskkill helper window', () => {
     const taskkill = vi.mocked(nodeSpawnSync)
     taskkill.mockReturnValueOnce({} as never)
@@ -822,7 +1008,8 @@ describe('coverage seams', () => {
     )
   })
 
-  it('taskkillProcessTree ignores non-positive pids and contains a missing binary', () => {
+  it('taskkillProcessTree ignores unpublished or non-positive pids and contains a missing binary', () => {
+    expect(() => { taskkillProcessTree(undefined) }).not.toThrow()
     expect(() => { taskkillProcessTree(-1) }).not.toThrow()
     expect(() => { taskkillProcessTree(0) }).not.toThrow()
     // On POSIX there is no taskkill; spawnSync reports the failure in its
@@ -841,10 +1028,12 @@ describe('coverage seams', () => {
       linuxProcessGroupHasLiveMembers: () => false,
     })
     const realKill = process.kill.bind(process)
+    let rootPid: number | undefined
     const killSpy = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
       if (typeof target === 'number' && target < 0) {
+        rootPid ??= -target
         if (signal === 0) return true
-        if (signal === 'SIGKILL') realKill(running.pid, 'SIGKILL')
+        if (signal === 'SIGKILL') realKill(-target, 'SIGKILL')
         return true
       }
       return realKill(target, signal)
@@ -861,8 +1050,10 @@ describe('coverage seams', () => {
   it('treats a vanished group probe as quiescent without signalling', async () => {
     const running = spawnSubprocess(spec('sleep 60'), { platform: 'linux' })
     const realKill = process.kill.bind(process)
+    let rootPid: number | undefined
     const killSpy = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
       if (typeof target === 'number' && target < 0) {
+        rootPid ??= -target
         throw Object.assign(new Error('simulated absent group'), { code: 'ESRCH' })
       }
       return realKill(target, signal)
@@ -870,11 +1061,33 @@ describe('coverage seams', () => {
     try {
       running.terminate()
       await new Promise(resolve => setTimeout(resolve, 20))
-      realKill(running.pid, 'SIGKILL')
+      if (rootPid === undefined) throw new Error('fallback owner did not probe its private process group')
+      realKill(rootPid, 'SIGKILL')
       await running.done
       await expect(running.waitForExit()).resolves.toBe(true)
     } finally {
       killSpy.mockRestore()
+    }
+  })
+
+  it('treats an EPERM group probe as still alive', async () => {
+    const running = spawnSubprocess(spec('sleep 60'), { platform: 'linux' })
+    const realKill = process.kill.bind(process)
+    let rootPid: number | undefined
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation((target, signal) => {
+      if (typeof target === 'number' && target < 0 && signal === 0) {
+        rootPid ??= -target
+        throw Object.assign(new Error('simulated permission denial'), { code: 'EPERM' })
+      }
+      return realKill(target, signal)
+    })
+    try {
+      await expect(running.waitForExit(AbortSignal.timeout(20))).resolves.toBe(false)
+    } finally {
+      killSpy.mockRestore()
+      if (rootPid === undefined) throw new Error('fallback owner did not probe its private process group')
+      realKill(-rootPid, 'SIGKILL')
+      await running.done
     }
   })
 
@@ -966,6 +1179,15 @@ describe('coverage seams', () => {
     await running.waitForExit()
   })
 
+  it('host-exit finalization synchronously terminates until range absence is observed', async () => {
+    const taskkill = vi.fn()
+    const running = spawnSubprocess(spec('true'), { platform: 'win32', taskkill })
+    await running.done
+    running.terminateForHostExit()
+    await expect(running.waitForExit()).resolves.toBe(true)
+    expect(taskkill).toHaveBeenCalledOnce()
+  })
+
   it('repeated terminate after exit never probes or signals a reused process group', async () => {
     const running = spawnSubprocess(spec('sleep 60'))
     running.terminate()
@@ -1014,14 +1236,19 @@ describe('coverage seams 2', () => {
     await expect(running.waitForExit(aborted.signal)).resolves.toBe(false) // alive branch
     running.terminate()
     await running.done
-    expect(killedPid).toBe(running.pid)
+    expect(killedPid).toBeGreaterThan(0)
     await expect(running.waitForExit()).resolves.toBe(true)
   })
 
   it('an inert win32 taskkill leaves the tree alive for a bounded wait to report', async () => {
     // An inert taskkill simulates a tree that never reports exit: terminate()
     // delivers nothing, so a bounded consumer wait must come back false.
-    const running = spawnSubprocess(spec('sleep 60'), { spillDir, platform: 'win32', taskkill: () => {} })
+    let rootPid: number | undefined
+    const running = spawnSubprocess(spec('sleep 60'), {
+      spillDir,
+      platform: 'win32',
+      taskkill: (pid) => { rootPid = pid },
+    })
     running.terminate()
     const bound = new AbortController()
     const timer = setTimeout(() => { bound.abort() }, 60)
@@ -1029,7 +1256,8 @@ describe('coverage seams 2', () => {
     clearTimeout(timer)
     // Real cleanup: the injected platform spawned without detachment, so the
     // child is a plain (group-less) POSIX process — kill it directly.
-    process.kill(running.pid, 'SIGKILL')
+    if (rootPid === undefined) throw new Error('fallback owner did not call its private taskkill adapter')
+    process.kill(rootPid, 'SIGKILL')
     await running.done
   })
 
@@ -1051,11 +1279,11 @@ describe('coverage seams 2', () => {
 
 describe('argv validation', () => {
   it('rejects an empty argv before spawning', () => {
-    expect(() => spawnSubprocess({ ...spec('true'), argv: [] })).toThrow(/non-empty program name/)
+    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [] }) }).toThrow(/non-empty program name/)
   })
 
   it('rejects an empty program name before spawning', () => {
-    expect(() => spawnSubprocess({ ...spec('true'), argv: [''] })).toThrow(/non-empty program name/)
+    expect(() => { validateSubprocessSpec({ ...spec('true'), argv: [''] }) }).toThrow(/non-empty program name/)
   })
 
   it.skipIf(process.platform === 'win32')('spawns argv verbatim without shell interpretation', async () => {
@@ -1065,17 +1293,15 @@ describe('argv validation', () => {
 })
 
 describe('abort edge cases', () => {
-  it('reports a fallback reason for reason-less pre-aborted signals', () => {
-    // Real AbortControllers always set a DOMException reason; signal-like
-    // objects from other libraries may not — the fallback covers them.
+  it('uses a stable fallback for a reason-less pre-aborted signal', () => {
     const bare = {
       aborted: true,
       reason: undefined,
       addEventListener() {},
       removeEventListener() {},
     } as unknown as AbortSignal
-    expect(() => spawnSubprocess(spec('echo hi', { signal: bare })))
-      .toThrow(/aborted before spawn: aborted/)
+    expect(() => { validateSubprocessSpec(spec('echo hi', { signal: bare })) })
+      .toThrow(new Error('aborted before spawn: aborted'))
   })
 
   it.skipIf(process.platform === 'win32')('reports the terminating signal of an externally self-killed command', async () => {
