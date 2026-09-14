@@ -34,6 +34,20 @@ describe('rankByName', () => {
     expect(names(rankByName(named('aab', 'ab'), 'ab'))).toEqual(['ab', 'aab'])
   })
 
+  it('matches the display label as a second key and keeps the stronger alignment', () => {
+    const items = [
+      { name: 'goal', label: '目标' },
+      { name: 'plan', label: '计划' },
+      { name: 'permission', label: '权限' },
+    ]
+    expect(names(rankByName(items, '目标'))).toEqual(['goal'])
+    expect(names(rankByName(items, 'goal'))).toEqual(['goal'])
+    expect(names(rankByName(items, 'p'))).toEqual(['plan', 'permission'])
+    expect(names(rankByName(items, '划'))).toEqual(['plan'])
+    // A label prefix hit ranks like a name prefix hit.
+    expect(names(rankByName([{ name: 'xplan', label: 'plan' }, { name: 'plant' }], 'pla'))).toEqual(['xplan', 'plant'])
+  })
+
   it('returns the ranked items with their payload intact', () => {
     const items = [{ name: 'goal', description: 'g' }, { name: 'plan', description: 'p' }]
     expect(rankByName(items, 'pl')).toEqual([{ name: 'plan', description: 'p' }])

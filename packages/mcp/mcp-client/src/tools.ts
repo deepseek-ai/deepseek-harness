@@ -14,9 +14,7 @@
 
 import { createHash } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
-import type { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
-import { z } from 'zod'
+import { specTypeSchemas, type Client, type ImageContent } from '@modelcontextprotocol/client'
 import type { Context } from '@deepseek-ai/cordis'
 import { isImageAdmissionError } from '@deepseek-ai/dsh-attachment'
 import type { AttachmentStore, ImageAttachmentRef, ImageMediaType, SaveImageAttachment } from '@deepseek-ai/dsh-attachment'
@@ -55,9 +53,6 @@ const INVALID_NAME_CHARS = /[^A-Za-z0-9_-]/g
 /** Hex chars of the SHA-256 identity hash appended on lossy normalization. */
 const HASH_LENGTH = 12
 
-/** Raw result record: the bridge owns JSON-value validation after transport. */
-const RawCallToolResultSchema = z.record(z.string(), z.unknown())
-
 /** Raster formats supported by the durable attachment vocabulary. */
 const IMAGE_MEDIA_TYPES: readonly ImageMediaType[] = [
   'image/png',
@@ -68,32 +63,6 @@ const IMAGE_MEDIA_TYPES: readonly ImageMediaType[] = [
 
 /** Canonical RFC 4648 base64, excluding whitespace and URL-safe aliases. */
 const CANONICAL_BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/
-
-/** List without mutating the SDK's per-page output-validator cache. */
-function listToolsUncached(client: Client, cursor?: string) {
-  return client.request(
-    { method: 'tools/list', ...cursor === undefined ? {} : { params: { cursor } } },
-    ListToolsResultSchema,
-  )
-}
-
-/** Call without the SDK pre-validating an output schema the bridge may not support. */
-function callToolUncached(
-  client: Client,
-  rawName: string,
-  args: Record<string, unknown>,
-  exec: ToolExecution,
-  opts: ToolBridgeOptions,
-) {
-  return client.request(
-    { method: 'tools/call', params: { name: rawName, arguments: args } },
-    RawCallToolResultSchema,
-    {
-      signal: exec.signal,
-      timeout: opts.toolCallTimeoutMs,
-    },
-  )
-}
 
 /**
  * Derive the model-facing public name for one MCP tool.
@@ -122,10 +91,10 @@ export function publicToolName(serverName: string, rawName: string): string {
  *
  * Two phases keep the swap safe:
  *
- * 1. Fetch: drain uncached `tools/list` pagination and build the full next
+ * 1. Fetch: let the SDK aggregate `tools/list` and build the full next
  *    generation of `ToolDefinition`s under public names. Any failure here
- *    (network error, duplicate raw name in the server's list) rejects and
- *    leaves the previous generation registered untouched.
+ *    (network error or duplicate raw name) rejects
+ *    and leaves the previous generation registered untouched.
  * 2. Swap: dispose the previous generation, register the new one. A registry
  *    conflict here can only mean a foreign registration squats on this
  *    server's `mcp__<serverName>__` namespace — the partial generation is
@@ -154,30 +123,29 @@ export async function syncTools(
 ): Promise<ToolDisposers> {
   // Phase 1: fetch and build the next generation without touching the registry.
   const definitions = new Map<string, ToolDefinition>()
-  let cursor: string | undefined
-  do {
-    const response = await listToolsUncached(client, cursor)
-    for (const tool of response.tools) {
-      const publicName = publicToolName(opts.serverName, tool.name)
-      if (definitions.has(publicName)) {
-        throw new Error(
-          `mcp-client(${opts.serverName}): server listed tool "${tool.name}" more than once — invalid tool list`,
-        )
-      }
-      definitions.set(publicName, createDefinition(
-        client,
-        ctx,
-        publicName,
-        tool.name,
-        tool.description ?? '',
-        tool.inputSchema,
-        supportedOutputSchema(tool.outputSchema),
-        tool.execution?.taskSupport === 'required',
-        opts,
-      ))
+  const response = client.getServerCapabilities()?.tools === undefined
+    ? { tools: [] }
+    : await client.listTools(undefined, { cacheMode: 'refresh' })
+  for (const tool of response.tools) {
+    const publicName = publicToolName(opts.serverName, tool.name)
+    if (definitions.has(publicName)) {
+      throw new Error(
+        `mcp-client(${opts.serverName}): server listed tool "${tool.name}" more than once — invalid tool list`,
+      )
     }
-    cursor = response.nextCursor
-  } while (cursor)
+    definitions.set(publicName, createMcpToolDefinition(ctx, {
+      name: publicName,
+      rawName: tool.name,
+      description: tool.description ?? '',
+      inputSchema: tool.inputSchema,
+      outputSchema: tool.outputSchema,
+      taskRequired: tool.execution?.taskSupport === 'required',
+      call: (args, execution) => client.callTool(
+        { name: tool.name, arguments: args },
+        { signal: execution.signal, timeout: opts.toolCallTimeoutMs, toolDefinition: tool },
+      ),
+    }))
+  }
 
   // Phase 2: swap generations — but only for a generation still entitled to
   // publish. The listing above is the slow await an abandonment can overtake;
@@ -201,12 +169,7 @@ export async function syncTools(
   return disposers
 }
 
-/**
- * The shape we read from each MCP content block. Intentionally looser than the
- * SDK's `ContentBlock` type: we're at a network trust boundary (data arrives
- * from an external MCP server process via JSON-RPC), so fields that the SDK
- * declares required may be absent at runtime if the server is buggy.
- */
+/** Fields read from canonical content, including policy-owned value replacements. */
 interface McpContentBlock {
   type: string
   text?: string
@@ -237,37 +200,48 @@ function supportedOutputSchema(candidate: unknown): JsonSchemaNode | undefined {
   }
 }
 
+/** One upstream MCP tool and the callback that obtains its raw protocol result. */
+export interface McpToolDefinitionOptions {
+  /** ToolRuntime name presented to the model. */
+  name: string
+  /** Upstream name used in result diagnostics. */
+  rawName: string
+  /** Upstream model-facing description. */
+  description: string
+  /** Upstream JSON input schema. */
+  inputSchema: Record<string, unknown>
+  /** Advertised structured output schema, when present. */
+  outputSchema?: unknown
+  /** Whether the upstream tool requires the unsupported task execution extension. */
+  taskRequired?: boolean
+  /**
+   * Obtain one raw MCP result from the provider.
+   * @param args - model arguments admitted by the ToolRuntime.
+   * @param execution - exact ToolRuntime invocation, including its Agent and cancellation.
+   * @returns the external result object, validated before content projection.
+   */
+  call(args: Record<string, unknown>, execution: ToolExecution): Promise<unknown>
+}
+
 /**
- * Build one generation-local tool definition and its execution-local rich projections.
- * @param client - connected MCP client used for calls.
+ * Adapt an upstream MCP tool to canonical values and durable image content.
+ * Registration, provider lifetime, deadlines, and transport belong to the caller.
  * @param ctx - plugin context carrying optional attachment and model services.
- * @param publicName - registry-qualified public tool name.
- * @param rawName - MCP wire tool name.
- * @param description - model-facing tool description.
- * @param parameters - MCP input schema.
- * @param structuredSchema - supported structured-output schema, when advertised.
- * @param taskRequired - whether this MCP tool requires unsupported task execution.
- * @param opts - bridge timeout and namespace options.
- * @returns a complete ToolRuntime definition.
+ * @param options - upstream tool fields and its raw-result callback.
+ * @returns the unregistered ToolRuntime definition.
  */
-function createDefinition(
-  client: Client,
+export function createMcpToolDefinition(
   ctx: Context,
-  publicName: string,
-  rawName: string,
-  description: string,
-  parameters: Record<string, unknown>,
-  structuredSchema: JsonSchemaNode | undefined,
-  taskRequired: boolean,
-  opts: ToolBridgeOptions,
+  options: McpToolDefinitionOptions,
 ): ToolDefinition {
+  const { name, rawName, description, inputSchema } = options
   const projections = new WeakMap<ToolExecution, PreparedProjection>()
   return {
-    name: publicName,
+    name,
     description,
-    parameters,
-    output: createOutput(rawName, structuredSchema),
-    execute: createExecutor(client, ctx, rawName, taskRequired, opts, projections),
+    parameters: inputSchema,
+    output: createOutput(rawName, supportedOutputSchema(options.outputSchema)),
+    execute: createExecutor(ctx, options, projections),
     finalizeContent(exec: Readonly<ToolExecution>, result: Readonly<ToolExecutionResult>) {
       const projection = projections.get(exec)
       if (projection === undefined) return undefined
@@ -300,23 +274,15 @@ function createOutput(rawName: string, structuredSchema: JsonSchemaNode | undefi
 }
 
 /**
- * Create an execute function for one MCP tool. The executor closes over the
- * raw MCP tool name and sends an uncached `tools/call` request with it (never
- * the public name), with abort signal and timeout, then maps the result to
- * harness ContentBlocks. Owning the raw request prevents the SDK's internal
- * per-page schema cache from pre-validating a different contract.
- *
- * When the MCP server returns `isError: true`, the executor throws so that
- * the ToolRuntime's catch path produces an `isError` result for the model.
+ * Invoke the caller-owned raw-result callback and prepare canonical content.
+ * MCP isError results reject before image storage so ToolRuntime records failure.
  */
 function createExecutor(
-  client: Client,
   ctx: Context,
-  rawName: string,
-  taskRequired: boolean,
-  opts: ToolBridgeOptions,
+  options: McpToolDefinitionOptions,
   projections: WeakMap<ToolExecution, PreparedProjection>,
 ): ToolDefinition['execute'] {
+  const { rawName, taskRequired } = options
   return async (args: unknown, exec: ToolExecution) => {
     if (taskRequired) {
       throw new Error(`Tool "${rawName}" requires task-based execution, which this bridge does not support`)
@@ -326,26 +292,12 @@ function createExecutor(
     // string/number/null). Fallback to {} lets the MCP server produce a
     // specific "missing required param" error the model can learn from.
     const argsObj = (typeof args === 'object' && args !== null ? args : {}) as Record<string, unknown>
-    const result = await callToolUncached(client, rawName, argsObj, exec, opts)
-
-    // The SDK may return a legacy `toolResult` shape; normalize to content array.
-    if (!Array.isArray(result.content)) {
-      const rendered: unknown = 'toolResult' in result
-        ? JSON.stringify(result.toolResult)
-        : '(no output)'
-      const text = typeof rendered === 'string' ? rendered : '(no output)'
-      if (result.isError === true) throw new Error(text)
-      return {
-        content: [{ type: 'text', text }],
-        ...result.structuredContent !== undefined
-          ? { structuredContent: result.structuredContent as JsonValue }
-          : {},
-      }
+    const parsed = specTypeSchemas.CallToolResult['~standard'].validate(await options.call(argsObj, exec))
+    if (parsed.issues !== undefined) {
+      throw new Error(`Tool "${rawName}" returned an invalid MCP result: ${parsed.issues.map(issue => issue.message).join('; ')}`)
     }
+    const result = parsed.value
 
-    // Trust boundary: the SDK's return type erases to `any[]` due to the
-    // union of CallToolResult | CompatibilityCallToolResult; extractText
-    // validates each element.
     const content = result.content as unknown as JsonValue[]
     const text = extractText(content, rawName)
 
@@ -384,12 +336,12 @@ function isImageMediaType(value: string): value is ImageMediaType {
   return IMAGE_MEDIA_TYPES.includes(value as ImageMediaType)
 }
 
-/** Decode one untrusted MCP image block without accepting base64 aliases. */
-function decodeImage(block: McpContentBlock): SaveImageAttachment {
-  if (block.mimeType === undefined || !isImageMediaType(block.mimeType)) {
+/** Decode one projected image without accepting base64 aliases. */
+function decodeImage(block: ImageContent): SaveImageAttachment {
+  if (!isImageMediaType(block.mimeType)) {
     throw new Error('the declared media type is not PNG, JPEG, WebP, or GIF')
   }
-  if (block.data === undefined || !CANONICAL_BASE64.test(block.data)) {
+  if (!CANONICAL_BASE64.test(block.data)) {
     throw new Error('the image data is not canonical base64')
   }
   const data = Buffer.from(block.data, 'base64')
@@ -452,7 +404,7 @@ async function prepareImageProjection(
     if (!isRecord(value) || value.type !== 'image') continue
     imageIndexes.push(index)
     try {
-      decoded.push(decodeImage(value as unknown as McpContentBlock))
+      decoded.push(decodeImage(value as unknown as ImageContent))
     } catch (error: unknown) {
       // decodeImage owns every throw above and always produces Error.
       validationErrors.set(index, (error as Error).message)
@@ -500,8 +452,7 @@ async function prepareImageProjection(
  * - text blocks: join with '\n'
  * - image/audio/resource blocks: replaced with a placeholder
  *
- * Defensive: fields that the MCP spec declares required (mimeType, text) are
- * guarded with fallbacks because this is a network trust boundary.
+ * Policy-owned canonical-value replacements may omit fields required on the MCP wire.
  */
 function extractText(mcpContent: JsonValue[], toolName: string): string {
   const content = projectContent(mcpContent, toolName)

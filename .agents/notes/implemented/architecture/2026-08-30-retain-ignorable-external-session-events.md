@@ -6,7 +6,7 @@ English | [中文](2026-08-30-retain-ignorable-external-session-events.zh.md)
 
 ## Problem
 
-The session event envelope carries `ignorable?: true` so a reader can accept an unrecognized informational event without treating every vocabulary addition as a new session format. [PR #3087](https://github.com/deepseek-harness/deepseek-harness/pull/3087) removed the field after finding no first-party producer and made every unknown event required-on-read.
+The session event envelope carries `ignorable?: true` so a reader can accept an unrecognized informational event without treating every vocabulary addition as a new session format. PR #3087 removed the field after finding no first-party producer and made every unknown event required-on-read.
 
 That producer inventory did not cover a third-party plugin that currently depends on the field. Without `ignorable`, a first-party reader rejects a stored session containing the plugin's informational event because the event is outside the repository-generated `KNOWN_SESSION_EVENT_TYPES`. The plugin has no replacement registration or versioning mechanism, so deleting the field before a replacement exists breaks a current external consumer.
 

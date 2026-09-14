@@ -220,7 +220,7 @@ Session 列表的 `updatedAt` 取 `max(header.createdAt, sessionListMetadata.las
 
 `packages/api/workspace-controller` 提供 Host `ctx.workspaceController` 与生成的 `ctx.remote.workspace` namespace。
 
-它拥有 create、rename、delete、insertBefore、insertSessionBefore、archiveSession 与 `follow`。Workspace registry 仍是持久事实来源，Controller 负责 Remote 命令、投影和错误映射。
+它拥有 create、rename、delete、insertBefore、insertSessionBefore、archiveSession、unarchiveSession 与 `follow`。Workspace registry 仍是持久事实来源，Controller 负责 Remote 命令、投影和错误映射。
 
 `WorkspaceFeed` 同步观察 storage `domain/changed`，并为每个 follow generation 先发送完整 baseline，再发送 `upsert`、`remove`、`order` 与 `archived` 增量。
 

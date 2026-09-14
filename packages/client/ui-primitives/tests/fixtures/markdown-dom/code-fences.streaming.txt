@@ -1,76 +1,81 @@
 <div class="_markdown_404681">
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
-      <div class="_banner_9aea57">
+      <div class="_banner_9aea57" data-code-block-banner="true">
         <div class="_infostring_9aea57">
           #text "ts"
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"
-    <pre class="shiki css-variables" style="background-color: var(--shiki-background); color: var(--shiki-foreground);" tabindex="0">
-      <code>
-        <span class="line">
-          <span style="color: var(--shiki-token-keyword);">
-            #text "const"
-          <span style="color: var(--shiki-token-constant);">
-            #text " answer"
-          <span style="color: var(--shiki-token-keyword);">
-            #text ":"
-          <span style="color: var(--shiki-token-constant);">
-            #text " number"
-          <span style="color: var(--shiki-token-keyword);">
-            #text " ="
-          <span style="color: var(--shiki-token-constant);">
-            #text " 42"
+    <div class="_content_9aea57" data-code-block-content="true">
+      <pre class="shiki css-variables" style="background-color: var(--shiki-background); color: var(--shiki-foreground);" tabindex="0">
+        <code>
+          <span class="line">
+            <span style="color: var(--shiki-token-keyword);">
+              #text "const"
+            <span style="color: var(--shiki-token-constant);">
+              #text " answer"
+            <span style="color: var(--shiki-token-keyword);">
+              #text ":"
+            <span style="color: var(--shiki-token-constant);">
+              #text " number"
+            <span style="color: var(--shiki-token-keyword);">
+              #text " ="
+            <span style="color: var(--shiki-token-constant);">
+              #text " 42"
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
-      <div class="_banner_9aea57">
+      <div class="_banner_9aea57" data-code-block-banner="true">
         <div class="_infostring_9aea57">
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"
-    <pre class="_plain_9aea57">
-      <code>
-        #text "no language"
+    <div class="_content_9aea57" data-code-block-content="true">
+      <pre class="_plain_9aea57">
+        <code>
+          #text "no language"
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
-      <div class="_banner_9aea57">
+      <div class="_banner_9aea57" data-code-block-banner="true">
         <div class="_infostring_9aea57">
           #text "unknown-lang"
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"
-    <pre class="_plain_9aea57">
-      <code>
-        #text "plain fallback"
+    <div class="_content_9aea57" data-code-block-content="true">
+      <pre class="_plain_9aea57">
+        <code>
+          #text "plain fallback"
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
-      <div class="_banner_9aea57">
+      <div class="_banner_9aea57" data-code-block-banner="true">
         <div class="_infostring_9aea57">
           #text "ts"
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"
-    <pre class="shiki css-variables" style="background-color: var(--shiki-background); color: var(--shiki-foreground);" tabindex="0">
-      <code>
-        <span class="line">
-          <span style="color: var(--shiki-token-keyword);">
-            #text "const"
-          <span style="color: var(--shiki-token-constant);">
-            #text " withMeta"
-          <span style="color: var(--shiki-token-keyword);">
-            #text " ="
-          <span style="color: var(--shiki-token-constant);">
-            #text " true"
+    <div class="_content_9aea57" data-code-block-content="true">
+      <pre class="shiki css-variables" style="background-color: var(--shiki-background); color: var(--shiki-foreground);" tabindex="0">
+        <code>
+          <span class="line">
+            <span style="color: var(--shiki-token-keyword);">
+              #text "const"
+            <span style="color: var(--shiki-token-constant);">
+              #text " withMeta"
+            <span style="color: var(--shiki-token-keyword);">
+              #text " ="
+            <span style="color: var(--shiki-token-constant);">
+              #text " true"
   <pre>
     <code>
   <div class="_block_9aea57 md-code-block">
     <div class="_bannerWrap_9aea57">
-      <div class="_banner_9aea57">
+      <div class="_banner_9aea57" data-code-block-banner="true">
         <div class="_infostring_9aea57">
         <div class="_action_9aea57">
           <button class="_copyButton_9aea57" type="button">
             #text "复制"
-    <pre class="_plain_9aea57">
-      <code>
-        #text "indented code block\nsecond line"
+    <div class="_content_9aea57" data-code-block-content="true">
+      <pre class="_plain_9aea57">
+        <code>
+          #text "indented code block\nsecond line"

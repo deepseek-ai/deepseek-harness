@@ -20,7 +20,7 @@ Status: implemented
 
 文件默认只披露**直接**依赖。完整的 npm 闭包连同锁定版本已记录在 `pnpm-lock.yaml`（`pnpm licenses list` 可渲染），Python 闭包记录在 `python/sdk/uv.lock`；再用散文誊一遍只会得到一份更差的副本。唯一明确披露的传递依赖，是 `@anthropic-ai/claude-agent-sdk` 通过 `optionalDependencies` 声明的官方 Claude 平台载荷集合，因为这些包承载随产品分发的 Claude Code 可执行文件，而非普通的库实现细节。
 
-**分层依据是声明方所在区域，而非 manifest 字段名。** 只要 `DEV_ONLY_AREAS` 之外的任一 manifest——即根 manifest、`packages/test-support/`、`packages/test-support/client-runtime/`、`website/`、`native/` 之外——在 `dependencies` 或 `optionalDependencies` 里点名某个包，它就是运行时依赖。单看字段名在两个方向上都会出错：测试支撑包把 `vitest` 写在 `dependencies` 里却并不交付它；而根目录的源码运行脚本通过 `tsx` 执行，根本没有任何 manifest 把它声明为运行时依赖，只能由生成器显式标记。
+**分层依据是分发内容，而非 manifest 字段名。** 安装的运行时库由 `DEV_ONLY_AREAS` 之外的 `dependencies` 或 `optionalDependencies` 识别；排除区域为根 manifest、`packages/test-support/`、`packages/test-support/client-runtime/`、`website/`、`native/`。发布所用的 tsdown 与 Vite 配置解析到的浏览器输入也属于运行时，即使它们位于 `devDependencies`；[浏览器第三方构建输入](2026-09-08-browser-third-party-build-inputs.zh.md)拥有这项分类。测试支撑依赖不会仅因字段写成 `dependencies` 就被交付，而生成器显式披露 `tsx`，因为源码启动通过其 ESM 钩子执行。
 
 运行时层刻意覆盖**所有可挂载的插件**，而不止 CLI、Web UI 与 Python 运行时默认加载的那些。从源码运行时，用户可以通过 `cordis.yml` 挂载任何插件包；因此，`@modelcontextprotocol/sdk` 与 OpenTelemetry 系列即使没有任何默认装配引入，也会触达真实用户。对法务披露而言，披露不足才是代价更高的那个方向。
 

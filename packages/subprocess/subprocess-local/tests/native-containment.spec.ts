@@ -144,6 +144,31 @@ async function waitForInputReadiness(handle: SubprocessTerminalHandle): Promise<
 const linuxNative = process.platform === 'linux' && probeLinuxScope()
 
 describe.skipIf(!linuxNative)('Linux user-systemd native containment', () => {
+  it('aborts an established scope before bootstrap consumption and joins its managed handle', async () => {
+    const controller = new AbortController()
+    const request: SubprocessSpawnSpec = {
+      ...spec(['bash', '-c', 'exit 0']),
+      signal: controller.signal,
+      stdio: { stdin: 'pipe', stdout: { maxBytes: 1_024 }, stderr: { maxBytes: 1_024 } },
+    }
+    const handle = bindManagedProcess(request, launchLinuxScope(request, targetEnvironment(request), {
+      runnerInvocation: [process.execPath, join(import.meta.dirname, 'fixtures/hold-linux-bootstrap.ts')],
+    }))
+    try {
+      const deadline = Date.now() + 5_000
+      while (!handle.collected.stdout?.readFrom(0).text.includes('BOOTSTRAP_WAITING')) {
+        if (Date.now() >= deadline) throw new Error('bootstrap did not reach its input barrier')
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+      controller.abort(new Error('cancel before target execution'))
+      await expect(handle.done).resolves.toEqual({ exitCode: null, signal: 'SIGTERM' })
+      await expect(handle.waitForExit()).resolves.toBe(true)
+    } finally {
+      handle.terminate()
+      await Promise.allSettled([handle.done, handle.waitForExit()])
+    }
+  })
+
   it('terminates a setsid descendant and waits for the scope to become empty', async () => {
     const pidFile = join(scratch, `setsid-${Date.now()}.pid`)
     const command = `setsid sh -c 'echo $$ > "$1"; trap "" TERM; while :; do sleep 60; done' sh ${JSON.stringify(pidFile)} & wait`
@@ -228,6 +253,7 @@ while :; do sleep 60; done
         cwd: scratch,
         rows: 24,
         cols: 80,
+        terminalType: 'dumb',
         graceMs: 100,
       })
       const output = captureTerminalOutput(handle)

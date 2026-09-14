@@ -1,5 +1,5 @@
 ---
-description: "面向用户与维护者的部署默认模型选择说明，用于选择、配置或调试新创建的 agent 从哪个模型开始。"
+description: "面向用户与维护者的部署默认模型选择说明，用于选择、配置或调试新创建的 agent（智能体）初始使用哪个模型。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-agent-default-model` 提供部署的默认模型选择——提供方、模型与可选的推理（reasoning）强度——agent 入口在全新会话没有自己的选择时应用它。`dsh --profile headless` 这类直接入口与 Host 支撑的入口读取 `ctx.agentDefaultModel`，而不是各自持有平行默认值，因此一个组合配置项就能控制新 agent 从哪个模型开始。挂载的设置提供方会把用户选择叠加在组合配置项之上，保存的更改在下一次读取时可见。它是单一的进程级默认值：按会话的模型选择仍由入口负责。想要为新建 agent 所用模型设置单一位置时，请选择本包。
+`dsh-agent-default-model` 在会话未指定模型时，为新创建的 agent 提供共享的默认提供方与模型。使用它可以为所有受支持的 agent 入口统一选择起始模型，其中包括 `dsh --profile headless`。设置可用时，用户可以覆盖已配置的选择（包括推理（reasoning）强度），保存的更改会在后续读取中生效。该默认值作用于整个进程；按会话选择模型仍由创建 agent 的入口负责。
 
 ## 目录
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 | `provider` | 必填 | 新 agent 使用的已注册提供方路由 |
 | `model` | 必填 | 新 agent 使用的、由提供方持有的模型 id |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-default-model)是每个受支持字段的穷尽式真源。`reasoningEffort` 刻意不是配置字段：它属于设置层，因此完整保存的选择可以在下一个选定的模型没有推理强度时清除旧值，而组合配置值会再次被继承。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-agent-default-model)是所有受支持字段的完整参考。`reasoningEffort` 刻意不是配置字段：它属于设置层，因此完整保存的选择可以在下一个选定的模型没有推理强度时清除旧值，而组合配置值会再次被继承。
 
 ### 读取与更改默认值
 
@@ -68,18 +68,18 @@ await ctx.agentDefaultModel.saveSelection({ provider, model, reasoningEffort: 'h
 
 ### 设计理念
 
-该服务是一个带设置后援真源的组合配置项。插件配置提供基础 `{ provider, model }`；挂载设置提供方后，`agent-default-model` 设置分节成为实时真源，所有消费方都通过 `currentSelection()` 读取，因此设置写入无需重建任何注册级事实。`reasoningEffort` 只存在于设置 schema 中——配置不能携带它，因为被新选择清除的推理强度必须保持清除，而不是从组合中再次继承。
+该服务是一个组合配置项，带有由设置支撑的数据源。插件配置提供基础 `{ provider, model }`；挂载设置提供方后，`agent-default-model` 设置分节成为实时数据源，所有消费方都通过 `currentSelection()` 读取，因此写入设置后无需在注册层面重建。`reasoningEffort` 只存在于设置 schema 中：配置不能携带它，因为新选择清除推理强度后，该值必须保持清除，而不能再次从组合配置中继承。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`AgentDefaultModelConfig` 服务、设置分节安装、`currentSelection`/`saveSelection` |
-| — | 不发布运行时不变式伴生入口；唯一的可变值关系由 settings 校验负责。 |
+| — | 未发布运行时不变式配套项；唯一的可变值关系由设置校验负责。 |
 
 ### 行为说明
 
-两个公开方法都是对该真源的薄读写：`currentSelection()` 返回全新独立对象，调用方持有它不会别名化服务状态；`saveSelection()` 在存在 `ctx.settings` 时写入完整选择。
+两个公开方法都只是对该数据源进行简单读写：`currentSelection()` 返回一个全新、独立的对象，因此调用方可以持有它，而不会与服务状态共享引用；`saveSelection()` 在存在 `ctx.settings` 时写入完整选择。
 
 </details>
 

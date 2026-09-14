@@ -39,7 +39,7 @@ describe('released v1 whole-artifact relationships', () => {
         data: { rootCallId: 'root', parentCallId: 'root', subCallId: 'sub', name: 'read', arguments: {} },
       },
     ]],
-    ['surface replace without shadow provenance', [
+    ['surface replace without source-event references', [
       { type: 'user/message', seq: 0, time: 1, data: user('one'), surfaceOp: 'append' },
       {
         type: 'user/message', seq: 1, time: 2, data: user('two'),

@@ -1,0 +1,24 @@
+{
+  "platform": "linux-x64",
+  "binaries": [
+    {
+      "tool": "landlock-run",
+      "kind": "static-musl",
+      "path": "bin/landlock-run"
+    },
+    {
+      "tool": "flock",
+      "kind": "node-api",
+      "napi": 8,
+      "libc": "glibc",
+      "path": "bin/glibc/system.node"
+    },
+    {
+      "tool": "flock",
+      "kind": "node-api",
+      "napi": 8,
+      "libc": "musl",
+      "path": "bin/musl/system.node"
+    }
+  ]
+}

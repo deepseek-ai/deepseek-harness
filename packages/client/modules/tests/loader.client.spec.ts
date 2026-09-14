@@ -123,8 +123,12 @@ function bench(
 }
 
 describe('Cordis plugin face', () => {
-  it('rejects activation before the HTML facade creates the module system', () => {
-    expect(() => { apply(new Context()) }).toThrow('createClientModuleSystem must run before plugin boot')
+  it('rejects a Loader whose internal is absent or not a client module system', () => {
+    for (const internal of [undefined, { version: 'worker' }]) {
+      const ctx = new Context()
+      ctx.provide('loader', { internal } as never)
+      expect(() => { apply(ctx) }).toThrow('the Loader has no client module system')
+    }
   })
 })
 
@@ -293,11 +297,19 @@ describe('bootstrap module', () => {
     expect(b.fetched).toEqual([APPLICATION_URL])
   })
 
-  it('publishes the same closed-over system when the modules Cordis plugin activates', () => {
+  it('publishes the module system attached to its own Loader', () => {
+    const a = bench([])
     const b = bench([])
-    const ctx = new Context()
-    apply(ctx)
-    expect(ctx.modules).toBe(b.loader)
+    const ctxA = new Context()
+    const ctxB = new Context()
+    ctxA.reflect.provide('loader', { internal: a.loader })
+    ctxB.reflect.provide('loader', { internal: b.loader })
+
+    apply(ctxA)
+    apply(ctxB)
+
+    expect(ctxA.modules).toBe(a.loader)
+    expect(ctxB.modules).toBe(b.loader)
   })
 
   it('rejects a second queued registration for the bootstrap id', () => {

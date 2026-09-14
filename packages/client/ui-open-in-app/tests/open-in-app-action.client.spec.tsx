@@ -66,6 +66,7 @@ describe('OpenInAppAction visibility', () => {
     for (const over of [
       { apps: null, cwd: '/w' },
       { apps: [], cwd: '/w' },
+      { apps: [], choice: 'vscode', cwd: '/w' },
       { apps: ['finder'] },
       { apps: ['finder'], cwd: '' },
       { apps: ['someday-an-app'], cwd: '/w' },

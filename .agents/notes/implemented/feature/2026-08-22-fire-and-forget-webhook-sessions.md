@@ -28,7 +28,7 @@ Patch loading anchors relative plugin names in inserted rows to the patch file. 
 
 A rule result names a local Workspace path, title, text prompt, agent preset, permission preset, and optional explicit provider/model route with an output cap. Without that route, the runtime snapshots the complete live default, including reasoning effort, until the first request records its durable header. It validates presets before mutation, resolves or creates the canonical Workspace, creates the Agent with that path as Session cwd, mounts the preset before publication, and attaches the Session before admitting the prompt.
 
-The initial follow-up is an ordinary durable user-role message with webhook provider, source, delivery, and rule provenance. Its inbox insertion is the webhook operation's last boundary. Ordinary Session persistence and Agent lifecycle own later work; the runtime neither flushes specially nor waits for a turn.
+The initial follow-up is an ordinary durable user-role message whose source records the webhook provider, source, delivery, and rule identifiers. Its inbox insertion is the webhook operation's last boundary. Ordinary Session persistence and Agent lifecycle own later work; the runtime neither flushes specially nor waits for a turn.
 
 ## Alternatives considered
 
@@ -40,13 +40,13 @@ The initial follow-up is an ordinary durable user-role message with webhook prov
 
 **Restrict rules to a declarative predicate language.** Rejected because programmatic rules explicitly need arbitrary external calls. Trusted Cordis plugins already provide the required authority and lifecycle.
 
-**Let each adapter create Sessions directly.** Rejected because Workspace, preset, permission, title, rollback, and provenance logic would spread across provider packages.
+**Let each adapter create Sessions directly.** Rejected because Workspace, preset, permission, title, rollback, and message-source logic would spread across provider packages.
 
 ## Verification
 
 Package tests pin independent callback execution, fire-and-forget HTTP timing, cancellation and quiescent disposal, request validation, Workspace attachment before prompt admission, rollback, GitHub HMAC and body limits, credential rotation, and exact Loader composition. The assembled Web example sends a signed ready-for-review delivery to an isolated second listener and records the resulting ordinary Workspace conversation.
 
-A real-API e2e test starts the built `dsh web` CLI with the webhook overlay and isolated listener, synthesizes only the signed inbound GitHub delivery, observes Workspace attachment and durable provenance through the public Web API, and waits for the real DeepSeek response. No DSH service, model adapter, or provider call is replaced by a test double.
+A real-API e2e test starts the built `dsh web` CLI with the webhook overlay and isolated listener, synthesizes only the signed inbound GitHub delivery, observes Workspace attachment and the durable message source through the public Web API, and waits for the real DeepSeek response. No DSH service, model adapter, or provider call is replaced by a test double.
 
 Source audits keep execution records, retry timers, dedupe maps, completion events, and Agent-status listeners absent.
 

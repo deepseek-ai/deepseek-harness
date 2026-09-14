@@ -31,6 +31,9 @@
     },
     {
       "path": "../../typert/protocol"
+    },
+    {
+      "path": "../command-feedback"
     }
   ]
 }

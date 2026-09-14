@@ -5,6 +5,7 @@
 import {
   ToolCallId,
   createAssistantMessage,
+  createSystemMessage,
   createToolResultMessage,
   createUserMessage,
 } from '@deepseek-ai/dsh-llm'
@@ -64,11 +65,21 @@ function markerHelpers(prefix: string): ChatScrollMarkers {
   }
 }
 
+function appendSystemPrompt(session: Session, turn: number, step: number): void {
+  session.append('system/message', {
+    turn,
+    step,
+    message: createSystemMessage(
+      'Synthetic chat-scroll system prompt.',
+      '@deepseek-ai/dsh-system-prompt',
+    ),
+  }, { surfaceOp: 'append' })
+}
+
 function appendRequestHeader(session: Session, turn: number, step: number): void {
   session.append('request/header', {
     header: {
       config: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
-      system: `Synthetic chat-scroll request for turn ${String(turn)}, step ${String(step)}.`,
     },
     reason: turn === 1 && step === 1 ? 'initial' : 'change',
   })
@@ -188,6 +199,9 @@ export function createChatScrollFixture(options: ChatScrollFixtureOptions): Chat
     session.append('turn/start', {
       turn,
     })
+    session.append('step/start', { turn, step: 1 })
+    // Native V3 installs the protected system head before any user surface.
+    if (turn === 1) appendSystemPrompt(session, turn, 1)
     const user = session.append('user/message', createUserMessage({
       content: text(
         `${markers.user(turn)} Review the long-running conversation state for turn ${String(turn)}. `
@@ -203,7 +217,6 @@ export function createChatScrollFixture(options: ChatScrollFixtureOptions): Chat
       })
     }
 
-    session.append('step/start', { turn, step: 1 })
     appendRequestHeader(session, turn, 1)
     if (turn % TOOL_INTERVAL === 0) {
       appendToolStep(session, markers, turn)

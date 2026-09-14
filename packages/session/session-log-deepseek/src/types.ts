@@ -1,6 +1,6 @@
 /** Wire types for lossless incremental DeepSeek session-log upload. */
 
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import type { SessionEvent, SurfaceEventType } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 /** Session header fields serialized as raw JSON primitives on the external request wire. */
@@ -20,17 +20,39 @@ export interface DeepSeekSessionLogWireHeader {
 /** Raw-number surface mutation serialized on the external request wire. */
 export type DeepSeekSessionLogWireSurfaceOp =
   | 'append'
-  | { readonly op: 'replace'; readonly start: number; readonly end: number }
+  | { readonly op: 'replace'; readonly startSeq: number; readonly endSeq: number }
 
-/** One complete canonical event translated to raw JSON primitives for upload. */
-export interface DeepSeekSessionLogWireEvent {
-  readonly type: SessionEvent['type']
+/**
+ * One canonical event translated to raw JSON primitives for upload. Surface
+ * events require an operation; system, user, and tool events may cite sources.
+ * Assistant provider metadata is embedded in its data; log-only events carry neither field.
+ */
+export type DeepSeekSessionLogWireEvent = {
+  [K in SessionEvent['type']]: {
+    readonly type: K
+    readonly seq: number
+    readonly time: number
+    readonly data: JsonValue
+    readonly ignorable?: true
+  } & (K extends SurfaceEventType ? {
+    readonly surfaceOp: DeepSeekSessionLogWireSurfaceOp
+  } & (K extends 'assistant/message' ? {
+    readonly sourceEventSeqs?: never
+  } : {
+    readonly sourceEventSeqs?: readonly number[]
+  }) : {
+    readonly surfaceOp?: never
+    readonly sourceEventSeqs?: never
+  })
+}[SessionEvent['type']] | {
+  /** Unrecognized ignorable records retain opaque metadata without surface semantics. */
+  readonly type: string
   readonly seq: number
   readonly time: number
   readonly data: JsonValue
-  readonly ignorable?: true
-  readonly sourceEventSeqs?: readonly number[]
-  readonly surfaceOp?: DeepSeekSessionLogWireSurfaceOp
+  readonly ignorable: true
+  readonly surfaceOp?: JsonValue
+  readonly sourceEventSeqs?: JsonValue
 }
 
 /** Versioned incremental session-log field carried by an official DeepSeek request. */

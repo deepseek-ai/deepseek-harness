@@ -1,5 +1,4 @@
-# The client-side FixtureApiClient intentionally rejects settings traffic, so
-# this goal-only scenario omits the settings shell and the onboarding steps it
-# would mount. Onboarding owns separate assembled-browser coverage.
-- id: ui-settings-general
+# This scenario owns Goal bar actions, not autonomous Goal rounds. Keeping the
+# driver out prevents an active Goal from issuing an unrelated model request.
+- id: goal-round-driver
   disabled: true

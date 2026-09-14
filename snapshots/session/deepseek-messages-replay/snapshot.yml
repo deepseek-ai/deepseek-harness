@@ -1,0 +1,10 @@
+version: 1
+scenario: deepseek-messages-replay
+profile: headless
+composition: default
+recording: authored
+header:
+  class: deepseek-messages
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

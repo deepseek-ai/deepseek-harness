@@ -53,7 +53,7 @@ it('uploads freeform feedback and message put/edit/delete through the unchanged 
       : name === '@deepseek-ai/dsh-message-feedback'
         ? { config: { maxNoteBytes: 1024 } }
         : name === '@deepseek-ai/dsh-llm-deepseek'
-          ? { config: { baseURL: server!.baseURL } }
+          ? { config: { protocol: 'chat-completions', baseURL: server!.baseURL } }
           : name === '@deepseek-ai/dsh-session-log-deepseek'
             ? { config: { enabled: true } }
             : {},
@@ -81,7 +81,7 @@ it('uploads freeform feedback and message put/edit/delete through the unchanged 
     session.append('user/message', user, { surfaceOp: 'append' })
     session.append('assistant/message', { message: assistant, stream: [], turn: 1, step: 1 }, { surfaceOp: 'append' })
     const messages = session.deriveMessages()
-    recordFeedback(session, '  The session needs a clearer explanation.  ')
+    recordFeedback(session, { text: '  The session needs a clearer explanation.  ' })
     const created = await ctx.messageFeedback.put({ sessionId: session.id, messageId: assistant.id, rating: 'negative', note: 'Explain the result.', ifVersion: null })
     if (!created.ok) throw new Error(created.error.code)
     const initialPrefix = session.snapshotEvents()

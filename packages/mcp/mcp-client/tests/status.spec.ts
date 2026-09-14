@@ -15,28 +15,33 @@ const { mockConnect, mockClose, mockListTools, mockSetNotificationHandler, MockC
   const mockClose = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
   const mockSetNotificationHandler = vi.fn()
-  const mockRequest = vi.fn(async (
-    request: { method: string; params?: Record<string, unknown> },
-  ): Promise<unknown> => {
-    if (request.method === 'tools/list') return await mockListTools(request.params)
-    throw new Error(`unexpected MCP request: ${request.method}`)
-  })
   class MockClient {
+    transport: object | undefined = {}
     onclose: (() => void) | undefined
     connect = mockConnect
     ping = (): Promise<void> => Promise.resolve()
     close = mockClose
-    request = mockRequest
-    setNotificationHandler = mockSetNotificationHandler
-    constructor() { instances.push(this) }
+    getServerCapabilities = () => ({ tools: {} })
+    getInstructions(): string | undefined { return undefined }
+    listResources = async () => ({ resources: [] })
+    listTools = mockListTools
+    constructor(_info: unknown, options: { listChanged: { tools: { onChanged: () => void } } }) {
+      instances.push(this)
+      mockSetNotificationHandler('notifications/tools/list_changed', options.listChanged.tools.onChanged)
+    }
   }
   const instances: MockClient[] = []
   return { mockConnect, mockClose, mockListTools, mockSetNotificationHandler, MockClient, instances }
 })
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ Client: MockClient }))
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ StdioClientTransport: vi.fn() }))
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ StreamableHTTPClientTransport: vi.fn() }))
+vi.mock('@modelcontextprotocol/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
+  Client: MockClient,
+  StreamableHTTPClientTransport: vi.fn(),
+}))
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
+  StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+}))
 
 import * as McpClient from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 import { apply, connectionStatusOf } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
@@ -144,10 +149,12 @@ describe('connection status surface', () => {
     expect(reconnecting.nextRetryAtMs).toBeGreaterThan(0)
 
     // A tools/list_changed re-sync republishes the connected count.
-    const notification = mockSetNotificationHandler.mock.calls.at(-1)![1] as () => Promise<void>
+    const notification = mockSetNotificationHandler.mock.calls.at(-1)![1] as () => void
     mockListTools.mockResolvedValue(listing('only-one'))
-    await notification()
-    expect(handle.current()).toMatchObject({ state: 'connected', toolCount: 1 })
+    notification()
+    await vi.waitFor(() => {
+      expect(handle.current()).toMatchObject({ state: 'connected', toolCount: 1 })
+    })
   })
 
   it('reports gave-up with the last connection error once the outage budget is exhausted', async () => {

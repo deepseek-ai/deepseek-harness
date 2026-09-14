@@ -13,8 +13,8 @@
     "kind": "chunks",
     "chunks": [
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "call_verify_session_query_spill", "name": "bash", "argumentsDelta": "{\"command\":\"file=$(find /tmp/dsh-acp-snap-035d1d054 -name '*-session_event_read.txt' -type f); grep -q request/header \\\"$file\\\" && grep -q session_event_search \\\"$file\\\" && echo SPILL_CANONICAL_OK\",\"description\":\"Verify complete session query spill\"}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_verify_session_query_spill", "name": "bash", "arguments": "{\"command\":\"file=$(find /tmp/dsh-acp-snap-035d1d054 -name '*-session_event_read.txt' -type f); grep -q request/header \\\"$file\\\" && grep -q session_event_search \\\"$file\\\" && echo SPILL_CANONICAL_OK\",\"description\":\"Verify complete session query spill\"}" } },
+      { "type": "tool-call-delta", "index": 0, "id": "call_verify_session_query_spill", "name": "bash", "argumentsDelta": "{\"command\":\"file=\\\"{{fromRequest:Full formatted result stored at: (.+-session_event_read[.]txt)[.] Use read}}\\\"; grep -Fq request/header \\\"$file\\\" && grep -Fq session_event_search \\\"$file\\\" && printf 'SPILL_CANONICAL_OK\\\\n'\",\"description\":\"Verify complete session query spill\"}" },
+      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_verify_session_query_spill", "name": "bash", "arguments": "{\"command\":\"file=\\\"{{fromRequest:Full formatted result stored at: (.+-session_event_read[.]txt)[.] Use read}}\\\"; grep -Fq request/header \\\"$file\\\" && grep -Fq session_event_search \\\"$file\\\" && printf 'SPILL_CANONICAL_OK\\\\n'\",\"description\":\"Verify complete session query spill\"}" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

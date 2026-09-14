@@ -18,7 +18,7 @@ Status: implemented
 
 服务或方法是否存在、插件 metadata 或 effect、固定纯函数示例，以及调用同一变更操作来验证该操作的探针，仍属于类型、加载、单元或集成测试。parser 与 config 输入、模型或工具 JSON、持久文件、worker 与进程消息和 wire 输入，仍在拥有其输入的操作处校验。
 
-`dsh-time-context` 伴生入口继续发布。它把插件产生的 context message 与独立拥有的当前轮用户消息 provenance 和持久事件时间进行对照，因此即使 formatter 本身正确，attribution、轮次位置与 elapsed-time 关系仍可能产生分歧。
+`dsh-time-context` 伴生入口继续发布。它把插件产生的 context message 与独立拥有的当前轮用户消息 source 和持久事件时间进行对照，因此即使 formatter 本身正确，attribution、轮次位置与 elapsed-time 关系仍可能产生分歧。
 
 ### 在包 README 中明确省略
 
@@ -36,7 +36,7 @@ Status: implemented
 
 - **保留带说明的空伴生入口。** 不采用：源文件、公共子路径、依赖边、构建输出和测试是一套过于繁重的机制，不应只用来表达不存在检查；包 README 可以直接记录该结论。
 - **把 webserver 探针保留为清理 sentinel。** 不采用：它会在无关生命周期事件上修改保留路由，并且只验证自己调用的服务方法。真实路由与 HMR 测试可以在没有生产诊断 effect 的情况下覆盖该行为。
-- **把每个生产方格式 parser 都视为自校验。** 不采用：即使文本只有一个生产方，parser 仍可能对照独立 provenance、时间或持久历史。`dsh-time-context` 符合条件，因为其消息会与当前轮用户消息和持久事件时间对照；只对同一写入方的 payload 做往返检查不符合条件。
+- **把每个生产方格式 parser 都视为自校验。** 不采用：即使文本只有一个生产方，parser 仍可能对照独立 source identity、时间或持久历史。`dsh-time-context` 符合条件，因为其消息会与当前轮用户消息和持久事件时间对照；只对同一写入方的 payload 做往返检查不符合条件。
 - **要求每个拥有私有可变状态的包都发布伴生入口。** 不采用：没有独立事件或第二数据源的私有状态只能通过重复实现来检查，或者需要专门为诊断暴露新 API。
 
 ## 后果

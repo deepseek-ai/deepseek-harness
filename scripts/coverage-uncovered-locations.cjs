@@ -18,6 +18,14 @@ const path = require('node:path');
 const { ReportBase } = require('istanbul-lib-report');
 
 /**
+ * End column of a location that spans to the end of its start line. Whole-line
+ * statements carry `Infinity` until a partition blob serializes it, which the
+ * partition reporter replaces with this finite column
+ * (scripts/coverage-canonical-locations.ts); both spellings read as line ends.
+ */
+const END_OF_LINE_COLUMN = Number.MAX_SAFE_INTEGER;
+
+/**
  * Editor-convention `line:column` of an istanbul location start (istanbul
  * columns are 0-based; editors and terminal link handlers expect 1-based).
  */
@@ -30,15 +38,20 @@ function usable(loc) {
   return Boolean(loc && loc.start && Number.isFinite(loc.start.line) && loc.start.line >= 1);
 }
 
+/** Whether an end column marks its line's end instead of a measured position. */
+function atLineEnd(column) {
+  return !Number.isFinite(column) || column >= END_OF_LINE_COLUMN;
+}
+
 /**
  * ` (to line:col)` suffix when the range end adds information beyond the
- * start. v8-remapped whole-line statements carry end.column = Infinity; those
+ * start. v8-remapped whole-line statements end at their line end; those
  * degrade to a line-only suffix, or to nothing on a single line.
  */
 function endSuffix(loc) {
   const end = loc.end;
   if (!end || !Number.isFinite(end.line) || end.line < 1) return '';
-  if (!Number.isFinite(end.column)) {
+  if (atLineEnd(end.column)) {
     return end.line === loc.start.line ? '' : ` (to ${end.line})`;
   }
   if (end.line === loc.start.line && end.column === loc.start.column) return '';

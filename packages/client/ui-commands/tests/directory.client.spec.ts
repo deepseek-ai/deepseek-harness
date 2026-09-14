@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
+import { CommandDefinitionId } from '@deepseek-ai/dsh-commands/brand'
 import type { CommandDescriptor } from '../src/client/directory.ts'
 import { CommandDirectory } from '../src/client/directory.ts'
 
@@ -52,6 +53,28 @@ function bench() {
 }
 
 describe('status and resolve (per key)', () => {
+  it('resolves bilingual aliases by definition identity and retains exact-name priority', async () => {
+    const goal = {
+      definitionId: CommandDefinitionId('@deepseek-ai/dsh-command-goal'),
+      name: 'objective',
+      description: 'Reworded description.',
+    }
+    const exact = { name: 'goal', description: 'independent exact-name entry' }
+    const { dir, pull } = bench()
+    const refreshed = dir.refresh(S1)
+    pull(S1, 0).resolve([goal])
+    await refreshed
+    expect(dir.resolve(S1, '目标')).toEqual(goal)
+    expect(dir.resolve(S1, 'goal')).toEqual(goal)
+    expect(dir.resolve(S1, '计划')).toBeUndefined()
+    expect(dir.resolve(S1, 'unregistered')).toBeUndefined()
+    const next = dir.refresh(S1)
+    pull(S1, 1).resolve([goal, exact])
+    await next
+    expect(dir.resolve(S1, 'goal')).toEqual(exact)
+    expect(dir.resolve(S1, '目标')).toEqual(goal)
+  })
+
   it('starts cold and resolves nothing', () => {
     const { dir } = bench()
     expect(dir.status(S1)).toBe('cold')

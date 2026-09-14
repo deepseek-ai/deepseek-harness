@@ -14,7 +14,7 @@ macOS Intel、ARM 与 Linux ARM64 上的 Python 运行时构建，以及通过 W
 
 Wine 作为独立的托管 Ubuntu master 作业运行一次。其现有的按镜像标识的 apt 缓存恢复和保存也负责生成默认分支缓存，因此不需要单独的缓存预热作业。原生 Linux 与 Windows 串行聚合不调用 Wine。Wine 保持托管运行，避免在持久 Linux VM 上执行共享宿主机 apt 事务和共享 Wine prefix 清理。脚本负责临时快照、checkout 内的 Wine prefix 和经过校验和验证的 Windows Node 缓存；环境准备、失败传播及始终执行的清理保持不变。
 
-父工作流与可复用运行时工作流均保留正在执行的 master 推送检查，不被后续 master 推送取消。GitHub 并发机制仍允许替换待执行的运行；手动基准测试可以取消父工作流。master 推送会调度全部三个选定载体，但不保证每个中间提交都得到结果。PR（Pull Request）、手动和发布运行的取消行为保持不变。
+[被取代 CI 的取消策略](2026-09-09-cancel-superseded-ci.zh.md) 适用于父工作流与可复用运行时工作流：更新的 master 推送或手动运行会取消同一工作流/引用组内的旧验证，而发布所属的构建仍受保护。master 推送会调度全部三个选定载体，但不保证每个中间提交都得到结果。
 
 本决策部分取代[安装后 wheel 包验证](../testing/2026-08-23-installed-python-wheel-black-box-ci.zh.md)、[原生 Windows CI](2026-08-08-native-windows-pull-request-ci.zh.md)、[串行参考](2026-07-21-serial-cross-platform-ci-reference.zh.md)和[故障切换手册](2026-07-26-ci-failover-runbook.zh.md)中的调度策略。这些记录仍保留产物来源、平台保真度、串行完整性与信任规则的决策价值。
 

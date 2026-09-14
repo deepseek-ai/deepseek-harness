@@ -43,6 +43,9 @@ export interface SubmitOutcome {
 
 /** Command-mode credential supplied by one input-trigger source. */
 export interface CommandClaim {
+  /** Catalog command name without the leading slash (the key of per-command composer copy such as `hint.*`). */
+  readonly name: string
+  /** Inserted command text with its argument separator; the bare complete name also retains the claim. */
   readonly token: string
   readonly hint?: string
   readonly attachments?: boolean
@@ -137,6 +140,12 @@ export interface InputTriggerController {
     signal: AbortSignal,
     envelope: { readonly attachments: number },
   ): Promise<PickOutcome>
+  /**
+   * @param source - chip owner, or undefined for a text reference.
+   * @param reference - source id and glyph.
+   * @returns whether a preview opened.
+   */
+  openReference(source: string | undefined, reference: Pick<ReferenceInsert, 'ref' | 'appearance'>): boolean
   /** @param source - source name. @param hit - synthetic trigger hit. */
   toggleSource(source: string, hit: InputTriggerHit): void
 }
@@ -260,7 +269,7 @@ export interface ComposerKeyboard {
   readonly snapshot: InputState
   /** The shell-owned Lexical editor the composer binds its contenteditable to. */
   readonly editor: LexicalEditor
-  /** Submit with an explicit delivery mode resolved by the keyboard policy. */
+  /** Submit with an explicit delivery mode resolved by the submission policy (Enter gestures and the primary Send button). */
   submit(mode: InputSubmitMode): void
   /**
    * Steer every still-pending queued message into the running turn (the
@@ -282,6 +291,12 @@ export interface ComposerKeyboard {
   space(): boolean
   /** Dismiss the popupSelect shell (any interaction outside the box). */
   dismissPopup(): void
+  /**
+   * Bind the mounted composer's file action and live intake availability.
+   * @param picker - availability query and native file-dialog opener.
+   * @returns the unbind disposer.
+   */
+  bindFilePicker(picker: { available(): boolean; open(): void }): () => void
 }
 
 /** One independently addressable row projected from the transient queue snapshot. */
@@ -335,7 +350,7 @@ export interface InputState {
   readonly draftRev: number
   readonly phase: 'plain' | 'adjudicating' | 'claimed' | 'submitting'
   /** Present exactly while claimed/submitting (claim snapshot during flight; submit closure withheld). */
-  readonly claim?: { readonly token: string; readonly hint?: string; readonly attachments?: boolean }
+  readonly claim?: { readonly name: string; readonly token: string; readonly hint?: string; readonly attachments?: boolean }
   /** Reference occurrence view of the editor's chips, sorted by offset. */
   readonly occurrences: readonly Occurrence[]
   /** Read-only transient inbox projection from Session control, including pending steering. */

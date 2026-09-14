@@ -79,6 +79,20 @@ export interface Win32DialogBindings {
    * @returns the calling thread's native id.
    */
   currentThreadId(): number
+  /**
+   * Make the dialog that `Show` is about to create able to take the
+   * foreground. Windows grants activation only to the foreground process,
+   * to a process it started, or to a process that received recent input; a
+   * worker spawned by a background host (the web GUI server) qualifies for
+   * none, so the dialog would open behind every other window. Synthesizing
+   * one Alt press (down, then up) through `keybd_event` counts this process
+   * as the most recent input owner — a community-documented technique with
+   * no documented contract. Call immediately before `Show`. When the
+   * process already holds foreground rights (a console-launched CLI), the
+   * press is inert, but the focused window still receives the lone Alt and
+   * may briefly highlight its menu bar before the dialog activates.
+   */
+  pressAltForForeground(): void
 }
 
 /**
@@ -117,6 +131,7 @@ export function runFolderDialog(
       check(dialog.setOptions(FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_NOCHANGEDIR), 'SetOptions')
       check(dialog.setTitle(title), 'SetTitle')
       onShowing(bindings.currentThreadId())
+      bindings.pressAltForForeground()
       const shown = dialog.show()
       if (shown === HRESULT_CANCELLED) return null
       check(shown, 'Show')

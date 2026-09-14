@@ -1,0 +1,10 @@
+version: 1
+scenario: computer-use-cua-driver-native
+profile: headless
+composition: computer-use-cua-driver-native
+recording: authored
+header:
+  class: computer-use-cua-driver-native
+  pin: true
+replay:
+  override: true

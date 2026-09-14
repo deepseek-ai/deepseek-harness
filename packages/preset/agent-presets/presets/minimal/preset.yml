@@ -1,3 +1,3 @@
 name: 极简模式
-description: 仅提供持久 bash 与 str_replace_editor 的双工具编码 Agent。
+description: 仅提供持久 shell 的单工具编码 Agent。
 order: 3

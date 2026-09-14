@@ -8,7 +8,7 @@ English | [中文](2026-06-13-capability-seams.zh.md)
 
 The harness has swappable capabilities, including shell execution and model providers. A capability has three concerns that change at different rates and for different reasons: the *contract* (what the capability is), the *implementation* (how it runs), and the *consumer API* (what the model and other plugins program against). Bundling them in one package couples those rates of change — swapping a local executor for a sandboxed one would churn the tool schemas the model sees, even though the model-facing contract never changed.
 
-This is distinct from "who provides vs. needs a capability at runtime", which Cordis already answers with services + `inject` (a provider registers `ctx.shell`; a consumer declares `inject: ['bash']` and its fiber pends until the service exists). That mechanism is necessary but doesn't dictate package boundaries; this Agent Note does.
+This is distinct from "who provides vs. needs a capability at runtime", which Cordis already answers with services + `inject` (a provider registers `ctx.shell`; a consumer declares `inject: ['shell']` and its fiber pends until the service exists). That mechanism is necessary but doesn't dictate package boundaries; this Agent Note does.
 
 ## Decision
 

@@ -9,8 +9,7 @@
  * @module
  */
 
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { ListToolsResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import { Client } from '@modelcontextprotocol/client'
 import { describeError } from './diagnostic.ts'
 import { withDeadline } from './deadline.ts'
 import { createTransport } from './transport.ts'
@@ -92,7 +91,9 @@ export async function probeServer(config: Config, options: McpProbeOptions = {})
   if (aborted()) {
     return { ok: false, stage, message: 'probe aborted', durationMs: 0 }
   }
-  const client = new Client({ name: 'dsh-mcp-probe', version: '0.0.1' }, { capabilities: {} })
+  // Negotiates exactly as the supervised connection does, so a probe verdict
+  // predicts what mounting the entry would do.
+  const client = new Client({ name: 'dsh-mcp-probe', version: '0.0.1' }, { capabilities: {}, versionNegotiation: { mode: 'auto' } })
   // Closing the client is the abort lever the SDK gives a hung connect; the
   // listing stage additionally carries the signal on each request.
   const onAbort = (): void => {
@@ -111,7 +112,6 @@ export async function probeServer(config: Config, options: McpProbeOptions = {})
       const result = await withProbeDeadline(
         client.request(
           { method: 'tools/list', ...cursor === undefined ? {} : { params: { cursor } } },
-          ListToolsResultSchema,
           options.signal === undefined ? {} : { signal: options.signal },
         ),
         remaining(),

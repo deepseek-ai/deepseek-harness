@@ -1,0 +1,24 @@
+.frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 240px;
+  border: none;
+  background: var(--dsw-alias-bg-base);
+}
+
+.status {
+  margin: 0;
+  padding: 10px;
+  color: var(--dsw-alias-label-secondary);
+  white-space: normal;
+}
+
+/* The packing wait fills the still-empty body and centres, like the image
+   renderer's status. */
+.opening {
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+}

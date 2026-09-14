@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-工具调用可能会长时间挂起——缓慢的网页抓取、永不返回的搜索——没有上限时模型会无限期等待，拖住整个会话。`dsh-tool-call-timeout-policy` 为声明了限时的调用设置协作式截止时间：它通过 `exec.signal` 请求工具停止，再把已经完成的取消映射为清晰的 `Error: tool call timed out after <ms>ms` 结果。忽略或缓慢处理取消的工具会让调用方继续等待，直到自身完成；本插件绝不会硬性停止下游工作。限时来自每个工具自身的配置，因此插件本身零配置，并随 `dsh` base 组合默认启用。
+使用本包可为工具调用执行其配置的协作式时间上限，并在取消完成后向模型返回清晰的超时错误。按时完成的调用保持不变。忽略或缓慢处理取消的工具仍可能让调用方继续等待，因为本包无法硬性停止下游工作。每个工具分别提供自己的限时；本包无需配置，并随 `dsh` 基础组合包默认启用。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-常用路径只有一行：把插件加入组合——`dsh` base 组合已经包含它。配置了限时的工具会被自动保护；其余工具完全不受影响。
+常用路径只有一行：把插件加入组合——`dsh` 基础组合包已经包含它。配置了限时的工具会被自动保护；其余工具完全不受影响。
 
 ### 何时选择
 
@@ -77,7 +77,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`TOOL_TIMEOUT`、`name`／`inject`／`apply`、`tools/execute` 包装层 |
-| — | 不发布运行时不变式伴生入口；无状态包装层不拥有包级事件历史。 |
+| — | 不发布运行时不变式伴生入口；此无状态策略插件不拥有包级事件历史，也不拥有所拦截 seam 之外的可变数据关系。 |
 
 </details>
 
@@ -88,7 +88,7 @@ kind: "package-reference"
 
 当包级约定不够用时阅读以下页面。它们从工具调用流水线逐步进入超时库拆分、被执行的限时与 guard 组映射。
 
-- [工具子系统参考](../../../docs/subsystems/tools.zh.md)——本包装层挂钩的 `tools/execute` waterfall 与决策形态。
+- [工具子系统参考](../../../docs/subsystems/tools.zh.md)——本包装层挂钩的 `tools/execute` waterfall（瀑布式事件）与决策形态。
 - [超时截止时间库 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-06-timeout-deadline-library.zh.md)——时序／终止拆分以及截止时间为何只通知。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-web)——策略所执行的 `dsh-tool-web` 的 `fetchTimeoutMs`／`searchTimeoutMs` 预算。
 - [guard 组映射](../README.zh.md)——同组的 guard 包与循环卫生家族。

@@ -27,7 +27,8 @@ export { filterOptions, PopupSelectController } from './popup.ts'
 export type { PopupSelectDeps, PopupSpec, PopupState, TokenSegment } from './popup.ts'
 export type { PopupSelectInjected, PopupSelectViewProps } from './PopupSelectView.tsx'
 export type {
-  CommandContribution, CommandDecoration, CommandUiContract, CommandUiSpec, SelectConfirmation, SelectOption,
+  ActionSpec, CommandContribution, CommandDecoration, CommandUiContract, CommandUiSpec, PopupSelectSpec,
+  SelectConfirmation, SelectOption,
 } from './contract.ts'
 export type { CommandKey } from './locales.ts'
 
@@ -39,7 +40,7 @@ declare module '@deepseek-ai/cordis' {
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** The popupSelect shell's copy. */
+    /** The menu rows' and the popupSelect shell's copy. */
     command: CommandKey
   }
 }
@@ -51,8 +52,7 @@ const NS = 'command'
 export const inject = ['inputTriggers', 'sessions', 'remote', 'remote.commands', 'locale']
 
 /**
- * Client plugin body: mount the service, then register the popupSelect shell
- * into the input overlay once its declarer is up.
+ * Mount the command service and its per-session popupSelect overlay.
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {

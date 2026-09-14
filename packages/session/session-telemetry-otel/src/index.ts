@@ -246,6 +246,7 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
     ctx.on('session/event', (session, event) => {
       if (!isFeedback(session, event)) return
       // Only the canonical appended event authorizes this exact prefix.
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       if (session.eventAt(event.seq) !== event) {
         ctx.logger.warn(NON_CANONICAL_EVENT_WARNING)
         return
@@ -258,7 +259,7 @@ export class OpenTelemetrySessionBackend extends SessionTelemetryBackend {
       if (committed === undefined) return
       const session = Session.fromRestore(
         snapshot.meta.id, snapshot.events, snapshot.meta, snapshot.inheritedEventCount,
-        'detached',
+        'detached', ctx.sessions.messageProjections,
       )
       // fromRestore appends a lifecycle marker that this submission did not commit.
       if (isFeedback(session, committed)) coordinator.captureSession(session, committed.seq)

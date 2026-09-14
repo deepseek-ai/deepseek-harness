@@ -1,3 +1,5 @@
-headless-test-driver: plugin tree failed to load: failed to apply loader entry include (cordis:include): failed to apply loader entry activation-error (./activation-error.mjs): startup activation snapshot failure
-Error: startup activation snapshot failure
+dsh: warning: 1 entry did not activate
+activation-error (./activation-error.mjs): Error: startup activation snapshot failure
     at activation-error-fixture
+dsh: reasoning:
+Inspecting the task before the tool call.

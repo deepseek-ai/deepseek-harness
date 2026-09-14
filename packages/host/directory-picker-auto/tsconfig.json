@@ -19,6 +19,9 @@
     },
     {
       "path": "../webserver"
+    },
+    {
+      "path": "../../util/launch-environment"
     }
   ]
 }

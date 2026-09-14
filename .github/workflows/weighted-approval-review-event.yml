@@ -1,0 +1,17 @@
+name: weighted-approval-review-event
+run-name: weighted-approval-review-event:${{ github.event.pull_request.number }}
+
+on:
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+
+permissions: {}
+
+jobs:
+  record-review-event:
+    name: record weighted approval review event
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Record review event
+        run: echo 'Recorded a weighted approval review event.'

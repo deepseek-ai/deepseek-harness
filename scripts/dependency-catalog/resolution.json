@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-12T08:56:20.434Z",
+  "npm": "11.17.0",
+  "node": "24.19.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "registry": "https://registry.npmjs.org/",
+  "installStrategy": "hoisted"
+}

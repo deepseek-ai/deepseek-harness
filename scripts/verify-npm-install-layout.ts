@@ -126,6 +126,9 @@ export function assertDualDshInstallLayout(packageLock: NpmPackageLock): DshInst
 
   for (const [path, manifest] of installed) {
     const name = packageNameAtPath(path, manifest)
+    if (name === 'react' || name === 'react-dom') {
+      errors.push(`${path}: ${name} is a browser build input, not a dependency of the synthetic DSH-only consumer`)
+    }
     if (name === undefined || !isDshPackage(name)) continue
     const version = manifest.version
     if (version !== nestedVersion && version !== rootVersion) {

@@ -973,3 +973,63 @@ describe('registry-global session archive', () => {
     expect(upgraded.registry.archivedSessionIds).toEqual([])
   })
 })
+
+describe('registry-global session unarchive', () => {
+  it('unarchives durably in order, idempotently skips absent ids, and leaves accounting untouched', async () => {
+    const dir = await makeDir('unarchive-home')
+    const result = await harness({
+      sessions: [header('one', dir, 100), header('two', dir, 200), header('three', dir, 300)],
+    })
+    const workspace = result.registry.list()[0]!
+    await result.registry.archiveSession(SessionId('one'))
+    await result.registry.archiveSession(SessionId('two'))
+    await result.registry.archiveSession(SessionId('three'))
+    expect(result.registry.archivedSessionIds).toEqual(['one', 'two', 'three'])
+
+    await result.registry.unarchiveSession(SessionId('two'))
+    // Removal keeps the survivors in archive order.
+    expect(result.registry.archivedSessionIds).toEqual(['one', 'three'])
+    // Unarchiving is a display-set write: the workspace account keeps the id.
+    expect(workspace.sessionIds).toContain('two')
+    expect(storedState(result.pool).archivedSessionIds).toEqual(['one', 'three'])
+    const changesAfterFirst = result.changes.filter(change => change.table === '').length
+
+    await result.registry.unarchiveSession(SessionId('two'))
+    expect(result.registry.archivedSessionIds).toEqual(['one', 'three'])
+    // The absent-id repeat neither rewrites the medium nor emits a change.
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterFirst)
+
+    await result.registry.unarchiveSession(SessionId('never-archived'))
+    expect(result.registry.archivedSessionIds).toEqual(['one', 'three'])
+    expect(result.changes.filter(change => change.table === '').length).toBe(changesAfterFirst)
+  })
+
+  it('unarchives an entry whose session is gone without consulting session persistence', async () => {
+    const dir = await makeDir('unarchive-vanished')
+    const result = await harness({ sessions: [header('vanished', dir, 100)] })
+    await result.registry.archiveSession(SessionId('vanished'))
+    result.setSessions([])
+    const listingsBefore = result.list.mock.calls.length
+    result.list.mockRejectedValueOnce(new Error('persistence backend down'))
+
+    // Removing an id cannot introduce an unknown one, so the archive entry
+    // resolves even though no session backs it and no listing runs.
+    await expect(result.registry.unarchiveSession(SessionId('vanished'))).resolves.toBeUndefined()
+    expect(result.registry.archivedSessionIds).toEqual([])
+    expect(result.list.mock.calls.length).toBe(listingsBefore)
+  })
+
+  it('keeps the surviving archive set across restarts', async () => {
+    const dir = await makeDir('unarchive-restart')
+    const pool = new MemoryMediaPool()
+    const sessions = [header('kept', dir, 100), header('restored', dir, 200)]
+    const first = await harness({ pool, sessions })
+    await first.registry.archiveSession(SessionId('kept'))
+    await first.registry.archiveSession(SessionId('restored'))
+    await first.registry.unarchiveSession(SessionId('restored'))
+    await first.fiber.dispose()
+
+    const second = await harness({ pool, sessions })
+    expect(second.registry.archivedSessionIds).toEqual(['kept'])
+  })
+})

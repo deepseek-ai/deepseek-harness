@@ -26,9 +26,15 @@ const NAME = 'dsh'
  * (the recovery diagnostic for a broken `cordis.patch.yml`, which is then
  * never parsed).
  * @param patches - `--patch` overlay paths, in argv order.
+ * @param fromDefaultProfile - shipped template used once to initialize a missing profile.
  */
-export function runDumpConfig(profile: string, defaultOnly: boolean, patches: readonly string[]): void {
-  const loaded = prepareProfile(profile, !defaultOnly)
+export function runDumpConfig(
+  profile: string,
+  defaultOnly: boolean,
+  patches: readonly string[],
+  fromDefaultProfile?: string,
+): void {
+  const loaded = prepareProfile(profile, !defaultOnly, fromDefaultProfile)
   const layers: ConfigDumpLayer[] = loaded.layers.map(layer => ({
     label: layer.packageName,
     patches: layer.patches,

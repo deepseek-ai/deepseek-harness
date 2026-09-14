@@ -37,6 +37,7 @@ export interface TrajectoryTurnModel {
 
 /** Snapshot slice the trajectory view folds. */
 export interface TrajectoryLayoutInput {
+  systemPrompts?: TrajectorySnapshot['systemPrompts']
   nodes: TrajectorySnapshot['eventNodes']
   eventLocations?: ReadonlyMap<number, ConversationLocation>
   partial: TrajectorySnapshot['partial']
@@ -94,7 +95,8 @@ type OrderedLayoutEntry =
   | {
     kind: 'system'
     seq: number
-    request: AssistantRequestView
+    request?: AssistantRequestView
+    systemPrompt?: string
     change: RequestPromptChange
   }
   | {
@@ -234,6 +236,10 @@ export function deriveTrajectoryLayout(
   }
 
   const entries: OrderedLayoutEntry[] = [
+    ...(input.systemPrompts ?? []).map(prompt => ({
+      kind: 'system' as const, seq: prompt.seq, systemPrompt: prompt.text,
+      change: { seq: prompt.seq, time: prompt.time, kind: prompt.update ? 'system' as const : 'initial' as const },
+    })),
     ...nodes.map((node, nodeIndex) => ({
       kind: 'node' as const,
       seq: node.seq,
@@ -306,7 +312,8 @@ export function deriveTrajectoryLayout(
           kind: 'system',
           text: promptChangeLabel(change, t),
           sourceSeq: change.seq,
-          ...(request.prompt === undefined ? {} : { promptDetail: request.prompt }),
+          ...(request?.prompt === undefined ? {} : { promptDetail: request.prompt }),
+          ...(entry.systemPrompt === undefined ? {} : { systemPromptDetail: entry.systemPrompt }),
           ...(change.previous === undefined
             ? {}
             : { previousPromptDetail: change.previous }),
@@ -1055,8 +1062,9 @@ function expandSubCalls(
 function summarizeCall(
   name: string,
   argsRaw: string,
-): Pick<TrajectoryCellProps, 'text' | 'previewMarkdown'> {
+): Pick<TrajectoryCellProps, 'text' | 'previewMarkdown' | 'toolName'> {
   return {
+    toolName: name,
     text: name,
     ...(argsRaw === '' ? {} : { previewMarkdown: argsRaw }),
   }

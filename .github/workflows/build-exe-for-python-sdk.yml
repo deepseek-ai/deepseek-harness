@@ -46,7 +46,8 @@ concurrency:
   # github.workflow identifies the caller inside a reusable workflow and keeps
   # an ordinary CI run from cancelling a full release validation on the same ref.
   group: build-single-exe-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'push' || github.ref != 'refs/heads/master' }}
+  # Release-owned builds are part of an intentional publication transaction.
+  cancel-in-progress: ${{ !inputs.release }}
 
 permissions:
   contents: read
@@ -62,7 +63,9 @@ jobs:
   plan:
     name: plan targets
     if: inputs.ci || inputs.release || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ inputs.ci && !inputs.release && vars.DSH_CI_FAILOVER_LINUX == 'blacksmith'
+          && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -122,7 +125,9 @@ jobs:
   sdk-wheel:
     needs: plan
     name: deepseek_harness_sdk-${{ needs.plan.outputs.version }}-py3-none-any.whl
-    runs-on: ubuntu-latest
+    runs-on: >-
+      ${{ inputs.ci && !inputs.release && vars.DSH_CI_FAILOVER_LINUX == 'blacksmith'
+          && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
@@ -150,7 +155,12 @@ jobs:
   build:
     needs: [plan, sdk-wheel]
     name: ${{ matrix.target }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: >-
+      ${{ inputs.ci && !inputs.release && matrix.target == 'node24-linux-x64'
+          && vars.DSH_CI_FAILOVER_LINUX == 'blacksmith' && 'blacksmith-16vcpu-ubuntu-2404'
+          || inputs.ci && !inputs.release && matrix.target == 'node24-win-x64'
+          && vars.DSH_CI_FAILOVER_WINDOWS == 'blacksmith' && 'blacksmith-16vcpu-windows-2025'
+          || matrix.runner }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -400,7 +410,7 @@ jobs:
                    || github.event.pull_request.user.login == 'dependabot[bot]'))
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
-          DEEPSEEK_BASE_URL: https://api.deepseek.com
+          DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
         run: |
           set -euo pipefail
           blackbox_root="$(python -c 'import tempfile; print(tempfile.mkdtemp(prefix="dsh-sdk-blackbox-live-"))')"
@@ -421,7 +431,7 @@ jobs:
         shell: pwsh
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY_EXTERNAL }}
-          DEEPSEEK_BASE_URL: https://api.deepseek.com
+          DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
         run: |
           $blackboxRoot = (& python -c 'import tempfile; print(tempfile.mkdtemp(prefix="dsh-sdk-blackbox-live-"))').Trim()
           Remove-Item Env:PYTHONPATH -ErrorAction SilentlyContinue

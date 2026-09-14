@@ -32,7 +32,7 @@ describe('windows-acl win32 chain (LocalSandboxProvider)', () => {
       windowsAclRunnerArgs: ['node', 'windows-acl-runner.js'],
       probeWindowsAcl,
     })
-    const confined = sandbox.confine(['pwsh', '/Command', 'x'], WW)
+    const confined = await sandbox.confine(['pwsh', '/Command', 'x'], WW)
     expect(confined.argv).toEqual([
       'node', 'windows-acl-runner.js',
       '--workspace', '/ws',
@@ -42,7 +42,7 @@ describe('windows-acl win32 chain (LocalSandboxProvider)', () => {
       'pwsh', '/Command', 'x',
     ])
     expect(confined.enforcement).toBe('partial')
-    expect(confined.denialSignatures).toEqual(['access is denied', 'access to the path', 'permission denied'])
+    expect(confined.denialSignatures).toEqual(['access is denied', 'access to the path', 'permission denied', 'operation not permitted'])
     expect(confined.runnerFailureRules).toEqual([{ allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] }])
     // A sole candidate is selected unprobed.
     expect(probeWindowsAcl).not.toHaveBeenCalled()
@@ -50,7 +50,7 @@ describe('windows-acl win32 chain (LocalSandboxProvider)', () => {
 
   it('read-only: same runner and contract, read-only mode flag', async () => {
     const sandbox = await setup({ platform: 'win32', windowsAclRunnerArgs: ['node', 'windows-acl-runner.js'] })
-    const confined = sandbox.confine(['true'], RO)
+    const confined = await sandbox.confine(['true'], RO)
     expect(confined.argv.slice(-4)).toEqual(['--mode', 'read-only', '--', 'true'])
     expect(confined.enforcement).toBe('partial')
     expect(confined.runnerFailureRules).toEqual([{ allowedExitCodes: [127], fatalSignatures: ['windows-acl-run: '] }])

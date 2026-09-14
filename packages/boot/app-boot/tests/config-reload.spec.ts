@@ -1,10 +1,6 @@
-/**
- * Transactional config replacement through the booted Include and Loader tree.
- * HMR contains rejected refreshes; direct callers receive the error after the
- * previous generation has been retained or restored.
- */
+/** File reload and overlay behavior through the booted Include tree. */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
@@ -43,242 +39,46 @@ function entryConfig(ctx: Context, id: string): unknown {
   return [...ctx.loader.entries()].find(entry => entry.options.id === id)?.options.config
 }
 
-function entryById(ctx: Context, id: string) {
-  const entry = [...ctx.loader.entries()].find(entry => entry.options.id === id)
-  if (!entry) throw new Error(`missing loader entry ${id}`)
-  return entry
-}
-
-function plugin(name: string, body = ''): string {
-  return `export default function ${name}(_ctx, config = {}) { ${body} }\n`
-}
-
-async function expectUpdateFailure(task: Promise<void>, stage: string): Promise<void> {
-  try {
-    await task
-  } catch (error) {
-    expect(error).toBeInstanceOf(Error)
-    expect((error as Error).message).toContain(`failed to ${stage} loader entry`)
-    return
-  }
-  throw new Error(`expected loader update to fail during ${stage}`)
-}
-
 describe('include refresh with an invalid file', () => {
-  it('rejects while keeping the last good tree, then applies the next valid edit', async () => {
+  it('writes and activates initial entries when an included file is missing', async () => {
+    const { ctx, dir } = await bootTree([
+      '- id: initialized',
+      "  name: 'cordis:include'",
+      '  config:',
+      '    path: ./created.yml',
+      '    initial:',
+      '      - id: noop',
+      '        name: ./noop.mjs',
+      '        config: { value: initial }',
+      '',
+    ].join('\n'))
+    try {
+      expect(entryConfig(ctx, 'noop')).toEqual({ value: 'initial' })
+      expect(readFileSync(join(dir, 'created.yml'), 'utf8')).toContain('id: noop')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('keeps the last good tree instead of throwing, then applies the next valid edit', async () => {
     const { ctx, dir, include } = await bootTree('- id: noop\n  name: ./noop.mjs\n  config:\n    value: 1\n')
     try {
       expect(entryConfig(ctx, 'noop')).toEqual({ value: 1 })
 
       writeFileSync(join(dir, 'cordis.yml'), 'invalid: [unclosed\n')
-      await expect(include.refresh()).rejects.toThrow('failed to parse config file')
+      await expect(include.refresh()).resolves.toBeUndefined()
       expect(entryConfig(ctx, 'noop')).toEqual({ value: 1 })
 
       // An empty file parses to `undefined` without a YAML error; it must be
       // treated exactly like a parse failure, not crash the entry walk.
       writeFileSync(join(dir, 'cordis.yml'), '')
-      await expect(include.refresh()).rejects.toThrow('failed to validate config file')
+      await expect(include.refresh()).resolves.toBeUndefined()
       expect(entryConfig(ctx, 'noop')).toEqual({ value: 1 })
 
       writeFileSync(join(dir, 'cordis.yml'), '- id: noop\n  name: ./noop.mjs\n  config:\n    value: 2\n')
       await include.refresh()
       await ctx.loader.await()
       expect(entryConfig(ctx, 'noop')).toEqual({ value: 2 })
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-})
-
-describe('loader entry replacement', () => {
-  it('imports a changed name before replacing the running plugin', async () => {
-    const { ctx } = await bootTree('- id: target\n  name: ./old.mjs\n', {
-      'old.mjs': plugin('oldPlugin'),
-      'new.mjs': plugin('newPlugin'),
-    })
-    try {
-      const entry = entryById(ctx, 'target')
-      await entry.update({ name: './new.mjs' })
-      expect(entry.options.name).toBe('./new.mjs')
-      expect(entry.parent.data.find(options => options.id === 'target')).toBe(entry.options)
-      expect(entry.fiber?.runtime?.callback.name).toBe('newPlugin')
-      expect(entry.options.disabled).toBeUndefined()
-      await entry.fiber?.await()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('retains the running plugin when the replacement cannot be imported', async () => {
-    const { ctx } = await bootTree('- id: target\n  name: ./old.mjs\n', {
-      'old.mjs': plugin('oldPlugin'),
-    })
-    try {
-      const entry = entryById(ctx, 'target')
-      const fiber = entry.fiber
-      await expectUpdateFailure(entry.update({ name: './missing.mjs' }), 'import')
-      expect(entry.options.name).toBe('./old.mjs')
-      expect(entry.fiber === fiber).toBe(true)
-      await fiber?.await()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('restores the previous plugin after replacement application fails', async () => {
-    const { ctx } = await bootTree('- id: target\n  name: ./old.mjs\n', {
-      'old.mjs': plugin('oldPlugin'),
-      'bad.mjs': plugin('badPlugin', 'throw new Error("candidate apply failed")'),
-    })
-    try {
-      const entry = entryById(ctx, 'target')
-      const previous = entry.fiber
-      await expectUpdateFailure(entry.update({ name: './bad.mjs' }), 'apply')
-      expect(entry.options.name).toBe('./old.mjs')
-      expect(entry.fiber === previous).toBe(false)
-      expect(entry.fiber?.runtime?.callback.name).toBe('oldPlugin')
-      expect(entry.options.disabled).toBeUndefined()
-      await entry.fiber?.await()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('restores the previous config when an in-place restart fails', async () => {
-    const { ctx } = await bootTree('- id: target\n  name: ./configurable.mjs\n  config:\n    fail: false\n', {
-      'configurable.mjs': plugin('configurablePlugin', 'if (config.fail) throw new Error("candidate config failed")'),
-    })
-    try {
-      const entry = entryById(ctx, 'target')
-      const fiber = entry.fiber
-      await expectUpdateFailure(entry.update({ config: { fail: true } }), 'apply')
-      expect(entry.options.config).toEqual({ fail: false })
-      expect(entry.fiber === fiber).toBe(true)
-      await fiber?.await()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('does not persist a failed direct fiber update', async () => {
-    const { ctx } = await bootTree('- id: target\n  name: ./configurable.mjs\n  config:\n    fail: false\n', {
-      'configurable.mjs': plugin('configurablePlugin', 'if (config.fail) throw new Error("candidate config failed")'),
-    })
-    try {
-      const entry = entryById(ctx, 'target')
-      const fiber = entry.fiber
-      if (!fiber) throw new Error('target entry has no fiber')
-      await expect(fiber.update({ fail: true })).rejects.toThrow('candidate config failed')
-      expect(entry.options.config).toEqual({ fail: false })
-      expect(entry.parent.data.find(options => options.id === 'target')).toBe(entry.options)
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-})
-
-describe('loader tree replacement', () => {
-  it('rolls back earlier updates and additions when a later entry fails', async () => {
-    const { ctx, dir, include } = await bootTree([
-      '- id: existing',
-      '  name: ./configurable.mjs',
-      '  config:',
-      '    value: old',
-      '',
-    ].join('\n'), {
-      'configurable.mjs': plugin('configurablePlugin'),
-      'bad.mjs': plugin('badPlugin', 'throw new Error("candidate apply failed")'),
-    })
-    try {
-      writeFileSync(join(dir, 'cordis.yml'), [
-        '- id: existing',
-        '  name: ./configurable.mjs',
-        '  config:',
-        '    value: candidate',
-        '- id: added',
-        '  name: ./noop.mjs',
-        '- id: bad',
-        '  name: ./bad.mjs',
-        '',
-      ].join('\n'))
-      await expect(include.refresh()).rejects.toThrow('failed to apply loader entry bad')
-      expect(entryConfig(ctx, 'existing')).toEqual({ value: 'old' })
-      expect([...ctx.loader.entries()].some(entry => entry.options.id === 'added')).toBe(false)
-      expect([...ctx.loader.entries()].some(entry => entry.options.id === 'bad')).toBe(false)
-
-      writeFileSync(join(dir, 'cordis.yml'), [
-        '- id: existing',
-        '  name: ./configurable.mjs',
-        '  config:',
-        '    value: committed',
-        '- id: added',
-        '  name: ./noop.mjs',
-        '',
-      ].join('\n'))
-      await include.refresh()
-      expect(entryConfig(ctx, 'existing')).toEqual({ value: 'committed' })
-      expect(entryById(ctx, 'added').fiber).toBeDefined()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('stops and restores descendants when an ancestor group is disabled and re-enabled', async () => {
-    // No manual builtin registration: `boot()` supplies `cordis:group` beside
-    // `cordis:include`, which is what lets a composition give one `isolate`
-    // realm to a provider and its consumers together.
-    const { ctx, dir, include } = await bootTree('- id: noop\n  name: ./noop.mjs\n')
-    try {
-      const config = (disabled: boolean) => [
-        '- id: parent',
-        '  name: cordis:group',
-        '  group: true',
-        `  disabled: ${disabled}`,
-        '  config:',
-        '    - id: child',
-        '      name: ./noop.mjs',
-        '',
-      ].join('\n')
-
-      writeFileSync(join(dir, 'cordis.yml'), config(false))
-      await include.refresh()
-      expect(entryById(ctx, 'child').fiber).toBeDefined()
-
-      writeFileSync(join(dir, 'cordis.yml'), config(true))
-      await include.refresh()
-      expect(entryById(ctx, 'child').fiber).toBeUndefined()
-
-      writeFileSync(join(dir, 'cordis.yml'), config(false))
-      await include.refresh()
-      expect(entryById(ctx, 'child').fiber).toBeDefined()
-    } finally {
-      await ctx.fiber.dispose()
-    }
-  })
-
-  it('restores a programmatic entry move when its update fails', async () => {
-    const { ctx } = await bootTree('- id: noop\n  name: ./noop.mjs\n', {
-      'movable.mjs': plugin('movablePlugin', 'if (config.fail) throw new Error("candidate config failed")'),
-    })
-    try {
-      const groupId = await ctx.loader.create({ name: 'cordis:group', group: true, config: [] })
-      const targetId = await ctx.loader.create({ name: './movable.mjs', config: { fail: false } })
-      const target = entryById(ctx, targetId)
-      const source = target.parent
-      const sourceIndex = source.data.indexOf(target.options)
-      const destination = entryById(ctx, groupId).subgroup
-      if (!destination) throw new Error('created loader group has no subgroup')
-
-      await expectUpdateFailure(
-        ctx.loader.update(targetId, { config: { fail: true } }, groupId),
-        'apply',
-      )
-
-      expect(target.parent).toBe(source)
-      expect(Object.getPrototypeOf(target.ctx)).toBe(source.ctx)
-      expect(source.data.indexOf(target.options)).toBe(sourceIndex)
-      expect(destination.data).not.toContain(target.options)
-      expect(target.options.config).toEqual({ fail: false })
     } finally {
       await ctx.fiber.dispose()
     }
@@ -335,9 +135,9 @@ describe('include refresh with overlay patches', () => {
       await ctx.loader.await()
       expect(entryConfig(ctx, 'noop')).toEqual({ value: 'patched-v2' })
 
-      // Omitting the patch list must remove the overlay rather than reuse the
-      // Include's previous config through a default parameter.
-      await entry.update({ config: { path: './base.yml' } })
+      // Removing every patch must revert to the file's own values: patching
+      // may not bake earlier patch results into the cached parse.
+      await entry.update({ config: { path: './base.yml', patches: [] } })
       await ctx.loader.await()
       expect(entryConfig(ctx, 'noop')).toEqual({ value: 'edited-2' })
     } finally {
@@ -389,6 +189,71 @@ describe('include patches layered over one base', () => {
       const dropped = [...ctx.loader.entries()].find(entry => entry.options.id === 'bundle-dropped')
       expect(dropped?.options.disabled).toBe(true)
       expect(dropped?.fiber).toBeUndefined()
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+})
+
+describe('best-effort config failure recovery', () => {
+  it.each([
+    ['import', undefined, undefined],
+    ['sync apply', 'export function apply(_ctx, config) { if (config.fail) throw new Error("reload sync failure") }\n', 3],
+    ['async apply', 'export async function apply(_ctx, config) { await Promise.resolve(); if (config.fail) throw new Error("reload async failure") }\n', 3],
+    ['dependency', 'export const inject = ["reloadMissing"]\nexport function apply() {}\n', 0],
+  ] as const)('keeps siblings after a required-id %s failure during HMR', async (_kind, source, state) => {
+    const base = '- id: good\n  name: ./noop.mjs\n'
+    const { ctx, dir, include } = await bootTree(base, {
+      ...source === undefined ? {} : { 'failure.mjs': source },
+      'provider.mjs': 'export function apply(ctx) { ctx.provide("reloadMissing", true) }\n',
+    })
+    try {
+      const good = [...ctx.loader.entries()].find(entry => entry.options.id === 'good')!.fiber
+      writeFileSync(join(dir, 'cordis.yml'), base + '- id: webserver\n  name: ./failure.mjs\n  config: { fail: true }\n')
+      await include.refresh()
+      await ctx.loader.await()
+      const failed = [...ctx.loader.entries()].find(entry => entry.options.id === 'webserver')!
+      expect(failed.fiber?.state).toBe(state)
+      expect(good?.state).toBe(2)
+      expect(ctx.fiber.state).toBe(2)
+
+      const recovery = `- id: webserver\n  name: ./${source === undefined ? 'noop' : 'failure'}.mjs\n  config: { fail: false }\n`
+      const provider = state === 0 ? '- id: provider\n  name: ./provider.mjs\n' : ''
+      writeFileSync(join(dir, 'cordis.yml'), base + recovery + provider)
+      await include.refresh()
+      await ctx.loader.await()
+      expect([...ctx.loader.entries()].find(entry => entry.options.id === 'webserver')?.fiber?.state).toBe(2)
+      expect([...ctx.loader.entries()].find(entry => entry.options.id === 'good')?.fiber).toBe(good)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('keeps the previous fiber config after schema rejection and retries a valid edit', async () => {
+    const config = (value: number | string): string => `- id: webserver\n  name: ./schema.mjs\n  config: { value: ${JSON.stringify(value)} }\n`
+    const { ctx, dir, include } = await bootTree(config(1), {
+      'schema.mjs': [
+        'export const Config = { "~standard": { version: 1, vendor: "app-boot-test", validate(config) {',
+        '  return typeof config.value === "number" ? { value: config } : { issues: [{ message: "expected number" }] }',
+        '} } }',
+        'export function apply(ctx, config) { ctx.provide("validatedValue", config.value) }',
+        '',
+      ].join('\n'),
+    })
+    try {
+      writeFileSync(join(dir, 'cordis.yml'), config('invalid'))
+      await include.refresh()
+      await ctx.loader.await()
+      const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'webserver')!
+      expect(entry.options.config).toEqual({ value: 'invalid' })
+      expect(entry.fiber?.config).toEqual({ value: 1 })
+      expect(ctx.get('validatedValue')).toBe(1)
+
+      writeFileSync(join(dir, 'cordis.yml'), config(2))
+      await include.refresh()
+      await ctx.loader.await()
+      expect(entry.fiber?.config).toEqual({ value: 2 })
+      expect(ctx.get('validatedValue')).toBe(2)
     } finally {
       await ctx.fiber.dispose()
     }

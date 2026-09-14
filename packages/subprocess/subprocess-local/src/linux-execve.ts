@@ -2,12 +2,14 @@
 
 import { getSystemErrorMessage, getSystemErrorName } from 'node:util'
 import koffi from 'koffi'
+import { SUBPROCESS_CONTROL_FD } from '@deepseek-ai/dsh-subprocess/control'
 
 /** Replace the current process image while preserving the supplied argv and environment. */
 export type LinuxExecve = (
   file: string,
   argv: string[],
   env: Record<string, string>,
+  control?: 'pipe',
 ) => never
 
 type NativeExecve = (
@@ -51,8 +53,11 @@ export function loadLinuxExecve(): LinuxExecve {
   const nativeFcntl = libc.func(
     'int fcntl(int fd, int cmd, int arg)',
   ) as NativeFcntl
-  cachedExecve = (file, argv, env) => {
-    for (const fd of STANDARD_FILE_DESCRIPTORS) {
+  cachedExecve = (file, argv, env, control) => {
+    const descriptors = control === 'pipe'
+      ? [...STANDARD_FILE_DESCRIPTORS, SUBPROCESS_CONTROL_FD]
+      : STANDARD_FILE_DESCRIPTORS
+    for (const fd of descriptors) {
       const flags = nativeFcntl(fd, F_GETFD, 0)
       if (flags === -1) throw systemError(koffi.errno(), 'fcntl')
       if ((flags & FD_CLOEXEC) === 0) continue

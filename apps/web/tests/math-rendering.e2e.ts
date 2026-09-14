@@ -123,7 +123,7 @@ describe('web e2e: settled Markdown math rendering', () => {
     await expect.poll(() => page.locator('.katex-display').count(), { timeout: 10_000 }).toBe(2)
     expect(await page.locator('.katex-error').count()).toBe(0)
     await expect.poll(
-      () => page.getByText('1 turns · 1 steps', { exact: false }).count(),
+      () => page.getByText('1 turns 1 steps', { exact: false }).count(),
       { timeout: 10_000 },
     ).toBe(1)
 

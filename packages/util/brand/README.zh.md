@@ -37,7 +37,7 @@ export type SessionId = Branded<'SessionId'>
 const sessionId = brandString<SessionId>('session-1')
 ```
 
-`brandString()` 只改变静态类型，不执行运行时校验。所属类型若有领域文法，应在调用前完成校验。添加品牌后，该 id 与普通字符串一样比较、记录日志、序列化为 JSON 和跨 wire 传输。
+`brandString()` 只改变静态类型，不执行运行时校验。所属类型若有领域文法，应在调用前完成校验。添加品牌后，该 id 在比较、日志记录、JSON 序列化和协议传输中仍表现为普通字符串。
 
 ### 为数字添加品牌
 
@@ -51,11 +51,11 @@ export type SessionSeq = BrandedNumber<'SessionSeq'>
 const seq = brandNumber<SessionSeq>(7)
 ```
 
-`brandNumber()` 原样返回数字，不执行校验。所属包会在添加品牌前校验非负安全整数范围等要求。比较、算术、日志、JSON 序列化与 wire 传输保留普通数字行为；算术会产生未品牌化数字，所属包必须重新准入该数字，才能让它再次进入领域。
+`brandNumber()` 原样返回数字，不执行校验。所属包会在添加品牌前校验非负安全整数范围等要求。比较、算术、日志、JSON 序列化与协议传输保留普通数字行为；算术会产生未品牌化数字，所属包必须重新准入该数字，才能让它再次进入领域。
 
 ### 何时添加品牌
 
-为跨包边界且可能被混淆的值添加品牌——`dsh-llm` 中的 `ToolCallId`、`dsh-session` 中共享的 agent/会话 `SessionId`、`dsh-jobs` 中的 `JobId`，以及 `dsh-session` 中的 `SessionSeq` 与 `SessionLogOffset`。保持局部或无法混淆的值不需要这种抽象。
+为跨包边界且可能被混淆的值添加品牌——`dsh-llm` 中的 `ToolCallId`、`dsh-session` 中由 agent（智能体）和会话共享的 `SessionId`、`dsh-jobs` 中的 `JobId`，以及 `dsh-session` 中的 `SessionSeq` 与 `SessionLogOffset`。保持局部或无法混淆的值不需要这种抽象。
 
 -----
 
@@ -72,7 +72,7 @@ const seq = brandNumber<SessionSeq>(7)
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 品牌化字符串与数字类型及其无状态构造函数 |
-| — | 不发布运行时不变量伴生入口；擦除由编译器保证。 |
+| — | 不发布运行时不变量配套入口；这个纯工具不拥有事件流或可变运行时数据；其值代数由单元测试保障。 |
 
 ### 值为何可移植
 

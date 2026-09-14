@@ -14,7 +14,7 @@ The [preview workflow](../../../../.github/workflows/build-preview-cloudflare.ym
 
 ### Measurements
 
-[Experiment 34012729982](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34012729982) succeeds for all eight size/cache combinations plus one cache seed. Every measured job checks out SHA `9149d7e7ef945b5601711badd3cf63d58ab384f5`, uses Node 24.19.0 and pnpm 11.7.0, and executes immutable install, full workspace build, preview/VFS packing, and local upload shaping with gzip integrity verification. Warm jobs restore one exact run-private pnpm cache; cold jobs skip restoration but contain pnpm bootstrap files. No compiled outputs are restored.
+Experiment 34012729982 succeeds for all eight size/cache combinations plus one cache seed. Every measured job checks out the same experiment revision, uses Node 24.19.0 and pnpm 11.7.0, and executes immutable install, full workspace build, preview/VFS packing, and local upload shaping with gzip integrity verification. Warm jobs restore one exact run-private pnpm cache; cold jobs skip restoration but contain pnpm bootstrap files. No compiled outputs are restored.
 
 | Runner | Cold / warm job seconds | Rounded minutes each | USD each | Workspace seconds cold / warm | Preview seconds cold / warm |
 |---|---:|---:|---:|---:|---:|
@@ -29,7 +29,7 @@ Standard jobs expose two vCPUs and 7.75 GiB RAM. Workspace maximum process RSS i
 
 The comparison fixes source, lockfile, commands, and runtime versions, not physical CPUs or image release: standard and 4-core use image 20260831.293.1; 8-core and 16-core use 20260823.283.1. CPUs vary among AMD EPYC 9V74/7763 and Intel Xeon 8370C/8573C. One sample per cache state measures the offered labels, not isolated CPU scaling or statistical repeatability.
 
-The experiment does not deploy or access Cloudflare credentials. Measurement upload takes zero to one second; warm-cache restore takes six to ten seconds. For context, [production job 101428009994](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34011495156/job/101428009994) spends 14 seconds uploading, one second verifying, and two seconds commenting on a different SHA. Adding that overhead to this experiment is a projection, not a measured standard-runner publication result. The actual PR preview workflow owns deployment confirmation.
+The experiment does not deploy or access Cloudflare credentials. Measurement upload takes zero to one second; warm-cache restore takes six to ten seconds. For context, production job 101428009994 (run 34011495156) spends 14 seconds uploading, one second verifying, and two seconds commenting on a different SHA. Adding that overhead to this experiment is a projection, not a measured standard-runner publication result. The actual PR preview workflow owns deployment confirmation.
 
 ## Alternatives considered
 

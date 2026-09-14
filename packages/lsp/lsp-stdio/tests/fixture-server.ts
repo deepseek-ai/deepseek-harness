@@ -12,9 +12,8 @@
  * - LSP_FAKE_CRASH_ON_OPEN: "1" exits the process when a didOpen arrives (crash test).
  * - LSP_FAKE_EXIT_AFTER_REPLY: "1" exits the process right after answering a textDocument/* request,
  *   simulating a server that dies while idle so the pool holds a dead instance (eviction test).
- * - LSP_FAKE_REPLY_DELAY_MS: delays each textDocument/* response by this many milliseconds.
  * - LSP_FAKE_OPEN_MARKER: appends each didOpen document text as one JSON line to this path.
- * - LSP_FAKE_INITIALIZED_MARKER: records when the initialized notification is received.
+ * - LSP_FAKE_INITIALIZED_MARKER: records initialized receipt after any requested stdin pause.
  * - LSP_FAKE_PAUSE_STDIN_AFTER_INITIALIZED: "1" stops consuming stdin after initialized.
  * - LSP_FAKE_EXIT_DELAY_MS / LSP_FAKE_EXIT_MARKER: delay protocol exit and record exit/termination.
  * - LSP_FAKE_NO_SHUTDOWN: "1" ignores the shutdown request (forces kill escalation).
@@ -34,7 +33,6 @@ const extraCaps: unknown = process.env.LSP_FAKE_CAPS !== undefined ? JSON.parse(
 const hang = process.env.LSP_FAKE_HANG === '1'
 const crashOnOpen = process.env.LSP_FAKE_CRASH_ON_OPEN === '1'
 const exitAfterReply = process.env.LSP_FAKE_EXIT_AFTER_REPLY === '1'
-const replyDelayMs = Number(process.env.LSP_FAKE_REPLY_DELAY_MS ?? 0)
 const openMarker = process.env.LSP_FAKE_OPEN_MARKER
 const initializedMarker = process.env.LSP_FAKE_INITIALIZED_MARKER
 const pauseStdinAfterInitialized = process.env.LSP_FAKE_PAUSE_STDIN_AFTER_INITIALIZED === '1'
@@ -146,25 +144,21 @@ function handle(message: { id?: number; method?: string; params?: unknown; resul
     return
   }
   if (method === 'initialized') {
-    if (initializedMarker !== undefined) appendFileSync(initializedMarker, 'INITIALIZED\n')
     if (pauseStdinAfterInitialized) process.stdin.pause()
+    if (initializedMarker !== undefined) appendFileSync(initializedMarker, 'INITIALIZED\n')
     return
   }
   if (method === 'textDocument/didClose') return
   if (method?.startsWith('textDocument/')) {
     if (hang) return
-    const reply = (): void => {
-      if (errorReply) {
-        send({ id, error: { code: -32000, message: 'server refused the request' } })
-      } else {
-        send({ id, result: resultFor(method) })
-      }
-      // Simulate an idle death: answer this request, then exit before the next one arrives so the
-      // pool is left holding a dead instance.
-      if (exitAfterReply) setTimeout(() => process.exit(0), 20)
+    if (errorReply) {
+      send({ id, error: { code: -32000, message: 'server refused the request' } })
+    } else {
+      send({ id, result: resultFor(method) })
     }
-    if (replyDelayMs > 0) setTimeout(reply, replyDelayMs)
-    else reply()
+    // Simulate an idle death: answer this request, then exit before the next one arrives so the
+    // pool is left holding a dead instance.
+    if (exitAfterReply) setTimeout(() => process.exit(0), 20)
     return
   }
   // Unknown request with an id: answer null so the client never stalls.

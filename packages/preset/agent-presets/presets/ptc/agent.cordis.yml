@@ -226,19 +226,27 @@
         backgroundMode: one-shot
         maxDepth: provider-managed
 
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
+      # No consumer here: `tool-workflow` is off in PTC mode and `tool-ralph`
+      # below is off by default. Restore this row together with `tool-ralph`.
+      disabled: true
       config:
         provider: spawn
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
-      # Keep the engine above for `ralph`, but do not publish a second
-      # model-authored orchestration surface beside `run_code` in PTC mode.
+      # Do not publish a second model-authored orchestration surface beside
+      # `run_code` in PTC mode.
       disabled: true
 
+    # Off by default with the base row it mirrors. Preset files take no patches,
+    # so a session that wants it duplicates this preset under a new id and drops
+    # `disabled` from this row and from the engine above; the shipped root
+    # shadows a copy that reuses this id.
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'
+      disabled: true
       config:
         subagentProvider: spawn
         maxRounds: 64
@@ -263,10 +271,13 @@
 
 # ── presentation ────────────────────────────────────────────────────────────
 
-# PTC mode for this agent alone. The row waits for the host's `codeRuntime`
+# PTC mode for this agent alone. The row waits for the host's `ptcRuntime`
 # rather than assuming it: a deployment that composes no TypeScript runtime
 # fails this preset at mount, naming this id, instead of at the first request.
 - id: tool-presentation
   name: '@deepseek-ai/dsh-agent-tool-presentation'
   config:
     mode: ptc
+
+- id: present
+  name: '@deepseek-ai/dsh-tool-present'

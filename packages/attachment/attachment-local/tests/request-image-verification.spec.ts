@@ -38,7 +38,7 @@ describe('request image verification', () => {
     const attachment = await attachments.saveImage({ data: source, mediaType: 'image/png' })
     control.mismatch = true
 
-    await expect(attachments.readImageRequest(attachment, { maxPixels: 16 * 16, maxBytes: 1024 * 1024 }))
+    await expect(attachments.readImageRequest(attachment, { width: 22, height: 11, maxBytes: 1024 * 1024 }))
       .rejects.toMatchObject({
         code: 'ATTACHMENT_WRITE_FAILED',
         message: 'Encoded model-request image does not match its verified 8-bit sRGB metadata.',

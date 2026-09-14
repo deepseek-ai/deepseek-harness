@@ -142,6 +142,10 @@ function validateEvent(
       pendingCalls = { kind: 'delete', callId }
       break
     }
+    case 'system/message': {
+      requireOpenStep(trace, 'system/message', event.data.turn, event.data.step, fail)
+      break
+    }
     case 'user/message':
       break
     case 'session/end-seed':
@@ -206,6 +210,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   const seedSession = (session: Session): SessionTrace => {
     const trace = freshTrace()
     traces.set(session, trace)
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     for (const event of session.snapshotEvents()) {
       applyTransition(trace, validateEvent(trace, event, fail))
     }

@@ -58,8 +58,8 @@ type QueryFactory = (params: {
 
 const queryMock = vi.hoisted(() => vi.fn<QueryFactory>())
 
-const CLAUDE_AGENT_SDK_VERSION = '0.3.241'
-const CLAUDE_CODE_VERSION = '2.1.241'
+const CLAUDE_AGENT_SDK_VERSION = '0.3.263'
+const CLAUDE_CODE_VERSION = '2.1.263'
 const CLAUDE_PLATFORM_PACKAGES = [
   '@anthropic-ai/claude-agent-sdk-darwin-arm64',
   '@anthropic-ai/claude-agent-sdk-darwin-x64',
@@ -167,6 +167,7 @@ function fakeChild(options: FakeChildOptions = {}): FakeChild {
     })
   })
   const handle: SubprocessHandle = {
+    control: undefined,
     stdin,
     stdout,
     stderr: undefined,

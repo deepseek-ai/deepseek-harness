@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-format-catalog",
   "description": "Build-static first-party Session format codec and migration catalog",
-  "version": "0.1.3-alpha.2",
+  "version": "0.1.5-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -19,17 +19,24 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./message-projections": {
+      "types": "./lib/types/message-projections.d.ts",
+      "default": "./lib/types/message-projections.js"
+    }
   },
   "files": [
     "lib/index.js",
+    "lib/types/**/*.js",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-session-format": "workspace:^",
     "@deepseek-ai/dsh-session-format-v0-to-v1": "workspace:^",
-    "@deepseek-ai/dsh-session-format-v1-to-v2": "workspace:^"
+    "@deepseek-ai/dsh-session-format-v1-to-v2": "workspace:^",
+    "@deepseek-ai/dsh-session-format-v2-to-v3": "workspace:^",
+    "@deepseek-ai/dsh-compaction-image-offload": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",

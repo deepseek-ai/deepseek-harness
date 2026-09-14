@@ -1,39 +1,33 @@
-/** Local submission echoes: synchronous insertion, observed/failed retirement, and settlement callbacks. */
+/**
+ * Local submission echoes: synchronous insertion, observed/failed retirement,
+ * and settlement callbacks. Prompts and the follow stream cross the assembled
+ * Gateway client and are answered by endpoint name.
+ */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { SessionSeq, type SessionEvent, type SessionId } from '@deepseek-ai/dsh-session/types'
+import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
+import type { SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
-import { Session } from '../src/client/sessions/session.ts'
+import { createClientTest, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
 import type { PendingSubmissionRetirement } from '../src/client/contract/session.ts'
-import type { SessionQueuedItem, SessionRequestId } from '../src/types.ts'
-import { FakeApiClient, err, fakeRemote, ok } from './fake-api.client.ts'
-import { historyValue } from './event-script.client.ts'
+import type { SessionRequestId } from '../src/types.ts'
+import { sessionBench } from './remote/bench.client.ts'
+import {
+  FOLLOW, err, fileRef, followScript, history, imageRef, pushEvent, queueFrame,
+} from './remote/session.client.ts'
 
+/** A Session talks through the Gateway client; its dependency cone is the Typert registry and the Connection. */
+const API_ROSTER = webApp.closure(['@deepseek-ai/dsh-api-gateway'])
+const it = createClientTest({ roster: API_ROSTER })
 const SID = 'fk-s1' as SessionId
+/** The first client boot pays the cold module transform of the api cone. */
+const COLD_BOOT_TIMEOUT_MS = 60_000
 
 afterEach(() => {
   vi.unstubAllGlobals()
 })
-
-function makeSession(api = new FakeApiClient()): { api: FakeApiClient; session: Session } {
-  return { api, session: new Session(SID, fakeRemote(api)) }
-}
-
-function imageRef(id: string): ImageAttachmentRef {
-  return {
-    attachmentId: id,
-    mediaType: 'image/png',
-    bytes: 1,
-    width: 2,
-    height: 2,
-  } as unknown as ImageAttachmentRef
-}
-
-function fileRef(id: string, name = 'notes.txt'): FileAttachmentRef {
-  return { attachmentId: id, name, bytes: 3 } as unknown as FileAttachmentRef
-}
 
 type AttachmentRef = ImageAttachmentRef | FileAttachmentRef
 
@@ -60,16 +54,9 @@ function promptEvent(seq: SessionSeq, rpcId: SessionRequestId, refs: readonly At
   } as unknown as SessionEvent
 }
 
-function queuedItem(rpcId: SessionRequestId, refs: readonly AttachmentRef[] = []): SessionQueuedItem {
-  return {
-    id: 'm-queued' as SessionQueuedItem['id'],
-    placement: 'queued',
-    rpcId,
-    message: {
-      id: 'm-queued' as SessionQueuedItem['id'],
-      content: refs.map(attachmentBlock) as unknown as SessionQueuedItem['message']['content'],
-    },
-  }
+/** The Host's queue holding one occurrence of the prompt `rpcId`. */
+function queuedFrame(rpcId: SessionRequestId, refs: readonly AttachmentRef[] = []) {
+  return queueFrame(SID, [{ id: 'm-queued', rpcId, content: refs.map(attachmentBlock) }])
 }
 
 /** Let the frame-delayed retirement (setTimeout fallback in this node environment) run. */
@@ -78,8 +65,8 @@ function settleFrames(): Promise<void> {
 }
 
 describe('beginSubmission', () => {
-  it('inserts the echo synchronously and flips the engaging edge before any prompt call', () => {
-    const { session } = makeSession()
+  it('inserts the echo synchronously and flips the engaging edge before any prompt call', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     expect(session.getSnapshot()).toMatchObject({ pendingSubmissions: [], promptAttempted: false })
     const handle = session.beginSubmission({
       mode: 'queue',
@@ -97,10 +84,11 @@ describe('beginSubmission', () => {
         type: 'image', value: { previewUrl: 'blob:p1', name: 'a.png', width: 4, height: 3 },
       }],
     }])
-  })
+    expect(mock.log.requests()).toEqual([])
+  }, COLD_BOOT_TIMEOUT_MS)
 
-  it('derives and captures the echo placement from running state and delivery mode', () => {
-    const { session } = makeSession()
+  it('derives and captures the echo placement from running state and delivery mode', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.beginSubmission({ mode: 'queue', text: '空闲', attachments: [] })
     session.handleRunning(true)
     session.beginSubmission({ mode: 'queue', text: '排队', attachments: [] })
@@ -113,8 +101,8 @@ describe('beginSubmission', () => {
     ])
   })
 
-  it('abandon retires the echo as failed exactly once', () => {
-    const { session } = makeSession()
+  it('abandon retires the echo as failed exactly once', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     const retirements: PendingSubmissionRetirement[] = []
     const handle = session.beginSubmission({
       mode: 'queue',
@@ -130,9 +118,9 @@ describe('beginSubmission', () => {
 })
 
 describe('prompt-coupled retirement', () => {
-  it('a rejected identified prompt retires its echo immediately alongside promptError', async () => {
-    const { api, session } = makeSession()
-    api.onPrompt = () => Promise.resolve(err(new RemoteError('session/agent-busy', '忙', { reason: 'busy' })))
+  it('a rejected identified prompt retires its echo immediately alongside promptError', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.remote.session.prompt.mockResolvedValue(err(new RemoteError('session/agent-busy', '忙', { reason: 'busy' })))
     const retirements: PendingSubmissionRetirement[] = []
     const handle = session.beginSubmission({
       mode: 'queue',
@@ -143,20 +131,20 @@ describe('prompt-coupled retirement', () => {
     const result = await session.prompt([{ type: 'text', text: '失败的' }], 'queue', undefined, handle.requestId)
     expect(result.ok).toBe(false)
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
-    expect(session.getSnapshot().promptError).toMatchObject({ op: 'send' })
+    expect(session.getSnapshot().promptError).toMatchObject({ op: 'send', error: { code: 'session/agent-busy' } })
     expect(retirements).toEqual([{ reason: 'failed' }])
   })
 
-  it('sends the echo identity as the prompt requestId', async () => {
-    const { api, session } = makeSession()
+  it('sends the echo identity as the prompt requestId', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     const handle = session.beginSubmission({ mode: 'queue', text: '带 id', attachments: [] })
     await session.prompt([{ type: 'text', text: '带 id' }], 'queue', undefined, handle.requestId)
-    expect(api.callsOf('session.prompt')).toMatchObject([{ requestId: handle.requestId }])
+    expect(mock.log.requests('session/prompt')).toMatchObject([{ requestId: handle.requestId, sessionId: SID }])
   })
 
-  it('an unidentified prompt failure leaves registered echoes alone', async () => {
-    const { api, session } = makeSession()
-    api.onPrompt = () => Promise.resolve(err(new RemoteError('session/agent-busy', '忙', { reason: 'busy' })))
+  it('an unidentified prompt failure leaves registered echoes alone', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    mock.remote.session.prompt.mockResolvedValue(err(new RemoteError('session/agent-busy', '忙', { reason: 'busy' })))
     session.beginSubmission({ mode: 'queue', text: '还在', attachments: [] })
     await session.prompt([{ type: 'text', text: '另一个' }], 'queue')
     expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
@@ -164,9 +152,8 @@ describe('prompt-coupled retirement', () => {
 })
 
 describe('observed retirement', () => {
-  it('a live durable event carrying the rpcId retires the echo one frame later with the admitted refs', async () => {
-    const { api, session } = makeSession()
-    api.onHistory = () => Promise.resolve(ok(historyValue([])))
+  it('a live durable event carrying the rpcId retires the echo one frame later with the admitted refs', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const retirements: PendingSubmissionRetirement[] = []
     const handle = session.beginSubmission({
@@ -176,7 +163,7 @@ describe('observed retirement', () => {
       onRetire: retirement => retirements.push(retirement),
     })
     const refs = [imageRef('att-1')]
-    await api.pushFollow(SID, { type: 'event', event: promptEvent(SessionSeq(0), handle.requestId, refs) as never })
+    await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId, refs))
     // Synchronously after the append the echo is still in the snapshot; the
     // render-time dedupe owns the overlap frame.
     expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
@@ -185,8 +172,8 @@ describe('observed retirement', () => {
     expect(retirements).toEqual([{ reason: 'observed', attachments: refs }])
   })
 
-  it('a queue occurrence carrying the rpcId retires the echo (running-turn submissions)', async () => {
-    const { session } = makeSession()
+  it('a queue occurrence carrying the rpcId retires the echo (running-turn submissions)', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     const retirements: PendingSubmissionRetirement[] = []
     session.handleRunning(true)
     const handle = session.beginSubmission({
@@ -196,7 +183,7 @@ describe('observed retirement', () => {
       onRetire: retirement => retirements.push(retirement),
     })
     const refs = [imageRef('att-q')]
-    session.handleControlFrame({ type: 'queue', sessionId: SID, items: [queuedItem(handle.requestId, refs)] })
+    session.handleControlFrame(queuedFrame(handle.requestId, refs))
     await settleFrames()
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
     expect(retirements).toEqual([{ reason: 'observed', attachments: refs }])
@@ -204,9 +191,8 @@ describe('observed retirement', () => {
     expect(session.getSnapshot().queue).toMatchObject([{ rpcId: handle.requestId }])
   })
 
-  it('retires a mixed echo with durable references in original selection order', async () => {
-    const { api, session } = makeSession()
-    api.onHistory = () => Promise.resolve(ok(historyValue([])))
+  it('retires a mixed echo with durable references in original selection order', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const retirements: PendingSubmissionRetirement[] = []
     const file = fileRef('file-1')
@@ -221,23 +207,22 @@ describe('observed retirement', () => {
       onRetire: retirement => retirements.push(retirement),
     })
     const refs = [imageRef('image-1'), file, imageRef('image-2')]
-    await api.pushFollow(SID, { type: 'event', event: promptEvent(SessionSeq(0), handle.requestId, refs) as never })
+    await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId, refs))
     await settleFrames()
     expect(retirements).toEqual([{ reason: 'observed', attachments: refs }])
   })
 
-  it('a full-window install (reconnect resync) retires echoes observed in the window', async () => {
-    const { api, session } = makeSession()
+  it('a full-window install (reconnect resync) retires echoes observed in the window', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     const handle = session.beginSubmission({ mode: 'queue', text: '重连', attachments: [] })
-    api.onHistory = () => Promise.resolve(ok(historyValue([promptEvent(SessionSeq(12), handle.requestId)])))
+    mock.stream(FOLLOW, followScript(history([promptEvent(SessionSeq(12), handle.requestId)])))
     await session.open()
     await settleFrames()
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
   })
 
-  it('the first observation wins: a later prompt failure cannot re-retire an observed echo', async () => {
-    const { api, session } = makeSession()
-    api.onHistory = () => Promise.resolve(ok(historyValue([])))
+  it('the first observation wins: a later prompt failure cannot re-retire an observed echo', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const retirements: PendingSubmissionRetirement[] = []
     const handle = session.beginSubmission({
@@ -246,15 +231,14 @@ describe('observed retirement', () => {
       attachments: [],
       onRetire: retirement => retirements.push(retirement),
     })
-    await api.pushFollow(SID, { type: 'event', event: promptEvent(SessionSeq(0), handle.requestId) as never })
+    await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId))
     handle.abandon()
     await settleFrames()
     expect(retirements).toEqual([{ reason: 'observed', attachments: [] }])
   })
 
-  it('retires once when the queue and durable event report the same request id', async () => {
-    const { api, session } = makeSession()
-    api.onHistory = () => Promise.resolve(ok(historyValue([])))
+  it('retires once when the queue and durable event report the same request id', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const retirements: PendingSubmissionRetirement[] = []
     const handle = session.beginSubmission({
@@ -263,28 +247,23 @@ describe('observed retirement', () => {
       attachments: [],
       onRetire: retirement => retirements.push(retirement),
     })
-    session.handleControlFrame({
-      type: 'queue', sessionId: SID, items: [queuedItem(handle.requestId, [])],
-    })
-    await api.pushFollow(SID, {
-      type: 'event', event: promptEvent(SessionSeq(0), handle.requestId) as never,
-    })
+    session.handleControlFrame(queuedFrame(handle.requestId))
+    await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId))
     await settleFrames()
     expect(retirements).toEqual([{ reason: 'observed', attachments: [] }])
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
   })
 
-  it('uses requestAnimationFrame for the retirement delay when the runtime provides one', async () => {
+  it('uses requestAnimationFrame for the retirement delay when the runtime provides one', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    await session.open()
     const frames: FrameRequestCallback[] = []
     vi.stubGlobal('requestAnimationFrame', (fn: FrameRequestCallback) => {
       frames.push(fn)
       return frames.length
     })
-    const { api, session } = makeSession()
-    api.onHistory = () => Promise.resolve(ok(historyValue([])))
-    await session.open()
     const handle = session.beginSubmission({ mode: 'queue', text: '帧', attachments: [] })
-    await api.pushFollow(SID, { type: 'event', event: promptEvent(SessionSeq(0), handle.requestId) as never })
+    await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId))
     expect(session.getSnapshot().pendingSubmissions).toHaveLength(1)
     expect(frames).toHaveLength(1)
     frames[0]?.(0)
@@ -293,9 +272,8 @@ describe('observed retirement', () => {
 })
 
 describe('disposal', () => {
-  it('retires unsettled echoes as failed and preserves an already-observed settlement', async () => {
-    const { api, session } = makeSession()
-    api.onHistory = () => Promise.resolve(ok(historyValue([])))
+  it('retires unsettled echoes as failed and preserves an already-observed settlement', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const retirements: { text: string; retirement: PendingSubmissionRetirement }[] = []
     const observed = session.beginSubmission({
@@ -310,7 +288,7 @@ describe('disposal', () => {
       attachments: [],
       onRetire: retirement => retirements.push({ text: '未settle', retirement }),
     })
-    await api.pushFollow(SID, { type: 'event', event: promptEvent(SessionSeq(0), observed.requestId) as never })
+    await pushEvent(mock, promptEvent(SessionSeq(0), observed.requestId))
     await session.dispose()
     await settleFrames()
     expect(retirements).toEqual([

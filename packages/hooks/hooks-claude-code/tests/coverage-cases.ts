@@ -23,7 +23,11 @@ const testToolSignal = new AbortController().signal
  * fallbacks, contextFrom-empty, and the detached-listener catch handlers. */
 
 const dirs: string[] = []
-afterEach(() => { for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true }) })
+const contexts: Context[] = []
+afterEach(async () => {
+  for (const ctx of contexts.splice(0)) await ctx.fiber.dispose()
+  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true })
+})
 
 function subagentCarrier(ctx: Context) {
   return scopeTarget(ctx as unknown as SubagentRuntime, undefined)
@@ -40,6 +44,7 @@ function hooks(d: string, h: unknown): string {
 type HarnessOpts = { pluginRoot?: string; projectDir?: string; stderrSummaryMaxChars?: number; sessionRoot?: string }
 async function harness(configPath: string, adapter: MockAdapter, opts: HarnessOpts = {}): Promise<Context> {
   const ctx = new Context()
+  contexts.push(ctx)
   await mountAgentLoopTestDependencies(ctx)
   if (opts.sessionRoot !== undefined) await ctx.plugin(JsonlSessionPersistence, { root: opts.sessionRoot })
   await ctx.plugin(AgentLoop, { agents: [] })
@@ -238,7 +243,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
         },
         session: { id: SessionId('child-x'), header: { id: 'child-x' } },
       } as unknown as Parameters<typeof ctx.agents.register>[0]
-      ctx.agents.register(child)
+      await ctx.agents.register(child)
       ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-x'), provider: 'p', id: SessionId('child-x'), local: true })
       await waitFor(() => injected.includes('child guidance'))
       expect(injected).toContain('child guidance')
@@ -254,7 +259,7 @@ export function defineCoverageCases(group: CoverageGroup): void {
       const ctx = await harness(path, new MockAdapter([]))
       const warn = vi.fn(); ctx.logger.warn = warn as never
       const child = { id: SessionId('child-y'), inject: () => { throw new Error('inject boom') }, session: { id: SessionId('child-y'), header: { id: 'child-y' } } } as unknown as Parameters<typeof ctx.agents.register>[0]
-      ctx.agents.register(child)
+      await ctx.agents.register(child)
       ctx.emit(subagentCarrier(ctx), 'subagent/start', { runId: SubagentRunId('run-y'), provider: 'p', id: SessionId('child-y'), local: true })
       await waitFor(() => warn.mock.calls.some(c => String(c[0]).includes('SubagentStart hook failed')))
       expect(warn).toHaveBeenCalledWith(expect.stringContaining('SubagentStart hook failed'))
@@ -627,24 +632,29 @@ export function defineCoverageCases(group: CoverageGroup): void {
 
   })
 
-  if (group === 'edge-paths') describe('hooks-claude-code coverage — detached-listener catch handlers', () => {
+  if (group === 'edge-paths') describe('hooks-claude-code coverage — lifecycle error handling', () => {
     it('a throwing SessionStart inject is contained (logged, agent still runs)', async () => {
       const d = dir()
       const s = sh(d, 'start.sh', '#!/usr/bin/env bash\necho \'{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"x"}}\'\n')
       const path = hooks(d, { SessionStart: [{ hooks: [{ type: 'command', command: s }] }] })
       const adapter = new MockAdapter([textResponse('ok')])
       const ctx = await harness(path, adapter)
-      const agent = await ctx.agentLoop.create(SessionId('a1'), { provider: 'mock', model: 'mock' })
-      // Make inject throw, forcing the SessionStart .catch path.
-      const original = agent.inject.bind(agent)
-      let threw = false
-      agent.inject = (() => { threw = true; throw new Error('inject boom') })
-      await waitFor(() => threw)
-      expect(threw).toBe(true)
-      agent.inject = original
-      agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
-      await waitForIdle(ctx, agent)
-      expect(adapter.requests).toHaveLength(1) // loop survived the thrown inject
+      const warn = vi.fn(); ctx.logger.warn = warn as never
+      try {
+        const { agent } = await ctx.agents.create({
+          sessionId: SessionId('a1'),
+          agentOptions: { provider: 'mock', model: 'mock' },
+          setup(_agentCtx, agent) {
+            vi.spyOn(agent, 'inject').mockImplementationOnce(() => { throw new Error('inject boom') })
+          },
+        })
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('SessionStart hook failed'))
+        agent.followup(createUserMessage({ content: [{ type: 'text', text: 'go' }], source: { kind: 'user' } }))
+        await waitForIdle(ctx, agent)
+        expect(adapter.requests).toHaveLength(1)
+      } finally {
+        await ctx.fiber.dispose()
+      }
     })
   })
 

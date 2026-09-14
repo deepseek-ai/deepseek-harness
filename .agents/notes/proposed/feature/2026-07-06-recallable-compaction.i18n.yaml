@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/proposed/feature/2026-07-06-recallable-compaction.md
-2026-07-06-recallable-compaction.md: f0cf1b0602ad7dd5ae719fdd1e3b569b0bf5b448
-2026-07-06-recallable-compaction.zh.md: 8e8793f28be848e6231e86a3eaba099e68d9947e
+2026-07-06-recallable-compaction.md: 07b89116b72a1c1aac2d79ee5aa41ff6e5d02a4c
+2026-07-06-recallable-compaction.zh.md: 7347cb08c94665a6e5bb88655ec08d04921d08eb

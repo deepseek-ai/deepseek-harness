@@ -56,6 +56,7 @@ const TAIL_MARKER = 'MWT_TABLES_DONE'
 const FILL_MARKER = 'MWT_FILL_C1'
 const WIDE_MARKER = 'MWT_WIDE_C01'
 const LONG_CELL_MARKER = 'MWT_LONGCELL_F1'
+const SHORT_MARKER = 'MWT_SHORT_C1'
 const MARKERS = [FILL_MARKER, WIDE_MARKER, LONG_CELL_MARKER]
 /** Golden-facing names, in {@link MARKERS} order. */
 const TABLE_NAMES = ['fill', 'wide', 'long-cell']
@@ -76,13 +77,20 @@ const SENTENCE = 'This cell carries one full sentence so the unwrapped table is 
 const LONG_TOKEN = 'workspace/deepseek-harness/packages/client/ui-primitives/src/markdown/render.tsx/'.repeat(3)
 const CJK_SENTENCE = '这个单元格包含一段较长的中文说明，用来验证长内容在窄列宽下按最小可读宽度换行而不是把列压缩到无法阅读。'
 
-/** The assistant markdown: one 3-column fill, one 12-column wide, one long-cell table. */
+/** The assistant markdown includes fitting and overflowing wide tables. */
 function tablesMarkdown(): string {
   const wideHeader = [WIDE_MARKER, ...Array.from({ length: 11 }, (_, i) => `C${String(i + 2).padStart(2, '0')}`)]
   const wideRow = (row: number): string[] =>
     Array.from({ length: 12 }, (_, i) => `v${String(row)}${String(i + 1).padStart(2, '0')}`)
   return [
-    'Three markdown tables exercise the wide-table layout rules.',
+    'Markdown tables exercise the wide-table layout rules.',
+    '',
+    `| ${SHORT_MARKER} | C2 | C3 | C4 |`,
+    '| --- | --- | --- | --- |',
+    '| 1 | 2 | 3 | 4 |',
+    '| 5 | 6 | 7 | 8 |',
+    '',
+    'The paragraph after the short table stays in place.',
     '',
     `| ${FILL_MARKER} | Current approach | Proposed approach |`,
     '| --- | --- | --- |',
@@ -103,7 +111,7 @@ function tablesMarkdown(): string {
   ].join('\n')
 }
 
-/** Build one closed, invariant-checked session fixture carrying the three tables. */
+/** Build one closed, invariant-checked session fixture carrying the tables. */
 function wideTableFixture(): string {
   const session = Session.create(SessionId('markdown-wide-table-source'))
   const eventTimeOrigin = new Date().setHours(12, 0, 0, 0)
@@ -197,20 +205,24 @@ interface TableStop {
 }
 
 /**
- * Close the details pane so the transcript spans the viewport. Open, it pins
- * the transcript to exactly the message column and every breakout relation
- * would go vacuous.
- * @param target - the page whose pane to close.
+ * Wait for collapsed columns, completed grid transitions, and the
+ * ConversationRoot ResizeObserver's width publication before measuring tables.
+ * @param target - the page whose frame to read.
  */
-async function closeDetailsPane(target: Page): Promise<void> {
-  await target.getByRole('button', { name: 'Close details', exact: true }).waitFor({ timeout: 10_000 })
-  await target.evaluate(() => {
-    document.querySelector<HTMLElement>('button[aria-label="Close details"]')?.click()
-  })
-  // Closed details resolve to zero width but never unmount (ui-layout
-  // columns contract), so the settled signal is the frame's collapse marker,
-  // not the button's detachment.
-  await target.waitForSelector('[data-details-collapsed]', { timeout: 5_000 })
+async function awaitTableLayout(target: Page): Promise<void> {
+  await target.evaluate(async () => { await document.fonts.ready })
+  await target.waitForFunction(() => {
+    const element = document.querySelector('[data-sidebar-collapsed][data-rightbar-collapsed]')
+    if (element === null) return false
+    const tracks = getComputedStyle(element).gridTemplateColumns.split(' ').map(Number.parseFloat)
+    const root = element.querySelector<HTMLElement>('div[data-phase]')
+    // Mirrored from ui-layout's SIDEBAR_COLLAPSED; these tests use the Host compiler face.
+    return tracks[0] === 56 && tracks.at(-1) === 0
+      && element.getAnimations().every(animation =>
+        animation.playState === 'finished' || animation.playState === 'idle')
+      && root !== null
+      && root.style.getPropertyValue('--dsh-conversation-column-width') === `${String(root.offsetWidth)}px`
+  }, undefined, { timeout: 10_000 })
 }
 
 /**
@@ -253,7 +265,8 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
     await seedSession(scaffold, wideTableFixture(), SEED_ID)
-    browser = await chromium.launch()
+    // The geometry assertions include the space occupied by native scrollbars.
+    browser = await chromium.launch({ ignoreDefaultArgs: ['--hide-scrollbars'] })
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -265,21 +278,17 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     await sessionRow.waitFor({ timeout: 10_000 })
     await sessionRow.click()
     await page.getByText(TAIL_MARKER, { exact: true }).waitFor({ timeout: 15_000 })
-    // Collapse the sidebar and close the details pane for the whole sweep:
-    // classic-scrollbar platforms (Linux CI) lose ~15px of layout width,
-    // which shifts how much of a narrow viewport the panes leave the
+    // Collapse the sidebar and keep the right column at its rail for the whole
+    // sweep: classic-scrollbar platforms (Linux CI) lose ~15px of layout
+    // width, which shifts how much of a narrow viewport the panes leave the
     // transcript and lands the narrow stop's readings far from the macOS
-    // ones — and the details pane alone pins the transcript to exactly the
-    // message column, which would make every breakout relation vacuous.
-    // With both out of the equation the transcript follows the viewport
-    // identically on every platform, which is what keeps one committed
-    // golden true for all lanes.
+    // ones — and an expanded right column alone pins the transcript to
+    // exactly the message column, which would make every breakout relation
+    // vacuous. With both out of the equation the transcript follows the
+    // viewport identically on every platform, which is what keeps one
+    // committed golden true for all lanes.
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-    // JS click: after the transcript scrolled to its tail, the pane's close
-    // button can sit under the sticky header where a pointer click is
-    // intercepted; the pane itself is scaffolding, not the behavior under
-    // test, so actionability adds nothing here.
-    await closeDetailsPane(page)
+    await awaitTableLayout(page)
   }, 180_000)
 
   afterAll(async () => {
@@ -296,15 +305,7 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
    */
   const settleAt = async (width: number): Promise<TableReading[]> => {
     await page.setViewportSize({ width, height: 900 })
-    // The wide wrapper follows the transcript width (the fill wrapper caps
-    // at the message column and would report "settled" mid-transition).
-    let previousWidth = -1
-    await expect.poll(async () => {
-      const current = (await readTables(page))[1]!.clientWidth
-      const settled = current === previousWidth
-      previousWidth = current
-      return settled
-    }, { timeout: 10_000 }).toBe(true)
+    await awaitTableLayout(page)
     return readTables(page)
   }
 
@@ -394,10 +395,39 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     // Resting hidden overflow keeps the scroll position reachable and intact.
     expect(await wide.evaluate(element => element.scrollLeft)).toBeGreaterThanOrEqual(0)
     await wide.hover()
-    await expect.poll(overflowState, { timeout: 5_000 }).toBe('auto 0px')
+    await expect.poll(overflowState, { timeout: 5_000 }).toBe('scroll 0px')
     // Pointer leaves: the bar rests hidden again.
     await page.mouse.move(4, 4)
     await expect.poll(overflowState, { timeout: 5_000 }).toBe('hidden 8px')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 120_000)
+
+  it('keeps a fitting wide table and its following paragraph stationary during interaction', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-short-table-height'))
+    await settleAt(1680)
+    const short = page.locator('[class*="tableScroll"]', { hasText: SHORT_MARKER })
+    await short.evaluate((element) => { element.scrollIntoView({ block: 'center', behavior: 'instant' }) })
+    await page.mouse.move(4, 4)
+    await short.evaluate((element) => { element.blur() })
+    expect(await short.evaluate(element => element.classList.contains('md-table-wide'))).toBe(true)
+    expect(await short.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1)
+    const position = () => short.evaluate((element) => {
+      const following = element.nextElementSibling
+      if (following === null) throw new Error('short table has no following paragraph')
+      return {
+        height: element.getBoundingClientRect().height,
+        followingTop: following.getBoundingClientRect().top,
+      }
+    })
+    const resting = await position()
+    await short.hover()
+    await expect.poll(position).toEqual(resting)
+    await page.mouse.move(4, 4)
+    await short.focus()
+    expect(await short.evaluate(element => document.activeElement === element)).toBe(true)
+    await expect.poll(position).toEqual(resting)
+    await short.evaluate((element) => { element.blur() })
+    await expect.poll(position).toEqual(resting)
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
@@ -436,17 +466,8 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
       await sessionRow.click()
       await hidpiPage.getByText(TAIL_MARKER, { exact: true }).waitFor({ timeout: 15_000 })
       await hidpiPage.getByRole('button', { name: 'Collapse sidebar', exact: true }).click()
-      await closeDetailsPane(hidpiPage)
-      // The pane collapses ease over the layout transition: compare only a
-      // settled reading (two consecutive equal wide-wrapper widths).
-      let readings: TableReading[] = []
-      let previousWide = -1
-      await expect.poll(async () => {
-        readings = await readTables(hidpiPage)
-        const settled = readings[1]!.clientWidth === previousWide
-        previousWide = readings[1]!.clientWidth
-        return settled
-      }, { timeout: 10_000 }).toBe(true)
+      await awaitTableLayout(hidpiPage)
+      const readings = await readTables(hidpiPage)
       const baseline = (await sweep()).find(stop => stop.width === 1100)!
       const relations = (tables: TableReading[]) => tables.map(table => ({
         marker: table.marker,

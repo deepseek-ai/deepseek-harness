@@ -7,7 +7,7 @@ import {
 } from '../src/client/index.ts'
 
 type BrowserGlobal = {
-  location?: { hostname: string; search: string }
+  location?: { hostname: string }
 }
 
 const contexts = new Set<Context>()
@@ -20,12 +20,12 @@ afterEach(async () => {
 })
 
 async function mount(): Promise<ConnectionHandle> {
-  ;(globalThis as BrowserGlobal).location = { hostname: 'localhost', search: '?fixture' }
+  ;(globalThis as BrowserGlobal).location = { hostname: 'localhost' }
   const ctx = new Context()
   contexts.add(ctx)
   await ctx.plugin({ apply, inject: [] })
   const connection = ctx.get('connection') as ConnectionHandle | undefined
-  if (connection === undefined) throw new Error('fixture did not provide Connection')
+  if (connection === undefined) throw new Error('plugin did not provide Connection')
   return connection
 }
 

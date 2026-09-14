@@ -426,9 +426,31 @@ export class MemoryVfs implements Vfs {
     this.replaceFile(node, resize(node.bytes, length))
   }
 
+  /** Change one file identity's permission bits and notify every linked path. */
+  private chmodFile(node: FileNode, mode: number): void {
+    node.mode = mode & 0o777
+    if (typeof node.paths === 'string') {
+      this.publish({ kind: 'chmod', path: node.paths, mode: node.mode })
+    } else if (node.paths !== undefined) {
+      for (const path of node.paths) this.publish({ kind: 'chmod', path, mode: node.mode })
+    }
+  }
+
   /** @returns Plain stats for an open file, including after its last name is removed. */
   private fileStats(node: FileNode): VfsStats {
     return statsOf(node.bytes.length, node.mtimeMs, false, this.identityOfFile(node), node.mode)
+  }
+
+  /** @returns BigInt stats for an open file, including its device and inode identity. */
+  private fileBigIntStats(node: FileNode): VfsBigIntStats {
+    return bigIntStatsOf(
+      node.bytes.length,
+      node.mtimeMs,
+      false,
+      this.identityOfFile(node),
+      node.mode,
+      this.fileLinkCount(node),
+    )
   }
 
   /** Forget removed directory identities, so recreated paths report new ones. */
@@ -647,7 +669,10 @@ export class MemoryVfs implements Vfs {
       truncate: async (length = 0): Promise<void> => {
         current('ftruncate').truncate(length)
       },
-      stat: async (): Promise<VfsStats> => current('fstat').stat(),
+      chmod: async (mode: number): Promise<void> => { current('fchmod').chmod(mode) },
+      stat: async (options?: VfsStatOptions): Promise<VfsStats | VfsBigIntStats> => options?.bigint === true
+        ? current('fstat').statBigInt()
+        : current('fstat').stat(),
       sync: async (): Promise<void> => { current('fsync'); await this.flush() },
       datasync: async (): Promise<void> => { current('fdatasync'); await this.flush() },
       close: async (): Promise<void> => { closed = true },
@@ -691,7 +716,9 @@ export class MemoryVfs implements Vfs {
         if (!access.writable) fail('EINVAL', 'ftruncate', target)
         this.truncateFile(node, length)
       },
+      chmod: (mode) => { this.chmodFile(node, mode) },
       stat: () => this.fileStats(node),
+      statBigInt: () => this.fileBigIntStats(node),
     }
   }
 
@@ -702,9 +729,10 @@ export class MemoryVfs implements Vfs {
    * @param target - Normalized path the handle was opened on.
    * @returns Metadata plus the no-op durability and release calls.
    */
-  private handleTail(target: string): Pick<VfsFileHandle, 'stat' | 'sync' | 'datasync' | 'close'> {
+  private handleTail(target: string): Pick<VfsFileHandle, 'chmod' | 'stat' | 'sync' | 'datasync' | 'close'> {
     return {
-      stat: async (): Promise<VfsStats> => this.plainStats(target),
+      chmod: async (mode: number): Promise<void> => { this.chmodSync(target, mode) },
+      stat: async (options?: VfsStatOptions): Promise<VfsStats | VfsBigIntStats> => this.statSync(target, options),
       sync: async (): Promise<void> => { await this.flush() },
       datasync: async (): Promise<void> => { await this.flush() },
       close: async (): Promise<void> => {},
@@ -836,12 +864,7 @@ export class MemoryVfs implements Vfs {
     const target = this.key(path)
     const node = this.files.get(target)
     if (node !== undefined) {
-      node.mode = mode & 0o777
-      if (typeof node.paths === 'string') {
-        this.publish({ kind: 'chmod', path: node.paths, mode: node.mode })
-      } else if (node.paths !== undefined) {
-        for (const path of node.paths) this.publish({ kind: 'chmod', path, mode: node.mode })
-      }
+      this.chmodFile(node, mode)
       return
     }
     if (this.directories.has(target)) {

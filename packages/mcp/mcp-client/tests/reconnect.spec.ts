@@ -8,6 +8,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import McpResources from '@deepseek-ai/dsh-mcp-resources'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
@@ -23,41 +24,37 @@ const {
   const mockPing = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
   const mockCallTool = vi.fn<(
-    _params?: Record<string, unknown>, _compatibilitySchema?: unknown, _options?: unknown,
+    _params?: Record<string, unknown>, _options?: unknown,
   ) => Promise<unknown>>()
   const mockSetNotificationHandler = vi.fn()
-  const mockRequest = vi.fn(async (
-    request: { method: string; params?: Record<string, unknown> },
-    _schema: unknown,
-    options?: unknown,
-  ): Promise<unknown> => {
-    if (request.method === 'tools/list') return await mockListTools(request.params)
-    if (request.method === 'tools/call') return await mockCallTool(request.params, undefined, options)
-    throw new Error(`unexpected MCP request: ${request.method}`)
-  })
   class MockClient {
+    transport: object | undefined = {}
     onclose: (() => void) | undefined
     connect = mockConnect
     close = mockClose
     ping = mockPing
-    request = mockRequest
-    setNotificationHandler = mockSetNotificationHandler
-    constructor() { instances.push(this) }
+    getServerCapabilities = () => ({ tools: {} })
+    getInstructions(): string | undefined { return undefined }
+    listResources = async () => ({ resources: [] })
+    listTools = mockListTools
+    callTool = mockCallTool
+    constructor(_info: unknown, options: { listChanged: { tools: { onChanged: () => void } } }) {
+      instances.push(this)
+      mockSetNotificationHandler('notifications/tools/list_changed', options.listChanged.tools.onChanged)
+    }
   }
   const instances: MockClient[] = []
   return { mockConnect, mockClose, mockPing, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances }
 })
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+vi.mock('@modelcontextprotocol/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
   Client: MockClient,
-}))
-
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: vi.fn(),
-}))
-
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: vi.fn(),
+}))
+
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
+  StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
 }))
 
 // vi.mock is hoisted above static imports, so the modules under test see the
@@ -254,6 +251,49 @@ describe('reconnect supervisor', () => {
     ctx = await mountRegistry()
   })
 
+  it('keeps instructions withdrawn when disposal interrupts initial discovery', async () => {
+    const listingGate: PromiseWithResolvers<ReturnType<typeof listing>> = Promise.withResolvers()
+    const instructionSpy = vi.spyOn(MockClient.prototype, 'getInstructions').mockReturnValue('Instructions after discovery.')
+    mockListTools.mockImplementation(() => listingGate.promise)
+    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), new McpStatusCell(() => {}))
+    try {
+      await vi.waitFor(() => { expect(mockListTools).toHaveBeenCalled() })
+      const disposing = handle.dispose()
+      listingGate.resolve(listing('remote'))
+      await disposing
+      expect(handle.instructions()).toBe('')
+    } finally {
+      instructionSpy.mockRestore()
+      listingGate.resolve(listing('remote'))
+      await handle.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects resource reads while a replacement connection is still negotiating', async () => {
+    await ctx.plugin(McpResources)
+    const config = stdioConfig({ initialDelayMs: 2, maxDelayMs: 8, maxAttempts: 2 })
+    const handle = startConnection(ctx, config, resolveReconnectPolicy(config.reconnect, 'reconnect'), new McpStatusCell(() => {}))
+    const reconnectGate: PromiseWithResolvers<void> = Promise.withResolvers()
+    try {
+      await handle.ready
+      ctx.mcpResources.register('srv', handle.resources)
+      mockConnect.mockImplementationOnce(() => reconnectGate.promise)
+      instances[0]!.onclose?.()
+      await vi.waitFor(() => { expect(instances).toHaveLength(2) })
+      const result = await ctx.tools.execute({
+        name: 'list_mcp_resources', arguments: { server: 'srv' },
+        callId: nextCallId(), signal: testToolSignal,
+      })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('server is disconnected')
+    } finally {
+      reconnectGate.resolve()
+      await handle.dispose()
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('reconnects after a transport close, re-syncs tools through the new generation, and serves calls', async () => {
     const { warns, infos } = captureLogs(ctx)
     await apply(ctx, stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 5 }))
@@ -336,8 +376,8 @@ describe('reconnect supervisor', () => {
 
     const gate: PromiseWithResolvers<unknown> = Promise.withResolvers()
     mockListTools.mockImplementation(() => gate.promise)
-    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-    const resync = handler()
+    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    handler()
     await vi.waitFor(() => { expect(mockListTools).toHaveBeenCalledTimes(2) })
 
     mockConnect.mockRejectedValue(new Error('server gone'))
@@ -347,7 +387,6 @@ describe('reconnect supervisor', () => {
     })
 
     gate.resolve(listing('late'))
-    await resync
     await vi.waitFor(() => {
       expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
       expect(ctx.tools.get('mcp__srv__late')).toBeUndefined()
@@ -407,12 +446,44 @@ describe('reconnect supervisor', () => {
     expect(instances).toHaveLength(1)
   })
 
-  it('bounds disposal while a resolving generation never reports that it closed', async () => {
+  it('stops reconnecting when disposal overlaps failed-generation cleanup', async () => {
+    vi.useFakeTimers()
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const closed: PromiseWithResolvers<void> = Promise.withResolvers()
+    const { warns } = captureLogs(ctx)
+    mockConnect.mockRejectedValue(new Error('initialize failed'))
+    mockClose.mockImplementation(async function (this: { onclose?: () => void }) {
+      entered.resolve()
+      await closed.promise
+      this.onclose?.()
+    })
+    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), new McpStatusCell(() => {}))
+    try {
+      await entered.promise
+      expect(warns.some(line => line.includes('connection attempt failed'))).toBe(true)
+      const disposing = handle.dispose()
+      closed.resolve()
+      await disposing
+      await handle.ready
+      await vi.runAllTimersAsync()
+      expect(instances).toHaveLength(1)
+      expect(mockListTools).not.toHaveBeenCalled()
+      expect(warns.some(line => line.includes('retrying'))).toBe(false)
+    } finally {
+      closed.resolve()
+      await handle.dispose()
+      await ctx.fiber.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['connect', 'discovery'] as const)('bounds disposal during %s when the transport never reports closure', async (phase) => {
     vi.useFakeTimers()
     try {
       const { errors } = captureLogs(ctx)
       const gate: PromiseWithResolvers<void> = Promise.withResolvers()
-      mockConnect.mockImplementation(() => gate.promise)
+      if (phase === 'connect') mockConnect.mockImplementation(() => gate.promise)
+      else mockListTools.mockImplementation(() => gate.promise.then(() => listing('late')))
       mockClose.mockResolvedValue(undefined)
       const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), new McpStatusCell(() => {}))
       await vi.advanceTimersByTimeAsync(0)
@@ -420,13 +491,39 @@ describe('reconnect supervisor', () => {
       const disposing = handle.dispose()
       await vi.advanceTimersByTimeAsync(5_000)
       gate.resolve()
+      await vi.advanceTimersByTimeAsync(5_000)
       await disposing
 
-      expect(mockListTools).not.toHaveBeenCalled()
+      expect(mockListTools).toHaveBeenCalledTimes(phase === 'connect' ? 0 : 1)
+      expect(ctx.tools.get('mcp__srv__late')).toBeUndefined()
       expect(errors.some(line => line.includes('server shutdown may be incomplete'))).toBe(true)
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('closes a transport that attaches after disposal starts', async () => {
+    const gate: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockConnect.mockImplementation(function (this: { transport: object | undefined }) {
+      this.transport = undefined
+      return gate.promise.then(() => { this.transport = {} })
+    })
+    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), new McpStatusCell(() => {}))
+    const disposing = handle.dispose()
+    gate.resolve()
+    await disposing
+    expect(mockClose).toHaveBeenCalledTimes(1)
+    expect(mockListTools).not.toHaveBeenCalled()
+  })
+
+  it('discards a queued tool refresh when disposal starts before it runs', async () => {
+    const handle = startConnection(ctx, stdioConfig(), resolveReconnectPolicy(undefined, 'reconnect'), new McpStatusCell(() => {}))
+    await handle.ready
+    const notify = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    notify()
+    await handle.dispose()
+    expect(mockListTools).toHaveBeenCalledTimes(1)
+    expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
   })
 
   it('dispose during the backoff wait cancels the pending reconnect', async () => {
@@ -579,15 +676,14 @@ describe('reconnect supervisor', () => {
 
     const gate: PromiseWithResolvers<unknown> = Promise.withResolvers()
     mockListTools.mockImplementation(() => gate.promise)
-    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-    const resync = handler()
+    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    handler()
     await vi.waitFor(() => { expect(mockListTools).toHaveBeenCalledTimes(2) })
 
     const disposing = fiber.dispose()
     await sleep(10)
     gate.reject(new Error('Connection closed'))
     await disposing
-    await resync
 
     expect(errors.some(line => line.includes('tool re-sync failed'))).toBe(false)
   })
@@ -601,8 +697,8 @@ describe('reconnect supervisor', () => {
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__remote')).toBeDefined() })
     const listCalls = mockListTools.mock.calls.length
 
-    const staleHandler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-    await staleHandler()
+    const staleHandler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    staleHandler()
     expect(mockListTools).toHaveBeenCalledTimes(listCalls)
   })
 })

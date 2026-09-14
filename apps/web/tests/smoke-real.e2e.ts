@@ -32,6 +32,20 @@ import { REPO_ROOT, connectFreshWorkspace, newEnglishPage, probeFreePort, requir
 const WEB_SURFACE_PROMPT = fileURLToPath(new URL('./expected/web-runtime-context/web-surface-prompt.expected.md', import.meta.url))
 const authenticatedCookies = new Map<string, Promise<{ origin: string; cookie: string }>>()
 
+/** Frame a complete text turn or an open block before a transport failure. */
+function messagesResponse(text: string, complete = true): string {
+  const events: object[] = [
+    { type: 'message_start', message: { id: 'web-smoke-response', model: 'mock-model', usage: { input_tokens: 3, output_tokens: 0 } } },
+    { type: 'content_block_start', index: 0, content_block: { type: 'text', text } },
+  ]
+  if (complete) events.push(
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 1 } },
+    { type: 'message_stop' },
+  )
+  return events.map(event => `data: ${JSON.stringify(event)}\n\n`).join('')
+}
+
 /** Exchange a printed process token once for Node-side HTTP/WebSocket probes. */
 function authenticatedWeb(launchUrl: string): Promise<{ origin: string; cookie: string }> {
   const existing = authenticatedCookies.get(launchUrl)
@@ -392,8 +406,9 @@ describe('dsh web keyless CLI smoke', () => {
     writeFileSync(join(workspace, 'AGENTS.md'), 'web-workspace-context-probe\n')
 
     interface NativeProviderRequest {
-      messages?: { role?: string; content?: string }[]
-      tools?: { function?: { name?: string } }[]
+      system?: string
+      messages?: { role?: string; content?: { type?: string; text?: string }[] }[]
+      tools?: { name?: string }[]
     }
     let resolveProviderRequests!: (requests: NativeProviderRequest[]) => void
     const requests: NativeProviderRequest[] = []
@@ -409,13 +424,7 @@ describe('dsh web keyless CLI smoke', () => {
         if ((parsed.tools?.length ?? 0) > 0) requests.push(parsed)
         if (requests.length === 1) resolveProviderRequests(requests)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        response.end([
-          'data: {"choices":[{"delta":{"role":"assistant","content":null,"reasoning_content":""}}]}',
-          'data: {"choices":[{"delta":{"content":"done"}}]}',
-          'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}',
-          'data: [DONE]',
-          '',
-        ].join('\n\n'))
+        response.end(messagesResponse('done'))
       })
     })
     await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
@@ -457,15 +466,15 @@ describe('dsh web keyless CLI smoke', () => {
       if (captured === undefined) {
         throw new Error('provider did not receive the workspace projection request')
       }
-      const workspaceMessage = captured.messages?.find(message =>
-        message.role === 'user' && message.content?.includes('web-workspace-context-probe'))
-      const systemMessage = captured.messages?.find(message => message.role === 'system')
+      const workspaceMessage = captured.messages?.filter(message => message.role === 'user')
+        .flatMap(message => message.content ?? [])
+        .find(block => block.type === 'text' && block.text?.includes('web-workspace-context-probe'))
       const expectedWebSection = readFileSync(WEB_SURFACE_PROMPT, 'utf8').trimEnd()
         .replace('{{webUrl}}', new URL(baseUrl).origin)
-      expect(systemMessage?.content).toContain(expectedWebSection)
+      expect(captured.system).toContain(expectedWebSection)
       expect(workspaceMessage).toMatchInlineSnapshot(`
         {
-          "content": "<system-reminder>
+          "text": "<system-reminder>
         The following workspace instructions may be relevant to your work. Use them as guidance when applicable. More specific instructions take precedence over broader ones. They do not override system, developer, or direct user instructions.
 
         Instructions from: AGENTS.md
@@ -473,10 +482,10 @@ describe('dsh web keyless CLI smoke', () => {
         web-workspace-context-probe
 
         </system-reminder>",
-          "role": "user",
+          "type": "text",
         }
       `)
-      expect(captured.tools?.map(tool => tool.function?.name)
+      expect(captured.tools?.map(tool => tool.name)
         .filter(name => name === 'web_search' || name === 'web_fetch'))
         .toMatchInlineSnapshot(`
           [
@@ -511,26 +520,16 @@ describe('dsh web keyless CLI smoke', () => {
         const mainRequest = !titleRequest && body.includes(promptMarker)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
         if (!mainRequest) {
-          response.end([
-            'data: {"choices":[{"delta":{"content":"Web retry title"}}]}',
-            'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1}}',
-            'data: [DONE]',
-            '',
-          ].join('\n\n'))
+          response.end(messagesResponse('Web retry title'))
           return
         }
         mainAttempts++
         if (mainAttempts === 1) {
-          response.write('data: {"choices":[{"delta":{"content":"WEB_RETRY_DISCARDED"}}]}\n\n')
+          response.write(messagesResponse('WEB_RETRY_DISCARDED', false))
           setTimeout(() => { response.destroy() }, 20)
           return
         }
-        response.end([
-          `data: {"choices":[{"delta":{"content":"${recoveredMarker}"}}]}`,
-          'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}',
-          'data: [DONE]',
-          '',
-        ].join('\n\n'))
+        response.end(messagesResponse(recoveredMarker))
       })
     })
     await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
@@ -595,8 +594,9 @@ describe('dsh web keyless CLI smoke', () => {
     const workspace = mkdtempSync(join(tmpdir(), 'dsh-web-ptc-'))
 
     interface PtcModeProviderRequest {
-      messages?: { role?: string; content?: string }[]
-      tools?: { function?: { name?: string } }[]
+      system?: string
+      messages?: { role?: string; content?: { type?: string; text?: string }[] }[]
+      tools?: { name?: string }[]
     }
     let resolveProviderRequest!: (request: PtcModeProviderRequest) => void
     const providerRequest = new Promise<PtcModeProviderRequest>((resolve) => {
@@ -609,13 +609,7 @@ describe('dsh web keyless CLI smoke', () => {
       request.on('end', () => {
         resolveProviderRequest(JSON.parse(body) as PtcModeProviderRequest)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        response.end([
-          'data: {"choices":[{"delta":{"role":"assistant","content":null,"reasoning_content":""}}]}',
-          'data: {"choices":[{"delta":{"content":"done"}}]}',
-          'data: {"choices":[{"delta":{"content":""},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}',
-          'data: [DONE]',
-          '',
-        ].join('\n\n'))
+        response.end(messagesResponse('done'))
       })
     })
     await new Promise<void>(resolve => provider.listen(0, '127.0.0.1', resolve))
@@ -654,10 +648,9 @@ describe('dsh web keyless CLI smoke', () => {
           setTimeout(() => { reject(new Error('provider request not received in 10s')) }, 10_000).unref()
         }),
       ])
-      expect(captured.tools?.map(tool => tool.function?.name)).toEqual(['run_code'])
-      const system = captured.messages?.find(message => message.role === 'system')
-      expect(system?.content).toContain('## Writing code for run_code')
-      expect(system?.content).toContain('declare const tools')
+      expect(captured.tools?.map(tool => tool.name)).toEqual(['run_code'])
+      expect(captured.system).toContain('## Writing code for run_code')
+      expect(captured.system).toContain('declare const tools')
     } finally {
       const closed = child.exitCode === null
         ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })

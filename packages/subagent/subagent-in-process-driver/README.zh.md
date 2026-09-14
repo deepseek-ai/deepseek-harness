@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-subagent-in-process-driver` 是两个进程内 subagent 后端共用的运行驱动器：它通过宿主的 agent 工厂创建一个子 agent，应用按子 agent 的定制，把一项任务驱动到完成，并以单一完全停稳的 dispose（资源释放）路径返回子 agent 自身的最终输出。spawn 调用它时不传入会话初始内容；fork 调用它时传入父级已完成轮次的前缀。它是库而非独立功能：提供方后端调用 `startInProcessRun`，组合中没有任何东西配置它。阅读本页可理解两个进程内后端共享的运行生命周期。
+`dsh-subagent-in-process-driver` 是两个进程内 subagent 后端共用的运行驱动器：它通过宿主的 agent（智能体）工厂创建一个子 agent，应用按子 agent 的定制，把一项任务驱动到完成，并以单一完全停稳的 dispose（资源释放）路径返回子 agent 自身的最终输出。spawn 调用它时不传入会话初始内容；fork 调用它时传入父级已完成轮次的前缀。它是库而非独立功能：提供方后端调用 `startInProcessRun`，组合中没有任何东西配置它。阅读本页可理解两个进程内后端共享的运行生命周期。
 
 ## 目录
 
@@ -37,7 +37,7 @@ kind: "package-library"
 
 ### 子 agent 获得什么
 
-子 agent 获得父级的工作目录/会话谱系，除非 `request.agentOptions` 覆盖，否则继承父级的提供方、模型、推理等级与输出 token 上限。它获得全新的扁平注册作用域：父级工具限制与权限不会被导入。一次运行会把父级显式的沙箱覆盖项与 `'never'` 审批钉定带入子 agent，并在子 agent 的初始轮次内追加一份按运行的描述符。
+子 agent 获得父级的工作目录／会话谱系，除非 `request.agentOptions` 覆盖，否则继承父级的提供方、模型、推理强度与输出 token 上限。它获得全新的扁平注册作用域：父级工具限制与权限不会被导入。一次运行会把父级显式的沙箱覆盖项与 `'never'` 审批钉定带入子 agent，并在子 agent 的初始轮次内追加一份每次运行的描述符。
 
 -----
 
@@ -65,7 +65,7 @@ kind: "package-library"
 
 ### 结构化输出
 
-`attachStructuredRuntime(childCtx, schema)` 会在子 agent 作用域中安装完整约定：`structured_output` 工具按请求的 schema 校验并暂存模型值；位于末尾、first-party 顺序为 9900 的系统提示词段告诉子 agent 该工具调用就是终态答案；`tools/result` 观察器只在该次执行的权威最终工具结果成功后提交暂存值，包括 PTC mode 子分派外层的 `run_code` 结果；单调工具防护会在捕获后阻止后续调用。正常结束却始终未提交必需值的轮次会报告 `error`；驱动器不会重新提示。所有注册都附着于子 agent fiber，并随其一同消失。
+`attachStructuredRuntime(childCtx, schema)` 会在子 agent 作用域中安装完整约定：`structured_output` 工具按请求的 schema 校验并暂存模型值；位于末尾、顺序为 9900 的 first-party 系统提示词段告诉子 agent 该工具调用就是终态答案；`tools/result` 观察器只在该次执行的权威最终工具结果成功后提交暂存值，包括 PTC mode 子分派外层的 `run_code` 结果；单调工具防护会在捕获后阻止后续调用。正常结束却始终未提交必需值的轮次会报告 `error`；驱动器不会重新提示。所有注册都附着于子 agent fiber，并随其一同消失。
 
 ### 源码地图
 
@@ -85,8 +85,8 @@ kind: "package-library"
 当包级约定不够用时阅读以下页面；它们从共享 subagent 模型进入构建于本驱动器之上的后端，以及委派策略决策。
 
 - [Subagent 子系统](../../../docs/subsystems/subagent.zh.md)——启动请求、结果、提供方约定与进程内深度和初始内容。
-- [dsh-subagent-spawn-in-process](../subagent-spawn-in-process/README.zh.md)——构建于本驱动器之上的全新子级后端。
-- [dsh-subagent-fork-in-process](../subagent-fork-in-process/README.zh.md)——构建于本驱动器之上的初始内容子级后端。
+- [dsh-subagent-spawn-in-process](../subagent-spawn-in-process/README.zh.md)——构建于本驱动器之上的全新子 agent 后端。
+- [dsh-subagent-fork-in-process](../subagent-fork-in-process/README.zh.md)——构建于本驱动器之上的带初始内容的子 agent 后端。
 - [委派策略决策](../../../.agents/notes/implemented/feature/2026-07-25-subagent-policy-inheritance.zh.md)——父级沙箱与审批策略如何到达子 agent。
 
 -----
@@ -98,11 +98,11 @@ kind: "package-library"
 
 #### 模型看到什么
 
-共享驱动器把任务逐字作为子 agent 的用户消息发送；若有请求，还会在未发布子 agent 的全新作用域中遮蔽 persona，并限制全局工具 schema、查找、执行与 PTC mode SDK 绑定。父级限制不会被继承，独立的工具指导段仍会保留。spawn 不提供历史；fork 提供其已配平的初始内容。
+共享驱动器把任务逐字作为子 agent 的用户消息发送；若有请求，还会在未发布子 agent 的全新作用域中遮蔽 persona，并限制全局工具 schema、查找、执行与 PTC mode SDK 绑定。父级限制不会被继承。工具指导插件可以使用组装 scope 省略不可用工具的指导；驱动器不会改写任意静态段落。spawn 不提供历史；fork 提供其已配平的初始内容。
 
 #### Token 影响
 
-子 agent 输入与父级隔离，并随子 agent 自身的步骤增长。persona 会改变重复提示词文本；过滤会改变 schema 或生成 SDK 的成本，但不影响独立注册的指导内容。
+子 agent 输入与父级隔离，并随子 agent 自身的步骤增长。persona 会改变重复提示词文本；过滤会改变 schema 或生成 SDK 的成本，使用 scope 的指导内容也会随可见能力变化。
 
 #### KV Cache 影响
 

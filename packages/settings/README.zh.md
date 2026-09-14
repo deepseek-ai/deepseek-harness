@@ -27,7 +27,7 @@ kind: "package-group"
 | 包 | 角色 | ctx 键 |
 |---|---|---|
 | [`settings/`](settings/README.zh.md) | 设置服务：注册 namespace 并读取或修改其值 | `ctx.settings` |
-| [`settings-file/`](settings-file/README.zh.md) | 把设置存进一个本地 YAML/JSON 文件并热发布外部编辑 | 注册 `ctx.settings` |
+| [`settings-file/`](settings-file/README.zh.md) | 把设置存进一个本地 YAML/JSON 文件并实时发布外部修改 | 注册 `ctx.settings` |
 
 -----
 
@@ -36,7 +36,7 @@ kind: "package-group"
 
 先从子系统参考了解共享词汇，再看本家族遵循的能力 seam 拆分。
 
-- [设置子系统参考](../../docs/subsystems/settings.zh.md)——namespace、分层解析、descriptor、变更提交与生成的 cordis 接口面。
+- [设置子系统参考](../../docs/subsystems/settings.zh.md)——namespace、分层解析、descriptor、变更提交与生成的 Cordis 接口。
 - [能力 seam](../../docs/capability-seams.zh.md)——本家族遵循的 Service Definition / Service Provider / Consumer 拆分。
 
 <a id="dev-note"></a>

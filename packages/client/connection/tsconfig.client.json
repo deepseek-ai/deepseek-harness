@@ -9,7 +9,6 @@
     "src/api-path.ts",
     "src/client/api.ts",
     "src/client/connection.ts",
-    "src/client/fixture.ts",
     "src/client/index.ts",
     "src/client/random-uuid.ts",
     "src/client/rpc.ts",
@@ -31,22 +30,7 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../todo/tool-todo"
-    },
-    {
-      "path": "../../core/tools"
-    },
-    {
       "path": "../../credentials/credentials"
-    },
-    {
-      "path": "../../settings/settings"
-    },
-    {
-      "path": "../../host/directory-picker"
-    },
-    {
-      "path": "../../interaction/commands"
     },
     {
       "path": "../../llm/llm"

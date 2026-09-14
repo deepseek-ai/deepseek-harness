@@ -1,22 +1,12 @@
-/* Inline reference chip: a real DOM capsule (the three-layer backdrop trick
-   and its advance-preserving constraints are gone — background, padding,
-   radius, and label truncation are ordinary styles here). Vertical metrics
-   stay inside the composer's 24px line so a chip never changes line height. */
+/* Atomic reference metrics stay inside the composer line. */
 
 .chip {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 3px;
   max-width: 240px;
-  padding: 0 6px;
-  border-radius: 6px;
-  vertical-align: bottom;
-  line-height: 22px;
-  height: 22px;
-  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-state-business-primary);
   user-select: none;
-  cursor: default;
 }
 
 .marker {
@@ -26,6 +16,7 @@
 
 .icon {
   flex: none;
+  align-self: center;
 }
 
 .label {

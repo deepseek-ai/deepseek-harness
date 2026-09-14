@@ -53,20 +53,11 @@ function taskText(body: Record<string, unknown>): string {
   return typeof body.instructions === 'string' ? body.instructions : ''
 }
 
-function deepSeekBaseUrl(): string {
-  const configured = (process.env.DEEPSEEK_BASE_URL ?? OFFICIAL_DEEPSEEK_BASE_URL)
-    .replace(/\/+$/, '')
-  if (configured !== OFFICIAL_DEEPSEEK_BASE_URL) {
-    throw new Error('Codex DeepSeek e2e requires the official DeepSeek base URL')
-  }
-  return configured
-}
-
 async function completeWithDeepSeek(
   authorization: string,
   task: string,
 ): Promise<string> {
-  const response = await fetch(`${deepSeekBaseUrl()}/chat/completions`, {
+  const response = await fetch(`${OFFICIAL_DEEPSEEK_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
       authorization,

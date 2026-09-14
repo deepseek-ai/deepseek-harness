@@ -9,11 +9,12 @@ const built = ['lib/index.js', 'lib/worker.cjs']
   .every(path => existsSync(join(packageRoot, path)))
 
 describe.skipIf(!built)('built migration verifier (plain node)', () => {
-  it('publishes a historical generation through the bundled worker', async () => {
+  it('publishes history and verifies it without runtime workspace imports', async () => {
     const script = `
-      import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+      import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
       import { tmpdir } from 'node:os'
       import { join } from 'node:path'
+      import { Worker } from 'node:worker_threads'
       import { Context } from '@deepseek-ai/cordis'
       import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 
@@ -30,8 +31,30 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
         const handle = await ctx.sessionPersistence.open(id, 'write')
         await handle.close()
         await ctx.sessionPersistence.flush()
-        const header = JSON.parse((await readFile(join(directory, 'session.v2.jsonl'), 'utf8')).trim())
-        console.log(JSON.stringify({ id: header.id, version: header.version }))
+        const currentPath = join(directory, 'session.v3.jsonl')
+        const header = JSON.parse((await readFile(currentPath, 'utf8')).trim())
+        await mkdir(join(root, 'lib'))
+        await copyFile('package.json', join(root, 'package.json'))
+        const workerPath = join(root, 'lib', 'worker.cjs')
+        await copyFile('lib/worker.cjs', workerPath)
+        async function verify(expectedEventCount) {
+          const worker = new Worker(workerPath, { workerData: {
+            path: currentPath, compression: 'none', expectedId: id, expectedEventCount,
+          } })
+          try {
+            return await new Promise((resolve, reject) => {
+              worker.once('message', resolve)
+              worker.once('error', reject)
+              worker.once('exit', code => reject(new Error('verifier exited before a result: ' + code)))
+            })
+          } finally {
+            await worker.terminate()
+          }
+        }
+        const verified = await verify(0)
+        const refused = await verify(1)
+        console.log(JSON.stringify({ id: header.id, version: header.version,
+          verified: verified.ok, refused: refused.ok, refusal: refused.message }))
       } finally {
         await ctx.fiber.dispose()
         await rm(root, { recursive: true, force: true })
@@ -40,10 +63,16 @@ describe.skipIf(!built)('built migration verifier (plain node)', () => {
     const { exitCode, stdout, stderr } = await execa(
       process.execPath,
       ['--input-type=module', '-e', script],
-      { cwd: packageRoot, stdin: 'ignore', timeout: 30_000, killSignal: 'SIGKILL', reject: false },
+      {
+        cwd: packageRoot, env: { NODE_PATH: undefined, NODE_OPTIONS: undefined },
+        stdin: 'ignore', timeout: 30_000, killSignal: 'SIGKILL', reject: false,
+      },
     )
 
     expect(exitCode, `stderr:\n${stderr}`).toBe(0)
-    expect(JSON.parse(stdout.trim())).toEqual({ id: 'built-migration-worker', version: 2 })
+    expect(JSON.parse(stdout.trim())).toEqual({
+      id: 'built-migration-worker', version: 3, verified: true, refused: false,
+      refusal: 'current session generation contains 0 events, expected 1',
+    })
   })
 })

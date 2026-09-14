@@ -212,12 +212,12 @@ describe('typert loader', () => {
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(ctx.typert.list()).toHaveLength(1)
 
-    await ctx.loader.remove(id)
+    ctx.loader.remove(id)
     await ctx.loader.await()
     // The unmount reconciliation rides a queued microtask flush.
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(ctx.typert.get('@fixture/with-typert#Thing')).toBeUndefined()
-    await ctx.loader.remove(plainId)
+    ctx.loader.remove(plainId)
     await ctx.loader.await()
     await new Promise(resolve => setTimeout(resolve, 20))
 

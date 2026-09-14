@@ -12,7 +12,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import { proxyEnvironmentForChild } from '@deepseek-ai/dsh-http-proxy'
 import { DSH_ENV_PREFIX } from './types.ts'
 import type { SubprocessHandle, SubprocessSpawnSpec } from './types.ts'
-import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from './types.ts'
+import type { SubprocessTerminalEnvironment, SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from './types.ts'
 
 export { DSH_ENV_PREFIX } from './types.ts'
 export type {
@@ -30,6 +30,7 @@ export type {
   SubprocessStdinMode,
   SubprocessStdio,
   SubprocessTerminalForeground,
+  SubprocessTerminalEnvironment,
   SubprocessTerminalHandle,
   SubprocessTerminalSignal,
   SubprocessTerminalSpawnSpec,
@@ -135,6 +136,13 @@ export abstract class SubprocessRuntime extends Service {
   ): Promise<string>
 
   /**
+   * Inspect shell-selection facts in the provider's execution environment.
+   * @param signal - cancellation of remote environment inspection.
+   * @returns platform and preferred shell; executable lookup and allocation remain separate operations.
+   */
+  abstract terminalEnvironment(signal?: AbortSignal): Promise<SubprocessTerminalEnvironment>
+
+  /**
    * Start one managed child process from a fully-specified spec; this seam
    * applies no defaults.
    * @param spec - argv, directory, stdio dispositions, grace, cancellation, and environment.
@@ -154,3 +162,15 @@ export abstract class SubprocessRuntime extends Service {
 }
 
 export default SubprocessRuntime
+
+/** Executable lookup completed without finding an executable file. */
+export class SubprocessExecutableNotFoundError extends Error {
+  /**
+   * @param message - provider-specific lookup diagnostic.
+   * @param options - original provider failure, when available.
+   */
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options)
+    this.name = 'SubprocessExecutableNotFoundError'
+  }
+}

@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 560" width="900" height="560" font-family="Helvetica, Arial, sans-serif">
+  <title>冯诺依曼架构</title>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#555"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="900" height="560" fill="#fafbfc"/>
+  <text x="450" y="34" text-anchor="middle" font-size="22" font-weight="bold" fill="#222">冯诺依曼体系结构 (Von Neumann Architecture)</text>
+
+  <!-- ===== CPU ===== -->
+  <rect x="300" y="70" width="300" height="240" rx="10" fill="#fff" stroke="#1f6feb" stroke-width="2.5"/>
+  <text x="450" y="98" text-anchor="middle" font-size="17" font-weight="bold" fill="#1f6feb">中央处理器 CPU</text>
+
+  <!-- Control Unit -->
+  <rect x="325" y="118" width="120" height="160" rx="8" fill="#ddf4ff" stroke="#54aeff" stroke-width="1.5"/>
+  <text x="385" y="142" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0969da">控制单元</text>
+  <text x="385" y="158" text-anchor="middle" font-size="11" fill="#0b5394">CU</text>
+  <text x="385" y="262" text-anchor="middle" font-size="10" fill="#555">指令译码 · 时序控制</text>
+
+  <!-- ALU -->
+  <rect x="455" y="118" width="120" height="160" rx="8" fill="#fff8c5" stroke="#d4a72c" stroke-width="1.5"/>
+  <text x="515" y="142" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#9a6700">算术逻辑单元</text>
+  <text x="515" y="158" text-anchor="middle" font-size="11" fill="#7a5200">ALU</text>
+  <text x="515" y="262" text-anchor="middle" font-size="10" fill="#555">算术运算 · 逻辑运算</text>
+
+  <!-- Registers -->
+  <rect x="330" y="186" width="110" height="56" rx="6" fill="#fff" stroke="#8c959f" stroke-width="1.2" stroke-dasharray="4,3"/>
+  <text x="385" y="208" text-anchor="middle" font-size="11" fill="#444">寄存器组</text>
+  <text x="385" y="224" text-anchor="middle" font-size="10" fill="#666">Registers / 缓存</text>
+
+  <!-- ===== Memory ===== -->
+  <rect x="300" y="400" width="300" height="110" rx="10" fill="#fff" stroke="#cf222e" stroke-width="2.5"/>
+  <text x="450" y="428" text-anchor="middle" font-size="17" font-weight="bold" fill="#cf222e">内存储器 Memory</text>
+  <text x="450" y="452" text-anchor="middle" font-size="12" fill="#444">存储单元: 指令和数据</text>
+  <text x="450" y="470" text-anchor="middle" font-size="11" fill="#666">(存放程序与数据，同一总线存取)</text>
+
+  <!-- ===== Input ===== -->
+  <rect x="40" y="150" width="170" height="120" rx="10" fill="#fff" stroke="#1a7f37" stroke-width="2.5"/>
+  <text x="125" y="186" text-anchor="middle" font-size="15" font-weight="bold" fill="#1a7f37">输入设备</text>
+  <text x="125" y="206" text-anchor="middle" font-size="11" fill="#444">Input</text>
+  <text x="125" y="238" text-anchor="middle" font-size="10" fill="#666">键盘 · 鼠标 · 磁盘</text>
+
+  <!-- ===== Output ===== -->
+  <rect x="690" y="150" width="170" height="120" rx="10" fill="#fff" stroke="#bf3989" stroke-width="2.5"/>
+  <text x="775" y="186" text-anchor="middle" font-size="15" font-weight="bold" fill="#bf3989">输出设备</text>
+  <text x="775" y="206" text-anchor="middle" font-size="11" fill="#444">Output</text>
+  <text x="775" y="238" text-anchor="middle" font-size="10" fill="#666">显示器 · 打印机</text>
+
+  <!-- ===== Bus lines ===== -->
+  <!-- Address bus CPU <-> Memory (red) -->
+  <path d="M450,320 L450,398" fill="none" stroke="#cf222e" stroke-width="3"/>
+  <text x="420" y="362" text-anchor="end" font-size="11" fill="#cf222e" transform="rotate(-90 420 362)">地址总线</text>
+
+  <!-- Data/control bus label along the bottom -->
+  <line x1="300" y1="355" x2="600" y2="355" stroke="#555" stroke-width="1" stroke-dasharray="2,3" opacity="0.0"/>
+  <text x="450" y="353" text-anchor="middle" font-size="12" font-weight="bold" fill="#555">← 数据总线 / 控制总线 →</text>
+
+  <!-- CPU <-> Input (bidirectional-ish: input data in + control out) -->
+  <path d="M212,210 L298,210" fill="none" stroke="#1a7f37" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M212,196 L298,196" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="255" y="184" text-anchor="middle" font-size="10.5" fill="#1a7f37">数据(输入)</text>
+  <text x="255" y="236" text-anchor="middle" font-size="10" fill="#555">控制</text>
+
+  <!-- CPU <-> Output -->
+  <path d="M602,210 L688,210" fill="none" stroke="#bf3989" stroke-width="3" marker-end="url(#arrow)"/>
+  <path d="M602,196 L688,196" fill="none" stroke="#555" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="645" y="184" text-anchor="middle" font-size="10.5" fill="#bf3989">数据(输出)</text>
+  <text x="645" y="236" text-anchor="middle" font-size="10" fill="#555">控制</text>
+
+  <!-- Memory <-> Input/Output hints: 存储器与 I/O 也通过总线交换 -->
+  <path d="M125,272 L125,300 Q125,340 175,340 L298,340" fill="none" stroke="#8c959f" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <text x="160" y="328" text-anchor="middle" font-size="10" fill="#666" transform="rotate(-8 160 328)">总线</text>
+
+  <path d="M775,272 L775,300 Q775,340 725,340 L602,340" fill="none" stroke="#8c959f" stroke-width="1.8" stroke-dasharray="6,4" marker-end="url(#arrow)"/>
+  <text x="740" y="328" text-anchor="middle" font-size="10" fill="#666" transform="rotate(8 740 328)">总线</text>
+
+  <!-- Stored-program note -->
+  <text x="450" y="530" text-anchor="middle" font-size="11.5" fill="#666">核心思想: 指令与数据以二进制形式统一存放在存储器中 —— “存储程序”</text>
+</svg>

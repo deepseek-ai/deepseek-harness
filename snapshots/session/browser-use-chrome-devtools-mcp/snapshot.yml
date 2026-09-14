@@ -1,0 +1,10 @@
+version: 1
+scenario: browser-use-chrome-devtools-mcp
+profile: headless
+composition: browser-use-chrome-devtools-mcp
+recording: authored
+header:
+  class: browser-use-chrome-devtools-mcp
+  pin: true
+replay:
+  override: true

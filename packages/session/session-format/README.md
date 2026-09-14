@@ -55,7 +55,7 @@ The recoverable decoder returns the accepted logical prefix. A codec may drop on
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The chain validates unique gap-free ordering at construction. The catalog composes one row decoder with stateful adjacent event transformers, retains only their bounded state and the final current events, and performs target validation at `finish()`; only the caller decides whether and how to publish that result.
+The chain validates unique gap-free ordering at construction. A source cut may be unknown until EOF; stages that require a header cut reject its absence, while marker-based stages derive it from emitted events. Each stage returns its exact target cut at finish, and any predeclared cut must agree. The catalog composes one row decoder with stateful adjacent event transformers, retains only their bounded state and the final current events, and performs target validation at `finish()`; only the caller decides whether and how to publish that result.
 
 | File | Role |
 |---|---|

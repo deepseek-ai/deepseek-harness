@@ -9,14 +9,14 @@ import type { InstructionFile, LoadedInstructionFile } from './files.ts'
 
 const SYSTEM_REMINDER_OPEN = '<system-reminder>'
 const SYSTEM_REMINDER_CLOSE = '</system-reminder>'
-const WORKSPACE_CONTEXT_INTRO = 'The following workspace instructions may be relevant to your work. '
+const AGENT_INSTRUCTIONS_INTRO = 'The following workspace instructions may be relevant to your work. '
   + 'Use them as guidance when applicable. More specific instructions take precedence over broader ones. '
   + 'They do not override system, developer, or direct user instructions.'
-const REPLACEMENT_WORKSPACE_CONTEXT_INTRO = 'This complete workspace instruction baseline replaces all earlier workspace instruction baselines. '
-  + WORKSPACE_CONTEXT_INTRO
-const EMPTY_REPLACEMENT_WORKSPACE_CONTEXT_INTRO = 'This complete workspace instruction baseline replaces all earlier workspace instruction baselines. '
+const REPLACEMENT_AGENT_INSTRUCTIONS_INTRO = 'This complete workspace instruction baseline replaces all earlier workspace instruction baselines. '
+  + AGENT_INSTRUCTIONS_INTRO
+const EMPTY_REPLACEMENT_AGENT_INSTRUCTIONS_INTRO = 'This complete workspace instruction baseline replaces all earlier workspace instruction baselines. '
   + 'No workspace instructions are currently active.'
-const COMPACT_WORKSPACE_CONTEXT_INTRO = 'Workspace instructions were omitted or truncated to fit the configured byte budget.'
+const COMPACT_AGENT_INSTRUCTIONS_INTRO = 'Workspace instructions were omitted or truncated to fit the configured byte budget.'
 
 /** Byte-accounting record for one truncated instruction file. */
 export interface TruncatedInstruction {
@@ -26,13 +26,13 @@ export interface TruncatedInstruction {
 }
 
 /** Model-facing text plus omitted and truncated source records. */
-export interface RenderedWorkspaceContext {
+export interface RenderedAgentInstructions {
   text: string
   omitted: InstructionFile[]
   truncated: TruncatedInstruction[]
 }
 
-interface RenderedInstructionContext extends RenderedWorkspaceContext {
+interface RenderedInstructionContext extends RenderedAgentInstructions {
   /**
    * Original files semantically represented by rendered section text. This is
    * not the complement of `omitted`: a truncated file may be represented here
@@ -156,15 +156,15 @@ function additionalSectionText(file: LoadedInstructionFile): string {
   ].join('\n')
 }
 
-const BASELINE_RENDER_STYLE: RenderStyle = { intro: WORKSPACE_CONTEXT_INTRO, section: sectionText }
+const BASELINE_RENDER_STYLE: RenderStyle = { intro: AGENT_INSTRUCTIONS_INTRO, section: sectionText }
 
 function baselineRenderStyle(files: LoadedInstructionFile[], replacePreviousBaseline: boolean | undefined): RenderStyle {
   if (replacePreviousBaseline !== true) return BASELINE_RENDER_STYLE
   return {
     ...BASELINE_RENDER_STYLE,
     intro: files.length === 0
-      ? EMPTY_REPLACEMENT_WORKSPACE_CONTEXT_INTRO
-      : REPLACEMENT_WORKSPACE_CONTEXT_INTRO,
+      ? EMPTY_REPLACEMENT_AGENT_INSTRUCTIONS_INTRO
+      : REPLACEMENT_AGENT_INSTRUCTIONS_INTRO,
   }
 }
 
@@ -299,7 +299,7 @@ function renderInstructionContext(
   const omitted = files.slice(0, -1).map(file => ({ absolutePath: file.absolutePath, displayPath: file.displayPath }))
   const originalBytes = byteLength(mostSpecific.content)
 
-  for (const candidateStyle of [style, { ...style, intro: COMPACT_WORKSPACE_CONTEXT_INTRO }]) {
+  for (const candidateStyle of [style, { ...style, intro: COMPACT_AGENT_INSTRUCTIONS_INTRO }]) {
     const truncatedFile = truncateToFit(mostSpecific, [], maxBytes, omitted, candidateStyle)
     const includedBytes = byteLength(truncatedFile.content)
     const truncated = [{
@@ -338,10 +338,10 @@ function renderInstructionContext(
  * @returns bounded public rendering plus files with surviving content, including genuinely empty files.
  * @internal
  */
-export function renderWorkspaceInstructionSet(
+export function renderAgentInstructionSet(
   files: LoadedInstructionFile[],
   options: { maxBytes: number; replacePreviousBaseline?: boolean },
-): { rendered: RenderedWorkspaceContext; included: LoadedInstructionFile[] } {
+): { rendered: RenderedAgentInstructions; included: LoadedInstructionFile[] } {
   const style = baselineRenderStyle(files, options.replacePreviousBaseline)
   const { represented, ...rendered } = renderInstructionContext(files, options.maxBytes, style)
   return { rendered, included: represented }
@@ -353,9 +353,9 @@ export function renderWorkspaceInstructionSet(
  * @param options - rendering byte budget and whether this baseline supersedes a visible predecessor.
  * @returns bounded baseline prompt text and budget diagnostics.
  */
-export function renderWorkspaceContext(
+export function renderAgentInstructions(
   files: LoadedInstructionFile[],
   options: { maxBytes: number; replacePreviousBaseline?: boolean },
-): RenderedWorkspaceContext {
-  return renderWorkspaceInstructionSet(files, options).rendered
+): RenderedAgentInstructions {
+  return renderAgentInstructionSet(files, options).rendered
 }

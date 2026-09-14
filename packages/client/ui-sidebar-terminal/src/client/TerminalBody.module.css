@@ -1,0 +1,15 @@
+.root { display: flex; flex: 1; flex-direction: column; box-sizing: border-box; height: 100%; min-height: 0; padding-top: 8px; color: var(--dsw-alias-label-primary); font-size: 13px; }
+.title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name { width: 120px; min-width: 48px; max-width: 100%; padding: 0 4px; color: inherit; font: inherit; background: var(--dsw-alias-bg-l1); border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 4px; outline: none; }
+.screen { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); }
+.screen :global(.xterm) { height: 100%; }
+.screen :global(.xterm-viewport) { background: var(--dsw-alias-bg-base); }
+.status { display: flex; align-items: center; gap: 8px; padding: 5px 12px; background: var(--dsw-alias-bg-l2); }
+.status button { padding: 6px 10px; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 6px; color: inherit; background: transparent; cursor: pointer; }
+.status button:hover { background: var(--dsw-alias-bg-l2); }
+.error { margin: 0; padding: 10px 12px; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-l2); }
+.launch { display: flex; align-items: end; flex-wrap: wrap; gap: 8px; padding: 12px; }
+.shellField { display: flex; flex: 1; flex-direction: column; gap: 6px; min-width: 0; }
+.shellMenu { width: 100%; min-width: 0; }
+.shellTrigger { width: 100%; min-width: 0; justify-content: space-between; gap: 8px; }
+.shellValue { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

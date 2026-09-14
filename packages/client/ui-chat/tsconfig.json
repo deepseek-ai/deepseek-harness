@@ -87,6 +87,9 @@
       "path": "../ui-session"
     },
     {
+      "path": "../ui-sidebar-right"
+    },
+    {
       "path": "../ui-settings"
     },
     {
@@ -94,6 +97,12 @@
     },
     {
       "path": "../ui-workspace"
+    },
+    {
+      "path": "../ui-sidebar-documentpreview"
+    },
+    {
+      "path": "../ui-input-trigger"
     }
   ]
 }

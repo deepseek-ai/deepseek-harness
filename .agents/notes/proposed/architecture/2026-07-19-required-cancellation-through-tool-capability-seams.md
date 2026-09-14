@@ -18,7 +18,7 @@ Require an `AbortSignal` on every asynchronous same-process capability operation
 
 Each direct caller supplies a signal it owns or propagates from its own required operation context. Implementations may derive a child deadline or cancellation scope, but the derived signal remains linked to the upstream signal for the delegated lifetime. Capability implementations do not synthesize never-abort signals, use ambient async-local cancellation, or validate `AbortSignal` at runtime solely to repeat the typed same-process contract.
 
-The migration begins with an inventory from every first-party `ToolDefinition.execute()` through the capability calls it awaits. It then changes each coherent Service Definition / Service Provider / Consumer seam together, including tests and generated API documentation. Separate PRs may migrate filesystem, shell/task, web/provider, workflow/subagent, code-runtime, and similar families so each change remains reviewable, but no migrated interface keeps an optional compatibility overload under the repository's pre-release policy.
+The migration begins with an inventory from every first-party `ToolDefinition.execute()` through the capability calls it awaits. It then changes each coherent Service Definition / Service Provider / Consumer seam together, including tests and generated API documentation. Separate PRs may migrate filesystem, shell/task, web/provider, workflow/subagent, ptc-runtime, and similar families so each change remains reviewable, but no migrated interface keeps an optional compatibility overload under the repository's pre-release policy.
 
 ### Scope boundary
 

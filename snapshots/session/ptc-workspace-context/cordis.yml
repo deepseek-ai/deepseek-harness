@@ -1,5 +1,9 @@
 # PTC mode agent-instructions snapshot recording overlay. The default filesystem
 # tools trigger nested instruction discovery after a read.
+- insert:
+    - id: literal-sdk
+      name: '../../../packages/core/tools/tests/fixtures/literal-sdk.ts'
+
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
   config:

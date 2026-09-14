@@ -26,7 +26,7 @@ Cancellation after an asynchronous save prevents context publication, even if st
 
 **Put omission and retrieval data inside the bounded preview JSON.** Rejected because that spends the conversation budget on metadata and can hide the notice precisely when the budget is smallest. Separate durable model-visible text preserves both obligations.
 
-**Use tool provenance for every spill.** Rejected because a session reference has no model-issued tool call. Invented tool ids would misattribute the artifact rather than describe its producer.
+**Use a tool source for every spill.** Rejected because a session reference has no model-issued tool call. Invented tool ids would misattribute the artifact rather than describe its producer.
 
 ## Consequences
 

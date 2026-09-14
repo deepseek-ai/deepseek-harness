@@ -60,7 +60,7 @@ None; package lifecycle changes do not alter the model-visible prefix.
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Loader package provenance only** — programmatic child fibers and in-memory dynamic plugins do not have authoritative npm name/version provenance and remain outside this inventory.
+- **Loader package identity only** — programmatic child fibers and in-memory dynamic plugins do not have authoritative npm names and versions and remain outside this inventory.
 - **Loose modules are omitted** — a relative file without a named and versioned owning manifest is a plugin module, not a plugin package.
 - **In-place package replacement requires restart** — manifest identities are cached for the process lifetime. Loader enable, disable, mount, unmount, and ordinary source HMR still refresh the active entry set, but replacing a mounted package's manifest with another version in the same process is not a supported upgrade path.
 

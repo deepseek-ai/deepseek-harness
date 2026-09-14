@@ -15,6 +15,14 @@ export const COVERAGE_PARTITION_MODE_ENV = 'DSH_COVERAGE_PARTITION_MODE'
 /** Environment variable overriding instrumented test, polling, and hook timeouts. */
 export const COVERAGE_TEST_TIMEOUT_ENV = 'DSH_COVERAGE_TEST_TIMEOUT_MS'
 
+/**
+ * Reporter that canonicalizes a partition's coverage locations before its blob
+ * is serialized (see scripts/coverage-canonical-locations.ts). Root-relative in
+ * POSIX spelling because every child runs with the repository root as its
+ * working directory on every platform.
+ */
+const CANONICAL_LOCATIONS_REPORTER = './scripts/coverage-canonical-locations.ts'
+
 /** One child command owned by the coverage coordinator. */
 export interface CoverageCommand {
   /** Diagnostic identity. */
@@ -561,6 +569,7 @@ export class CoveragePartitionCoordinator {
       '--reporter=default',
       '--reporter=blob',
       '--reporter=json',
+      `--reporter=${CANONICAL_LOCATIONS_REPORTER}`,
       `--outputFile.blob=${this.relativePath(blobPath)}`,
       `--outputFile.json=${this.relativePath(jsonReportPath)}`,
       `--coverage.reportsDirectory=${this.relativePath(reportsDirectory)}`,

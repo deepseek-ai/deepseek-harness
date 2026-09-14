@@ -8,7 +8,7 @@
  */
 
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
-import type { CommandId } from './brand.ts'
+import type { CommandDefinitionId, CommandId } from './brand.ts'
 import type { EncodedImageAttachment } from '@deepseek-ai/dsh-attachment/types'
 
 /** One browser-submitted command attachment: encoded image input or a staged file receipt. */
@@ -55,6 +55,8 @@ export interface CommandExecution {
 
 /** Handler-free immutable command view returned to UI adapters. */
 export interface CommandDescriptor {
+  /** Stable plugin-owned identity; absent for definitions without identity-based client behavior. */
+  readonly definitionId?: CommandDefinitionId
   /** Lowercase command name without the leading slash. */
   readonly name: string
   /** Human-readable summary used in discovery UI. */

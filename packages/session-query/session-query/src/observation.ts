@@ -289,6 +289,7 @@ export class SessionObservationReader {
         header: session.header,
         inheritedEventCount: session.inheritedEventCount,
         get events() {
+          // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
           materialized ??= session.snapshotEvents(SessionLogOffset(0), seq)
           return materialized
         },

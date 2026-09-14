@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-agent-loop-testkit` mounts the standard prerequisite services a test needs before loading the concrete `AgentLoop` — the LLM runtime, session store, session-projection registry, system-prompt registry, tool registry, and agent registry — in dependency order, with one call. A second helper mounts the production loop and returns a narrow driver for creating real Agents and claiming their real Inbox input. Consumer tests that need only the public queue operations can instead use an explicitly process-local Inbox stub, while tests with no pending-input behavior can use a fail-fast unsupported Inbox. Adapters, optional plugins, load order, and teardown stay in the test's hands. The package registers no model-facing behavior of its own.
+Use `dsh-agent-loop-testkit` to give AgentLoop tests the standard prerequisites and a production loop driver without repeating setup. The harness creates real Agents and exposes Inbox input claiming for tests of durable events, recovery, notifications, and claim behavior. For consumer tests that need only queue editing, choose the process-local Inbox stub; choose the fail-fast Inbox when pending input must never be touched. Tests still own adapters, optional plugins, load order, and context disposal, and the package adds no model-visible behavior.
 
 ## Table of Contents
 

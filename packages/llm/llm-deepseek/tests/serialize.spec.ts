@@ -8,8 +8,8 @@ import {
   serializeMessagesWithImages,
   serializeRequest,
   serializeRequestWithImages,
-} from '../src/serialize.ts'
-import type { ImageSerializationOptions } from '../src/serialize.ts'
+} from '../src/protocols/chat-completions/serialize.ts'
+import type { ImageSerializationOptions } from '../src/protocols/chat-completions/serialize.ts'
 
 type FileResolver = Extract<ImageSerializationOptions['representation'], { kind: 'file' }>['resolveFileId']
 
@@ -247,6 +247,23 @@ describe('serializeRequest', () => {
     const wire = serializeRequest(request({ messages: history, system: 'be helpful' }))
     expect(wire.messages[0]).toEqual({ role: 'system', content: 'be helpful' })
     expect(wire.messages[1]).toEqual({ role: 'user', content: 'hi' })
+  })
+
+  it('serializes a leading system message byte-for-byte like the same prompt passed as options.system', async () => {
+    const systemMessage = createMessage({
+      role: 'system',
+      content: [{ type: 'text', text: 'be helpful' }],
+      source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' },
+    })
+    const tools = [{ name: 'f', description: 'F', parameters: { type: 'object', properties: {} } }]
+    const fromHistory = serializeRequest(request({ messages: [systemMessage, ...history], tools }))
+    const fromOption = serializeRequest(request({ messages: history, system: 'be helpful', tools }))
+    expect(fromHistory.messages[0]).toEqual({ role: 'system', content: 'be helpful' })
+    expect(JSON.stringify(fromHistory)).toBe(JSON.stringify(fromOption))
+    const images = imageOptions([])
+    const imageHistory = await serializeRequestWithImages(request({ messages: [systemMessage, ...history], tools }), images)
+    const imageOption = await serializeRequestWithImages(request({ messages: history, system: 'be helpful', tools }), images)
+    expect(JSON.stringify(imageHistory)).toBe(JSON.stringify(imageOption))
   })
 
   it('maps sampling params and stop sequences', () => {
@@ -589,7 +606,7 @@ describe('image serialization', () => {
     ])
   })
 
-  it('offloads oldest images before reads and keeps the newest image', async () => {
+  it('projects surface-offloaded occurrences to placeholders without resolving them', async () => {
     const resolveFileId = fileResolver()
     const png = imageRef('image/png', 3)
     const jpeg = imageRef('image/jpeg', 3)
@@ -601,7 +618,7 @@ describe('image serialization', () => {
       model: 'deepseek-v4-flash-vision-exp',
       messages: [createUserMessage({
         content: [
-          { type: 'image', attachment: png },
+          { type: 'image', attachment: png, offloaded: true },
           { type: 'image', attachment: jpeg },
         ],
         source: { kind: 'plugin', plugin: 'test' },
@@ -622,22 +639,38 @@ describe('image serialization', () => {
     expect(resolveFileId).toHaveBeenCalledTimes(1)
     expect(resolveFileId.mock.calls[0]?.[0]).toMatchObject({ attachment: { mediaType: 'image/jpeg' } })
   })
-
-  it('drops base64 history from a 20-unit high watermark to a 10-unit low watermark', async () => {
+  it('rejects retained inline images beyond the bound with the quantized count to offload', async () => {
     const ref = imageRef('image/png', 3)
-    const wire = await serializeRequestWithImages(request({
+    // 21 retained 3-byte images encode to 84 base64 bytes against an 80-byte bound with a
+    // 40-byte quantum: the removal crosses the quantum at the eleventh oldest occurrence.
+    await expect(serializeRequestWithImages(request({
       model: 'deepseek-v4-flash-vision-exp',
       messages: [createUserMessage({
         content: Array.from({ length: 21 }, () => ({ type: 'image' as const, attachment: ref })),
         source: { kind: 'plugin', plugin: 'test' },
       })],
-    }), inlineImageOptions([ref], 80, 40))
+    }), inlineImageOptions([ref], 80, 40))).rejects.toMatchObject({
+      code: 'IMAGE_OFFLOAD_REQUIRED',
+      failure: { offloadImages: 11 },
+    })
+  })
 
+  it('counts only retained occurrences against the bound', async () => {
+    const ref = imageRef('image/png', 3)
+    const wire = await serializeRequestWithImages(request({
+      model: 'deepseek-v4-flash-vision-exp',
+      messages: [createUserMessage({
+        content: [
+          ...Array.from({ length: 11 }, () => ({ type: 'image' as const, attachment: ref, offloaded: true as const })),
+          ...Array.from({ length: 10 }, () => ({ type: 'image' as const, attachment: ref })),
+        ],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    }), inlineImageOptions([ref], 80, 40))
     const content = wire.messages[0]?.content
     expect(JSON.stringify(content).match(/image omitted to fit request image limits/g)).toHaveLength(11)
     expect(JSON.stringify(content).match(/"type":"image_url"/g)).toHaveLength(10)
   })
-
   it('rejects an unprepared image while computing exact request bytes', async () => {
     const ref = imageRef()
     await expect(serializeRequestWithImages(request({

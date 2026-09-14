@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`terminalCardModel` 对根调用与 Code Dispatch 调用应用相同的适用检查，不因 `parentCallId` 拒绝调用。受支持的运行中与已完成的 `bash`、`pwsh` 和 `terminal_send` 调用使用现有 terminal 卡片。后台调用、工具错误、格式错误的输入、缺失的调用头和不受支持的结果内容保留通用回退。持久 shell 在运行中仍可使用 terminal，完成后使用通用展示；非零进程退出仍是 terminal 结果数据，而非工具错误。
+`terminalCardModel` 对根调用与 PTC dispatch 调用应用相同的适用检查，不因 `parentCallId` 拒绝调用。受支持的运行中与已完成的 `bash`、`pwsh` 和 `terminal_send` 调用使用现有 terminal 卡片。后台调用、工具错误、格式错误的输入、缺失的调用头和不受支持的结果内容保留通用回退。持久 shell 在运行中仍可使用 terminal，完成后使用通用展示；非零进程退出仍是 terminal 结果数据，而非工具错误。
 
 本文仅部分取代 [Client 派生工具展示](../architecture/2026-08-23-client-derived-tool-presentation.zh.md)中的 terminal 子调用卡片禁令。该文继续负责 Client 展示所有权及 diff/read/search/web 子调用限制。无需更改 Host 展示转换器、事件、schema、元数据、调用树或模型上下文。[规范工具输出](../architecture/2026-07-20-canonical-tool-output-contract.zh.md)与 [PTC 类型化返回值](../feature/2026-07-20-ptc-typed-tool-returns.zh.md)中的元数据和执行期值决策保持不变；省略元数据不禁止 Client 派生 terminal 卡片。
 
@@ -32,4 +32,4 @@ Status: implemented
 
 ## 验证
 
-[Terminal 卡片测试](../../../../packages/client/ui-tool/tests/terminal-card.client.spec.tsx)覆盖根／子调用适用性、运行中与已完成的 Details 以及回退情况。[组装后的 Code Dispatch 测试](../../../../packages/client/ui-tool/tests/chat-code-subcalls.client.spec.tsx)覆盖经对话树渲染的嵌套 terminal。[通知测试](../../../../packages/spill/spill-policy/tests/notice.spec.ts)使用独立于格式化函数的字面量 fixture（测试前置数据）固定历史拼写。[spill-policy 到 UI 的测试](../../../../packages/client/ui-tool/tests/spill-policy-terminal.client.spec.ts)覆盖真实的根调用与 PTC spill 生成、保持不变的完整文本和程序化值、字节上限、仅含通知的输出以及 terminal 回退。浏览器回放负责验证可见的嵌套卡片变化；非 terminal 子调用行为不属于本修复。
+[Terminal 卡片测试](../../../../packages/client/ui-tool/tests/terminal-card.client.spec.tsx)覆盖根／子调用适用性、运行中与已完成的 Details 以及回退情况。[组装后的 PTC dispatch 测试](../../../../packages/client/ui-tool/tests/chat-ptc-subcalls.client.spec.tsx)覆盖经对话树渲染的嵌套 terminal。[通知测试](../../../../packages/spill/spill-policy/tests/notice.spec.ts)使用独立于格式化函数的字面量 fixture（测试前置数据）固定历史拼写。[spill-policy 到 UI 的测试](../../../../packages/client/ui-tool/tests/spill-policy-terminal.client.spec.ts)覆盖真实的根调用与 PTC spill 生成、保持不变的完整文本和程序化值、字节上限、仅含通知的输出以及 terminal 回退。浏览器回放负责验证可见的嵌套卡片变化；非 terminal 子调用行为不属于本修复。

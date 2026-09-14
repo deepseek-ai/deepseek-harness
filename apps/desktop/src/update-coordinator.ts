@@ -1,4 +1,4 @@
-/** One Electron release stream for the version-bound shell and dsh seed. */
+/** One Electron release stream for the version-bound shell and bundled dsh runtime. */
 
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'

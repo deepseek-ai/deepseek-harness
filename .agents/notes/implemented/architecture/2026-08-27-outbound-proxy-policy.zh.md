@@ -6,9 +6,9 @@ Status: implemented
 
 ## Problem
 
-Node 内置的 `fetch` 会忽略 `HTTP_PROXY` 与 `HTTPS_PROXY`。开发者运行的其他工具——curl、git、npm、pip——都遵循它们，所以代理后面的用户导出一次变量就期待一切随之生效。Harness 并没有：`setGlobalDispatcher`、`ProxyAgent` 与 `EnvHttpProxyAgent` 在 `packages/` 与 `apps/` 中出现次数为零，因此模型请求、每次 web 搜索、`web_fetch`、走 HTTP 的 MCP、OTLP 导出器与 E2B SDK 全部直连，且是静默的，任何地方都没有诊断。
+Node 内置的 `fetch` 会忽略 `HTTP_PROXY` 与 `HTTPS_PROXY`。开发者运行的其他工具——curl、git、npm、pip——都遵循它们，所以代理后面的用户导出一次变量就期待一切随之生效。Harness 并没有：`setGlobalDispatcher`、`ProxyAgent` 与 `EnvHttpProxyAgent` 在 `packages/` 与 `apps/` 中出现次数为零，因此模型请求、每次 web 搜索、`web_fetch`、走 HTTP 的 MCP 与 OTLP 导出器全部直连，且是静默的，任何地方都没有诊断。
 
-仓库曾短暂拥有过答案，又在无人察觉时弄丢了。PR #971 在 `bin/dsh` 里设置了 `NODE_USE_ENV_PROXY=1`；十一天后 `bbb1b1cc38 cleanup: remove managed source installer` 整体删除了那个启动器，把该标志一并带走。留下的只有 `apps/cli/reference/README.md` 里的一句话，让读者去设置一个已经无人消费的变量。
+仓库曾短暂拥有过答案，又在无人察觉时弄丢了。PR #971 在 `bin/dsh` 里设置了 `NODE_USE_ENV_PROXY=1`；十一天后的“cleanup: remove managed source installer”改动整体删除了那个启动器，把该标志一并带走。留下的只有 `apps/cli/reference/README.md` 里的一句话，让读者去设置一个已经无人消费的变量。
 
 即便照做，那句话也不可能生效，原因有三条且都经过实测。`NODE_USE_ENV_PROXY` 在进程启动时对环境取快照，而 `loadLayeredEnv()` 是在之后才合并 `.env` 层，因此写在 `$DSH_HOME/.env` 中的代理对它不可见。它只覆盖 Node 24.0+，在 22 线上只覆盖 22.21+——而 `engines` 允许 `^22.19.0`，那里根本没有这个变量，设置了也不会有任何警告。它也完全触及不到 `web-fetch-http`：该提供方向 `fetch` 传入自己的 `dispatcher`，而显式 dispatcher 无论标志如何都会覆盖全局的那个。
 
@@ -24,9 +24,7 @@ Node 内置的 `fetch` 会忽略 `HTTP_PROXY` 与 `HTTPS_PROXY`。开发者运�
 
 那次修订一并引入的插件也随之删除。它让某个组合可以把策略写进 `cordis.yml`，但没有任何随附 bundle 挂载它，因此启动器那条路径是唯一可达的——而它的 `Config` 是那条配置分支唯一的供给方，别处无从到达。
 
-**四个函数——收敛的是调用方，而不是让本包为每个 SDK 各加一个导出。** 早先一版导出六个：dispatcher 工厂、`node:http` agent 工厂、代理 URL 查询、策略访问器、安装器与子进程环境构造器。每一个都为某个 SDK 的传输而存在，而这正是一个传输策略包退化成「别的包的约束目录」的过程。Review 问能不能反过来让调用方收敛；能，而且每删掉一个导出都带走了一整种写法。遥测不再被路由，`node:http` agent 工厂随之退场。`web-fetch-http` 在带注释的豁免下自建 pin agent，dispatcher 工厂随之退场。E2B 读 `route.proxy`，代理 URL 查询随之退场。
-
-剩下的是 `installProxyFromEnvironment`、`proxyRouteFor`、`proxyEnvironmentForChild` 与 `clearedProxyEnv`——按「调用方需要策略的方式」各一个，而不是按 SDK 各一个。安装吸收了解析与诊断上报，因为没有调用方需要把它们分开：解析出来却不安装的策略什么也路由不了。
+**每种调用需求对应一项操作。** `installProxyFromEnvironment`、`proxyRouteFor`、`proxyEnvironmentForChild` 与 `clearedProxyEnv` 分别负责安装、逐请求路由、子进程继承和 fixture 隔离。特定于 SDK 的工厂会通过共享 API 暴露各自的传输约束。`web-fetch-http` 在构造地址固定传输时使用已解析路由；OTLP 导出器保持直连。安装包含解析与诊断上报，因为调用方需要一项同时解析并安装路由的操作。
 
 `proxyRouteFor` 还堵掉了旧访问器让人写得出来的一个缺陷。`web-fetch-http` 先读策略决定是否 pin，再读一次去构造传输；两次读取之间发生卸载，就会为第一次读取已判定走代理的 URL 返回一个直连且未 pin 的 agent。路由把两者一起交出，分支与请求便无从分歧。它携带的是进程级 dispatcher，dispose 时是 close 而非 destroy，因此策略被卸载时已经发出的请求仍会跑完。
 
@@ -42,19 +40,19 @@ Node 内置的 `fetch` 会忽略 `HTTP_PROXY` 与 `HTTPS_PROXY`。开发者运�
 
 URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与跨域重定向拒绝在每一跳上依然生效。
 
-**派生的子进程通过环境获得策略；执行模型代码的 worker 什么也不获得。** `proxyEnvironmentForChild()` 并入 `scrubbedParentEnv()`——每个 spawner 本就共享的那一个函数。workflow worker **不**接收它：它执行的是模型编写的脚本体，而代理 URL 可能携带 `user:password`。这与 code runtime 保持的隔离相同，也是 `docs/defensive-patterns.md` 的要求，因此 workflow 自身的请求直连。
+**普通子进程接收代理策略；PTC 程序环境省略它。** `proxyEnvironmentForChild()` 并入 `scrubbedParentEnv()`。PTC 也执行工作流脚本，并从程序环境中排除这些设置，因为代理 URL 可能携带 `user:password`；程序的直接请求采用直连。
 
 子进程拿到的是用户自己的值，而这恰恰曾把它弄坏。Node 在 `NODE_USE_ENV_PROXY` 下会在运行程序之前先解析 `HTTP_PROXY` 与 `HTTPS_PROXY`，遇到 `http:`/`https:` 之外的协议直接退出；于是一个为 `curl` 保留的 `socks4://` 会让每个 Node 子进程——MCP server、subagent CLI、`npm`——在第一行之前就终结，而本进程此前只报告过该协议保持直连。在 Node 24.17 上实测：`socks4://`、`ftp://` 与畸形值均以 1 退出；`socks5://` 恰好在该版本被接受。现在只要子进程收到的某个值是本包拒绝过的，就扣下该标志，这样的子进程直连，`curl` 仍读到为它保留的值。若改为把解析后的值交给子进程，Node 固然能继续走代理，代价却是悄悄改写用户为另一工具设置的值。
 
 这接受了一处已记录的接缝。此类上下文按 Node 自己的规则匹配绕过条目，其分隔符与 IPv4 区间支持与本包不同，且该标志仅存在于 Node 22.21+ 与 24+。
 
-**有两个 SDK 并不落到 `globalThis.fetch`，而读代码给出的答案是相反的。** 审计最初把 OTLP 导出器与 E2B SDK 判为已覆盖，依据是在 `@opentelemetry/otlp-exporter-base` 里 grep 到了 `globalThis.fetch`。那处命中属于**浏览器**传输；在 Node 上 delegate 选择的是 `http-exporter-transport`，它通过 `node:http` 投递——那里全局 dispatcher 触及不到。E2B 又是另一种形态：它自建 undici `Agent`／`ProxyAgent`，并接受一个自己从不从环境读取的 `proxy` URL。两者都实测为直连。E2B 接收 `proxyRouteFor` 给出的 `route.proxy`，与 `web-fetch-http` 调的是同一个函数。遥测则被有意保留为直连，而这个排除项才是更值得说的一半。
+**SDK 传输需要独立验证。** OTLP 导出器在 Node 上选择 `http-exporter-transport`，通过 `node:http` 投递并绕过全局 fetch dispatcher；其浏览器实现中的 `globalThis.fetch` 引用不能证明 Node 路由。[E2B 移除决策](../simplification/2026-09-11-remove-e2b-providers.zh.md)撤下另一项 SDK 传输集成，但不改变这一要求。
 
 **遥测的直连是有意为之。** 要让它走代理只有两条路，代价都超过这条通道本身的价值。`http.Agent` 通过 `proxyEnv` 读取环境，而该选项自 Node 22.21 与 24.5 才有——落在 engines 范围之内，因此 22.19、22.20 与 24.0–24.4 无论如何仍是直连，而代理包还得为一条只在部分运行时生效的路径保留 `createNodeHttpAgent` 导出。改用 SDK 的 `fetch` delegate 替换传输可以覆盖所有运行时，但该 delegate 没有压缩能力，而随附的 `base` bundle 启用了 gzip：实测一批真实规模的 OTLP 数据启用后体积只有 1/6.4。曾有一版转而在加载期拒绝 `exporter.compression`，结果凡是启动随附 bundle 的测试全部失败；另一版在 serializer 处 gzip 确实能跑通，但代价是把传输层代码塞进了遥测插件。
 
 与之相比，遥测是唯一一条丢失了对用户毫无代价的出网通道：没有任何工具、模型请求或会话依赖它，而连不上的导出本就被静默丢弃。处在强制代理后的用户，只是停留在本次改动之前的状态，而不是被弄坏。`egress.spec.ts` 现在断言这一排除——若某次 SDK 升级把导出器挪到 `fetch` 上，遥测就会开始静默走代理，而该用例正是让这件事暴露出来的东西。
 
-**每个出网点都配一份出网测试，因为读代码不够。** 各所属包中的 `egress.spec.ts` 驱动该点的真实代码路径，目标是无法解析的 `.invalid` 主机，穿过一个假代理，并断言代理确实收到了请求。九份测试覆盖搜索后端、pi-ai 发现、走 HTTP 的 MCP、E2B、派生的子 Node、worker 线程，以及遥测的排除。下面那条门禁看不进依赖内部；这些能，它们把「某个 SDK 换了传输」从静默回归变成失败的测试。
+**每个出网点都配有出网测试。** 各所属包中的 `egress.spec.ts` 通过假代理驱动实际传输，并检查观察到的路由。这些测试覆盖搜索后端、pi-ai 发现、走 HTTP 的 MCP、子 Node 进程、worker 线程和遥测的直连例外。它们可发现静态调用点检查无法观察到的依赖传输变化。
 
 **用门禁防止该缺陷复现。** `verify-no-bare-dispatcher` 解析 TypeScript AST——`scripts/AGENTS.md` 要求 source-ownership 门禁使用语法感知发现，而逐行正则漏掉了本仓库已在使用的 `{ dispatcher }` 简写，以及重命名导入后的 `new Alias(...)`。它在所属包之外拒绝 undici agent 构造与显式 `dispatcher` 选项。`proxyRouteFor(url)` 是受支持的替代；唯一一处确实自有传输的调用点——`web-fetch-http`，它把请求钉在已校验的地址上——用 `proxy-exempt:` 注释说明。这条规则之所以存在，是因为 `web-fetch-http` 里原本那行 `new Agent` 在写下时完全合理——那时根本还没有代理这回事，也没有任何机制会拦下它。
 
@@ -72,7 +70,7 @@ URL 层策略未受影响：仅 `http(s)`、禁止内嵌凭据、长度上限与
 
 **读取操作系统的代理设置。** 本次变更中被否决。所调研的六个产品中只有 Codex 与 Reasonix 这样做，且 Codex 把它放在默认关闭的开关之后。在作者机器上实测，它什么也读不到：代理软件把设置写在了 Wi-Fi 服务上，而主接口是一块没有代理的 USB 以太网卡，因此 `scutil --proxy` 报告无代理，而导出的环境变量却工作正常。它还需要自带的绕过匹配器，因为操作系统的列表含有 undici 与 Node 都不匹配的 CIDR 条目。
 
-**也把代理给 `code-runtime` worker。** 被否决。模型编写的程序在那里运行时完全没有环境变量——这比派生命令得到的 scrubbed 环境更严——而代理 URL 可能携带凭据。把带凭据的 URL 交给模型代码去访问网络是错误的取舍；该排除已记入那个包的限制清单。
+**也把代理配置交给模型编写的代码。** 不采纳，因为代理 URL 可能携带凭据。PTC 进程（包括工作流执行）不在程序环境中提供这些设置；直接网络访问仍受程序执行策略约束。
 
 ## Consequences
 

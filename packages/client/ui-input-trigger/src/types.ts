@@ -7,9 +7,11 @@
  * never a Cordis context or the mutable Session. RPC and service access go
  * through the provider plugin's own root context captured at registration.
  */
+import type { ComponentType } from 'react'
 import type {
-  PickOutcome, TokenSpan,
+  PickOutcome, ReferenceInsert, TokenSpan,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 export type {
@@ -40,14 +42,23 @@ export type PickVia = 'menu' | 'space' | 'enter'
 /** What a pick asks for: resolve the candidate, or drill into it in place. */
 export type PickAction = 'pick' | 'drill'
 
-/** Leading glyph token of one menu candidate, mapped to its SVG by the menu view. */
+/** Leading glyph token of one menu candidate, mapped to its reference SVG by the menu view. */
 export type InputTriggerCandidateIcon = 'file' | 'folder' | 'session'
 
 /** One menu candidate. Pure display data — zero behavior declaration. */
 export interface InputTriggerCandidate {
+  /** Identity: the pick payload, the exact-match key, and the first search key. */
   readonly name: string
+  /**
+   * Display title; the name itself when absent. A label that is not the
+   * name in another letter case renders with the name as a trailing alias,
+   * and every label is the second search key (a localized title stays
+   * findable by its command name).
+   */
+  readonly label?: string
   readonly description?: string
-  readonly icon?: InputTriggerCandidateIcon
+  /** Reference glyph token, or an icon component from the shared icon set. */
+  readonly icon?: InputTriggerCandidateIcon | ComponentType<IconProps>
   readonly hint?: string
   /** Optional visual heading shared by adjacent candidates; sectioned groups omit their source-title row. */
   readonly section?: string
@@ -211,6 +222,13 @@ export interface InputTriggerSource {
    * @returns unsubscribe.
    */
   subscribeLexicon?(session: ClientSessionContext, listener: () => void): () => void
+  /**
+   * Open a reference preview without changing or submitting the draft.
+   * @param session - session owning the composer.
+   * @param reference - source-owned id and optional chip glyph; text references retain their trigger.
+   * @returns whether this source accepted the preview, possibly awaiting its catalog; false leaves the editor gesture unchanged.
+   */
+  openReference?(session: ClientSessionContext, reference: Pick<ReferenceInsert, 'ref' | 'appearance'>): boolean
   /** Reference codec; required for sources producing insert outcomes. */
   readonly codec?: ReferenceCodec
 }

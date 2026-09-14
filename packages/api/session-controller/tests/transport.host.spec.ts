@@ -697,7 +697,7 @@ describe('SessionHistoryController', () => {
     expect(childSnapshot).toHaveBeenCalledWith(childSession)
   })
 
-  it('keeps message-aligned pagination contiguous across replacement provenance', async () => {
+  it('keeps message-aligned pagination contiguous across replacement source-event references', async () => {
     const { ctx, transport } = await setup()
     const session = ctx.sessions.create(SessionId('pagination'), { meta: { cwd: '/workspace' } })
     session.append('turn/start', { turn: 1 })
@@ -707,7 +707,7 @@ describe('SessionHistoryController', () => {
     append(session, 'assistant/message', { turn: 1, step: 2, message: {} }, { surfaceOp: 'append' })
     const summary = append(session, 'fixture/summary', {})
     const replacement = append(session, 'user/message', { content: [], source: { kind: 'plugin' } }, {
-      surfaceOp: { op: 'replace', start: SessionSeq(1), end: SessionSeq(4) },
+      surfaceOp: { op: 'replace', startSeq: SessionSeq(1), endSeq: SessionSeq(4) },
       sourceEventSeqs: [SessionSeq(1), firstReply.seq, SessionSeq(3), SessionSeq(4), summary.seq],
     })
 

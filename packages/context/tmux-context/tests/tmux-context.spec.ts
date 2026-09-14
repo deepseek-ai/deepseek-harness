@@ -71,7 +71,7 @@ class FakeBash extends ShellExecutor {
     if (this.runError) throw this.runError
     return this.result
   }
-  override start(): ShellProcess {
+  override async start(): Promise<ShellProcess> {
     throw new Error('tmux-context must never start a background job')
   }
 }

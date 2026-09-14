@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-terminal` gives the model six tools over persistent terminal sessions: `terminal_open`, `terminal_send`, `terminal_read`, `terminal_signal`, `terminal_close`, and `terminal_list`. Every call is fenced to the exact agent that opened the session, so a model cannot operate another agent's terminal even if it learns the id. Sends run in the foreground (returning bounded output with a wait reason) or in the background through the jobs service (returning a job id collected with `job_output` and stopped with `job_kill`). Results are capped by `maxResultBytes` and stay in session history until compaction. A short guidance section tells the model to prefer one-shot tools unless a terminal's persistent state or interactive stdin is genuinely needed.
+Use `dsh-tool-terminal` when an agent needs persistent terminal state or interactive input across calls. It can open, send to, read, signal, close, and list terminal sessions while preventing one agent from operating another agent's sessions. Sends may wait for bounded foreground output or return a background job id for later collection or interruption. `maxResultBytes` caps each result, which remains in session history until compaction. The model is guided to prefer one-shot tools for bounded work.
 
 ## Table of Contents
 

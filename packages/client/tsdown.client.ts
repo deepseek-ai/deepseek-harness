@@ -7,17 +7,20 @@
  * and injects a tagged style at factory execution, while `x.css?inline`
  * exports compiled text for a plugin-owned lifecycle effect. The virtual
  * loaders register each real stylesheet as a watch dependency.
+ * Non-experimental client outputs reject experimental module and stylesheet
+ * inputs, including origins recorded by chained source maps.
  */
 import { readFile } from 'node:fs/promises'
 import { existsSync, globSync, readFileSync } from 'node:fs'
-import { isBuiltin } from 'node:module'
+import { createRequire, isBuiltin } from 'node:module'
 import { basename, dirname, isAbsolute, relative, resolve as resolvePath, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { UserConfig } from 'tsdown'
+import type { TsdownPlugin, UserConfig } from 'tsdown'
 import { transform } from 'lightningcss'
 import { optionalStringArray } from './modules/src/client/manifest.ts'
 import { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS } from './web/src/platform.ts'
 import { clientBuildEnvironmentDefines } from '../../scripts/client-build-environment.ts'
+import { BundleInputIsolation, physicalBundleInput } from '../../scripts/bundle-input-isolation.ts'
 
 /**
  * Virtual-id wrapper keeping module CSS away from tsdown's own css pipeline
@@ -255,6 +258,7 @@ interface AssetEmitter {
 
 function staticLinkedConfig(id: string, entry: string, outputName = basename(entry, '.js')): UserConfig {
   const emitted = new Set<string>()
+  const isolation = clientInputIsolation(id)
   return {
     name: id,
     entry: { [outputName]: entry },
@@ -268,7 +272,10 @@ function staticLinkedConfig(id: string, entry: string, outputName = basename(ent
     // The shell compiles this artifact, so its map is the only path from a
     // browser stack frame back to the TSX (tsc emits the lib/types half).
     sourcemap: true,
-    outputOptions: { sourcemapExcludeSources: false },
+    outputOptions: {
+      sourcemapExcludeSources: false,
+      sourcemapPathTransform: isolation.sourcePath,
+    },
     plugins: [{
       // Contract 1. `pre` because tsdown's own deps plugin would otherwise
       // resolve and inline every specifier missing from the npm production
@@ -283,7 +290,7 @@ function staticLinkedConfig(id: string, entry: string, outputName = basename(ent
           return isBareSpecifier(source) ? { id: source, external: true } : null
         },
       },
-    }, tscSourceMapPlugin(), {
+    }, tscSourceMapPlugin(), isolation.plugin, {
       // Contract 4. The import survives verbatim and the sheet lands beside the
       // JavaScript, so the shell's CSS Modules pipeline sees a real stylesheet.
       name: 'dsh-css-asset',
@@ -427,6 +434,7 @@ function matchesSpecifier(patterns: readonly RegExp[], specifier: string): boole
 
 function clientConfig(id: string, entry: string): UserConfig {
   const isRequested = (specifier: string): boolean => clientExternals(id).has(specifier)
+  const isolation = clientInputIsolation(id)
   return {
     name: `${id}/client`,
     entry: { client: entry },
@@ -498,7 +506,7 @@ function clientConfig(id: string, entry: string): UserConfig {
           + '(type-only imports are erased and never reach this gate)',
         )
       },
-    }, tscSourceMapPlugin(), {
+    }, tscSourceMapPlugin(), isolation.plugin, {
       name: 'dsh-css-modules-inline',
       resolveId(source: string, importer: string | undefined) {
         if (!source.endsWith('.module.css')) return null
@@ -562,12 +570,69 @@ function clientConfig(id: string, entry: string): UserConfig {
       // browser resolves its local sources back into URLs that mirror the
       // /packages/<group>/<package>/src directories; sourcesContent keeps them usable
       // without exposing that tree as an HTTP route.
-      sourcemapPathTransform: browserSourcePath,
+      sourcemapPathTransform(source, mapPath) {
+        isolation.sourcePath(source, mapPath)
+        return browserSourcePath(source, mapPath)
+      },
       banner: `window.__ModuleLoader__.load({ id: ${JSON.stringify(id)}, factory: (require) => {`,
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },
   }
+}
+
+/** Check browser bundle inputs before their original package identity is folded into an artifact. */
+function clientInputIsolation(id: string): {
+  plugin: TsdownPlugin
+  sourcePath: (source: string, mapPath: string) => string
+} {
+  const experimental = id.startsWith('@deepseek-ai/dsh-experimental-')
+  const inputs = new BundleInputIsolation(REPOSITORY_ROOT, `client bundle isolation (${id})`)
+  return {
+    plugin: {
+      name: 'dsh-client-input-isolation',
+      buildStart() { inputs.reset() },
+      generateBundle(_options, bundle) {
+        if (experimental) return
+        for (const output of Object.values(bundle)) {
+          if (output.type === 'chunk') {
+            for (const module of Object.keys(output.modules)) {
+              inputs.assertInput(clientInputFile(module))
+              const info = this.getModuleInfo(module)
+              if (info === null) {
+                // Rolldown's runtime helper is compiler-generated and has no source module record.
+                if (module === '\0rolldown/runtime.js') continue
+                throw new Error(`client bundle isolation (${id}): module ${module} has no bundler module record`)
+              }
+              for (const dependency of [...info.importedIds, ...info.dynamicallyImportedIds]) {
+                inputs.assertInput(clientInputFile(dependency))
+              }
+            }
+            for (const external of [...output.imports, ...output.dynamicImports]) {
+              if (!(external in bundle)) inputs.assertInput(external)
+            }
+          } else {
+            for (const original of output.originalFileNames) inputs.assertInput(original)
+          }
+        }
+      },
+    },
+    sourcePath(source, mapPath) {
+      if (!experimental) {
+        const decoded = clientInputFile(source)
+        const file = physicalBundleInput(decoded) ?? resolvePath(dirname(mapPath), decoded)
+        inputs.assertSourceMapInput(file)
+      }
+      return source
+    },
+  }
+}
+
+/** CSS loader ids append a JavaScript suffix to the physical stylesheet path. */
+function clientInputFile(id: string): string {
+  const prefix = [CSS_VIRTUAL_PREFIX, GLOBAL_CSS_VIRTUAL_PREFIX, INLINE_CSS_VIRTUAL_PREFIX]
+    .find(prefix => id.startsWith(prefix))
+  return prefix === undefined ? id : id.slice(prefix.length, -CSS_VIRTUAL_SUFFIX.length)
 }
 
 /** Chain tsc's emitted maps into any Client bundle that consumes `lib/types`. */
@@ -616,6 +681,7 @@ const SOURCEMAP_COMMENT = /\n\/\/# sourceMappingURL=.*\s*$/
 
 /** Resolve an emitted JS asset import against its source-tree counterpart. */
 function sourceAssetPath(source: string, importer: string): string {
+  if (!source.startsWith('.') && !isAbsolute(source)) return createRequire(importer).resolve(source)
   const emitted = resolvePath(dirname(importer), source)
   if (existsSync(emitted)) return emitted
   const boundary = emitted.indexOf(TYPES_MARKER)

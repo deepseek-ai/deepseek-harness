@@ -1,5 +1,5 @@
 ---
-description: "面向模型的 ralph 工具：面向一个不可变目标的固定前台全新 agent 循环，供选择或配置全新 agent 迭代的用户与维护者阅读。"
+description: "面向模型的 ralph 工具：固定前台 agent loop（智能体循环），让全新 agent 围绕一个不可变目标迭代，供选择或配置此类迭代的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-ralph` 把 `ralph` 工具交给模型：一个固定的前台工作流，把一个不可变目标依次交给多个全新子 agent（智能体），每个子 agent 都没有对话种子，只携带上一份有界报告。它是构建在工作流与 subagent 能力之上的专用编排策略——不会向 agent loop 添加 Ralph 模式，同会话的 goal 领域也保持独立。调用在 worker 报告完成或具体阻塞、或达到 Round 上限时返回；完成与阻塞都是 worker 报告，不是独立认证。仅当直接用户明确要求 Ralph 循环或全新 agent 迭代执行时使用它；普通的长期同会话目标属于 goal 工具，有界委派属于 subagent 或工作流。
+`ralph` 针对一个不可变目标运行由多个全新子 agent 组成的前台序列，每个 Round 只接收上一份有界报告与共享工作区状态。它会在 worker 报告完成或具体阻塞，或达到配置的 Round 上限时返回；这些报告不会得到独立验证。父级对话与先前子 agent 会话绝不会复制到新的 Round。仅当直接用户明确要求 Ralph 式全新 agent 迭代时使用它；普通的长期工作请使用 goal 工具，有界委派请使用 subagent 或工作流。
 
 ## 目录
 
@@ -44,7 +44,7 @@ kind: "package-reference"
 | `maxHandoffChars` | `16384` | 一份 Round 报告序列化后的最大字符数。 |
 | `maxResultChars` | `16384` | 返回给父级的完整成功结果最大字符数。 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-ralph)是每个受支持字段的穷尽式真源。配置的提供方必须存在、支持结构化输出，并报告 `inheritsParentContext: false`；针对违反此要求的提供方的调用会在任何 Round 开始前响亮失败。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-ralph)是每个受支持字段的穷尽式真源。配置的提供方必须存在、支持结构化输出，并报告 `inheritsParentContext: false`；针对违反此要求的提供方发起调用时，会在任何 Round 开始前直接报错。
 
 -----
 
@@ -70,7 +70,7 @@ kind: "package-reference"
 
 ### 生命周期与取消
 
-调用方 agent 是每个全新子 agent 的父级，因此会保留 cwd 与谱系，但不会复制其对话。`exec.signal` 进入工作流引擎，同时也桥接到 `run.cancel()`，以便不依赖具体实现。工具等待 `run.result` 并在 `finally` 中调用 `run.dispose()`，因此被取消的父级步骤会等到引擎完成有界终止且子 agent 完全停稳后才返回。
+调用方 agent 是每个全新子 agent 的父级，因此会保留 cwd 与谱系，但不会复制其对话。`exec.signal` 进入工作流引擎，同时也桥接到 `run.cancel()`，以便不依赖具体实现。工具等待 `run.result` 并在 `finally` 中调用 `run.dispose()`，因此被取消的父级步骤会等到进程与子 agent 清理完成后才返回。PTC 引擎不设整体工作流经过时间截止；调用方取消仍然生效。
 
 ### 渲染意图
 
@@ -81,7 +81,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：固定脚本、提供方路由、报告校验、工具注册 |
-| — | 不发布运行时不变式伴生入口；工作流与 subagent 归属方校验它启动的运行与子 agent。 |
+| — | 不发布运行时不变式伴生入口；该面向模型的编排适配器不拥有独立事件流；工作流与 subagent 归属方会校验该适配器启动的运行及其子 agent 生命周期。 |
 
 </details>
 
@@ -92,10 +92,10 @@ kind: "package-reference"
 
 当工具级契约不够用时阅读以下页面。它们从共享工作流模型逐步进入引擎、subagent seam 与相邻的 goal 领域。
 
-- [工作流子系统](../../../docs/subsystems/workflow.zh.md)——固定循环背后的 seam 契约。
+- [工作流子系统](../../../docs/subsystems/workflow.zh.md)——固定循环背后的 seam 约定。
 - [工作流 seam](../workflow/README.zh.md)——运行与结果词汇。
-- [worker-thread 引擎](../workflow-worker-thread/README.zh.md)——执行固定脚本的引擎。
-- [subagent seam](../../subagent/subagent/README.zh.md)——全新子 agent 的提供方契约。
+- [PTC 工作流引擎](../workflow-ptc/README.zh.md)——执行固定脚本的引擎。
+- [subagent seam](../../subagent/subagent/README.zh.md)——全新子 agent 的提供方约定。
 - [goal 组](../../goal/goal/README.zh.md)——面向普通长期目标的同会话 goal 工具。
 - [Harness 层目标式执行 Agent Note](../../../.agents/notes/implemented/feature/2026-07-16-harness-level-loop.zh.md)——策略、提供方要求与暂缓事项。
 
@@ -142,7 +142,7 @@ Use the ralph tool ONLY when the direct human explicitly asks for a Ralph loop o
 
 #### 模型看到什么
 
-每个子 agent 都会看到独立的固定 Round 提示词与结构化输出捕获契约。父级只看到原始调用与一个终态结果，其中包含 worker 报告的状态、Round 数量与美化打印的最终报告；中间子 agent 消息与报告不会进入父级对话。普通子 agent 失败时改为产生错误，其中包含对应 Round 编号；从第二个 Round 起，还会包含上一次成功交接。
+每个子 agent 都会看到独立的固定 Round 提示词与结构化输出捕获约定。父级只看到原始调用与一个终态结果，其中包含 worker 报告的状态、Round 数量与美化打印的最终报告；中间子 agent 消息与报告不会进入父级对话。普通子 agent 失败时改为产生错误，其中包含对应 Round 编号；从第二个 Round 起，还会包含上一次成功交接。
 
 #### Token 影响
 

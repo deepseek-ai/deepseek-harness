@@ -1,6 +1,9 @@
 .rail {
   min-width: 0;
-  padding: 4px 12px 0;
+  padding: 2px 10px 0;
+  /* The card's flex gap (12px) separates every row pair; the thumbnails sit
+     closer to the draft text than the other rows, so pull back 6 here. */
+  margin-bottom: -6px;
 }
 
 .imageItem {

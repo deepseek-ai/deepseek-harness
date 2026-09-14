@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/web/web-search-perplexity/README.md
 README.md: 21754cea3aeb7e288a8fa085bc5561a25144d6c7
-README.zh.md: 8c078345a341d5fc394f86b57bc7369d9c999bfc
+README.zh.md: 03ee456cc1d5288c0f5b45a7da03cd6e7c098107

@@ -2,9 +2,10 @@
  * Tests for the mcp-client plugin's `apply` lifecycle entry point.
  * Isolated file so vi.mock of the MCP SDK doesn't pollute other test suites.
  */
+import assert from 'node:assert/strict'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
@@ -18,40 +19,32 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
   const mockClose = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
   const mockCallTool = vi.fn<(
-    _params?: Record<string, unknown>, _compatibilitySchema?: unknown, _options?: unknown,
+    _params?: Record<string, unknown>, _options?: unknown,
   ) => Promise<unknown>>()
   const mockSetNotificationHandler = vi.fn()
-  const mockRequest = vi.fn(async (
-    request: { method: string; params?: Record<string, unknown> },
-    _schema: unknown,
-    options?: unknown,
-  ): Promise<unknown> => {
-    if (request.method === 'tools/list') return await mockListTools(request.params)
-    if (request.method === 'tools/call') return await mockCallTool(request.params, undefined, options)
-    throw new Error(`unexpected MCP request: ${request.method}`)
-  })
   class MockClient {
+    transport = {}
     connect = mockConnect
     ping = (): Promise<void> => Promise.resolve()
     close = mockClose
     listTools = mockListTools
     callTool = mockCallTool
-    request = mockRequest
-    setNotificationHandler = mockSetNotificationHandler
+    constructor(_info: unknown, options: { listChanged: { tools: { onChanged: () => void } } }) {
+      mockSetNotificationHandler('notifications/tools/list_changed', options.listChanged.tools.onChanged)
+    }
+    getServerCapabilities = () => ({ tools: {} })
+    getInstructions(): string | undefined { return undefined }
   }
   return { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient }
 })
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
+vi.mock('@modelcontextprotocol/client', () => ({
   Client: MockClient,
-}))
-
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
-  StdioClientTransport: vi.fn(),
-}))
-
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
   StreamableHTTPClientTransport: vi.fn(),
+}))
+
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
+  StdioClientTransport: vi.fn(),
 }))
 
 // vi.mock is hoisted above static imports, so the module under test sees the
@@ -175,6 +168,22 @@ describe('apply (plugin lifecycle)', () => {
     ctx = await mountRegistry()
   })
 
+  it.each([undefined, '', ' \n\t'])(
+    'connects without attributed prompt text when server instructions are absent or blank (%j)', async (instructions) => {
+      const spy = vi.spyOn(MockClient.prototype, 'getInstructions').mockReturnValue(instructions)
+      try {
+        await apply(ctx, {
+          ...stdioConfig, failOnStartupError: true, reconnect: { enabled: false }, maxInstructionBytes: 1,
+        })
+        expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
+        expect(renderPrompt(await ctx.systemPrompt.assemble())).not.toContain('### MCP server:')
+      } finally {
+        spy.mockRestore()
+        await ctx.fiber.dispose()
+      }
+    },
+  )
+
   it('connects, syncs tools under the namespace, and registers a notification handler', async () => {
     await apply(ctx, stdioConfig)
 
@@ -210,6 +219,29 @@ describe('apply (plugin lifecycle)', () => {
 
     await expect(apply(ctx, stdioConfig)).rejects.toThrow(/serverName "srv" is already in use/)
     expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
+  })
+
+  it('closes the transport when its owner unloads during initial connection', async () => {
+    const connecting: PromiseWithResolvers<void> = Promise.withResolvers()
+    mockConnect.mockImplementation(() => connecting.promise)
+    mockClose.mockImplementation(function (this: { onclose?: () => void }) {
+      this.onclose?.()
+      connecting.resolve()
+      return Promise.resolve()
+    })
+    const fiber = ctx.plugin({ name: 'mcp-pending-startup', inject, apply }, { ...stdioConfig, reconnect: { enabled: false } })
+    const activation = Promise.resolve(fiber).catch((error: unknown) => error)
+    try {
+      await vi.waitFor(() => { expect(mockConnect).toHaveBeenCalledTimes(1) })
+      await fiber.dispose()
+      await activation
+      expect(mockClose).toHaveBeenCalledTimes(1)
+      expect(mockListTools).not.toHaveBeenCalled()
+      expect(ctx.tools.schemas()).toEqual([])
+    } finally {
+      connecting.resolve()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('allows one serverName in each independent registration scope', async () => {
@@ -318,8 +350,8 @@ describe('apply (plugin lifecycle)', () => {
       execute: async () => 'foreign',
     })
     mockConnect.mockImplementation(async () => {
-      const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-      await handler()
+      const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+      handler()
     })
 
     await expect(apply(ctx, {
@@ -342,21 +374,21 @@ describe('apply (plugin lifecycle)', () => {
       nextCursor: undefined,
     })
 
-    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-    await handler()
+    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    handler()
 
-    expect(ctx.tools.get('mcp__srv__remote')).toBeUndefined()
-    expect(ctx.tools.get('mcp__srv__updated')).toBeDefined()
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__updated')).toBeDefined() })
   })
 
   it('keeps the previous generation when a re-sync fails', async () => {
     await apply(ctx, stdioConfig)
     expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
 
+    const reported = vi.spyOn(ctx.logger, 'error')
     mockListTools.mockRejectedValue(new Error('flaky server'))
-    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-    // Must not reject (contained), and must keep the last good generation.
-    await handler()
+    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    handler()
+    await vi.waitFor(() => { expect(reported).toHaveBeenCalledWith(expect.stringContaining('flaky server')) })
 
     expect(ctx.tools.get('mcp__srv__remote')).toBeDefined()
   })
@@ -372,9 +404,9 @@ describe('apply (plugin lifecycle)', () => {
       tools: [{ name: 'updated', inputSchema: { type: 'object' } }],
       nextCursor: undefined,
     })
-    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => Promise<void>
-    await handler()
-    expect(ctx.tools.get('mcp__srv__updated')).toBeDefined()
+    const handler = mockSetNotificationHandler.mock.calls[0]![1] as () => void
+    handler()
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__updated')).toBeDefined() })
 
     await fiber.dispose()
     await sleep(50)
@@ -415,5 +447,39 @@ describe('apply (plugin lifecycle)', () => {
 
     expect(mockConnect).toHaveBeenCalled()
     expect(ctx.tools.get('mcp__web__remote')).toBeDefined()
+  })
+})
+
+
+describe('server instruction limits', () => {
+  it('counts the complete attributed UTF-8 text before publishing tools', async () => {
+    const ctx = await mountRegistry()
+    const text = '服务器指南'
+    const spy = vi.spyOn(MockClient.prototype, 'getInstructions').mockReturnValue(text)
+    const exactBytes = Buffer.byteLength(`### MCP server: srv\n\n${text}`)
+    try {
+      const failure: unknown = await apply(ctx, {
+        ...stdioConfig, failOnStartupError: true, reconnect: { enabled: false },
+        maxInstructionBytes: exactBytes - 1,
+      }).catch((error: unknown) => error)
+      assert(failure instanceof Error)
+      assert(failure.cause instanceof Error)
+      expect(failure.cause.message).toContain('server instructions exceed maxInstructionBytes')
+      expect(ctx.tools.schemas()).toEqual([])
+    } finally {
+      spy.mockRestore()
+      await ctx.fiber.dispose()
+    }
+    const valid = await mountRegistry()
+    const validSpy = vi.spyOn(MockClient.prototype, 'getInstructions').mockReturnValue(text)
+    try {
+      await apply(valid, {
+        ...stdioConfig, failOnStartupError: true, reconnect: { enabled: false },
+        maxInstructionBytes: exactBytes,
+      })
+    } finally {
+      validSpy.mockRestore()
+      await valid.fiber.dispose()
+    }
   })
 })

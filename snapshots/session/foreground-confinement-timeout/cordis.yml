@@ -1,0 +1,10 @@
+# Bound foreground preparation before any native process is allocated.
+- id: subprocess
+  disabled: true
+
+- id: sandbox
+  disabled: true
+
+- insert:
+    - id: pending-confinement-fixture
+      name: '../../../packages/shell/bash-sandbox/tests/fixtures/pending-confinement.ts'

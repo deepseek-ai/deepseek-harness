@@ -1,0 +1,7 @@
+version: 1
+scenario: bash-startup-timeout
+profile: headless
+composition: default
+recording: authored
+header:
+  class: default

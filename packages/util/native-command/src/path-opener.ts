@@ -10,7 +10,8 @@
  */
 
 import { release as osRelease } from 'node:os'
-import { extname } from 'node:path'
+import { dirname, extname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { runNativeCommand, type NativeCommandRunner } from './runner.ts'
 
 /** Testable command boundary; native implementations never invoke a shell. */
@@ -200,4 +201,63 @@ export function openNativeTextFile(
   internals: PathOpenerInternals = {},
 ): Promise<void> {
   return openNativePathWithIntent(path, signal, 'text-editor', internals)
+}
+
+/** File-manager behavior available on the serving Host, including WSL's Windows desktop. */
+export type NativeFileManager = 'finder' | 'explorer' | 'directory'
+
+/**
+ * Identify the native file-manager action without inspecting the browser's platform.
+ * @param internals - platform and WSL facts.
+ * @returns the supported file-manager action, or null on unsupported platforms.
+ */
+export function nativeFileManager(internals: PathOpenerInternals = {}): NativeFileManager | null {
+  const platform = internals.platform ?? process.platform
+  if (platform === 'darwin') return 'finder'
+  if (platform === 'win32' || (platform === 'linux' && isWsl(internals))) return 'explorer'
+  return platform === 'linux' ? 'directory' : null
+}
+
+/**
+ * Reveal a file in Finder or Explorer, or open its parent in the Linux default file manager.
+ * @param path - absolute file path already authorized by the caller.
+ * @param signal - caller lifetime; abort terminates the native command.
+ * @param internals - platform, environment, and command runner for adapter tests.
+ * @returns after command completion; Explorer exit 1 is accepted as a delegated handoff, not proof of selection.
+ */
+export async function revealNativePath(
+  path: string, signal: AbortSignal, internals: PathOpenerInternals = {},
+): Promise<void> {
+  signal.throwIfAborted()
+  const platform = internals.platform ?? process.platform
+  const run = internals.run ?? runNativeCommand
+  const manager = nativeFileManager({ ...internals, platform })
+  if (manager === 'finder') {
+    await run('open', ['-R', path], signal)
+    return
+  }
+  if (manager === 'explorer') {
+    let windowsPath = path
+    if (platform === 'linux') {
+      const translated = await run('wslpath', ['-w', path], signal)
+      signal.throwIfAborted()
+      windowsPath = translated.stdout.replace(/[\r\n]+$/, '')
+      if (windowsPath === '') throw new Error('wslpath returned no Windows path')
+    }
+    // Explorer parses commas itself; a file URI preserves commas and whitespace in the path.
+    const target = pathToFileURL(windowsPath, { windows: true }).href.replaceAll(',', '%2C')
+    try {
+      await run('explorer.exe', ['/select,', target], signal)
+    } catch (error) {
+      signal.throwIfAborted()
+      // Explorer can exit 1 after delegating to the existing desktop process.
+      if (!(error instanceof Error) || !('code' in error) || error.code !== 1) throw error
+    }
+    return
+  }
+  if (manager === 'directory') {
+    await run('xdg-open', [dirname(path)], signal)
+    return
+  }
+  throw new Error(`native file manager is unsupported on ${platform}`)
 }

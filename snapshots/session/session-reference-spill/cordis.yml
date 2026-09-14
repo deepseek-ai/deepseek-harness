@@ -11,3 +11,10 @@
         maxReferenceBytes: 360
     - id: reference-source-fixture
       name: ../../../packages/context/session-reference/tests/fixtures/source-session.ts
+
+- insert:
+    - id: snapshot-spill-locators
+      name: ../../../scripts/snapshot-spill-locators.ts
+      config:
+        root: !!js process.env.DSH_SNAPSHOT_SPILL_ROOT
+        locatorRoot: !!js process.env.DSH_SNAPSHOT_SPILL_LOCATOR_ROOT

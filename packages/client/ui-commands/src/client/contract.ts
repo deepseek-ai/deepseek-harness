@@ -1,10 +1,12 @@
 /**
  * Frozen contract of the client command surface. Types only. The
  * CommandUiRuntime (`ctx.commandUi`) implements this face; business packages
- * consume `register` alone.
+ * consume its registration and dismissal operations.
  */
+import type { ComponentType } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
+import type { IconProps } from '@deepseek-ai/dsh-client-ui-primitives'
 
 /** Copy for an option that must be acknowledged before onSelect can run. */
 export interface SelectConfirmation {
@@ -19,6 +21,8 @@ export interface SelectConfirmation {
 export interface SelectOption {
   readonly id: string
   readonly label: string
+  /** Optional short marker rendered as a superscript beside the label. */
+  readonly badge?: string
   readonly detail?: string
   readonly active?: boolean
   /** Optional in-page risk gate owned by the shared popup shell. */
@@ -31,26 +35,48 @@ export interface SelectOption {
  * The shell component is owned by ui-commands; business never sees it. Both
  * callbacks receive the ClientSessionContext captured at popup open.
  */
-export type CommandUiSpec = {
+export interface PopupSelectSpec {
   readonly kind: 'popupSelect'
   options(session: ClientSessionContext, signal: AbortSignal): Promise<readonly SelectOption[]>
   onSelect(option: SelectOption, session: ClientSessionContext): void | Promise<void>
 }
 
 /**
+ * Business registration for the action command kind: a bare invocation
+ * consumes the trigger token and runs one client-side callback. It submits nothing, so an
+ * attachment-carrying draft never refuses it.
+ */
+export interface ActionSpec {
+  readonly kind: 'action'
+  /**
+   * Run the action for one session.
+   * @param session - the ClientSessionContext captured at invocation.
+   */
+  run(session: ClientSessionContext): void
+}
+
+/** The UI behavior of a contribution or decoration. */
+export type CommandUiSpec = PopupSelectSpec | ActionSpec
+
+/**
  * One client-owned command contribution: a slash-menu entry whose behavior
  * lives entirely on the client (no host descriptor). Merged with the host
  * catalog by name — a collision with a host command fails loud at candidate
- * synthesis, never shadows.
+ * synthesis, never shadows. Row copy is read on every candidate pass, so a
+ * locale change reaches the next menu open without re-registration.
  */
 export interface CommandContribution {
   /** Command name without the leading slash (unique across contributions). */
   readonly name: string
-  /** Menu row description. */
-  readonly description: string
+  /** Localized menu row title; the name itself when absent. */
+  label?(): string
+  /** Localized menu row description; the row shows none when absent. */
+  description?(): string
+  /** Menu row glyph from the shared icon set. */
+  readonly icon?: ComponentType<IconProps>
   /** Capability filter, called with a fresh projection per candidate pass. */
   available(session: ClientSessionContext): boolean
-  /** The command's UI behavior (this phase: popupSelect only). */
+  /** The command's UI behavior. */
   readonly ui: CommandUiSpec
 }
 
@@ -68,7 +94,7 @@ export interface CommandDecoration {
   readonly name: string
   /** Capability filter, called with a fresh projection per bare invocation. */
   available(session: ClientSessionContext): boolean
-  /** The bare-invocation UI (this phase: popupSelect only). */
+  /** The bare-invocation UI. */
   readonly ui: CommandUiSpec
 }
 
@@ -84,6 +110,8 @@ export interface CommandUiContract {
    * Duplicate names throw at registration.
    */
   decorate(decoration: CommandDecoration): () => void
+  /** Close this command's open popups and confirmations without consuming composer drafts. */
+  dismiss(name: string): void
   /** Resolve the per-session popup controller for one session scope (wiring/overlay layer). */
   popupFor(actx: ClientContext): unknown
 }

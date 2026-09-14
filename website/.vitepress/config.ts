@@ -218,8 +218,7 @@ const wordmark = readFileSync(resolve(import.meta.dirname, '../public/wordmark.s
   .replace('<svg ', '<svg class="dsh-wordmark" ')
 
 /**
- * Styles the default theme does not provide, carried inline because the site
- * runs the stock theme with no theme directory of its own.
+ * Head-injected styles for the site identity and sidebar scrollbar.
  *
  * The navigation-bar lockup pairs with `siteTitle`. The scrollbar rules replace
  * the sidebar's platform bar, which reserves 15px of a 265px column and draws a

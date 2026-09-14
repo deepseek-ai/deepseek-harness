@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The schedule group provides session-local reminders for a running conversation: ask the agent to remind you later, at an absolute time, or on a fixed interval, and each reminder arrives as an ordinary message in the same conversation when it comes due. Its host package owns the three management tools and can publish the complete active-record set through the optional Session projection registry. The separate [`ui-schedule`](../client/ui-schedule/README.md) browser plugin renders that projection as a read-only current-state catalog, while [`ui-workspace`](../client/ui-workspace/README.md) marks ordinary and search rows whose best-effort list value is non-empty. That marker reports cached active state, not a live runtime guarantee. Reminders survive restarts but stay inside the session: there is no email, SMS, or push notification. This page maps the group; each package README owns its contract.
+The schedule group lets an agent create, list, and cancel reminders for the current conversation. Reminders can run after a delay, at an absolute time, or on a fixed interval; when due, they arrive as ordinary messages in that conversation. They survive restarts, but never leave the session or send email, SMS, or push notifications. The group's package provides reminder management and delivery. Optional browser packages show the current reminder catalog and mark conversations with known active reminders; those indicators reflect cached state and may lag the running session.
 
 ## Table of Contents
 

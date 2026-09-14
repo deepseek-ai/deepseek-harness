@@ -98,6 +98,8 @@ export const launchDetachedApp: OpenInAppLauncher = (command, args, options) =>
 /** Injectable platform facts for deterministic tests. */
 export interface OpenInAppInternals {
   platform?: NodeJS.Platform
+  /** SSH launch fact from the inherited process layer, independent of `.env` values. */
+  ssh?: boolean
   /** Bundle-directory roots replacing `/Applications` and `~/Applications`. */
   applicationRoots?: readonly string[]
   /** Environment for `${VAR}`/`%VAR%` expansion in candidates and registry values. */
@@ -113,6 +115,7 @@ export interface OpenInAppInternals {
 /** Platform facts after the one explicit defaulting step at each public entry. */
 export interface ResolvedInternals {
   platform: NodeJS.Platform
+  ssh: boolean
   applicationRoots: readonly string[]
   env: Readonly<Record<string, string | undefined>>
   home: string
@@ -137,6 +140,7 @@ export function resolveInternals(internals: OpenInAppInternals): ResolvedInterna
   }
   return {
     platform: internals.platform ?? osPlatform(),
+    ssh: internals.ssh ?? false,
     applicationRoots: internals.applicationRoots ?? ['/Applications', join(home, 'Applications')],
     env: internals.env ?? process.env,
     home,
@@ -617,12 +621,13 @@ async function locate(
  * @param app - catalog entry.
  * @param probeTimeoutMs - per-command deadline for resolution host commands.
  * @param internals - platform and runner hooks for deterministic tests.
- * @returns the verified launch, or null when the entry is not installed here.
+ * @returns the verified launch, or null during SSH launches or when the entry is not installed here.
  */
 export async function resolveLaunch(
   app: OpenInAppApp, probeTimeoutMs: number, internals: OpenInAppInternals = {},
 ): Promise<OpenInAppResolvedLaunch | null> {
   const resolved = resolveInternals(internals)
+  if (resolved.ssh) return null
   return resolveWithRegistry(app, probeTimeoutMs, new RegistryViewOnce(probeTimeoutMs, resolved), resolved)
 }
 
@@ -648,6 +653,7 @@ async function resolveWithRegistry(
  * The returned map is the mutable authority the caller owns — the routes
  * serve its keys and launch from its values, and a stale entry is replaced
  * or removed in place after an `ENOENT` launch.
+ * An SSH launch returns an empty map without probing.
  * @param probeTimeoutMs - per-command deadline for resolution host commands.
  * @param internals - platform and runner hooks for deterministic tests.
  * @returns catalog id to verified launch, in catalog order.
@@ -656,6 +662,9 @@ export async function resolveOpenInAppApps(
   probeTimeoutMs: number, internals: OpenInAppInternals = {},
 ): Promise<Map<string, OpenInAppResolvedLaunch>> {
   const resolved = resolveInternals(internals)
+  if (resolved.ssh) {
+    return new Map()
+  }
   const registry = new RegistryViewOnce(probeTimeoutMs, resolved)
   const entries = await Promise.all(OPEN_IN_APP_CATALOG.map(async app =>
     [app.id, await resolveWithRegistry(app, probeTimeoutMs, registry, resolved)] as const))

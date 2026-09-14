@@ -51,7 +51,7 @@ async function harness(withPersistence = true): Promise<ToolHarness> {
   await ctx.plugin(SystemPrompt, {})
   await ctx.plugin(ToolRuntime)
   const agent = stubAgent(ctx, `schedule-tools-${Math.random()}`)
-  ctx.agents.register(agent)
+  await ctx.agents.register(agent)
   const flushes = { count: 0, outcomes: [] as Array<'resolve' | 'reject' | Promise<'resolve' | 'reject'>> }
   if (withPersistence) {
     ctx.on('session/flush', async () => {
@@ -550,7 +550,7 @@ describe('Schedule persistence failure boundaries', () => {
     stop()
 
     const other = stubAgent(test.ctx, `other-${Math.random()}`)
-    test.ctx.agents.register(other)
+    await test.ctx.agents.register(other)
     expect(value(await execute(test, 'schedule_create', { prompt: 'x', after_seconds: 1 }, other)))
       .toEqual({ code: 'internal_error', message: 'The schedule operation failed.' })
     expect(value(await execute(test, 'schedule_list', {}, other)))

@@ -82,6 +82,22 @@ declare module '@deepseek-ai/cordis' {
   interface Context {
     compaction: CompactionEngine
   }
+  interface Events {
+    /**
+     * Recover a failed summary request by synchronously recording a durable
+     * change to its selected input. Return true only after making progress;
+     * the provider re-derives and re-prices the selection before retrying.
+     * Call next() when the failure cannot be recovered. Decisions survive a
+     * later summary failure or cancellation.
+     * @param payload.session - session containing the selected input.
+     * @param payload.sourceEventSeqs - selected message events in request order.
+     * @param payload.error - failure thrown by the summarizer.
+     * @param payload.signal - optional compaction cancellation signal.
+     * @param next - delegate to the next recovery listener.
+     * @mode waterfall
+     */
+    'compaction/summary-error'(payload: { session: Session; sourceEventSeqs: readonly SessionSeq[]; error: unknown; signal?: AbortSignal }, next: () => boolean): boolean
+  }
 }
 
 /**

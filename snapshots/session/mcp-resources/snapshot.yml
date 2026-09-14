@@ -1,0 +1,8 @@
+version: 1
+scenario: mcp-resources
+profile: headless
+composition: mcp-resources
+recording: live
+header:
+  class: mcp-resources
+  pin: true

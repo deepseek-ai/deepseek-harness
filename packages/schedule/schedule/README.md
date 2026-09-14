@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-schedule` gives your session durable reminders: ask the model to remind you later, and the reminder comes back as an ordinary follow-up message in the same conversation. You can schedule a one-time reminder after a delay or at an absolute time, or a repeating reminder on a fixed interval, and you can list what is still pending or cancel a reminder. Reminders survive restarts: an already-live idle agent can deliver due work immediately, while a closed or cold session keeps it overdue until a future live root agent resumes the session. Delivery stays inside the session, with no email, SMS, or push notification. It is an opt-in Web capability; load the Schedule overlay to enable the reminder tools and read-only active-reminder catalog. Ordinary and search sidebar rows also show a non-interactive alarm when their best-effort list projection is known to be non-empty; the alarm does not promise a live runtime.
+Schedule lets you ask the model for durable reminders that return as ordinary follow-up messages in the same conversation. Create one-time reminders for a delay or absolute time, repeat them at fixed intervals, list pending reminders, and cancel them. Reminders survive restarts, but delivery requires a live root agent: closed sessions keep reminders overdue until resumed. Delivery never uses email, SMS, push, or browser notifications. Enable the Schedule overlay to expose the reminder tools and active-reminder catalog; sidebar alarms are best-effort indicators of known active reminders, not proof that reminder delivery is currently running.
 
 ## Table of Contents
 
@@ -94,7 +94,7 @@ The package rests on one separation and three commitments:
 | [`src/projection.ts`](src/projection.ts) | Optional seed-aware Session projection and strict checkpoint schema |
 | [`src/client.ts`](src/client.ts) | Browser-safe type-only `ScheduleRecord` export |
 | [`src/transaction.ts`](src/transaction.ts) | Agent-scoped serialization for reads and durable mutations |
-| [`src/invariant.ts`](src/invariant.ts) | `./invariant` companion applying replay policy to existing logs and candidate events |
+| [`src/invariant.ts`](src/invariant.ts) | `schedule-invariant` companion at `./invariant`, applying replay policy to existing logs and candidate events |
 
 ### Durable state and replay
 

@@ -770,7 +770,7 @@ describe('Session history raw journal', () => {
       content: [{ type: 'text', text: '<context_checkpoint>summary</context_checkpoint>' }],
       source: { kind: 'plugin', plugin: 'compact' },
     }), {
-      surfaceOp: { op: 'replace', start: shadowedStart, end: shadowedEnd },
+      surfaceOp: { op: 'replace', startSeq: shadowedStart, endSeq: shadowedEnd },
       sourceEventSeqs: [...shadowed, summary.seq],
     })
 

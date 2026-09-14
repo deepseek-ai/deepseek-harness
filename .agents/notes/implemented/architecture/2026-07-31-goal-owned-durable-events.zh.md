@@ -30,4 +30,4 @@ Goal 领域需要持久状态，但不需要拥有待处理的模型输入。继
 
 Goal 状态不依赖 inbox 放置与准入。回放只有一条变更路径，投影直接由 `goal/change` 推进，继续执行消息只携带 Round 归属。模型不会收到仅用于变更的 `<goal_state>` 消息；模型可见状态来自 goal 工具与已调度的继续执行提示词。直接写入会话的写入方仍受信任，并且可以追加畸形变更；严格折叠与 invariant 配套模块会拒绝这些变更。
 
-聚焦的 goal、goal-round-driver、command、TUI 与 client fixture（测试前置数据）测试固定持久回放、正数 Round 计数、inbox 独立性、投影更新和恢复会话行为。无密钥进程测试检查持久的 `goal/change` 事件，并验证仅创建 goal 不会启动继续执行 Round。
+聚焦的 goal、goal-round-driver、command、TUI 与 Client RemoteMock 测试固定持久回放、正数 Round 计数、inbox 独立性、投影更新和恢复会话行为。无密钥进程测试检查持久的 `goal/change` 事件，并验证仅创建 goal 不会启动继续执行 Round。

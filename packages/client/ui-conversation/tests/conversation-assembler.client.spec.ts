@@ -1291,7 +1291,7 @@ describe('ConversationNodeAssembler', () => {
   it('carries explicit coordinates across coordinate-free events in a partial window and live tail', () => {
     const definition: ConversationNodeDefinition<null> = {
       kind: 'location-probe',
-      match: event => (event.type as string) === 'tool/code-dispatch-start'
+      match: event => (event.type as string) === 'tool/ptc-dispatch-start'
         ? { id: String(event.seq), role: 'start' }
         : null,
       start: () => null,
@@ -1310,11 +1310,11 @@ describe('ConversationNodeAssembler', () => {
     )
     assembler.replaceWindow([
       input(at(SessionSeq(10), 'tool/call', { turn: 2, step: 3, callId: 'root', name: 'x', arguments: '{}' })),
-      input(at(SessionSeq(11), 'tool/code-dispatch-start', { rootCallId: 'root', subCallId: 'a' })),
+      input(at(SessionSeq(11), 'tool/ptc-dispatch-start', { rootCallId: 'root', subCallId: 'a' })),
     ], true)
     assembler.flush()
 
-    assembler.append(input(at(SessionSeq(12), 'tool/code-dispatch-start', { rootCallId: 'root', subCallId: 'b' })))
+    assembler.append(input(at(SessionSeq(12), 'tool/ptc-dispatch-start', { rootCallId: 'root', subCallId: 'b' })))
     assembler.flush()
 
     expect([...testSnapshot(assembler)?.nodes.values() ?? []].map(value => value.data))

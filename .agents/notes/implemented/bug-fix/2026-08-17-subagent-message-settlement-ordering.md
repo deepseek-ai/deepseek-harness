@@ -6,7 +6,7 @@ English | [中文](2026-08-17-subagent-message-settlement-ordering.zh.md)
 
 ## Problem
 
-A continuable child can send selected content and later produce an unconditional manager-authored settlement notice. If those two messages enter queues with different claim priority, the later settlement notice can reach the parent model before the earlier child message. The first step of a turn claims the complete `next-step` batch before one `next-turn` message, so mixing a FIFO later-turn send with a next-step settlement reverses causal order. [Issue #2600](https://github.com/deepseek-harness/deepseek-harness/issues/2600) records the defect.
+A continuable child can send selected content and later produce an unconditional manager-authored settlement notice. If those two messages enter queues with different claim priority, the later settlement notice can reach the parent model before the earlier child message. The first step of a turn claims the complete `next-step` batch before one `next-turn` message, so mixing a FIFO later-turn send with a next-step settlement reverses causal order. Issue #2600 records the defect.
 
 The child instruction says to send a finding whenever it changes what the parent should do next. Deferring that message to a later turn contradicts its scheduling meaning and separates causally ordered messages across queues with different claim priority.
 

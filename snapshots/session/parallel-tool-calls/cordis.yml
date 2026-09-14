@@ -11,3 +11,10 @@
   name: '@deepseek-ai/dsh-spill-policy'
   config:
     maxInlineBytes: !!js process.env.DSH_SNAPSHOT && 800 || 50000
+
+- insert:
+    - id: snapshot-spill-locators
+      name: ../../../scripts/snapshot-spill-locators.ts
+      config:
+        root: !!js process.env.DSH_SNAPSHOT_SPILL_ROOT
+        locatorRoot: !!js process.env.DSH_SNAPSHOT_SPILL_LOCATOR_ROOT

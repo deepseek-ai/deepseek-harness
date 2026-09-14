@@ -34,7 +34,7 @@ import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import type { DshManifest, DshModuleFallbackManifest, ProfilePatchReload } from '@deepseek-ai/dsh-package-manifest'
+import type { DshPackageManifest, ProfilePatchReload } from '@deepseek-ai/dsh-package-manifest'
 import { resolve as resolvePackage, type Package as ResolvePackageManifest } from 'resolve.exports'
 import { loadOverlayPatches } from './index.ts'
 
@@ -55,13 +55,8 @@ export interface ProfileTemplate {
   patchReload: ProfilePatchReload
 }
 
-/** The slice of package.json both profiles and bundles use. */
-export interface ProfileManifest {
-  name?: string
-  dependencies?: Record<string, string>
-  peerDependencies?: Record<string, string>
-  dsh?: DshManifest
-}
+/** Package metadata accepted by the profile reader; local profiles need no published identity. */
+export type ProfileManifest = Partial<DshPackageManifest>
 
 /** One resolved bundle layer of a profile. */
 export interface ProfileLayer {
@@ -308,7 +303,7 @@ interface ModuleProxyManifest {
   private: true
   type: 'module'
   exports: Record<string, string>
-  dsh: { moduleFallback: DshModuleFallbackManifest }
+  dsh: { moduleFallback: { targets: Record<string, string> } }
 }
 
 interface ModuleProxyRecord {

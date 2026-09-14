@@ -261,26 +261,6 @@
       }
     },
     {
-      "name": "ralph",
-      "description": "Run a foreground fresh-agent Ralph loop toward one immutable objective. Use only when the direct human explicitly asks for Ralph or fresh-agent iteration. Each round opens a new child with no parent conversation or prior child session; the shared workspace is long-term memory, and only a bounded structured report crosses rounds. The call returns when a worker reports completion or a concrete blocker, or at the round limit. Ordinary long-running same-session work belongs to goal tools.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "objective": {
-            "type": "string",
-            "description": "The immutable completion objective for every fresh Ralph round."
-          },
-          "maxRounds": {
-            "type": "number",
-            "description": "Optional positive safe-integer round cap, bounded by the deployment ceiling."
-          }
-        },
-        "required": [
-          "objective"
-        ]
-      }
-    },
-    {
       "name": "read",
       "description": "Read a UTF-8 text file and return line-numbered content.",
       "parameters": {

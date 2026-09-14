@@ -82,7 +82,7 @@ async function commandHarness(
     followup: vi.fn(),
     cancel,
   } as unknown as Agent
-  ctx.agents.register(agent)
+  await ctx.agents.register(agent)
   ctx.provide('workspaceRegistry', { get: () => undefined, list: () => [] } as never)
   ctx.provide('agentDefaultModel', {
     currentSelection: () => ({ provider: 'fixture', model: 'fixture-model' }),
@@ -133,6 +133,14 @@ describe('Session queue commands', () => {
         }],
       },
     })), 'session/attachment-invalid')
+    for (const content of [[], [{ type: 'text' as const, text: ' \t\n' }]]) {
+      await expectFailure(Promise.resolve().then(() => controller.updateQueue({
+        sessionId: agent.id,
+        itemId: queued.id,
+        action: { kind: 'edit', content },
+      })), 'gateway/bad-request')
+    }
+    expect(inbox.nextTurn[0]?.content).toEqual([{ type: 'text', text: 'queued' }])
     await expectFailure(Promise.resolve().then(() => controller.updateQueue({
       sessionId: SessionId('missing'), itemId: queued.id, action: { kind: 'remove' },
     })), 'session/queue-item-not-found')
@@ -317,21 +325,24 @@ describe('Session attachment authorization', () => {
     const message = imageRef('message')
     const inserted = imageRef('inserted')
     const streamed = imageRef('streamed')
-    const events = [
+    const events: SessionEvent[] = [
       { ...event('fixture/direct', SessionSeq(0), {
         content: [null, [], { type: 'tool-result', content: [{ type: 'text', text: 'none' }] }, {
           type: 'tool-result', content: [{ type: 'image', attachment: nested }],
         }],
       }), ignorable: true as const },
-      { ...event('assistant/message', SessionSeq(1), {
-        turn: 1,
-        step: 1,
-        stream: [],
-        message: createAssistantMessage({
-          content: [{ type: 'image', attachment: message }],
-          source: { provider: 'fixture', model: 'fixture' },
-        }),
-      }), surfaceOp: 'append' as const },
+      {
+        type: 'assistant/message', seq: SessionSeq(1), time: 2, surfaceOp: 'append',
+        data: {
+          turn: 1,
+          step: 1,
+          stream: [],
+          message: createAssistantMessage({
+            content: [{ type: 'image', attachment: message }],
+            source: { provider: 'fixture', model: 'fixture' },
+          }),
+        },
+      },
       event('agent/inbox/spliced', SessionSeq(2), {
         target: 'next-turn',
         start: 0,

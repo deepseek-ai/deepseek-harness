@@ -37,6 +37,9 @@
     },
     {
       "path": "../../session/session-projection-cache"
+    },
+    {
+      "path": "../../session/session-format-catalog"
     }
   ]
 }

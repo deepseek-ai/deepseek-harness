@@ -1,0 +1,12 @@
+version: 1
+scenario: foreground-confinement-timeout
+profile: headless
+composition: foreground-confinement-timeout
+recording: authored
+header:
+  class: foreground-confinement-timeout
+  pin: true
+platform: posix
+permission: read-only
+workspace:
+  final: true

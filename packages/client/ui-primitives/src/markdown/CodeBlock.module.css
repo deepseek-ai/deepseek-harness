@@ -8,11 +8,12 @@
      with the markdown 0.875 ladder without shrinking every other xs-13 use. */
   --dsl-code-block-banner-font: 11px/18px var(--dsw-font-family);
   --dsl-code-block-content-font: var(--dsw-font-markdown-code-block);
+  --dsl-code-block-background: var(--dsw-alias-markdown-code-block);
 
   position: relative;
   margin: 16px 0;
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-markdown-code-block);
+  background: var(--dsl-code-block-background);
   border-radius: var(--dsl-code-block-border-radius);
 }
 
@@ -68,6 +69,12 @@
   font: inherit;
 }
 
+/* Consumers may turn the stable content node into a viewport without changing
+   the default CodeBlock layout. */
+.content {
+  display: contents;
+}
+
 .block :where(pre) {
   font: var(--dsl-code-block-content-font);
   padding: 16px;
@@ -75,7 +82,7 @@
   overflow-x: auto;
   white-space: pre-wrap;
   word-break: break-all;
-  background: var(--dsw-alias-markdown-code-block);
+  background: var(--dsl-code-block-background);
   /* Bottom radii live on <pre>: overflow:hidden on .block would kill the
      sticky banner, and this opaque fill otherwise squares off the wrapper. */
   border-bottom-left-radius: var(--dsl-code-block-border-radius);
@@ -84,7 +91,7 @@
 
 /* Shiki inlines its theme background var; route it to the repo token. */
 .block :where(pre.shiki) {
-  background: var(--dsw-alias-markdown-code-block) !important;
+  background: var(--dsl-code-block-background) !important;
 }
 
 .block :where(pre) code {
@@ -95,4 +102,29 @@
 
 .plain {
   color: var(--dsw-alias-label-primary);
+}
+
+.numbered :where(pre) code {
+  display: block;
+  counter-reset: source-line;
+  white-space: normal;
+}
+
+.numbered :where(pre) code > :global(.line) {
+  position: relative;
+  display: block;
+  min-height: 1lh;
+  padding-inline-start: calc(var(--dsl-code-block-line-number-width) + 12px);
+  counter-increment: source-line;
+  white-space: var(--dsl-code-block-line-white-space, pre-wrap);
+}
+
+.numbered :where(pre) code > :global(.line)::before {
+  position: absolute;
+  inset-inline-start: 0;
+  width: var(--dsl-code-block-line-number-width);
+  color: var(--dsw-alias-label-tertiary);
+  text-align: end;
+  content: counter(source-line);
+  user-select: none;
 }

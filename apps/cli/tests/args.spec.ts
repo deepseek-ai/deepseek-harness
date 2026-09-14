@@ -25,6 +25,8 @@ describe('parseDshArgs', () => {
     expect(parse(['--profile', 'tui'])).toEqual({ mode: 'profile', profile: 'tui', patches: [], args: [] })
     expect(parse(['--profile', 'tui', '--patch', 'a.yml', '--patch', 'b.yml']))
       .toEqual({ mode: 'profile', profile: 'tui', patches: ['a.yml', 'b.yml'], args: [] })
+    expect(parse(['--profile', 'rescue', '--from-default-profile', 'web']))
+      .toEqual({ mode: 'profile', profile: 'rescue', fromDefaultProfile: 'web', patches: [], args: [] })
     expect(parse(['web'])).toEqual({ mode: 'profile', profile: 'web', patches: [], args: [] })
     expect(parse(['web', '--patch', 'web.yml']))
       .toEqual({ mode: 'profile', profile: 'web', patches: ['web.yml'], args: [] })
@@ -43,6 +45,15 @@ describe('parseDshArgs', () => {
     // Launcher flags placed after that boundary belong to the app too.
     expect(parse(['--profile', 'tui', '--patch', 'a.yml', '--resume', 'b', '--patch', 'late.yml']))
       .toEqual({ mode: 'profile', profile: 'tui', patches: ['a.yml'], args: ['--resume', 'b', '--patch', 'late.yml'] })
+    expect(parse(['--profile', 'rescue', '--resume', 'abc', '--from-default-profile', 'web']))
+      .toEqual({
+        mode: 'profile',
+        profile: 'rescue',
+        patches: [],
+        args: ['--resume', 'abc', '--from-default-profile', 'web'],
+      })
+    expect(parse(['web', '--from-default-profile', 'web']))
+      .toEqual({ mode: 'profile', profile: 'web', patches: [], args: ['--from-default-profile', 'web'] })
   })
 
   it('routes the plugin pnpm forwarder', () => {
@@ -62,6 +73,14 @@ describe('parseDshArgs', () => {
       .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: false, patches: [] })
     expect(parse(['--profile', 'web', '--dump-default-config']))
       .toEqual({ mode: 'dump-config', profile: 'web', defaultOnly: true, patches: [] })
+    expect(parse(['--profile', 'rescue', '--from-default-profile', 'web', '--dump-config']))
+      .toEqual({
+        mode: 'dump-config',
+        profile: 'rescue',
+        fromDefaultProfile: 'web',
+        defaultOnly: false,
+        patches: [],
+      })
     expect(parse(['--profile', 'tui', '--dump-config', '--patch', 'x.yml']))
       .toEqual({ mode: 'dump-config', profile: 'tui', defaultOnly: false, patches: ['x.yml'] })
     expect(parse(['web', '--dump-config']))
@@ -77,6 +96,8 @@ describe('parseDshArgs', () => {
     expect(exitCode(['-p', 'task'])).toBe(1) // removed
     expect(exitCode(['run', 'task'])).toBe(1) // app-owned task replaced the launcher subcommand
     expect(exitCode(['--profile', ''])).toBe(1)
+    expect(exitCode(['--profile', 'x', '--from-default-profile='])).toBe(1)
+    expect(exitCode(['--profile', 'x', '--from-default-profile'])).toBe(1)
     expect(exitCode(['--profile', 'x', '--patch='])).toBe(1)
     expect(exitCode(['--dump-config'])).toBe(1)
     expect(exitCode(['--profile', 'x', '--dump-config', '--dump-default-config'])).toBe(1)
@@ -102,6 +123,7 @@ describe('parseDshArgs', () => {
     expect(exitCode(['plugin', '--profile', 'desktop', 'add', 'x'])).toBe(1)
     expect(exitCode(['plugin', '--profile', 'Desktop', 'add', 'x'])).toBe(1)
     expect(exitCode(['--profile', 'x', 'plugin', 'add', 'y'])).toBe(1)
+    expect(exitCode(['--from-default-profile', 'web', 'plugin', '--profile', 'x', 'add', 'y'])).toBe(1)
   })
 
   it('keeps its own help for an invocation with no app to hand it to', () => {

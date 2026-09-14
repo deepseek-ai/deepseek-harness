@@ -160,14 +160,12 @@ interface FileUploadTransport {
 
 /** Cordis service that owns one background carrier per upload operation. */
 export class FileUploadRuntime extends Service implements FileUploadService {
-  readonly available: boolean
   private readonly transport: FileUploadTransport
 
   /** @param ctx - providing Client context. */
   constructor(ctx: Context) {
     super(ctx, 'fileUpload')
     const hook = (globalThis as ClientFileUploadGlobal).__DSH_FILE_UPLOAD__
-    this.available = hook !== undefined || !isFixturePage()
     this.transport = hook === undefined ? workerTransport() : customTransport(hook.fetch)
   }
 
@@ -177,7 +175,6 @@ export class FileUploadRuntime extends Service implements FileUploadService {
    * @returns the response status and text body.
    */
   post(request: FileUploadRequest): Promise<FileUploadResponse> {
-    if (!this.available) return Promise.reject(new Error('background upload is unavailable in fixture mode'))
     return this.transport.post(request)
   }
 
@@ -197,7 +194,7 @@ export class FileUploadRuntime extends Service implements FileUploadService {
     signal?: AbortSignal,
     onProgress?: (progress: { readonly loaded: number; readonly total?: number }) => void,
   ): Promise<RemoteResult<FileUploadValue>> {
-    if (!(data instanceof Uint8Array) && this.available) {
+    if (!(data instanceof Uint8Array)) {
       const query = new URLSearchParams({ sessionId })
       if (name !== undefined) query.set('name', name)
       const response = await this.post({
@@ -212,14 +209,10 @@ export class FileUploadRuntime extends Service implements FileUploadService {
       }
       return parseFileUploadResult(response.body)
     }
-    if (!(data instanceof Uint8Array) && !(data instanceof Blob)) {
-      throw new Error('stream file upload requires a background carrier')
-    }
-    const bytes = data instanceof Uint8Array ? data : new Uint8Array(await data.arrayBuffer())
     return (this.ctx as FileUploadRemoteContext).remote.fileUploads.upload(
       sessionId,
       {
-        data: bytesToBase64(bytes),
+        data: bytesToBase64(data),
         ...(name === undefined ? {} : { name }),
       },
       signal,
@@ -309,13 +302,6 @@ function resolveUrl(path: string): URL {
     ? pageLocation.origin
     : undefined
   return new URL(path, origin === undefined || origin === 'null' ? 'http://dsh.internal' : origin)
-}
-
-function isFixturePage(): boolean {
-  const pageLocation = Reflect.get(globalThis, 'location') as unknown
-  return typeof pageLocation === 'object' && pageLocation !== null
-    && 'search' in pageLocation && typeof pageLocation.search === 'string'
-    && new URLSearchParams(pageLocation.search).has('fixture')
 }
 
 function parseFileUploadResult(body: string): RemoteResult<FileUploadValue> {

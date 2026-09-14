@@ -1,12 +1,17 @@
 {
   "prompt": "respond",
-  "logs": [{
-    "file": "b/main/session.v2.jsonl",
-    "lines": [
-      { "type": "session", "version": 2, "id": "{{SID}}", "createdAt": 100, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
-      { "type": "turn/start", "seq": 0, "time": 100, "data": { "turn": 1 } },
-      { "type": "request/header", "seq": 1, "time": 100, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } },
-      { "type": "request/header", "seq": 2, "time": 100, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT\n\nNEW PROMPT LINE", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "change" } }
-    ]
-  }]
+  "logs": [
+    {
+      "file": "b/main/session.v3.jsonl",
+      "lines": [
+        {"type":"session","version":3,"id":"{{SID}}","createdAt":100,"cwd":"{{CWD}}","isSeeded":false,"delegationDepth":0},
+        {"type":"turn/start","seq":0,"time":100,"data":{"turn":1}},
+        {"type":"step/start","seq":1,"time":100,"data":{"turn":1,"step":1}},
+        {"type":"system/message","seq":2,"time":100,"data":{"turn":1,"step":1,"message":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"system","content":[{"type":"text","text":"SYS PROMPT"}],"source":{"kind":"plugin","plugin":"@deepseek-ai/dsh-system-prompt"}}},"surfaceOp":"append"},
+        {"type":"request/header","seq":3,"time":100,"data":{"header":{"config":{"provider":"fake","model":"fake"},"tools":[{"name":"t1","description":"D1","parameters":{"type":"object"}}]},"reason":"initial"}},
+        {"type":"system/message","seq":4,"time":100,"data":{"turn":1,"step":1,"message":{"id":"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb","role":"system","content":[{"type":"text","text":"SYS PROMPT\n\nNEW PROMPT LINE"}],"source":{"kind":"plugin","plugin":"@deepseek-ai/dsh-system-prompt"}}},"surfaceOp":{"op":"replace","startSeq":2,"endSeq":2},"sourceEventSeqs":[2]},
+        {"type":"request/header","seq":5,"time":100,"data":{"header":{"config":{"provider":"fake","model":"fake"},"tools":[{"name":"t1","description":"D1","parameters":{"type":"object"}},{"name":"t2","description":"D2","parameters":{"type":"object"}}]},"reason":"change"}}
+      ]
+    }
+  ]
 }

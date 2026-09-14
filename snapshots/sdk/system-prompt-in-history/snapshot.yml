@@ -1,0 +1,9 @@
+version: 1
+scenario: system-prompt-in-history
+profile: sdk
+composition: system-prompt-in-history
+recording: authored
+header:
+  class: system-prompt-in-history
+replay:
+  override: true

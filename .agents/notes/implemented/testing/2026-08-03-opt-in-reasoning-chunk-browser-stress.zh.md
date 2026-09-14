@@ -8,7 +8,7 @@ Status: implemented
 
 长 reasoning stream 会在一个持久 settlement 前连续产生大量进程本地 `assistant/live-chunk` update。每个 update 都必须保持有序并折叠进 Assistant Definition，以保留实时完整性；settlement 则嵌入精确 stream 供 replay。React 只需要看到当前累计结果，不需要观察同一浏览器帧内每个中间态。
 
-异步流的每次 `yield` 都可能形成新的微任务边界，因此仅靠微任务合批的 `Notifier.markDirty()` 会退化为每个分片重建一次 `ConversationSnapshot`、通知一次 `useSyncExternalStore` 并运行一次 React render。即使实时 Think 行保持折叠，100,000 个推理分片仍会让协调、提交和布局工作压住主线程。性能边界必须位于会话接收与 React 发布之间，不能通过减慢生产方或丢弃原始事件来掩盖问题。
+异步流的每次 `yield` 都可能形成新的微任务边界，因此仅靠微任务合批的 `Notifier.markDirty()` 会退化为每个分片重建一次 `ConversationSnapshot`、通知一次 `useSyncExternalStore` 并运行一次 React render。即使实时 Think 行保持折叠，100,000 个推理分片仍会让协调、提交和布局工作压住主线程。性能边界必须位于会话接收与 React 发布之间；测试必须保留每个原始事件，并区分单批渲染成本与无限累积的 transport backlog。
 
 ## 决策
 
@@ -18,9 +18,9 @@ Session Controller 把每个 Client-only live chunk 追加到 event source，Con
 
 实时 Think 行对累计文本的横向跟尾属于纯视觉对齐，不需要在每次 React 提交中同步读取布局。组件内调度器将连续请求合并为每三帧一次，从最新 DOM 读取 `scrollWidth` 和 `clientWidth` 并将 `scrollLeft` 直接更新到最新位置；固定的视觉节奏让摘要变化可读，又不会积压浏览器平滑滚动动画。该节流只作用于 Think 的横向摘要，不延迟 Chat 正文滚动、历史 prepend 锚定或用户触发的 `scrollIntoView`。
 
-`pnpm run test:web:stress` 保留为无密钥、需显式启用的浏览器性能证据。确定性的 `?fixture` 会话以独立于绘制的节奏发出 100,000 个 `reasoning-delta`，结尾标记证明事件经过生产会话归并并到达实时 Think 行；50 毫秒心跳和预先调度的 DOM 事件分别测量主线程停顿与交互延迟，250 毫秒预算用于识别明显回归。`DSH_WEB_STRESS_HEADFUL=1` 允许开发者在可见浏览器中使用 Performance 面板分析同一场景。该压力车道是手动性能诊断与修复验收的证据，不是默认 CI 门禁，也不替代确定性的调度单元测试。
+`pnpm run test:web:stress` 保留为无密钥、需显式启用的浏览器性能证据。测试持有的模型 adapter 通过真实 Host、Gateway、WebSocket、Session 归并和实时 Think 行发出 100,000 个 `reasoning-delta` chunk。每批 128 个 chunk 会等待一次浏览器 timer 轮次后再发下一批，因此 50 毫秒心跳与预先调度的 DOM 事件按 250 毫秒预算测量一个有界接收／渲染区间，而不是累积的 socket backlog。结尾标记证明所有 chunk 都已到达 UI。`DSH_WEB_STRESS_HEADFUL=1` 允许开发者在可见浏览器中使用 Performance 面板分析同一场景。该压力车道是手动性能诊断与修复验收的证据，不是默认 CI 门禁，也不替代确定性的调度单元测试。
 
-聚焦测试固定 `Notifier` 的逐帧合并、结构事件抢占、失效回调和无 rAF 回退，并在 `Session` 层证明一帧只发布一次最新累计文本且定稿不会被旧帧回调重复通知。fixture（测试前置数据）的小型单元测试继续固定输入校验、外部到达节奏、并发拒绝、精确事件数和结尾标记交付，无需把 100,000 分片工作负载带入默认测试套件。
+聚焦测试固定 `Notifier` 的逐帧合并、结构事件抢占、失效回调和无 rAF 回退，并在 `Session` 层证明一帧只发布一次最新累计文本且定稿不会被旧帧回调重复通知。按需启用的浏览器用例持有 adapter 节奏、精确事件数和结尾标记交付，不把 100,000 分片工作负载带入默认测试套件。
 
 ## 曾考虑的替代方案
 
@@ -32,7 +32,9 @@ Session Controller 把每个 Client-only live chunk 追加到 event source，Con
 
 **按动画帧控制测试生产方节奏。** 不予采纳：生产方会在渲染变慢时同步减速，使页面获得真实网络流不存在的隐式背压，并掩盖主线程饥饿。
 
-**真实模型或录制的 HTTP 字节流。** 不予采纳：实时模型不具确定性，HTTP/SSE（Server-Sent Events）录制也不会改进目标断言。内存 fixture 保留逐个异步会话事件、生产客户端归并和 React 渲染路径，同时控制工作负载与到达节奏。
+**不等待确认就把原有浏览器本地速率发入 WebSocket。** 不予采纳：transport 工作的排队速度会超过模型可能达到的产出速度，使结果变成 socket backlog 测量。浏览器 timer 确认限制每批工作量，同时 heartbeat 仍能发现一批数据使页面饥饿。
+
+**真实外部模型或录制的 HTTP 字节流。** 不予采纳：外部模型不具确定性，HTTP 录制还会增加第二种 fixture 格式，却不会改进目标断言。测试持有的 adapter 让每个 chunk 经过真实 Host 与浏览器 transport，同时控制工作负载。
 
 ## 后果
 
@@ -40,4 +42,4 @@ Session Controller 把每个 Client-only live chunk 追加到 event source，Con
 
 折叠 Think 摘要的横向布局读写最多每三帧执行一次，并直接追上该时刻的最新位置；React 仍按累计快照正常提交，定稿时摘要恢复到首行。该局部视觉策略不会改变正文滚动和用户交互的即时性。
 
-浏览器压力车道继续提供真实组装应用上的响应性信号和可见 profiling 入口，但硬件与调度差异使其只适合作为显式性能证据。确定性的 focused tests 负责守住发布次数、累计内容与抢占顺序，默认测试车道保持快速。
+浏览器压力车道继续提供真实组装应用与载体上的响应性信号和可见 profiling 入口，但硬件与调度差异使其只适合作为显式性能证据。确定性的 focused tests 负责守住发布次数、累计内容与抢占顺序，默认测试车道保持快速。

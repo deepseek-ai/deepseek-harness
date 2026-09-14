@@ -33,9 +33,9 @@ function throwUnknown(value: unknown): never {
   throw value
 }
 
-function identityStage(inheritedEventCount: number) {
+function identityStage(inheritedEventCount: number | undefined) {
   return {
-    headerInheritedEventCount: inheritedEventCount,
+    ...(inheritedEventCount === undefined ? {} : { headerInheritedEventCount: inheritedEventCount }),
     transformEvent(
       value: SessionFormatEvent,
       context: SessionFormatMigrationContext,
@@ -48,7 +48,7 @@ function identityStage(inheritedEventCount: number) {
     ) {
       context.emitRun(run)
     },
-    finish: () => inheritedEventCount,
+    finish: () => inheritedEventCount ?? 0,
   }
 }
 
@@ -134,7 +134,7 @@ describe('Session format chain', () => {
     })).toThrow(/does not lead/)
   })
 
-  it('requires every intermediate stage to expose its inherited cut before the next edge', () => {
+  it('composes stages whose inherited cut is derived from the body', () => {
     const first = migration({
       createStage: () => ({
         transformEvent: (value, context) => { context.emitEvent(value) },
@@ -155,11 +155,11 @@ describe('Session format chain', () => {
       restoreCurrentHeader: header => header,
     })
 
-    expect(() => current.createStream(
+    expect(current.createStream(
       { ...currentHeader, version: 0 },
       0,
       discard,
-    )).toThrow(/expose its inherited cut/)
+    ).finish()).toBe(0)
 
     const createSecondStage = vi.fn(({ sourceKind }: SessionFormatMigrationStageInput) => {
       expect(sourceKind).toBe('transformed')
@@ -212,6 +212,15 @@ describe('Session format chain', () => {
     const finishRefusal = captureError(() => finishing.finish())
     expect(finishRefusal).toBeInstanceOf(SessionFormatUnsupportedMigrationError)
     expect(finishRefusal.cause).toBe(finishFailure)
+
+    const eventFailure = new Error('event relationship is invalid')
+    const eventFailing = chain(migration({
+      createStage: () => ({
+        ...identityStage(0),
+        transformEvent: () => { throw eventFailure },
+      }),
+    })).createStream(source, 0, discard)
+    expect(() => { eventFailing.emitEvent(event) }).toThrow(/event relationship is invalid/)
 
     const runFailure = new Error('run relationship is invalid')
     const runFailing = chain(migration({

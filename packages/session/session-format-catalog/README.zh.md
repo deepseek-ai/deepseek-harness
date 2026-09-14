@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-session-format-catalog` 为持久化提供一个确定性的 Session 格式读取器，且无需查询已挂载插件。它把冻结的 v0、v1 与 v2 编解码器和相邻的 v0 到 v1、v1 到 v2 迁移边装配起来，在模块初始化时校验完整且无缺口的迁移链，并通过 `sessionFormatCatalog` 暴露物理分派、仅 header 分类、单遍行还原和当前格式逐记录编码。
+`dsh-session-format-catalog` 为持久化提供一个确定性的 Session 格式读取器，且无需查询已挂载插件。它装配从最早受支持格式到[当前写入格式](../../../docs/session-format-status.zh.md)的编解码器与相邻迁移边，在模块初始化时校验完整且无缺口的迁移链，并通过 `sessionFormatCatalog` 暴露物理分派、仅 header 分类、单遍行还原和当前格式逐记录编码。
 
 ## 目录
 
@@ -40,11 +40,11 @@ const headerRecord = sessionFormatCatalog.encodeCurrentHeader(current.header, cu
 const eventRecords = current.events.map(sessionFormatCatalog.encodeCurrentEvent)
 ```
 
-从包根导入 `sessionFormatCatalog`。JSONL 与 fixture 读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()`。Writer 通过 `encodeCurrentHeader()` 与 `encodeCurrentEvent()` 序列化返回的当前 artifact。列表读取调用 `readHeader()`，绝不打开事件正文。
+从包根导入 `sessionFormatCatalog`。JSONL 与 fixture（测试前置数据）读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()`。Writer 通过 `encodeCurrentHeader()` 与 `encodeCurrentEvent()` 序列化返回的当前产物。列表读取调用 `readHeader()`，绝不打开事件正文。
 
 Production 历史读取使用 `{ recovery: 'recoverable', validation: 'transformed' }`。Worker 与 fixture 校验使用 `{ recovery: 'strict', validation: 'current' }`。Transformed validation 会在迁移后执行已发布 current 规则，但对已经是 current 的输入有意跳过已安装语义校验。
 
-该目录直接包含所有受支持的历史读取器。Profile 无法通过挂载功能插件来添加、移除或重新排列迁移边。它通过对 `dsh-session` 的 peer 依赖获得已安装的当前事件词表与当前还原规则，而历史迁移边校验器保持冻结。
+该目录直接包含所有受支持的历史读取器。Profile 无法通过挂载功能插件来添加、移除或重新排列迁移边。它通过对 `dsh-session` 的对等依赖（peer dependency）获得已安装的当前事件词表与当前还原规则，而历史迁移边校验器保持冻结。浏览器安全的 `./message-projections` 导出为独立构造函数和 surface 折叠装配当前插件拥有的处理器，不挂载恢复监听器。
 
 -----
 
@@ -65,7 +65,8 @@ Production 历史读取使用 `{ recovery: 'recoverable', validation: 'transform
 
 - [迁移机制](../session-format/README.zh.md)——目录构造与分派行为。
 - [已发布 v0 到 v1 迁移边](../session-format-v0-to-v1/README.zh.md)——编解码器与校验器所有权。
-- [已发布 v1 到 v2 迁移边](../session-format-v1-to-v2/README.zh.md)——Assistant stream 嵌入与基数变化引用重映射。
+- [已发布 v1 到 v2 迁移边](../session-format-v1-to-v2/README.zh.md)——Assistant 流嵌入与基数变化引用重映射。
+- [已发布 V2 到 V3 规范](../session-format-v2-to-v3/README.zh.md#v2-to-v3-specification)——转换、保留与拒绝。
 - [JSONL 持久化](../session-persistence-jsonl/README.zh.md)——不可变 generation 命名与排他发布。
 
 -----
@@ -85,7 +86,7 @@ Production 历史读取使用 `{ recovery: 'recoverable', validation: 'transform
 
 #### KV Cache 影响
 
-没有直接影响；还原后的历史在其消费者中决定缓存身份。
+没有直接影响；还原后的历史在其消费方中决定缓存身份。
 
 ## 已知限制与延期工作
 

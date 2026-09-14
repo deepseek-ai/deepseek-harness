@@ -25,3 +25,5 @@ Status: implemented
 ## 后果
 
 孪生体使适配器和需要密钥的 e2e 维护量翻倍——两者都覆盖 V4 Flash 和 Pro 在各代表性推理（reasoning）模式下的行为——换来的是持续的 seam 中立性验证和第二份实现示例。两个适配器均使用 `apiKey`、`baseURL` 和 `models`；直接 fetch 适配器暴露 `thinking`/`reasoningEffort`，pi-ai 适配器暴露一个 `reasoning` 级别。未来如果有一致性测试套件，可以通过后续 Agent Note 论证退役其中一个适配器。
+
+[Messages 适配器](../feature/2026-09-07-deepseek-messages-adapter.zh.md) 在 `llm-deepseek` 内增加 Anthropic 协议实现，并遵守相同的流约定。

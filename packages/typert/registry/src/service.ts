@@ -357,7 +357,6 @@ class ContextStore {
         key: K,
         adapter: TypertClientContextAdapter<TypertContextWire<TypertContextMap[K]>>,
       ) => this.registerClient(ctx, key, adapter),
-      identifyHost: context => this.identifyHost(context),
       getHost: key => this.getHost(key),
       getClient: key => this.clients.get(key)?.provider,
       subscribe: listener => this.changes.subscribe(ctx, listener),
@@ -372,24 +371,8 @@ class ContextStore {
     return {
       wire: adapter.wire,
       wireTypeSymbol: adapter.wireTypeSymbol,
-      identity: context => adapter.identity(context),
       resolve: id => resolver.resolve(id),
     }
-  }
-
-  private identifyHost(ctx: Context): ReturnType<TypertContextRegistry['identifyHost']> {
-    let match: ReturnType<TypertContextRegistry['identifyHost']>
-    for (const key of this.hosts.keys()) {
-      const identity = this.getHost(key)?.identity(ctx)
-      if (identity === undefined) continue
-      if (match !== undefined) {
-        throw new Error(
-          `typert: Host Context is recognized by both ${JSON.stringify(match.kind)} and ${JSON.stringify(key)}`,
-        )
-      }
-      match = { kind: key, identity }
-    }
-    return match
   }
 
   private configureHost<Wire>(

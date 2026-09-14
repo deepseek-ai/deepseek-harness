@@ -18,6 +18,9 @@
       "path": "../ui-slots"
     },
     {
+      "path": "../store"
+    },
+    {
       "path": "../ui-primitives"
     },
     {

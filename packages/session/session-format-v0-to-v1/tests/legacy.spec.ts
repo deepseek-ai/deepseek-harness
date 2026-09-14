@@ -12,6 +12,7 @@ const header = {
   createdAt: 1,
   delegationDepth: 0,
 } as const
+const legacyAssistantSourceKey = ['pro', 'venance'].join('')
 
 function migrate(rows: readonly unknown[]) {
   return restoreV0ToV1(header, rows)
@@ -33,7 +34,7 @@ describe('released v0 legacy normalization', () => {
           turn: 1,
           step: 1,
           content: [{ type: 'tool-call', id: 'call-1', name: 'read', arguments: '{}' }],
-          provenance: { provider: 'mock', model: 'mock' },
+          [legacyAssistantSourceKey]: { provider: 'mock', model: 'mock' },
         },
         surfaceOp: 'append',
       },

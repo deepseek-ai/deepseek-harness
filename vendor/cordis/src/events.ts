@@ -340,7 +340,7 @@ export interface Events {
   /** Interception hook for a service binding (no core producer). */
   'internal/service'(this: Context, name: string, value: any): void
   /** Waterfall: a fiber config update is being applied; skip `next()` to veto. */
-  'internal/update'(this: Fiber, config: any, noSave: boolean, next: () => void | Promise<void>): void | Promise<void>
+  'internal/update'(this: Fiber, config: any, noSave: boolean, next: () => void): void
   /** Waterfall: a service is being read through the context proxy. */
   'internal/get'(ctx: Context, name: string, error: Error, next: () => any): any
   /** Waterfall: a service is being written through the context proxy. */

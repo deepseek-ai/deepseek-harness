@@ -5,7 +5,7 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { launcherPath } from '@deepseek-ai/node-addon-landlock-run'
+import { launcherPath } from '@deepseek-ai/node-addon-system/landlock-run'
 import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
 import { SandboxPolicyService } from '@deepseek-ai/dsh-sandbox-policy'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -21,7 +21,7 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
  * `@deepseek-ai/dsh-sandbox-local`.
  *
  * Self-skips when the running kernel does not enforce Landlock. CI builds the launcher from
- * `native/landlock-run` before running this file.
+ * `native/system` before running this file.
  */
 
 const probe = spawnSync(launcherPath(), ['--probe'], { timeout: 5_000, encoding: 'utf8' })
@@ -84,7 +84,7 @@ describe.skipIf(!landlockUsable)('bash-sandbox: real Landlock confinement throug
   it('classifies a background denial once the task settles', async () => {
     const workdir = await tempDir(homedir())
     const bash = await sandboxedBash(workdir, 'read-only')
-    const task = bash.start(bash.resolve({ command: `echo hi > ${workdir}/bg-denied.txt` }))
+    const task = await bash.start(bash.resolve({ command: `echo hi > ${workdir}/bg-denied.txt` }))
     await task.done
     expect(task.sandbox).toEqual({ mode: 'read-only', denied: true, enforcement })
     expect(existsSync(join(workdir, 'bg-denied.txt'))).toBe(false)

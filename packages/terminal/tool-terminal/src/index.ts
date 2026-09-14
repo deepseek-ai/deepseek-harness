@@ -105,7 +105,7 @@ const SESSION_SNAPSHOT_SCHEMA = {
   properties: SESSION_SNAPSHOT_PROPERTIES,
 } as const
 
-const BACKGROUND_TASK_OUTPUT_SCHEMA = {
+const BACKGROUND_JOB_OUTPUT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   properties: {
@@ -210,7 +210,7 @@ export function apply(ctx: Context, config: Config = {}): void {
     output: {
       schema: {
         oneOf: [
-          BACKGROUND_TASK_OUTPUT_SCHEMA,
+          BACKGROUND_JOB_OUTPUT_SCHEMA,
           {
             type: 'object',
             additionalProperties: false,

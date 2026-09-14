@@ -299,21 +299,51 @@ describe('lsp-stdio end to end over a fake server', () => {
 
   it('reads a queued query source only when its lifecycle starts', async () => {
     const marker = join(root, 'opened.jsonl')
+    let provider: LspProvider | undefined
     const ctx = await mount({
       LSP_FAKE_DEF: 'null',
-      LSP_FAKE_REPLY_DELAY_MS: '300',
       LSP_FAKE_OPEN_MARKER: marker,
+    }, {}, (registered) => { provider = registered })
+    const firstReply = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    const request = Object.getOwnPropertyDescriptor(LspConnection.prototype, 'request')?.value as LspConnection['request']
+    let holdFirst = true
+    const requestSpy = vi.spyOn(LspConnection.prototype, 'request').mockImplementation(async function (this: LspConnection, method, params) {
+      const hold = method === 'textDocument/definition' && holdFirst
+      if (hold) holdFirst = false
+      const result = await request.call(this, method, params)
+      if (hold) {
+        firstReply.resolve(undefined)
+        await release.promise
+      }
+      return result
     })
-    const first = ctx.lsp.query(query('goToDefinition'))
-    await waitFor(async () => (await markerLines(marker)).length === 1)
-    const second = ctx.lsp.query(query('goToDefinition'))
-    await writeFile(join(ws, 'a.ts'), 'const changed = 2\n')
-    await Promise.all([first, second])
-    expect(await markerLines(marker)).toEqual([
-      'const x = 1\nconst y = x\n',
-      'const changed = 2\n',
-    ])
-    await ctx.fiber.dispose()
+    const pending: Promise<unknown>[] = []
+    try {
+      const first = ctx.lsp.query(query('goToDefinition'))
+      pending.push(Promise.allSettled([first]))
+      await Promise.race([firstReply.promise, first])
+      // The changed tail proves the second query entered the provider queue
+      // while the first response is held, before the source rewrite starts.
+      const queues = (provider as unknown as { queues: ReadonlyMap<unknown, Promise<void>> }).queues
+      const firstTail = [...queues.values()][0]
+      expect(firstTail).toBeDefined()
+      const second = ctx.lsp.query(query('goToDefinition'))
+      pending.push(Promise.allSettled([second]))
+      await vi.waitFor(() => { expect([...queues.values()][0]).not.toBe(firstTail) }, { timeout: 3000 })
+      await writeFile(join(ws, 'a.ts'), 'const changed = 2\n')
+      release.resolve(undefined)
+      await Promise.all([first, second])
+      expect(await markerLines(marker)).toEqual([
+        'const x = 1\nconst y = x\n',
+        'const changed = 2\n',
+      ])
+    } finally {
+      release.resolve(undefined)
+      await Promise.all(pending)
+      requestSpy.mockRestore()
+      await ctx.fiber.dispose()
+    }
   })
 
   it('aborts an in-flight query when the signal fires', async () => {

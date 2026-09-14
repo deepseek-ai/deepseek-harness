@@ -198,6 +198,7 @@ export function createActivationObserver(
       emit('subagent/start', identity, parent)
     },
     capture: (child: Agent): void => {
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       const own = child.session.snapshotEvents(boundary)
       const output = finalAssistantOutput(own)
       captured = {

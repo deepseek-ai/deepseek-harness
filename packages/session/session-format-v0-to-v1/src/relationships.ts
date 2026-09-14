@@ -437,8 +437,8 @@ function assertTitleSources(
       throw new SessionFormatError(`${event.type} ${event.seq} messageSeqs must cite earlier human user/message events`)
     }
     const sourceData = releasedV0Record(source.data, `${source.type} ${seq} data`)
-    const provenance = releasedV0Record(sourceData['source'], `${source.type} ${seq} source`)
-    if (provenance['kind'] !== 'user') {
+    const messageSource = releasedV0Record(sourceData['source'], `${source.type} ${seq} source`)
+    if (messageSource['kind'] !== 'user') {
       throw new SessionFormatError(`${event.type} ${event.seq} messageSeqs must cite earlier human user/message events`)
     }
     const content = sourceData['content'] as readonly Record<string, SessionFormatJsonValue>[]

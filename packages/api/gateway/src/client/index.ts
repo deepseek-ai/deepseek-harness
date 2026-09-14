@@ -728,11 +728,24 @@ function withdrawn(endpoint: string): Extract<RemoteResult<never>, { readonly ok
   return internalFailure(`client api: Remote method ${endpoint} is no longer mounted`)
 }
 
-function carrierFailure(endpoint: string, error: unknown): Extract<RemoteResult<never>, { readonly ok: false }> {
+/**
+ * The error branch a carrier throw (offline, transport fault) folds into: `gateway/internal` naming the endpoint and
+ * the thrown message. Exported so a stand-in for this face folds identically.
+ * @param endpoint - `<namespace>/<method>` that was called.
+ * @param error - what the carrier threw.
+ * @returns the failed result.
+ */
+export function carrierFailure(endpoint: string, error: unknown): Extract<RemoteResult<never>, { readonly ok: false }> {
   return internalFailure(`client api: ${endpoint} failed: ${error instanceof Error ? error.message : String(error)}`)
 }
 
-function cancelledFailure(endpoint: string, cause: unknown): Extract<RemoteResult<never>, { readonly ok: false }> {
+/**
+ * The error branch a call aborted by its caller folds into: `gateway/cancelled` with the carrier's throw as `cause`.
+ * @param endpoint - `<namespace>/<method>` that was called.
+ * @param cause - what the carrier threw when the signal aborted.
+ * @returns the failed result.
+ */
+export function cancelledFailure(endpoint: string, cause: unknown): Extract<RemoteResult<never>, { readonly ok: false }> {
   return {
     ok: false,
     error: new RemoteError('gateway/cancelled', `client api: Remote invocation "${endpoint}" was aborted`, {}, { cause }),

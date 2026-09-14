@@ -30,6 +30,7 @@
     "packages/extensions/ui-cordis/src/css-modules.d.ts",
     "packages/client/tsdown.client.ts",
     "scripts/client-build-environment.ts",
+    "scripts/bundle-input-isolation.ts",
     "scripts/*.client.spec.ts",
     "scripts/client-bundle-css.spec.ts",
     "scripts/client-bundle-purity.spec.ts"
@@ -41,8 +42,10 @@
     "packages/client/*/tests/**/*.host.spec.ts"
   ],
   "references": [
-    // Producer-to-UI spill tests execute the real nested dispatch worker.
-    { "path": "./packages/code-runtime/code-runtime-worker-thread" },
+    { "path": "./packages/client/ui-sidebar-terminal" },
+    { "path": "./packages/api/terminal-controller/tsconfig.client.json" },
+    // Producer-to-UI spill tests use the ptc-runtime contract with the real tool registry.
+    { "path": "./packages/ptc-runtime/ptc-runtime" },
     // Shared leaf: web e2e boots the real host webserver (fixture + real-host
     // smoke policy). webserver has zero workspace deps and no cordis merge,
     // so it cannot drag host-side Context augmentation into this program.
@@ -68,6 +71,7 @@
     { "path": "./packages/extensions/cordis-client-runner" },
     { "path": "./packages/extensions/ui-cordis" },
     { "path": "./packages/test-support/client-runtime" },
+    { "path": "./packages/test-support/remote-mock" },
     { "path": "./packages/client/ui-layout" },
     { "path": "./packages/client/ui-sidebar" },
     { "path": "./packages/client/ui-brand-official" },
@@ -75,7 +79,7 @@
     { "path": "./packages/client/ui-chat" },
     { "path": "./packages/client/ui-conversation" },
     { "path": "./packages/client/ui-tool" },
-    { "path": "./packages/client/ui-deliverables" },
+    { "path": "./packages/client/ui-deliverables/tsconfig.client.json" },
     { "path": "./packages/client/ui-workflow-run" },
     { "path": "./packages/client/ui-workspace" },
     { "path": "./packages/client/ui-input-trigger" },
@@ -84,6 +88,10 @@
     { "path": "./packages/client/ui-reference" },
     { "path": "./packages/client/ui-subagent" },
     { "path": "./packages/experimental/client-ui-agent-team" },
+    { "path": "./packages/client/ui-dockkit" },
+    { "path": "./packages/client/ui-sidebar-right" },
+    { "path": "./packages/client/ui-sidebar-documentpreview" },
+    { "path": "./packages/client/ui-sidebar-files" },
     { "path": "./packages/client/ui-jobs" },
     { "path": "./packages/client/ui-schedule" },
     { "path": "./packages/client/ui-directory-picker-browse" },
@@ -104,9 +112,12 @@
     { "path": "./packages/client/ui-settings-general" },
     { "path": "./packages/client/ui-settings-models" },
     { "path": "./packages/client/ui-settings-plugin-inventory" },
+    { "path": "./packages/client/ui-settings-unarchive-sessions" },
     { "path": "./packages/client/locale" },
     { "path": "./packages/client/ui-renderer" },
     { "path": "./packages/client/ui-session" },
+    { "path": "./packages/client/resources" },
+    { "path": "./packages/api/workspace-files/tsconfig.client.json" },
     { "path": "./packages/client/web" },
     { "path": "./packages/context/file-reference" },
     { "path": "./apps/web" }

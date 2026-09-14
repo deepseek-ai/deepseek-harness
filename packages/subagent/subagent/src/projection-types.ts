@@ -4,7 +4,18 @@
  * @module @deepseek-ai/dsh-subagent/projection-types
  */
 
-import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import type { SessionId, SessionSeq } from '@deepseek-ai/dsh-session/types'
+
+/** One current direct-child discovery row materialized from parent facts. */
+export type SubagentCatalogEntry =
+  & {
+    readonly id: SessionId
+    readonly createdAt: number
+  }
+  & (
+    | { readonly mode: 'one-shot'; readonly label?: string }
+    | { readonly mode: 'continuable'; readonly label: string }
+  )
 
 /** Durable active-turn timing for one descriptor-backed child session. */
 export interface SubagentTimingProjection {
@@ -50,6 +61,8 @@ export type SubagentIdentityProjection =
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
+    /** Direct children in parent catalog event order, excluding fork-inherited facts. */
+    subagentCatalog: SubagentCatalogEntry[]
     /** Active-turn duration for a descriptor-backed subagent session. */
     subagentTiming: SubagentTimingProjection
     /**

@@ -10,7 +10,7 @@
 // that produces the values).
 import type { ToolCallBlock, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { LocaleKeysOf } from '@deepseek-ai/dsh-client-ui-slots'
-import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
+import { abbreviateHomePath, relativizeToCwd } from '@deepseek-ai/dsh-util-workspace-path'
 
 export type { ToolCallBlock } from '@deepseek-ai/dsh-client-ui-chat/client'
 
@@ -19,6 +19,12 @@ export type ToolRowVariant = 'search' | 'read' | 'bash' | 'write' | 'edit' | 'co
 
 /** Row state semantic; colors self-supplied via StateDot (design gives none). */
 export type ToolRowState = 'running' | 'ok' | 'error' | 'stopped'
+
+/** Locale-neutral structured fact consumed only by the user-facing Tool row. */
+export interface AutoReviewDenial {
+  /** Raw persisted reviewer reason; display normalization happens at render time. */
+  reason: string | null
+}
 
 type ToolTitleKey = Extract<LocaleKeysOf<'conversation'>, `tool.title.${string}`>
 
@@ -104,7 +110,18 @@ export interface ToolRowModel {
   output: string | null
   /** First line of the result text on an error row; null for every other state. */
   errorSummary: string | null
+  /** Structured Auto-review denial identity; null for every ordinary result. */
+  autoReviewDenial: AutoReviewDenial | null
   state: ToolRowState
+}
+
+function deriveAutoReviewDenial(block: ToolCallBlock): AutoReviewDenial | null {
+  if (!('kind' in block) || !block.isError) return null
+  const error = block.error
+  if (error?.name !== 'AutoReviewDeniedError' || error.code !== 'AUTO_REVIEW_DENIED') return null
+  // A durable record reaches this renderer without a type check on `reason`, so
+  // a non-string value degrades to the no-reason copy exactly as a missing one.
+  return { reason: typeof error.reason === 'string' ? error.reason : null }
 }
 
 /**
@@ -159,18 +176,6 @@ const SUMMARY_KEYS: Record<ToolRowVariant, readonly string[]> = {
   others: [],
 }
 
-/**
- * Strip the workspace root from a workspace-rooted absolute path (display only).
- * @param text - the path to shorten.
- * @param cwd - session workspace root; absent or empty leaves the path unchanged.
- * @returns the path relative to the workspace root, or unchanged when it is not rooted there.
- */
-export function relativizeToCwd(text: string, cwd: string | undefined): string {
-  if (cwd === undefined || cwd === '') return text
-  const root = cwd.replace(/[/\\]+$/, '')
-  if (text.startsWith(`${root}/`) || text.startsWith(`${root}\\`)) return text.slice(root.length + 1)
-  return text
-}
 
 function deriveSummary(variant: ToolRowVariant, argsRaw: string): string {
   const parsed = parseArgs(argsRaw)
@@ -259,6 +264,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
     bodyRaw,
     output,
     errorSummary,
+    autoReviewDenial: deriveAutoReviewDenial(block),
     state,
   }
 }

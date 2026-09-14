@@ -256,8 +256,8 @@ Dispose and immediately reload this plugin with its current config.
  *
  * @param config — the new raw config; validated before anything restarts.
  * @param noSave — hint for persistence hooks not to write the change back.
- * @returns the update waterfall result; the default restart returns a promise.
- * @throws when validation, an update listener, or the restarted plugin fails.
+ * @returns nothing; the restart runs behind the `internal/update` waterfall.
+ * @throws {ValidationError} when the new config fails validation.
  */
 update(config: any, noSave = false)
 ```
@@ -269,7 +269,7 @@ Runs the `internal/update` waterfall first, so update hooks (and HMR) can veto o
 - `config` — the new raw config; validated before anything restarts.
 - `noSave` — hint for persistence hooks not to write the change back.
 
-**Returns** the update waterfall result; the default restart returns a promise.
+**Returns** nothing; the restart runs behind the `internal/update` waterfall.
 
 [Source](../../vendor/cordis/src/fiber.ts#L736)
 

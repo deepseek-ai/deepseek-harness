@@ -147,6 +147,7 @@ function validateStarted(
 
 /** Validate every retry record already present in one loaded session. */
 function validateSession(session: Session, fail: InvariantFailure): void {
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   const events = session.snapshotEvents()
   for (const [index, event] of events.entries()) {
     if (event.type === 'llm/retry') validateRetry(events.slice(0, index), event, fail)
@@ -161,7 +162,9 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
   ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     if (event.type === 'llm/retry') validateRetry(session.snapshotEvents(), event, fail)
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     else if (event.type === 'llm/retry-started') validateStarted(session.snapshotEvents(), event, fail)
   }, { global: true })
 }, { inject: ['sessions'] })

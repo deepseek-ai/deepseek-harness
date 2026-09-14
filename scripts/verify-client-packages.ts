@@ -101,14 +101,15 @@ export function collectLocalSourceSpecifiers(path: string, source: string): Set<
 }
 
 /**
- * Collect relative module specifiers retained by one production source file.
+ * Collect local module specifiers retained by one production source file.
  * @param path - File path used to select TypeScript's parser mode.
  * @param source - Source text to inspect.
- * @returns Relative imports, exports, and requires that survive compilation.
+ * @param includeRootRelative - Include absolute paths, such as Vite's Web-root imports.
+ * @returns Local imports, exports, and requires that survive compilation.
  */
-export function collectRuntimeLocalSourceSpecifiers(path: string, source: string): Set<string> {
+export function collectRuntimeLocalSourceSpecifiers(path: string, source: string, includeRootRelative = false): Set<string> {
   const sourceFile = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
-  return collectSourceFileUses(sourceFile, true, 'local')
+  return collectSourceFileUses(sourceFile, true, 'local', includeRootRelative)
 }
 
 function importCarriesRuntimeValue(node: ts.ImportDeclaration): boolean {
@@ -134,13 +135,14 @@ function collectSourceFileUses(
   sourceFile: ts.SourceFile,
   runtimeOnly: boolean,
   key: 'local' | 'package' | 'specifier',
+  includeRootRelative = false,
 ): Set<string> {
   const uses = new Set<string>()
 
   const add = (specifier: ts.Expression | undefined): void => {
     if (specifier === undefined || !ts.isStringLiteralLike(specifier)) return
     if (key === 'local') {
-      if (specifier.text.startsWith('.')) uses.add(specifier.text)
+      if (specifier.text.startsWith('.') || includeRootRelative && specifier.text.startsWith('/')) uses.add(specifier.text)
       return
     }
     if (!isBareSpecifier(specifier.text)) return

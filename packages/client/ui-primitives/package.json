@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-primitives",
   "description": "Pure React atoms for the dsh web UI: controls, icons, markdown, and JSON inspectors (zero cordis)",
-  "version": "0.1.3-alpha.2",
+  "version": "0.1.5-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -22,32 +22,31 @@
     "./package.json": "./package.json"
   },
   "license": "MIT",
-  "dependencies": {
-    "@shikijs/langs": "^4.3.1",
-    "@types/mdast": "^4.0.4",
-    "anser": "^2.3.5",
-    "clsx": "^2.0.0",
-    "katex": "^0.16.47",
-    "mdast-util-from-markdown": "^2.0.3",
-    "mdast-util-gfm": "^3.1.0",
-    "mdast-util-math": "^3.0.0",
-    "micromark-core-commonmark": "^2.0.3",
-    "micromark-extension-gfm": "^3.0.0",
-    "micromark-extension-math": "^3.1.0",
-    "micromark-factory-space": "^2.0.1",
-    "micromark-util-character": "^2.1.1",
-    "micromark-util-classify-character": "^2.0.1",
-    "micromark-util-sanitize-uri": "^2.0.1",
-    "micromark-util-symbol": "^2.0.1",
-    "micromark-util-types": "^2.0.2",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "shiki": "^4.3.1"
-  },
   "devDependencies": {
     "@types/react": "~18.3.1",
     "@types/react-dom": "~18.3.0",
-    "@deepseek-ai/cordis": "workspace:^"
+    "@deepseek-ai/cordis": "workspace:^",
+    "react": "^18.2.0",
+    "clsx": "^2.0.0",
+    "diff": "^9.0.0",
+    "react-dom": "^18.2.0",
+    "anser": "^2.3.5",
+    "katex": "^0.16.47",
+    "micromark-core-commonmark": "^2.0.3",
+    "micromark-util-character": "^2.1.1",
+    "micromark-util-classify-character": "^2.0.1",
+    "micromark-util-symbol": "^2.0.1",
+    "micromark-util-types": "^2.0.2",
+    "shiki": "^4.3.1",
+    "@shikijs/langs": "^4.3.1",
+    "@types/mdast": "^4.0.4",
+    "micromark-factory-space": "^2.0.1",
+    "micromark-extension-math": "^3.1.0",
+    "mdast-util-from-markdown": "^2.0.3",
+    "mdast-util-gfm": "^3.1.0",
+    "mdast-util-math": "^3.0.0",
+    "micromark-extension-gfm": "^3.0.0",
+    "micromark-util-sanitize-uri": "^2.0.1"
   },
   "files": [
     "lib/index.js",

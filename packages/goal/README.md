@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The goal group gives an agent session one durable completion objective that survives restarts, resume, and fork: the goal service keeps the goal state and lifecycle durable, the model tools let the agent create and update goals, the `/goal` command gives the human direct goal control without a model turn, and the continuation driver turns an active goal into sequential rounds of automatic work. Goal state lives in the session log, so nothing in the group keeps a separate store. Only one goal is current at a time, and a goal is state, not a scheduler — automatic continuation is an opt-in consumer you mount deliberately.
+The goal group lets one agent session pursue a durable completion objective across restarts, resumes, and forks. Agents can create and update the objective, while people can inspect or control it directly with `/goal` without spending a model turn. An optional continuation package can keep active work moving through sequential Rounds. Each session has only one current goal, and that goal records completion state rather than scheduling work; automatic continuation must therefore be enabled separately.
 
 ## Table of Contents
 
@@ -27,7 +27,7 @@ The goal group gives an agent session one durable completion objective that surv
 | [`goal`](goal/README.md) | One durable goal per session: create, edit, pause, resume, complete, block, and clear | `ctx.goals` |
 | [`tool-goal`](tool-goal/README.md) | Model tools `get_goal`, `create_goal`, `update_goal` | registers on `ctx.tools` |
 | [`command-goal`](command-goal/README.md) | Human `/goal` command in UI command planes | registers on `ctx.commands` |
-| [`goal-round-driver`](goal-round-driver/README.md) | Automatic continuation: turns an active goal into sequential rounds | no service key |
+| [`goal-round-driver`](goal-round-driver/README.md) | Automatic continuation: turns an active goal into sequential Rounds | no service key |
 
 -----
 

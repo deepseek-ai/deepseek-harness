@@ -10,6 +10,7 @@ import type { DirectoryPickerHostFacts } from '../src/resolve.ts'
 const attended: DirectoryPickerHostFacts = {
   bindHost: '127.0.0.1',
   platform: 'darwin',
+  ssh: false,
   env: {},
   linuxChooser: false,
 }
@@ -24,9 +25,8 @@ describe('resolveDirectoryPickerBackend', () => {
     expect(resolveDirectoryPickerBackend({ ...attended, bindHost: '0.0.0.0' })).toBe('browse')
   })
 
-  it('resolves browse under an SSH launch (either env marker)', () => {
-    expect(resolveDirectoryPickerBackend({ ...attended, env: { SSH_CONNECTION: '10.0.0.2 55 10.0.0.9 22' } })).toBe('browse')
-    expect(resolveDirectoryPickerBackend({ ...attended, env: { SSH_TTY: '/dev/pts/3' } })).toBe('browse')
+  it('resolves browse under an SSH launch', () => {
+    expect(resolveDirectoryPickerBackend({ ...attended, ssh: true })).toBe('browse')
   })
 
   it('requires a display session and a chooser binary on linux', () => {
@@ -43,7 +43,6 @@ describe('resolveDirectoryPickerBackend', () => {
   })
 
   it('treats blank env exports as unset', () => {
-    expect(resolveDirectoryPickerBackend({ ...attended, env: { SSH_CONNECTION: '', SSH_TTY: '' } })).toBe('native')
     expect(resolveDirectoryPickerBackend({
       ...attended, platform: 'linux', linuxChooser: true, env: { DISPLAY: '', WAYLAND_DISPLAY: '' },
     })).toBe('browse')

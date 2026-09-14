@@ -1,10 +1,4 @@
-# Activation-failure patch over the shipped headless profile.
-- id: headless-startup
-  disabled: true
-
-- id: headless-runner
-  disabled: true
-
+# Unrelated activation failure over the shipped headless profile.
 - insert:
     - id: activation-error
       name: ./activation-error.mjs

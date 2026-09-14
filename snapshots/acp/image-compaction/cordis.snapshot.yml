@@ -62,3 +62,6 @@
   name: '@deepseek-ai/dsh-compaction-basic'
   config:
     retainTokens: 100
+
+- insert:
+    - name: './summary-image-budget.mjs'

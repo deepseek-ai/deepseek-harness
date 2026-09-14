@@ -4,13 +4,46 @@
  * contenteditable reach the registered composer commands (the jsdom lane's
  * gesture entry, below the full component bench).
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 import { createEditor } from 'lexical'
 import { registerPlainText } from '@lexical/plain-text'
 import { registerComposerKeymap } from '../src/client/input/editor/keymap.ts'
 
 describe('keymap keydown routing', () => {
+  it('clears composition presentation on root swaps and unregisters pending callbacks', async () => {
+    const editor = createEditor({ namespace: 'composition-root', onError: (e) => { throw e } })
+    const first = document.createElement('div')
+    const second = document.createElement('div')
+    document.body.append(first, second)
+    onTestFinished(() => {
+      editor.setRootElement(null)
+      first.remove()
+      second.remove()
+    })
+    editor.setRootElement(first)
+    const unregister = registerComposerKeymap(editor, {
+      arbitrate: () => 'pass', space: () => false, dismissPopup: () => {},
+      canSubmit: () => false, submit: () => {}, intakeFiles: () => {}, pasteText: () => {},
+    })
+    onTestFinished(unregister)
+    fireEvent.compositionStart(first)
+    expect(first.hasAttribute('data-composer-composing')).toBe(true)
+    editor.setRootElement(second)
+    expect(first.hasAttribute('data-composer-composing')).toBe(false)
+    expect(second.hasAttribute('data-composer-composing')).toBe(false)
+    fireEvent.compositionStart(first)
+    expect(first.hasAttribute('data-composer-composing')).toBe(false)
+    fireEvent.compositionStart(second)
+    expect(second.hasAttribute('data-composer-composing')).toBe(true)
+    fireEvent.compositionEnd(second, { data: '' })
+    unregister()
+    await Promise.resolve()
+    expect(second.hasAttribute('data-composer-composing')).toBe(false)
+    fireEvent.compositionStart(second)
+    expect(second.hasAttribute('data-composer-composing')).toBe(false)
+  })
+
   it('routes Enter to the keymap submit handler', () => {
     const editor = createEditor({ namespace: 'keymap-routing', onError: (e) => { throw e } })
     const root = document.createElement('div')

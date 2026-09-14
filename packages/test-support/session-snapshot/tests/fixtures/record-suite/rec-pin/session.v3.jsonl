@@ -1,0 +1,5 @@
+{"type":"session","version":3,"id":"{{session:1}}","createdAt":600,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":0}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"step/start","data":{"turn":1,"step":1}}
+{"type":"system/message","data":{"turn":1,"step":1,"message":{"id":"{{message:1}}","role":"system","content":[{"type":"text","text":"{{system}}"}],"source":{"kind":"plugin","plugin":"@deepseek-ai/dsh-system-prompt"}}},"surfaceOp":"append"}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"tools":"{{tools}}"},"reason":"initial"}}

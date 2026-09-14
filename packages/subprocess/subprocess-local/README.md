@@ -29,7 +29,7 @@ Mount the provider beside its consumers and start processes exactly as the subpr
 
 ### Mounting the provider
 
-Load the provider in the same composition as its consumers. It has no config fields: every choice arrives on the spawn request, so deployment-varying decisions stay with the caller's configuration.
+Load the provider in the same composition as its consumers. It has no config fields: every choice arrives on the spawn request, so deployment-varying decisions stay with the caller's configuration. `terminalEnvironment()` reads a nonempty `SHELL` on POSIX, falling back to the account login shell, or a nonempty `ComSpec` on Windows. Empty values are omitted so the consumer can choose its platform fallback.
 
 ```yaml
 - name: '@deepseek-ai/dsh-subprocess-local'
@@ -44,6 +44,12 @@ Absolute executable paths are verified; bare names resolve against the scrubbed 
 
 Collect mode keeps the last `maxBytes` of a stream in memory — errors and final results cluster at the end — and, when a `spill` cap is configured, appends the complete stream to a private file under a per-process directory in the OS temp dir (a `0700` directory, `0600` random-named files). A stream larger than the spill cap discards its incomplete spill and returns only the marked truncated tail. Reads are offset-based and non-consuming, so background and batch readers coexist before and after exit.
 
+The `./output` export shares this collector and retained-spill storage with process adapters. `snapshot()` returns the retained raw bytes and total byte count, allowing remote adapters to preserve offsets without forwarding the complete stream.
+
+### Control transport
+
+An ordinary spawn can request the [subprocess control pipe](../subprocess/README.md#using-a-control-pipe). A Node target receives fd 7 on every supported host; Windows descriptor numbering requires CRT initialization. POSIX runners preserve that descriptor across `execve`; Windows Job and ACL runners establish it in the child's CRT startup table before Node initializes and close their own carrier copies after spawning. Standard streams and the runner's private management channel remain independent.
+
 ### Running terminal sessions
 
 `spawnTerminal` allocates a real PTY and bridges UTF-8 text; you can inspect and signal the current foreground process group and await one `terminate()` operation. On supported Linux hosts, the original terminal argv runs directly inside a user-systemd scope, preserving the node-pty PID, session leader, controlling terminal, foreground `inputWaiting`, and readiness while the scope owns reparented or `setsid` descendants. On fallback hosts, cleanup retains exact identities from the rooted tree and observable session but cannot recover every escaped descendant. An exact Linux input wait requires a foreground thread whose fd 0 identifies the shell's controlling terminal and whose current syscall waits on that fd; if the kernel denies the syscall probe, the higher PTY backend uses its idle inference instead. On Windows, SIGINT is delivered as a Ctrl-C input write, SIGTSTP and SIGHUP are unsupported, and teardown verifies the shell's termination through the process table because an externally killed shell may never fire the PTY exit notification.
@@ -51,6 +57,8 @@ Collect mode keeps the last `maxBytes` of a stream in memory — errors and fina
 ### Shutdown behavior
 
 Normal disposal terminates every running managed range and terminal session and awaits quiescence. During a JavaScript-observable host exit — direct `process.exit()`, default uncaught exceptions, default unhandled rejections — synchronous finalization asks a Linux scope to kill its members, kills each Windows runner so its sole Job handle closes, and uses the existing PGID, `taskkill`, or captured-identity operation for fallbacks. It creates no promises or timers and does not claim quiescence. The same exit removes the private per-process spill directory when it holds no completed spill file; completed spill files remain as full-output recovery artifacts until an external cleanup. Unhandled `SIGTERM`/`SIGINT`/`SIGHUP`, `SIGKILL`, fatal OOM, native crashes, and power loss need an external supervisor.
+
+Linux ordinary and terminal cancellation preserves the observed termination signal even before the bootstrap consumes its launch request. An unconsumed request still reports startup failure when no matching termination was requested; a recorded pre-exec error always takes precedence. `waitForExit()` independently proves the scope empty, including a scope the manager leaves active with no processes after a payload dies before it enters that scope's cgroup. State queries interrupted by a termination signal are repeated before deciding whether cleanup succeeded. After termination, a consumed launch request and zero scope processes prove quiescence even before the direct-process exit notification. If the final scope signal fails, an accepted direct `SIGKILL` or verified direct-process absence permits one wait for the pending direct-process settlement before rechecking an active range not yet proven empty. This wait is independent of output draining and whole-range settlement. The fresh scope observation must prove the range empty; surviving processes or an unknown process count retain the signal failure.
 
 ### What can go wrong
 
@@ -90,7 +98,7 @@ Each spawn selects one owner for both signalling and quiescence. Supported Linux
 
 ### Main flow
 
-A spawn synchronously validates the final argv, cwd, and environment, selects containment before the user command can run, and returns a handle while target identity remains private. Linux ordinary and terminal launches use a private one-shot request whose scoped bootstrap restores the target cwd and environment, resolves the executable, clears close-on-exec on fd 0 through fd 2, and enters libc `execve()` with the original argv. Windows ordinary launches isolate runner fd 0 through fd 2, reserve fd 3 for IPC, and carry target stdio on fd 4 through fd 6; the runner resolves those CRT descriptors to OS handles, creates the target suspended, assigns it to the Job, resumes it, and closes only the carrier descriptors. `done` settles the direct command after its stdio barrier, while `waitForExit()` separately waits for the selected scope, Job, process group, or observed session to become empty.
+A spawn synchronously validates the final argv, cwd, and environment, selects containment before the user command can run, and returns a handle while target identity remains private. Linux ordinary and terminal launches use a private one-shot request whose scoped bootstrap restores the target cwd and environment, resolves the executable, clears close-on-exec on fd 0 through fd 2 and optional control fd 7, and enters libc `execve()` with the original argv. Windows ordinary launches isolate runner fd 0 through fd 2, reserve fd 3 for IPC, and carry target stdio on fd 4 through fd 6 plus fd 7 when control is requested; the runner resolves those CRT descriptors to OS handles, creates the target suspended, assigns it to the Job, resumes it, and closes its standard-stream carriers and optional fd-7 carrier. `done` settles the direct command after its stdio barrier, while `waitForExit()` separately waits for the selected scope, Job, process group, or observed session to become empty.
 
 ### Safety invariants
 
@@ -113,6 +121,8 @@ Read these pages when the provider-level contract is not enough. They move from 
 
 -----
 
+Terminal allocation advertises the caller-provided `terminalType` through TERM and node-pty. Dynamic resize updates the existing PTY. Output backpressure pauses native reads until the consumer drains; explicit termination resumes a paused reader to receive the exit notification.
+
 <a id="model-experience"></a>
 ## Model Experience
 
@@ -129,6 +139,7 @@ No direct invalidation; the named consumers own any request-prefix changes.
 
 These limits define when the provider is a poor fit or needs special operational care. They are current package constraints, not a general platform comparison or a task backlog.
 
+- **Linux direct exit has no independent deadline** — after direct `SIGKILL` is acknowledged, uninterruptible kernel I/O can keep disposal pending indefinitely; `graceMs` and scope-query polling budgets do not bound this wait.
 - **Native ownership has explicit host requirements** — Linux needs a readable user manager and `systemd-run --expand-environment=no`; older systemd versions use the warned PGID fallback. macOS always uses that fallback because no supported public persistent owner exists.
 - **Native selection has bounded per-spawn costs** — Linux repeats the bootstrap entry, libc `execve`/`fcntl` bindings, live user manager, and literal-argv scope probe until it first succeeds; later eligible ordinary or terminal spawns recheck only the live user manager. Windows rechecks the runner entry, bindings, and current Job support before every ordinary spawn. Successful Linux deep-probe state and fallback-warning de-duplication persist for the provider lifetime. All probes finish before the user command can run, and child-process probes have a 5-second timeout. Each Linux launch creates a private request directory, checks unresolved scope establishment every 50 milliseconds, then exponentially backs off an established active scope to at most 5 seconds between queries; a Windows ordinary launch keeps one runner and IPC channel until the Job reports zero active processes. Target standard handles are inherited directly, with no named-pipe stdio or result files.
 - **Windows Job inheritance has defined exclusions** — ordinary descendants inherit the Job by default, but breakaway processes are outside the guarantee. The target starts only after Job assignment; external termination of the runner in the narrow create-to-assignment interval can leave a suspended target behind.

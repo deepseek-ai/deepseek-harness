@@ -263,4 +263,17 @@ describe('ComposerAttachments file drafts', () => {
     expect(group.textContent).toContain('文件')
     expect(group.textContent).toContain('3B')
   })
+
+  it('uses the shared leading-dot suffix in ready-file metadata', () => {
+    const view = render(<ComposerAttachments {...props({
+      attachments: [fileDraft('env', '.env')],
+      uploads: {
+        env: {
+          status: 'ready', receiptId: 'receipt-env' as never,
+          file: { attachmentId: 'file-env' as never, name: '.env', bytes: 3 },
+        },
+      },
+    })} />)
+    expect(view.getByTitle('.env').textContent).toContain('ENV 3B')
+  })
 })

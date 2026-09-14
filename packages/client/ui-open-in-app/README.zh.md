@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包提供 open-in-app 功能的浏览器表面：会话头部的一个分体按钮，主按钮在记住的应用中打开当前会话的 workspace 目录（会话摘要的 `cwd`），下拉箭头列出主机探测到已安装的全部目录应用。可用性、图标与启动均来自 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 的主机路由；两个包应一起挂载。没有 workspace 目录的会话、或没装任何可命名应用的主机，完全不渲染按钮。
+本包提供 open-in-app 功能的浏览器表面：会话头部的一个分体按钮，主按钮在记住的应用中打开当前会话的 workspace 目录（会话摘要的 `cwd`），下拉箭头列出主机探测到已安装的全部 catalog 应用。可用性、图标与启动均来自 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 的主机路由；两个包应一起挂载。没有 workspace 目录的会话、或没装任何可命名应用的主机，完全不渲染按钮。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂进 Web 组合；这对包用两行 cordis.yml 组成完整功能，本行不接受任何 config。只要主机探测到至少一个已安装的目录应用且会话有已知的 workspace 目录，会话头部就会出现 "Open In..." 分体按钮。
+把本插件与 [`dsh-host-open-in-app`](../../host/open-in-app/README.zh.md) 并排挂进 Web 组合；这对包用两行 cordis.yml 组成完整功能，本行不接受任何配置。只要主机探测到至少一个已安装的 catalog 应用且会话有已知的 workspace 目录，会话头部就会出现 "Open In..." 分体按钮。
 
 ### 预期行为
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 <details>
 <summary>实现内幕——点击展开</summary>
 
-插件经标准 slot/inject 通货把分体按钮注册到 `conversation.session.header.utilities`，并以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收两个 store，因此所有会话头部共享同一份事实。路由路径与 wire 载荷类型从主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared` 内联。飞行中的启动由 ref 守卫——启动期间的重复点击与菜单选择被整体忽略（否则会持久化一个该手势从未打开的选择）——busy/error 视觉由围绕 `launch` promise 的定时器驱动。节点半边是一个空 `apply`，让插件出现在主机侧的插件名册上。
+插件通过标准 slot/inject 机制把分体按钮注册到 `conversation.session.header.utilities`，并以一个 effect 注册 `open-in-app` 词典。一个页面生命周期的 controller（[`src/client/controller.ts`](src/client/controller.ts)）拥有每页一次的可用性读取、持久化选择的 snapshot store 与启动 POST；组件经 inject 的 `hooks` 隔间接收两个 store，因此所有会话头部共享同一份事实。路由路径与 wire 载荷类型从主机包的浏览器安全子路径 `@deepseek-ai/dsh-host-open-in-app/shared` 内联。飞行中的启动由 ref 守卫——启动期间的重复点击与菜单选择被整体忽略（否则会持久化一个该手势从未打开的选择）——busy/error 视觉由围绕 `launch` promise 的定时器驱动。节点半边是一个空 `apply`，让插件出现在主机侧的插件名册上。
 
 </details>
 
@@ -59,9 +59,9 @@ kind: "package-reference"
 
 无。分体按钮是浏览器 chrome；这里没有任何东西进入模型请求。
 
-#### KV 缓存影响
+#### KV Cache 影响
 
-无；本包从不组装或发送 provider 请求。
+无；本包从不组装或发送提供方请求。
 
 ## 已知限制与延后工作
 
@@ -80,4 +80,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变量：** 不发布 companion。插件注册一个词典 effect 与一个头部 slot 条目，HMR 安全测试已证明其可处置；可用性与选择存于 controller 的 snapshot store，没有可能分叉的第二份副本。
+**运行时不变式：** 不发布伴生入口。插件注册一个词典 effect 和一个 header slot 条目，HMR 安全性 spec 证明二者都会在资源释放时撤销；可用性与选择存储在控制器的快照存储中，不存在可能与之分歧的第二份副本。

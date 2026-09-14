@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Assembled search-card snapshot: boots the real built workspace client bundles
 // through AppWebEntry's ModuleLoader path against the keyless
-// fixture Connection RPC (no API key, no model round), opens the fixture
+// RemoteMock transport (no API key, no model round), opens the fixture
 // session, and pins the search card the `grep` turn (fixture turn 67) renders in
 // the assembled application. The built-boot smoke proves the graph boots but
 // intentionally carries no behavior assertions; this is the assembled-output check

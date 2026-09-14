@@ -28,7 +28,7 @@ macOS 参考流程使用 fork 进程运行常规 Vitest 项目。macOS arm64 上
 
 master 分支的参考作业仅用于诊断，不参与拉取请求所要求的 `all checks passed` 结果。ci-master 与 Sandbox 工作流把跨平台参考流程保留在 master 推送上。系统根据已完成托管作业的时间戳评估性能，并将其报告为测量结果，而不是写成 `timeout-minutes` 值。
 
-当前启用的参考流程运行在公司自有 `vm-backup`（`serial / linux`）与 `dsh-win-ci`（`serial / windows`）自托管池上；唯一剩余的禁用托管参考作业（`serial-macos`）使用 `macos-latest`，且不存在标准托管的 `serial / linux` 标签。仅 master 触发的 Wine 作业在 `ubuntu-latest` 上运行，而拉取请求原生作业在正常运行下使用托管的 `dsh-windows-2025-16core` 运行器，故障切换时使用自托管 `[self-hosted, dsh-win-ci, windows]` 池（参见[故障切换手册](2026-07-26-ci-failover-runbook.zh.md)），依据[原生 Windows 决策](2026-08-08-native-windows-pull-request-ci.zh.md)，其中构建与定向进程检查参与必需聚合流程。依据[必需 CI 决策](../../archived/process/2026-07-23-portable-required-pull-request-ci.md)，拉取请求必需作业使用可移植的标准容量。更高核心数的托管运行器仍仅用于手动基准测试，因为正确性路径必须无需仓库外部的运行器配置即可运行。
+当前启用的参考流程运行在公司自有 `vm-backup`（`serial / linux`）与 `dsh-win-ci`（`serial / windows`）自托管池上；唯一剩余的禁用托管参考作业（`serial-macos`）使用 `macos-latest`，且不存在标准托管的 `serial / linux` 标签。仅 master 触发的 Wine 作业在 `ubuntu-latest` 上运行，而拉取请求原生作业在正常运行下使用托管的 `dsh-windows-2025-16core` 运行器，在 `selfhosted` 故障切换取值下使用自托管 `[self-hosted, dsh-win-ci, windows]` 池，在 `blacksmith` 取值下使用 Blacksmith 的 Windows 运行器（见 [blacksmith 故障切换支路笔记](2026-09-09-blacksmith-failover-leg.zh.md)；另见[故障切换手册](2026-07-26-ci-failover-runbook.zh.md)），依据[原生 Windows 决策](2026-08-08-native-windows-pull-request-ci.zh.md)，其中构建与定向进程检查参与必需聚合流程。依据[必需 CI 决策](../../archived/process/2026-07-23-portable-required-pull-request-ci.md)，拉取请求必需作业使用可移植的标准容量。更高核心数的托管运行器仍仅用于手动基准测试，因为正确性路径必须无需仓库外部的运行器配置即可运行。
 
 ## 曾考虑的替代方案
 

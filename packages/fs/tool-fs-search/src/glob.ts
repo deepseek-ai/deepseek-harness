@@ -287,7 +287,7 @@ export function presentGlobResult(_args: { pattern: string; path?: string }, res
 }
 
 /**
- * Register the `glob` tool and its system-prompt guidance.
+ * Register the `glob` tool and its scope-aware system-prompt guidance.
  *
  * @param ctx - the plugin context; registrations are effects scoped to it, and
  *   execution uses its `subprocess` service.
@@ -300,7 +300,9 @@ export function applyGlobTool(ctx: Context, caps: GlobToolCaps): void {
   ctx.systemPrompt.section({
     name: 'tool:glob',
     order: ctx.systemPrompt.getSectionOrder('TOOL_GLOB'),
-    text: 'Use the glob tool — not shell find — to discover files by path pattern. A pattern with no "/" matches basenames at any depth, so "*" matches every file in the tree rather than its top level. '
+    text: ({ scope }) => ctx.tools.get('glob', scope) === undefined
+      ? ''
+      : 'Use the glob tool — not shell find — to discover files by path pattern. A pattern with no "/" matches basenames at any depth, so "*" matches every file in the tree rather than its top level. '
       + `Results are files only, never directories, and include hidden and ignored files: a result that fits comes back in modification-time order, ${overCapGuidance}`,
   })
 

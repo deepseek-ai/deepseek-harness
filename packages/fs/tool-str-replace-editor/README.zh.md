@@ -1,5 +1,5 @@
 ---
-description: "基于 `ctx.fs` 的独立 str_replace_editor 工具：供组合 Claude Code 风格文件编辑能力的用户与维护者使用。"
+description: "基于 `ctx.fs` 的独立 str_replace_editor 工具：供为 agent（智能体）组合 Claude Code 风格文件编辑能力的用户与维护者使用。"
 kind: "package-reference"
 ---
 
@@ -64,7 +64,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-该工具是基于 `ctx.fs` 的单一 schema、四个命令。修改操作绝不带着自己的假设直接触碰提供方：每个操作都运行 `fs/write-intent` 或 `fs/edit-intent` waterfall 以取得策略插件的防护，在已挂载的 `ctx.fs` 实施沙箱限制时解析按调用沙箱策略，并把强制执行委托给提供方。`str_replace` 与 `insert` 还会重新读取文件，并在没有策略插件提供防护时把观察到的版本作为比较并交换的基础。
+该工具是基于 `ctx.fs` 的单一 schema、四个命令。修改操作绝不带着自己的假设直接触碰提供方：每个操作都运行 `fs/write-intent` 或 `fs/edit-intent` waterfall（瀑布式事件）以取得策略插件的防护，在已挂载的 `ctx.fs` 实施沙箱限制时解析每次调用的沙箱策略，并把强制执行委托给提供方。`str_replace` 与 `insert` 还会重新读取文件，并在没有策略插件提供防护时把观察到的版本作为比较并交换的基础。
 
 ### 源码地图
 
@@ -146,4 +146,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。tool adapter 不持有独立持久状态；filesystem mutation 关系属于 provider 与 policy 插件。
+**运行时不变式：** 不发布伴生入口。工具适配器不持有独立持久状态；文件系统修改关系属于提供方与策略插件。

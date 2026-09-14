@@ -2,7 +2,8 @@
 import { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
-import { WorkerThreadCodeRuntime } from '@deepseek-ai/dsh-code-runtime-worker-thread'
+import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcRunRequest, PtcRunSpec, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { SpillLocator, SpillStore, type SaveTextSpill, type SpillRef } from '@deepseek-ai/dsh-spill'
@@ -40,7 +41,24 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
     await ctx.plugin(ToolRuntime, { mode: 'both' })
     await ctx.plugin(MemorySpillStore)
     await ctx.plugin(SpillPolicy, { maxInlineBytes })
-    if (nested) await ctx.plugin(WorkerThreadCodeRuntime, {})
+    if (nested) {
+      // The real registry and spill policy own nested output; evaluator execution has its own process suite.
+      class BindingRuntime extends PtcRuntime {
+        readonly language = 'typescript'
+        readonly isolation = 'fixture'
+        resolve(request: PtcRunRequest): PtcRunSpec {
+          return { ...request, cwd: process.cwd(), timeoutMs: 120_000 }
+        }
+        async run(spec: PtcRunSpec): Promise<PtcRunResult> {
+          const tool = spec.bindings.find(binding => binding.global === 'tools')?.functions[name]
+          if (tool === undefined) throw new Error('missing fixture binding')
+          const blocks = await tool(shellArgs)
+          expect(blocks).toEqual([{ type: 'text', text }])
+          return { logs: [], value: true }
+        }
+      }
+      await ctx.plugin(BindingRuntime)
+    }
     ctx.effect(() => ctx.tools.register(defineContentToolFixture({
       name,
       description: 'Return deterministic shell text without spawning a process.',
@@ -70,7 +88,7 @@ async function executeShell(text: string, nested: boolean, name = 'bash', maxInl
     let block: ToolResultNode
     if (nested) {
       expect(result.value).toMatchObject({ result: true })
-      const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/code-dispatch')
+      const dispatches = session.snapshotEvents().filter(event => event.type === 'tool/ptc-dispatch')
       expect(dispatches).toHaveLength(1)
       const event = dispatches[0]!
       block = {

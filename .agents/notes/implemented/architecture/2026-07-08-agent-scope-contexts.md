@@ -16,6 +16,8 @@ The mechanism also needs a publication boundary. An agent must not become visibl
 
 Every live agent owns one flat registration layer exposed as `agent.ctx`. Code registers through the context that owns a contribution; scope-aware services combine deployment-global registrations with exactly one matching agent layer; operations choose that layer from their real agent; and the layer exists for the agent's complete published lifetime.
 
+`agent.ctx` carries registration ownership and the scope key; it does not expose a reverse `agent` property. Code that needs the domain subject receives it explicitly: `AgentSetup` receives `(agentCtx, agent)`, and scoped events carry their subject in the payload.
+
 Cordis is the plugin framework underneath the SDK. A Cordis **context** is the object plugins use to access services and register effects whose cleanup follows that context. The [Cordis primer](../../../../docs/cordis-primer.md) explains the framework in more detail.
 
 For most contributors, the complete contract is four rules:
@@ -45,7 +47,7 @@ flowchart LR
 
 The missing cross-edges are the isolation rule: Agent A's local registrations do not enter Agent B's view, and a parent's registrations do not enter a child merely because the parent owns the child's lifetime.
 
-The companion [runtime-design Agent Note](2026-07-12-agent-scope-runtime-design.md) explains the implementation and correctness reasoning. The [subagent composition-controls Agent Note](../feature/2026-07-12-subagent-persona-tool-filter-and-depth.md) owns the separate `persona`, `toolFilter`, and `maxDepth` feature.
+The companion [runtime-design Agent Note](2026-07-12-agent-scope-runtime-design.md) explains the implementation and correctness reasoning. The [explicit runtime-identity Agent Note](2026-08-31-explicit-agent-runtime-identity.md) owns why lifecycle, event, and transport interfaces pass Agent identity instead of exposing it through Context. The [subagent composition-controls Agent Note](../feature/2026-07-12-subagent-persona-tool-filter-and-depth.md) owns the separate `persona`, `toolFilter`, and `maxDepth` feature.
 
 ### Registration origin chooses visibility and cleanup
 
@@ -88,7 +90,7 @@ await handle.dispose()
 ctx.tools.get('review_summary', handle.agent)  // undefined: scope is gone
 ```
 
-Setup receives a full trusted Cordis context so it can compose ordinary plugins and services. Its contract is composition-only: driving or publishing the in-flight agent through casts or internal registry calls is unsupported.
+Setup receives the full trusted Cordis context and unpublished Agent so it can compose ordinary plugins and services while reading the exact child Session when needed. Its contract is composition-only: driving or publishing the in-flight agent through casts or internal registry calls is unsupported.
 
 ### The operation chooses the view
 

@@ -1,6 +1,10 @@
-# PTC mode adds `ctx.codeRuntime` and changes the registry to one wire tool,
+# PTC mode adds `ctx.ptcRuntime` and changes the registry to one wire tool,
 # `run_code`, plus its generated TypeScript SDK prompt. The demo and snapshot
 # recorder apply this profile patch; replay applies its sibling patch.
+- insert:
+    - id: literal-sdk
+      name: '../../../packages/core/tools/tests/fixtures/literal-sdk.ts'
+
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
   config:

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-launch-environment` freezes this run's environment at launch into an immutable snapshot that records which layer supplied each value. Resolving a name searches the layers from most to least trusted — the inherited process environment, the invoking directory's `.env`, then the Harness home's `.env` — so the winning value always carries its source. A caller can also resolve from a named subset of layers, which is a refusal rather than a demotion: omitted layers are unreachable no matter how trust ordering changes later. Values still reach `process.env` for config expressions and third-party libraries, but nothing the harness resolves treats that flattened view as authoritative. It is a zero-dependency library that product packages import directly; a `cordis.yml` cannot load it.
+Use `@deepseek-ai/dsh-launch-environment` to resolve launch-time environment values without trusting the flattened `process.env`. It freezes inherited process values, the invocation directory's `.env`, and the Harness home's `.env`, then returns the winning value and its source in a fixed trust order. Callers can exclude layers for sensitive lookups; an omitted layer stays unreachable regardless of later ordering changes. The snapshot is immutable, but every layer is still copied into `process.env`, so it does not isolate subprocesses. Import it as a library; it cannot be mounted from `cordis.yml`.
 
 ## Table of Contents
 
@@ -36,6 +36,8 @@ const endpoint = launchEnvironmentOf(ctx).get('DEEPSEEK_BASE_URL')?.value
 ```
 
 `get(name)` searches every layer, most trusted first. `getFrom(name, sources)` searches only the named layers without changing that trust order — a caller that must never accept a layer leaves it out of the list, so no future reordering can let it back in.
+
+`launchedThroughSsh(snapshot)` returns true only for a non-empty `SSH_CONNECTION` or `SSH_TTY` in the inherited process layer. Web browser handoff, the adaptive directory picker, and Open In share this predicate; project and user `.env` values never establish an SSH session.
 
 ### How layers rank
 

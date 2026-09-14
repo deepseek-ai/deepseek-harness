@@ -77,6 +77,19 @@ describe('npm install layout verifier', () => {
     })
   })
 
+  it.each([
+    ['react', 'node_modules/react'],
+    ['react-dom', 'node_modules/react-dom'],
+    ['react', 'node_modules/dsh-previous/node_modules/react'],
+    ['react-dom', 'node_modules/dsh-previous/node_modules/react-dom'],
+  ])('rejects browser runtime %s installed at %s in the DSH-only consumer', (name, path) => {
+    const layout = validLayout()
+    const packages = { ...layout.packages, [path]: { version: '18.3.1' } }
+    expect(() => assertDualDshInstallLayout({ ...layout, packages })).toThrow(
+      `${path}: ${name} is a browser build input`,
+    )
+  })
+
   it('rejects an internal edge that crosses release versions', () => {
     const layout = validLayout()
     const packages = { ...layout.packages }

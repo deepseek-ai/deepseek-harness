@@ -6,7 +6,7 @@ English | [中文](2026-08-27-adjacent-agent-steer-messaging.zh.md)
 
 ## Problem
 
-Continuable Agents originally used direction-specific model controls. A parent called `send_message({ subagent_id, message })`, which delegated to a FIFO `followup` service operation. A child instead received a child-scoped `report({ output })` tool, a `tool:report` system-prompt section, and deployment-selected quiet or waking delivery. The tools described one adjacent-Agent operation through different schemas, service paths, provenance, and scheduling.
+Continuable Agents originally used direction-specific model controls. A parent called `send_message({ subagent_id, message })`, which delegated to a FIFO `followup` service operation. A child instead received a child-scoped `report({ output })` tool, a `tool:report` system-prompt section, and deployment-selected quiet or waking delivery. The tools described one adjacent-Agent operation through different schemas, service paths, source attribution, and scheduling.
 
 A continuable child owns its own Session, so its parent does not automatically receive the child's transcript, tool output, or reasoning. The return path must therefore remain explicit and repeatable: a child may send progress before it finishes, remain available after sending, or fail before it can cooperate. Turning every final assistant message into an implicit result would conflate turn completion with model-selected communication and would not cover abnormal endings.
 

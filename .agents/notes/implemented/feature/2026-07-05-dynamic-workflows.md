@@ -22,19 +22,13 @@ One deliberate strictness DIVERGENCE from CC: hook misuse — unknown or deferre
 
 `ctx.workflowEngine` is an abstract `WorkflowEngine` in the bash shape — one engine per context, no named-provider registry (engines are deployment swaps, not co-residents). `start(request)` throws synchronously for a script that cannot begin; a returned `WorkflowRun`'s `result` NEVER rejects (failures resolve as `stopReason: 'error' | 'cancelled'`). The `workflow/*` events are observe-only emits carrying DATA SNAPSHOTS (id + meta; `workflow/end` omits the result value), per-listener contained, mirroring `subagent/start`/`subagent/end` — control stays with the run's holder. Vocabulary details: [subsystems/workflow.md](../../../../docs/subsystems/workflow.md).
 
-### The engine (dsh-workflow-worker-thread): one worker thread per run
+### The engine (dsh-workflow-ptc): shared Node process execution
 
-**Trust premise**: workflow scripts have the same trust as the model's bash access. The engine contains buggy scripts and guarantees settled results, JSON-safe values, and cancellation quiescence; it does not defend against hostile code. A vm context and worker thread are not security boundaries: a script can escape to Node APIs with process-wide authority. Sandboxing requires a separate-process or isolated-vm engine behind this seam.
+The [workflow sandbox reuse decision](../architecture/2026-09-13-workflow-ptc-sandbox-reuse.md) supersedes the worker-thread execution and trust realization. The engine retains the VM and helpers inside a sandboxed PTC Node process. The VM defines the script API; OS file policy and managed process cleanup belong to the shared execution provider.
 
-**Why `node:worker_threads`**: each run gets one unpooled worker. A vm context limits the documented script API, while message-port RPC bridges `agent()` to host-side child loops. The worker prevents synchronous script work from blocking the host, provides a serialization boundary, and permits forced termination after cancellation. `isolated-vm` was rejected because of its maintenance state and deployment requirements.
+The host validates metadata and parses the body before publication. Host bindings connect the guest to subagents and workflow observers. Pending starts and published child records share a cancellation signal; the [agent-scope runtime-design Agent Note](../architecture/2026-07-12-agent-scope-runtime-design.md#workflow-children-are-pending-starts-or-published-records) owns their lifecycle rules.
 
-The host validates metadata and parses the body before publication. Private enum-keyed payload maps define the wire protocol; pending starts, published child records, one cancellation signal, worker-death reaping, result precedence, and disposal quiescence preserve the subagent run contract across it. The [agent-scope runtime-design Agent Note](../architecture/2026-07-12-agent-scope-runtime-design.md#workflow-children-are-pending-starts-or-published-records) owns those race algorithms.
-
-The engine exposes an in-process `MessageChannel` test path because main-process V8 coverage cannot see worker execution.
-
-**Meta is data**: the schema-validated `meta` field reaches the seam as JSON and is only shape-validated. The host never evaluates a metadata literal, which would let script-controlled accessors run outside the worker's isolation.
-
-**Value boundary**: `materializeFromRealm` copies outbound values and rejects functions, symbols, nested `undefined`, exotic prototypes, cycles, sparse arrays, and non-finite numbers. Data-property copies make `"__proto__"` safe; getters are read normally and a throwing getter fails loudly. `args` crosses through `workerData` and is cloned again before exposure. Realm functions are invoked rather than copied, and thrown values use a total renderer so `result` cannot reject. Hook errors are host-realm `WorkflowError`s, so scripts branch on `name` or `code` rather than `instanceof Error`, as documented in the engine README. Concurrency, total-agent, item, timeout, and grace limits are validated config.
+**Meta is data**: the host never evaluates a metadata literal. **Values are lossless JSON**: guest-side realm materialization rejects unsupported values before PTC transport. Getters run inside the confined process, and hook errors retain their stable `name` and `code` fields across realms. Cooperative helper caps and the initial synchronous-slice timeout remain; no overall workflow elapsed timer is added.
 
 ### The Consumer (`dsh-tool-workflow`)
 
@@ -52,7 +46,7 @@ An output schema makes a schema-valid committed capture mandatory for successful
 
 ## Testing
 
-Worker-side logic runs through an in-process `MessageChannel` so V8 coverage measures it. Unit tests cover script helpers, fatal and nullable failures, JSON boundaries, caps, cancellation, child ownership, and structured output through real loops. A built-bin smoke runs the separately bundled `lib/worker.cjs` under plain Node, a with-key e2e drives real child agents, and model-facing workflow behavior is snapshot-covered through its owning example.
+Verification belongs to the workflow helper and host-lifecycle tests, the shared Node PTC confinement tests, and source/built workflow execution through the shipped profile. Recorded workflow and opt-in Ralph scenarios own the assembled model transcript; replay configurations using a passthrough sandbox do not establish OS enforcement.
 
 ## Deferred (documented non-goals)
 
@@ -60,14 +54,14 @@ Worker-side logic runs through an in-process `MessageChannel` so V8 coverage mea
 - **Journaling + resume** (`resumeFromRunId`, cached agent() prefixes) — implementing it reintroduces CC's determinism bans as a script-contract tightening (scripts may read the clock).
 - **Saved/bundled workflows** (a `.deepseek/workflows/` registry, slash-command API) and **script persistence to a run directory** (the tool-call event already records the script durably).
 - **Nested `workflow()`**, **token `budget`**, and the `effort`/`isolation`/`agentType` agent options (each rejects loud with a message naming it deferred).
-- **An overall run wall-clock timeout** — cancellation always frees the caller (result settles within the grace), so a cap on total run time is a policy knob for the background redesign, not a correctness need here.
-- **Engine hardening beyond worker threads**: an isolated-vm or separate-process engine behind the same seam (actual sandboxing; memory limits).
+- **An overall run wall-clock timeout** — workflow lifetime remains caller-controlled; explicit cancellation stops PTC execution and awaits child cleanup.
 - **ACP-backend structured output** and **`toolFilter`** (both still capability-gated `false`).
 
 ## Alternatives considered
 
-- **Hostile-value containment in the host** (trap-free proxy rejection, accessor-never-invoked descriptor walks, realm-side pre-rendering of thrown values, realm-built promises/arrays/error clones with structural fatal recognition): rejected because every defense targets an author the trust premise accepts, while the thread's serialization boundary already makes cross-realm values total by construction.
-- **In-process `node:vm` execution**: mechanically simplest — no RPC, no thread — but `start()` blocks the caller for the script's initial synchronous slice, a synchronous spin past the first await cannot be killed in-process (the vm `timeout` covers only that first slice), and `dispose()` could only abandon an unsettling script on the host loop. The worker-thread engine keeps the same vm-context script API while unblocking the host and making termination real.
+- **Host-side defenses for VM values** (proxy rejection, descriptor walks and cross-realm clones): these cannot enforce OS file authority. VM evaluation and materialization belong inside the confined process; the shared PTC provider owns validation at the process transport.
+- **In-process `node:vm` execution**: mechanically simplest — no RPC, no thread — but `start()` blocks the caller for the script's initial synchronous slice, a synchronous spin past the first await cannot be killed in-process (the vm `timeout` covers only that first slice), and `dispose()` could only abandon an unsettling script on the host loop. The PTC process keeps the vm-context script API while unblocking the host and providing managed termination.
+- **`isolated-vm`**: adding a separate JavaScript engine brings native dependency and deployment requirements; the shared PTC provider already supplies process confinement.
 - **Background execution as the default** (CC's shape): deferred; foreground-synchronous matches `dsh-tool-subagent`'s cut, and background semantics should be designed ONCE across shell/subagent/workflow rather than per-tool.
 - **Workflow-layer JSON parsing for `agent({schema})`**: duplicating a seam concern at one consumer while the seam's capability flag stayed dishonestly `false`.
 - **Meta embedded in the script as `export const meta = {...}`** (CC's exact format): keeps scripts self-contained and CC scripts drop-in, but obtaining meta requires evaluating model-written text on the host. Even an empty timed vm context cannot bound script-controlled getters when the host reads the resulting object. A JSON parameter removes the scanner, evaluation, and host-spin hole; the cost is that a CC script's meta header must move into the parameter (the body stays drop-in).
@@ -78,4 +72,4 @@ Worker-side logic runs through an in-process `MessageChannel` so V8 coverage mea
 
 ## Consequences
 
-Fan-out plans now live in rerunnable scripts, and `outputSchema` provides authoritative structured child results. Each run pays worker startup and message-port RPC costs, but host startup stays non-blocking, cancellation can terminate the worker, and serialization enforces the value boundary. Worker threads are not a security boundary. Invalid options fail rather than degrading to Claude Code's `null`; consumers retain control through the run handle while observers receive snapshots only. Top-level Web users also receive a durable, replayable workflow record without widening the execution seam or coupling the original tool card to workflow-specific UI.
+Fan-out plans now live in rerunnable scripts, and `outputSchema` provides authoritative structured child results. Each run pays PTC process startup and binding RPC costs. Host execution stays non-blocking, cancellation stops the managed process, and JSON serialization separates guest values from the host. Invalid options fail rather than degrading to Claude Code's `null`; consumers retain control through the run handle while observers receive snapshots only. Top-level Web users also receive a durable, replayable workflow record without widening the execution seam or coupling the original tool card to workflow-specific UI.

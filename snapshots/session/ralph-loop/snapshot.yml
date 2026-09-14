@@ -1,10 +1,11 @@
 version: 1
 scenario: ralph-loop
 profile: headless
-composition: default
+composition: ralph
 recording: authored
 header:
-  class: default
+  class: ralph
+  pin: true
   childSystemPrompts: [1, 2]
   childToolSchemas: [1, 2]
 replay:

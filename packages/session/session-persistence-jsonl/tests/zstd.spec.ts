@@ -417,16 +417,36 @@ describe('JsonlSessionPersistence: default Zstandard encoding', () => {
     const header = meta('zstd-v0-read', '/work')
     const sourcePath = generationLogPath(root, header.cwd, header.id, 0, 'zstd')
     const currentPath = logPath(root, header.cwd, header.id, 'zstd')
+    const [turn, user, step, ...tail] = releasedV1OneTurnLog()
+    // Synthetic historical input opens its step before any surface so V3 can reserve the system head.
+    const historical = [turn!, step!, user!, ...tail].map((event, seq) => ({
+      ...event, seq: SessionSeq(seq), time: seq < 3 ? seq + 1 : event.time,
+    }))
     const source = Buffer.concat([
       await compressZstdFrame(`${JSON.stringify(releasedV0Header(header))}\n`),
-      await compressZstdFrame(`${releasedV1OneTurnLog().map(event => JSON.stringify(event)).join('\n')}\n`),
+      await compressZstdFrame(`${historical.map(event => JSON.stringify(event)).join('\n')}\n`),
     ])
     await mkdir(sessionDir(root, header.cwd, header.id), { recursive: true })
     await writeFile(sourcePath, source)
 
     await expect(readAll(ctx.sessionPersistence, header.id)).resolves.toEqual({
       meta: { ...header, delegationDepth: 0 },
-      events: oneTurnLog(),
+      events: [
+        historical[0],
+        historical[1],
+        {
+          type: 'system/message', seq: 2, time: 2, surfaceOp: 'append',
+          data: {
+            turn: 1, step: 1,
+            message: {
+              id: 'v2-to-v3-system-fc06c3f7720f3bc94ea7a2b7fadde6a5b100c6ab6ca342d2222bd017184a0b67',
+              role: 'system', source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }, content: [],
+            },
+          },
+        },
+        { ...historical[2], seq: 3 },
+        ...oneTurnLog().slice(3).map(event => ({ ...event, seq: event.seq + 1 })),
+      ],
     })
     expect(await readFile(sourcePath)).toEqual(source)
     await expect(readFile(currentPath)).rejects.toMatchObject({ code: 'ENOENT' })

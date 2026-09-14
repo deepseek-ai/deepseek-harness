@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Multimodal image surfaces over the BUILT client graph (the ptc-fixture
-// idiom: real bundles via AppWebEntry, keyless fixture Connection RPC).
+// idiom: real bundles via AppWebEntry, keyless RemoteMock transport).
 // Opens the fixture history session whose turn 73 carries an image in BOTH a
 // user message and an assistant message, and pins the product surfaces: the
 // history ImageGallery loading real fixture bytes through the authorized
@@ -90,7 +90,7 @@ it('accepts pasted images into the composer rail in order and removes them', asy
   // this assembled lane pins the intake chain over the built graph.
   const textarea = await waitFor(() => {
     const surface = document.querySelector<HTMLElement>(
-      '[data-composer-input][data-placeholder="Describe what you want to build... / commands, @ files or sessions"]',
+      '[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]',
     )
     if (surface === null) throw new Error('composer surface missing')
     return surface
@@ -161,7 +161,7 @@ it('accepts a whole-page drop under the limits-labeled overlay and refuses an ov
   fireEvent.click(start)
   const textarea = await waitFor(() => {
     const surface = document.querySelector<HTMLElement>(
-      '[data-composer-input][data-placeholder="Describe what you want to build... / commands, @ files or sessions"]',
+      '[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]',
     )
     if (surface === null) throw new Error('composer surface missing')
     return surface
@@ -169,7 +169,7 @@ it('accepts a whole-page drop under the limits-labeled overlay and refuses an ov
 
   // A file drag anywhere over the page raises the full-viewport overlay whose
   // desc line carries the projected limits — copy that can only render after
-  // the imageLimits projection crossed the real fixture transport.
+  // the imageLimits projection crossed the RemoteMock transport.
   const image = new File([new Uint8Array([137, 80, 78, 71])], 'dropped.png', { type: 'image/png' })
   const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'none' }
   fireEvent.dragEnter(document.body, { dataTransfer })
@@ -207,7 +207,7 @@ it('accepts a whole-page drop under the limits-labeled overlay and refuses an ov
 })
 
 it('renders a host dimension rejection with the projected 2000px limit', async () => {
-  mountAssembledApp('?fixture&fixturePrompt=reject')
+  mountAssembledApp({ remote: { rejectPrompt: true } })
 
   const tree = await screen.findByRole('tree', { name: 'Sessions' }, { timeout: 10_000 })
   const start = tree.querySelector<HTMLButtonElement>('button[aria-label="New session in fixture"]')
@@ -216,7 +216,7 @@ it('renders a host dimension rejection with the projected 2000px limit', async (
 
   const textarea = await waitFor(() => {
     const surface = document.querySelector<HTMLElement>(
-      '[data-composer-input][data-placeholder="Describe what you want to build... / commands, @ files or sessions"]',
+      '[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]',
     )
     if (surface === null) throw new Error('composer surface missing')
     return surface

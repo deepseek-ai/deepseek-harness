@@ -4,23 +4,47 @@
   grid-template-columns: 14px max-content;
   align-items: center;
   column-gap: 4px;
-  height: 32px;
-  padding: 0 10px;
+  height: 28px;
+  padding: 0 8px;
   box-sizing: border-box;
-  border: none;
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 13px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 500;
   line-height: 18px;
   white-space: nowrap;
-  transition: background-color 160ms ease-out, color 160ms ease-out;
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out,
+    border-color 160ms ease-out,
+    opacity 150ms ease-out;
+  animation: indicator-enter 150ms ease-out;
+}
+
+.leaving {
+  opacity: 0;
+}
+
+@keyframes indicator-enter {
+  from {
+    opacity: 0;
+  }
 }
 
 .warning {
   background: var(--dsw-alias-state-warn-tertiary);
   color: var(--dsw-alias-state-warn-label);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-warn-label) 20%, transparent);
   cursor: pointer;
+}
+
+.warning:hover {
+  background: color-mix(
+    in srgb,
+    var(--dsw-alias-state-warn-tertiary),
+    var(--dsw-alias-state-warn-primary) 6%
+  );
 }
 
 .warning:active {
@@ -39,6 +63,7 @@
 .success {
   background: var(--dsw-alias-state-success-tertiary);
   color: var(--dsw-alias-state-success-primary);
+  border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 20%, transparent);
 }
 
 .icon {
@@ -49,35 +74,20 @@
 }
 
 .label {
-  display: grid;
   text-align: left;
 }
 
-.stateLabel,
-.hoverLabel,
-.sizeLabel {
-  grid-area: 1 / 1;
+.spinner {
+  animation: spinner-rotate 0.9s linear infinite;
 }
 
-.sizeLabel {
-  visibility: hidden;
-}
-
-.warning:is(:hover, :focus-visible) .stateLabel {
-  visibility: hidden;
-}
-
-.hoverLabel {
-  visibility: hidden;
-}
-
-.warning:is(:hover, :focus-visible) .hoverLabel {
-  visibility: visible;
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
 }
 
 .dots {
   display: inline-block;
-  width: 1.5em;
+  width: 1em;
   text-align: left;
 }
 
@@ -90,18 +100,24 @@
 }
 
 @keyframes reveal-second-dot {
-  0%, 33.32% { visibility: hidden; }
-  33.33%, 100% { visibility: visible; }
+  0%, 33.32% { opacity: 0; }
+  33.33%, 100% { opacity: 1; }
 }
 
 @keyframes reveal-third-dot {
-  0%, 66.65% { visibility: hidden; }
-  66.66%, 100% { visibility: visible; }
+  0%, 66.65% { opacity: 0; }
+  66.66%, 100% { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .indicator,
   .secondDot,
-  .thirdDot {
+  .thirdDot,
+  .spinner {
     animation: none;
+  }
+
+  .indicator {
+    transition: none;
   }
 }

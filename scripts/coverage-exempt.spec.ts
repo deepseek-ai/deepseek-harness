@@ -32,6 +32,14 @@ function filterMatches(filter: string): string[] {
 }
 
 describe('coverage-exempt roster', () => {
+  it('selects every Typert suite for the uninstrumented gate', () => {
+    const typertSpecs = filterMatches('packages/typert/')
+    const exemptSpecs = coverageExemptHeavySuites.flatMap(suite => excludeMatches(suite.exclude))
+      .filter(spec => spec.startsWith('packages/typert/')).sort()
+    expect(typertSpecs.length).toBeGreaterThan(0)
+    expect(exemptSpecs).toEqual(typertSpecs)
+  })
+
   it.each(coverageExemptHeavySuites.map(suite => [suite.filter, suite] as const))(
     'filter and exclude select the same non-empty spec set for %s',
     (_filter, suite) => {

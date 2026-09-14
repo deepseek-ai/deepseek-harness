@@ -5,7 +5,7 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronUpOutline14, IconCloseOutline16,
-  DocumentFileIcon, fileSizeText, IconEditOutline16, IconQueueOutline14, IconSendOutline14,
+  FileTypeIcon, fileSizeText, IconEditOutline16, IconQueueOutline14, IconSendOutline14,
   IconTrashOutline16, projectUserText, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { QueueAction, QueueItemId, QueueRow } from '../contract/queue.ts'
@@ -52,7 +52,7 @@ function queueAttachments(content: QueueRow['content']): Array<
 function QueueFile({ attachment, label }: { attachment: FileAttachmentRef; label: string }) {
   return (
     <span className={css.file} aria-label={label} title={attachment.name}>
-      <span className={css.fileIcon} aria-hidden><DocumentFileIcon /></span>
+      <span className={css.fileIcon} aria-hidden><FileTypeIcon path={attachment.name} size={16} /></span>
       <span className={css.fileName}>{attachment.name}</span>
       <span className={css.fileSize}>{fileSizeText(attachment.bytes)}</span>
     </span>

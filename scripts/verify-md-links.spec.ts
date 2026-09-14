@@ -1,5 +1,5 @@
 /**
- * Acceptance-path coverage for fragment validation in `verify-md-links`: a
+ * Source-discovery and fragment validation coverage for `verify-md-links`: a
  * `#fragment` onto a Markdown target — same-file anchors included — must name
  * a real heading slug or explicit `<a id>`, while non-Markdown fragments and
  * external targets stay out of scope.
@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { anchorCache, documentAnchors, findViolations, githubSlug } from './verify-md-links.ts'
+import { anchorCache, documentAnchors, findViolations, githubSlug, markdownLinkSourcePaths } from './verify-md-links.ts'
 
 const roots: string[] = []
 afterEach(() => {
@@ -29,6 +29,38 @@ function layout(files: Record<string, string>): string {
 function violationsIn(root: string, rel: string): { url: string; reason: string }[] {
   return findViolations(join(root, rel), anchorCache(), root).map(({ url, reason }) => ({ url, reason }))
 }
+
+describe('Markdown source discovery', () => {
+  it('rejects broken links in both top-level package indexes', () => {
+    const root = layout({
+      'packages/README.md': '[removed group](removed/README.md)\n',
+      'packages/README.zh.md': '[removed group](removed/README.zh.md)\n',
+    })
+    const sources = markdownLinkSourcePaths(root)
+    const violations = sources.flatMap(file => findViolations(join(root, file), anchorCache(), root))
+    expect(violations.map(({ file, reason }) => ({ file, reason })).sort((a, b) => a.file.localeCompare(b.file)))
+      .toEqual([
+        { file: join('packages', 'README.md'), reason: 'target' },
+        { file: join('packages', 'README.zh.md'), reason: 'target' },
+      ])
+  })
+
+  it('checks package instructions and nested docs while excluding frozen notes', () => {
+    const root = layout({
+      'packages/AGENTS.md': '[missing](missing.md)\n',
+      'packages/core/README.md': '[missing](missing.md)\n',
+      'packages/core/probe/README.md': '[missing](missing.md)\n',
+      '.agents/notes/archived/process/frozen.md': '[historical](missing.md)\n',
+    })
+    const sources = markdownLinkSourcePaths(root)
+    const violations = sources.flatMap(file => findViolations(join(root, file), anchorCache(), root))
+    expect(violations.map(({ file }) => file).sort()).toEqual([
+      join('packages', 'AGENTS.md'),
+      join('packages', 'core', 'README.md'),
+      join('packages', 'core', 'probe', 'README.md'),
+    ])
+  })
+})
 
 describe('documentAnchors', () => {
   it('slugs rendered heading text, suffixes repeats, and reads explicit <a id> anchors', () => {

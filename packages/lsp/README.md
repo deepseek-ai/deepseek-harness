@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The lsp group gives agents precise, language-server-backed code navigation: go to a symbol's definition, find its references, jump to its implementations, or read hover documentation, without the model ever knowing which server answers. The capability is split across three product packages: the `dsh-lsp` seam (`ctx.lsp`) that selects a provider by file extension and normalizes results, the `dsh-lsp-stdio` provider that drives configured local language-server commands, and the model-facing `dsh-tool-lsp` tool that owns the `lsp` schema, prompt, and presentation. Only the provider and the tool do anything when loaded; deployments configure server commands and extension mappings explicitly, and the group ships no language server of its own.
+The lsp group lets agents navigate code through configured language servers: go to definitions, find references and implementations, and read hover documentation. Use `lsp-stdio` to connect local stdio language-server commands and extension mappings, and `tool-lsp` to make those operations available to the model. The shared `lsp` package keeps provider choice and normalized results consistent, so changing servers does not change model requests. Deployments must supply and configure their language servers; this group ships none.
 
 ## Table of Contents
 

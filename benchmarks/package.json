@@ -6,6 +6,9 @@
   "type": "module",
   "devDependencies": {
     "playwright": "^1.49.0",
+    "@xterm/headless": "^6.0.0",
+    "@deepseek-ai/dsh-terminal": "workspace:^",
+    "@deepseek-ai/dsh-subprocess": "workspace:^",
     "@deepseek-ai/dsh-llm-replay": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^",
     "@deepseek-ai/dsh-agent": "workspace:^",

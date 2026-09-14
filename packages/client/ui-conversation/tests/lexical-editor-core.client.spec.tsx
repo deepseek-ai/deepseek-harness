@@ -429,9 +429,9 @@ describe('claim precedence over text-ref entities', () => {
   const TOKEN_STYLE = 'color: var(--dsw-alias-state-warn-label)'
   const LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map([['/', ['plan']]])
 
-  it('keeps a claimed lexicon-listed token plain and warn-styled until release', () => {
+  it.each(['/plan', '/plan '])('keeps the lexicon-listed %j claim plain and warn-styled until release', (token) => {
     const editor = makeEditor()
-    let claim: string | null = '/plan'
+    let claim: string | null = token
     registerClaimDecoration(editor, () => claim)
     registerTextRefDecoration(editor, () => LEXICON, () => claim)
     editor.update(() => {
@@ -449,7 +449,7 @@ describe('claim precedence over text-ref entities', () => {
         }
       })
     // Claimed: the entity transform yields the seat, the claim transform styles it.
-    expect(leaf()).toEqual({ type: 'text', style: TOKEN_STYLE, text: '/plan' })
+    expect(leaf()).toEqual({ type: 'text', style: TOKEN_STYLE, text: token })
     // Released (the shell's refresh nudges the seat dirty): the entity captures it.
     claim = null
     editor.update(() => {
@@ -458,11 +458,11 @@ describe('claim precedence over text-ref entities', () => {
     }, { discrete: true })
     expect(leaf()).toEqual({ type: 'composer-text-ref', style: '', text: '/plan' })
     // Re-claimed: the entity reverts to plain text and the warn style returns.
-    claim = '/plan'
+    claim = token
     editor.update(() => {
       const first = ($getRoot().getFirstChild() as ParagraphNode).getFirstChild()
       if ($isTextNode(first)) first.markDirty()
     }, { discrete: true })
-    expect(leaf()).toEqual({ type: 'text', style: TOKEN_STYLE, text: '/plan' })
+    expect(leaf()).toEqual({ type: 'text', style: TOKEN_STYLE, text: token })
   })
 })

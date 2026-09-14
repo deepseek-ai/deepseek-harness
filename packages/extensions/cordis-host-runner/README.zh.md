@@ -1,5 +1,5 @@
 ---
-description: "动态 Cordis 包的 host 半说明，供选择、组合或排查注册表、沙箱与运行往返的 agent 与维护者阅读。"
+description: "动态 Cordis 包的 host 半说明，供选择、组合或排查注册表、沙箱与运行往返的 agent（智能体）与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -47,7 +47,7 @@ kind: "package-reference"
 
 ### 定义的去向
 
-定义以会话为界、以进程为本：包只对定义它的会话可见，其他会话读起来是不存在，DSH 重启后一切都消失。会话日志保留一次 define 调用的参数——包括它提交的代码——以及回执；解析出的定义只存于内存注册表。浏览器半只能经一次运行到达页面，因此刷新后的页面手上什么都没有，直到有人再次运行该包。
+定义以会话为界、以进程为本：包只对定义它的会话可见，其他会话读取时视其为不存在，DSH 重启后一切都消失。会话日志保留一次 define 调用的参数——包括它提交的代码——以及回执；解析出的定义只存于内存注册表。浏览器半只能经一次运行到达页面，因此刷新后的页面手上什么都没有，直到有人再次运行该包。
 
 ### 信任立场
 
@@ -65,23 +65,23 @@ kind: "package-reference"
 
 ### 设计理念
 
-runner 建立在两个分离之上。**注册表与沙箱是同一个服务。** `DynamicCordisRunnerService` 拥有定义注册表、vm 沙箱、host 半 fiber 生命周期与 invoke handler 表，因此一个定义的整个生命周期只有一个 owner。**版本是不可变的包。** 插件持有 `define` 之后永不变化的包；`currentPackageId` 与 `nextPackageId` 指向运行中与目标版本，`mode: "run"` 与 `"update"` 编码目标是否等于当前版本。浏览器往返之所以存在，是因为浏览器半只能由页面执行：服务 emit 请求并挂起，由页面的结论结算，调用方的 `AbortSignal` 是唯一的另一条出路。
+runner 基于两项职责划分。**注册表与沙箱是同一个服务。** `DynamicCordisRunnerService` 拥有定义注册表、vm 沙箱、host 半 fiber 生命周期与 invoke handler 表，因此一个定义的整个生命周期只有一个 owner。**版本是不可变的包。** 插件持有 `define` 之后永不变化的包；`currentPackageId` 与 `nextPackageId` 指向运行中与目标版本，`mode: "run"` 与 `"update"` 编码目标是否等于当前版本。浏览器往返之所以存在，是因为浏览器半只能由页面执行：服务 emit 请求并挂起，由页面的结论结算，调用方的 `AbortSignal` 是唯一的另一条出路。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 服务入口：`Config`、注册表接线、生命周期动词、steer 消息 |
+| [`src/index.ts`](src/index.ts) | 服务入口：`Config`、注册表接线、生命周期动词、steering（中途引导）消息 |
 | [`src/registry.ts`](src/registry.ts) | 定义存储：插件与包标识、运行尝试、审批请求 |
 | [`src/sandbox.ts`](src/sandbox.ts) | `node:vm` 求值：全局变量、Node API 陷阱、define 时语法预检 |
 | [`src/guard.ts`](src/guard.ts) | 注册边界：schema 规范化、沙箱 `ctx` façade、插件形态检查 |
 | [`src/lifecycle.ts`](src/lifecycle.ts) | 在 `cordis-dynamic` fiber 组下启动 host 半 |
-| [`src/inspect-registry.ts`](src/inspect-registry.ts) | `ctx.cordisInspect` 注册表：host provider 加镜像的 client manifest |
+| [`src/inspect-registry.ts`](src/inspect-registry.ts) | `ctx.cordisInspect` 注册表：host 提供方加镜像的 client manifest（元数据清单） |
 | [`src/types.ts`](src/types.ts) | `dynamicCordisRunner` remote namespace 与转发事件共享的 client 安全载荷形态 |
 
 ### 一次 run 的流程
 
-`define` 对元数据做首尾去空白与必填校验，用编译预检每一半的语法（不执行任何代码），铸出插件与包标识，并把定义登记在发起调用的会话名下。`run` 对照 `currentPackageId` 与 `nextPackageId` 解析目标：纯 host 包在沙箱中求值并立即提交，带浏览器半的包则挂起一次审批请求、emit `cordis/request-run` 并挂起。作答页面依次走 `runHostHalf`、`getClientCode` 与 `resolveRequestRun`；命名存活 revision 的成功会提交激活、设置 `currentPackageId`，`cordis/request-run-resolved` 让其他每个页面撤下待作答入口。`stop` 回退存活下发——handler disposer、fiber dispose 与 `cordis/dynamic-retract` 广播——并让定义保持可运行。四条转发事件（`cordis/request-run`、`cordis/request-run-resolved`、`cordis/dynamic-package`、`cordis/dynamic-retract`）声明在 client 安全的 `./types` 子路径上，并由 `@deepseek-ai/dsh-api-remotes` 的白名单准许投递——正是这一点让浏览器能经 `ctx.remote.$on` 收到它们。
+`define` 对元数据做首尾去空白与必填校验，用编译预检每一半的语法（不执行任何代码），铸出插件与包标识，并把定义登记在发起调用的会话名下。`run` 对照 `currentPackageId` 与 `nextPackageId` 解析目标：纯 host 包在沙箱中求值并立即提交，带浏览器半的包则建立一次审批请求、emit `cordis/request-run` 并挂起。作答页面依次走 `runHostHalf`、`getClientCode` 与 `resolveRequestRun`；命名存活 revision 的成功会提交激活、设置 `currentPackageId`，`cordis/request-run-resolved` 让其他每个页面撤下待作答入口。`stop` 回退存活下发——handler disposer、fiber dispose（资源释放）与 `cordis/dynamic-retract` 广播——并让定义保持可运行。四条转发事件（`cordis/request-run`、`cordis/request-run-resolved`、`cordis/dynamic-package`、`cordis/dynamic-retract`）声明在 client 安全的 `./types` 子路径上，并由 `@deepseek-ai/dsh-api-remotes` 的白名单准许投递——正是这一点让浏览器能经 `ctx.remote.$on` 收到它们。
 
 </details>
 
@@ -108,7 +108,7 @@ runner 建立在两个分离之上。**注册表与沙箱是同一个服务。**
 
 #### 模型看到的内容
 
-没有直接可见的内容：本包不注册任何工具，也不注入提示词。当一次 run 结算时，它会 steer 所属会话——成功时点名当前包并指示继续，用户拒绝时指示不要再次请求同一激活，技术性失败则给出原因、版本指针与「检查—修正—更新」路径。它还会在结算后 steer 渲染失败（槽位、条目是否已被移除）、host guard 拒绝与 host handler 失败。面板上的停止与移除手势会注入一条 user 角色消息，说明用户做了什么。`run` 或 `stop` 的拒绝还会经调用它的工具结果到达模型。
+没有直接可见的内容：本包不注册任何工具，也不注入提示词。当一次 run 结算时，它会向所属会话发送 steering——成功时点名当前包并指示继续，用户拒绝时指示不要再次请求同一激活，技术性失败则给出原因、版本指针与「检查—修正—更新」路径。它还会通过 steering 转达结算后的渲染失败（slot、条目是否已被移除）、host guard 拒绝与 host handler 失败。面板上的停止与移除手势会注入一条 user 角色消息，说明用户做了什么。`run` 或 `stop` 的拒绝还会经调用它的工具结果到达模型。
 
 #### Token 影响
 
@@ -125,7 +125,7 @@ runner 建立在两个分离之上。**注册表与沙箱是同一个服务。**
 
 这些限制说明 runner 何时需要特别小心。它们是当前包约束，不是任务积压。
 
-- **run 成功不等于 UI 渲染成功**——只要作答页面已装载浏览器半，`run` 就会返回；React 是随后才渲染的，因此抛异常的组件不可能出现在 run 回执里。该失败经 steer 与 `cordis_inspect_self` 诊断浮现。
+- **run 成功不等于 UI 渲染成功**——只要作答页面已装载浏览器半，`run` 就会返回；React 是随后才渲染的，因此抛异常的组件不可能出现在 run 回执里。该失败经 steering 与 `cordis_inspect_self` 诊断浮现。
 - **带浏览器半的包在没有页面连接的地方挂起**——headless 与 ACP（Agent Client Protocol）部署会把 run 一直挂到提问的轮次被取消；纯 host 包不受影响。
 - **挂起的 run 请求没有超时**——它一直等人，直到提问的轮次被取消，因此无人值守的自动化用不了带浏览器半的包。
 - **`vmTimeoutMs` 只约束同步求值**——async 的 host 半函数体会逃出该上限，这与工具集基于协作的信任立场一致。
@@ -143,4 +143,4 @@ runner 建立在两个分离之上。**注册表与沙箱是同一个服务。**
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。definition registry 是无事件流的进程内存；运行 definition 与 host-half fiber/handler table 的关系在单个 awaited verb 内建立和释放。
+**运行时不变式：** 不发布伴生入口。definition registry 位于进程内存中且没有可观察的事件流；它唯一负责的关系是运行中的 definition 拥有已结算的 host-half fiber 及其 handler table，该关系在单个等待完成的操作中建立和解除，因此由包测试直接断言。

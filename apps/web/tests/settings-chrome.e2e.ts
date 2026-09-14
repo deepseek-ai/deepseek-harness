@@ -10,9 +10,9 @@
 // open llm seam.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { join } from 'node:path'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import {
@@ -24,9 +24,10 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/settings-chrome', import.meta.url))
 const DIALOG_EXPECTED = join(SNAPSHOT_DIR, 'dialog.expected.md')
 const PLUGINS_EXPECTED = join(SNAPSHOT_DIR, 'plugins.expected.md')
+const PLUGIN_INSTANCES_EXPECTED = join(SNAPSHOT_DIR, 'plugin-instances.expected.md')
 // The English fallback surface: a browser naming no shipped language.
 const DIALOG_EN_EXPECTED = join(SNAPSHOT_DIR, 'dialog-en.expected.md')
-const PLUGIN_ROW_SELECTOR = '[data-plugin-entry$="ui-settings"]'
+const PLUGIN_ROW_SELECTOR = '[data-plugin-scope="preset"] [data-plugin-entry="tool-subagent"]'
 const MODE = webSnapshotMode()
 
 describe('web e2e: settings modal and General preferences', () => {
@@ -114,7 +115,8 @@ describe('web e2e: settings modal and General preferences', () => {
     const expectedPluginCount = [...scaffold.ctx.loader.entries()]
       .filter(entry => !entry.options.group)
       .length
-    expect(await dialog.getByRole('searchbox', { name: '搜索插件' }).count()).toBe(1)
+    const pluginSearch = dialog.getByRole('searchbox', { name: '搜索插件' })
+    expect(await pluginSearch.count()).toBe(1)
     // Every Loader entry appears exactly once in the global group — rows the
     // presets took over included, preset compositions excluded.
     expect(await dialog.locator('[data-plugin-scope="global"] [data-plugin-entry]').count())
@@ -130,6 +132,35 @@ describe('web e2e: settings modal and General preferences', () => {
       scaffold.workspaceCwd,
     )
     await compareOrRefreshGolden(PLUGINS_EXPECTED, pluginsSnapshot, MODE)
+    await pluginSearch.fill('tool-subagent')
+    const instanceRows = [
+      ['tool-subagent', '已启用'],
+      ['tool-subagent-fork', '已启用'],
+      ['tool-subagent-codex', '已停用'],
+      ['tool-subagent-claude-code', '已停用'],
+    ] as const
+    for (const [entryId, status] of instanceRows) {
+      const row = dialog.locator(`[data-plugin-scope="preset"] [data-plugin-entry="${entryId}"]`)
+      const trigger = row.getByRole('button', { name: `tool-subagent, ${entryId}, ${status}`, exact: true })
+      await trigger.waitFor({ timeout: 10_000 })
+      expect(await trigger.getAttribute('aria-expanded')).toBe('false')
+      const identity = row.locator('code')
+      expect(await identity.textContent()).toBe(entryId)
+      expect(await identity.getAttribute('title')).toBe(entryId)
+    }
+    const instancesSnapshot = await captureStableAria(
+      page,
+      '[data-plugin-scope="preset"] ul',
+      scaffold.workspaceCwd,
+    )
+    await compareOrRefreshGolden(PLUGIN_INSTANCES_EXPECTED, instancesSnapshot, MODE)
+    await dialog.getByRole('button', {
+      name: 'tool-subagent, tool-subagent-claude-code, 已停用',
+      exact: true,
+    }).click()
+    expect(await dialog.locator('[data-plugin-entry="tool-subagent-claude-code"] button')
+      .getAttribute('aria-expanded')).toBe('true')
+    await pluginSearch.fill('')
     // Close path 1: Escape.
     await page.keyboard.press('Escape')
     await expect.poll(() => page.getByRole('dialog', { name: '设置' }).count(), { timeout: 5_000 }).toBe(0)
@@ -190,13 +221,33 @@ describe('web e2e: settings modal and General preferences', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  async function selectTheme(cube: Locator, preference: 'light' | 'dark' | 'system'): Promise<void> {
+    // Optimistic UI and a file value from an earlier gesture do not prove this write finished.
+    const [response] = await Promise.all([
+      page.waitForResponse((candidate) => {
+        if (candidate.request().method() !== 'POST'
+          || new URL(candidate.url()).pathname !== '/api/settings/mutate') return false
+        const { payload: { args } } = candidate.request().postDataJSON() as {
+          payload: { args: { ns: string; ops: { op: string; path: string[]; value?: unknown }[] } }
+        }
+        return args.ns === 'ui-theme' && args.ops.some(op => op.op === 'set'
+          && op.path.length === 1 && op.path[0] === 'preference' && op.value === preference)
+      }, { timeout: 5_000 }),
+      cube.click(),
+    ])
+    expect(response.ok()).toBe(true)
+    expect(await response.json()).toMatchObject({
+      result: { ok: true, value: { ns: 'ui-theme', value: { preference } } },
+    })
+  }
+
   it('uses the persisted dark preference while plugins are still loading', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-boot-theme'))
     await page.emulateMedia({ colorScheme: 'light' })
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const initialDialog = page.getByRole('dialog', { name: '设置' })
     const darkCube = initialDialog.getByRole('button', { name: '深色' })
-    await darkCube.click()
+    await selectTheme(darkCube, 'dark')
     await expect.poll(() => darkCube.getAttribute('aria-pressed'), { timeout: 5_000 }).toBe('true')
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
       .toMatch(/ui-theme:\n\s+preference: dark/)
@@ -242,7 +293,10 @@ describe('web e2e: settings modal and General preferences', () => {
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const restoredDialog = page.getByRole('dialog', { name: '设置' })
     const systemCube = restoredDialog.getByRole('button', { name: '跟随系统' })
-    await systemCube.click()
+    // The boot palette precedes the settings mirror's saved preference.
+    const restoredDarkCube = restoredDialog.getByRole('button', { name: '深色' })
+    await expect.poll(() => restoredDarkCube.getAttribute('aria-pressed'), { timeout: 5_000 }).toBe('true')
+    await selectTheme(systemCube, 'system')
     await expect.poll(() => systemCube.getAttribute('aria-pressed'), { timeout: 5_000 }).toBe('true')
     await expect.poll(() => page.evaluate(() => document.body.hasAttribute('data-ds-dark-theme')), {
       timeout: 5_000,
@@ -291,7 +345,7 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.waitFor({ timeout: 10_000 })
     const darkCube = dialog.getByRole('button', { name: '深色' })
     expect(await darkCube.getAttribute('aria-pressed')).toBe('false')
-    await darkCube.click()
+    await selectTheme(darkCube, 'dark')
     // The full cascade: pressed state, Host-backed preference, body attribute,
     // alias token flip — all from one real user gesture.
     await expect.poll(() => darkCube.getAttribute('aria-pressed'), { timeout: 5_000 }).toBe('true')
@@ -340,7 +394,7 @@ describe('web e2e: settings modal and General preferences', () => {
     // `system` follows the emulated OS scheme (dark stays dark, light clears).
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const systemCube = page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '跟随系统' })
-    await systemCube.click()
+    await selectTheme(systemCube, 'system')
     await expect.poll(() => systemCube.getAttribute('aria-pressed'), { timeout: 5_000 }).toBe('true')
     await expect.poll(async () => (await readState()).attr, { timeout: 5_000 }).toBe(false)
     expectThemeColorSynchronized(await readState())
@@ -349,7 +403,7 @@ describe('web e2e: settings modal and General preferences', () => {
     expectThemeColorSynchronized(await readState())
     // Restore for the specs that follow: light preference beats the emulated
     // dark OS scheme, leaving the shared page in the light default.
-    await page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '浅色' }).click()
+    await selectTheme(page.getByRole('dialog', { name: '设置' }).getByRole('button', { name: '浅色' }), 'light')
     await expect.poll(async () => (await readState()).attr, { timeout: 5_000 }).toBe(false)
     expectThemeColorSynchronized(await readState())
     await page.keyboard.press('Escape')
@@ -358,6 +412,10 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it('steps the content font size, applies it to body, and persists across reload', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-settings-font-size'))
+    onTestFinished(async () => {
+      await page.keyboard.press('Escape')
+      await page.getByRole('dialog', { name: '设置', exact: true }).waitFor({ state: 'hidden' })
+    })
     const readFontSize = async (target: Page = page): Promise<string> => await target.evaluate(
       () => document.body.style.getPropertyValue('--dsh-content-font-size'),
     )
@@ -372,6 +430,24 @@ describe('web e2e: settings modal and General preferences', () => {
       probe.remove()
       return size
     })
+    // The displayed value is optimistic; wait for the write before the next step.
+    const stepFontSize = async (button: Locator, px: number): Promise<void> => {
+      const [response] = await Promise.all([
+        page.waitForResponse((reply) => {
+          if (new URL(reply.url()).pathname !== '/api/settings/mutate' || reply.request().method() !== 'POST') return false
+          const request = reply.request().postDataJSON() as { payload: { args: { ns: string } } }
+          return request.payload.args.ns === 'ui-theme'
+        }),
+        button.click(),
+      ])
+      expect(await response.finished()).toBeNull()
+      const envelope = await response.json() as { result: { ok: boolean } }
+      expect(envelope.result.ok).toBe(true)
+      await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
+        .toMatch(new RegExp(`ui-theme:\n(?:\\s+\\w+: .*\n)*?\\s+fontSize: ${px}`))
+      await page.getByRole('dialog', { name: '设置' }).getByText(String(px), { exact: true }).waitFor({ timeout: 5_000 })
+      await expect.poll(readFontSize, { timeout: 5_000 }).toBe(`${px}px`)
+    }
     expect(await readFontSize()).toBe('14px')
     expect(await readSecondaryFontSize()).toBe('13px')
     await page.getByRole('button', { name: '设置', exact: true }).click()
@@ -380,17 +456,12 @@ describe('web e2e: settings modal and General preferences', () => {
     // The stepper reveals its arrows on hover; the up arrow steps 14 → 15 → 16.
     await dialog.getByText('14', { exact: true }).hover()
     const increase = dialog.getByRole('button', { name: '增大字号' })
-    await increase.click()
-    await dialog.getByText('15', { exact: true }).waitFor({ timeout: 5_000 })
+    await stepFontSize(increase, 15)
     // 15 is the piecewise boundary: the secondary tier holds at 13px (−2)
     // where the ≤14 branch would have given 14px (−1).
     await expect.poll(readSecondaryFontSize, { timeout: 5_000 }).toBe('13px')
-    await increase.click()
-    await dialog.getByText('16', { exact: true }).waitFor({ timeout: 5_000 })
-    await expect.poll(readFontSize, { timeout: 5_000 }).toBe('16px')
+    await stepFontSize(increase, 16)
     await expect.poll(readSecondaryFontSize, { timeout: 5_000 }).toBe('14px')
-    await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
-      .toMatch(/ui-theme:\n(?:\s+\w+: .*\n)*?\s+fontSize: 16/)
     await page.keyboard.press('Escape')
 
     // Reload: the boot script embeds the durable size and ThemeRuntime seeds
@@ -409,11 +480,8 @@ describe('web e2e: settings modal and General preferences', () => {
     await restored.waitFor({ timeout: 10_000 })
     await restored.getByText('16', { exact: true }).hover()
     const decrease = restored.getByRole('button', { name: '减小字号' })
-    await decrease.click()
-    await restored.getByText('15', { exact: true }).waitFor({ timeout: 5_000 })
-    await decrease.click()
-    await restored.getByText('14', { exact: true }).waitFor({ timeout: 5_000 })
-    await expect.poll(readFontSize, { timeout: 5_000 }).toBe('14px')
+    await stepFontSize(decrease, 15)
+    await stepFontSize(decrease, 14)
     await page.keyboard.press('Escape')
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
@@ -424,9 +492,9 @@ describe('web e2e: settings modal and General preferences', () => {
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
     await dialog.getByText('对话显示', { exact: true }).waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: 'Compact', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Normal', exact: true }).click()
-    await dialog.getByRole('button', { name: 'Normal', exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '紧凑', exact: true }).click()
+    await page.getByRole('menuitem', { name: '标准', exact: true }).click()
+    await dialog.getByRole('button', { name: '标准', exact: true }).waitFor({ timeout: 10_000 })
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
       .toMatch(/ui-chat:\n\s+transcriptView: normal/)
     await page.keyboard.press('Escape')
@@ -437,11 +505,11 @@ describe('web e2e: settings modal and General preferences', () => {
     acknowledgeReloadConnectionLoss(tripwire, warningStart)
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const reloaded = page.getByRole('dialog', { name: '设置' })
-    await reloaded.getByRole('button', { name: 'Normal', exact: true }).waitFor({ timeout: 10_000 })
+    await reloaded.getByRole('button', { name: '标准', exact: true }).waitFor({ timeout: 10_000 })
 
-    await reloaded.getByRole('button', { name: 'Normal', exact: true }).click()
-    await page.getByRole('menuitem', { name: 'Compact', exact: true }).click()
-    await reloaded.getByRole('button', { name: 'Compact', exact: true }).waitFor({ timeout: 10_000 })
+    await reloaded.getByRole('button', { name: '标准', exact: true }).click()
+    await page.getByRole('menuitem', { name: '紧凑', exact: true }).click()
+    await reloaded.getByRole('button', { name: '紧凑', exact: true }).waitFor({ timeout: 10_000 })
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), { timeout: 5_000 })
       .toMatch(/ui-chat:\n\s+transcriptView: compact/)
     await page.keyboard.press('Escape')
@@ -635,6 +703,11 @@ describe('web e2e: settings modal and General preferences', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['dialog-en.expected.md', 'dialog.expected.md', 'plugins.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      'dialog-en.expected.md',
+      'dialog.expected.md',
+      'plugin-instances.expected.md',
+      'plugins.expected.md',
+    ])
   })
 })

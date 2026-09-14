@@ -3,13 +3,32 @@
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import type { DshSessionFormatMigrationManifest } from '@deepseek-ai/dsh-package-manifest'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'packages/session/session-format-catalog/src/generated.ts'
 
+/** Internal adjacent migration metadata discovered only in workspace migration packages. */
+interface SessionFormatMigrationDeclaration {
+  /** Non-negative safe integer source version; negative zero is rejected. */
+  from: number
+  /** Non-negative safe integer target version, exactly from + 1. */
+  to: number
+  /** Non-empty package export path, such as `.` or `./migration`. */
+  export: string
+  /** Non-empty named export of the migration implementation. */
+  migration: string
+  /** Non-empty named export of the source version codec. */
+  sourceCodec: string
+  /** Non-empty named export of the target version codec. */
+  targetCodec: string
+  /** Non-empty named export of the target header validator. */
+  targetHeaderValidator: string
+  /** Non-empty named export of the target version restorer. */
+  targetRestorer: string
+}
+
 /** Validated adjacent migration metadata with its resolved package import path. */
-export interface SessionFormatMigrationManifest extends Readonly<Omit<DshSessionFormatMigrationManifest, 'export'>> {
+export interface SessionFormatMigrationManifest extends Readonly<Omit<SessionFormatMigrationDeclaration, 'export'>> {
   readonly packageName: string
   readonly importPath: string
 }
@@ -72,7 +91,7 @@ export function collectSessionFormatMigrations(
     if (metadata === undefined) {
       throw new Error(`gen-session-format-catalog: ${rel} lacks dsh.sessionFormatMigration`)
     }
-    const allowed: ReadonlySet<string> = new Set<keyof DshSessionFormatMigrationManifest>([
+    const allowed: ReadonlySet<string> = new Set<keyof SessionFormatMigrationDeclaration>([
       'from', 'to', 'export', 'migration', 'sourceCodec', 'targetCodec',
       'targetHeaderValidator', 'targetRestorer',
     ])

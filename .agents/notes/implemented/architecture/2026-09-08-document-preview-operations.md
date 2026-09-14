@@ -1,0 +1,41 @@
+# Agent Note: Document preview and file addresses
+
+Status: implemented
+
+English | [中文](2026-09-08-document-preview-operations.zh.md)
+
+## Problem
+
+File viewers need different loading policies and may offer several implementations for one extension. A change stream cannot also express an on-demand read without mixing live data with callable capabilities. HTML dependencies additionally need the Host's filesystem authorization and path resolution, not the browser's current directory.
+
+## Decision
+
+Document Preview separates resource observation from content reads. The [resource model](2026-09-05-client-resource-model.md) shares observations by address alone: `source(address)`, `pin(address, signal)`, and provider `open(address, { signal })` carry no consuming Session. Providers return `AsyncIterable<RemoteResult<ResourceProtocolMap[P]>>`; `useResource` exposes only `{ status, value, failure }`. Holds start and stop observation, not the underlying file or Session. Content reads use ordinary injected Preview callbacks.
+
+[Workspace Files](../../../../packages/api/workspace-files/README.md) retains Host line reads, byte windows, bounded complete reads, and bounded reads relative to another file's directory. Its Client `file` provider observes only `stat` and `changes`, with `ResourceProtocolMap.file` directly naming `WorkspaceFileStat`. The Host resolves every path through the Session filesystem; file reads inherit that backend's read authority, while directory listing and change observation stay workspace-scoped.
+
+Readable files use `dsh-resource://file/session/<sessionId>/<path>`. The path may be workspace-relative or absolute; an encoded absolute path retains its leading slash. `fileAddressFor` always emits this Session-address form. The provider and Preview RPC take the Session only from that address, never from the current selection, first holder, or owning tab. A Session-less `absolute` URI cannot be read; the provider reports `workspace-file/unknown-workspace`. Session authorization is a file-protocol rule, not an additional Resource identity.
+
+[Document Preview](../../../../packages/client/ui-sidebar-documentpreview/README.md) owns format selection and loading policy. Metadata registers with `ctx.documentPreviews`; components register separately into the keyed `sidebar.right.tab.document` Slot. Extension registrations precede builtins, then longer suffixes and registration order decide. The toolbar lists matching alternatives only when at least two exist and remembers a manual choice per tab; plain text is the fallback except for suffixes a registration declares binary or the owner's unviewable list names ([sidebar preview polish](../feature/2026-09-11-sidebar-document-preview-polish.md)). The child receives accumulated text or complete native bytes, the original resource address, and the standard `useResource` and `useTabInfo` hooks. Preview calls existing `read`, `readAll`, and `readRelated` through ordinary injection and decodes bytes in its own `rpc.ts`. Refresh remains per tab, with no resource reload, shared `changed` acknowledgement, extra resource wrapper, or content Session.
+
+Markdown and code reuse the incremental primitives with cumulative paged text. HTML, PDF, and images read complete `Uint8Array<ArrayBuffer>` data; Host transport remains base64. Published buffers are borrowed read-only and never persist into layout or Session JSON. PDF.js runs in an owned Worker with version-matched bundled font and decoder data, and copies input before transfer to preserve Preview's retained buffer. HTML runs in a Blob iframe with `sandbox="allow-scripts"`, without same-origin, popup, form, download, or top-navigation privileges. The browser retains its normal external-network rules. Bounded static local JS/CSS reads stay in the parent; the opaque frame creates its own asset Blobs, because it cannot load parent-origin Blobs. PNG, JPEG, GIF, WebP, BMP, ICO, and SVG use image-specific Blob URLs in an `<img>` static-image context. An image wider than the pane scales down to its width at its aspect ratio; a smaller image keeps its intrinsic CSS-pixel dimensions centred by auto margins, and a taller image extends the shared scroller's vertical range ([sidebar preview polish](../feature/2026-09-11-sidebar-document-preview-polish.md)). The renderer provides no zoom or drag-to-pan. SVG markup never enters the application DOM or an iframe, so scripts remain inert and cannot reach the parent page. Replacing HTML or an image revokes its root Blob URL.
+
+## Alternatives considered
+
+**Methods attached to an Iterator or its values.** This conflates observation with commands and repeats capability identity in data frames. Frames carry data and failures; explicit Preview RPC callbacks perform reads.
+
+**A core public-projection factory, or the same assembly inside `open`.** Separate stream values, operations bundles, and public interfaces add assembly without another current consumer that needs it. Preview's shared RPC adapter already keeps Session decoding and base64 out of renderers. Resource offers no provider-agnostic command interface or opening-bound command lifetime; adding either needs consumer evidence beyond file preview.
+
+**UI Session as extra Resource identity, or authorization from the first holder or current selection.** A retained tab can belong to a different Session from the selected one, and the UI location does not identify the addressed file. Encoding the required Session in the file address preserves Host authorization while letting all readers of one address share observation.
+
+**File-reading methods on every resource.** Chat and terminal resources have independent data and operation semantics; only observation registration and lifetime are common.
+
+**A preview resource wrapper, content Session, or second resource Hook.** These duplicate addressing, cancellation, subscriptions, and ownership already provided by Resource and Workspace Files. Loading policy belongs to the preview owner.
+
+**A local server, virtual host, or `file:` iframe.** These require extra hosting or filesystem authority. The preview is for static generated pages, not a complete application runtime; modules, dynamic filesystem requests, and arbitrary nested asset graphs are outside its support.
+
+**Sanitize SVG into the application DOM or an iframe.** A sanitizer would add a second SVG parser and an evolving active-content policy before placing untrusted markup in an interactive document. The `<img>` static-image context preserves native SVG rendering and intrinsic dimensions without giving the markup a script-capable DOM.
+
+## Consequences
+
+Renderers can be replaced without changing the tab or file protocol. Full-file formats pay bounded whole-file memory and PDF adds bundled Worker/font/decoder bytes. Format selection and view state are page-local, not durable Session data. Preview owns RPC cancellation and native buffers independently of metadata observation. A tab retains its read version and the observation version captured at read start; refreshing it neither discards another tab's content nor clears its change notice. File reads remain non-transactional, and opaque versions are compared for equality, not ordering. The [recorded browser scenario](../../../../apps/web/tests/document-preview.e2e.ts) exercises the shared toolbar, incremental text, isolated HTML dependencies, width-fitted raster and SVG rendering, inert SVG scripts, and lazy continuous PDF Worker rendering.

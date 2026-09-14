@@ -10,7 +10,7 @@ JSONL 后端的写句柄认领只在单个后端实例内部排除第二个写�
 
 ## Decision
 
-`SessionWriteLease`（packages/session/session-persistence-jsonl/src/lease.ts）在日志旁的 `session.lock` 上持有内核锁，贯穿写句柄的整个生命期：POSIX 经由固定版本的原生依赖 `fs-ext` 以非阻塞 `flock(2)` 加锁，Windows 持有由规范锁路径派生的命名内核信号量（计数 1，`CreateSemaphoreW`，实现在 src/win32.ts 既有 koffi 绑定旁）——零文件系统足迹的内核对象，随最后一个句柄关闭而销毁。竞争映射为 `SessionAlreadyOwnedError`；持有者的描述符或句柄关闭时内核释放锁，包括任何形式的进程死亡，因此崩溃的持有者从不阻塞后继者，也不存在任何过期簿记。活着但卡死的持有者保有锁直到其进程退出：剥夺停顿写入方的所有权被否决，因为其复活后的追加会撕坏日志；POSIX 上删除锁文件仍是该场景的显式放弃手段。由于 POSIX 锁指向 inode 而非路径，获取后会校验所锁 inode 仍是锁路径上的文件，否则重试。锁在写打开既有工件时立即获取，新建会话则仅在首次物化写入之前获取——未物化的会话不留任何文件系统足迹，已取得锁的句柄即使物化失败也保有锁直到关闭；释放从不删除锁文件，保住后续加锁者用于校验的稳定 inode。浏览器 worker 部署将 fs-ext 存根为立即成功：它是单进程部署，进程内写认领已排除所有写入方。
+`SessionWriteLease`（packages/session/session-persistence-jsonl/src/lease.ts）在日志旁的 `session.lock` 上持有内核锁，贯穿写句柄的整个生命期：POSIX 经由预编译 `@deepseek-ai/node-addon-system/flock` 绑定 以非阻塞 `flock(2)` 加锁，Windows 持有由规范锁路径派生的命名内核信号量（计数 1，`CreateSemaphoreW`，实现在 src/win32.ts 既有 koffi 绑定旁）——零文件系统足迹的内核对象，随最后一个句柄关闭而销毁。竞争映射为 `SessionAlreadyOwnedError`；持有者的描述符或句柄关闭时内核释放锁，包括任何形式的进程死亡，因此崩溃的持有者从不阻塞后继者，也不存在任何过期簿记。活着但卡死的持有者保有锁直到其进程退出：剥夺停顿写入方的所有权被否决，因为其复活后的追加会撕坏日志；POSIX 上删除锁文件仍是该场景的显式放弃手段。由于 POSIX 锁指向 inode 而非路径，获取后会校验所锁 inode 仍是锁路径上的文件，否则重试。锁在写打开既有工件时立即获取，新建会话则仅在首次物化写入之前获取——未物化的会话不留任何文件系统足迹，已取得锁的句柄即使物化失败也保有锁直到关闭；释放从不删除锁文件，保住后续加锁者用于校验的稳定 inode。浏览器 worker 部署将 flock 入口存根为立即成功，因为进程内写认领已排除所有写入方。它的 `node:fs` 替代实现仍从 `FileHandle.stat({ bigint: true })` 报告 BigInt device 与 inode 身份，并在该路径仍指向所打开文件时与路径 `stat` 一致，因为租约在存根式加锁后仍保留 inode 替换检查。
 
 ## Alternatives considered
 
@@ -22,8 +22,8 @@ JSONL 后端的写句柄认领只在单个后端实例内部排除第二个写�
 
 **Windows 共享模式独占打开（`CreateFileW` 拒绝 `FILE_SHARE_WRITE`）** —— 读者不受影响，但持有期间钉住锁文件的名字与目录：CI 显示数十个套件的临时根清理因仍打开的句柄阻塞递归删除而报 EBUSY，用户删除会话目录也会撞上同一堵墙。命名信号量保住内核仲裁，且文件系统足迹为零。
 
-**POSIX 也手写 ffi（经 koffi 调 `flock(2)`）** —— 免去 node-gyp 安装期编译，但意味着自有两个平台的锁实现及其错误映射；`fs-ext` 交付了有维护、可固定版本的 POSIX 侧，Windows 侧复用 `win32.ts` 已自有的 koffi 绑定。
+**POSIX 也手写 ffi（经 koffi 调 `flock(2)`）** —— 绑定选择与异步 errno 处理由[预编译系统原语决策](../architecture/2026-09-07-prebuilt-system-primitives.zh.md)规定。Windows 侧保留 `win32.ts` 已有的 koffi 绑定。
 
 ## Consequences
 
-跨进程排他的代价是一个 node-gyp 编译的原生依赖（`fs-ext`，已在 `pnpm-workspace.yaml` 的 `allowBuilds` 列入允许）、每个物化会话一个由释放刻意留下的锁文件，以及卡死持有者规则：卡住的进程阻塞该会话的写入方直到其退出。它换来的是即时崩溃恢复（无等待期）、零续约流量，以及删除了 TTL 设计只能"管理"而非"消除"的全部接管竞态。咨询式 `flock` 在部分网络文件系统（NFSv3）上不可靠；位于此类挂载上的根目录会退化为仅进程内排他。POSIX 上删除活跃会话的锁文件按设计即放弃排他——harness 自身从不这样做；agent-loop 的 resume 测试刻意用它模拟卡死的第一个生命周期，并在 Windows 上跳过：那里的锁是任何文件操作都无法放弃的内核对象。
+跨进程排他需要对应平台的预编译系统绑定、每个物化会话一个由释放刻意留下的锁文件，以及卡死持有者规则：卡住的进程阻塞该会话的写入方直到其退出。它换来的是即时崩溃恢复（无等待期）、零续约流量，以及删除了 TTL 设计只能"管理"而非"消除"的全部接管竞态。咨询式 `flock` 在部分网络文件系统（NFSv3）上不可靠；位于此类挂载上的根目录会退化为仅进程内排他。POSIX 上删除活跃会话的锁文件按设计即放弃排他——harness 自身从不这样做；agent-loop 的 resume 测试刻意用它模拟卡死的第一个生命周期，并在 Windows 上跳过：那里的锁是任何文件操作都无法放弃的内核对象。

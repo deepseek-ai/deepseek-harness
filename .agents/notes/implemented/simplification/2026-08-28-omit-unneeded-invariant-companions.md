@@ -18,7 +18,7 @@ A package publishes `./invariant` only when it can compare observations that may
 
 Service or method presence, plugin metadata or effects, fixed pure examples, and probes that call the same mutation they claim to verify remain type, load, unit, or integration-test concerns. Parser and config input, model or tool JSON, durable files, worker and process messages, and wire input remain validated at their owning input operation.
 
-The `dsh-time-context` companion remains published. Its check compares the plugin-produced context message with independently owned current-turn user-message provenance and durable event time, so attribution, turn position, and elapsed-time relations can diverge even when the formatter itself is correct.
+The `dsh-time-context` companion remains published. Its check compares the plugin-produced context message with independently owned current-turn user-message source and durable event time, so attribution, turn position, and elapsed-time relations can diverge even when the formatter itself is correct.
 
 ### Omission is explicit in the package README
 
@@ -36,7 +36,7 @@ Existing package behavior tests remain responsible for omitted relationships, in
 
 - **Keep explained empty companions.** Rejected because a source file, public subpath, dependency edges, build output, and tests are disproportionate machinery for saying that no check exists; the package README records that conclusion directly.
 - **Keep the webserver probe as a teardown sentinel.** Rejected because it mutates a reserved route on unrelated lifecycle events and verifies only the service method it invokes. Real routing and HMR tests exercise the behavior without production diagnostic effects.
-- **Treat every producer-format parser as self-validation.** Rejected because a parser can compare independent provenance, timing, or durable history even when one producer owns the text. `dsh-time-context` qualifies because its message is checked against current-turn user messages and durable event time; a same-writer payload round trip alone would not qualify.
+- **Treat every producer-format parser as self-validation.** Rejected because a parser can compare independent source identity, timing, or durable history even when one producer owns the text. `dsh-time-context` qualifies because its message is checked against current-turn user messages and durable event time; a same-writer payload round trip alone would not qualify.
 - **Require every package with mutable private state to publish a companion.** Rejected because private state without an independent event or second data source cannot be checked without duplicating the implementation or exposing new API solely for diagnostics.
 
 ## Consequences

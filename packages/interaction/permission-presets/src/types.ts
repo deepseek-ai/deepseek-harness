@@ -9,9 +9,9 @@
  * @module @deepseek-ai/dsh-permission-presets/types
  */
 
-/** The select-option shape a presentation layer advertises for one preset (or for the derived `custom` state). */
+/** Presentation for an available preset or the derived `custom` current value. */
 export interface PresetOption {
-  /** Stable option value: the table key, or `custom`. */
+  /** Stable option value: a configured preset key, live `auto`, or derived `custom`. */
   value: string
   /** The display label. */
   name: string
@@ -20,25 +20,40 @@ export interface PresetOption {
 }
 
 /**
- * Whole `permissions` projection value: every switchable preset in table
- * order (plus the derived current-only `custom` when the knobs match no
- * entry) and the effective current value.
+ * Process-level permission catalog. It changes with live contributions and is
+ * deliberately separate from Session history.
  */
-export interface PermissionSelect {
-  /** Switchable presets, plus `custom` appended exactly while it is current. */
+export interface PermissionCatalog {
+  /** Every currently selectable preset, in contribution order. */
   options: PresetOption[]
-  /** The effective current value: a preset table key, or `custom`. */
+}
+
+/** Whole `permissions` Session projection: current durable selection only. */
+export interface PermissionSelection {
+  /** The effective current value: a configured preset key, `auto`, or `custom`. */
   currentValue: string
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * The selectable process catalog changed. Payload-free by design:
+     * consumers subscribe first, then re-read the complete catalog.
+     * @mode emit
+     */
+    'permission-presets/catalog-changed'(): void
+  }
 }
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /**
-     * The session's permission select, folded from the three whole-value
+     * The session's current permission, folded from the three whole-value
      * knob events (`permission/preset`, `sandbox/mode`, `approval/policy`)
-     * over the composition defaults. Key absence means no permission service
+     * over the composition defaults. Selectable options come from the
+     * process-level catalog Remote. Key absence means no permission service
      * is composed — clients hide the control.
      */
-    permissions: PermissionSelect
+    permissions: PermissionSelection
   }
 }

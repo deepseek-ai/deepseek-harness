@@ -1,5 +1,5 @@
 ---
-description: "Package map for the loop-hygiene guard family: the advisory repeat-tool reminder and the per-call tool-call timeout policy, for users and maintainers choosing or composing the guards."
+description: "Package map for the loop-hygiene guard family: the advisory repeat-tool reminder and the per-tool-call timeout policy, for users and maintainers choosing or composing the guards."
 kind: "package-group"
 ---
 

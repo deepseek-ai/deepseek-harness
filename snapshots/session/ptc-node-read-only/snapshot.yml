@@ -1,0 +1,15 @@
+version: 1
+scenario: ptc-node-read-only
+profile: headless
+composition: ptc-node-read-only
+recording: authored
+header:
+  class: ptc-node-read-only
+  pin: true
+replay:
+  override: true
+platform: posix
+permission: read-only
+workspace:
+  final: true
+  parent: outside-temp

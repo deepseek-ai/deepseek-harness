@@ -2,29 +2,37 @@
 import { describe, expect, it, vi } from 'vitest'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
 import {
-  ComposerSubmissionPolicy, DEFAULT_BUSY_ENTER_BEHAVIOR,
+  ComposerSubmissionPolicy, DEFAULT_BUSY_ENTER_BEHAVIOR, resolveSubmitMode,
 } from '../src/client/input/submission-policy.ts'
 import type { ConversationSettings } from '../src/submission-settings.ts'
 
+describe('resolveSubmitMode', () => {
+  it('queues outside steer-capable busy state and applies the preference to the enter gesture', () => {
+    expect(resolveSubmitMode('queue', false, 'enter', true)).toBe('queue')
+    expect(resolveSubmitMode('queue', false, 'accelerated', true)).toBe('queue')
+    expect(resolveSubmitMode('queue', true, 'enter', true)).toBe('queue')
+    expect(resolveSubmitMode('queue', true, 'accelerated', true)).toBe('steer')
+    expect(resolveSubmitMode('queue', true, 'enter', false)).toBe('queue')
+    expect(resolveSubmitMode('queue', true, 'accelerated', false)).toBe('queue')
+
+    expect(resolveSubmitMode('steer', true, 'enter', true)).toBe('steer')
+    expect(resolveSubmitMode('steer', true, 'accelerated', true)).toBe('queue')
+    expect(resolveSubmitMode('steer', false, 'enter', true)).toBe('queue')
+    expect(resolveSubmitMode('steer', false, 'accelerated', true)).toBe('queue')
+    expect(resolveSubmitMode('steer', true, 'enter', false)).toBe('queue')
+  })
+})
+
 describe('ComposerSubmissionPolicy', () => {
-  it('defaults to Queue and only applies the preference while running', () => {
+  it('defaults to Queue and publishes preference changes', () => {
     const policy = new ComposerSubmissionPolicy()
     expect(policy.busyEnter.getSnapshot()).toBe(DEFAULT_BUSY_ENTER_BEHAVIOR)
-    expect(policy.resolve(false, 'enter', true)).toBe('queue')
-    expect(policy.resolve(false, 'accelerated', true)).toBe('queue')
-    expect(policy.resolve(true, 'enter', true)).toBe('queue')
-    expect(policy.resolve(true, 'accelerated', true)).toBe('steer')
-    expect(policy.resolve(true, 'enter', false)).toBe('queue')
-    expect(policy.resolve(true, 'accelerated', false)).toBe('queue')
 
     const changed = vi.fn()
     policy.busyEnter.subscribe(changed)
     policy.setBusyEnter('steer')
     expect(changed).toHaveBeenCalledTimes(1)
-    expect(policy.resolve(true, 'enter', true)).toBe('steer')
-    expect(policy.resolve(true, 'accelerated', true)).toBe('queue')
-    expect(policy.resolve(false, 'enter', true)).toBe('queue')
-    expect(policy.resolve(false, 'accelerated', true)).toBe('queue')
+    expect(policy.busyEnter.getSnapshot()).toBe('steer')
   })
 
   it('writes an explicit change through the scope after publishing it locally', () => {

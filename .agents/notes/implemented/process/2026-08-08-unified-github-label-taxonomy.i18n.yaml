@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-08-08-unified-github-label-taxonomy.md
-2026-08-08-unified-github-label-taxonomy.md: 625c5c1cac951bdc97187c17c964d677f31131c7
-2026-08-08-unified-github-label-taxonomy.zh.md: 855a2b98f44d517abe1f7718ae4e81262cb031b6
+2026-08-08-unified-github-label-taxonomy.md: 1748f9b77ed2922035c5e75ac4a2eee047f413d3
+2026-08-08-unified-github-label-taxonomy.zh.md: 3b221a5f3db43597656f46dfc505cdfda38c75db

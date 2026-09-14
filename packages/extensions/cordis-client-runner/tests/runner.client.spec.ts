@@ -13,7 +13,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type {
   CordisDynamicPackageId, CordisDynamicPluginId, CordisDynamicPluginRunId, SessionId,
 } from '@deepseek-ai/dsh-api-remotes/client'
@@ -52,7 +52,7 @@ interface Bench {
   invalidated: string[]
   removed: string[]
   created: string[]
-  invoke: ReturnType<typeof vi.fn>
+  invoke: ReturnType<typeof vi.fn<() => Promise<unknown>>>
   /** Render failures the runner sent upstream, in order. */
   reported: {
     agentId: SessionId
@@ -103,15 +103,15 @@ async function boot(): Promise<Bench> {
       return Promise.resolve(entryId)
     },
     resolve: (entryId: string) => fibers.get(entryId) ?? { fiber: undefined },
-    remove: async (entryId: string) => {
+    remove: (entryId: string) => {
       removed.push(entryId)
       const entry = fibers.get(entryId)
       fibers.delete(entryId)
-      await (entry?.fiber as { dispose(): Promise<void> } | undefined)?.dispose()
+      void (entry?.fiber as { dispose(): Promise<void> } | undefined)?.dispose()
     },
   } as unknown as Loader
 
-  const invoke = vi.fn(() => Promise.resolve(null))
+  const invoke = vi.fn<() => Promise<unknown>>(() => Promise.resolve(null))
   const reported: Bench['reported'] = []
   // The crash seam is stood in so a test can report an entry failure without a
   // React render, exactly as the renderer's boundary would; registrations still
@@ -298,6 +298,26 @@ describe('failure stages', () => {
 })
 
 describe('retract', () => {
+  it('waits for plugin cleanup before invalidating its module factory', async () => {
+    const bench = await boot()
+    const started = Promise.withResolvers<undefined>()
+    const release = Promise.withResolvers<undefined>()
+    onTestFinished(() => { release.resolve(undefined) })
+    bench.invoke.mockImplementation(() => {
+      started.resolve(undefined)
+      return release.promise
+    })
+    await bench.runner.load(half({ code: 'return { apply: (ctx) => ctx.effect(() => () => host.call("cleanup", null)) }' }))
+    bench.runner.retract(PLUGIN, RUN)
+    await started.promise
+    await bench.settle()
+    expect(bench.removed).toEqual(['entry-1'])
+    expect(bench.invalidated).toEqual(['dyn/dyn-1'])
+    release.resolve(undefined)
+    await bench.settle()
+    expect(bench.invalidated).toEqual(['dyn/dyn-1', 'dyn/dyn-1'])
+  })
+
   it('unloads at the named revision', async () => {
     const bench = await boot()
     await bench.runner.load(half())

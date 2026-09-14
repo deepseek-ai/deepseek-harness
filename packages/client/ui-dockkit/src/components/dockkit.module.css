@@ -1,0 +1,731 @@
+/*
+ * Docking-kit styles. One sheet on purpose: a consumer bundle de-duplicates
+ * injected stylesheets by `<pluginId>/<basename>`, so a second sheet whose file
+ * name matches one in the embedding package would be dropped silently. Keeping
+ * a single `dockkit.module.css` makes that collision impossible.
+ *
+ * Colours come from the embedder's token layer; the kit names no literal. Type
+ * follows the embedder's content axis (`--dsh-content-font-size` and its
+ * secondary step) so a surface reads at the same size as the page around it.
+ * Emphasis — the drop caret, the drop-zone hint — takes the platform's accent
+ * (`--dsw-alias-brand-primary-new-colorprimary-new-color`), not
+ * `--dsw-alias-brand-primary`, which this platform binds to its near-black
+ * (light) or near-white (dark) foreground. A hovered divider takes the
+ * caption label ink instead, reading as a handle rather than a highlight.
+ */
+
+.split {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.splitRow {
+  flex-direction: row;
+}
+
+.splitColumn {
+  flex-direction: column;
+}
+
+.splitCell {
+  display: flex;
+  flex-basis: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The divider owns no layout room (`SPLIT_MINIMUMS.divider` mirrors the 0):
+   the halves abut, so a rule a pane draws across its own edge — a header's
+   hairline — runs unbroken past the seam. The visible rule is a 0.5px hairline
+   centred on the seam, matching the embedder's other borders, and `::after`
+   widens the pointer target to 8px by reaching 4px over each neighbour.
+   `z-index` keeps that overhang above the later sibling, which would otherwise
+   take the hit. */
+.divider {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  touch-action: none;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  position: absolute;
+}
+
+.divider::before {
+  background: var(--dsw-alias-border-l4);
+}
+
+.splitRow > .divider {
+  width: 0;
+  cursor: col-resize;
+}
+
+.splitRow > .divider::before {
+  top: 0;
+  bottom: 0;
+  left: -0.25px;
+  width: 0.5px;
+}
+
+.splitRow > .divider::after {
+  top: 0;
+  bottom: 0;
+  left: -4px;
+  right: -4px;
+}
+
+.splitColumn > .divider {
+  height: 0;
+  cursor: row-resize;
+}
+
+.splitColumn > .divider::before {
+  left: 0;
+  right: 0;
+  top: -0.25px;
+  height: 0.5px;
+}
+
+.splitColumn > .divider::after {
+  left: 0;
+  right: 0;
+  top: -4px;
+  bottom: -4px;
+}
+
+/* Hover: a 1px grip fades in over the hairline, its caption ink deepest at
+   its middle and fading toward both ends. The grip is painted on the `::after`
+   hit target, centred on the seam, and crossfaded through opacity, because a
+   gradient cannot transition from the hairline's solid colour. */
+.divider::after {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.divider:hover::after {
+  opacity: 1;
+}
+
+.splitRow > .divider::after {
+  background: linear-gradient(to bottom, transparent, var(--dsw-alias-label-caption) 50%, transparent) center / 1px 100% no-repeat;
+}
+
+.splitColumn > .divider::after {
+  background: linear-gradient(to right, transparent, var(--dsw-alias-label-caption) 50%, transparent) center / 100% 1px no-repeat;
+}
+
+/* Both floors: a flex item's minimum is its content's, and a body's longest
+   unwrapped line would widen the surface past the embedder's box, carrying the
+   strip's controls and the body's scrollbar out of view. */
+.surface {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A body that overflows scrolls inside its pane; nothing escapes the pane. */
+.pane {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* A 38px row whose 28px content band sits at its bottom: chips fill the band,
+   so they end flush with the strip's bottom edge, and the 28px add control, the
+   28px split control, and the embedder's 28px chrome centre on the band's one
+   centre line, so chip text and control glyphs never sit at different heights.
+   The 10px above is the strip's own top margin, inside its box so the hit
+   area stays one element; the 10px at the start is the first chip's inset
+   from the edge, and the 6px at the end puts the last control's glyph 12px
+   from the edge. The strip draws no border: a body
+   that wants a rule under it draws its own. A floating panel's header is
+   this same row.
+
+   The strip never clips: the chip box below is its one shrinking part, and
+   every control after it is `flex: none`, so a narrow pane costs chips, never
+   controls. */
+.tabStrip {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  align-items: center;
+  height: 28px;
+  padding: 10px 6px 0 10px;
+  touch-action: none;
+}
+
+/* The chips. Shrinks to nothing before any control after it moves; chips keep
+   their 80px floor, so what no longer fits scrolls here on the wheel, with no
+   scrollbar drawn. `touch-action: none` keeps a touch press-and-move a tab drag
+   rather than a pan the scroller would claim and cancel the pointer for.
+   `data-dockkit-strip-scroll` names the hidden sides (`start`, `end`, or
+   both); each hidden side fades the chips out over 24px into whatever ground
+   the pane draws, so the row reads as continuing under the controls. */
+.stripTabs {
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The scroll to a newly active chip glides rather than jumps. */
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  touch-action: none;
+}
+
+.stripTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.stripTabs[data-dockkit-strip-scroll='end'] {
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+}
+
+.stripTabs[data-dockkit-strip-scroll='start'] {
+  mask-image: linear-gradient(to right, transparent, black 24px);
+}
+
+.stripTabs[data-dockkit-strip-scroll='start end'] {
+  mask-image: linear-gradient(to right, transparent, black 24px, black calc(100% - 24px), transparent);
+}
+
+/* Takes the free space and gives it all back first: a zero basis shrinks
+   nothing, so shortage lands on the chip box alone. */
+.stripFill {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Embedder controls at the strip's end, spaced from the kit's own split
+   control as they are from each other: the strip's 4px gap plus this 4px
+   margin equals the 8px between the controls. */
+.stripChrome {
+  display: flex;
+  flex: none;
+  gap: 8px;
+  align-items: center;
+  height: 28px;
+  margin-left: 4px;
+}
+
+/* The slot between two chips: a 10px box with a hairline down its centre.
+   Targeted by a drag, the same box draws the caret instead, so the chips
+   around it never move. */
+.slot {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 28px;
+}
+
+.slot::before {
+  content: '';
+  width: 0.5px;
+  height: 14px;
+  background: var(--dsw-alias-border-l4);
+}
+
+/* The active chip is a filled capsule and needs no rule against it: the two
+   slots beside it go blank, so the row reads as the capsule between bare
+   chips. A caret in either slot still draws. */
+.tabActive + .slot:not(.slotCaret)::before,
+.slot:not(.slotCaret):has(+ .tabActive)::before {
+  background: transparent;
+}
+
+.slotCaret::before {
+  width: 2px;
+  height: 20px;
+  background: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+/* The chip: a 28px capsule whose title runs to the right inset. The close
+   control is not in the flow — it sits over the title's last 14px and shows
+   while the chip is active, hovered, or holds focus — so a chip is the same
+   width with and without it and nothing shifts on hover. */
+.tab {
+  position: relative;
+  display: flex;
+  flex: 0 1 auto;
+  align-items: center;
+  min-width: 80px;
+  max-width: 170px;
+  height: 28px;
+  padding: 0 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1;
+  white-space: nowrap;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+/* A flex row with a 5px gap, so an embedder's leading glyph (`renderTabTitle`)
+   centres on the text's line rather than sitting on its baseline and keeps
+   one distance from it. The clip is horizontal in intent; the line box must
+   hold the descenders it would otherwise cut, hence a line-height above the
+   chip's own 1. No ellipsis: a title wider than its box (`TabTitle` sets
+   `data-dockkit-tab-clipped`) fades out over its last 16px instead. A mask on
+   the title rather than a painted gradient: the chip's fill is bare,
+   translucent hover, or the active tag colour, and a mask matches every one
+   without naming it. */
+.tabTitle {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 5px;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.tabTitle[data-dockkit-tab-clipped] {
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
+}
+
+/* While the close shows, the title is gone under the close's circle and fades
+   out over the 16px before it: the circle spans the chip's last 24px and the
+   title ends 10px inside the chip, so the title's last 14px are under it.
+   Later than the clipped mask, so a clipped chip showing its close fades
+   under the close. A floating panel's header chip has no close, so it keeps
+   the clipped mask alone. */
+.tab:not(.floatTitle):hover .tabTitle,
+.tab:not(.floatTitle):focus-within .tabTitle,
+.tabActive .tabTitle {
+  mask-image: linear-gradient(to right, black calc(100% - 30px), transparent calc(100% - 14px));
+}
+
+/* A 20px icon button inset 4px from the chip's end, holding a 14px glyph in
+   the tertiary ink, so it sits back from the title beside it. */
+.tabClose {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--dsw-alias-label-tertiary);
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  opacity: 0;
+  /* Hidden means untouchable too: without this a touch press on the chip's
+     trailing 20px would close the tab instead of activating it. */
+  pointer-events: none;
+}
+
+/* Shown while the chip is hovered or holds focus, and always on the active
+   chip: the tab in view is the one a reader closes next. */
+.tab:hover .tabClose,
+.tab:focus-within .tabClose,
+.tabActive .tabClose {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The chip's height and corner, so it reads as one more capsule in the row. */
+.addTab {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.addTab:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tabClose:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.tab:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The active chip is the filled capsule, in the tag fill; the rest are bare text. */
+.tabActive {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-markdown-tag);
+}
+
+/* A pane's lone unclosable chip is a label, not a choice: no capsule, no
+   hover fill — the primary ink on the pane's own ground. Its title never
+   yields to a close control, so it keeps the clipped fade alone. */
+.tab.tabQuiet,
+.tab.tabQuiet:hover {
+  color: var(--dsw-alias-label-primary);
+  background: transparent;
+  cursor: default;
+}
+
+.tab.tabQuiet .tabTitle,
+.tab.tabQuiet:hover .tabTitle,
+.tab.tabQuiet:focus-within .tabTitle {
+  mask-image: none;
+}
+
+.tab.tabQuiet .tabTitle[data-dockkit-tab-clipped] {
+  mask-image: linear-gradient(to right, black calc(100% - 16px), transparent);
+}
+
+.tabDragging {
+  opacity: 0.5;
+}
+
+/* The geometry of a message's action row button (ui-chat MessageIconActions):
+   a 28px circle around a 15px glyph. */
+.iconButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+}
+
+.iconButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.iconButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/*
+ * Portalled beside the app root, so its stacking level is stated here: above the
+ * floating panels (which the embedder draws at 60), because a menu opened from
+ * a tab must never sit under a panel. No z-index token layer exists to draw from
+ * yet.
+ */
+.menu {
+  position: fixed;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  min-width: 96px;
+  padding: 4px;
+  background: var(--dsw-alias-bg-layer-3);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+}
+
+.menu:not(:has([role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'])) {
+  display: none;
+}
+
+.menuItem {
+  padding: 5px 8px;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* No padding of its own: a tab's body reaches the pane's edges and the strip's
+   bottom edge, and keeps its own insets, so a header row it draws sits flush
+   under the strip. */
+.paneBody {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;  /* This sheet draws elevated surfaces (the strip and the menu), so a scroller
+     inside it rebinds the thumb indirection in a complete pair — a base-surface
+     thumb on an elevated ground reads as a smudge. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+}
+
+/* The drop hint is a scrim and, over it, one box pair per landing region.
+   The scrim (`.dockScrim`) covers the whole body with the translucent, blurred
+   ground, so the insets between and around the cards dim the body's content
+   instead of letting it show through raw. The outer box (`.dockHint`) is the
+   region a release fills — the whole body, or 40% (edge bands) or 50%
+   (horizontal halves) of it — and draws nothing; it is a padded frame that
+   keeps the card inside it 8px clear of the body's edges and, between two
+   horizontal halves, 4px clear of the seam, so neighbouring cards sit 8px
+   apart like the body's own insets. The card (`.dockHintCard`) is what the eye
+   lands on: a dashed frame with the zone's glyph and caption stacked at its
+   centre. A card that is not under the pointer stays as a quiet outline so the
+   reader sees where the other release would land. */
+.dockScrim {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  /* The ground the panes sit on, not a raised layer: in dark mode `bg-layer-2`
+     is a lighter bluish step than the column's `bg-base`, which tinted the
+     whole scrim away from the content beneath it. */
+  background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent);
+  backdrop-filter: blur(6px);
+  animation: dockScrimIn 140ms ease-out;
+}
+
+.dockHint {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  box-sizing: border-box;
+  padding: 8px;
+  pointer-events: none;
+}
+
+.dockHint[data-dockkit-dock-zone='center'] {
+  inset: 0;
+}
+
+.dockHint[data-dockkit-dock-zone='left'] {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+}
+
+.dockHint[data-dockkit-dock-zone='right'] {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40%;
+}
+
+[data-dockkit-drop-zones='horizontal'] .dockHint[data-dockkit-dock-zone='left'] {
+  width: 50%;
+  padding-right: 4px;
+}
+
+[data-dockkit-drop-zones='horizontal'] .dockHint[data-dockkit-dock-zone='right'] {
+  width: 50%;
+  padding-left: 4px;
+}
+
+.dockHintCard {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px;
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  border: 1.5px dashed var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  transition: color 120ms ease-out, background-color 120ms ease-out, border-color 120ms ease-out;
+  animation: dockHintIn 140ms ease-out;
+}
+
+/* The card under the pointer takes the accent: a tinted ground over the scrim,
+   an accent dashed frame, and secondary ink for the glyph and caption. */
+.dockHint[data-dockkit-drop-active] .dockHintCard {
+  color: var(--dsw-alias-label-secondary);
+  background: color-mix(in srgb, var(--dsw-alias-brand-primary-new-colorprimary-new-color) 8%, transparent);
+  border-color: var(--dsw-alias-brand-primary-new-colorprimary-new-color);
+}
+
+.dockHintCard svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+/* One line, clipped rather than wrapped: the card in a narrow half is still
+   wide enough for its glyph, and the caption fades under the frame. */
+.dockHintLabel {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@keyframes dockHintIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The scrim fades in without the cards' scale: a full-body cover that shrinks
+   would expose an uncovered rim of raw content on entry. */
+@keyframes dockScrimIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.dockHint[data-dockkit-dock-zone='top'] {
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 40%;
+}
+
+.dockHint[data-dockkit-dock-zone='bottom'] {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 40%;
+}
+
+.float {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  /* The body inside is unpadded and reaches the edges, so the frame clips it
+     to its own corners. */
+  overflow: hidden;
+  background: var(--dsw-alias-bg-layer-2);
+  border-radius: 20px;
+  /* The menu's shadow with the stroke rebound one step lighter than the
+     default (l2): the panel reads as the same kind of raised surface, and the
+     shadow's hairline outlines it, so the frame draws no border of its own. */
+  --dsw-elevation-stroke-color: var(--dsw-alias-border-l2);
+  box-shadow: var(--dsw-elevation-prominent);
+  pointer-events: auto;
+}
+
+/* The active panel keeps the same frame: it is already on top of the z order
+   and casts the same shadow, and a heavier or darker frame read as a defect.
+   `data-dockkit-float-active` stays on the element for tests. */
+
+/* The panel's header is the pane strip's row (`.tabStrip` supplies the
+   metrics) and the whole of it is the move grip. */
+.floatHeader {
+  cursor: move;
+  user-select: none;
+}
+
+/* The one tab, drawn as its chip would be in a strip but never selected,
+   hovered, or closable from here: the frame's controls do that. */
+.floatTitle {
+  flex: 0 1 auto;
+  cursor: inherit;
+}
+
+.tab.floatTitle:hover {
+  background: transparent;
+}
+
+/* Mirrored so the filled pane sits at the right, where the docked surface is. */
+.dockGlyph {
+  transform: scaleX(-1);
+}
+
+/* Unpadded like `.paneBody`: the same body draws the same insets in a float. */
+.floatBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;  /* This sheet draws elevated surfaces (the strip and the menu), so a scroller
+     inside it rebinds the thumb indirection in a complete pair — a base-surface
+     thumb on an elevated ground reads as a smudge. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+.floatResize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 20px;
+  height: 20px;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+/* The grip is a quarter arc concentric with the frame's 20px corner (16px
+   radius at a 4px inset), so it reads as part of the frame. It shows only
+   while the pointer is over the panel — an idle panel keeps a clean corner —
+   and `:active` keeps it lit while a drag holds the pointer capture. */
+.floatResize::after {
+  content: '';
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  border-right: 1.5px solid var(--dsw-alias-label-caption);
+  border-bottom: 1.5px solid var(--dsw-alias-label-caption);
+  border-bottom-right-radius: 16px;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.float:hover .floatResize::after,
+.floatResize:active::after {
+  opacity: 1;
+}
+
+.floatResize:hover::after {
+  border-color: var(--dsw-alias-label-tertiary);
+}

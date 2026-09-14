@@ -1,5 +1,5 @@
 ---
-description: "面向模型的背景任务控制，供选择、配置或排查 job_output、job_list、job_kill 与完成通知的用户与维护者阅读。"
+description: "面向模型的后台任务控制，供选择、配置或排查 job_output、job_list、job_kill 与完成通知的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-jobs` 为 agent 提供三个与 kind 无关的后台工作工具——`job_output`、`job_list` 与 `job_kill`——因此 agent 启动的任何任务，无论是后台命令、PTY 发送还是 subagent，都可以通过同一套控制读取、列出和取消。任务完成时，拥有它的 agent 会在会话内收到通知：繁忙的 agent 在下一步收到通知，空闲的 agent 则被一个 follow-up 轮次唤醒，两者均按所有者设限。加载插件还会附加让生产方能够启动后台工作的任务控制器。这些工具是基于 `ctx.jobs` 的通用 UI 卡片；配置用于调节等待超时与完成投递。
+使用 `dsh-tool-jobs`，可通过 `job_output`、`job_list` 与 `job_kill` 检查和控制后台命令、PTY 工作与 subagent。读取可在配置的超时内等待，列表结果标识各任务的 kind 与状态，而取消只有在工作停止后才结算。归属明确的工作完成时，agent（智能体）会收到会话内通知：繁忙的 agent 在下一步收到通知，空闲的 agent 则可能由有界的 follow-up 轮次唤醒。配置控制等待上限、完成投递与连续唤醒次数。流输出仅供单一读取方消费，待领通知无法在所有者释放后存活。
 
 ## 目录
 
@@ -39,7 +39,7 @@ kind: "package-reference"
 
 任务完成时，拥有它的 agent 会收到会话内消息 `background job <id> (<kind>: <label>) finished [status: ...]. Read its output with job_output.`。繁忙的 agent 会在下一步收到注入的通知——inbox 尚有内容时轮次无法结束，因此同时结算的多个任务只花掉一步，而不是各占一轮。空闲的 agent 则被一个 follow-up 轮次唤醒，因为无人领取的通知等于模型永远不会知道的完成。kill 或针对终止任务的 read/wait 会把完成标为已报告并抑制重复通知；排空 owner 或服务的 teardown 取消同样如此。
 
-唤醒是有界的：每个所有者最多可被唤醒 `maxConsecutiveWakes` 次，此后的通知降级为注入；领取任何用户撰写的消息都会恢复预算。设界是因为这条链会自激——被唤醒的一轮可能启动某个后台任务，而它的完成又会唤醒同一个所有者。`completionDelivery: quiet` 让空闲所有者也在注入通道上，确定性 transcript 需要的正是这一点。
+唤醒是有界的：每个所有者最多可被唤醒 `maxConsecutiveWakes` 次，此后的通知降级为注入；领取任何用户撰写的消息都会恢复预算。设界是因为这条链会自激——被唤醒的一轮可能启动某个后台任务，而它的完成又会唤醒同一个所有者。`completionDelivery: quiet` 让空闲所有者也在注入通道上，确定性 transcript（文本记录）需要的正是这一点。
 
 ### 最小配置
 
@@ -83,7 +83,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、完成监听器、提示词区段、输出上限 |
-| — | 不发布运行时不变式伴生入口；执行关系归能力 seam 所有。 |
+| — | 不发布运行时不变式伴生入口；这个面向模型的适配器没有独立的生命周期流；执行关系归其调用的能力 seam 所有。 |
 
 ### 输出上限
 
@@ -102,7 +102,7 @@ kind: "package-reference"
 
 当包级约定不够用时阅读以下页面。它们从任务类型逐步进入注册表约定与生成 schema。
 
-- [后台任务运行时子系统](../../../docs/subsystems/jobs.zh.md)——任务类型、快照字段与 `ctx.jobs` 的 cordis 接口面。
+- [后台任务运行时子系统](../../../docs/subsystems/jobs.zh.md)——任务类型、快照字段与 `ctx.jobs` 的 Cordis 接口面。
 - [jobs 组映射](../README.zh.md)——同级组页面及其包表格。
 - [注册表约定](../jobs/README.zh.md)——工具背后的抽象 `ctx.jobs` 服务。
 - [进程本地注册表](../jobs-local/README.zh.md)——任务在本进程中的运行位置。
@@ -119,7 +119,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-该插件注册 scope 中的每次请求都包含以下指引。按 agent（智能体）scope 过滤工具时，可能会隐藏工具，却不会移除独立注册的提示词区段。
+该插件注册 scope 中的每次请求都包含以下指引。按 agent scope 过滤工具时，可能会隐藏工具，却不会移除独立注册的提示词区段。
 
 ##### 后台任务指引
 
@@ -161,7 +161,7 @@ Track every background job id you start. You are notified in-session when a job 
 
 #### KV Cache 影响
 
-仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV-cache 条目失效。
+仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效。
 
 ## 已知限制与延期工作
 
@@ -170,7 +170,7 @@ Track every background job id you start. You are notified in-session when a job 
 
 这些限制说明工具何时不合适。它们是当前包约束，不是任务积压。
 
-- **落在 driver 退休窗口内的结算仍会让通知搁浅**——在轮次循环最后一次检查 inbox 与 driver 提交 idle 相位之间，所有者读起来仍是繁忙，因此通知走注入且无人唤醒。steer 有同样的洞；堵上它属于 `agent-loop`。
+- **落在 driver 退休窗口内的结算仍会让通知搁浅**——在轮次循环最后一次检查 inbox 与 driver 提交 idle 相位之间，所有者读起来仍是繁忙，因此通知走注入且无人唤醒。steering（中途引导）存在同样的问题；修复它属于 `agent-loop`。
 - **已花掉的唤醒预算不会随时间恢复**——只有用户撰写的输入才能补充，因此预算耗尽的无人值守 agent 要等到其他原因开启下一轮时才收走剩余通知。
 - **待领于空闲所有者的通知无法在该所有者释放后存活**——释放时的取消会清空未领取的 inbox，日志保留插入/取消这一对作为记录。
 - **流读取只有单一消费方**——独立观察者需要另一套运行时 API。

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-fs-sandbox` provides the sandbox-enforcing `ctx.fs` backend: it extends [`fs-local`](../fs-local/README.md) with every text-storage behavior intact and adds only a per-call mode fence on writes and edits, while reads always pass through. Under `read-only` every mutation is refused; under `workspace-write` a mutation is allowed only when the target sits under the session workspace or a platform temp root; under `danger-full-access` mutations run unfenced. Loading it instead of `fs-local`, together with the shared `ctx.sandboxPolicy` service, is the whole swap — the model-facing tools and the policy plugin are untouched. A denial is a structured `FS_SANDBOX_DENIED` error that the tools render as the familiar `[sandbox: file access denied under <mode> mode]` marker with a same-turn escalation hint. Choose it when a session's file mutations must be confined to its workspace.
+`dsh-fs-sandbox` confines model file writes and edits according to each session's sandbox mode while preserving the local filesystem's read behavior. In `read-only`, it rejects every mutation; in `workspace-write`, it permits targets only inside the session workspace or a platform temporary root; in `danger-full-access`, it does not restrict mutations. Use it instead of `fs-local` with `ctx.sandboxPolicy` when sessions need workspace-confined file changes. Denied operations return `FS_SANDBOX_DENIED`, which filesystem tools present with the active mode and a same-turn escalation hint.
 
 ## Table of Contents
 
@@ -39,7 +39,7 @@ Load the shared policy service, then this backend, then the tools; the read-befo
 - name: '@deepseek-ai/dsh-tool-fs'
 ```
 
-The backend's config is the local backend's unchanged (`cwd` resolution default and `diffBasisMaxBytes` overwrite bound); the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-fs-sandbox) is the exhaustive source.
+The backend's config is unchanged from the local backend's (`cwd` resolution default and `diffBasisMaxBytes` overwrite bound); the [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-fs-sandbox) is the exhaustive source.
 
 ### How the fence behaves
 

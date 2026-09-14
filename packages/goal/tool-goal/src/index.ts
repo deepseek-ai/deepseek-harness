@@ -276,6 +276,14 @@ export function apply(ctx: Context, config: Config): void {
             'GOAL_TOOL_INVALID_UPDATE',
           )
         }
+        const current = ctx.goals.get(execution.agent)
+        if (args.action === 'resume' && current?.id === ref.id && current.revision === ref.revision
+          && current.phase === 'paused') {
+          throw new HarnessError(
+            'the model cannot resume a paused goal; the user must resume it',
+            'GOAL_TOOL_RESUME_PAUSED',
+          )
+        }
         const goal = args.action === 'pause'
           ? ctx.goals.pause(execution.agent, ref)
           : ctx.goals.resume(execution.agent, ref)

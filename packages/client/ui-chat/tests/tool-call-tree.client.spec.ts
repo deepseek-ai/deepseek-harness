@@ -9,12 +9,12 @@ const at = (seq: number, type: string, data: Record<string, unknown>): SessionEv
   ({ seq, time: 1_700_000_000_000 + seq, type, data }) as unknown as SessionEvent
 
 const start = (seq: number, parentCallId: string, subCallId: string): SessionEvent =>
-  at(seq, 'tool/code-dispatch-start', {
+  at(seq, 'tool/ptc-dispatch-start', {
     parentCallId, subCallId, name: 'run_code', arguments: {},
   })
 
 const settle = (seq: number, parentCallId: string, subCallId: string): SessionEvent =>
-  at(seq, 'tool/code-dispatch', {
+  at(seq, 'tool/ptc-dispatch', {
     parentCallId, subCallId, name: 'run_code', arguments: {},
     isError: false, content: [],
   })

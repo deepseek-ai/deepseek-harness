@@ -11,21 +11,21 @@ import { bindScopeParent, createScope, scopeOf } from '@deepseek-ai/dsh-scope'
 import { JobId } from '@deepseek-ai/dsh-jobs'
 import LocalJobRegistry from '@deepseek-ai/dsh-jobs-local'
 import type { JobHooks, JobOutcome, JobSnapshot, JobStart } from '@deepseek-ai/dsh-jobs'
-import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
+import * as ToolJobs from '@deepseek-ai/dsh-tool-jobs'
 import { statusLine } from '@deepseek-ai/dsh-tool-jobs'
 
 const testToolSignal = new AbortController().signal
 
-const agentRegistryDisposers = new WeakMap<Agent, () => void>()
+const agentRegistryDisposers = new WeakMap<Agent, () => Promise<void>>()
 const agentScopeFibers = new WeakMap<Agent, { dispose: () => Promise<void> }>()
 
-async function setup(config: ToolTasks.Config = {}) {
+async function setup(config: ToolJobs.Config = {}) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   const agentsFiber = await ctx.plugin(AgentRegistry)
   await ctx.plugin(LocalJobRegistry)
-  const toolsFiber = await ctx.plugin(ToolTasks, config)
+  const toolsFiber = await ctx.plugin(ToolJobs, config)
   return { ctx, agentsFiber, toolsFiber }
 }
 
@@ -41,7 +41,7 @@ interface FakeDelivery {
  * A fake agent with the shared agent/session identity, registered in
  * `ctx.agents` with a dedicated lifecycle scope.
  */
-function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery = {}): Agent {
+async function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery = {}): Promise<Agent> {
   const scopeFiber = ctx.plugin(() => {})
   const id = SessionId(sessionId)
   const agent = {
@@ -52,15 +52,15 @@ function fakeAgent(ctx: Context, sessionId: string, delivery: FakeDelivery = {})
     status: delivery.status ?? 'running',
     session: { id, header: { version: 0, id, createdAt: 0 } },
   } as unknown as Agent
-  agentRegistryDisposers.set(agent, ctx.agents.register(agent))
+  agentRegistryDisposers.set(agent, await ctx.agents.register(agent))
   agentScopeFibers.set(agent, scopeFiber)
   return agent
 }
 
-function detachAgent(agent: Agent): void {
+async function detachAgent(agent: Agent): Promise<void> {
   const dispose = agentRegistryDisposers.get(agent)
   if (dispose === undefined) throw new Error(`missing registry disposer for agent "${agent.id}"`)
-  dispose()
+  await dispose()
 }
 
 /** Dispose the agent's own lifecycle scope, which is what drains its owned jobs. */
@@ -124,15 +124,15 @@ describe('tool-jobs setup', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalJobRegistry)
-    await expect(ctx.plugin(ToolTasks, { waitTimeoutMs: 100, maxWaitTimeoutMs: 50 }))
+    await expect(ctx.plugin(ToolJobs, { waitTimeoutMs: 100, maxWaitTimeoutMs: 50 }))
       .rejects.toThrow('waitTimeoutMs (100) exceeds maxWaitTimeoutMs (50)')
   })
 
   it('defaults delivery to wakeup and rejects an unknown lane', () => {
-    expect(ToolTasks.Config({}).completionDelivery).toBe('wakeup')
-    expect(ToolTasks.Config({}).maxConsecutiveWakes).toBe(3)
-    expect(() => ToolTasks.Config({ completionDelivery: 'loud' as never })).toThrow()
-    expect(() => ToolTasks.Config({ maxConsecutiveWakes: 0 })).toThrow()
+    expect(ToolJobs.Config({}).completionDelivery).toBe('wakeup')
+    expect(ToolJobs.Config({}).maxConsecutiveWakes).toBe(3)
+    expect(() => ToolJobs.Config({ completionDelivery: 'loud' as never })).toThrow()
+    expect(() => ToolJobs.Config({ maxConsecutiveWakes: 0 })).toThrow()
   })
 
   it('rejects a wake budget that cannot bound anything', async () => {
@@ -143,7 +143,7 @@ describe('tool-jobs setup', () => {
       await ctx.plugin(ToolRuntime)
       await ctx.plugin(LocalJobRegistry)
       try {
-        await ctx.plugin(ToolTasks, { maxConsecutiveWakes })
+        await ctx.plugin(ToolJobs, { maxConsecutiveWakes })
         return 'loaded'
       } catch (error: unknown) {
         return String(error)
@@ -170,7 +170,7 @@ describe('tool-jobs setup', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(LocalJobRegistry)
-    ToolTasks.apply(ctx, {})
+    ToolJobs.apply(ctx, {})
     expect(ctx.tools.get('job_output')).toBeDefined()
     expect(() => ctx.jobs.start(producer().spec)).not.toThrow()
   })
@@ -353,7 +353,7 @@ describe('job_list', () => {
     const { ctx } = await setup()
     expect(text(await call(ctx, 'job_list', {}))).toBe('(no background jobs)')
 
-    const alice = fakeAgent(ctx, 'sess-alice')
+    const alice = await fakeAgent(ctx, 'sess-alice')
     ctx.jobs.start(producer({ owner: alice, label: 'pnpm test' }).spec)
     ctx.jobs.start(producer({ kind: 'subagent', label: 'open research' }).spec)
     const p = producer({ owner: alice, label: 'build' })
@@ -377,7 +377,7 @@ describe('job_list', () => {
       'bash-2 [bash] completed — build',
     ].join('\n'))
     // A different caller sees only the unowned job.
-    const bob = fakeAgent(ctx, 'sess-bob')
+    const bob = await fakeAgent(ctx, 'sess-bob')
     expect(text(await call(ctx, 'job_list', {}, bob))).toBe('subagent-1 [subagent] running — open research')
   })
 })
@@ -521,8 +521,8 @@ describe('completion notices across scoped mounts', () => {
 
     const standingA = createScope(ctx, {})
     const standingB = createScope(ctx, {})
-    await standingA.ctx.plugin(ToolTasks)
-    await standingB.ctx.plugin(ToolTasks)
+    await standingA.ctx.plugin(ToolJobs)
+    await standingB.ctx.plugin(ToolJobs)
 
     // The agent joins preset A exactly as `agentPresets.compose` binds it.
     const agentKey = {}
@@ -536,7 +536,7 @@ describe('completion notices across scoped mounts', () => {
       inject,
       session: { id: SessionId('sess-scoped'), header: { version: 0, id: SessionId('sess-scoped'), createdAt: 0 } },
     } as unknown as Agent
-    const dispose = ctx.agents.register(owner)
+    const dispose = await ctx.agents.register(owner)
 
     try {
       // No waiter: `settle()` leaves `reported` false, which is the only path
@@ -548,7 +548,7 @@ describe('completion notices across scoped mounts', () => {
 
       expect(inject).toHaveBeenCalledTimes(1)
     } finally {
-      dispose()
+      await dispose()
     }
   })
 })
@@ -558,7 +558,7 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
     const p = producer({ owner, label: 'pnpm test' })
     ctx.jobs.start(p.spec)
 
@@ -572,7 +572,7 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup({ completionDelivery: 'quiet' })
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
     const p = producer({ owner })
     ctx.jobs.start(p.spec)
 
@@ -586,7 +586,7 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup({ maxConsecutiveWakes: 2 })
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
 
     await settleTasks(ctx, owner, 3)
     // A woken turn that starts another job is the self-exciting case: the
@@ -599,7 +599,7 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup({ maxConsecutiveWakes: 1 })
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
 
     await settleTasks(ctx, owner, 2)
     expect(followup).toHaveBeenCalledTimes(1)
@@ -616,7 +616,7 @@ describe('completion notice delivery', () => {
     const { ctx } = await setup()
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
     let settle!: (outcome: JobOutcome) => void
     ctx.jobs.start({
       kind: 'bash',
@@ -641,7 +641,7 @@ describe('completion notice delivery', () => {
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
     const inject = vi.fn()
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject, followup, status: 'idle' })
     ctx.jobs.start({
       kind: 'bash',
       label: 'broken producer',
@@ -666,7 +666,7 @@ describe('completion notice delivery', () => {
   it('keeps the budget spent when the owner only claims plugin notices', async () => {
     const { ctx } = await setup({ maxConsecutiveWakes: 1 })
     const followup = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { followup, status: 'idle' })
+    const owner = await fakeAgent(ctx, 'sess-1', { followup, status: 'idle' })
 
     await settleTasks(ctx, owner, 1)
     emitAgentEvent(ctx, owner, 'agent/inbox/claimed', {
@@ -685,7 +685,7 @@ describe('completion notices', () => {
   it('injects a notice into the owning agent when an unreported job settles', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const p = producer({ owner, label: 'pnpm test' })
     ctx.jobs.start(p.spec)
 
@@ -708,7 +708,7 @@ describe('completion notices', () => {
   it('preserves job ids and collection guidance in bounded completion notices', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const first = producer({
       owner,
       kind: 'subagent',
@@ -762,7 +762,7 @@ describe('completion notices', () => {
       await tick()
     }
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const target = producer({
       owner,
       kind: 'pty-send',
@@ -783,7 +783,7 @@ describe('completion notices', () => {
   it('reserves the collection-action tail when a producer supplies a smaller budget', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const tiny = producer({ owner, kind: 'pty-send', label: 'x'.repeat(100), outputLimitBytes: 8 })
     const short = producer({ owner, kind: 'pty-send', label: 'x'.repeat(100), outputLimitBytes: 32 })
     ctx.jobs.start(tiny.spec)
@@ -804,7 +804,7 @@ describe('completion notices', () => {
   it('suppresses the notice for a job the model already killed', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const p = producer({ owner })
     ctx.jobs.start(p.spec)
 
@@ -817,7 +817,7 @@ describe('completion notices', () => {
   it('suppresses the notice when a wait returned the terminal state', async () => {
     const { ctx } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
     const p = producer({ owner, kind: 'subagent' })
     ctx.jobs.start(p.spec)
 
@@ -842,13 +842,13 @@ describe('completion notices', () => {
     // terminal state, so the notice lands in the old owner's (detached)
     // session instead of throwing or re-routing.
     const oldInject = vi.fn()
-    const oldOwner = fakeAgent(ctx, 'shared', { inject: oldInject })
+    const oldOwner = await fakeAgent(ctx, 'shared', { inject: oldInject })
     const p = producer({ owner: oldOwner })
     ctx.jobs.start(p.spec)
 
-    detachAgent(oldOwner)
+    await detachAgent(oldOwner)
     const replacementInject = vi.fn()
-    fakeAgent(ctx, 'shared', { inject: replacementInject })
+    await fakeAgent(ctx, 'shared', { inject: replacementInject })
     p.settle({ status: 'completed' })
     await tick()
 
@@ -859,7 +859,7 @@ describe('completion notices', () => {
   it('surfaces an inject failure through listener containment (a real bug must be visible)', async () => {
     const { ctx } = await setup()
     const warn = vi.spyOn(ctx.logger, 'warn').mockImplementation(() => {})
-    const owner = fakeAgent(ctx, 'sess-1', { inject: () => { throw new Error('unexpected inject bug') } })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject: () => { throw new Error('unexpected inject bug') } })
     const p = producer({ owner })
     ctx.jobs.start(p.spec)
     p.settle({ status: 'completed' })
@@ -872,7 +872,7 @@ describe('completion notices', () => {
   it('keeps using the exact owner after the agent registry is gone', async () => {
     const { ctx, agentsFiber } = await setup()
     const inject = vi.fn()
-    const owner = fakeAgent(ctx, 'sess-1', { inject })
+    const owner = await fakeAgent(ctx, 'sess-1', { inject })
 
     // Settlement must not depend on a later registry lookup: the exact owner
     // supplied at start remains the destination while its own scope is live.

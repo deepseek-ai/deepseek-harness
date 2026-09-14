@@ -1,0 +1,168 @@
+# CI for the node-addon-system packages under native/system. A separate
+# workflow from ci.yml keeps the native OS/architecture matrix independent of
+# the harness Node matrix. Each platform job builds once and tests those bytes
+# under every supported Node release. Release assembly and publication use the
+# companion Node Addon System Release workflow.
+name: Node Addon System
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/node-addon-system.yml'
+      - '.github/workflows/node-addon-system-release.yml'
+      - 'native/system/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/node-addon-system.yml'
+      - '.github/workflows/node-addon-system-release.yml'
+      - 'native/system/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # CI runs must never report to the production telemetry endpoint baked
+  # into apps/cli/cordis.yml (AppCLIEntry disables the row when set).
+  DSH_TELEMETRY_DISABLED: '1'
+
+defaults:
+  run:
+    working-directory: native/system
+
+jobs:
+  matrix:
+    name: Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      ci: ${{ steps.matrix.outputs.ci }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: matrix
+        run: echo "ci=$(node ./scripts/github-matrix.mjs ci)" >> "$GITHUB_OUTPUT"
+
+  native:
+    name: ${{ matrix.platform }}
+    needs: matrix
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix.outputs.ci) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: package.json
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --filter @deepseek-ai/node-addon-system-workspace... --frozen-lockfile
+
+      - name: Install musl toolchain
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq musl-tools
+
+      - name: Build TypeScript
+        run: pnpm build:ts
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build native binaries (this architecture is the builder of record)
+        run: pnpm build:native
+
+      - name: Entry tests (keyless)
+        run: node ./test/entry.test.js
+
+      # NALR_REQUIRE_LANDLOCK: a self-skip on the very platform that exists to
+      # prove enforcement would be a false green, so an unenforcing kernel
+      # fails the leg instead of skipping.
+      - name: Launcher tests (real kernel enforcement)
+        if: runner.os == 'Linux'
+        run: node ./test/launcher.test.js
+        env:
+          NALR_REQUIRE_LANDLOCK: 1
+
+      - name: Pack rehearsal (pack → install → confine, this platform only)
+        run: |
+          node ./scripts/pack-release.mjs .release/npm --current-platform-only
+          node ./scripts/verify-packed-install.mjs .release/npm --current-platform-only
+        env:
+          NALR_REQUIRE_LANDLOCK: ${{ runner.os == 'Linux' && '1' || '0' }}
+
+      - name: Verify platform payload rules (Node 24)
+        run: pnpm test:packaging
+
+      - name: Flock behavior (Node 24, built addon)
+        run: |
+          pnpm build:test-oracle
+          pnpm test:flock
+
+      - name: Test the same musl addon on Node 24 without a compiler
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm -v "$PWD:$PWD" -w "$PWD"
+          node:24-alpine
+          node --test ./test/flock.test.js ./test/package-matrix.test.js
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Test the same binaries on Node 20
+        run: node --test ./test/flock.test.js ./test/package-matrix.test.js
+
+      - name: Test the same musl addon on Node 20 without a compiler
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm -v "$PWD:$PWD" -w "$PWD"
+          node:20-alpine
+          node --test ./test/flock.test.js ./test/package-matrix.test.js
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Test the same binaries on Node 22
+        run: node --test ./test/flock.test.js ./test/package-matrix.test.js
+
+      - name: Test the same musl addon on Node 22 without a compiler
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm -v "$PWD:$PWD" -w "$PWD"
+          node:22-alpine
+          node --test ./test/flock.test.js ./test/package-matrix.test.js
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+
+      - name: Test the same binaries on Node 26
+        run: node --test ./test/flock.test.js ./test/package-matrix.test.js
+
+      - name: Test the same musl addon on Node 26 without a compiler
+        if: runner.os == 'Linux'
+        run: >-
+          docker run --rm -v "$PWD:$PWD" -w "$PWD"
+          node:26-alpine
+          node --test ./test/flock.test.js ./test/package-matrix.test.js

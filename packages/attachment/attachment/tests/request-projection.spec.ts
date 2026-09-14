@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { requestImageDimensions } from '../src/index.ts'
+import { longEdgeDimensions, requestImageDimensions } from '../src/index.ts'
 
 describe('request image dimensions', () => {
   it.each([
@@ -25,5 +25,19 @@ describe('request image dimensions', () => {
 
   it('rounds a portrait inward when integer aspect rounding crosses the pixel cap', () => {
     expect(requestImageDimensions(2, 4, 5)).toEqual({ width: 1, height: 2 })
+  })
+})
+
+describe('long-edge dimensions', () => {
+  it('keeps the long edge exact and rounds the short edge', () => {
+    expect(longEdgeDimensions(8000, 40, 4096)).toEqual({ width: 4096, height: 20 })
+    expect(longEdgeDimensions(10_000, 100, 4096)).toEqual({ width: 4096, height: 41 })
+    expect(longEdgeDimensions(1080, 2400, 1862)).toEqual({ width: 838, height: 1862 })
+    expect(longEdgeDimensions(1, 9000, 4096)).toEqual({ width: 1, height: 4096 })
+  })
+
+  it('never enlarges a source at or below the long edge', () => {
+    expect(longEdgeDimensions(320, 240, 320)).toEqual({ width: 320, height: 240 })
+    expect(longEdgeDimensions(320, 240, 4096)).toEqual({ width: 320, height: 240 })
   })
 })

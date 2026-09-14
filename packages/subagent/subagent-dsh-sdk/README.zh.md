@@ -1,5 +1,5 @@
 ---
-description: "面向用户与维护者的进程外 SDK subagent 后端，用于选择委派提供方、配置子 Harness 运行时命令或排查远程子 agent 运行问题。"
+description: "面向用户与维护者的进程外 SDK subagent 后端，用于选择委派提供方、配置子 Harness 运行时，或排查本地嵌套子 agent（智能体）的运行问题。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-subagent-dsh-sdk` 在全新的子进程中把每个被委派的子 agent（智能体）作为完整的 DeepSeek Harness 运行时运行，并经由 TypeScript SDK 客户端通过 stdio JSON-RPC 驱动。它是 ACP 提供方之外的第二个进程外后端，差异在协议格式（wire format）与子进程约定：子进程是完整的对等 harness，拥有由 `cordis.yml` 决定的组合、会话持久化、模型路由与工具。每次运行都会 spawn 子运行时（Node 下解析出的 `@deepseek-ai/dsh` CLI，或配置的 `dshBin`），以配置的提供方与模型路由完成 `initialize` 握手、提交任务，并从子进程的会话事件中读取答案。父级只收到子进程最终的 assistant 文本或安全错误——中间消息与工具流量不会跨越边界。当子进程应该是与父 harness 完全隔离的真实 Harness 运行时时，选择它。
+`dsh-subagent-dsh-sdk` 在全新的 DeepSeek Harness 子进程中运行每个委派任务，子进程拥有自己的 profile、会话、模型路由与工具。父级提供任务与工作目录，每个子进程使用其已配置的运行时，并与父级对话保持隔离。父级只会收到子进程最终的 assistant 文本或安全错误；中间消息与工具流量保留在子进程内。当委派需要完整的 Harness 运行时而不是共享进程内状态时，选择此后端，并接受每次运行都要启动新进程的成本。
 
 ## 目录
 
@@ -25,21 +25,21 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当委派应以完整 Harness 运行时在独立进程中运行时，挂载本提供方。常用路径是显式的：挂载 seam、挂载本提供方，并给出一个启动带有自身 `cordis.yml` 的 SDK 运行时的命令。
+当委派应以完整 Harness 运行时在独立进程中运行时，挂载本提供方。常用路径是显式的：挂载 seam、挂载本提供方，按需配置 `dshBin`，并选择子级 `profile` 与有序 `patches`。
 
 ### 何时选择
 
 当子进程必须是完整的 harness 对等体——拥有自己的组合、会话持久化、模型路由与工具——而不是共享父进程的 agent 时，选择此后端。当子进程必须共享父级组合或遵守父级强制的非路由能力时，请选择进程内后端：本提供方接受 agent 路由选项，但会拒绝结构化输出、深度上限、工具过滤或 persona，而不是静默省略。
 
-提供方声明 `agentOptions: true`，同时保持 `outputSchema`/`depthLimit`/`toolFilter`/`persona` 为 false，并且 `inheritsParentContext: false`。不可变的 `agentRouteDefaults` 会在模型覆盖与确切路由预检前，把配置的 provider／model 基线公开给 `dsh-tool-subagent`；`start()` 则为直接调用方与 `maxTokens` 独立应用同一份配置默认值。Agent 路由值通过显式白名单跨越 SDK 协议；子进程仍是另一进程里的全新运行时，唯一从父 agent 本身派生的值是工作区 cwd。基于本提供方的 `dsh-tool-subagent` 部署应设置 `maxDepth: 'provider-managed'`——子 harness 拥有自己的递归预算。
+提供方声明 `agentOptions: true`，同时保持 `outputSchema`/`depthLimit`/`toolFilter`/`persona` 为 false，并且 `inheritsParentContext: false`。不可变的 `agentRouteDefaults` 会在模型覆盖与确切路由预检前，把配置的 provider／model 基线公开给 `dsh-tool-subagent`；`start()` 则为直接调用方独立应用同一份配置默认值，包括 `maxTokens`。agent 路由值通过显式白名单跨越 SDK 协议；子进程仍是另一进程里的全新运行时，唯一从父 agent 本身派生的值是工作区 cwd。基于本提供方的 `dsh-tool-subagent` 部署应设置 `maxDepth: 'provider-managed'`——子 harness 拥有自己的递归预算。
 
 ### 配置
 
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `providerName` | `dsh-sdk` | `ctx.subagents` 上的注册表名称 |
-| `dshBin` | SDK 依赖 | 显式 dsh CLI 模块，在插件加载时解析并校验；省略则使用 SDK 依赖 |
-| `profile` | `sdk` | 子进程命名的 profile |
+| `dshBin` | SDK 依赖 | 显式 dsh CLI（命令行界面）模块，在插件加载时解析并校验；省略则使用 SDK 依赖 |
+| `profile` | `sdk` | 具名子 profile |
 | `patches` | `[]` | 每次启动的有序 profile patch 文件，在插件加载时解析并校验 |
 | `dshHome` | 必填 | 每个嵌套子进程的绝对隔离 Harness home |
 | `cwd` | 父会话 cwd | 子进程及其 SDK 会话的工作目录覆盖值 |
@@ -47,7 +47,7 @@ kind: "package-reference"
 | `model` | `deepseek-v4-flash` | 写入子进程 `initialize` 的模型 |
 | `maxTokens` | 适配器／提供方路由默认值 | 写入子进程 `initialize` 的单次请求输出 token 上限 |
 | `env` | `{}` | 叠加在已清理凭据的父环境之上的显式子环境 |
-| `shutdownTimeoutMs` | `1000` | dispose 期间协议 `shutdown` 交换的时限 |
+| `shutdownTimeoutMs` | `1000` | dispose（资源释放）期间协议 `shutdown` 交换的时限 |
 | `disposeEofGraceMs` | `6000` | stdin EOF 之后、平台终止之前的宽限 |
 | `disposeGraceMs` | `3000` | 终止后的退出确认宽限 |
 
@@ -93,7 +93,7 @@ kind: "package-reference"
 
 - **完整 harness 对等体。** 每个子进程都是独立进程中的完整 Harness 运行时——拥有自己的组合、会话、模型路由与工具；只有解析后的工作目录与 `initialize` 路由从父级跨越。
 - **每次运行一个运行时。** 每次运行都 spawn 全新运行时进程；没有进程池。
-- **JSON-RPC 协议格式是序列化边界。** 同进程 subagent 值不会为防御目的克隆；协议才是校验不可信输入的地方。
+- **JSON-RPC 协议格式（wire format）是序列化边界。** 同进程 subagent 值不会为防御目的克隆；协议才是校验不可信输入的地方。
 
 ### 源码地图
 
@@ -104,7 +104,7 @@ kind: "package-reference"
 
 ### 运行流程
 
-一次启动会在 spawn 前解析子进程工作目录与一条进程级 SDK 路由。`request.agentOptions` 中每个已声明字段（`provider`、`model`、`reasoningEffort` 或 `maxTokens`）都会覆盖对应的提供方实例默认值；省略时保留已配置的提供方／模型与可选上限，而推理强度只有在请求提供时才会出现。随后，提供方通过 SDK 客户端 spawn 运行时，并在履行前完成 `initialize` 握手，其中包括确切模型与推理强度校验。路由、spawn、握手或发布前取消失败时，只会在子进程被回收后拒绝；工作目录解析失败则会在尚未 spawn 任何内容时拒绝。发布后，提供方拥有一段 SDK 活动，并从子会话事件中读取答案：最后一条完整且非空的 `assistant/message`（记录 usage 的空内容消息会被跳过）；若没有这类消息，则取累积的 `text-delta` 流。dispose（资源释放）是幂等的：先在本地把结果确定为 `aborted`，发出有界的协议 `shutdown` 请求，再经 stdin EOF → SIGTERM → SIGKILL 升级到实际退出。
+一次启动会在 spawn 前解析子进程工作目录与一条进程级 SDK 路由。`request.agentOptions` 中每个已声明字段（`provider`、`model`、`reasoningEffort` 或 `maxTokens`）都会覆盖对应的提供方实例默认值；省略时保留已配置的提供方／模型与可选上限，而推理强度只有在请求提供时才会出现。随后，提供方通过 SDK 客户端 spawn 运行时，并在履行前完成 `initialize` 握手，其中包括确切模型与推理强度校验。路由、spawn、握手或发布前取消失败时，只会在子进程被回收后拒绝；工作目录解析失败则会在尚未 spawn 任何内容时拒绝。发布后，提供方拥有一段 SDK 活动，并从子会话事件中读取答案：最后一条完整且非空的 `assistant/message`（记录 usage 的空内容消息会被跳过）；若没有这类消息，则取累积的 `text-delta` 流。dispose 是幂等的：先在本地把结果确定为 `aborted`，发出有界的协议 `shutdown` 请求，再经 stdin EOF → SIGTERM → SIGKILL 升级到实际退出。
 
 ### 停止原因映射
 
@@ -112,7 +112,7 @@ kind: "package-reference"
 
 ### 进程边界
 
-子进程环境以子进程 seam 的已清理凭据父环境为基础，并在清除之后合并显式 `config.env` 值。子进程由 SDK 客户端 spawn，而不是经由 `ctx.subprocess`——这是 SDK 托管传输的文档化例外——因此本后端会自行执行环境清理。
+子进程环境以子进程 seam 中已清除凭据的父环境为基础，并在清除之后合并显式 `config.env` 值。子进程由 SDK 客户端 spawn，而不是经由 `ctx.subprocess`——这是 SDK 托管传输的文档化例外——因此本后端会自行执行环境清理。
 
 </details>
 
@@ -138,7 +138,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-子运行时的模型会收到作为用户消息的独立任务，以及该运行时自身配置的系统提示词、工具和全新会话。它不会收到父级对话。父级工具调用可以为本次运行选择子级提供方、模型与推理强度；所选路由和部署持有的可选输出上限会固定到这个新子进程。persona、工具过滤、深度强制与结构化输出仍不受支持，并会被拒绝而不是静默省略。
+子运行时的模型会收到作为用户消息的独立任务，以及该运行时自身配置的系统提示词、工具和全新会话。它不会收到父级对话。父级工具调用可以为本次运行选择子级提供方、模型与推理强度；所选路由和由部署控制的可选输出上限会固定到这个新子进程。persona、工具过滤、深度强制与结构化输出仍不受支持，并会被拒绝而不是静默省略。
 
 #### Token 影响
 
@@ -171,7 +171,7 @@ kind: "package-reference"
 
 - **每次运行都使用全新的运行时进程**——不使用进程池；harness 运行时需要启动完整的插件树，因此每次运行的 spawn 成本高于 ACP 后端通常使用的子进程。
 - **不支持路由之外的启动时能力**——父级可以选择子 agent 路由，但无法在子进程内强制执行 `outputSchema`、深度限制、工具过滤或 persona；应改为配置所选子 profile 及其有序 patch。
-- **子进程的 transcript（文本记录）保留在其自身的会话根目录中**——父级日志只记录委派工具调用与结果；流式会话事件通道只用于提取输出，不会桥接到父级日志中。
+- **子进程的 transcript（文本记录）保留在其自身的会话根目录中**——父级日志只记录委派工具调用与结果；流式 `session.event` 通道只用于提取输出，不会桥接到父级日志中。
 - **仅支持本地子进程**——解析出的工作目录是本地路径；远程运行时需要独立的后端。
 
 <a id="dev-note"></a>
@@ -187,4 +187,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。run 生命周期配对由 subagent seam 的不变式检查；backend 自身状态位于子进程中，超出当前 Context 的事件流。
+**运行时不变式：** 不发布伴生入口。run 生命周期配对由 subagent seam 的不变式检查；本后端自身的状态位于子进程中，不在当前上下文的事件流内。

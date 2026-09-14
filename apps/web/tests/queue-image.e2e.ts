@@ -21,7 +21,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/queued-image', import.meta.url))
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v2.jsonl', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/live-interactions/session.v3.jsonl', import.meta.url))
 const PNG = fileURLToPath(new URL('../../../snapshots/session/read-image/workspace/red.png', import.meta.url))
 const QUEUED_EXPECTED = join(SNAPSHOT_DIR, 'queued.expected.md')
 const DELIVERED_EXPECTED = join(SNAPSHOT_DIR, 'delivered.expected.md')
@@ -46,9 +46,12 @@ describe('web e2e: queued image submission', () => {
   let browser: Browser | undefined
   let page: Page
   let overrideDir: string | undefined
+  let cleanupRoutes: (() => Promise<void>) | undefined
 
   afterEach(async () => {
     const failures: unknown[] = []
+    await cleanupRoutes?.().catch((error: unknown) => failures.push(error))
+    cleanupRoutes = undefined
     await browser?.close().catch((error: unknown) => failures.push(error))
     browser = undefined
     const closing = scaffold
@@ -97,17 +100,49 @@ describe('web e2e: queued image submission', () => {
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
     await pasteImage(page, await readFile(PNG))
     await page.getByRole('img', { name: 'queued.png' }).waitFor({ timeout: 10_000 })
-    await input.fill(QUEUED_TEXT)
-    await input.press('Enter')
-
-    // The queued row renders the durable thumbnail beside the text preview.
+    const releasePrompt = Promise.withResolvers<undefined>()
+    const releaseImage = Promise.withResolvers<undefined>()
+    let cleanupPromise: Promise<void> | undefined
+    const cleanup = (): Promise<void> => cleanupPromise ??= (async () => {
+      releasePrompt.resolve(undefined)
+      releaseImage.resolve(undefined)
+      await page.unrouteAll({ behavior: 'wait' })
+    })()
+    cleanupRoutes = cleanup
+    let imageRequested = false
+    await page.route('**/api/session/prompt', async (route) => {
+      await releasePrompt.promise
+      await route.continue()
+    })
+    await page.route('**/api/session/attachment', async (route) => {
+      imageRequested = true
+      await releaseImage.promise
+      await route.continue()
+    })
     const dockThumb = page.locator('[data-queue-dock] img[alt="Queued message image"]')
-    await dockThumb.waitFor({ timeout: 15_000 })
-    await expect.poll(() => dockThumb.getAttribute('src')).toMatch(/^blob:/)
-    await page.getByText(QUEUED_TEXT, { exact: true }).waitFor()
-    await page.getByRole('button', { name: 'Remove queued message', disabled: false }).waitFor({ timeout: 15_000 })
-    const queuedSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
-    await compareOrRefreshGolden(QUEUED_EXPECTED, queuedSnapshot, MODE)
+    try {
+      await input.fill(QUEUED_TEXT)
+      await input.press('Enter')
+      await dockThumb.waitFor({ timeout: 15_000 })
+      await expect.poll(() => dockThumb.getAttribute('src'), { timeout: 15_000 }).toMatch(/^blob:/)
+      expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(1)
+      releasePrompt.resolve(undefined)
+      await expect.poll(() => imageRequested, { timeout: 15_000 }).toBe(true)
+      await page.getByText(QUEUED_TEXT, { exact: true }).waitFor()
+      await page.getByRole('button', { name: 'Remove queued message', disabled: false }).waitFor({ timeout: 15_000 })
+      expect(await page.locator('[data-queue-dock] [data-submission-echo]').count()).toBe(0)
+      expect(await dockThumb.count()).toBe(0)
+      releaseImage.resolve(undefined)
+      // Admission replaces the optimistic image; wait for the durable row's own thumbnail.
+      const durableThumb = page.locator('[data-queue-dock] li:not([data-submission-echo]) img[alt="Queued message image"]')
+      await durableThumb.waitFor({ timeout: 15_000 })
+      await expect.poll(() => durableThumb.getAttribute('src'), { timeout: 15_000 }).toMatch(/^blob:/)
+      await expect.poll(() => durableThumb.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0)).toBe(true)
+      const queuedSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
+      await compareOrRefreshGolden(QUEUED_EXPECTED, queuedSnapshot, MODE)
+    } finally {
+      await cleanup()
+    }
 
     // Stop parks the accepted queue; the next waking send delivers the image
     // message first (FIFO), then its own text as the following turn.
@@ -136,6 +171,14 @@ describe('web e2e: queued image submission', () => {
     ).toBe(0)
     const chatImage = page.locator('[class*="userRow"] img')
     await chatImage.first().waitFor({ timeout: 15_000 })
+    // Host persistence precedes delivery to the browser; require the waking turn's settled tail.
+    await page.locator('[data-turn-tail="3"]')
+      .getByRole('button', { name: 'Branch into a new conversation', exact: true })
+      .waitFor({ timeout: 15_000 })
+    await expect.poll(
+      () => page.getByRole('button', { name: /^3 turns 3 steps/ }).count(),
+      { timeout: 15_000 },
+    ).toBe(1)
     const deliveredSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DELIVERED_EXPECTED, deliveredSnapshot, MODE)
 

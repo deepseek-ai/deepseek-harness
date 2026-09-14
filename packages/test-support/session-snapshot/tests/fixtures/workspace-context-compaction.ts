@@ -42,7 +42,7 @@ export function apply(ctx: Context): void {
       content,
       source: compactCheckpointSource(compactionId),
     }), {
-      surfaceOp: { op: 'replace', start: baseline.seq, end: baseline.seq },
+      surfaceOp: { op: 'replace', startSeq: baseline.seq, endSeq: baseline.seq },
       sourceEventSeqs: [baseline.seq],
     })
     agent.session.append('compaction/end', { compactionId, turn: openTurn.data.turn })

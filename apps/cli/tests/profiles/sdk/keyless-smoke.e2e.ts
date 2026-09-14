@@ -12,6 +12,17 @@ const binScript = fileURLToPath(new URL('../../../src/bin.ts', import.meta.url))
 const repoRoot = fileURLToPath(new URL('../../../../../', import.meta.url))
 const decompress = promisify(zstdDecompress)
 
+/** Frame one text or tool response from the local Messages endpoint. */
+function messagesResponse(content: Record<string, unknown>, stopReason: 'end_turn' | 'max_tokens' | 'tool_use'): string {
+  return [
+    { type: 'message_start', message: { id: 'sdk-smoke-response', model: 'deepseek-v4-pro', usage: { input_tokens: 3, output_tokens: 0 } } },
+    { type: 'content_block_start', index: 0, content_block: content },
+    { type: 'content_block_stop', index: 0 },
+    { type: 'message_delta', delta: { stop_reason: stopReason }, usage: { output_tokens: 1 } },
+    { type: 'message_stop' },
+  ].map(event => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')
+}
+
 function waitForLine(
   lines: string[],
   predicate: (value: Record<string, unknown>) => boolean,
@@ -67,10 +78,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       request.on('end', () => {
         modelRequests.push(JSON.parse(body) as Record<string, unknown>)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        response.write('data: {"choices":[{"delta":{"role":"assistant","content":null}}]}\n\n')
-        response.write('data: {"choices":[{"delta":{"content":"done"}}]}\n\n')
-        response.write('data: {"choices":[{"delta":{},"finish_reason":"length"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}\n\n')
-        response.end('data: [DONE]\n\n')
+        response.end(messagesResponse({ type: 'text', text: 'done' }, 'max_tokens'))
       })
     })
     await new Promise<void>(resolve => modelServer.listen(0, '127.0.0.1', resolve))
@@ -160,9 +168,9 @@ describe('Python SDK dsh profile keyless smoke', () => {
         },
       })
       expect(modelRequests[0]?.tools).toEqual(expect.any(Array))
-      const tools = modelRequests[0]?.tools as { function?: { name?: string } }[]
-      const toolNames = tools.map(tool => tool.function?.name)
-      expect(modelRequests[0]?.reasoning_effort).toBe('max')
+      const tools = modelRequests[0]?.tools as { name?: string }[]
+      const toolNames = tools.map(tool => tool.name)
+      expect(modelRequests[0]?.output_config).toEqual({ effort: 'max' })
       expect(modelRequests[0]?.max_tokens).toBe(1234)
       expect(toolNames).toEqual(expect.arrayContaining(['read', 'write', 'edit', 'web_fetch', 'web_search']))
       expect(toolNames.includes('str_replace_editor')).toBe(editorEnabled)
@@ -189,8 +197,25 @@ describe('Python SDK dsh profile keyless smoke', () => {
     }
   }, 40_000)
 
-  it('boots the standalone minimal profile through its generated manifest', async () => {
+  it.each([
+    { label: 'boots the standalone minimal profile through its generated manifest', editorEnabled: false },
+    { label: 'executes the documented editor opt-in patch with sdk-minimal', editorEnabled: true },
+  ])('$label', async ({ editorEnabled }) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-python-sdk-minimal-'))
+    const editorPatch = join(root, 'editor.patch.yml')
+    if (editorEnabled) {
+      const guide = await readFile(join(repoRoot, 'docs/user/guide/python-sdk.md'), 'utf8')
+      const yaml = guide.split('<a id="opt-in-to-str_replace_editor"></a>')[1]
+        ?.match(/```yaml\n([\s\S]*?)```/)?.[1]
+      expect(yaml).toBeDefined()
+      await writeFile(editorPatch, yaml!)
+    }
+    const editorFile = join(root, 'editor.txt')
+    const editorContent = 'sdk-minimal editor opt-in\n'
+    const editorCalls = editorEnabled ? [
+      { command: 'create', path: editorFile, file_text: editorContent },
+      { command: 'view', path: editorFile },
+    ] : []
     const modelRequests: Record<string, unknown>[] = []
     const modelServer = createServer((request, response) => {
       let body = ''
@@ -199,10 +224,13 @@ describe('Python SDK dsh profile keyless smoke', () => {
       request.on('end', () => {
         modelRequests.push(JSON.parse(body) as Record<string, unknown>)
         response.writeHead(200, { 'content-type': 'text/event-stream' })
-        response.write('data: {"choices":[{"delta":{"role":"assistant","content":null}}]}\n\n')
-        response.write('data: {"choices":[{"delta":{"content":"done"}}]}\n\n')
-        response.write('data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1}}\n\n')
-        response.end('data: [DONE]\n\n')
+        const toolCall = editorCalls[modelRequests.length - 1]
+        response.end(messagesResponse(toolCall ? {
+          type: 'tool_use',
+          id: `editor-${toolCall.command}`,
+          name: 'str_replace_editor',
+          input: toolCall,
+        } : { type: 'text', text: 'done' }, toolCall ? 'tool_use' : 'end_turn'))
       })
     })
     await new Promise<void>(resolve => modelServer.listen(0, '127.0.0.1', resolve))
@@ -214,6 +242,7 @@ describe('Python SDK dsh profile keyless smoke', () => {
       binScript,
       '--profile',
       'sdk-minimal',
+      ...(editorEnabled ? ['--patch', editorPatch] : []),
     ], {
       cwd: repoRoot,
       env: {
@@ -251,11 +280,14 @@ describe('Python SDK dsh profile keyless smoke', () => {
         method: 'session/prompt',
         params: { sessionId: 'minimal', contentBlocks: [{ type: 'text', text: 'inspect tools' }] },
       })}\n`)
-      await waitForLine(lines, (value) => {
+      const turnEnd = await waitForLine(lines, (value) => {
         const params = value.params as Record<string, unknown> | undefined
         const event = params?.event as Record<string, unknown> | undefined
         return params?.sessionId === 'minimal' && event?.type === 'turn/end'
       }, () => stderr)
+      expect(turnEnd).toMatchObject({
+        params: { event: { data: { reason: { kind: 'completed' } } } },
+      })
 
       const profile = JSON.parse(
         await readFile(join(root, '.dsh', 'profiles', 'sdk-minimal', 'package.json'), 'utf8'),
@@ -265,14 +297,35 @@ describe('Python SDK dsh profile keyless smoke', () => {
         patchReload: 'startup',
       })
       expect(modelRequests[0]?.tools).toEqual(expect.any(Array))
-      const tools = modelRequests[0]?.tools as { function?: { name?: string } }[]
-      expect(tools.map(tool => tool.function?.name).sort()).toEqual(
-        [process.platform === 'win32' ? 'pwsh' : 'bash', 'str_replace_editor'].sort(),
-      )
+      const tools = modelRequests[0]?.tools as { name?: string }[]
+      expect(tools.map(tool => tool.name)).toEqual([
+        process.platform === 'win32' ? 'pwsh' : 'bash',
+        ...(editorEnabled ? ['str_replace_editor'] : []),
+      ])
+      expect(modelRequests).toHaveLength(editorEnabled ? 3 : 1)
+      if (editorEnabled) {
+        expect(await readFile(editorFile, 'utf8')).toBe(editorContent)
+        expect(modelRequests[2]?.messages).toEqual(expect.arrayContaining([
+          expect.objectContaining({
+            role: 'user',
+            content: expect.arrayContaining([
+              expect.objectContaining({
+                type: 'tool_result',
+                tool_use_id: 'editor-view',
+                content: expect.arrayContaining([
+                  { type: 'text', text: expect.stringContaining(editorContent.trim()) as unknown },
+                ]) as unknown,
+              }),
+            ]) as unknown,
+          }),
+        ]))
+      }
 
       child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'shutdown' })}\n`)
       await waitForLine(lines, value => value.id === 3, () => stderr)
       const exit = await child
+      expect(exit.timedOut, stderr).toBe(false)
+      expect(exit.signal, stderr).toBeUndefined()
       expect(exit.exitCode, `signal=${String(exit.signal)}; stderr=${stderr}`).toBe(0)
     } finally {
       child.kill('SIGKILL')
@@ -307,7 +360,8 @@ describe('Python SDK dsh profile keyless smoke', () => {
       expect(exitCode, stderr).toBe(1)
       expect(stdout).toBe('')
       expect(stderr).toContain('plugin tree failed to load')
-      expect(stderr).toContain('failed to apply loader entry sdk-jsonrpc-server (@deepseek-ai/dsh-sdk-jsonrpc-server)')
+      expect(stderr).toContain('required startup failure')
+      expect(stderr).toContain('sdk-jsonrpc-server (@deepseek-ai/dsh-sdk-jsonrpc-server): SyntaxError')
       expect(stderr).toContain('sometimes')
     } finally {
       await rm(root, { recursive: true, force: true })

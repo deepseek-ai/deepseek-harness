@@ -41,13 +41,13 @@ const headerRecord = releasedV2SessionFormatCodec.encodeHeader(currentHeader, ta
 const eventRecord = releasedV2SessionFormatCodec.encodeEvent(currentEvent)
 ```
 
-`releasedV1SessionFormatCodec` 逐行读取冻结的 v1 物理语言。`sessionFormatV1ToV2` 创建改变事件基数的 Stage，静态 catalog 把它连接到 decoder，且不保留 v1 事件数组。Catalog 会重映射已声明引用，并校验 released-v2 envelope、inherited cut、事件准入与关系。持久化在发布前通过 Worker 执行完整 installed-current 校验。`releasedV2SessionFormatCodec` 创建当前格式的逐行 decoder，并逐条编码当前 header 与事件。
+`releasedV1SessionFormatCodec` 逐行读取冻结的 v1 物理语言。`sessionFormatV1ToV2` 创建改变事件基数的 Stage，静态 catalog 把它连接到 decoder，且不保留 v1 事件数组。Catalog 会重映射已声明引用，并校验 released-v2 envelope、inherited cut、事件准入与关系。持久化在发布前通过 Worker 执行完整 installed-current 校验。`releasedV2SessionFormatCodec` 创建已发布 v2 格式的逐行 decoder，并逐条编码 v2 header 与事件。
 
-成功的 v1 `assistant/message` 必须引用其完整有序 attempt。迁移会移除这些顶层 chunk 和已停用的 message provenance，在不合并 token 边界的前提下压缩 chunk，并把 stream 存到该 message 上。未被 message 认领的 attempt 会在其最后一个 chunk 的位置变成一个仅日志可见的 `assistant/attempt`。无关的交错事件保持相对顺序。
+成功的 v1 `assistant/message` 必须引用其完整有序 attempt。迁移会移除这些顶层 chunk 和已停用的 message chunk reference，在不合并 token 边界的前提下压缩 chunk，并把 stream 存到该 message 上。未被 message 认领的 attempt 会在其最后一个 chunk 的位置变成一个仅日志可见的 `assistant/attempt`。无关的交错事件保持相对顺序。
 
 该 edge 还会闭合一种有限的旧版恢复模式：非空的 `next-turn` inbox 插入后直接出现下一个 `turn/start`，但缺少前一轮的 `turn/end`；迁移将前一轮记录为 interrupted。旧版 round-zero goal mutation 会变成一个 `goal/change`，随后保留原本模型可见的 message 并改用普通 plugin attribution，因此持久 goal 状态与历史模型输入都会保留。
 
-如果引用指向被消费的 chunk，迁移会失败，而不会把它重定向到语义不同的事件。它会重映射已声明的事件 provenance、surface replacement、command source event、compaction range 与 list，以及 title message list。已经对模型可见的 `session/title-llm-request.messages` 文本会在源校验后保持逐字节不变，因此目标校验不会重新解释该 prompt 中嵌入的旧序号。带 seed 的源若让继承切点切开一个 Assistant attempt，也会迁移失败；目标会用 `session/end-seed { inherited: true }` 标出精确切点。
+如果引用指向被消费的 chunk，迁移会失败，而不会把它重定向到语义不同的事件。它会重映射已声明的 source-event reference、surface replacement、command source event、compaction range 与 list，以及 title message list。已经对模型可见的 `session/title-llm-request.messages` 文本会在源校验后保持逐字节不变，因此目标校验不会重新解释该 prompt 中嵌入的旧序号。带 seed 的源若让继承切点切开一个 Assistant attempt，也会迁移失败；目标会用 `session/end-seed { inherited: true }` 标出精确切点。
 
 v2 物理 header 要求 `isSeeded`，且不存储数值切点。编解码器从最后一个 inherited end-seed marker 推导切点，每行写入一个事件，只对 `sourceEventSeqs` 做范围编码，并对普通事件词汇与 payload 扩展保持中立。Released-current restoration 准入 installed Session package 已知的事件 type，以及携带 `ignorable: true` 的未知事件，并校验事件 member 与关系。普通 Session restore 只检查 runtime 直接依赖的 settlement 字段，不重放嵌入 stream；persistence publication 与冻结的 writer-image fixture validator 保留完整 stream verification。
 
@@ -64,7 +64,7 @@ v2 物理 header 要求 `isSeeded`，且不存储数值切点。编解码器从�
 | 文件 | 职责 |
 |---|---|
 | [`src/migration.ts`](src/migration.ts) | Attempt 分组、settlement 替换、密集序号映射与引用重写 |
-| [`src/codec.ts`](src/codec.ts) | 已发布 v2 header、每行一个事件的编码、provenance 范围与可恢复前缀解码 |
+| [`src/codec.ts`](src/codec.ts) | 已发布 v2 header、每行一个事件的编码、source-event 范围与可恢复前缀解码 |
 | [`src/validation.ts`](src/validation.ts) | v2 物理 envelope／cut 校验，以及 released-current 事件准入与关系校验 |
 | [`src/dispositions.ts`](src/dispositions.ts) | 冻结的已发布 v2 事件与 payload 成员清单 |
 

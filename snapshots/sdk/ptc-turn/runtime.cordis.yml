@@ -1,0 +1,3 @@
+- insert:
+    - id: ptc-runtime
+      name: '@deepseek-ai/dsh-ptc-runtime-node'

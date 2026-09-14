@@ -198,10 +198,11 @@
    scrollbar STYLES (neither hover-conditioned `::-webkit-scrollbar*` rules
    nor a :hover `scrollbar-color` change reaches the painted bar), so the
    toggle is `overflow-x` itself — a layout change repaints reliably. The
-   resting padding matches the themed bar's height, so on an overflowing
-   table the appearing bar exactly replaces it and nothing below shifts.
+   resting padding matches the themed bar's height on the WebKit scrollbar
+   path. There, `scroll` reserves that height even when the table fits.
+   Other engines and overlay scrollbars may reserve a different height.
    Wheel and trackpad scrolling need the pointer over the table, which is
-   already the hover that re-enables `auto`. */
+   already the hover that re-enables scrolling. */
 .tableScroll:global(.md-table-wide) {
   overflow-x: hidden;
   padding-bottom: var(--dsh-scrollbar-width, 8px);
@@ -209,7 +210,7 @@
 
 .tableScroll:global(.md-table-wide):hover,
 .tableScroll:global(.md-table-wide):focus-visible {
-  overflow-x: auto;
+  overflow-x: scroll;
   padding-bottom: 0;
 }
 

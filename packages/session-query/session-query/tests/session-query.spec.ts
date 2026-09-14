@@ -961,7 +961,7 @@ describe('session-query exact reads', () => {
         content: [{ type: 'text', text: 'replacement' }],
         source: { kind: 'plugin', plugin: 'test' },
       }),
-      { surfaceOp: { op: 'replace', start: first.seq, end: first.seq }, sourceEventSeqs: [first.seq] },
+      { surfaceOp: { op: 'replace', startSeq: first.seq, endSeq: first.seq }, sourceEventSeqs: [first.seq] },
     )
 
     expect((await ctx.sessionQuery.listEvents(session.id)).slice(2).map(record => record.surface))
@@ -988,7 +988,7 @@ describe('session-query exact reads', () => {
       createUserMessage({
         content: [{ type: 'text', text: 'checkpoint' }], source: { kind: 'plugin', plugin: 'compact' },
       }),
-      { surfaceOp: { op: 'replace', start: first.seq, end: first.seq }, sourceEventSeqs: [first.seq] },
+      { surfaceOp: { op: 'replace', startSeq: first.seq, endSeq: first.seq }, sourceEventSeqs: [first.seq] },
     )
     const retained = session.append(
       'user/message',
@@ -1002,7 +1002,7 @@ describe('session-query exact reads', () => {
       createUserMessage({
         content: [{ type: 'text', text: 'latest checkpoint' }], source: { kind: 'plugin', plugin: 'compact' },
       }),
-      { surfaceOp: { op: 'replace', start: SessionSeq(2), end: retained.seq }, sourceEventSeqs: [SessionSeq(2), retained.seq] },
+      { surfaceOp: { op: 'replace', startSeq: SessionSeq(2), endSeq: retained.seq }, sourceEventSeqs: [SessionSeq(2), retained.seq] },
     )
     session.append(
       'assistant/message',
@@ -1212,7 +1212,7 @@ describe('session-query exact reads', () => {
         data: createUserMessage({
           content: [{ type: 'text', text: 'hidden' }], source: { kind: 'user' },
         }),
-      }],
+      }] as unknown as SessionEvent[],
     }])
     const persistence = await ctx.plugin(TestPersistence)
     await expect(ctx.sessionQuery.listEvents(persisted.id))

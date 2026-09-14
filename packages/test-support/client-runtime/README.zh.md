@@ -1,5 +1,5 @@
 ---
-description: "面向浏览器功能测试的 jsdom slot 测试运行时，供测试作者针对生产机制检验 slot、store 与渲染。"
+description: "面向浏览器功能测试的 jsdom slot 测试运行时，供测试作者针对生产机制检验 slot、存储与渲染。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-client-test-runtime` 让浏览器功能测试拥有真实的 jsdom 测试台：它把 Cordis 上下文、渲染器拥有的 slot 注册表与生产 `UiSession` 适配器组装在带类型的 Session 和 Workspace Controller 替身周围。默认文件上传替身可满足声明该服务的功能；测试若没有替换它却发起上传，就会明确失败。功能套件无需复制生产渲染器或适配器逻辑，即可检验声明、注册、作用域、store、注入、渲染、更新与销毁。套件通过带类型 fixture 发布 Session 生命周期状态、Workspace 状态、projection 值与 Conversation 事件，再使用局部 DOM 快照根、限定范围的 Testing Library 查询与自明的服务缺失检查。它不属于产品插件图（无 `dsh.client`）；feature 包仅以 `devDependencies` 依赖之。
+`SlotTestRuntime.create()` 让 Vitest 套件在 jsdom 中驱动生产 slot、store、带类型的 Session 与 Workspace fixture，并对局部 DOM 断言。面向插件激活、重载、重连与清理的测试，`createClientTest` 使用具名端点 Remote mock 启动 web profile 的 bundle roster，无需业务 Host。缺失服务与未打桩调用会明确失败。整机 fixture 拥有启动和销毁，局部 runtime 提供幂等销毁。通过 `devDependencies` 将本包用于客户端测试；它不是产品插件。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-library"
 
 ### 搭建功能测试
 
-`SlotTestRuntime.create()` 组装运行时，`declare(children)` 注册一个自动 frame，其逐 key 的 `<div data-slot>` 包裹层成为快照根，`mount(plugin)` 在真实 fiber 上运行功能，`renderSlot(key, owner)` 返回带限定查询与原位更新的 slot 局部视图：
+`SlotTestRuntime.create()` 组装运行时，`declare(children)` 注册一个自动 frame，其逐 key 的 `<div data-slot>` 包裹层成为快照根，`mount(plugin)` 在真实 fiber 上运行功能，`renderSlot(key, owner, opts?)` 返回带限定查询与原位更新的 slot 局部视图：
 
 ```text
 const runtime = await SlotTestRuntime.create()
@@ -40,11 +40,13 @@ expect(view.container).toMatchSnapshot()
 await runtime.dispose()
 ```
 
-`mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。运行时会提供不可用的 `fileUpload` 替身，使装配可以挂载；测试上传行为时，需要在挂载前替换 `runtime.fileUpload.upload`。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时 store 实例，用于身份与动作驱动写入断言。
+`mount` 会预检必需服务，缺失时自明报错——先用 `provide(name, value)` 提供额外服务。运行时提供的 `fileUpload` 替身会拒绝每次调用，直到测试套件替换 `runtime.fileUpload.upload`。`storeOf(key, scopeKey)` 返回渲染器交给 slot 组件的实时存储实例，用于身份与动作驱动写入断言。
+
+可选渲染参数通过 `entryKey` 选择 keyed 条目，或通过 `only` 选择 list 条目；`view.update(owner)` 保留该选择。`runtime.panelInfo` 提供默认的 `usePanelInfo` 数据源，初始不选中全局面板。挂载生产 Layout 所有者之前，先调用 `releasePanelInfoSource()` 释放该数据源。`dispose()` 同时释放默认的工作区与面板信息根数据源；提前释放是幂等的，不会移除替代它们的所有者。
 
 ### 局部 DOM 快照
 
-注册的快照序列化器把 CSS-module 哈希类名折回语义名（`_frame_a1b2c3` → `frame`），使 `.snap` 文件只含结构，并把 `<svg>` 内部折叠为 `data-content` 指纹。需要自定义页面 frame 的套件改用 `root.declare(children, Frame)` 而非自动 frame；`dispose()` 沿单一轴拆除视图、feature fiber、已铸 scope 与持久化 store 状态，且幂等。
+注册的快照序列化器把 CSS-module 哈希类名折回语义名（`_frame_a1b2c3` → `frame`），使 `.snap` 文件只含结构，并把 `<svg>` 内部折叠为 `data-content` 指纹。需要自定义页面 frame 的套件改用 `root.declare(children, Frame)` 而非自动 frame；`dispose()` 沿单一轴拆除视图、功能 fiber、已铸 scope 与持久化存储状态，且幂等。
 
 ### 脚本化 Remote 应答与失败
 
@@ -62,9 +64,34 @@ remote.goals.create.mockResolvedValue({
 expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 ```
 
+### 整体档
+
+上面的 slot 档把一个功能挂在替身上。整体档起真实装配：`TestClient.start(plan, mock, options)` 进程内 import 每个 roster 行的 `/client` 模块（或取计划里的 `provide` 替换），把 `{ rpc: mock.rpc }` 绑定到该客户端的 Connection 模块，用 `graphFromRoster` 合成启动图并把已加载模块交给生产模块系统，经生产 `bootClient` 启动，按需挂载 `uiRenderer`，再等 `ctx.connection.state === 'connected'`。它藏在深 import 后面，slot 档测试永不加载它：
+
+```text
+// @vitest-environment jsdom
+import { createClientTest, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
+import { ok } from '@deepseek-ai/dsh-remote-mock'
+
+const test = createClientTest({ roster: webApp }, { mount: true })
+test('registers into the sidebar', async ({ remote, start }) => {
+  remote.settings.describe.mockResolvedValue(ok({ writable: true, hasDocument: false, namespaces: [] }))
+  const client = await start()
+  expect(client.ctx.slots.entries('sidebar.settings')).toHaveLength(1)
+})
+```
+
+`createClientTest` 使用原生 Vitest fixture：每个测试获得已加载 `remoteDefaultResponses` 的新 `mock`、等同于 `mock.remote` 的 `remote` Proxy，以及配置应答后才起机的 `start()`。重复启动共用一个 Promise，调用方必须 await 它来观察启动错误。fixture 收尾等待启动，即使断言失败也销毁客户端、检查漏配，并拒绝测试结束后保存的 `start` 调用。需要分别拥有多个客户端时直接用 `TestClient.start`。这些 fixture 隔离自己的状态，不隔离 `location` 等页面全局。
+
+两档测试的所有命名空间都使用[通用 Remote Proxy](../remote-mock/README.zh.md#remote-proxy)。装配测试使用 `remote` fixture；局部 `TestRemote` 可以接收 `{ settings: mock.remote.settings }`。直接配置返回数据，并读取原生 `.mock.calls`。mutation 应答不会自动更新后续 describe 应答：场景发布新数据时，显式修改 `remote.settings.describe.mockResolvedValue(...)`。Proxy 文档拥有无构建类型说明和必需的构建后本地类型检查规则。
+
+### Roster 与启动行为
+
+`webApp` 是 `web` profile 的浏览器 roster，首次 import 装配入口时从它的 bundle（先 `dsh-base`、再 `dsh-web-app`）按启动器的方式现读，只是匹配不到任何行的补丁在这里抛错、启动器只警告：每个 bundle 的 `dsh.bundle.patch` 列表用 include 插件的 YAML 方言解析、用它的 `applyEntryPatches` 合成，每个未禁用且其包声明 `dsh.client.platform === 'web'` 的行成为一行，带上该声明的 `inject` 与 `immediately`；`bundleRoster(bundles)` 对任意 bundle 列表做同样的事。没有任何东西从 bundle 拷贝出来，bundle 一改下次跑测试就能看见。`webApp.closure(names)` 保留点名的行及其传递注入的全部行（即按 bundle 组合方式起这些插件所需的行），`webApp.pick(names)` 与 `webApp.without(names)` 手工裁剪，三者都对未知名字抛错，`ClientRoster.of(rows)` 内联构造一份。`remoteDefaultResponses` 是 roster 在没有 session、没有 workspace、默认设置下启动时恰好会打的那些 Remote 端点的默认响应；测试用 `mock.load(table)` 在其上叠加自己的 `RemoteTable`，任何没有规则的调用都会在 `dispose()` 时经 `mock.assertNoUnmatched()` 让测试失败。`mount` 要求 roster 提供 `uiRenderer`；否则 `start` 响亮失败而不是返回一个空容器。`client.connection` 是 roster 的 Connection 服务（没有任何 `Context` 增强声明它），`connectTimeoutMs` 限定等就绪的时长，超时消息列出 mock log。`reload(name)` 按 client-hmr 的方式重建一个 Loader entry（先拆 registry，再 `entry.refresh()`）；每个客户端都保留自己的模块系统和绑定实例的 Connection 替换，因此启动与重载可以重叠而无需改写页面全局变量。`unload(name)` 移除 entry 并等待插件清理完成，`flush()` 在 `act` 内让 React 落定。jsdom 既没有 `EventSource`（client-hmr 在 apply 时打开一个）也没有 `ResizeObserver`（布局组件挂载时观察尺寸），所以 `start` 对缺失的全局惰性桩做引用计数，`dispose` 只移除它装的那些——这是 jsdom 的缺口，不是客户端身份通道。每个 roster 里的 `@deepseek-ai/dsh-api-remotes` 行都会被去掉：它生成的 Remote 客户端只存在于构建后的 `lib/`，而 `remote.<ns>` 正是本档要替掉的东西。`start` 改为给 roster 注入的每个 `remote.<ns>` 服务（加上此刻 mock 登记过规则的命名空间；之后才首次登记的命名空间没有代理）提供一个无契约代理；`ctx.remote.<ns>.<method>(...args)` 变成对端点 `<ns>/<method>` 的调用，携带位置参数，mock 登记了 `stream()` 脚本的走流、否则走一元，并沿用生成客户端的结果折叠（载体抛错折成 `gateway/internal`，中止折成 `gateway/cancelled`）。没有规则的端点照样发出，所以 mock 会记下它、`dispose()` 让测试失败。
+
 ### 何时使用
 
-当功能套件要在真实运行时下检验 slot、store、渲染与销毁时使用本测试台——生产 `SlotRegistry`、渲染器与 provide bundle 物化都会被挂载，绝不重实现。它是浏览器侧测试基础设施：永远不触及模型请求，feature 包仅以 `devDependencies` 依赖之。
+当功能套件要在真实运行时下检验 slot、存储、渲染与销毁时使用本测试台——生产 `SlotRegistry`、渲染器与 provide bundle 物化都会被挂载，绝不重实现。它是客户端测试基础设施：永远不触及模型请求，功能包仅以 `devDependencies` 依赖之。
 
 ### 可能出什么问题
 
@@ -84,7 +111,7 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 
 ### 设计
 
-测试台不复制生产逻辑：它挂载生产 `SlotRegistry`、生产渲染器与 `UiSession` 适配器。`TestSessions` 与 `TestWorkspaces` 实现功能通过 Cordis 消费的 owner 接口，每个 fixture Session 实现 `SessionFace`，`stubSettingsScope` 实现 `SettingsScope`。`UiSession` 从这些 Controller binding 派生标准渲染器 source。未 stub 的 `ISession` 行为会携缺失方法名失败。
+测试台不复制生产逻辑：它挂载生产 `SlotRegistry`、生产渲染器与 `UiSession` 适配器。`TestSessions` 与 `TestWorkspaces` 实现功能通过 Cordis 消费的 owner 接口，每个 fixture Session 实现 `SessionFace`，`stubSettingsScope` 实现 `SettingsScope`。`UiSession` 从这些控制器绑定派生标准渲染器数据源。未 stub 的 `ISession` 行为会携缺失方法名失败。
 
 ### 源码地图
 
@@ -97,11 +124,18 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 | [`src/remote.ts`](src/remote.ts) | 用于 host RPC 的 `TestRemote` 替身、`RemoteError` 值转出 |
 | [`src/translate.ts`](src/translate.ts) + [`src/locale-env.ts`](src/locale-env.ts) | 翻译与固定浏览器语言测试辅助 |
 | [`src/settings-scope.ts`](src/settings-scope.ts) | 带测试驱动发布与写入 spy 的 `stubSettingsScope` |
-| — | 不发布运行时不变式伴生入口；所挂载的生产包拥有各自的不变式。 |
+| [`src/assembly/roster.ts`](src/assembly/roster.ts) | `ClientRosterRow`、`ClientRoster`（`of`/`closure`/`pick`/`without`）、它所标注的 `AssemblyPlan`，以及 `graphFromRoster` |
+| [`src/assembly/modules.ts`](src/assembly/modules.ts) | 源码 `/client` 导入及替换，通过生产模块 facade 的待注册工厂队列登记 |
+| [`src/assembly/test-client.ts`](src/assembly/test-client.ts) | `TestClient`：绑定实例的 Connection、共享 jsdom 桩、`bootClient`、挂载、等就绪、`reload`/`unload`/`dispose` |
+| [`src/assembly/vitest.ts`](src/assembly/vitest.ts) | 测试级 `mock` 与懒启动 `start` fixture |
+| [`src/assembly/remote-default-responses.ts`](src/assembly/remote-default-responses.ts) | `remoteDefaultResponses`：roster 启动期 Remote 端点的默认响应 |
+| [`src/assembly/remote-proxies.ts`](src/assembly/remote-proxies.ts) | 经 Connection 的无契约 `remote.<ns>` 代理：`remoteNamespacesOf`、`remoteProxiesPlugin` |
+| [`src/assembly/bundle-roster.ts`](src/assembly/bundle-roster.ts) | `bundleRoster` 与 `webApp`：用 include 插件自己的 schema 与补丁应用从 bundle 补丁文件读出浏览器 roster |
+| — | 不发布运行时不变式伴生入口；本测试支持包不拥有生产事件流或可变数据，而是围绕测试替身组装生产 SlotRegistry 与渲染器。所挂载的生产包拥有各自的不变式，本包行为由本包测试检验。 |
 
 ### 生命周期
 
-`create()` 构建全新上下文，挂载 slot 与会话注册表，安装渲染器，并提供 session/workspace 替身和明确失败的文件上传替身。`mount` 在启动 fiber 前对照上下文检查每个已声明注入，使缺失提供方自明报错而非永久挂起。`dispose()` 先卸载 React 树，再 dispose feature fiber、释放根注册、dispose 已铸 session scope 并清除持久化 store 状态；每个公共修改器都包裹在 act 中，因此测试无需自行处理 SlotCore 微任务批处理或 React `act`。
+`create()` 构建全新上下文，挂载 slot 与会话注册表，安装渲染器，并提供 session/workspace 替身和明确失败的文件上传替身。`mount` 在启动 fiber 前对照上下文检查每个已声明注入，使缺失提供方自明报错而非永久挂起。`dispose()` 先卸载 React 树，再 dispose 功能 fiber、释放根注册、dispose 已铸 session scope 并清除持久化存储状态；每个公共修改器都包裹在 act 中，因此测试无需自行处理 SlotCore 微任务批处理或 React `act`。
 
 </details>
 
@@ -112,7 +146,7 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 
 当包级约定不够用时阅读以下页面。它们从测试台逐步进入它所挂载的生产机制以及使用它的测试。
 
-- [ui-session](../../client/ui-session/README.zh.md)——从 Controller 替身派生标准 Slot source 的生产适配器。
+- [ui-session](../../client/ui-session/README.zh.md)——从控制器替身派生标准 Slot 数据源的生产适配器。
 - [UI slots 包](../../client/ui-slots/README.zh.md)——测试台挂载的 `SlotRegistry` 约定。
 - [UI renderer 包](../../client/ui-renderer/README.zh.md)——测试台安装的渲染器。
 - [测试策略](../../../docs/testing.zh.md)——覆盖层级与浏览器快照流水线。
@@ -123,7 +157,7 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 <a id="model-experience"></a>
 ## 模型体验
 
-无；本包是浏览器侧测试基础设施，无一物到达模型请求。
+无；本包是浏览器侧测试基础设施，不会发起任何模型请求。
 
 #### KV Cache 影响
 
@@ -136,8 +170,11 @@ expect(view.getByRole('alert')).toHaveTextContent('goal/not-found')
 
 这些限制说明本测试台如何被消费。它们是当前包约束，不是任务积压。
 
-- **仅限 Vitest 与 jsdom**——所有消费方都是仓内、面向浏览器的 Vitest 套件。本包不是产品插件，也不是通用 Node 测试框架。
-- **Session、Conversation 与 Chat fixture 保持分离**——`sessionSnapshot` 只包含 Session Controller 状态，`conversationSnapshot` 包含 target-neutral Conversation 状态，`chatSnapshot` 包含 Chat target 状态。组装测试提供 Session event entry，而不是向 `SessionSnapshot` 添加 Conversation 或 Chat 字段。
+- **整体档不运行生成的 Remote 客户端**——`remote.<ns>` 代理转发位置参数，不经过生成的 zod 校验、wire 名映射或 scoped 身份注入；mock handler 直接接收这些参数，生成客户端仍由 built-artifact e2e 车道覆盖。
+- **代理调用绕过 Gateway 客户端的 `invoke` 与 `invokeStream`**——不做 `$mount` 生命周期检查，流失败不经 `normalizeConnectionStream` 重新标记，一元拒绝由代理自己用 Gateway 客户端导出的 `carrierFailure` 与 `cancelledFailure` 折叠。`ctx.remote.$stream`、`$on`、`$host` 是真 Gateway 客户端的。
+- **未声明的端点按一元调用发出**——代理从 mock 的登记学到每个端点的模式；spec 既没给脚本也没声明（`RemoteTable.streams`、`mock.stream(endpoint)`）的流端点记为 `unary` 漏配，产品代码收到的是折叠结果而不是失败的流。`remoteDefaultResponses` 声明了 roster 启动后才打开的流；无论哪种，`dispose()` 都会让测试失败。
+- **本包的 client 编译程序加了 `node` 环境类型**，好让 roster 读取器使用 `node:fs`；slot 档的源码也在这些类型下编译。
+- **Session、Conversation 与 Chat fixture 保持分离**——`sessionSnapshot` 只包含 Session 控制器状态，`conversationSnapshot` 包含与目标无关的 Conversation 状态，`chatSnapshot` 包含 Chat 目标状态。组装测试提供 Session 事件条目，而不是向 `SessionSnapshot` 添加 Conversation 或 Chat 字段。
 
 <a id="dev-note"></a>
 ### 开发备注

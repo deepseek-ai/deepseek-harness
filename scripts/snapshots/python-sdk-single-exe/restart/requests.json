@@ -1,18 +1,20 @@
 [
   {
     "model": "smoke-model",
+    "system": "{{system}}",
     "messages": [
       {
-        "role": "system",
-        "content": "{{system}}"
-      },
-      {
         "role": "user",
-        "content": "Complete the first isolated Python SDK process turn."
-      },
-      {
-        "role": "user",
-        "content": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+        "content": [
+          {
+            "type": "text",
+            "text": "Complete the first isolated Python SDK process turn."
+          },
+          {
+            "type": "text",
+            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+          }
+        ]
       }
     ],
     "toolNames": [
@@ -33,18 +35,20 @@
   },
   {
     "model": "smoke-model",
+    "system": "{{system}}",
     "messages": [
       {
-        "role": "system",
-        "content": "{{system}}"
-      },
-      {
         "role": "user",
-        "content": "Complete the second isolated Python SDK process turn."
-      },
-      {
-        "role": "user",
-        "content": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+        "content": [
+          {
+            "type": "text",
+            "text": "Complete the second isolated Python SDK process turn."
+          },
+          {
+            "type": "text",
+            "text": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\nCurrent DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations.\n\nApproval prompts are disabled in this session: actions that require approval are rejected automatically — do not request sandbox escalation (do not set `sandbox_permissions`)."
+          }
+        ]
       }
     ],
     "toolNames": [

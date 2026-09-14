@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import {
-  createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, launchEnvironmentOf,
+  createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY, launchedThroughSsh, launchEnvironmentOf,
 } from '../src/index.ts'
 
 const layered = createLaunchEnvironmentSnapshot([
@@ -9,6 +9,24 @@ const layered = createLaunchEnvironmentSnapshot([
   { source: 'project-env', path: '/work/.env', values: { SHARED: 'from-project', ONLY_PROJECT: 'j' } },
   { source: 'user-env', path: '/home/.dsh/.env', values: { SHARED: 'from-user', ONLY_USER: 'u' } },
 ])
+
+describe('launchedThroughSsh', () => {
+  it.each(['SSH_CONNECTION', 'SSH_TTY'].flatMap(name =>
+    (['process', 'project-env', 'user-env'] as const).map(source => ({ name, source })),
+  ))('classifies $name from $source', ({ name, source }) => {
+    const snapshot = createLaunchEnvironmentSnapshot([{ source, values: { [name]: 'ssh-marker' } }])
+    expect(launchedThroughSsh(snapshot)).toBe(source === 'process')
+  })
+
+  it.each([{}, { SSH_CONNECTION: '', SSH_TTY: '' }])('keeps absent or empty inherited markers local: %j', (values) => {
+    const snapshot = createLaunchEnvironmentSnapshot([
+      { source: 'process', values },
+      { source: 'project-env', values: { SSH_CONNECTION: 'stale-connection' } },
+      { source: 'user-env', values: { SSH_TTY: 'stale-tty' } },
+    ])
+    expect(launchedThroughSsh(snapshot)).toBe(false)
+  })
+})
 
 describe('createLaunchEnvironmentSnapshot', () => {
   it('resolves across every layer, most trusted first, and reports the winning source', () => {

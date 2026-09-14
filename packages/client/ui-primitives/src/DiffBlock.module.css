@@ -76,6 +76,14 @@
   color: var(--dsw-alias-state-success-primary);
 }
 
+.context {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.context::before {
+  content: '  ';
+}
+
 .expand {
   display: block;
   width: 100%;

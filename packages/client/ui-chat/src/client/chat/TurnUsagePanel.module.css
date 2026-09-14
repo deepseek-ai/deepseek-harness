@@ -1,6 +1,5 @@
-/* Icon-row Turn-usage pill (data icon + turn total) plus its click-open
-   Turn-details dialog (menu surface: r12, elevation-prominent —
-   ContextMeter's panel skin). */
+/* Icon-row Turn-usage pill (data icon + turn total); its click-open dialog
+   wears the shared stat-dialog.module.css skin. */
 
 .root {
   display: inline-flex;
@@ -73,94 +72,4 @@
   .root + .root {
     margin-left: 0;
   }
-}
-
-/* Portal surface: fixed in the viewport, left/top supplied inline from the
-   anchored-position clamp so the panel keeps its 12px viewport margin instead
-   of hanging off the trigger and clipping at the window edge. Portaled panels
-   layer above modal overlays (z 1000). */
-.panel {
-  position: fixed;
-  z-index: 1100;
-  box-sizing: border-box;
-  /* Size to the widest row so provider/model stays on one line, within a cap.
-     Both bounds yield to a viewport narrower than themselves (12px margins),
-     so a fixed floor cannot push the panel past the placement clamp. */
-  width: max-content;
-  min-width: min(300px, calc(100vw - 24px));
-  max-width: min(440px, calc(100vw - 24px));
-  padding: 16px;
-  border: 0;
-  border-radius: 12px;
-  background: var(--dsw-specific-menu);
-  --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
-  box-shadow: var(--dsw-elevation-prominent);
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-secondary);
-  cursor: default;
-}
-
-/* Dialog heading row: the section name left, the section's headline value
-   (the usage total) right, both at the primary weight. */
-.title {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 8px;
-  color: var(--dsw-alias-label-primary);
-  font-weight: 500;
-}
-
-/* Rule under each section heading, above its rows. */
-.titleRule {
-  margin-bottom: 10px;
-  border-top: 0.5px solid var(--dsw-alias-border-l2);
-}
-
-.titleValue {
-  font-variant-numeric: tabular-nums;
-}
-
-/* Section-heading glyph seated left of the section name. */
-.titleLabel {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.titleLabel svg {
-  width: 14px;
-  height: 14px;
-  flex: none;
-}
-
-.details {
-  display: grid;
-  grid-template-columns: minmax(76px, auto) minmax(0, 1fr);
-  gap: 6px 16px;
-  margin: 0;
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.details dt,
-.details dd {
-  min-width: 0;
-  margin: 0;
-}
-
-.details dd {
-  color: var(--dsw-alias-label-secondary);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.details .route {
-  overflow-wrap: anywhere;
-}
-
-.reasoning {
-  color: var(--dsw-alias-label-tertiary);
-  white-space: nowrap;
 }

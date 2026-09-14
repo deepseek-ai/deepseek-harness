@@ -31,7 +31,7 @@ async function stubAgent(
   ctx: Context,
   id = 'file-reference-agent',
   includeCwd = true,
-): Promise<{ agent: Agent; dispose: () => void }> {
+): Promise<{ agent: Agent; dispose: () => Promise<void> }> {
   const root = await mkdtemp(join(tmpdir(), 'dsh-file-reference-service-'))
   roots.push(root)
   await writeFile(join(root, 'README.md'), 'readme')
@@ -51,10 +51,29 @@ async function stubAgent(
     cancel() {},
     whenIdle: () => Promise.resolve(),
   } as unknown as Agent
-  return { agent, dispose: ctx.agents.register(agent) }
+  return { agent, dispose: await ctx.agents.register(agent) }
 }
 
 describe('LocalFileReferenceService', () => {
+  it('defers guidance until optional prompt and tool services become available', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(AgentRegistry)
+    await ctx.plugin(LocalFileReferenceService)
+    try {
+      const { agent } = await stubAgent(ctx, 'deferred-prompt')
+      expect(ctx.agents.get(agent.id)).toBe(agent)
+      await ctx.plugin(SystemPrompt, { personaPrefix: '' })
+      await ctx.plugin(ToolRegistry)
+      ctx.tools.register(defineContentToolFixture({
+        name: 'read', description: 'read a file', parameters: {}, execute: () => Promise.resolve([]),
+      }))
+      expect(renderPrompt(await ctx.systemPrompt.assemble())).toContain(FILE_REFERENCE_PROMPT)
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('serves the addressed workspace and installs read-tool guidance for existing agents', async () => {
     const ctx = await harness()
     const { agent } = await stubAgent(ctx)
@@ -95,7 +114,7 @@ describe('LocalFileReferenceService', () => {
     ctx.emit('session/event', orphan, { type: 'tool/result' } as never)
     expect(invalidate).toHaveBeenCalledOnce()
 
-    dispose()
+    await dispose()
     expect(close).toHaveBeenCalledOnce()
     ctx.emit('agent/disposed', { agent })
   })
@@ -131,7 +150,7 @@ describe('LocalFileReferenceService', () => {
     const fiber = ctx.plugin(LocalFileReferenceService)
     await fiber
     const { agent } = await stubAgent(ctx, 'cwd-fallback', false)
-    ctx.emit('agent/created', { agent })
+    await ctx.serial('agent/created', { agent, source: 'startup' })
     const list = vi.spyOn(WorkspaceFileSearch.prototype, 'list').mockResolvedValue([])
     await expect(ctx.fileReferences.list(agent, '', new AbortController().signal)).resolves.toEqual([])
     await expect(ctx.fileReferences.list(agent, 'src', new AbortController().signal)).resolves.toEqual([])
@@ -151,8 +170,8 @@ describe('LocalFileReferenceService', () => {
     const first = await stubAgent(ctx, 'cleanup-one')
     const second = await stubAgent(ctx, 'cleanup-two')
     expect(inject).toHaveBeenCalledTimes(2)
-    first.dispose()
-    second.dispose()
+    await first.dispose()
+    await second.dispose()
     await vi.waitFor(() => {
       expect(warn).toHaveBeenCalledWith('file-reference-local: prompt cleanup failed: error cleanup')
       expect(warn).toHaveBeenCalledWith('file-reference-local: prompt cleanup failed: string cleanup')

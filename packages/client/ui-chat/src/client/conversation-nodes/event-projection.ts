@@ -2,7 +2,7 @@
 
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm/types'
 import type {
-  AssistantBlock, ContextProvenanceView, KnownContextForm,
+  AssistantBlock, ContextProducerView, KnownContextForm,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 
 /* jscpd:ignore-start -- Chat and Trajectory own independent event-to-view projections. */
@@ -57,7 +57,7 @@ export function contextForm(source: unknown): KnownContextForm | null {
  * @param source - Logged `user/message` source.
  * @returns Role and label rendered by Chat.
  */
-export function contextProvenance(source: unknown): ContextProvenanceView {
+export function contextProducer(source: unknown): ContextProducerView {
   const record = asRecord(source)
   const kind = record === null ? null : readString(record, 'kind')
   if (record === null || kind === null) return { role: 'inject', label: null }

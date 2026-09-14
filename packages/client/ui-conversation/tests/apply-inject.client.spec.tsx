@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import type { CommandContribution, CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
@@ -41,7 +42,6 @@ async function bench() {
     },
   }))
   const uploads = new Map<SessionId, (...args: unknown[]) => Promise<unknown>>([[ROOT, rootUpload]])
-  runtime.fileUpload.available = true
   runtime.fileUpload.upload = (sessionId: SessionId, ...args: unknown[]) => {
     const upload = uploads.get(sessionId)
     if (upload === undefined) throw new Error('test file upload has no Session fixture')
@@ -49,7 +49,14 @@ async function bench() {
   }
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const connectWorkspace = vi.fn(async () => ROOT)
-  runtime.ctx.provide('uiWorkspace', { connectWorkspace } as never)
+  runtime.ctx.provide('uiWorkspace', {
+    openWorkspace: async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
+      const id = await connectWorkspace()
+      beforeOpen(id)
+      runtime.sessions.open(id)
+    },
+    openSession: (id: SessionId) => { runtime.sessions.open(id) },
+  } as never)
   const sessionFake = sessionFakeFor()
   await runtime.sessions.add({
     id: ROOT,
@@ -60,12 +67,12 @@ async function bench() {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   await runtime.root.declare({
-    'conversation': { kind: 'single', scope: 'session-maybe' },
+    'main': { kind: 'keyed', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
 
   const feature = await runtime.mount({ inject: [...inject], apply })
   runtime.renderRoot()
-  const entryOf = (key: 'conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
+  const entryOf = (key: 'main.conversation' | 'conversation.session' | 'conversation.session.header' | 'conversation.composer.bar') =>
     runtime.slots.entries(key)[0]!
   const conversationApi = (id: SessionId) => {
     const entry = entryOf('conversation.session')
@@ -77,7 +84,7 @@ async function bench() {
     return { instance, injected }
   }
   const residentApi = (id: SessionId | undefined) => {
-    const entry = entryOf('conversation')
+    const entry = entryOf('main.conversation')
     return (entry.inject as unknown as (sessionId: SessionId | undefined) => ConversationInjected)(id)
   }
   const headerApi = (id: SessionId) => {
@@ -106,6 +113,50 @@ async function bench() {
 }
 
 describe('Conversation inject API', () => {
+  it('owns the File action, reads its mounted composer availability, and unregisters on disposal', async () => {
+    const b = await bench()
+    onTestFinished(() => b.runtime.dispose())
+    const contributions = new Map<string, CommandContribution>()
+    const registry = {
+      register: (contribution: CommandContribution) => {
+        contributions.set(contribution.name, contribution)
+        return () => { contributions.delete(contribution.name) }
+      },
+    } satisfies Pick<CommandUiContract, 'register'>
+    b.runtime.ctx.provide('commandUi', registry)
+    await vi.waitFor(() => { expect(contributions.has('file')).toBe(true) })
+    const file = contributions.get('file')!
+    const target = { sessionId: ROOT }
+    expect(file.label!()).toBe('文件')
+    expect(file.available(target)).toBe(false)
+    expect(file.available({ sessionId: 'missing' as SessionId })).toBe(false)
+    if (file.ui.kind !== 'action') throw new Error('File must be an action')
+    file.ui.run({ sessionId: 'missing' as SessionId })
+    const keyboard = b.composerApi(ROOT).keyboard!
+    const open = vi.fn()
+    let available = true
+    const unbind = keyboard.bindFilePicker({ open, available: () => available })
+    expect(file.available(target)).toBe(true)
+    file.ui.run(target)
+    expect(open).toHaveBeenCalledOnce()
+    available = false
+    expect(file.available(target)).toBe(false)
+    file.ui.run(target)
+    expect(open).toHaveBeenCalledOnce()
+    const replacement = vi.fn()
+    const removeReplacement = keyboard.bindFilePicker({ open: replacement, available: () => true })
+    unbind()
+    expect(file.available(target)).toBe(true)
+    file.ui.run(target)
+    expect(replacement).toHaveBeenCalledOnce()
+    removeReplacement()
+    expect(file.available(target)).toBe(false)
+    file.ui.run(target)
+    expect(replacement).toHaveBeenCalledOnce()
+    await b.feature.dispose()
+    expect(contributions.size).toBe(0)
+  })
+
   it('assembles the target-neutral read face without Session side effects', async () => {
     const b = await bench()
     const { injected } = b.conversationApi(ROOT)

@@ -164,10 +164,7 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
     register(scoped.systemPrompt.section({
       name: 'team:policy',
       order: scoped.systemPrompt.getSectionOrder('TEAM_POLICY'),
-      text: () => {
-        const membership = ctx.agentTeams.membership(agent)
-        return `${POLICY}\n\nYour Team role is ${membership.role}; your Team name is ${membership.name}; Team id is ${membership.id}.`
-      },
+      text: POLICY,
     }))
 
     register(scoped.tools.register(defineTool({
@@ -190,7 +187,10 @@ function install(agent: Agent, ctx: Context, config: Required<Config>): () => vo
         return await ctx.agentTeams.spawnTeammate(agent, {
           name: args.name,
           description: args.description,
-          prompt: [{ type: 'text', text: args.prompt }],
+          prompt: [
+            { type: 'text', text: `<system-reminder>\nYou are teammate "${args.name.trim()}".\n</system-reminder>\n\n` },
+            { type: 'text', text: args.prompt },
+          ],
           context,
           provider: context === 'fork' ? config.forkProvider : config.freshProvider,
           signal: exec.signal,

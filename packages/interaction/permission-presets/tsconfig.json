@@ -43,6 +43,9 @@
     },
     {
       "path": "../commands"
+    },
+    {
+      "path": "../../typert/protocol"
     }
   ]
 }

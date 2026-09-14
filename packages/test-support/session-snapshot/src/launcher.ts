@@ -387,7 +387,7 @@ function packageDirFromPatch(source: string, packageName: string): string | unde
 /**
  * Install an authored patch's resolvable bare package into the temporary
  * profile fallback. This mirrors `dsh plugin` while retaining the bare entry
- * name and package provenance used by request metadata.
+ * name and package identity used by request metadata.
  */
 function linkProfilePackage(source: string, cwd: string, packageName: string): void {
   const packageDir = packageDirFromPatch(source, packageName)

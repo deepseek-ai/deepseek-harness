@@ -37,6 +37,12 @@
     },
     {
       "path": "../ui-slots"
+    },
+    {
+      "path": "../ui-sidebar-right"
+    },
+    {
+      "path": "../../util/workspace-path"
     }
   ]
 }

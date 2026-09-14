@@ -8,7 +8,7 @@ import AttachmentStore, {
   isImageAdmissionError,
   type ImageAttachmentRef,
   type ImageMediaType,
-  type ImageRequestPolicy,
+  type ImageRequestTarget,
   type RequestImageAttachment,
   type SaveFileAttachment,
   type SaveImageAttachment,
@@ -56,7 +56,7 @@ class RecordingStore extends AttachmentStore {
 
   override readImageRequest(
     ref: ImageAttachmentRef,
-    _policy: ImageRequestPolicy,
+    _target: ImageRequestTarget,
   ): Promise<RequestImageAttachment> {
     this.calls.push(`request:${ref.name}`)
     return Promise.resolve({
@@ -154,12 +154,12 @@ describe('AttachmentStore.readImageRequest', () => {
   it('reports unsupported request projection while preserving cancellation', async () => {
     const store = new UnsupportedProjectionStore(new Context())
     const ref = await new RecordingStore(new Context()).saveImage(image(1))
-    await expect(store.readImageRequest(ref, { maxPixels: 1, maxBytes: 1 }))
+    await expect(store.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1 }))
       .rejects.toMatchObject({ code: 'ATTACHMENT_PROJECTION_UNSUPPORTED' })
     const controller = new AbortController()
     const reason = new Error('cancel unsupported projection')
     controller.abort(reason)
-    expect(() => store.readImageRequest(ref, { maxPixels: 1, maxBytes: 1 }, controller.signal)).toThrow(reason)
+    expect(() => store.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1 }, controller.signal)).toThrow(reason)
   })
 
   it('rejects generic-file storage and exposes no provider-owned host path by default', async () => {

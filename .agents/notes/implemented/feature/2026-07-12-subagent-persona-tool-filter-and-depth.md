@@ -34,7 +34,7 @@ This uses the normal system-prompt registration mechanism rather than a second p
 
 ### Tool filtering is one live global-view rule
 
-The tool filter controls capability visibility and executable lookup together. An in-process provider installs `ToolRuntime.restrict()` in the child's scope before publication, and the registry's single resolver applies the same result to wire tool schemas, lookup, execution, and PTC mode SDK generation. Independently registered system-prompt sections are outside `ToolRuntime`, so filtering a tool does not remove that plugin's standalone guidance.
+The tool filter controls capability visibility and executable lookup together. An in-process provider installs `ToolRuntime.restrict()` in the child's scope before publication, and the registry's single resolver applies the same result to wire tool schemas, lookup, execution, and PTC mode SDK generation. Independently registered system-prompt sections remain owned by their plugins. The filesystem, search, and web tool plugins use the existing `PromptSection.text({ scope })` callback and `ctx.tools.get(name, scope)` to omit guidance for unavailable tools and select applicable cross-tool text. This keeps the original wording and ordering for a supported tool set and works for any agent scope, including underlying PTC capabilities whose wire presentation is `run_code`. It adds no section-ownership metadata or assembly pass; unrelated static prose is not automatically rewritten by `restrict()`.
 
 Resolution follows these rules:
 

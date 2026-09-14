@@ -1,0 +1,52 @@
+{
+  "name": "@deepseek-ai/dsh-session-format-v2-to-v3",
+  "description": "Streaming system-prompt, canonical-envelope and PTC migration into V3",
+  "version": "0.1.5-rc.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "packages/session/session-format-v2-to-v3"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "dsh": {
+    "sessionFormatMigration": {
+      "from": 2,
+      "to": 3,
+      "export": ".",
+      "migration": "sessionFormatV2ToV3",
+      "sourceCodec": "releasedV2SessionFormatCodec",
+      "targetCodec": "releasedV3SessionFormatCodec",
+      "targetHeaderValidator": "assertReleasedV3Header",
+      "targetRestorer": "restoreReleasedV3Artifact"
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh-session-format": "workspace:^",
+    "@deepseek-ai/dsh-session-format-v0-to-v1": "workspace:^",
+    "@deepseek-ai/dsh-session-format-v1-to-v2": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^"
+  }
+}

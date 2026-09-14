@@ -51,7 +51,7 @@ This section explains the design behind the browser half; the observable behavio
 
 ### Design philosophy
 
-The browser half is built on one principle: a dynamic package must ride the same activation gating, fiber-effect cleanup, and status projection as a static one. The evaluated plugin is seated in the module table and mounted through `loader.create`; unload is entry removal plus factory invalidation plus style removal. The guard is a whitelist — lifecycle verbs plus declared services — that mirrors the host-side sandbox facade, so a package author meets one contract on both halves. One observer feeds two outlets: the slot registry's entry-error seam is watched only here, and a crash belonging to a package this runner seated goes upstream to the host for the model and onto this package's own `renderFailures` for the panel.
+The browser half is built on one principle: a dynamic package must ride the same activation gating, fiber-effect cleanup, and status projection as a static one. The evaluated plugin is seated in the module table and mounted through `loader.create`; unload removes the entry, waits for its fiber's cleanup, then invalidates its factory and removes its styles. The guard is a whitelist — lifecycle verbs plus declared services — that mirrors the host-side sandbox facade, so a package author meets one contract on both halves. One observer feeds two outlets: the slot registry's entry-error seam is watched only here, and a crash belonging to a package this runner seated goes upstream to the host for the model and onto this package's own `renderFailures` for the panel.
 
 ### Source map
 

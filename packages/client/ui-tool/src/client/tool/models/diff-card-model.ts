@@ -3,16 +3,8 @@ import type { DiffBlockProps, DiffHunk } from '@deepseek-ai/dsh-client-ui-primit
 import type { ToolCallBlock } from './tool-call-model.ts'
 import { parsedToolCall, validEscalationFields } from './raw-tool-call.ts'
 
-/**
- * Diff-body lines the chat row shows before collapsing the middle — half the
- * primitive's own default, which the details panel keeps. A chat row is a
- * summary surface inside the message flow: the flow must stay scannable across
- * many calls, while the details panel is the single-call reading surface. The
- * same split {@link CHAT_TERMINAL_MAX_LINES} draws for a terminal card, so the
- * two card kinds cap a long body at the same place in the flow. A design
- * constant of this UI's row geometry, not a deployment choice.
- */
-export const CHAT_DIFF_MAX_LINES = 8
+/** Room for a path, one removed/added pair, and three context lines on each side. */
+export const CHAT_DIFF_MAX_LINES = 9
 
 /**
  * The {@link DiffBlock} props this derivation owns. Picked off the primitive's

@@ -8,6 +8,3 @@ sessionFormat:
   coverage: [retry-failure]
 header:
   class: retry
-  pin: true
-  systemPromptSource: text-turn
-  toolSchemasSource: text-turn

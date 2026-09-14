@@ -5,7 +5,7 @@ import { AttachmentId, AttachmentStore, ImageVariantId } from '@deepseek-ai/dsh-
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
-  ImageRequestPolicy,
+  ImageRequestTarget,
   RequestImageAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
@@ -91,7 +91,7 @@ async function harness(image?: StoredImageAttachment): Promise<Context> {
         return Promise.resolve(fixture)
       }
 
-      override readImageRequest(ref: ImageAttachmentRef, _policy: ImageRequestPolicy): Promise<RequestImageAttachment> {
+      override readImageRequest(ref: ImageAttachmentRef, _target: ImageRequestTarget): Promise<RequestImageAttachment> {
         if (ref.attachmentId !== fixture.ref.attachmentId) {
           return Promise.reject(new Error('unknown e2e attachment fixture'))
         }

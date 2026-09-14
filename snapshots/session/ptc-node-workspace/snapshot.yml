@@ -1,0 +1,15 @@
+version: 1
+scenario: ptc-node-workspace
+profile: headless
+composition: ptc-node-workspace
+recording: authored
+header:
+  class: ptc-node-workspace
+  pin: true
+replay:
+  override: true
+platform: posix
+permission: workspace-write
+workspace:
+  final: true
+  parent: outside-temp

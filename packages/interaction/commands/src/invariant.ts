@@ -35,6 +35,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
       fail(`command/done ${JSON.stringify(event.data.commandId)} pairs no prior command/run in this log`)
     }
     const source = event.data.sourceEventSeq
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const sourceEvent = source === undefined ? undefined : session.eventAt(source)
     if (source !== undefined
       && (event.data.kind !== 'success'
@@ -46,6 +47,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
     }
   }
   for (const session of ctx.sessions.list()) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     for (const event of session.snapshotEvents()) validateEvent(session, event)
   }
   ctx.on('internal/dispatch', (_mode, eventName, args) => {

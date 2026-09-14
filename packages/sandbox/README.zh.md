@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`sandbox/` 组将子进程执行限制在文件效果策略之下：命令以 `read-only` 运行、只能写入会话工作区（`workspace-write`）或不受限制地运行（`danger-full-access`）。四个包交付该能力：隔离服务（`sandbox/`）、面向 Linux、macOS 与 Windows 的各平台后端（`sandbox-local/`）、共享策略解析器（`sandbox-policy/`）与 Windows 写入限制后端（`sandbox-windows-acl/`）。被策略拒绝的受限调用可以通过用户批准的一次性升权重试。隔离仅限同世界：它与宿主共享内核与文件系统，容器、microVM 与远程执行器会替换整个能力，而不是在此注册。
+`sandbox/` 组将子进程执行限制在文件效果策略之下：命令以 `read-only` 运行、只能写入会话工作区（`workspace-write`）或不受限制地运行（`danger-full-access`）。四个包交付该能力：隔离服务（`sandbox/`）、面向 Linux、macOS 与 Windows 的各平台后端（`sandbox-local/`）、共享策略解析器（`sandbox-policy/`）与 Windows 写入限制后端（`sandbox-windows-acl/`）。被策略拒绝的受限调用可以通过用户批准的一次性升权重试。隔离仅适用于与宿主共享文件系统和内核的子进程；容器、microVM 与远程执行器会替换整个能力，而不是在此注册。
 
 ## 目录
 
@@ -22,13 +22,13 @@ kind: "package-group"
 <a id="packages"></a>
 ## 包
 
-四个包承担隔离角色；子系统参考文档拥有穷尽式约定与逐调用策略语义。
+四个包承担隔离角色；完整约定和逐调用策略语义以子系统参考文档为准。
 
 | 包 | 职责 | ctx key |
 |---|---|---|
 | [`sandbox/`](sandbox/README.zh.md) | 隔离服务约定：模式、强制执行、逐调用策略与升权词汇 | `ctx.sandbox` |
-| [`sandbox-local/`](sandbox-local/README.zh.md) | 各平台隔离后端：Linux bwrap 与 Landlock、macOS Seatbelt、Windows 受限令牌 | 注册到 `ctx.sandbox` |
-| [`sandbox-policy/`](sandbox-policy/README.zh.md) | 共享策略归属：每个执行家族的部署默认值与逐会话模式覆盖 | `ctx.sandboxPolicy` |
+| [`sandbox-local/`](sandbox-local/README.zh.md) | 各平台隔离后端：Linux 先使用 bwrap，再使用 Landlock；macOS 使用 Seatbelt；Windows 使用受限令牌 | 注册到 `ctx.sandbox` |
+| [`sandbox-policy/`](sandbox-policy/README.zh.md) | 共享策略归属：供所有实施隔离的家族使用的部署默认值与逐会话模式覆盖 | `ctx.sandboxPolicy` |
 | [`sandbox-windows-acl/`](sandbox-windows-acl/README.zh.md) | Windows 写入限制：受限子进程只能写入工作区与私有临时目录 | —（由 `sandbox-local` 挂载为 win32 后端） |
 
 -----

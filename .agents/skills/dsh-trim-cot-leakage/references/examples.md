@@ -174,7 +174,7 @@ Replace the hedge with the actual bound and the failure behavior when it is exce
 
 **Fixed:** "The renderer runs on the client side; spacing follows the Figma frame `widget-badges`."
 
-Working-language fragments and session separators are transcription residue. The Figma frame name stays: external provenance that resolves outside the repo by design.
+Working-language fragments and session separators are transcription residue. The Figma frame name stays: an external source that resolves outside the repo by design.
 
 ### Authoring-language slip inside a paired fence
 
@@ -216,7 +216,7 @@ The justification clause is required prose. When the stated reason is false (the
 
 **Keep:** "Depth cap (measured: 512 nests ≈ 0.15s synchronous; 4096 blocks the loop)."
 
-The measurement pins the constant against uninformed retuning, and "measured" is the provenance that distinguishes data from a guess.
+The measurement pins the constant against uninformed retuning, and "measured" identifies data rather than a guess.
 
 ### Runtime old/new is not change history
 
@@ -264,7 +264,7 @@ Deleting the future-marker alone turns a design illustration into a claim that t
 
 Half the sentence was narration; the other half was a load-bearing coupling. Delete clauses, not sentences, when propositions share a line.
 
-### Dropping provenance while keeping the number
+### Dropping the measurement source while keeping the number
 
 **Original:** "The 4 MiB ceiling is measured: the largest generated `py-types` module is 3.1 MiB."
 

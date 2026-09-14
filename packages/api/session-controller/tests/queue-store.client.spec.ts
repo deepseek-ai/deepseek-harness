@@ -3,17 +3,23 @@
  * change, reconnect re-baselining, pre-instantiation buffering, editable-text
  * projection, and snapshot reference stability.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, vi } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, UserMessage } from '@deepseek-ai/dsh-llm/types'
 import { SessionSeq, type SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { MessageId, RpcId, SessionId } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SessionControlFrame } from '@deepseek-ai/dsh-api-session-controller/types'
-import { Session } from '../src/client/sessions/session.ts'
+import { createClientTest, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
 import { SessionManager } from '../src/client/sessions/manager.ts'
-import { FakeApiClient, fakeRemote } from './fake-api.client.ts'
+import { sessionBench } from './remote/bench.client.ts'
+import { pushEvent, sessionWorld } from './remote/session.client.ts'
 
+/** A Session talks through the Gateway client; its dependency cone is the Typert registry and the Connection. */
+const API_ROSTER = webApp.closure(['@deepseek-ai/dsh-api-gateway'])
+const it = createClientTest({ roster: API_ROSTER })
 const SID = 'fk-q1' as SessionId
+/** The first client boot pays the cold module transform of the api cone. */
+const COLD_BOOT_TIMEOUT_MS = 60_000
 const text = (value: string): ContentBlock[] => [{ type: 'text', text: value }]
 const rid = (id: string): RpcId => id as RpcId
 const iid = (id: string): MessageId => id as MessageId
@@ -42,23 +48,9 @@ function queueFrame(items: QueueFixture[]): Extract<SessionControlFrame, { type:
   }
 }
 
-function makeSession(): Session {
-  return makeBench().session
-}
-
-function makeBench(): { api: FakeApiClient; session: Session } {
-  const api = new FakeApiClient()
-  return { api, session: new Session(SID, fakeRemote(api)) }
-}
-
-function makeManager(): SessionManager {
-  const api = new FakeApiClient()
-  return new SessionManager(fakeRemote(api))
-}
-
 describe('Session queue snapshot intake', () => {
-  it('projects stable ids, flat previews, and complete text', () => {
-    const session = makeSession()
+  it('projects stable ids, flat previews, and complete text', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([
       { id: 'q-1', body: '第一条  排队\n消息' },
     ]))
@@ -71,10 +63,10 @@ describe('Session queue snapshot intake', () => {
         preview: '第一条 排队 消息', text: '第一条  排队\n消息',
       },
     ])
-  })
+  }, COLD_BOOT_TIMEOUT_MS)
 
-  it('marks mixed-content messages non-editable and keeps attachment blocks out of the text preview', () => {
-    const session = makeSession()
+  it('marks mixed-content messages non-editable and keeps attachment blocks out of the text preview', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([{
       id: 'q-image',
       body: '',
@@ -101,8 +93,8 @@ describe('Session queue snapshot intake', () => {
     ])
   })
 
-  it('caps previews at 200 code points and preserves the full editable text', () => {
-    const session = makeSession()
+  it('caps previews at 200 code points and preserves the full editable text', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     const body = '长'.repeat(201)
     session.handleControlFrame(queueFrame([{ id: 'q-cap', body }]))
     const row = session.getSnapshot().queue[0]
@@ -111,8 +103,8 @@ describe('Session queue snapshot intake', () => {
     expect(row?.text).toBe(body)
   })
 
-  it('replaces content, order, and membership from each authoritative frame', () => {
-    const session = makeSession()
+  it('replaces content, order, and membership from each authoritative frame', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([
       { id: 'q-1', body: 'one' },
       { id: 'q-2', body: 'two' },
@@ -133,16 +125,16 @@ describe('Session queue snapshot intake', () => {
     expect(session.getSnapshot().queue).toEqual([])
   })
 
-  it('keeps the queue array reference stable across unrelated snapshot swaps', () => {
-    const session = makeSession()
+  it('keeps the queue array reference stable across unrelated snapshot swaps', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([{ id: 'q-stable', body: '稳定' }]))
     const before = session.getSnapshot().queue
     session.handleAgentError('unrelated')
     expect(session.getSnapshot().queue).toBe(before)
   })
 
-  it('retains steering placement and complete content in the same authoritative snapshot', () => {
-    const session = makeSession()
+  it('retains steering placement and complete content in the same authoritative snapshot', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([
       { id: 'q-next', body: 'later' },
       { id: 's-now', body: 'interrupt now', placement: 'steering' },
@@ -156,8 +148,8 @@ describe('Session queue snapshot intake', () => {
     ])
   })
 
-  it('hands off exactly one current occurrence when live steering becomes durable', async () => {
-    const { api, session } = makeBench()
+  it('hands off exactly one current occurrence when live steering becomes durable', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const message = createUserMessage({
       content: text('same message'),
@@ -175,7 +167,7 @@ describe('Session queue snapshot intake', () => {
       data: message,
     } satisfies SessionEvent
 
-    await api.pushFollow(SID, { type: 'event', event: durable as never })
+    await pushEvent(mock, durable)
     await vi.waitFor(() => {
       expect(session.getSnapshot().queue.map(item => item.id)).toEqual(['s-second'])
     })
@@ -183,14 +175,14 @@ describe('Session queue snapshot intake', () => {
     session.handleControlFrame(queueFrame([
       { id: 's-later', body: '', placement: 'steering', message },
     ]))
-    await api.pushFollow(SID, { type: 'event', event: durable as never })
+    await pushEvent(mock, durable)
     await vi.waitFor(() => {
       expect(session.getSnapshot().queue.map(item => item.id)).toEqual(['s-later'])
     })
   })
 
-  it('hands off live steering when the agent claims it as a user message', async () => {
-    const { api, session } = makeBench()
+  it('hands off live steering when the agent claims it as a user message', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     const message = createUserMessage({
       content: text('claimed steering'),
@@ -200,16 +192,13 @@ describe('Session queue snapshot intake', () => {
       { id: 's-claimed', body: '', placement: 'steering', message },
     ]))
 
-    await api.pushFollow(SID, {
-      type: 'event',
-      event: {
-        seq: 0,
-        time: 1_700_000_000_000,
-        type: 'user/message',
-        surfaceOp: 'append',
-        data: message,
-      } as never,
-    })
+    await pushEvent(mock, {
+      seq: 0,
+      time: 1_700_000_000_000,
+      type: 'user/message',
+      surfaceOp: 'append',
+      data: message,
+    } as never)
 
     await vi.waitFor(() => {
       expect(session.getSnapshot().queue).toEqual([])
@@ -218,9 +207,8 @@ describe('Session queue snapshot intake', () => {
 })
 
 describe('queue operation transport', () => {
-  it('addresses the session.updateQueue RPC without optimistic local mutation', async () => {
-    const api = new FakeApiClient()
-    const session = new Session(SID, fakeRemote(api))
+  it('addresses the session.updateQueue RPC without optimistic local mutation', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([{ id: 'q-op', body: 'pending' }]))
     const before = session.getSnapshot().queue
 
@@ -228,7 +216,7 @@ describe('queue operation transport', () => {
       .resolves.toEqual({ ok: true, value: { accepted: true } })
     await expect(session.updateQueue(iid('q-op'), { kind: 'steer' }))
       .resolves.toEqual({ ok: true, value: { accepted: true } })
-    expect(api.callsOf('session.updateQueue')).toEqual([
+    expect(mock.log.requests('session/updateQueue')).toEqual([
       {
         sessionId: SID,
         itemId: 'q-op',
@@ -245,8 +233,8 @@ describe('queue operation transport', () => {
 })
 
 describe('queue reconnect semantics', () => {
-  it('a control baseline clears stale state before a fresh update lands', () => {
-    const session = makeSession()
+  it('a control baseline clears stale state before a fresh update lands', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([{ id: 'q-old', body: '旧连接' }]))
     session.replaceControl([])
     expect(session.getSnapshot().queue).toEqual([])
@@ -254,16 +242,16 @@ describe('queue reconnect semantics', () => {
     expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['q-new'])
   })
 
-  it('resync does not clear a baseline that raced ahead of the host connection signal', async () => {
-    const session = makeSession()
+  it('resync does not clear a baseline that raced ahead of the host connection signal', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     await session.open()
     session.handleControlFrame(queueFrame([{ id: 'q-fresh', body: '新基线' }]))
     await session.resync()
     expect(session.getSnapshot().queue.map(row => row.id)).toEqual(['q-fresh'])
   })
 
-  it('running-status changes never guess at queue retirement', () => {
-    const session = makeSession()
+  it('running-status changes never guess at queue retirement', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
     session.handleControlFrame(queueFrame([{ id: 'q-live', body: '保留' }]))
     session.handleRunning(true)
     session.handleRunning(false)
@@ -272,15 +260,19 @@ describe('queue reconnect semantics', () => {
 })
 
 describe('manager buffering of queue snapshots', () => {
-  it('replays only the latest snapshot for an uninstantiated session', () => {
-    const manager = makeManager()
+  it('replays only the latest snapshot for an uninstantiated session', async ({ mock, start }) => {
+    mock.load(sessionWorld)
+    const { ctx: { remote } } = await start()
+    const manager = new SessionManager(remote)
     manager.handleControlFrame(queueFrame([{ id: 'q-old', body: '旧' }]))
     manager.handleControlFrame(queueFrame([{ id: 'q-new', body: '新' }]))
     expect(manager.get(SID).getSnapshot().queue.map(row => row.id)).toEqual(['q-new'])
   })
 
-  it('a control baseline replaces the prior queue', () => {
-    const manager = makeManager()
+  it('a control baseline replaces the prior queue', async ({ mock, start }) => {
+    mock.load(sessionWorld)
+    const { ctx: { remote } } = await start()
+    const manager = new SessionManager(remote)
     manager.handleControlFrame(queueFrame([{ id: 'q-g1', body: '第一代' }]))
     const nextQueue = queueFrame([{ id: 'q-g2', body: '第二代' }]).items
     manager.handleControlFrame({

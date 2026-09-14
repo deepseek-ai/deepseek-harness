@@ -1,5 +1,5 @@
 ---
-description: "面向模型的 glob 与 grep 发现工具：供组合或排查 agent 工作区搜索的用户与维护者使用。"
+description: "面向模型的 glob 与 grep 发现工具：供组合或排查 agent（智能体）工作区搜索的用户与维护者使用。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-fs-search` 提供面向模型的文件系统发现工具——`glob` 与 `grep`——由打包的 ripgrep 二进制支持，因此既不需要宿主 `rg` 安装，也不需要文件系统后端。每次调用都由 ripgrep 自身以固定参数集执行，并返回相对于工作目录的结果；由于每种载体都打包 ripgrep，工具始终可用。结果受可配置上限约束，达到上限的结果会在挂载可选 spill 存储时完整保存。当模型需要按模式发现文件或搜索文件内容时选择本包；文本文件的读取、写入与编辑是同级 `dsh-tool-fs` 包的职责。
+使用 `dsh-tool-fs-search` 为模型提供本地工作区中的 `glob` 文件发现与 `grep` 内容搜索。搜索无需在宿主上安装 `rg`，也无需文件系统提供方；结果相对于工作目录，并包含隐藏与忽略文件但排除 VCS 元数据。可配置上限约束内联输出；挂载可选 spill 存储后，达到上限的结果仍可完整恢复。若需读取、写入或编辑文件，请选择同级 `dsh-tool-fs` 包。
 
 ## 目录
 
@@ -70,7 +70,7 @@ kind: "package-reference"
 
 ### 部署要求
 
-Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ripgrep` 平台包；Python SDK wheel 把目标原生二进制复制到单文件运行时旁，作为 `-rg` 伴随文件。两种载体均不要求宿主安装 `rg`。返回路径相对于解析后的工作目录显示（有会话 cwd 时使用会话 cwd），只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。
+Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ripgrep` 平台包；Python SDK 的 wheel 包把目标原生二进制复制到单文件运行时旁，作为 `-rg` 伴随文件。两种载体均不要求宿主安装 `rg`。返回路径相对于解析后的工作目录显示（有会话 cwd 时使用会话 cwd），只有该工作目录与文件系统根目录是同一工作区时，才能用 `read` 继续读取。
 
 ### 失败与恢复
 
@@ -134,7 +134,7 @@ Node 部署在受支持的 macOS、Linux 与 Windows 目标上获得 `@vscode/ri
 
 #### 模型看到的内容
 
-该插件注册作用域内的每个请求都包含下方独立注册的 glob 与 grep 指导。agent 作用域的工具限制可以隐藏任一 schema，而不移除其提示词段。
+组装时，每个段落通过 `ctx.tools.get(name, scope)` 检查对应工具，仅在其可见时输出。grep 段落仅在 read 可见时包含后续使用 read 的句子。同一受支持工具集合下，原文和段落顺序保持不变，包括通过 `run_code` 暴露的 PTC 能力。 这种按 scope 选择文本的机制适用于系统提示词段落。工具 schema 描述仍是注册时的文本；具体而言，即使 scope 隐藏了 read，grep 的 schema 仍会推荐 read。尚未实现按 scope 改变 schema 措辞。
 
 ##### 启用 `sampleOverCapGlobResults: true` 时的 Glob 指导
 
@@ -156,11 +156,11 @@ Use the grep tool — not shell grep or rg — to search file contents. Use read
 
 #### Token 影响
 
-工具注册期间每个请求有固定的指导成本；必填的采样选择决定采用哪一个 glob 变体。
+指导成本取决于可见工具；必填的采样选择决定采用哪一个 glob 变体。
 
 #### KV Cache 影响
 
-插件作用域、采样选择与指导文本不变时前缀稳定。激活、dispose（资源释放）或改变选择可能使该提示词段的复用失效。
+可见工具集合、插件作用域、采样选择与指导文本不变时前缀稳定。限制、激活、dispose（资源释放）或改变选择可能从首个变化的段落开始使复用失效。
 
 ### 工具 schema
 
@@ -226,4 +226,4 @@ glob 描述声明了配置的超过上限排序方式。生成的 [`glob` 和 `g
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。这个模型侧 adapter 没有独立 lifecycle stream；执行关系由它调用的 capability seam 负责。
+**运行时不变式：** 不发布伴生入口。这个面向模型的适配器没有独立生命周期流；执行关系由它调用的能力 seam 负责。

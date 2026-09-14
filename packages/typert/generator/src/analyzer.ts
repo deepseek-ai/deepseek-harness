@@ -130,6 +130,25 @@ interface ModuleIdentity {
   readonly subpath: string
 }
 
+/** The package import a type reference reaches after following package-local forwarding modules. */
+interface PackageImport {
+  readonly module: ModuleIdentity
+  /** Name the type is exported under at that package subpath. */
+  readonly name: string
+}
+
+/** One `import` binding of a local name; `name` is absent for a namespace import. */
+interface ImportBinding {
+  readonly specifier: string
+  readonly name?: string
+}
+
+/** One outgoing `export` edge of a forwarding module for one exported name. */
+interface ForwardedExport {
+  readonly specifier: string
+  readonly name: string
+}
+
 interface StaticLookupDeclaration {
   readonly key: string
   readonly hostSymbol: SymbolId
@@ -317,15 +336,13 @@ export class WorkspaceAnalyzer {
           incremental: false,
           noEmit: true,
         }
-        const program = ts.createProgram({
-          rootNames,
-          options,
-          host: this.caches.programHost(face, options),
-        })
+        const host = this.caches.programHost(face, options)
+        const program = ts.createProgram({ rootNames, options, host })
         faces.push(new FaceAnalyzer({
           root: this.options.root,
           face,
           program,
+          host,
           registrations,
           allRegistrations: this.registrations,
           mode: this.options.mode,
@@ -588,6 +605,8 @@ interface FaceAnalyzerOptions {
   readonly root: string
   readonly face: TypertFace
   readonly program: ts.Program
+  /** Program host whose module-resolution cache serves import resolution outside the checker. */
+  readonly host: ts.CompilerHost
   readonly registrations: readonly PackageRegistration[]
   readonly allRegistrations: readonly PackageRegistration[]
   readonly mode: AnalysisMode
@@ -599,6 +618,7 @@ class FaceAnalyzer {
   private readonly root: string
   private readonly face: TypertFace
   private readonly program: ts.Program
+  private readonly host: ts.CompilerHost
   private readonly checker: ts.TypeChecker
   private readonly registrations: readonly PackageRegistration[]
   private readonly allRegistrations: readonly PackageRegistration[]
@@ -618,6 +638,7 @@ class FaceAnalyzer {
     this.root = options.root
     this.face = options.face
     this.program = options.program
+    this.host = options.host
     this.checker = options.program.getTypeChecker()
     this.registrations = options.registrations
     this.allRegistrations = options.allRegistrations
@@ -834,19 +855,84 @@ class FaceAnalyzer {
         if ((!ts.isImportDeclaration(statement) && !ts.isExportDeclaration(statement))
           || statement.moduleSpecifier === undefined
           || !ts.isStringLiteral(statement.moduleSpecifier)) continue
-        const resolved = ts.resolveModuleName(
-          statement.moduleSpecifier.text,
-          sourceFile.fileName,
-          this.program.getCompilerOptions(),
-          ts.sys,
-        ).resolvedModule
-        if (resolved === undefined) continue
-        const resolvedPath = realPath(resolved.resolvedFileName)
-        if (!isWithin(resolvedPath, registration.root)) continue
+        const resolvedPath = this.resolveImport(statement.moduleSpecifier.text, sourceFile.fileName)
+        if (resolvedPath === undefined || !isWithin(resolvedPath, registration.root)) continue
         queue.push(this.sourceFiles.get(resolvedPath) as ts.SourceFile)
       }
     }
     return [...reachable.values()].sort((left, right) => left.fileName.localeCompare(right.fileName))
+  }
+
+  private resolveImport(specifier: string, fromFile: string): string | undefined {
+    const resolved = ts.resolveModuleName(
+      specifier,
+      fromFile,
+      this.program.getCompilerOptions(),
+      this.host,
+      this.host.getModuleResolutionCache?.(),
+    ).resolvedModule
+    return resolved === undefined ? undefined : realPath(resolved.resolvedFileName)
+  }
+
+  /**
+   * Follow the import that names `symbol` at `site` through modules of the
+   * referencing package until a package specifier appears. Each forwarding
+   * module and requested export name pair is entered once; its explicit export
+   * edges are tried before its star edges. A relative specifier that resolves
+   * outside `from`, a namespace hop, or a module with no edge leading to a
+   * package specifier yields undefined.
+   */
+  private packageImportOf(
+    site: ReferenceSite,
+    moduleSpecifier: string,
+    symbol: ts.Symbol,
+    from: PackageRegistration,
+  ): PackageImport | undefined {
+    const visited = new Map<string, Set<string>>()
+    const walk = (sourceFile: ts.SourceFile, specifier: string, name: string): PackageImport | undefined => {
+      const module = moduleIdentity(specifier)
+      if (module !== undefined) return { module, name }
+      const resolvedPath = this.resolveImport(specifier, sourceFile.fileName)
+      if (resolvedPath === undefined || !isWithin(resolvedPath, from.root)) return undefined
+      const names = visited.get(resolvedPath)
+      if (names?.has(name)) return undefined
+      if (names === undefined) visited.set(resolvedPath, new Set([name]))
+      else names.add(name)
+      const forward = this.sourceFiles.get(resolvedPath) as ts.SourceFile
+      for (const edge of this.forwardedExports(forward, name, symbol)) {
+        const found = walk(forward, edge.specifier, edge.name)
+        if (found !== undefined) return found
+      }
+      return undefined
+    }
+    return walk(site.getSourceFile(), moduleSpecifier, authoredExportName(site, moduleSpecifier))
+  }
+
+  /** Export edges of `sourceFile` that carry `name`: explicit edges in source order, then star edges exporting `symbol`. */
+  private forwardedExports(sourceFile: ts.SourceFile, name: string, symbol: ts.Symbol): ForwardedExport[] {
+    const explicit: ForwardedExport[] = []
+    const stars: ForwardedExport[] = []
+    for (const statement of sourceFile.statements) {
+      if (!ts.isExportDeclaration(statement)
+        || (statement.exportClause === undefined && statement.moduleSpecifier === undefined)
+        || (statement.exportClause !== undefined && ts.isNamespaceExport(statement.exportClause))) continue
+      if (statement.exportClause === undefined) {
+        const specifier = (statement.moduleSpecifier as ts.StringLiteral).text
+        const exported = this.moduleExports(statement.moduleSpecifier as ts.StringLiteral)
+          .find(candidate => candidate.name === name && this.resolveSymbol(candidate) === symbol)
+        if (exported !== undefined) stars.push({ specifier, name })
+        continue
+      }
+      const element = statement.exportClause.elements.find(candidate => candidate.name.text === name)
+      if (element === undefined) continue
+      if (statement.moduleSpecifier !== undefined) {
+        explicit.push({ specifier: (statement.moduleSpecifier as ts.StringLiteral).text, name: element.propertyName?.text ?? name })
+        continue
+      }
+      const binding = importBindingOf(sourceFile, element.propertyName?.text ?? name)
+      if (binding?.name !== undefined) explicit.push({ specifier: binding.specifier, name: binding.name })
+    }
+    return [...explicit, ...stars]
   }
 
   private collectServices(
@@ -2390,17 +2476,21 @@ class FaceAnalyzer {
     }
 
     const moduleSpecifier = moduleSpecifierOf(site)
-    const module = moduleSpecifier === undefined ? undefined : moduleIdentity(moduleSpecifier)
     const from = this.registrationForFile(site.getSourceFile().fileName) as PackageRegistration
     const owner = this.registrationForFile(declaration.getSourceFile().fileName)
     if (owner !== undefined) {
       if (owner.name !== from.name) {
-        if (module === undefined) {
+        const imported = moduleSpecifier === undefined
+          ? undefined
+          : this.packageImportOf(site, moduleSpecifier, symbol, from)
+        if (imported === undefined) {
           this.fail(site, `reference to ${symbol.name} crosses a package without an explicit package import`)
         }
-        const exportName = authoredExportName(site, moduleSpecifier as string)
-        if (this.packageExportName(module, symbol, owner.face, exportName) === undefined) {
-          this.fail(site, `package reference ${exportName} is not exported by ${module.package} at ${module.subpath}`)
+        if (this.packageExportName(imported.module, symbol, owner.face, imported.name) === undefined) {
+          this.fail(
+            site,
+            `package reference ${imported.name} is not exported by ${imported.module.package} at ${imported.module.subpath}`,
+          )
         }
       }
       const typeDeclaration = declaration as ts.ClassDeclaration | ts.InterfaceDeclaration
@@ -2409,15 +2499,18 @@ class FaceAnalyzer {
       return { kind: 'declaration', symbol: this.symbolId(symbol) }
     }
 
-    const packageFaces = module === undefined
+    const imported = moduleSpecifier === undefined
+      ? undefined
+      : this.packageImportOf(site, moduleSpecifier, symbol, from)
+    const packageFaces = imported === undefined
       ? []
-      : [...new Set(this.allRegistrations.filter(candidate => candidate.name === module.package).map(candidate => candidate.face))]
+      : [...new Set(this.allRegistrations.filter(candidate => candidate.name === imported.module.package).map(candidate => candidate.face))]
     const otherFace = packageFaces.find(face => face !== this.face)
-    if (otherFace !== undefined && module !== undefined) {
-      const requestedName = authoredExportName(site, moduleSpecifier as string)
-      const exportName = this.packageExportName(module, symbol, otherFace, requestedName)
+    if (otherFace !== undefined && imported !== undefined) {
+      const { module } = imported
+      const exportName = this.packageExportName(module, symbol, otherFace, imported.name)
       if (exportName === undefined) {
-        this.fail(site, `cross-face reference ${requestedName} is not exported by ${module.package} at ${module.subpath}`)
+        this.fail(site, `cross-face reference ${imported.name} is not exported by ${module.package} at ${module.subpath}`)
       }
       this.recordCrossFaceLink(from.name, otherFace, module, exportName)
       return {
@@ -2429,11 +2522,11 @@ class FaceAnalyzer {
       }
     }
 
-    if (module !== undefined) {
+    if (imported !== undefined) {
       return {
         kind: 'external',
-        module: module.package,
-        subpath: module.subpath,
+        module: imported.module.package,
+        subpath: imported.module.subpath,
         name: symbol.name,
       }
     }
@@ -2483,7 +2576,8 @@ class FaceAnalyzer {
     requestedName: string,
   ): string | undefined {
     const registration = this.allRegistrations.find(candidate =>
-      candidate.face === face && candidate.name === module.package) as PackageRegistration
+      candidate.face === face && candidate.name === module.package)
+    if (registration === undefined) return undefined
     const target = packageExportTargets(registration.manifest)
       .find(([subpath]) => subpath === module.subpath)?.[1]
     if (target === undefined) return undefined
@@ -3019,18 +3113,7 @@ function moduleSpecifierOf(node: ReferenceSite): string | undefined {
     : node.expression
   const sourceFile = node.getSourceFile()
   const first = ts.isIdentifier(symbol) ? symbol.text : symbol.getFirstToken(sourceFile)?.getText(sourceFile)
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || statement.importClause === undefined
-      || !ts.isStringLiteral(statement.moduleSpecifier)) continue
-    if (statement.importClause.name?.text === first) return statement.moduleSpecifier.text
-    const bindings = statement.importClause.namedBindings
-    if (bindings !== undefined && ts.isNamespaceImport(bindings) && bindings.name.text === first) {
-      return statement.moduleSpecifier.text
-    }
-    if (bindings !== undefined && ts.isNamedImports(bindings)
-      && bindings.elements.some(element => element.name.text === first)) return statement.moduleSpecifier.text
-  }
-  return undefined
+  return first === undefined ? undefined : importBindingOf(sourceFile, first)?.specifier
 }
 
 function authoredExportName(node: ReferenceSite, moduleSpecifier: string): string {
@@ -3040,23 +3123,28 @@ function authoredExportName(node: ReferenceSite, moduleSpecifier: string): strin
     ? node.typeName.getText().split('.')
     : node.expression.getText().split('.')
   const localName = referenced[0] as string
-  for (const statement of node.getSourceFile().statements) {
-    if (!ts.isImportDeclaration(statement)
-      || statement.importClause === undefined
-      || !ts.isStringLiteral(statement.moduleSpecifier)
-      || statement.moduleSpecifier.text !== moduleSpecifier) continue
-    if (statement.importClause.name?.text === localName) return 'default'
+  const binding = importBindingOf(node.getSourceFile(), localName)
+  /* v8 ignore next -- moduleSpecifierOf returns only the import inspected by importBindingOf. */
+  if (binding === undefined) throw new TypertAnalysisError(`typert: cannot recover export name for ${localName} from ${moduleSpecifier}`)
+  return binding.name ?? (referenced[1] as string)
+}
+
+function importBindingOf(sourceFile: ts.SourceFile, localName: string): ImportBinding | undefined {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.importClause === undefined
+      || !ts.isStringLiteral(statement.moduleSpecifier)) continue
+    const specifier = statement.moduleSpecifier.text
+    if (statement.importClause.name?.text === localName) return { specifier, name: 'default' }
     const bindings = statement.importClause.namedBindings
-    if (bindings !== undefined && ts.isNamedImports(bindings)) {
-      const imported = bindings.elements.find(element => element.name.text === localName)
-      if (imported !== undefined) return imported.propertyName?.text ?? imported.name.text
+    if (bindings === undefined) continue
+    if (ts.isNamespaceImport(bindings)) {
+      if (bindings.name.text === localName) return { specifier }
+      continue
     }
-    if (bindings !== undefined && ts.isNamespaceImport(bindings) && bindings.name.text === localName) {
-      return referenced[1] as string
-    }
+    const element = bindings.elements.find(candidate => candidate.name.text === localName)
+    if (element !== undefined) return { specifier, name: element.propertyName?.text ?? element.name.text }
   }
-  /* v8 ignore next -- moduleSpecifierOf returns only the matching import inspected by this loop. */
-  throw new TypertAnalysisError(`typert: cannot recover export name for ${localName} from ${moduleSpecifier}`)
+  return undefined
 }
 
 function importTypeAttributesText(node: ts.ImportTypeNode): string {

@@ -15,6 +15,7 @@ const E_FAIL = 0x80004005 | 0
 interface FakeWorld {
   bindings: Win32DialogBindings
   dpi: ReturnType<typeof vi.fn>
+  pressAlt: ReturnType<typeof vi.fn>
   createDialog: ReturnType<typeof vi.fn>
   uninitialize: ReturnType<typeof vi.fn>
   dialog: {
@@ -36,6 +37,7 @@ function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorl
     ...overrides,
   }
   const dpi = vi.fn()
+  const pressAlt = vi.fn()
   const createDialog = vi.fn(() => dialog)
   const uninitialize = vi.fn()
   const bindings: Win32DialogBindings = {
@@ -44,13 +46,14 @@ function world(overrides: Partial<Win32FolderDialog> = {}, coInit = 0): FakeWorl
     coUninitialize: uninitialize,
     createFolderDialog: createDialog,
     currentThreadId: vi.fn(() => 4242),
+    pressAltForForeground: pressAlt,
   }
-  return { bindings, dpi, createDialog, uninitialize, dialog: dialog as FakeWorld['dialog'] }
+  return { bindings, dpi, pressAlt, createDialog, uninitialize, dialog: dialog as FakeWorld['dialog'] }
 }
 
 describe('runFolderDialog', () => {
   it('sequences DPI, STA, options, title, show, result extraction, and apartment teardown', () => {
-    const { bindings, dpi, dialog, uninitialize } = world()
+    const { bindings, dpi, pressAlt, dialog, uninitialize } = world()
     const showing = vi.fn()
     expect(runFolderDialog(bindings, 'Pick', showing)).toBe('C:\\picked\\目录')
     expect(dpi).toHaveBeenCalledOnce()
@@ -60,12 +63,17 @@ describe('runFolderDialog', () => {
     expect(dialog.setTitle).toHaveBeenCalledWith('Pick')
     expect(showing).toHaveBeenCalledWith(4242)
     expect(showing.mock.invocationCallOrder[0]).toBeLessThan(dialog.show.mock.invocationCallOrder[0] as number)
+    // The foreground press sits between the showing notice and the blocking Show.
+    expect(pressAlt).toHaveBeenCalledOnce()
+    expect(showing.mock.invocationCallOrder[0]).toBeLessThan(pressAlt.mock.invocationCallOrder[0] as number)
+    expect(pressAlt.mock.invocationCallOrder[0]).toBeLessThan(dialog.show.mock.invocationCallOrder[0] as number)
     expect(dialog.release).toHaveBeenCalledOnce()
   })
 
   it('maps the cancelled HRESULT to null and still releases the dialog and apartment', () => {
-    const { bindings, dialog, uninitialize } = world({ show: vi.fn(() => HRESULT_CANCELLED) })
+    const { bindings, pressAlt, dialog, uninitialize } = world({ show: vi.fn(() => HRESULT_CANCELLED) })
     expect(runFolderDialog(bindings, 'Pick', vi.fn())).toBeNull()
+    expect(pressAlt).toHaveBeenCalledOnce()
     expect(dialog.resultPath).not.toHaveBeenCalled()
     expect(dialog.release).toHaveBeenCalledOnce()
     expect(uninitialize).toHaveBeenCalledOnce()

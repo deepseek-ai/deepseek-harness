@@ -8,7 +8,7 @@ Status: implemented
 
 长时间运行的 agent（智能体）对话会无限增长。随着事件日志不断累积轮次，派生出的消息历史最终逼近模型的上下文窗口，模型随即在响应中途停止生成（`max-tokens`），或表现退化。**上下文压缩（context compaction）** 是对此的缓解手段：用一段简洁的摘要替换一批较早的历史，保持近期上下文完整。
 
-[会话接口面](../architecture/2026-06-18-session-surface.zh.md)正是为此而构建的基础设施：一份建立在事件日志之上的有序投影，带有专门设计的 `surfaceOp: { op: 'replace', start, end }` 操作，用于遮蔽一段条目并插入替换内容，`sourceEventSeqs` 列出每个来源事件，使回放可以验证替换是否引用了它移除的每个事件。剩下的是那个*决定压缩什么、并产出摘要*的插件。
+[会话接口面](../architecture/2026-06-18-session-surface.zh.md)正是为此而构建的基础设施：一份建立在事件日志之上的有序投影，带有专门设计的 `surfaceOp: { op: 'replace', startSeq, endSeq }` 操作，用于遮蔽一段条目并插入替换内容，`sourceEventSeqs` 列出每个来源事件，使回放可以验证替换是否引用了它移除的每个事件。剩下的是那个*决定压缩什么、并产出摘要*的插件。
 
 两股力量塑造了设计。第一，压缩策略与可复用的 token 测量独立变化：测量归 LLM（大语言模型）系列的 [`ctx.tokenMeter` 服务](../../archived/architecture/2026-07-15-replay-token-meter-service.md)所有，摘要生成则可以使用模型调用、模板或远程服务。第二，`SurfaceEventType` 封闭为产生消息的事件类型（`user/message`、`assistant/message`、`tool/result`）；只有这些类型可以携带 `surfaceOp`。因此一个专用的 `compaction/*` 事件**不能**出现在 surface 上，编译器与 Session 始终启用的 append/seed 边界都会拒绝在其上附加 `surfaceOp`。
 
@@ -71,13 +71,13 @@ retry → next numbered step/start      ⟵ derives from the replacement surface
 
 ### Surface 替换：`compaction/*` 事件仅存在于日志；一条 `user/message` 承载摘要
 
-由于 `SurfaceEventType` 是封闭的，摘要不能搭载在 `compaction/*` 事件上。后端改为追加**单条 `user/message`**，带有 `source: COMPACT_CHECKPOINT_SOURCE` 和 `surfaceOp: { op: 'replace', start, end }`；其 `content` 是（带框架的）摘要，`sourceEventSeqs` 覆盖被遮蔽的条目*和*簿记事件。接口导出该来源和 `isCompactCheckpointSource()`，使消费方无需依赖后端包身份，即可识别持久化或克隆得到的检查点。`compaction/*` 事件记录锁、摘要、选中区间、被遮蔽的 seq、token 数和模型调用，但不加入 surface。surface 变更位于锁**内部**，`compaction/end` 是最后追加的事件：
+由于 `SurfaceEventType` 是封闭的，摘要不能搭载在 `compaction/*` 事件上。后端改为追加**单条 `user/message`**，带有 `source: COMPACT_CHECKPOINT_SOURCE` 和 `surfaceOp: { op: 'replace', startSeq, endSeq }`；其 `content` 是（带框架的）摘要，`sourceEventSeqs` 覆盖被遮蔽的条目*和*簿记事件。接口导出该来源和 `isCompactCheckpointSource()`，使消费方无需依赖后端包身份，即可识别持久化或克隆得到的检查点。`compaction/*` 事件记录锁、摘要、选中区间、被遮蔽的 seq、token 数和模型调用，但不加入 surface。surface 变更位于锁**内部**，`compaction/end` 是最后追加的事件：
 
 ```
 compaction/start    → log-only. Acquires the lock.
 [summarize older range via the backend]
 compaction/summary  → log-only. Records the raw summary, local-call marker, range, shadowed seqs, and token count.
-user/message     → canonical checkpoint source + surfaceOp { op:'replace', start, end }.
+user/message     → canonical checkpoint source + surfaceOp { op:'replace', startSeq, endSeq }.
                    THE surface mutation (framed summary).
                    deriveMessages() renders it as a user-role message.
 compaction/end      → log-only. Releases the lock (carries `error` on a recoverable failure).

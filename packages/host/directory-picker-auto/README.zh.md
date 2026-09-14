@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 选择是如何作出的
 
-`native` 要求「操作者看得到宿主屏幕、且原生后端能服务它」的全部信号：仅回环的绑定（从注入的 `webServer` 读取；全网卡绑定会接入任何 OS 选择器都触及不到的远程浏览器）；非 SSH 启动（`SSH_CONNECTION`／`SSH_TTY` 未设置或为空）；以及可服务的显示会话——darwin 与 win32 上视为存在；linux 上要求 `DISPLAY`／`WAYLAND_DISPLAY`，外加 `PATH` 上有 zenity 或 kdialog 二进制；其余任何平台上都不成立。任何含糊情形都判定为处处可用的 `browse`。
+`native` 要求「操作者看得到宿主屏幕、且原生后端能服务它」的全部信号：仅回环的绑定（从注入的 `webServer` 读取；全网卡绑定会接入任何 OS 选择器都触及不到的远程浏览器）；非 SSH 启动（共用的 [launch-environment](../../util/launch-environment/README.zh.md) 判断忽略项目与用户 `.env` 中的值，只检查继承的非空 `SSH_CONNECTION`／`SSH_TTY`）；以及可服务的显示会话——darwin 与 win32 上视为存在；linux 上要求 `DISPLAY`／`WAYLAND_DISPLAY`，外加 `PATH` 上有 zenity 或 kdialog 二进制；其余任何平台上都不成立。任何含糊情形都判定为处处可用的 `browse`。
 
 ### 你会得到什么
 
@@ -53,7 +53,7 @@ kind: "package-reference"
 
 ### 设计理念
 
-选择器是一次纯决策加一次挂载：`resolveDirectoryPickerBackend` 在启动时采样宿主事实并返回一个后端类型，`apply` 把匹配的后端与界面包作为真实 Loader 条目挂进内存根树——绝不持久化到配置文件，因为根树的 `write()` 是 no-op。该 effect 的 disposer 会移除两个条目并汇合其 fiber 的拆除，因此卸载只在所挂载交互的两面（及其依赖方）完全停稳后返回。
+选择器是一次纯决策加一次挂载：`resolveDirectoryPickerBackend` 在启动时采样宿主事实并返回一个后端类型，`apply` 把匹配的后端与界面包作为真实 Loader 条目挂进内存根树——绝不持久化到配置文件，因为根树的 `write()` 是 no-op。该 effect 的 disposer 会移除两个条目并汇合其 fiber 的拆除，因此卸载只在所挂载交互的两面完全停稳后返回。
 
 ### 判定表
 
@@ -119,4 +119,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。唯一 effect 是由插件 fiber 持有的 boot-time Loader-entry mount，store 是权威来源。
+**运行时不变式：** 不发布伴生入口。唯一 effect 是由插件 fiber 持有的 boot-time Loader-entry mount，存储是权威来源。

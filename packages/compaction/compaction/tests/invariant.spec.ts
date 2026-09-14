@@ -58,7 +58,11 @@ describe('compaction invariants', () => {
       content: [{ type: 'text', text: 'checkpoint' }],
       source: compactCheckpointSource(TEST_COMPACTION_ID),
     }), {
-      surfaceOp: { op: 'replace', ...summaryData.shadowedRange },
+      surfaceOp: {
+        op: 'replace',
+        startSeq: summaryData.shadowedRange.start,
+        endSeq: summaryData.shadowedRange.end,
+      },
       sourceEventSeqs: summaryData.shadowedSeqs,
     })
     success.append('compaction/end', { compactionId: TEST_COMPACTION_ID, turn: 1 })
@@ -325,12 +329,12 @@ describe('compaction invariants', () => {
       content: [{ type: 'text', text: 'checkpoint' }],
       source: compactCheckpointSource(NEXT_COMPACTION_ID),
     }), {
-      surfaceOp: { op: 'replace', start: original.seq, end: original.seq },
+      surfaceOp: { op: 'replace', startSeq: original.seq, endSeq: original.seq },
       sourceEventSeqs: [original.seq],
     })).toThrow(/compaction checkpoint id .* does not match compaction\/start id/)
   })
 
-  it('requires checkpoint provenance to name an open transaction', async () => {
+  it('requires a checkpoint source to name an open transaction', async () => {
     const ctx = await setup()
     const withoutStart = ctx.sessions.create()
     const original = withoutStart.append('user/message', createUserMessage({
@@ -341,7 +345,7 @@ describe('compaction invariants', () => {
       content: [{ type: 'text', text: 'checkpoint' }],
       source: compactCheckpointSource(TEST_COMPACTION_ID),
     }), {
-      surfaceOp: { op: 'replace', start: original.seq, end: original.seq },
+      surfaceOp: { op: 'replace', startSeq: original.seq, endSeq: original.seq },
       sourceEventSeqs: [original.seq],
     })).toThrow(/no matching compaction\/start/)
 
@@ -356,7 +360,7 @@ describe('compaction invariants', () => {
       content: [{ type: 'text', text: 'checkpoint' }],
       source: compactCheckpointSource(TEST_COMPACTION_ID, CommandId('')),
     }), {
-      surfaceOp: { op: 'replace', start: replaced.seq, end: replaced.seq },
+      surfaceOp: { op: 'replace', startSeq: replaced.seq, endSeq: replaced.seq },
       sourceEventSeqs: [replaced.seq],
     })).toThrow(/checkpoint sourceCommandId must be a non-empty string/)
   })

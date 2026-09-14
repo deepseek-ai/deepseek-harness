@@ -3,11 +3,13 @@
 // and projects each pick as a complete inline range without issuing a model call.
 import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { abbreviateHomePath } from '@deepseek-ai/dsh-util-workspace-path'
 import {
   SESSION_FORMAT_VERSION,
   Session,
@@ -171,7 +173,10 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     // Session rows are dated from the live Host list, so their age bucket
     // advances while the suite runs.
     const snapshot = await captureStableAria(
-      page, '[role="listbox"]', scaffold.workspaceCwd, { normalizeAge: true },
+      page, '[role="listbox"]', scaffold.workspaceCwd, {
+        normalizeAge: true,
+        replacements: [[abbreviateHomePath(scaffold.workspaceCwd, homedir()), '{{cwd}}']],
+      },
     )
     await compareOrRefreshGolden(MENU_EXPECTED, snapshot, MODE)
     expect(snapshot).toContain('Files & folders')
@@ -218,9 +223,10 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     const input = page.locator('[data-composer-input]').first()
     const menu = page.getByRole('listbox', { name: 'Trigger suggestions' })
 
-    await writeComposerDraft(page, input, '@reference')
+    await writeComposerDraft(page, input, '@reference.txt')
     await expect.poll(() => input.locator('[data-composer-chip]').count()).toBe(0)
-    await menu.getByRole('option', { name: /reference\.txt/ }).click()
+    await expect.poll(() => menu.getByRole('option').allTextContents()).toEqual(['reference.txt'])
+    await menu.getByRole('option', { name: 'reference.txt', exact: true }).click()
     await expect.poll(() => input.locator('[data-composer-chip]').count()).toBe(1)
 
     // The #2813 gesture: collapse the caret to the document start, directly
@@ -248,9 +254,10 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     const input = page.locator('[data-composer-input]').first()
     const menu = page.getByRole('listbox', { name: 'Trigger suggestions' })
 
-    await writeComposerDraft(page, input, '@reference')
+    await writeComposerDraft(page, input, '@reference.txt')
     await expect.poll(() => input.locator('[data-composer-chip]').count()).toBe(0)
-    await menu.getByRole('option', { name: /reference\.txt/ }).click()
+    await expect.poll(() => menu.getByRole('option').allTextContents()).toEqual(['reference.txt'])
+    await menu.getByRole('option', { name: 'reference.txt', exact: true }).click()
     await expect.poll(() => input.locator('[data-composer-chip]').count()).toBe(1)
 
     // First ArrowLeft crosses the trailing space; the second steps across the
@@ -351,6 +358,7 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     // A crumb above the current step re-lists that directory and keeps the
     // header, which now names the step it returned to.
     await writeComposerDraft(page, input, '@folderx/nested')
+    await expect.poll(() => menu.getByRole('option', { name: /child\.txt/ }).count()).toBe(0)
     const nested = menu.getByRole('option', { name: /^nested\// })
     await nested.waitFor()
     await nested.getByRole('button', { name: 'Browse folder' }).click()

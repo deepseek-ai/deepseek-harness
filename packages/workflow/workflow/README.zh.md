@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-workflow` 运行一段纯 JavaScript 编排脚本，并交给调用方一个活动运行，其 result 在脚本结算时以脚本的最终 JSON 值兑现。脚本可以用 `agent()` 扇出 subagent，用 `parallel()` 和 `pipeline()` 组合独立工作，用 `phase()` 和 `log()` 叙述进度；agent 通常通过 `dsh-tool-workflow` 的 `workflow` 工具驱动这一切。运行由持有方负责：其 result 绝不拒绝，取消与 dispose（资源释放）有界，每个子 agent 都归属于调用它的 agent。本包不附带执行引擎——当前引擎是 `dsh-workflow-worker-thread`——因此可以用不同的隔离策略替换它，而不改变调用方或模型看到的内容。
+运行一段纯 JavaScript 编排脚本，将工作扇出给 subagent，并返回脚本的最终 JSON 值。脚本可以使用 `agent()`、`parallel()`、`pipeline()`、`phase()` 和 `log()`；模型通常通过 `workflow` 工具访问它们。每次运行都归调用方所有，将每个子 agent（智能体）归属于调用它的 agent，在失败或取消时以结果兑现而不拒绝，并在 dispose（资源释放）期间等待脚本与子 agent 清理完成。调用方必须提供执行引擎，因此可以更换隔离策略而不改变可见行为。
 
 ## 目录
 
@@ -50,11 +50,11 @@ return { reviewed: reviews.length }
 
 插件消费方可以直接启动运行：`ctx.workflowEngine.start({ script, meta, args?, parent, signal? })`。`parent` 把每个子 agent 归属于调用它的 agent；`signal` 在中止时取消运行。`start()` 在运行存在之前校验 meta 块并解析脚本，因此格式错误的请求会立即以违规清单失败。
 
-返回的运行公开 `id`、`meta`、`result`、`cancel(reason?)` 与 `dispose()`。result 绝不拒绝：脚本失败以 `stopReason: 'error'` 兑现，取消以 `'cancelled'` 兑现。调用方拥有该运行——每条路径都要调用 `dispose()`；它会取消剩余工作，并在有界宽限期内等待脚本与子 agent 完全停稳。
+返回的运行公开 `id`、`meta`、`result`、`cancel(reason?)` 与 `dispose()`。result 绝不拒绝：脚本失败以 `stopReason: 'error'` 兑现，取消以 `'cancelled'` 兑现。调用方拥有该运行——每条路径都要调用 `dispose()`；它会取消剩余工作，并按提供方的生命周期约定等待脚本与子 agent 清理完成。
 
 ### 失败与恢复
 
-无法解析的脚本、格式错误的 meta 块、不可用的提供方路由或不受支持的单次运行限制，都会在运行存在之前被同步拒绝；`workflow` 工具把这些报告为模型可以修正的错误。执行期间，钩子误用——错误参数、未知选项、不支持的 schema、超出上限——会响亮地终止脚本，而不会溶解为逐项 `null`。普通子 agent 失败不是基础设施错误：`agent()` 以 `null` 兑现，由脚本决定如何处理。
+无法解析的脚本、格式错误的 meta 块、不可用的提供方路由或不受支持的单次运行限制，都会在运行存在之前被同步拒绝；`workflow` 工具把这些报告为模型可以修正的错误。执行期间，钩子误用——错误参数、未知选项、不支持的 schema、超出上限——会明确终止脚本，而不会转为逐项 `null`。普通子 agent 失败不是基础设施错误：`agent()` 以 `null` 兑现，由脚本决定如何处理。
 
 -----
 
@@ -64,11 +64,11 @@ return { reviewed: reviews.length }
 <details>
 <summary>实现细节——点击展开</summary>
 
-本节解释能力如何拆分、契约位于何处；可观察行为已在[使用本包](#use-this-package)中完整说明。
+本节解释能力如何拆分、约定位于何处；可观察行为已在[使用本包](#use-this-package)中完整说明。
 
 ### 设计理念
 
-本包把脚本、运行、结果与事件契约同执行分开：任何引擎都可以在同一词汇背后实现 `ctx.workflowEngine`，一个上下文同时只有一个引擎——加载第二个引擎会立即失败，因此更换引擎意味着更改组合所加载的引擎插件。`workflow/*` 事件只供观察：payload 携带运行身份快照，绝不携带活动运行，因此监听器无法取得取消或 dispose 权限。
+本包把脚本、运行、结果与事件约定同执行分开：任何引擎都可以在同一词汇背后实现 `ctx.workflowEngine`，一个上下文同时只有一个引擎——加载第二个引擎会明确报错，因此更换引擎意味着更改组合所加载的引擎插件。`workflow/*` 事件只供观察：payload 携带运行身份快照，绝不携带活动运行，因此监听器无法取得取消或 dispose 权限。
 
 ### 源码地图
 
@@ -81,13 +81,13 @@ return { reviewed: reviews.length }
 
 ### 生命周期与归属
 
-运行由持有方负责：引擎插件卸载会阻止新的启动，但不会撤销已接受的运行，调用方必须 dispose 自己启动的每个运行。`dispose()` 在需要时取消，并在引擎文档规定的期限内等待脚本与子 agent 完全停稳，因此等待 `result` 的消费方绝不会因取消而卡死。
+运行由持有方负责：引擎插件卸载会阻止新的启动，但不会撤销已接受的运行，调用方必须 dispose 自己启动的每个运行。`dispose()` 在需要时取消，并等待脚本与子 agent 清理完成。PTC 引擎立即中止受管进程；子 agent 的资源释放仍遵循各 subagent 提供方的生命周期约定。
 
 `workflow/start` 与 `workflow/end` 为运行配对；`workflow/phase` 与 `workflow/log` 携带脚本叙述；`workflow/agent-start` 与 `workflow/agent-end` 按 `seq` 为每次子 agent 调用配对。每个监听器都独立隔离：抛错的监听器只记录日志，不会饿死同级监听器或改变执行，并且每个监听器都会收到自己的 payload 副本。
 
 ### 失败纪律
 
-`WorkflowError` 携带机器可路由的 code 与 `fatal` 标志；每个 code 都是致命的，`parallel()` 与 `pipeline()` 会重新抛出致命错误，而不是把条目映射为 `null`——拼错的选项必须响亮地终止脚本。code 覆盖启动失败、契约违规、超出上限、提供方与结果故障、不可序列化值与取消；完整集合与含义见 [`src/index.ts`](src/index.ts)。
+`WorkflowError` 携带机器可路由的 code 与 `fatal` 标志；每个 code 都是致命的，`parallel()` 与 `pipeline()` 会重新抛出致命错误，而不是把条目映射为 `null`——拼错的选项必须明确终止脚本。code 覆盖启动失败、约定违规、超出上限、提供方与结果故障、不可序列化值与取消；完整集合与含义见 [`src/index.ts`](src/index.ts)。
 
 逐项 `null` 只保留给子运行失败与阶段内普通脚本错误，因此以非完成结束原因正常结算的子 agent 不属于基础设施异常：`agent()` 返回 `null`，让脚本处理普通子 agent 失败。
 
@@ -103,7 +103,7 @@ return { reviewed: reviews.length }
 - [工作流子系统](../../../docs/subsystems/workflow.zh.md)——完整类型词汇、启动请求与事件载荷。
 - [组地图](../README.zh.md)——工作流能力家族及其包。
 - [workflow 工具](../tool-workflow/README.zh.md)——拥有调用 schema 与结果包络的模型侧消费方。
-- [worker-thread 引擎](../workflow-worker-thread/README.zh.md)——当前执行引擎及其隔离边界。
+- [PTC 工作流引擎](../workflow-ptc/README.zh.md)——当前执行引擎及其隔离边界。
 - [动态工作流 Agent Note](../../../.agents/notes/implemented/feature/2026-07-05-dynamic-workflows.zh.md)——seam 设计及其决策。
 
 -----
@@ -138,6 +138,6 @@ return { reviewed: reviews.length }
 
 本开发备注是维护者的工作上下文：尚未决定的开放方向。它明确不具权威性——已交付的行为、限制与既定理由以上文、包代码与相关 Agent Note 为准。
 
-暂缓的方向：带 spill 句柄与分离收集的后台启动／轮询 API；已保存与嵌套工作流；跨子 agent 的 token 预算词汇；以及该 seam 的承诺——未来的进程或沙箱引擎可以在不改变模型侧表面的前提下替换 worker-thread 引擎。
+暂缓的方向：带 spill 句柄与分离收集的后台启动／轮询 API；已保存与嵌套工作流；以及跨子 agent 的 token 预算词汇。
 
 </details>

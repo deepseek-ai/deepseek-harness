@@ -22,7 +22,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Three to five sentences: what a caller can DO with the library, who consumes it, the smallest entry point, and the main boundary.
+Three to five sentences and at most 100 `wc -w`-style words: what a caller can DO with the library, who consumes it, the smallest entry point, and the main boundary. Apply the [Summary voice rules](../SKILL.md#voice-rules).
 
 ## Table of Contents
 

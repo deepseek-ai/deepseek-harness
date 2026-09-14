@@ -73,6 +73,9 @@ describe('request-reconstruction invariant', () => {
       .toThrow(/diverges from the dispatch-time durable derivation/)
     expect(() => { dispatch(ctx, loopRequest({ model: 'other', messages: Object.freeze(boundary), sessionId: session.id })) })
       .toThrow(/diverges from the folded request header/)
+    // The system prompt is surface node 0 inside `messages`; a `system` field is an unlogged prefix.
+    expect(() => { dispatch(ctx, loopRequest({ model: 'm', system: 'unlogged', messages: Object.freeze(boundary), sessionId: session.id })) })
+      .toThrow(/diverges from the folded request header/)
   })
 
   it('rejects loop requests with no boundary or header', async () => {

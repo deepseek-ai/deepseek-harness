@@ -22,11 +22,11 @@ import { packedWorkspaceClosure, readWorkspacePackages } from './packed-workspac
 
 const packageDir = fileURLToPath(new URL('..', import.meta.url))
 const repoRoot = fileURLToPath(new URL('../../../..', import.meta.url))
-const nativeDir = join(repoRoot, 'native/landlock-run')
+const nativeDir = join(repoRoot, 'native/system')
 const sourceLauncher = join(nativeDir, 'packages', `linux-${process.arch}`, 'bin', 'landlock-run')
-const platformPackageName = `@deepseek-ai/node-addon-landlock-run-linux-${process.arch}`
+const platformPackageName = `@deepseek-ai/node-addon-system-linux-${process.arch}`
 
-const NATIVE_PACKAGE_PREFIX = '@deepseek-ai/node-addon-landlock-run'
+const NATIVE_PACKAGE_PREFIX = '@deepseek-ai/node-addon-system'
 
 /** ELF `e_machine` (offset 18, LE) for this host: x86-64 = 62, AArch64 = 183. */
 const E_MACHINE = { x64: 62, arm64: 183 }[process.arch as 'x64' | 'arm64']
@@ -109,7 +109,7 @@ describe.skipIf(!packable)('sandbox-local: packed-tarball distribution (publish-
       import { spawnSync } from 'node:child_process'
       import { existsSync } from 'node:fs'
       import { Context } from '@deepseek-ai/cordis'
-      import { launcherPath } from '@deepseek-ai/node-addon-landlock-run'
+      import { launcherPath } from '@deepseek-ai/node-addon-system/landlock-run'
       import { LocalSandboxProvider } from '@deepseek-ai/dsh-sandbox-local'
       const ctx = new Context()
       await ctx.plugin(LocalSandboxProvider, {})
@@ -120,7 +120,7 @@ describe.skipIf(!packable)('sandbox-local: packed-tarball distribution (publish-
       const out = { launcher, launcherExists: existsSync(launcher), enforcing: probe.status === 0 }
       const workdir = process.argv[2]
       if (out.enforcing) {
-        const confined = sandbox.confine(['bash', '-c', \`echo hi > \${workdir}/denied.txt\`], { mode: 'read-only', workspaceRoot: workdir })
+        const confined = await sandbox.confine(['bash', '-c', \`echo hi > \${workdir}/denied.txt\`], { mode: 'read-only', workspaceRoot: workdir })
         out.wrapArgv0 = confined.argv[0]
         out.enforcement = confined.enforcement
         const run = spawnSync(confined.argv[0], confined.argv.slice(1), { encoding: 'utf8', timeout: 30000 })
@@ -128,7 +128,7 @@ describe.skipIf(!packable)('sandbox-local: packed-tarball distribution (publish-
         out.stderrHasDialect = /permission denied/i.test(run.stderr)
       } else {
         try {
-          sandbox.confine(['true'], { mode: 'read-only', workspaceRoot: workdir })
+          await sandbox.confine(['true'], { mode: 'read-only', workspaceRoot: workdir })
           out.confineOutcome = 'wrapped'
         } catch (error) {
           out.confineOutcome = error?.code === 'SANDBOX_UNAVAILABLE' ? 'fail-closed' : String(error)

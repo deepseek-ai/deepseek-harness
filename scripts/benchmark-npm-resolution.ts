@@ -16,8 +16,8 @@ const WORKSPACE_MANIFEST_GLOBS = [
   'apps/*/package.json',
   'packages/*/*/package.json',
   'vendor/*/package.json',
-  'native/landlock-run/package.json',
-  'native/landlock-run/packages/*/package.json',
+  'native/system/package.json',
+  'native/system/packages/*/package.json',
 ]
 const INSTALLED_MANIFEST_GLOBS = [
   'node_modules/.pnpm/*/node_modules/*/package.json',
@@ -131,7 +131,7 @@ export function parseBenchmarkOptions(args: readonly string[]): BenchmarkOptions
 }
 
 function workspaceManifestPath(path: string): boolean {
-  return /^(?:apps\/[^/]+|packages\/[^/]+\/[^/]+|vendor\/[^/]+|native\/landlock-run(?:\/packages\/[^/]+)?)\/package\.json$/.test(path)
+  return /^(?:apps\/[^/]+|packages\/[^/]+\/[^/]+|vendor\/[^/]+|native\/system(?:\/packages\/[^/]+)?)\/package\.json$/.test(path)
 }
 
 function workspaceManifestPaths(root: string, ref: string | undefined): string[] {

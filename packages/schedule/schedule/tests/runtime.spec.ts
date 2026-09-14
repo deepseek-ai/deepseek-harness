@@ -97,7 +97,10 @@ async function harness(): Promise<RuntimeHarness> {
     steer(_message: UserMessage) {},
     inject(_message: UserMessage) {},
   }
-  const disposeAgent = ctx.agents.register(agent)
+  // Dispatch callbacks remove registry visibility synchronously while the schedule is running.
+  const disposeAgent = ctx.agents.enter(agent, undefined)
+  ctx.effect(() => disposeAgent)
+  await ctx.agents.announce(agent, 'startup')
   ctx.on('session/event', (_session, event) => {
     if (event.type === 'schedule/change' && event.data.operation === 'dispatch') order.push('dispatch')
   })

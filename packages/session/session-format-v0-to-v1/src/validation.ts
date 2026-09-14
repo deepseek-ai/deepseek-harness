@@ -145,7 +145,7 @@ export function assertReleasedArtifactCoordinates(
  * @param record - exact event envelope.
  * @param seq - event position used for earlier-reference checks.
  * @param type - surface event type used in diagnostics.
- * @param assistantSources - whether this generation admits empty Assistant chunk provenance.
+ * @param assistantSources - whether this generation admits empty Assistant chunk references.
  */
 export function assertReleasedSurfaceMetadata(
   record: Record<string, SessionFormatJsonValue>,
@@ -155,7 +155,7 @@ export function assertReleasedSurfaceMetadata(
 ): void {
   const sources = record['sourceEventSeqs']
   if (type === 'assistant/message' && sources !== undefined && assistantSources === 'forbid-assistant') {
-    throw new SessionFormatError(`assistant/message ${seq} retains obsolete chunk provenance`)
+    throw new SessionFormatError(`assistant/message ${seq} retains obsolete chunk references`)
   }
   if (sources !== undefined) {
     if (!Array.isArray(sources)) throw new SessionFormatError(`${type} ${seq} sourceEventSeqs must be an array`)

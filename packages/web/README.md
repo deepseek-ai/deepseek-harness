@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `web/` group gives the harness web access — searching the web and fetching URLs — through one provider-neutral service (`ctx.web`) and the backends and tools that use it. A deployment mounts one or more backends — Exa, Perplexity, or DeepSeek for search, anonymous HTTP(S) for fetch — and the service picks a usable provider per operation, so the model-facing tools stay stable while backends come and go. Six packages split the family: the `web/` service that owns provider selection and errors, three search backends, one fetch backend, and `tool-web/`, which exposes `web_search` and `web_fetch` to the model. The group owns web access only: no browsing or extraction, no per-URL policy, and each backend keeps its own resource caps. Search and fetch deliberately share one service so selection, cancellation, errors, and configuration have a single owner.
+The `web/` packages let models search the public web and fetch HTTP(S) pages through the `web_search` and `web_fetch` tools. Deployments can choose Exa, Perplexity, or DeepSeek for search and anonymous HTTP(S) access for fetch; availability and resource limits depend on the configured provider. Use this family for search and page retrieval, not interactive browsing, content extraction, or per-URL policy enforcement. Models receive consistent tool behavior, cancellation, and error reporting when providers change.
 
 ## Table of Contents
 

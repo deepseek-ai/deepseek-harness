@@ -12,7 +12,7 @@ export const FLAT_SESSION_ORDER_KEY = '__flat_session_order__'
 
 /** Session-list grouping mode: workspace sections or one flat recency list. */
 export type SessionGroupBy = 'workspace' | 'flat'
-/** Session order: user-arranged only, or user-arranged plus activity promotion. */
+/** Session order: saved manual positions or current recency. */
 export type SessionOrderBy = 'manual' | 'updated'
 
 /** Workspace browser viewing state persisted across surface remounts and reloads. */
@@ -21,10 +21,8 @@ type WorkspaceViewState = {
   orderBy: SessionOrderBy
   /** Explicit zero-or-five-session state keyed by Workspace group identity. */
   groupExpansion: Record<string, boolean>
-  /** Shared editable order per Workspace group plus the browser-local flat-list account. */
+  /** Saved manual order per Workspace group plus the browser-local flat-list account. */
   sessionOrderByAccount: Record<string, string[]>
-  /** Last observed update timestamps per order account for one-time promotion events. */
-  sessionUpdatedAtByAccount: Record<string, Record<string, number>>
 }
 
 /**
@@ -33,16 +31,30 @@ type WorkspaceViewState = {
  */
 type WorkspaceViewActions = {
   setGroupBy: (draft: WorkspaceViewState, mode: SessionGroupBy) => void
-  setOrderBy: (draft: WorkspaceViewState, mode: SessionOrderBy) => void
+  setOrderBy: (
+    draft: WorkspaceViewState,
+    mode: SessionOrderBy,
+    initialOrders: Readonly<Record<string, readonly string[]>>,
+  ) => void
   setGroupExpanded: (draft: WorkspaceViewState, key: string, expanded: boolean) => void
   retainAccountKeys: (draft: WorkspaceViewState, workspaceKeys: readonly string[]) => void
-  syncSessionOrderAccount: (
+  syncSessionOrders: (
+    draft: WorkspaceViewState,
+    orders: Readonly<Record<string, readonly string[]>>,
+  ) => void
+  setSessionOrder: (
     draft: WorkspaceViewState,
     accountKey: string,
-    order: string[],
-    updatedAt: Record<string, number>,
+    order: readonly string[],
+    initialOrders: Readonly<Record<string, readonly string[]>>,
   ) => void
-  setSessionOrder: (draft: WorkspaceViewState, accountKey: string, order: string[]) => void
+}
+
+/** Copy read-only projections into the persisted mutable store representation. */
+function copySessionOrders(
+  orders: Readonly<Record<string, readonly string[]>>,
+): Record<string, string[]> {
+  return Object.fromEntries(Object.entries(orders).map(([key, order]) => [key, [...order]]))
 }
 
 /**
@@ -56,12 +68,15 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
       orderBy: 'updated',
       groupExpansion: {},
       sessionOrderByAccount: {},
-      sessionUpdatedAtByAccount: {},
     }),
     persist: 'dsh.workspace.view.v5',
     actions: {
       setGroupBy: (d, mode: SessionGroupBy) => { d.groupBy = mode },
-      setOrderBy: (d, mode: SessionOrderBy) => { d.orderBy = mode },
+      setOrderBy: (d, mode: SessionOrderBy, initialOrders) => {
+        if (mode === d.orderBy) return
+        d.sessionOrderByAccount = mode === 'manual' ? copySessionOrders(initialOrders) : {}
+        d.orderBy = mode
+      },
       setGroupExpanded: (d, key: string, expanded: boolean) => { d.groupExpansion[key] = expanded },
       retainAccountKeys: (d, workspaceKeys: readonly string[]) => {
         const retained = new Set(workspaceKeys)
@@ -71,16 +86,16 @@ export function createWorkspaceViewStore(): EngineStoreHandle<WorkspaceViewState
         d.sessionOrderByAccount = Object.fromEntries(
           Object.entries(d.sessionOrderByAccount).filter(([key]) => retained.has(key)),
         )
-        d.sessionUpdatedAtByAccount = Object.fromEntries(
-          Object.entries(d.sessionUpdatedAtByAccount).filter(([key]) => retained.has(key)),
-        )
+        delete (d as WorkspaceViewState & { sessionUpdatedAtByAccount?: unknown }).sessionUpdatedAtByAccount
       },
-      syncSessionOrderAccount: (d, accountKey: string, order: string[], updatedAt: Record<string, number>) => {
-        d.sessionOrderByAccount[accountKey] = order
-        d.sessionUpdatedAtByAccount[accountKey] = updatedAt
+      syncSessionOrders: (d, orders) => {
+        if (d.orderBy !== 'manual') return
+        Object.assign(d.sessionOrderByAccount, copySessionOrders(orders))
       },
-      setSessionOrder: (d, accountKey: string, order: string[]) => {
-        d.sessionOrderByAccount[accountKey] = order
+      setSessionOrder: (d, accountKey, order, initialOrders) => {
+        if (d.orderBy === 'updated') d.sessionOrderByAccount = copySessionOrders(initialOrders)
+        d.orderBy = 'manual'
+        d.sessionOrderByAccount[accountKey] = [...order]
       },
     },
   })

@@ -1,6 +1,6 @@
 // Shared scaffolding for the assembled-jsdom snapshots: the real built
 // workspace `lib/client.js` artifacts booted through AppWebEntry's
-// ModuleLoader path (loadBundle) against the keyless fixture Connection RPC
+// ModuleLoader path (loadBundle) against a test-owned RemoteMock carrier
 // transport. Every file that mounts this graph needs the same boot entry list,
 // the same bundle map, the same jsdom globals, and the same mount call, and
 // differs only in what it asserts afterwards, so the scaffolding lives here.
@@ -15,7 +15,11 @@ import { act, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { bootInjections, orderByModuleGraph } from '@deepseek-ai/dsh-client-modules'
 import type { ClientModuleLoaderTarget, WebBootEntry, WebBootGraph } from '@deepseek-ai/dsh-client-modules/client'
+import type { RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { AppWebEntry } from '@deepseek-ai/dsh-client-web'
+import {
+  createAssembledRemote, type AssembledRemote, type AssembledRemoteOptions,
+} from './assembled-remote.ts'
 
 interface AssembledPlugin extends WebBootEntry {
   /** Absolute path to the built client artifact declared by this package. */
@@ -25,6 +29,8 @@ interface AssembledPlugin extends WebBootEntry {
 interface AssembledBootOptions {
   /** Package ids omitted from this mounted composition. */
   readonly exclude?: readonly string[]
+  /** Remote answers owned by this assembled case. */
+  readonly remote?: AssembledRemoteOptions
 }
 
 interface ClientPackageManifest {
@@ -174,6 +180,7 @@ function bundleTable(graph: WebBootGraph, plugins: readonly AssembledPlugin[]): 
 interface FixtureWindow extends Window {
   __DSH_BOOT__?: WebBootGraph
   __ModuleLoader__?: ClientModuleLoaderTarget
+  __DSH_TRANSPORT__?: { readonly rpc: RemoteMock['rpc'] }
 }
 
 class ResizeObserverStub {
@@ -189,6 +196,7 @@ class EventSourceStub {
 
 const win = window as FixtureWindow
 let unmount: (() => Promise<void>) | undefined
+let mountedRemote: RemoteMock | undefined
 
 /**
  * Register the per-test jsdom setup and teardown the assembled boot needs:
@@ -214,9 +222,8 @@ export function installAssembledBootEnv(): void {
   beforeEach(() => {
     localStorage.clear()
     // The locale service derives its provisional locale from the browser and
-    // takes an explicit choice only from Host settings, which this lane's
-    // fixture transport does not serve; pinning the navigator is what selects
-    // English here.
+    // takes an explicit choice only from Host settings. This scenario serves no
+    // locale setting, so pinning the navigator selects English.
     Object.defineProperty(navigator, 'languages', { value: ['en-US'], configurable: true })
     Object.defineProperty(navigator, 'language', { value: 'en-US', configurable: true })
     document.title = 'DeepSeek Harness'
@@ -228,11 +235,23 @@ export function installAssembledBootEnv(): void {
   })
 
   afterEach(async () => {
-    await act(async () => { await unmount?.() })
+    const failures: unknown[] = []
+    try {
+      await act(async () => { await unmount?.() })
+    } catch (error) {
+      failures.push(error)
+    }
+    try {
+      mountedRemote?.assertNoUnmatched()
+    } catch (error) {
+      failures.push(error)
+    }
     unmount = undefined
+    mountedRemote = undefined
     cleanup()
     delete win.__DSH_BOOT__
     delete win.__ModuleLoader__
+    delete win.__DSH_TRANSPORT__
     document.body.innerHTML = ''
     document.head.querySelectorAll('style[data-plugin]').forEach((style) => { style.remove() })
     document.title = ''
@@ -243,19 +262,23 @@ export function installAssembledBootEnv(): void {
     delete ownNavigator.languages
     delete ownNavigator.language
     vi.unstubAllGlobals()
+    if (failures.length > 0) throw new AggregateError(failures, 'assembled boot teardown failed')
   })
 }
 
 /**
- * Mount the assembled application on the fixture transport; the teardown
+ * Mount the assembled application on an isolated RemoteMock transport; the teardown
  * registered by installAssembledBootEnv disposes it.
- * @param search - fixture query string used to select deterministic host behavior.
  * @param options - composition changes applied to this mount.
+ * @returns the test-owned RemoteMock world.
  */
-export function mountAssembledApp(search = '?fixture', options: AssembledBootOptions = {}): void {
+export function mountAssembledApp(options: AssembledBootOptions = {}): AssembledRemote {
   const excluded = new Set(options.exclude)
   const plugins = PLUGINS.filter(plugin => !excluded.has(plugin.id))
-  history.replaceState(null, '', `/${search}`)
+  const remote = createAssembledRemote(options.remote)
+  mountedRemote = remote.mock
+  win.__DSH_TRANSPORT__ = { rpc: remote.mock.rpc }
+  history.replaceState(null, '', '/')
   const root = document.createElement('div')
   root.id = 'root'
   document.body.appendChild(root)
@@ -281,6 +304,7 @@ export function mountAssembledApp(search = '?fixture', options: AssembledBootOpt
     void entry.run()
     unmount = () => entry.dispose()
   })
+  return remote
 }
 
 /**

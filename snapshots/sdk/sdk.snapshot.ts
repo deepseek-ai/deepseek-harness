@@ -20,7 +20,7 @@ import {
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
   captureWorkspaceSnapshot,
-  normalizeSessionFormatProvenance,
+  normalizeSessionFormatMetadata,
   normalizeSessionLog,
   normalizeSessionSnapshots,
   normalizeStdout,
@@ -32,12 +32,14 @@ import {
   redactSessionSnapshotIds,
   refreshFixtureReplacements,
   restorePinnedToolSchemas,
-  scrubRequestHeaders,
+  scrubModelRequestBulk,
   scrubSessionSnapshot,
   scrubSystemPrompts,
   sessionFixtureName,
+  systemPromptPrecedesRequests,
   sessionFixtureNames,
   sessionHeaderVersion,
+  writerSnapshotName,
   stabilizeFixtureMessageIds,
   stabilizeRefreshLog,
   tokenizeSessionFixtureCwd,
@@ -58,7 +60,7 @@ import {
   type RunResult,
   type SdkPromptContentBlock,
 } from '@deepseek-ai/dsh-sdk-client'
-import { prepareSessionEventNotificationsForComparison } from '@deepseek-ai/dsh-llm-replay'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 
 const corpusRoot = fileURLToPath(new URL('../', import.meta.url))
 
@@ -98,6 +100,10 @@ function dirOf(url: string): string {
 }
 
 interface SdkAssertions {
+  /** Additional profile patches applied after the shared composition. */
+  patches?: readonly string[]
+  /** Final response required from a completed turn before updating goldens. */
+  expectedFinalResponse?: string
   /** Environment overrides passed to the runtime subprocess. */
   environment?: Readonly<Record<string, string>>
   /** A separate DSH SDK child whose persisted session joins the evidence. */
@@ -118,6 +124,15 @@ interface SdkAssertions {
 }
 
 const SDK_ASSERTIONS: Readonly<Record<string, SdkAssertions>> = {
+  'tool-error-details': {
+    patches: [fileURLToPath(new URL('./tool-error-details/runtime.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'ERROR_DETAILS_OK',
+  },
+  'ptc-turn': {
+    patches: [fileURLToPath(new URL('./ptc-turn/runtime.cordis.yml', import.meta.url))],
+    expectedFinalResponse: 'CODE_ONE+CODE_TWO',
+    expectedTools: { run_code: ['code', 'description'] },
+  },
   'subagent-continuable': {
     environment: { DSH_SNAPSHOT_HUMAN_STEER: '1' },
   },
@@ -237,7 +252,7 @@ async function persistedLogs(sessionsRoot: string): Promise<PersistedLog[]> {
   const files = await jsonlFiles(sessionsRoot)
   return Promise.all(files.map(async (path) => {
     const content = await readFile(path, 'utf8')
-    assertPersistedSessionVersion(basename(path), content)
+    expect(assertPersistedSessionVersion(basename(path), content), `${path}: current writer`).toBe(SESSION_FORMAT_VERSION)
     const header = JSON.parse(content.slice(0, content.indexOf('\n'))) as Record<string, unknown>
     return { path, content, header }
   }))
@@ -245,7 +260,12 @@ async function persistedLogs(sessionsRoot: string): Promise<PersistedLog[]> {
 
 interface LoggedRequestHeader {
   type?: string
-  data?: { header?: { system?: unknown; tools?: LoggedTool[] } }
+  data?: { header?: { tools?: LoggedTool[] } }
+}
+
+interface LoggedSystemMessage {
+  type?: string
+  data?: { message?: { content?: Array<{ type?: string; text?: unknown }> } }
 }
 
 interface LoggedTool {
@@ -274,12 +294,13 @@ function assembledToolDescriptions(log: PersistedLog): Record<string, string> {
   }))
 }
 
+/** The rendered system prompt of the root request: the text of the first `system/message` (surface node 0). */
 function assembledSystem(log: PersistedLog): string {
   const event = log.content.trimEnd().split('\n')
-    .map(line => JSON.parse(line) as LoggedRequestHeader)
-    .find(candidate => candidate.type === 'request/header')
-  const system = event?.data?.header?.system
-  if (typeof system !== 'string') throw new Error('session log has no request/header system')
+    .map(line => JSON.parse(line) as LoggedSystemMessage)
+    .find(candidate => candidate.type === 'system/message')
+  const system = event?.data?.message?.content?.[0]?.text
+  if (typeof system !== 'string') throw new Error('session log has no system/message text')
   return system
 }
 
@@ -346,8 +367,8 @@ function normalizeNotifications(notifications: readonly HarnessNotification[], c
     : eventLog
   const normalizedEvents = events.length === 0
     ? []
-    : scrubRequestHeaders(normalizeSessionLog(
-      normalizeSessionFormatProvenance(typedLog),
+    : scrubModelRequestBulk(normalizeSessionLog(
+      normalizeSessionFormatMetadata(typedLog),
       ctx,
       typedFeedback ? { identityMode: 'preserve' } : {},
     )).trimEnd().split('\n').map(line => JSON.parse(line) as Record<string, unknown>)
@@ -520,9 +541,9 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   const route = modelFromSession(primaryFixture)
   const patchRoot = join(cwd, '.snapshot-patches')
   await mkdir(patchRoot, { recursive: true })
-  const patches = authoredPatches(scenario, !recording)
-    .map((patch, index) => materializeProfilePatch(patch, cwd, patchRoot, index))
   const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
+  const patches = [...authoredPatches(scenario, !recording), ...assertions.patches ?? []]
+    .map((patch, index) => materializeProfilePatch(patch, cwd, patchRoot, index))
   let childSessionsRoot: string | undefined
   let childEnvironment: Record<string, string> = {}
   if (assertions.dshSdkChild !== undefined) {
@@ -613,7 +634,7 @@ async function runScenario(scenario: CorpusScenario): Promise<{
         if (scenario.manifest.environment?.DSH_SNAPSHOT_FEEDBACK === '1') {
           const feedback = result.events.filter(event => event.type.startsWith('feedback/'))
           expect(feedback.map(event => event.type)).toEqual([
-            'feedback/record', 'feedback/message-put', 'feedback/message-put', 'feedback/message-delete',
+            'feedback/record', 'feedback/record', 'feedback/message-put', 'feedback/message-put', 'feedback/message-delete',
           ])
         }
         await waitForRootEvent(
@@ -737,8 +758,13 @@ async function verifyHeaders(
   }
 
   for (const [logIndex, log] of ordered.entries()) {
-    const headers = normalizedHeaders(scrubSystemPrompts(log.content), ctx)
+    const headers = normalizedHeaders(log.content, ctx)
     const prompts = normalizedSystemPrompts(log.content, ctx)
+    if (headers.length > 0) {
+      expect(systemPromptPrecedesRequests(log.content), `${scenario.name}: session ${logIndex} has a system/message before its first request/header`).toBe(true)
+      expect(prompts.length, `${scenario.name}: session ${logIndex} system/message count`)
+        .toBe(1 + (logIndex === 0 ? pin.manifest.header.promptChanges ?? 0 : 0))
+    }
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
       const base = reconstructed[index] ?? reconstructed[0]
@@ -749,7 +775,9 @@ async function verifyHeaders(
         ? configured
         : { ...configured as JsonObject, tools: selectedSchemas }
       expect(header, `${scenario.name}: session ${logIndex} header ${index + 1}`).toEqual(expected)
-      expect(formatSystemPromptSnapshot(prompts[index] as string), `${scenario.name}: session ${logIndex} prompt ${index + 1}`)
+    }
+    if (prompts.length > 0) {
+      expect(formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1)), `${scenario.name}: session ${logIndex} system prompts`)
         .toBe(childPrompts.get(logIndex) ?? prompt)
     }
   }
@@ -763,13 +791,20 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
       : it
     scenarioTest(`${mode}s ${scenario.name} through dsh --profile sdk`, async () => {
       const scenarioDir = scenario.dir
-      const notificationsExpectedPath = join(scenarioDir, 'notifications.expected.jsonl')
+      const retained = scenario.manifest.sessionFormat !== undefined
+      const notificationsExpectedPath = join(scenarioDir, retained ? 'notifications.current.expected.jsonl' : 'notifications.expected.jsonl')
       const resultExpectedPath = join(scenarioDir, 'result.expected.json')
       const hasWireGoldens = existsSync(notificationsExpectedPath) || existsSync(resultExpectedPath)
       const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
       const writesSessionFixtures = writesCurrentSessionFixtures(scenario.manifest, sessionWriteMode)
 
       let files = await fixtureFiles(scenario)
+      const replayContents = await Promise.all(files.map(file => readFile(file, 'utf8')))
+      if (!recording && !refreshing) {
+        const writerFiles = (await readdir(scenarioDir)).filter(name => /^writer(?:\.[1-9]\d*)?\.expected\.jsonl$/u.test(name)).sort()
+        expect(writerFiles, 'native writer oracle inventory').toEqual(retained
+          ? files.map((_, index) => writerSnapshotName(index)).sort() : [])
+      }
       const { results, notifications, observedMethods, logs, initialWorkspace, finalWorkspace, cwd } = await runScenario(scenario)
       const ordered = orderLogs(
         logs,
@@ -777,8 +812,33 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         assertions.dshSdkChild !== undefined,
       )
       const actualContext = contextOf(ordered, cwd)
+      if (scenario.name === 'tool-error-details') {
+        const events = results.flatMap(result => result.events)
+        const errors = events.filter(event => event.type === 'tool/result' || event.type === 'tool/ptc-dispatch')
+          .map(event => event.data['error']).filter(error => error !== undefined)
+        expect(errors).toEqual(Array.from({ length: 2 }, () => ({
+          name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: '  transport raw\r\nreason  ',
+        })))
+        const ptc = events.filter(event => event.type.startsWith('tool/ptc-dispatch'))
+        expect(ptc.map(event => event.type)).toEqual(['tool/ptc-dispatch-start', 'tool/ptc-dispatch'])
+        for (const event of ptc) {
+          expect(event.data).not.toHaveProperty('description')
+          expect(event.data).not.toHaveProperty('parameters')
+          expect(event.data).not.toHaveProperty('schema')
+        }
+      }
+      if (assertions.expectedFinalResponse !== undefined) {
+        expect(results.at(-1)?.finalResponse, `${scenario.name}: final response`).toBe(assertions.expectedFinalResponse)
+        const parent = ordered[0]
+        if (parent === undefined) throw new Error(`${scenario.name}: no primary session log`)
+        const turnEnds = records(parent.content).filter(record => record.type === 'turn/end')
+        expect(turnEnds, `${scenario.name}: completed turns`).toHaveLength(results.length)
+        for (const turnEnd of turnEnds) expect(turnEnd).toMatchObject({ data: { reason: { kind: 'completed' } } })
+      }
 
-      let expectedContents = await Promise.all(files.map(file => readFile(file, 'utf8')))
+      let expectedContents = retained && !refreshing
+        ? await Promise.all(files.map((_, index) => readFile(join(scenarioDir, writerSnapshotName(index)), 'utf8')))
+        : replayContents
 
       if (recording) {
         expectedContents = redactSessionSnapshotIds(stabilizeFixtureMessageIds(
@@ -787,7 +847,7 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         ))
       }
 
-      if (refreshing && writesSessionFixtures) {
+      if (refreshing && (writesSessionFixtures || retained)) {
         const harvested = ordered.map((log): HarvestedLog => ({
           id: String(log.header.id),
           createdAt: Number(log.header.createdAt),
@@ -805,22 +865,29 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         expectedContents = redactSessionSnapshotIds(stabilizeFixtureMessageIds(refreshed, expectedContents))
       }
 
-      if (writesSessionFixtures) {
-        const outputFiles = ordered.map((log, index) => join(scenarioDir, sessionFixtureName(
-          index,
-          sessionHeaderVersion(log.content, `harvested Session ${index}`),
-        )))
+      if (writesSessionFixtures || refreshing && retained) {
+        const outputFiles = ordered.map((log, index) => join(scenarioDir, retained
+          ? writerSnapshotName(index)
+          : sessionFixtureName(index, sessionHeaderVersion(log.content, `harvested Session ${index}`))))
         await Promise.all(expectedContents.map((stable, index) => writeFile(outputFiles[index] as string, stable)))
         files = outputFiles
         await writeHeaderSidecars(scenario, ordered, actualContext)
       }
 
       for (const [index, expected] of expectedContents.entries()) {
-        expect(scrubRequestHeaders(expected), `${scenario.name} session fixture ${index} carries request-header bulk`)
+        expect(scrubModelRequestBulk(expected), `${scenario.name} session fixture ${index} carries prompt text or tool-schema bulk`)
           .toBe(expected)
       }
       expect(redactSessionSnapshotIds(expectedContents), `${scenario.name}: identity redaction fixed point`)
         .toEqual(expectedContents)
+
+      if (retained) {
+        expect(await Promise.all((await fixtureFiles(scenario)).map(file => readFile(file, 'utf8'))),
+          'historical replay input remains unchanged').toEqual(replayContents)
+        for (const [index, content] of expectedContents.entries()) {
+          expect(sessionHeaderVersion(content, writerSnapshotName(index))).toBe(SESSION_FORMAT_VERSION)
+        }
+      }
 
       // Persisted transcripts match the committed fixtures.
       const expectedContext = contextOfContents(expectedContents)
@@ -841,11 +908,33 @@ describe('TypeScript SDK snapshots over the jsonrpc runtime', () => {
         }
         const expectedNotifications = await readFile(notificationsExpectedPath, 'utf8')
         expect(
-          records(prepareSessionEventNotificationsForComparison(normalizedNotifications)),
+          records(normalizedNotifications),
           `${scenario.name}: notifications`,
         )
-          .toEqual(records(prepareSessionEventNotificationsForComparison(expectedNotifications)))
+          .toEqual(records(expectedNotifications))
         expect(normalizedResult).toBe(await readFile(resultExpectedPath, 'utf8'))
+      }
+
+      if (scenario.name === 'system-prompt-in-history') {
+        const events = notifications.flatMap(notification => {
+          const event = notificationEvent(notification)
+          return event === undefined ? [] : [event]
+        })
+        const systems = events.filter(event => event.type === 'system/message')
+        expect(systems).toHaveLength(2)
+        expect(systems.map(event => event.surfaceOp)).toEqual(['append', 'append'])
+        const prompts = systems.map(event => (event.data as {
+          message: { content: Array<{ text: string }> }
+        }).message.content[0]!.text)
+        expect(prompts[0]).not.toContain('Snapshot guidance added after the first read')
+        expect(prompts[1]).toContain('Snapshot guidance added after the first read')
+        expect(prompts[1]).not.toBe(prompts[0])
+        expect(events.indexOf(systems[1]!)).toBeGreaterThan(events.findIndex(event => event.type === 'tool/result'))
+        expect(events.filter(event => event.type === 'request/header')).toHaveLength(1)
+        expect(events.filter(event => event.type === 'request/context')).toMatchObject([
+          { data: { systemPromptUpdate: 'in-history' } },
+        ])
+        expect(events.filter(event => event.surfaceOp !== undefined).every(event => event.surfaceOp === 'append')).toBe(true)
       }
 
       // Wire-shape invariants that must hold in every mode.

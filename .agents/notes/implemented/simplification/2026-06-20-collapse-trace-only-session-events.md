@@ -27,7 +27,7 @@ The user conversation log contains what is needed to render, resume, audit, and 
 
 ## Verification
 
-`SessionEventMap` carries no standalone `usage` or `error`; the loop appends no separate usage event and records durable failures through `turn/end { kind: 'error', step, message, code? }`; ACP snapshots and persistence tests assert no trace-only lines; the frozen v0 codec and identity migration preserve this released representation into current v1; and the docs state where token usage and operational errors are observed.
+`SessionEventMap` carries no standalone `usage` or `error`; the loop appends no separate usage event and records durable failures through `turn/end { kind: 'error', step, message, code? }`; ACP snapshots and persistence tests assert no trace-only lines; the frozen v0 codec and identity migration preserve this released representation into released v1; and the docs state where token usage and operational errors are observed.
 
 ## Consequences
 

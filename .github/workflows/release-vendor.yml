@@ -20,7 +20,7 @@ permissions:
 concurrency:
   # Pack runs per ref so concurrent pull requests never displace each other.
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   PRIMARY_NODE_VERSION: '24'

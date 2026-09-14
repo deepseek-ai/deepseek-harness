@@ -1,4 +1,4 @@
-# Private Python PTC composition: replace the headless worker provider through
+# Python PTC composition: replace the Node provider through
 # the real Loader and render the generated Python SDK prompt.
 - id: agent-default-model
   name: '@deepseek-ai/dsh-agent-default-model'
@@ -22,12 +22,18 @@
   config:
     mode: ptc
 
-- id: code-runtime
+- id: ptc-runtime
+  disabled: true
+
+- id: workflow-ptc
+  disabled: true
+
+- id: tool-workflow
   disabled: true
 
 - insert:
-    - id: code-runtime-python
-      name: '@deepseek-ai/dsh-experimental-code-runtime-python'
+    - id: ptc-runtime-python
+      name: '@deepseek-ai/dsh-experimental-ptc-runtime-python'
 
 - id: system-prompt
   name: '@deepseek-ai/dsh-system-prompt'

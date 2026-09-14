@@ -9,12 +9,12 @@
 // `/feedback` pins its expandable correlation ids. The seed is a recorded
 // fixture under the same record discipline as every other: DSH_SNAPSHOT=record drives the turn
 // live through the composer (real read tool against seeded workspace files)
-// and harvests session.v2.jsonl; replay/refresh seed it cold and only render.
+// and harvests session.v3.jsonl; replay/refresh seed it cold and only render.
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, Message } from '@deepseek-ai/dsh-llm'
 import { deriveEventMessage, SessionId } from '@deepseek-ai/dsh-session'
@@ -30,7 +30,7 @@ import {
 import { expandOwningTurnProcess, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/seeded-history', import.meta.url))
-const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v2.jsonl', import.meta.url))
+const SEED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/session.v3.jsonl', import.meta.url))
 const UI_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/ui.expected.md', import.meta.url))
 const UI_EXPANDED_EXPECTED = fileURLToPath(
   new URL('../../../snapshots/web/seeded-history/ui-expanded.expected.md', import.meta.url),
@@ -38,7 +38,7 @@ const UI_EXPANDED_EXPECTED = fileURLToPath(
 // Command-row goldens over the same conversation after direct host commands.
 const COMMAND_ROW_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/command-row.expected.md', import.meta.url))
 const FEEDBACK_ROW_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/feedback-row.expected.md', import.meta.url))
-const FILE_OPEN_FAILURE_EXPECTED = fileURLToPath(new URL('../../../snapshots/web/seeded-history/file-open-failure.expected.md', import.meta.url))
+const FILE_PREVIEW_EXPECTED = join(SNAPSHOT_DIR, 'file-preview.expected.md')
 const MODE = webSnapshotMode()
 const SEED_ID = 'seeded-history-web-e2e'
 
@@ -157,7 +157,7 @@ function withCompaction(raw: string, meter: TokenMeter): string {
         kind: 'plugin', plugin: 'compact', compactionId, sourceCommandId: commandId,
       },
     }),
-    surfaceOp: { op: 'replace', start: first, end: last },
+    surfaceOp: { op: 'replace', startSeq: first, endSeq: last },
     sourceEventSeqs: [startSeq, summarySeq, ...surfaceSeqs],
   })
   at({
@@ -190,11 +190,8 @@ describe('web e2e: seeded history renders through cold resume', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
-    // The workspace-aware flow runs sessions in <workspaceCwd>/workspace
-    // (the composer's default draft name); the read-tool targets must live in
-    // that session cwd. Pre-creating the directory is safe because the picker
-    // adopts an existing directory by path.
-    const sessionCwd = join(scaffold.workspaceCwd, 'workspace')
+    // Composer recording uses a child workspace; seedSession owns the scaffold root.
+    const sessionCwd = MODE === 'record' ? join(scaffold.workspaceCwd, 'workspace') : scaffold.workspaceCwd
     await mkdir(sessionCwd, { recursive: true })
     await writeFile(join(sessionCwd, 'a.txt'), 'alpha\n')
     await writeFile(join(sessionCwd, 'b.txt'), 'beta\n')
@@ -407,56 +404,37 @@ describe('web e2e: seeded history renders through cold resume', () => {
     await expect.poll(() => disclosure.getAttribute('aria-expanded')).toBe('false')
   })
 
-  it.skipIf(MODE === 'record')('file-path tool rows rebuilt from the cold log stay details-inert', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-toolrow'))
-    // Interaction over cold-resumed history: read summaries are host-open
-    // file links (not expand-in-place / not details). Runs after the golden
-    // capture; still zero model calls.
+  it.skipIf(MODE === 'record')('file-path tool rows rebuilt from the cold log open the right Sidebar', async () => {
+    onTestFailed(async () => {
+      await mkdir(fileURLToPath(new URL('../../../.artifacts/screenshots/0907-2205-sidebar', import.meta.url)), { recursive: true })
+      await saveFailureShot(page, `screenshots/0907-2205-sidebar/seeded-toolrow-${process.pid}`)
+    })
+    // Interaction over cold-resumed history: read summaries are file links
+    // that open a text-preview tab in the right Sidebar (not expand-in-place).
+    // Runs after the golden capture; still zero model calls.
     const fileLink = page.locator('[data-variant="read"] button').first()
     await expandOwningTurnProcess(page, fileLink)
     await fileLink.waitFor({ timeout: 10_000 })
     const frame = page.locator('[style*="grid-template-columns"]').first()
-    expect(await frame.getAttribute('data-details-collapsed')).toBe('true')
-    const openPath = vi.spyOn(scaffold.ctx.sessionController, 'openWorkspacePath')
-      .mockResolvedValue({ opened: true })
-    try {
-      await fileLink.click()
-      await expect.poll(() => frame.getAttribute('data-details-collapsed'), { timeout: 5_000 }).toBe('true')
-    } finally {
-      openPath.mockRestore()
-    }
+    expect(await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
+    await fileLink.click()
+    await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe(null)
+    const column = page.locator('[data-rightbar-col]')
+    await expect.poll(() => column.locator('[data-dockkit-tab-title]').allTextContents(), { timeout: 5_000 }).toEqual(['a.txt'])
     // Path label survives from the recorded args (a.txt).
     await expect.poll(() => page.getByText('a.txt', { exact: false }).count(), { timeout: 5_000 }).toBeGreaterThan(0)
-  })
-
-  it.skipIf(MODE === 'record')('a Host open refusal keeps the reason and retries the same path', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-seeded-file-open-failure'))
-    const fileLink = page.locator('[data-variant="read"] button').first()
-    await fileLink.waitFor({ timeout: 10_000 })
-    const openPath = vi.spyOn(scaffold.ctx.sessionController, 'openWorkspacePath')
-      .mockRejectedValue(new Error('xdg-open is not available'))
-    try {
-      await fileLink.click()
-      const dialog = page.getByRole('dialog', { name: 'Couldn’t open file' })
-      await dialog.waitFor({ timeout: 5_000 })
-      const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
-      await compareOrRefreshGolden(FILE_OPEN_FAILURE_EXPECTED, snapshot, MODE)
-      await expect.poll(() => dialog.innerText(), { timeout: 5_000 })
-        .toContain('path open failed: xdg-open is not available')
-      await page.getByRole('button', { name: 'Retry' }).click()
-      await expect.poll(() => openPath.mock.calls.length, { timeout: 5_000 }).toBe(2)
-      expect(openPath.mock.calls[0]![0]).toEqual(openPath.mock.calls[1]![0])
-      await page.getByRole('button', { name: 'Cancel' }).click()
-      await expect.poll(() => page.getByRole('dialog', { name: 'Couldn’t open file' }).count(), {
-        timeout: 5_000,
-      }).toBe(0)
-    } finally {
-      // Shared page: a leftover mask blocks later cases even when this one fails.
-      if (await page.getByRole('dialog', { name: 'Couldn’t open file' }).count() > 0) {
-        await page.keyboard.press('Escape')
-      }
-      openPath.mockRestore()
-    }
+    const path = column.locator('[data-textpreview-path]')
+    const absolutePath = join(scaffold.workspaceCwd, 'a.txt')
+    await expect.poll(() => path.textContent()).toBe(absolutePath)
+    expect(await path.getAttribute('title')).toBe(absolutePath)
+    await expect.poll(() => column.locator('[data-textpreview-line="1"]').textContent()).toBe('alpha\n')
+    const preview = await captureStableAria(page, '[data-textpreview-state="text"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(FILE_PREVIEW_EXPECTED, preview, MODE)
+    // Put the column back so the later goldens see the default frame.
+    await column.locator('[data-sidebar-right-toggle]').click()
+    await expect.poll(() => frame.getAttribute('data-rightbar-collapsed'), { timeout: 5_000 }).toBe('true')
+    await page.getByRole('button', { name: 'Open right sidebar', exact: true }).waitFor({ state: 'visible' })
+    await page.getByRole('navigation', { name: 'Turn navigation', exact: true }).waitFor({ state: 'visible' })
   })
 
   it.skipIf(MODE === 'record')('expands the cold-resumed compact summary', async () => {
@@ -485,7 +463,8 @@ describe('web e2e: seeded history renders through cold resume', () => {
     // the command's own name).
     await page.getByRole('button', { name: 'Access mode, current: Workspace Write' }).click()
     await page.getByRole('menuitem', { name: 'Read Only' }).click()
-    await page.getByRole('button', { name: 'Access mode, current: Read Only' }).waitFor({ timeout: 10_000 })
+    const access = page.getByRole('button', { name: 'Access mode, current: Read Only' })
+    await expect.poll(() => access.isEnabled(), { timeout: 10_000 }).toBe(true)
     // Scoped to the row itself, so unrelated page text that happens to read
     // `permission` (a future resident slash menu) cannot satisfy or break it.
     const row = page.locator('[data-variant="others"]').filter({ hasText: 'preset read-only' })
@@ -525,6 +504,9 @@ describe('web e2e: seeded history renders through cold resume', () => {
       const userId = userLine?.match(/^Anonymous user: ([0-9a-f-]+)/i)?.[1]
       if (userId === undefined) throw new Error('feedback command omitted the user id')
 
+      // command/done can arrive before the submit reply releases the composer.
+      await expect.poll(() => input.textContent(), { timeout: 10_000 }).toBe('')
+      await expect.poll(() => page.getByRole('button', { name: 'Add files or run commands' }).isEnabled(), { timeout: 10_000 }).toBe(true)
       const snapshot = (await captureStableAria(page, '[class*="centerCol"]', scaffold.workspaceCwd))
         .split(SEED_ID).join('{{seededId}}')
         .split(userId).join('{{userId}}')
@@ -563,8 +545,8 @@ describe('web e2e: seeded history renders through cold resume', () => {
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'command-row.expected.md', 'feedback-row.expected.md', 'file-open-failure.expected.md',
-      'session.v2.jsonl', 'ui.expected.md', 'ui-expanded.expected.md',
+      'command-row.expected.md', 'feedback-row.expected.md', 'file-preview.expected.md',
+      'session.v3.jsonl', 'ui.expected.md', 'ui-expanded.expected.md',
     ])
   })
 })

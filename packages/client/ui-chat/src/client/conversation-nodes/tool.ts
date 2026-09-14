@@ -73,6 +73,7 @@ interface DispatchData {
   readonly name: string
   readonly arguments: unknown
   readonly isError?: boolean
+  readonly error?: { name: string; code: string; reason?: string }
   readonly content?: ToolResultNode['content']
 }
 
@@ -100,6 +101,7 @@ function childResult(match: ConversationMatch, data: DispatchData, previous?: To
     callTime: previous?.time ?? null,
     content: data.content ?? [],
     isError: data.isError === true,
+    ...data.error === undefined ? {} : { error: data.error },
     subCalls: [],
   }
 }
@@ -139,13 +141,13 @@ function acceptsEdge(state: ToolState, parent: string, child: string): boolean {
 
 function updateDispatch(state: ToolState, match: ConversationMatch): ToolState {
   const event = match.event
-  if (event.type !== 'tool/code-dispatch-start' && event.type !== 'tool/code-dispatch') return state
+  if (event.type !== 'tool/ptc-dispatch-start' && event.type !== 'tool/ptc-dispatch') return state
   const data = event.data
   const parentCallId = String(data.parentCallId)
   const subCallId = String(data.subCallId)
   const siblings = state.children.get(parentCallId) ?? []
   const index = siblings.findIndex(candidate => candidate.callId === subCallId)
-  if (event.type === 'tool/code-dispatch-start') {
+  if (event.type === 'tool/ptc-dispatch-start') {
     if (index >= 0 || !acceptsEdge(state, parentCallId, subCallId)) return state
     const children = new Map(state.children)
     children.set(parentCallId, [...siblings, childCall(match, data)])
@@ -227,7 +229,7 @@ function fallbackState(context: ConversationNodeContext<ToolState>): ToolState |
   return state
 }
 
-/** Root Tool lifecycle and nested Code Dispatch Definition. */
+/** Root Tool lifecycle and nested PTC dispatch Definition. */
 export const toolDefinition: ConversationNodeDefinition<ToolState> = {
   kind: 'tool-call',
   target: 'chat',
@@ -236,7 +238,7 @@ export const toolDefinition: ConversationNodeDefinition<ToolState> = {
     if (event.type === 'tool/result' && isAppendSurfaceEvent(event)) {
       return { id: String(event.data.message.source.callId), role: 'update' }
     }
-    if (event.type === 'tool/code-dispatch-start' || event.type === 'tool/code-dispatch') {
+    if (event.type === 'tool/ptc-dispatch-start' || event.type === 'tool/ptc-dispatch') {
       const rootCallId: unknown = event.data.rootCallId
       return typeof rootCallId === 'string' && rootCallId !== ''
         ? { id: rootCallId, role: 'update' }

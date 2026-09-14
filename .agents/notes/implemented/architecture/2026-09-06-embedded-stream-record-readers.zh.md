@@ -20,7 +20,7 @@ Session 格式 v2 将每次模型尝试的紧凑流（`AssistantStreamRecord[]`�
 - Run 读取器：`runFirstTokenTime` 与 `runFirstVisibleTime` 从 `time0` 与 `dt` 间隔重建首个合格成员的时间并停止扫描；带名称的 Tool-call run 直接产出 `time0`，不读片段。
 - 流读取器：`assistantStreamFirstTokenTime`、`assistantStreamHasVisibleContent`、`assistantStreamHasVisibleText`、`lastAssistantStreamChunk(stream, type)`（逆向扫描）、`assistantStreamChunks(stream, type)`、`joinAssistantStreamText` 与 `assembleAssistantStream`（每个 run 向 `BlockAssembler` 喂入一个拼接后的 delta；组装只做拼接，因此 blocks、usage、finish 与 replay state 与逐成员结果一致）。`RawStreamChunkType` 排除 delta 类型，因此原始 chunk 查找不可能静默跳过打包成员。
 
-Session Stats 读取 `assistantStreamFirstTokenTime`；token 计量读取 `lastAssistantStreamChunk(stream, 'usage')` 并通过 `assembleAssistantStream` 组装提供商输出；子代理输出折叠追加 `joinAssistantStreamText`；Session Controller 用 `assistantStreamChunks(stream, 'block-end')` 扫描镜像。
+Session Stats、Chat 与 Trajectory 从 `assistant/attempt` 和 `assistant/message` 读取 `assistantStreamFirstTokenTime`，跨重试保留步骤的首个 token。Chat 与 Trajectory 从组装后的消息结算内容，并独立读取计时，因此重新打开历史时无需展开流便能保留 TTFT 与解码指标。token 计量读取 `lastAssistantStreamChunk(stream, 'usage')` 并通过 `assembleAssistantStream` 组装提供商输出；子代理输出折叠追加 `joinAssistantStreamText`；Session Controller 用 `assistantStreamChunks(stream, 'block-end')` 扫描镜像。
 
 `expandAssistantStream` 保留其严格校验与其余调用方（需要每个成员或在持久边界校验流）：Session 恢复校验、v1-to-v2 迁移校验器与发布 Worker 重放、重连基线、测试支撑。
 

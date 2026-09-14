@@ -6,4 +6,4 @@ recording: authored
 header:
   class: web-default
 session:
-  source: ../seeded-history/session.v2.jsonl
+  source: ../seeded-history/session.v3.jsonl

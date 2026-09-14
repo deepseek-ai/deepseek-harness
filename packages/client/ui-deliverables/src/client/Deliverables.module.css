@@ -1,0 +1,35 @@
+/** Delivery cards use one full-width row or a two-column, four-card summary. */
+.root { --deliverable-fill: var(--dsw-static-neutral-50); --deliverable-hover: var(--dsw-static-neutral-100); container-type: inline-size; display: flex; flex-direction: column; gap: 16px; min-width: 0; margin-top: 4px; }
+/* The turn-tail gap alone separates adjacent file sections. The default top
+   margin remains when deliveries are the first file section after prose. */
+.root[data-after-produced-files='true'] { margin-top: 0; }
+:global(body[data-ds-dark-theme]) .root { --deliverable-fill: var(--dsw-static-neutral-850); --deliverable-hover: var(--dsw-static-neutral-800); }
+.hostStatus { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); }
+.presented { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.presented[data-single='true'] { grid-template-columns: minmax(0, 1fr); }
+.file { position: relative; box-sizing: border-box; display: flex; align-items: center; gap: 10px; min-width: 0; height: 60px; padding: 8px 10px; overflow: hidden; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 18px; background: var(--deliverable-fill); color: var(--dsw-alias-label-primary); transition: background-color 120ms ease; }
+.file:hover { background: var(--deliverable-hover); }
+.cardPreview { position: absolute; z-index: 1; inset: 0; width: 100%; padding: 0; border: 0; border-radius: inherit; background: transparent; cursor: pointer; }
+.cardPreview:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--dsw-alias-brand-primary); }
+.fileIcon { position: relative; z-index: 2; box-sizing: border-box; flex: 0 0 auto; display: grid; place-items: center; width: 40px; height: 40px; overflow: hidden; pointer-events: none; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--deliverable-fill); color: var(--dsw-alias-link); }
+.fileBody { position: relative; z-index: 2; display: flex; flex: 1; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; pointer-events: none; }
+.details { display: flex; flex: 1; flex-direction: column; justify-content: center; gap: 2px; min-width: 0; }
+.fileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; line-height: 20px; }
+.description { overflow: hidden; color: var(--dsw-alias-label-tertiary); font-size: 10px; font-weight: 400; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.description[data-error='true'] { color: var(--dsw-alias-state-error-primary); }
+.previewHint { display: none; }
+.file:hover .secondaryText { display: none; }
+.file:hover .previewHint { display: inline; }
+.split { display: inline-flex; flex: none; align-items: stretch; box-sizing: border-box; height: 28px; overflow: hidden; pointer-events: auto; border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 10px; background: var(--dsw-alias-button-floating-fill); }
+.menuAnchor { align-self: stretch; }
+.open, .chevron { display: inline-flex; align-items: center; justify-content: center; border: 0; background: none; color: var(--dsw-alias-label-primary); cursor: pointer; font-family: var(--dsw-font-family); }
+.open { padding: 4px 8px; font-size: 12px; line-height: 18px; }
+.chevron { padding: 4px 5px; border-left: 0.5px solid var(--dsw-alias-border-l3); color: var(--dsw-alias-label-secondary); }
+.open:hover, .open:focus-visible, .chevron:hover:not(:disabled), .chevron:focus-visible { background: var(--dsw-alias-interactive-bg-hover); }
+.chevron:disabled { color: var(--dsw-alias-label-dimmed); cursor: not-allowed; }
+.menuActionIcon { display: block; width: 16px; height: 16px; }
+.toggle { align-self: center; display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 1px 11px; border: 0; border-radius: 8px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; font: inherit; font-size: 12px; line-height: 18px; }
+.toggle:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.toggle svg { flex: none; width: 14px; height: 14px; }
+@container (max-width: 620px) { .presented { grid-template-columns: minmax(0, 1fr); } }
+@media (pointer: coarse) { .split { min-height: 44px; } .open, .chevron { min-width: 44px; } }

@@ -1,0 +1,10 @@
+version: 1
+scenario: browser-use-playwright-mcp
+profile: headless
+composition: browser-use-playwright-mcp
+recording: authored
+header:
+  class: browser-use-playwright-mcp
+  pin: true
+replay:
+  override: true

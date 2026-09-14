@@ -1,5 +1,5 @@
 # Session-root sandbox snapshot overlay. The generated session cwd lives
-# under the user's home, while this deployment fallback deliberately points at
+# outside the automatic temp grants, while this deployment fallback points at
 # /tmp. A workspace-write mutation can therefore succeed only when the calling
 # session's cwd replaces the process-level fallback root.
 - id: sandbox-policy

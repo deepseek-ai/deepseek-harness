@@ -1,17 +1,21 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { createUserMessage, ToolCallId  } from '@deepseek-ai/dsh-llm'
+import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import { createScope } from '@deepseek-ai/dsh-scope'
 import type { Scope } from '@deepseek-ai/dsh-scope'
-import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
-import { CodeRuntime } from '@deepseek-ai/dsh-code-runtime'
-import type { CodeRunRequest, CodeRunResult } from '@deepseek-ai/dsh-code-runtime'
+import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
+import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import type { PtcRunRequest, PtcRunResult } from '@deepseek-ai/dsh-ptc-runtime'
 import ToolRuntime, { CodeRunFailedError, RUN_CODE_NAME, TOOL_ABORTED_BEFORE_DISPATCH, defineContentToolFixture, defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config, JsonSchemaNode, PostToolDecision, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import ApprovalService, { type ApprovalOutcome, type ApprovalRequest } from '@deepseek-ai/dsh-user-approval'
 import type { SessionEventMap } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import SandboxPolicy from '@deepseek-ai/dsh-sandbox-policy'
+import SessionProjections from '@deepseek-ai/dsh-session-projection'
 
 const testToolSignal = new AbortController().signal
 
@@ -23,19 +27,21 @@ const testToolSignal = new AbortController().signal
  * Service Definition / Service Provider / Consumer roles the seam promises.
  */
 
-/** A scriptable in-repo CodeRuntime: each test sets `behavior` to drive the bindings however it needs. */
-class FakeRuntime extends CodeRuntime {
+/** A scriptable in-repo PtcRuntime: each test sets `behavior` to drive the bindings however it needs. */
+class FakeRuntime extends PtcRuntime {
+  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+
   readonly language: string
   readonly isolation = 'fake'
-  behavior: (request: CodeRunRequest) => Promise<CodeRunResult> = () => Promise.resolve({ logs: [] })
-  lastRequest?: CodeRunRequest
+  behavior: (request: PtcRunRequest) => Promise<PtcRunResult> = () => Promise.resolve({ logs: [] })
+  lastRequest?: PtcRunRequest
 
   constructor(ctx: Context, config: { language?: string } = {}) {
     super(ctx)
     this.language = config.language ?? 'typescript'
   }
 
-  run(request: CodeRunRequest): Promise<CodeRunResult> {
+  run(request: PtcRunRequest): Promise<PtcRunResult> {
     this.lastRequest = request
     return this.behavior(request)
   }
@@ -55,14 +61,14 @@ async function setup(options: SetupOptions = {}) {
   let runtime: FakeRuntime | undefined
   if (options.runtime !== false) {
     await ctx.plugin(FakeRuntime, options.runtime ?? {})
-    runtime = ctx.codeRuntime as FakeRuntime
+    runtime = ctx.ptcRuntime as FakeRuntime
   }
   return { ctx, tools: ctx.tools, systemPrompt: ctx.systemPrompt, runtime: runtime! }
 }
 
 /** Mint an agent scope configured like production that can register scoped tool policy. */
 async function mintAgentScope(ctx: Context, name = 'scoped'): Promise<{ scope: Scope; agent: Agent }> {
-  const agent = { id: SessionId(name) } as Agent
+  const agent = { id: SessionId(name), session: { header: {}, append: () => {} } } as unknown as Agent
   let scope!: Scope
   await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, agent) },
     { inject: ['tools', 'systemPrompt'] }))
@@ -117,6 +123,38 @@ async function runCode(
 }
 
 describe('mode-aware wire contribution', () => {
+  it.each([
+    { mode: 'ptc', language: 'typescript' },
+    { mode: 'both', language: 'typescript' },
+    { mode: 'ptc', language: 'python' },
+    { mode: 'both', language: 'python' },
+  ] as const)('preserves literal braces in the $language SDK under $mode', async ({ mode, language }) => {
+    const { ctx, systemPrompt } = await setup({ mode, runtime: { language } })
+    try {
+      systemPrompt.variable('model', () => 'actual-model')
+      const description = 'Expand {{item}} with {{model}} or {{ model }}.'
+      ctx.tools.register(defineTool({
+        name: 'template',
+        description,
+        parameters: { value: { type: 'string', description, enum: ['{{item}}', '{{model}}'], required: true } },
+        output: {
+          schema: { type: 'string', enum: ['{{item}}', '{{model}}'] },
+          render: (_args, value) => [{ type: 'text', text: value }],
+        },
+        execute: args => Promise.resolve(args.value),
+      }))
+      const assembly = await systemPrompt.assemble()
+      const sdk = assembly.sections.find(section => section.name === 'tools:sdk')
+      expect(sdk).toBeDefined()
+      const prompt = renderPrompt(assembly)
+      expect(prompt).toContain(description)
+      expect(prompt).toContain(sdk!.text)
+      expect(prompt).not.toContain('actual-model')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it("mode 'native' contributes every schema, no run_code, no SDK section — and needs no runtime", async () => {
     const { ctx, systemPrompt } = await setup({ mode: 'native', runtime: false })
     registerEcho(ctx)
@@ -370,9 +408,9 @@ describe('mode-aware wire contribution', () => {
     expect(text(first)).toBe(text(second))
   })
 
-  it('rejects every assembly when a non-native mode has no code runtime', async () => {
+  it('rejects every assembly when a non-native mode has no PTC runtime', async () => {
     const { systemPrompt } = await setup({ mode: 'ptc', runtime: false })
-    await expect(systemPrompt.assemble()).rejects.toThrow(/requires a code runtime/)
+    await expect(systemPrompt.assemble()).rejects.toThrow(/requires a PTC runtime/)
   })
 
   it('rejects every assembly when the runtime language has no registered SDK renderer', async () => {
@@ -391,7 +429,7 @@ describe('mode-aware wire contribution', () => {
   })
 
   it("assembles under a python runtime in mode 'both' as well, SDK and schema together", async () => {
-    // `both` reaches the same wireSchemas/requireCodeRuntime/SDK-section code
+    // `both` reaches the same wireSchemas/requirePtcRuntime/SDK-section code
     // as `ptc`, so this pins the mode-by-language matrix rather than a
     // separate path — including that the `wireSchemas` projection behind
     // `assembly.tools` picks the Python flavor under `both` instead of hitting
@@ -436,12 +474,12 @@ describe('mode-aware wire contribution', () => {
 
   it('resolves the run_code schema flavor lazily and fails loud on a language absent from the flavor table', async () => {
     // The flavor getter reads the runtime directly (peekRuntime), so it — not
-    // requireCodeRuntime — owns the flavor-table guard. Keeping
+    // requirePtcRuntime — owns the flavor-table guard. Keeping
     // RUN_CODE_FLAVORS in step with SDK_RENDERERS is the compiler's job (both
-    // are `satisfies`-checked against CodeSdkLanguage), so what the guard
+    // are `satisfies`-checked against PtcSdkLanguage), so what the guard
     // covers is a mounted runtime naming a language absent from both tables,
     // which throws when the schema is projected. Assembly's
-    // requireCodeRuntime rejects such a language earlier; this reaches the
+    // requirePtcRuntime rejects such a language earlier; this reaches the
     // guard on its own.
     const { ctx } = await setup({ mode: 'ptc', runtime: { language: 'ruby' } })
     const definition = ctx.tools.get(RUN_CODE_NAME)
@@ -542,9 +580,9 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     if (result.isError) throw new Error('expected success')
     expect(result.value).toMatchObject({ result: 'safe_read:a,safe_read:b,safe_read:c' })
     // One start per dispatch, paired with its settle by subCallId, starts in submission order.
-    const starts = events.filter(event => event.type === 'tool/code-dispatch-start').map(event => event.data as { subCallId: string })
-    const settles = events.filter(event => event.type === 'tool/code-dispatch').map(event => event.data as { subCallId: string })
-    expect(starts.map(start => start.subCallId)).toEqual(['call-1:code:1', 'call-1:code:2', 'call-1:code:3'])
+    const starts = events.filter(event => event.type === 'tool/ptc-dispatch-start').map(event => event.data as { subCallId: string })
+    const settles = events.filter(event => event.type === 'tool/ptc-dispatch').map(event => event.data as { subCallId: string })
+    expect(starts.map(start => start.subCallId)).toEqual(['call-1:ptc:1', 'call-1:ptc:2', 'call-1:ptc:3'])
     expect(new Set(settles.map(settle => settle.subCallId))).toEqual(new Set(starts.map(start => start.subCallId)))
   })
 
@@ -576,6 +614,33 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     expect(unsafe.order).toEqual(['start:w', 'end:w'])
     // r3 started only after w ended.
     expect(safe.order.indexOf('start:r3')).toBeGreaterThan(safe.order.indexOf('end:r1'))
+  })
+
+  it('holds later dispatches while settled results await log storage', async () => {
+    const { ctx, runtime } = await setup({ maxParallelSubCalls: 1 })
+    const calls = registerEcho(ctx)
+    const { agent } = fakeAgent()
+    const release = Promise.withResolvers<undefined>()
+    const blocked = Promise.withResolvers<undefined>()
+    let pendingLogs = 0
+    ctx.on('tools/ptc-dispatch-log', async (_dispatch, next) => {
+      if (++pendingLogs === 2) blocked.resolve(undefined)
+      await release.promise
+      return next()
+    })
+    runtime.behavior = async request => ({ logs: [], value: await Promise.all(
+      [0, 1, 2, 3].map(value => request.bindings[0]!.functions.echo!({ value: String(value) })),
+    ) })
+    const running = runCode(ctx, 'program', { agent })
+    try {
+      await blocked.promise
+      // Synchronous executors exhaust their unblocked microtasks before this checkpoint.
+      await new Promise<void>(resolve => setImmediate(resolve))
+      expect(calls).toHaveLength(2)
+      release.resolve(undefined)
+      expect((await running).isError).toBe(false)
+      expect(calls).toHaveLength(4)
+    } finally { release.resolve(undefined); await running; await ctx.fiber.dispose() }
   })
 
   it('maxParallelSubCalls caps the overlap window', async () => {
@@ -656,7 +721,7 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
       // Both submissions are in; the second pre-execute must NOT have entered
       // while the first is still awaiting its policy decision.
       await expect.poll(() => stages.length).toBeGreaterThanOrEqual(1)
-      expect(stages).toEqual(['pre-enter:call-1:code:1'])
+      expect(stages).toEqual(['pre-enter:call-1:ptc:1'])
       releaseGate!()
       await expect.poll(() => gated.pending()).toBe(2)
       gated.releaseAll()
@@ -666,8 +731,8 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(false)
     expect(stages).toEqual([
-      'pre-enter:call-1:code:1', 'pre-exit:call-1:code:1',
-      'pre-enter:call-1:code:2', 'pre-exit:call-1:code:2',
+      'pre-enter:call-1:ptc:1', 'pre-exit:call-1:ptc:1',
+      'pre-enter:call-1:ptc:2', 'pre-exit:call-1:ptc:2',
     ])
   })
 
@@ -737,7 +802,7 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     // its post-execute was mid-flight, so the native cancellation contract
     // replaces the successful outcome with the aborted result — the event is
     // still durable and in-turn, which is the invariant under test.
-    const settles = events.filter(event => event.type === 'tool/code-dispatch')
+    const settles = events.filter(event => event.type === 'tool/ptc-dispatch')
     expect(settles).toHaveLength(1)
     expect(settles[0]?.data).toMatchObject({ name: 'safe_read', isError: true })
   })
@@ -772,10 +837,10 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(false)
     // Post-execute observed submission order regardless of completion interleave.
-    expect(postOrder).toEqual(['call-1:code:1', 'call-1:code:2'])
+    expect(postOrder).toEqual(['call-1:ptc:1', 'call-1:ptc:2'])
     // Deferred contexts reach the outer result in the same order.
     expect(result.additionalContexts?.map(c => (c.content[0] as { text: string }).text))
-      .toEqual(['ctx:call-1:code:1', 'ctx:call-1:code:2'])
+      .toEqual(['ctx:call-1:ptc:1', 'ctx:call-1:ptc:2'])
   })
 
   it('a queued-unstarted call abandoned by run settlement logs no start event', async () => {
@@ -798,18 +863,65 @@ describe('the sub-dispatch scheduler (native concurrency contract)', () => {
     }
     const result = await runCode(ctx, 'program', { agent })
     expect(result.isError).toBe(true)
-    const starts = events.filter(event => event.type === 'tool/code-dispatch-start').map(event => (event.data as { subCallId: string }).subCallId)
-    const settles = events.filter(event => event.type === 'tool/code-dispatch').map(event => (event.data as { subCallId: string }).subCallId)
+    const starts = events.filter(event => event.type === 'tool/ptc-dispatch-start').map(event => (event.data as { subCallId: string }).subCallId)
+    const settles = events.filter(event => event.type === 'tool/ptc-dispatch').map(event => (event.data as { subCallId: string }).subCallId)
     // w1 started and settled under the abort; w2 never started and never
     // settled — no start event, no settle event, binding rejected with the
     // abandonment message at drain time.
-    expect(starts).toEqual(['call-1:code:1'])
-    expect(settles).toEqual(['call-1:code:1'])
+    expect(starts).toEqual(['call-1:ptc:1'])
+    expect(settles).toEqual(['call-1:ptc:1'])
     expect(abandoned).toEqual(['run_code run is over (run_code settled); writer tool call abandoned'])
   })
 })
 
 describe('the run_code dispatch bridge', () => {
+  it('keeps each concurrent run bound to its own immutable schema snapshot', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    let description = 'original description'
+    let parameters = { type: 'object', properties: { value: { type: 'string', description: 'original value' } } }
+    ctx.tools.register({
+      name: 'probe',
+      get description() { return description },
+      get parameters() { return parameters },
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+      execute: () => Promise.resolve('done'),
+    })
+    const seen: ToolSchema[] = []
+    ctx.on('tools/pre-execute', (exec, next) => {
+      if (exec.name === 'probe') {
+        expect(exec.schema).toBeDefined()
+        expect(Object.isFrozen(exec.schema)).toBe(true)
+        expect(Object.isFrozen(exec.schema!.parameters)).toBe(true)
+        seen.push(exec.schema!)
+      }
+      return next()
+    })
+    const firstBound = Promise.withResolvers<undefined>()
+    const releaseFirst = Promise.withResolvers<undefined>()
+    runtime.behavior = async (request) => {
+      if (request.program === 'first') {
+        firstBound.resolve(undefined)
+        await releaseFirst.promise
+      }
+      const value = await request.bindings[0]!.functions.probe!({ value: request.program })
+      return { logs: [], value: JSON.stringify(value) }
+    }
+    const first = runCode(ctx, 'first')
+    try {
+      await firstBound.promise
+      description = 'replacement description'
+      parameters = { type: 'object', properties: { value: { type: 'string', description: 'replacement value' } } }
+      expect((await runCode(ctx, 'second')).isError).toBe(false)
+    } finally {
+      releaseFirst.resolve(undefined)
+    }
+    expect((await first).isError).toBe(false)
+    expect(seen.map(schema => schema.description)).toEqual(['replacement description', 'original description'])
+    expect(seen[1]!.parameters).toEqual({
+      type: 'object', properties: { value: { type: 'string', description: 'original value' } },
+    })
+  })
+
   it('bridges tool calls, returns only the curated output, and logs one event per dispatch', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     const calls = registerEcho(ctx)
@@ -827,14 +939,14 @@ describe('the run_code dispatch bridge', () => {
     expect(result.value).toEqual({ logs: ['saw echo:one'], result: 'echo:two' })
     expect(result.content).toEqual([{ type: 'text', text: 'saw echo:one\necho:two' }])
     expect(calls).toEqual([{ value: 'one' }, { value: 'two' }])
-    const dispatches = events.filter(event => event.type === 'tool/code-dispatch')
+    const dispatches = events.filter(event => event.type === 'tool/ptc-dispatch')
     expect(dispatches.map(event => event.data)).toEqual([
       {
-        rootCallId: 'call-1', parentCallId: 'call-1', subCallId: 'call-1:code:1', name: 'echo',
+        rootCallId: 'call-1', parentCallId: 'call-1', subCallId: 'call-1:ptc:1', name: 'echo',
         arguments: { value: 'one' }, isError: false, content: [{ type: 'text', text: 'echo:one' }],
       },
       {
-        rootCallId: 'call-1', parentCallId: 'call-1', subCallId: 'call-1:code:2', name: 'echo',
+        rootCallId: 'call-1', parentCallId: 'call-1', subCallId: 'call-1:ptc:2', name: 'echo',
         arguments: { value: 'two' }, isError: false, content: [{ type: 'text', text: 'echo:two' }],
       },
     ])
@@ -966,6 +1078,43 @@ describe('the run_code dispatch bridge', () => {
     expect(result.content[0]).toEqual({ type: 'text', text: 'caught: deliberate failure' })
   })
 
+  it('bounds pending log writes without withholding settled values from the program', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc', maxParallelSubCalls: 1 })
+    const calls = registerEcho(ctx)
+    const { agent, events } = fakeAgent()
+    const firstLog = Promise.withResolvers<undefined>()
+    const secondLog = Promise.withResolvers<undefined>()
+    let logs = 0
+    ctx.on('tools/ptc-dispatch-log', async (_dispatch, next) => {
+      const ordinal = ++logs
+      if (ordinal === 1) await firstLog.promise
+      if (ordinal === 2) await secondLog.promise
+      return next()
+    })
+    runtime.behavior = async (request) => {
+      const echo = request.bindings[0]!.functions.echo!
+      expect(await echo({ value: 'one' })).toBe('echo:one')
+      expect(await echo({ value: 'two' })).toBe('echo:two')
+      expect(logs).toBe(2)
+      expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(0)
+      const third = echo({ value: 'three' })
+      await Promise.resolve()
+      expect(calls).toEqual([{ value: 'one' }, { value: 'two' }])
+      firstLog.resolve(undefined)
+      expect(await third).toBe('echo:three')
+      secondLog.resolve(undefined)
+      return { logs: [], value: 'complete' }
+    }
+    try {
+      const result = await runCode(ctx, 'program', { agent })
+      expect(result.isError).toBe(false)
+      expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toHaveLength(3)
+    } finally {
+      firstLog.resolve(undefined)
+      secondLog.resolve(undefined)
+    }
+  })
+
   it('a throwing tools/ptc-dispatch-log listener is contained: the original settled content is logged', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     registerEcho(ctx)
@@ -977,7 +1126,7 @@ describe('the run_code dispatch bridge', () => {
     }
     const result = await runCode(ctx, 'program', { agent })
     expect(result.isError).toBe(false)
-    const settle = events.find(event => event.type === 'tool/code-dispatch')
+    const settle = events.find(event => event.type === 'tool/ptc-dispatch')
     expect(settle?.data).toMatchObject({ name: 'echo', isError: false, content: [{ type: 'text', text: 'echo:x' }] })
   })
 
@@ -1007,7 +1156,7 @@ describe('the run_code dispatch bridge', () => {
     // skipped, yet the settle event still carries the error outcome.
     expect(calls).toEqual([])
     expect(postExecuted).toEqual([])
-    const settles = events.filter(event => event.type === 'tool/code-dispatch')
+    const settles = events.filter(event => event.type === 'tool/ptc-dispatch')
     expect(settles).toHaveLength(1)
     expect(settles[0]?.data).toMatchObject({ name: 'echo', isError: true })
   })
@@ -1015,10 +1164,21 @@ describe('the run_code dispatch bridge', () => {
   it('a tools/pre-execute deny reaches the program as a binding rejection', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     registerEcho(ctx)
+    const schemas: unknown[] = []
     ctx.on('tools/pre-execute', (exec, next) => {
-      if (exec.name === 'echo') return Promise.resolve({ kind: 'deny' as const, reason: 'not on my watch' })
+      if (exec.name === 'echo') {
+        schemas.push(exec.schema)
+        expect(Object.isFrozen(exec.schema)).toBe(true)
+        expect(Object.isFrozen(exec.schema?.parameters)).toBe(true)
+        return Promise.resolve({
+          kind: 'deny' as const,
+          reason: 'not on my watch',
+          info: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: ' raw\nreason ' },
+        })
+      }
       return next()
     })
+    const { agent, events } = fakeAgent()
     runtime.behavior = async (request) => {
       try {
         await request.bindings[0]!.functions.echo!({ value: 'x' })
@@ -1027,9 +1187,97 @@ describe('the run_code dispatch bridge', () => {
         return { logs: [], value: `denied: ${error instanceof Error ? error.message : String(error)}` }
       }
     }
-    const result = await runCode(ctx, 'program')
+    const result = await runCode(ctx, 'program', { agent })
     expect(result.content[0]?.type).toBe('text')
     expect((result.content[0] as { text: string }).text).toContain('not on my watch')
+    const start = events.find(event => event.type === 'tool/ptc-dispatch-start')
+    expect(start?.data).toMatchObject({
+      name: 'echo',
+      arguments: { value: 'x' },
+    })
+    expect(schemas).toEqual([{
+      name: 'echo',
+      description: 'Echo tool echo.',
+      parameters: {
+        type: 'object',
+        properties: { value: { type: 'string' } },
+        required: ['value'],
+      },
+    }])
+    const settle = events.find(event => event.type === 'tool/ptc-dispatch')
+    expect(settle?.data).toMatchObject({
+      name: 'echo',
+      isError: true,
+      error: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: ' raw\nreason ' },
+    })
+    for (const event of [start, settle]) {
+      expect(event?.data).not.toHaveProperty('description')
+      expect(event?.data).not.toHaveProperty('parameters')
+      expect(event?.data).not.toHaveProperty('schema')
+    }
+  })
+
+  it('an uncaught tools/pre-execute deny fails the program without changing the inner error identity', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    const calls = registerEcho(ctx)
+    ctx.on('tools/pre-execute', (exec, next) => {
+      if (exec.name === 'echo') {
+        return Promise.resolve({
+          kind: 'deny' as const,
+          reason: 'not on my watch',
+          info: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: 'exact denial' },
+        })
+      }
+      return next()
+    })
+    const { agent, events } = fakeAgent()
+    runtime.behavior = async (request) => {
+      await request.bindings[0]!.functions.echo!({ value: 'x' })
+      return { logs: [], value: 'unreachable' }
+    }
+
+    const result = await runCode(ctx, 'await tools.echo({ value: "x" })', { agent })
+
+    expect(result.isError).toBe(true)
+    const modelContent = result.content[0]
+    expect(modelContent?.type).toBe('text')
+    expect(modelContent?.type === 'text' ? modelContent.text : '').toContain('not on my watch')
+    expect(result.isError && result.error.info?.code).not.toBe('AUTO_REVIEW_DENIED')
+    expect(calls).toEqual([])
+    const settle = events.find(event => event.type === 'tool/ptc-dispatch')
+    expect(settle?.data).toMatchObject({
+      name: 'echo',
+      isError: true,
+      error: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: 'exact denial' },
+    })
+  })
+
+  it('maps a PTC pre-execute cancellation to the canonical binding rejection', async () => {
+    const { ctx, runtime } = await setup({ mode: 'ptc' })
+    const calls = registerEcho(ctx)
+    ctx.on('tools/pre-execute', (exec, next) =>
+      exec.name === 'echo' ? Promise.resolve({ kind: 'cancel' as const }) : next())
+    const { agent, events } = fakeAgent()
+    runtime.behavior = async (request) => {
+      try {
+        await request.bindings[0]!.functions.echo!({ value: 'x' })
+        return { logs: [], value: 'unreachable' }
+      } catch (error: unknown) {
+        return { logs: [], value: error instanceof Error ? error.message : String(error) }
+      }
+    }
+
+    const result = await runCode(ctx, 'program', { agent })
+
+    expect(result.isError).toBe(false)
+    expect(result.content[0]).toEqual({ type: 'text', text: 'tool call aborted before dispatch' })
+    expect(calls).toEqual([])
+    const settle = events.find(event => event.type === 'tool/ptc-dispatch')
+    expect(settle?.data).toMatchObject({
+      name: 'echo',
+      isError: true,
+      error: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH },
+    })
   })
 
   it('rejects a binding argument that is not lossless JSON, dispatching nothing', async () => {
@@ -1047,7 +1295,7 @@ describe('the run_code dispatch bridge', () => {
     const result = await runCode(ctx, 'program', { agent })
     expect((result.content[0] as { text: string }).text).toContain('lossless JSON')
     expect(calls).toEqual([])
-    expect(events.filter(event => event.type === 'tool/code-dispatch')).toEqual([])
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toEqual([])
   })
 
   it('dispatches and logs independent snapshots of the same lossless JSON value', async () => {
@@ -1061,7 +1309,7 @@ describe('the run_code dispatch bridge', () => {
     }
     await runCode(ctx, 'program', { agent })
     expect(calls).toEqual([{ value: 'x', nested: ['same'] }])
-    const dispatch = events.find(event => event.type === 'tool/code-dispatch')?.data as SessionEventMap['tool/code-dispatch']
+    const dispatch = events.find(event => event.type === 'tool/ptc-dispatch')?.data as SessionEventMap['tool/ptc-dispatch']
     expect(dispatch.arguments).toEqual({ value: 'x', nested: ['same'] })
   })
 
@@ -1090,12 +1338,12 @@ describe('the run_code dispatch bridge', () => {
     expect(result.additionalContexts).toMatchObject([
       {
         role: 'user',
-        content: [{ type: 'text', text: 'context for call-1:code:1' }],
+        content: [{ type: 'text', text: 'context for call-1:ptc:1' }],
         source: { kind: 'plugin', plugin: 'test' },
       },
       {
         role: 'user',
-        content: [{ type: 'text', text: 'context for call-1:code:2' }],
+        content: [{ type: 'text', text: 'context for call-1:ptc:2' }],
         source: { kind: 'plugin', plugin: 'test' },
       },
     ])
@@ -1127,7 +1375,7 @@ describe('the run_code dispatch bridge', () => {
 
     expect(result.additionalContexts).toMatchObject([{
       role: 'user',
-      source: { kind: 'plugin', plugin: 'tools-code-mode' },
+      source: { kind: 'plugin', plugin: 'tools-ptc' },
       content: [
         { type: 'text', text: 'image result' },
         { type: 'image', attachment: { mediaType: 'image/png', bytes: 1, width: 1, height: 1 } },
@@ -1284,7 +1532,7 @@ describe('the run_code dispatch bridge', () => {
     // Quiescence held: the in-flight sub-dispatch was aborted and its event
     // logged INSIDE the run_code execution, not after it returned.
     expect(sawAbort).toBe(true)
-    expect(events.filter(event => event.type === 'tool/code-dispatch').map(event => (event.data as { name: string }).name)).toEqual(['slow'])
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch').map(event => (event.data as { name: string }).name)).toEqual(['slow'])
   })
 
   it('runs without an owning agent: dispatches work, event logging is skipped', async () => {
@@ -1305,7 +1553,7 @@ describe('the run_code dispatch bridge', () => {
     await ctx.plugin(ToolRuntime, { mode: 'ptc' })
     const result = await runCode(ctx, 'program')
     expect(result.isError).toBe(true)
-    expect((result.content[0] as { text: string }).text).toContain('requires a code runtime')
+    expect((result.content[0] as { text: string }).text).toContain('requires a PTC runtime')
   })
 
   it('presents the model-authored description as the execute-card title over the program input', async () => {
@@ -1333,7 +1581,7 @@ describe('the run_code dispatch bridge', () => {
     ['result only', { logs: [], value: 'returned' }, 'returned'],
     ['logs plus result', { logs: ['printed'], value: 'returned' }, 'printed\nreturned'],
     ['no output', { logs: [] }, '(run_code completed with no output)'],
-  ] as [string, CodeRunResult, string][])('keeps %s in durable content without a result presenter', async (_name, output, text) => {
+  ] as [string, PtcRunResult, string][])('keeps %s in durable content without a result presenter', async (_name, output, text) => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     runtime.behavior = () => Promise.resolve(output)
 
@@ -1407,7 +1655,7 @@ describe('the run_code dispatch bridge', () => {
     const result = await runCode(ctx, 'program', { agent })
     expect(result.isError).toBe(false)
     expect((result.content[0] as { text: string }).text).toBe('mixed-value')
-    const dispatch = events.find(event => event.type === 'tool/code-dispatch')?.data as SessionEventMap['tool/code-dispatch']
+    const dispatch = events.find(event => event.type === 'tool/ptc-dispatch')?.data as SessionEventMap['tool/ptc-dispatch']
     expect(dispatch.content).toEqual([
       { type: 'text', text: long },
       { type: 'reasoning', text: 'hidden' },
@@ -1443,7 +1691,7 @@ describe('the run_code dispatch bridge', () => {
     expect(text.match(/tool arguments must be lossless JSON/g)).toHaveLength(5)
     // None dispatched or logged.
     expect(calls).toEqual([])
-    expect(events.filter(event => event.type === 'tool/code-dispatch')).toEqual([])
+    expect(events.filter(event => event.type === 'tool/ptc-dispatch')).toEqual([])
   })
 
   it('dispatches and durably logs binding arguments deeper than the structured-clone call stack', async () => {
@@ -1484,8 +1732,8 @@ describe('the run_code dispatch bridge', () => {
     expect(result.isError).toBe(false)
     expect(result.isError ? undefined : result.value).toEqual({ logs: [], result: depth })
     expect({ observedDepth, observedLeaf }).toEqual({ observedDepth: depth, observedLeaf: 'leaf' })
-    const dispatch = session.snapshotEvents().find(event => event.type === 'tool/code-dispatch')
-    if (dispatch === undefined) throw new Error('expected a durable tool/code-dispatch event')
+    const dispatch = session.snapshotEvents().find(event => event.type === 'tool/ptc-dispatch')
+    if (dispatch === undefined) throw new Error('expected a durable tool/ptc-dispatch event')
     const logged = dispatch.data.arguments as { nested: JsonValue }
     let loggedDepth = 0
     let loggedCursor = logged.nested
@@ -1517,7 +1765,7 @@ describe('the run_code dispatch bridge', () => {
     const result = await runCode(ctx, 'program', { agent })
     expect(result.isError).toBe(false)
     expect(mutationSucceeded).toBe(false)
-    const dispatch = events.find(event => event.type === 'tool/code-dispatch')?.data as SessionEventMap['tool/code-dispatch']
+    const dispatch = events.find(event => event.type === 'tool/ptc-dispatch')?.data as SessionEventMap['tool/ptc-dispatch']
     expect(dispatch.arguments).toEqual({ list: ['original'] })
   })
 
@@ -1588,7 +1836,7 @@ describe('the run_code dispatch bridge', () => {
     expect(text.length).toBeLessThan(11_000)
   })
 
-  it('short-circuits a pre-aborted outer signal before the code runtime', async () => {
+  it('short-circuits a pre-aborted outer signal before the PTC runtime', async () => {
     const { ctx, runtime } = await setup({ mode: 'ptc' })
     const calls = registerEcho(ctx)
     runtime.behavior = (request) => {
@@ -1632,15 +1880,15 @@ describe('the run_code dispatch bridge', () => {
     expect(calls).toEqual([])
   })
 
-  it('a tool/code-dispatch event never derives a model message', () => {
+  it('a tool/ptc-dispatch event never derives a model message', () => {
     const session = Session.create(SessionId('ptc-derive'))
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    session.append('tool/code-dispatch', {
+    session.append('tool/ptc-dispatch', {
       rootCallId: ToolCallId('p1'),
       parentCallId: ToolCallId('p1'),
-      subCallId: ToolCallId('p1:code:1'),
+      subCallId: ToolCallId('p1:ptc:1'),
       name: 'echo',
       arguments: { value: 'x' },
       isError: false,
@@ -1873,6 +2121,246 @@ describe('per-agent presentation', () => {
     scope.ctx.tools.presentAs('both')
 
     await expect(systemPrompt.assemble({ scope: agent }))
-      .rejects.toThrow('mode "both" requires a code runtime')
+      .rejects.toThrow('mode "both" requires a PTC runtime')
+  })
+})
+
+
+class ConfinedFakeRuntime extends FakeRuntime {
+  override get sandboxMode() { return 'read-only' as const }
+}
+
+describe('PTC standing file policy and sandbox outcomes', () => {
+  it('requires a policy owner before dispatching a confined runtime', async () => {
+    const { ctx } = await setup({ runtime: false })
+    try {
+      await ctx.plugin(ConfinedFakeRuntime)
+      const result = await runCode(ctx, 'return 1')
+      expect(result.isError).toBe(true)
+      expect(result.content).toEqual([{ type: 'text', text: 'Error: dsh-tools: confined PTC runtime requires sandboxPolicy' }])
+      expect((ctx.ptcRuntime as ConfinedFakeRuntime).lastRequest).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('resolves deployment policy for an agentless program', async () => {
+    const { ctx } = await setup({ runtime: false })
+    try {
+      await ctx.plugin(SessionProjections)
+      await ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
+      await ctx.plugin(ConfinedFakeRuntime)
+      const result = await runCode(ctx, 'return 1')
+      expect(result.isError).not.toBe(true)
+      expect((ctx.ptcRuntime as ConfinedFakeRuntime).lastRequest?.sandboxPolicy).toEqual(ctx.sandboxPolicy.resolve())
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('preserves partial enforcement and observed denial in successful output', async () => {
+    const { ctx, runtime } = await setup()
+    try {
+      runtime.behavior = async () => ({ logs: [], sandbox: { mode: 'read-only', enforcement: 'partial', denied: true } })
+      const result = await runCode(ctx, 'return 1')
+      expect(result.value).toEqual({ logs: [], sandbox: { mode: 'read-only', enforcement: 'partial', denied: true } })
+      expect(result.content).toEqual([{ type: 'text', text: 'File sandbox enforcement is partial on this host.\nThe read-only file sandbox denied an operation.' }])
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each([
+    { mode: 'danger-full-access' as const, denied: false },
+    { mode: 'read-only' as const, denied: true, enforcement: 'full' as const },
+  ])('includes the available sandbox facts with a failed program ($mode)', async (sandbox) => {
+    const { ctx, runtime } = await setup()
+    try {
+      runtime.behavior = async () => ({ logs: [], error: { kind: 'exception', message: 'failed' }, sandbox })
+      const result = await runCode(ctx, 'throw new Error("failed")')
+      expect(result.isError).toBe(true)
+      const text = result.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
+      expect(text).toContain(`File sandbox: ${sandbox.mode}`)
+      expect(text.includes('enforcement: full')).toBe('enforcement' in sandbox)
+      expect(text.includes('operation denied')).toBe(sandbox.denied)
+    } finally { await ctx.fiber.dispose() }
+  })
+})
+
+describe('per-program execution controls', () => {
+  async function controlledSetup(approval = true) {
+    const state = await setup()
+    await state.ctx.plugin(SessionProjections)
+    await state.ctx.plugin(SandboxPolicy, { mode: 'read-only', workspaceRoot: process.cwd() })
+    if (approval) await state.ctx.plugin(ApprovalService, { policy: 'ask' })
+    Object.defineProperties(state.runtime, {
+      sandboxMode: { get: () => 'read-only' },
+      executionInstructions: { get: () => 'Programs start with an empty environment.' },
+      timeout: { get: () => ({ defaultMs: 120_000, maxMs: 600_000 }) },
+    })
+    const session = Session.create(SessionId('program-controls'))
+    session.append('turn/start', { turn: 1 })
+    const agent = { session } as unknown as Agent
+    const execute = (args: Record<string, unknown>, signal = testToolSignal) => state.tools.execute({
+      callId: ToolCallId('program-controls'), name: RUN_CODE_NAME,
+      arguments: { code: 'program', description: 'Test execution controls', ...args }, agent, signal,
+    })
+    return { ...state, agent, session, execute }
+  }
+
+  it('advertises configured timeout values and one-execution scope only when supported', async () => {
+    const { ctx, tools } = await controlledSetup()
+    try {
+      const schema = tools.schemas().find(tool => tool.name === RUN_CODE_NAME)!
+      expect(JSON.stringify(schema.parameters)).toContain('Default 120000; capped at 600000')
+      expect(JSON.stringify(schema.parameters)).toContain('sandbox_permissions')
+      expect(schema.description).toContain('Nested tools retain their own policies')
+      expect(schema.description).toContain('Programs start with an empty environment.')
+      expect(schema.description).toContain("The working directory is the Session's current directory.")
+    } finally { await ctx.fiber.dispose() }
+    const python = await setup({ runtime: { language: 'python' } })
+    try {
+      const schema = python.tools.schemas().find(tool => tool.name === RUN_CODE_NAME)!
+      expect(JSON.stringify(schema.parameters)).not.toContain('timeoutMs')
+      expect(JSON.stringify(schema.parameters)).not.toContain('sandbox_permissions')
+      expect(schema.description).not.toContain('Programs start with an empty environment.')
+      expect(schema.description).toContain("The working directory is the Session's current directory.")
+      const rejected = await python.tools.execute({
+        callId: ToolCallId('hidden-timeout'), name: RUN_CODE_NAME, signal: testToolSignal,
+        arguments: { code: 'pass', description: 'Try unsupported timeout', timeoutMs: 5 },
+      })
+      expect(rejected.isError).toBe(true)
+      expect(python.runtime.lastRequest).toBeUndefined()
+    } finally { await python.ctx.fiber.dispose() }
+  })
+
+  it.each([0, -1, Number.NaN, Number.POSITIVE_INFINITY, '1000', null])('rejects invalid timeout %s before runtime execution', async (timeoutMs) => {
+    const { ctx, runtime, execute } = await controlledSetup()
+    try {
+      expect((await execute({ timeoutMs })).isError).toBe(true)
+      expect(runtime.lastRequest).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('rejects escalation fields for a runtime without confinement support', async () => {
+    const { ctx, tools, runtime } = await setup()
+    try {
+      const result = await tools.execute({
+        callId: ToolCallId('unsupported-escalation'), name: RUN_CODE_NAME, signal: testToolSignal,
+        arguments: { code: 'return 1', description: 'Try an unsupported mode', sandbox_permissions: 'workspace-write', justification: 'Need file writes' },
+      })
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('sandbox_permissions is not available for this PTC runtime')
+      expect(runtime.lastRequest).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('forwards an explicit timeout to the runtime resolver', async () => {
+    const { ctx, runtime, execute } = await controlledSetup()
+    const resolver = vi.spyOn(runtime, 'resolve')
+    try {
+      expect((await execute({ timeoutMs: 900_000 })).isError).toBe(false)
+      expect(resolver.mock.calls[0]?.[0].timeoutMs).toBe(900_000)
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each([
+    { sandbox_permissions: 'workspace-write' },
+    { justification: 'Need writes' },
+    { sandbox_permissions: 'workspace-write', justification: ' ' },
+    { sandbox_permissions: 'read-only', justification: 'No widening' },
+  ])('rejects invalid escalation pairing or mode: %j', async (args) => {
+    const { ctx, runtime, execute } = await controlledSetup()
+    const ask = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', ask)
+    try {
+      expect((await execute(args)).isError).toBe(true)
+      expect(ask).not.toHaveBeenCalled()
+      expect(runtime.lastRequest).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it.each(['rejected', 'cancelled', 'unavailable'] as const)('does not start a program after approval returns %s', async (outcome) => {
+    const { ctx, runtime, session, execute } = await controlledSetup()
+    ctx.on('approval/request', () => Promise.resolve<ApprovalOutcome>(outcome))
+    try {
+      expect((await execute({ sandbox_permissions: 'workspace-write', justification: 'Write generated source' })).isError).toBe(true)
+      expect(runtime.lastRequest).toBeUndefined()
+      expect(session.snapshotEvents().filter(event => event.type === 'approval/decided').map(event => event.data)).toMatchObject([{ outcome }])
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('fails closed when no approval service is mounted', async () => {
+    const { ctx, runtime, execute } = await controlledSetup(false)
+    try {
+      const result = await execute({ sandbox_permissions: 'workspace-write', justification: 'Write generated source' })
+      expect(result.isError).toBe(true)
+      expect(runtime.lastRequest).toBeUndefined()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('cancels an outstanding approval without launching the program', async () => {
+    const { ctx, runtime, execute } = await controlledSetup()
+    const asked = Promise.withResolvers<undefined>()
+    const answer = Promise.withResolvers<ApprovalOutcome>()
+    const controller = new AbortController()
+    ctx.on('approval/request', () => { asked.resolve(undefined); return answer.promise })
+    const result = execute({ sandbox_permissions: 'workspace-write', justification: 'Write generated source' }, controller.signal)
+    try {
+      await asked.promise
+      controller.abort('cancel outer approval')
+      expect((await result).isError).toBe(true)
+      expect(runtime.lastRequest).toBeUndefined()
+    } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
+  })
+
+  it('reports prior effects after a denial and never requests approval or replays implicitly', async () => {
+    const { ctx, runtime, execute } = await controlledSetup()
+    const ask = vi.fn(() => Promise.resolve<ApprovalOutcome>('allowed-once'))
+    ctx.on('approval/request', ask)
+    let effects = 0
+    runtime.behavior = () => {
+      effects++
+      return Promise.resolve({ logs: ['first effect completed'],
+        error: { kind: 'exception', message: 'access denied' },
+        sandbox: { mode: 'read-only', denied: true, enforcement: 'full' } })
+    }
+    try {
+      const result = await execute({})
+      expect(result.isError).toBe(true)
+      expect(JSON.stringify(result.content)).toContain('first effect completed')
+      expect(JSON.stringify(result.content)).toContain('Earlier effects may already have completed')
+      expect(effects).toBe(1)
+      expect(ask).not.toHaveBeenCalled()
+    } finally { await ctx.fiber.dispose() }
+  })
+
+  it('waits for outer approval before resolving execution and keeps nested tool approvals independent', async () => {
+    const { ctx, runtime, agent, execute } = await controlledSetup()
+    const asked = Promise.withResolvers<undefined>()
+    const answer = Promise.withResolvers<ApprovalOutcome>()
+    const requests: ApprovalRequest[] = []
+    ctx.on('approval/request', (req) => {
+      requests.push(req)
+      if (req.toolName === RUN_CODE_NAME) { asked.resolve(undefined); return answer.promise }
+      return Promise.resolve<ApprovalOutcome>('rejected')
+    })
+    registerEcho(ctx)
+    ctx.on('tools/pre-execute', (exec, next) => exec.name === 'echo'
+      ? Promise.resolve({ kind: 'ask', reason: 'Nested tool has its own approval' }) : next())
+    runtime.behavior = async (request) => {
+      expect(request.sandboxPolicy?.mode).toBe('workspace-write')
+      expect(ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
+      const value = await request.bindings[0]!.functions.echo!({ value: 'nested' })
+        .then(() => 'unexpected nested grant', () => 'nested approval rejected')
+      return { logs: [], value }
+    }
+    const resolver = vi.spyOn(runtime, 'resolve')
+    const result = execute({ sandbox_permissions: 'workspace-write', justification: 'Write generated source', timeoutMs: 1234 })
+    try {
+      await asked.promise
+      expect(resolver).not.toHaveBeenCalled()
+      expect(runtime.lastRequest).toBeUndefined()
+      answer.resolve('allowed-once')
+      const completed = await result
+      expect(completed.isError).toBe(false)
+      expect(requests.map(req => req.toolName)).toEqual([RUN_CODE_NAME, 'echo'])
+      expect(runtime.lastRequest?.timeoutMs).toBe(1234)
+      expect(ctx.sandboxPolicy.resolve({ session: agent.session }).mode).toBe('read-only')
+    } finally { answer.resolve('cancelled'); await result; await ctx.fiber.dispose() }
   })
 })

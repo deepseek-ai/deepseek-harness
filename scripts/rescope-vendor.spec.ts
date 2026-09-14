@@ -1,14 +1,26 @@
-/**
- * Acceptance-path coverage for the rescope codemod's exact-edit classifier: a
- * duplicated insertion — what a non-idempotent apply produces — must be
- * rejected rather than applied again.
- */
+/** Recorded npm evidence stays intact while authored files and exact edits remain checked. */
 
 import { describe, expect, it } from 'vitest'
-import { exactEditState } from './rescope-vendor.ts'
+import { exactEditState, isRescopeExcluded } from './rescope-vendor.ts'
 
 const ANCHOR = '\n## Sync procedure'
 const INSERTED = `\n15. **rescope**: one log entry.\n${ANCHOR}`
+
+describe('rescope file selection', () => {
+  it('preserves the recorded npm resolution', () => {
+    expect(isRescopeExcluded('scripts/dependency-catalog/package-lock.json')).toBe(true)
+  })
+
+  it.each([
+    'scripts/dependency-catalog/package.json',
+    'scripts/dependency-catalog/source.ts',
+    'scripts/other/package-lock.json',
+    'packages/example/src/index.ts',
+    'packages/example/package.json',
+  ])('keeps %s subject to upstream package-name checks', (file) => {
+    expect(isRescopeExcluded(file)).toBe(false)
+  })
+})
 
 describe('exactEditState', () => {
   it('classifies an insertion by its target form, so a duplicate is invalid', () => {

@@ -1,5 +1,5 @@
 ---
-description: "面向模型的 workflow 工具：运行扇出 subagent 的 JavaScript 编排脚本，供选择或配置模型驱动编排的用户与维护者阅读。"
+description: "面向模型的工作流工具：运行扇出 subagent 的 JavaScript 编排脚本，供选择或配置模型驱动编排的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-workflow` 把 `workflow` 工具交给模型：以 JavaScript 编排脚本、身份块与可选参数调用它，它会在 `ctx.workflowEngine` 上运行脚本，把工作扇出到多个 subagent，直到脚本的最终值返回。该工具拥有模型侧 schema、系统提示词中的使用指导与结果包络；脚本解析、执行、上限与取消位于引擎之后。执行为前台：父级轮次会阻塞到整个工作流结算，非正常结束是错误，绝不是部分输出。仅当用户明确要求工作流式或大型多 agent 编排时选择它；一两项委派时优先使用普通 subagent 调用。
+`dsh-tool-workflow` 让模型运行 JavaScript 编排脚本，把工作委派给多个 subagent，并返回脚本的最终 JSON 值。仅当用户明确要求工作流或大型多 agent（智能体）编排时使用；一两项委派应使用普通 subagent 调用。父级轮次会等待所有委派任务结束；取消或异常完成会返回错误，而不是部分成功。部署方可以通过 `toolName` 重命名工具，并通过 `maxResultChars` 限制渲染结果文本。
 
 ## 目录
 
@@ -35,7 +35,7 @@ kind: "package-reference"
 
 ### 运行期间的预期
 
-脚本运行期间，父级轮次会等待：工具启动运行、等待其结果，并始终 dispose（资源释放）它，因此脚本及其子 agent 在每条路径上完全停稳——包括从父级步骤中止信号桥接而来的取消。模型只看到最终结果，永远不会看到中间子 agent 消息；子 agent 自己的工作不会进入父级对话。
+脚本运行期间，父级轮次会等待：工具启动运行、等待其结果，并始终对该运行执行 dispose（资源释放），因此脚本及其子 agent 在每条路径上完全停稳——包括从父级步骤中止信号桥接而来的取消。模型只看到最终结果，永远不会看到中间子 agent 消息；子 agent 自己的工作不会进入父级对话。
 
 ### 配置
 
@@ -58,15 +58,15 @@ kind: "package-reference"
 
 ### 设计理念
 
-消费方拥有模型侧 schema、`tool:<toolName>` 系统提示词指导与结果包络；脚本解析、执行、上限与取消位于 `ctx.workflowEngine` 之后，因此更坚固的引擎可以无缝替换，而不改变模型看到的内容。使用指导以提示词段的形式随工具插件交付，绝不放入部署 persona。
+消费方拥有模型侧 schema、`tool:<toolName>` 系统提示词指导与结果包络；脚本解析、执行、上限与取消位于 `ctx.workflowEngine` 之后，PTC 引擎与 `run_code` 共享 Node 进程约束。使用指导以提示词段的形式随工具插件交付，绝不放入部署 persona。
 
 ### 运行生命周期
 
-`execute` 启动运行，并在 `try/finally` 内等待 `run.result`；该结构总会 dispose 运行。`exec.signal` 会桥接到 `run.cancel()`，包括启动前已经中止的情况。非 `completed` 结束原因会映射为报告原因的 `isError` 结果；完成时渲染 `{ runId, agentsStarted, result }`，Native 渲染器只会在 `maxResultChars` 处截断该投影。
+`execute` 启动运行，并在 `try/finally` 内等待 `run.result`；该结构总会对运行执行 dispose。`exec.signal` 会桥接到 `run.cancel()`，包括启动前已经中止的情况。非 `completed` 结束原因会映射为报告原因的 `isError` 结果；完成时渲染 `{ runId, agentsStarted, result }`，Native 渲染器只会在 `maxResultChars` 处截断该投影。
 
 ### 持久会话记录
 
-对于根 transport 执行（`exec.parent` 缺省），工具会用四个 log-only 事件把运行投影到调用 Agent 的 Session：`start()` 返回后写 run-start，只记录 `run.id` 匹配的成员开始与结束，并且只在结果可用且 dispose 完全停稳后写 run-end。嵌套 transport 调用照常执行，但不写任何记录。任一次 Session append 首次失败后，本运行会停止后续记录并只告警一次，留下空记录或合法连续前缀，同时不改变工具结果和清理。包 invariant 会在冷加载与实时追加时拒绝重复 start、未配对成员、仍有开放成员的终点与 run-end 后更新，同时允许缺失终态后缀的连续前缀。
+对于根 transport 执行（`exec.parent` 缺省），工具会用四个 log-only 事件把运行投影到调用方 agent 的会话：`start()` 返回后写 run-start，只记录 `run.id` 匹配的成员开始与结束，并且只在结果可用且 dispose 完全停稳后写 run-end。嵌套 transport 调用照常执行，但不写任何记录。会话追加操作首次失败后，本运行会停止后续记录并只告警一次，留下空记录或合法连续前缀，同时不改变工具结果和清理。包 invariant 会在冷加载与实时追加时拒绝重复 start、未配对成员、仍有开放成员的终点与 run-end 后更新，同时允许缺失终态后缀的连续前缀。
 
 ### 渲染意图
 
@@ -78,7 +78,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：工具注册、运行生命周期、记录器接线 |
 | [`src/types.ts`](src/types.ts) | 四个 log-only 记录事件 payload 及其 `SessionEventMap` 声明 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：持久工作流记录协议校验 |
+| [`src/invariant.ts`](src/invariant.ts) | 不变式配套入口：持久工作流记录协议校验 |
 
 </details>
 
@@ -87,11 +87,11 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当工具级契约不够用时阅读以下页面。它们从共享工作流模型逐步进入引擎与可比的委派工具。
+当工具级约定不够用时阅读以下页面。这些页面依次介绍共享工作流模型、引擎，以及可供比较的委派工具。
 
-- [工作流子系统](../../../docs/subsystems/workflow.zh.md)——seam 契约、启动请求与事件载荷。
+- [工作流子系统](../../../docs/subsystems/workflow.zh.md)——seam 约定、启动请求与事件载荷。
 - [工作流 seam](../workflow/README.zh.md)——工具背后的运行与结果词汇。
-- [worker-thread 引擎](../workflow-worker-thread/README.zh.md)——执行脚本的引擎。
+- [PTC 工作流引擎](../workflow-ptc/README.zh.md)——执行脚本的引擎。
 - [subagent 工具](../../subagent/tool-subagent/README.zh.md)——一两项委派时的普通委派替代方案。
 - [组地图](../README.zh.md)——工作流能力家族及其包。
 - [动态工作流 Agent Note](../../../.agents/notes/implemented/feature/2026-07-05-dynamic-workflows.zh.md)——seam 设计及其决策。
@@ -119,7 +119,7 @@ Use the <toolName> tool ONLY when the user explicitly asks for a workflow or for
 
 #### KV Cache 影响
 
-只要插件作用域与指导文本不变，前缀就保持稳定。启用或 dispose（资源释放）可能会使从该提示词段起的缓存复用失效。
+只要插件作用域与指导文本不变，前缀就保持稳定。启用或 dispose 可能会使从该提示词段起的缓存复用失效。
 
 ### 工具 schema
 

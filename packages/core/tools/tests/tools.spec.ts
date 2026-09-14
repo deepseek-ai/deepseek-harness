@@ -683,7 +683,13 @@ describe('ToolRuntime', () => {
     let postSawFrozen = false
 
     ctx.on('tools/pre-execute', async (exec, next): Promise<PreToolDecision> => {
-      if (exec.name === 'echo') return { kind: 'deny', reason: 'denied by policy' }
+      if (exec.name === 'echo') {
+        return {
+          kind: 'deny',
+          reason: 'denied by policy',
+          info: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: ' raw\nreason ' },
+        }
+      }
       return next()
     })
     ctx.on('tools/post-execute', async (_exec, result, next) => {
@@ -695,6 +701,10 @@ describe('ToolRuntime', () => {
     const result = await ctx.tools.execute({ signal: testToolSignal, callId: ToolCallId('c1'), name: 'echo', arguments: { text: 'hi' } })
     expect(result.isError).toBe(true)
     expect(result.content[0]).toMatchObject({ text: 'Error: denied by policy' })
+    expect(result.error).toEqual({
+      message: 'denied by policy',
+      info: { name: 'AutoReviewDeniedError', code: 'AUTO_REVIEW_DENIED', reason: ' raw\nreason ' },
+    })
     expect(postSawFrozen).toBe(true)
   })
 
@@ -1125,6 +1135,32 @@ describe('ToolRuntime', () => {
       content: [{ type: 'text', text: 'Error: tool call aborted before dispatch' }],
       isError: true,
       error: { info: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH } },
+    })
+    expect(dispatched).toBe(0)
+  })
+
+  it('maps an explicit pre-execute cancellation to the canonical before-dispatch result', async () => {
+    const ctx = await setup()
+    let dispatched = 0
+    ctx.tools.register({
+      ...echoTool,
+      name: 'cancelled-by-policy',
+      async execute() { dispatched += 1; return [] },
+    })
+    ctx.on('tools/pre-execute', async () => ({ kind: 'cancel' }))
+
+    await expect(ctx.tools.execute({
+      callId: ToolCallId('cancelled-by-policy'),
+      name: 'cancelled-by-policy',
+      arguments: {},
+      signal: new AbortController().signal,
+    })).resolves.toEqual({
+      content: [{ type: 'text', text: 'Error: tool call aborted before dispatch' }],
+      isError: true,
+      error: {
+        message: 'tool call aborted before dispatch',
+        info: { name: 'AbortError', code: TOOL_ABORTED_BEFORE_DISPATCH },
+      },
     })
     expect(dispatched).toBe(0)
   })

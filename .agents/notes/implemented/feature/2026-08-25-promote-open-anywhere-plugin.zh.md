@@ -12,6 +12,8 @@ Status: implemented
 
 第一方功能命名为 `open-in-app`：它选择在 Harness 主机上打开 workspace 目录的应用，不表示另一台机器或目的位置。
 
+[launch-environment](../../../../packages/util/launch-environment/README.zh.md) 中共用的 `launchedThroughSsh()` 只从继承的进程层读取非空 `SSH_CONNECTION` 或 `SSH_TTY`。SSH 启动时会在任何探测开始前返回空应用目录。项目与用户 `.env` 中的值不能作为 SSH 启动的依据；Web 浏览器唤起和自适应目录选择器共用此判断。即使客户端记住了应用选择，也会隐藏操作入口；已有的可用性检查会拒绝图标和启动请求。SSH 端口转发只改变 HTTP 可达性，不改变工作区或应用所属的机器。
+
 该功能的第一方归属是一对包：`@deepseek-ai/dsh-host-open-in-app` 位于 `packages/host/open-in-app/`（探测、目录与启动路由），`@deepseek-ai/dsh-client-ui-open-in-app` 位于 `packages/client/ui-open-in-app/`（分体按钮），由 `dsh-web-app` bundle 的 `open-in-app` 与 `ui-open-in-app` 两行挂载进 Web profile。转正是重写，不是 vendoring：
 
 - **一对 host/client 包，沿用 `directory-picker-browse`/`ui-directory-picker-browse` 的配对结构**：host 包的 `src/index.ts` 在 `ctx.webServer` 上注册三条 HTTP 路由（`GET /open-in-app/apps`、`GET /open-in-app/icon/<id>`、`POST /open-in-app/open`）；ui 包的 `src/client/index.ts` 经标准 slot/inject 通货把分体按钮注册进 `conversation.session.header.utilities`，文案在类型化的 `open-in-app` locale 命名空间中，样式为 `--dsw-*` token 上的 CSS Modules（原插件手工注入的 style 标签与内联下拉被 `Menu` 原语替代），节点半边是让插件出现在主机名册上的空 apply。路由路径与 wire 载荷类型只有一个家：host 包浏览器安全的 `./shared` 子路径（只有常量与类型）；client bundle 经 client tsdown preset 的 `INLINE_SAFE` 条目将其内联，与 `dsh-session` 各 wire 切片同一通道。host 根入口只导出 Loader 所需的插件实体与类型；目录、resolver、launcher 与图标 helper 保持源码内部可见。
@@ -27,6 +29,8 @@ Status: implemented
 这对包放在 `packages/host/` 与 `packages/client/`，因为两个半边本来就是这两种东西：探测/启动侧是主机基础设施，与它消费的 webserver 同组；按钮是客户端表面，与其他 `ui-*` 包同组。评审把它从 `packages/workspace/` 的单个双半边包迁到这里（见替代方案）。
 
 ## 考虑过的替代方案
+
+**在 SSH 会话中提供 VS Code 的远端 CLI。** 已安装的可执行文件不能证明编辑器连接可用：继承的 IPC socket 属于一个仍在运行的 VS Code 连接，Harness 继续运行时它也可能消失。浏览器侧的 SSH 目标配置与本地编辑器唤起不属于这个主机应用功能。
 
 **将插件的 `lib/` 原样 vendor 进 `packages/`。** 最快，但手写 JavaScript 会整体不过 typecheck、覆盖率、i18n、JSDoc 和 invariant 门禁；为其保留豁免会造出仓库刻意不设的包类别。
 
@@ -50,8 +54,8 @@ Status: implemented
 
 ## 后果
 
-- 只要主机在 macOS、Windows 或 Linux 上探测到至少一个已安装的目录应用，Web profile 就会出现头部按钮；其余情况零渲染（探测目录为空 → 组件返回 null）。
+- 非 SSH 会话中，只要主机在 macOS、Windows 或 Linux 上探测到至少一个已安装的目录应用，Web profile 就会出现头部按钮；其余情况零渲染（探测目录为空 → 组件返回 null）。
 - 社区插件的安装路径仍然有效但已冗余；其原始路由与浏览器选择键独立于 `open-in-app`，因此使用第一方功能的安装应移除社区插件，避免出现重复的头部控件。
 - 解析与图标每主机进程惰性执行一次，dsh 运行期间安装的应用要重启后才出现——接受；卸载方向经 `ENOENT` 单条目刷新自愈。
 - 目录在编译期固定；扩展它意味着同时编辑 `OPEN_IN_APP_CATALOG` 与两份 locale 词典（README 已知限制）。平台覆盖不均——若干 Git GUI 与终端仅有 macOS 条目；Windows 图标受限于 .NET 标准接口的 32px 提取，Linux 跟随 hicolor 而非当前主题，没有 desktop 记录的纯 CLI 条目则保留通用图标。
-- 覆盖：resolver 逻辑（每种 locator 在临时文件系统上、注册表转储与 desktop 条目 fixture、注入的 env/home/PATH 表）、逐平台图标提取、三条路由（真实 Loader + 真实 WebServer 组合，含单趟缓存、`ENOENT` 刷新与 HMR 安全处置）、controller wire 行为和组件呈现都以逐文件 100% 门禁做了单元测试；不新增 snapshot，因为随仓库发布的免密 snapshot fixture 断言会话驱动的输出，而这个纯浏览器侧控件不触及它。Web ARIA golden 禁用 `open-in-app` 与 `ui-open-in-app` 两行，Host-only 的 preset e2e 组合禁用 host 行：按钮反映运行机器实际安装了哪些应用，其出现与否和标签都是主机事实，跨平台 golden 无法钉住。
+- 解析器、图标、路由、控制器与组件测试覆盖平台探测、启动结果、可用性缓存和 HMR 处置。[SSH Web 快照](../../../../snapshots/web/open-in-app-ssh/snapshot.yml) 在启用两个 Open In 配置项并记住应用选择的条件下渲染共享的录制会话，并仅捕获会话头部；输入框和统计栏由各自的快照负责。继承的 SSH 标记使空应用目录在不同平台上保持确定。普通 Web 快照仍禁用依赖主机的应用探测。

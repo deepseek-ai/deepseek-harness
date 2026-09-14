@@ -9,7 +9,7 @@ import {
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
-import { createUserMessage, ToolCallId , createMessage } from '@deepseek-ai/dsh-llm'
+import { createUserMessage, ToolCallId, createMessage } from '@deepseek-ai/dsh-llm'
 import { SessionSeq, SESSION_FORMAT_VERSION, SessionId, type SessionEvent, type SessionHeader } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { logPath } from '../../../../../../packages/session/session-persistence-jsonl/src/format.ts'
@@ -49,14 +49,19 @@ async function seedInterruptedSession(root: string, cwd: string): Promise<string
   }
   const events: SessionEvent[] = [
     { type: 'turn/start', seq: SessionSeq(0), time: 10, data: { turn: 1 } },
-    { type: 'user/message', seq: SessionSeq(1), time: 11, data: createUserMessage({
+    { type: 'step/start', seq: SessionSeq(1), time: 11, data: { turn: 1, step: 1 } },
+    {
+      type: 'system/message', seq: SessionSeq(2), time: 12,
+      data: { turn: 1, step: 1, message: createMessage({ role: 'system', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }) },
+      surfaceOp: 'append',
+    },
+    { type: 'user/message', seq: SessionSeq(3), time: 13, data: createUserMessage({
       content: [{ type: 'text', text: 'Perform one side-effecting remote mutation.' }], source: { kind: 'user' },
     }), surfaceOp: 'append' },
-    { type: 'step/start', seq: SessionSeq(2), time: 12, data: { turn: 1, step: 1 } },
     {
       type: 'assistant/message',
-      seq: SessionSeq(3),
-      time: 13,
+      seq: SessionSeq(4),
+      time: 14,
       data: {
         turn: 1,
         step: 1,
@@ -74,8 +79,8 @@ async function seedInterruptedSession(root: string, cwd: string): Promise<string
     },
     {
       type: 'tool/call',
-      seq: SessionSeq(4),
-      time: 14,
+      seq: SessionSeq(5),
+      time: 15,
       data: {
         turn: 1,
         step: 1,

@@ -9,10 +9,8 @@ describe('Chat View type chain', () => {
       base: ConvViewProps,
       chat: ChatViewSlotProps,
     ): ReactNode => {
-      // @ts-expect-error openDetails belongs to the Chat inject face.
-      void base.openDetails
-      // @ts-expect-error openDetails accepts a SelectionTarget.
-      chat.openDetails('nope')
+      // @ts-expect-error openFile belongs to the Chat inject face.
+      void base.openFile
       // @ts-expect-error openFile accepts a path.
       void chat.openFile({ turnSeq: 1, callId: 'c' })
       return null

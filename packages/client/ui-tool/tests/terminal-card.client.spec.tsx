@@ -2,13 +2,9 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import {
-  bindSnapshotSelector, conversationSnapshot, sessionSnapshot, workspaceSnapshot,
-} from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type {
-  ChatSnapshot, ConversationNode, RunningToolCall, SelectionTarget, ToolResultNode,
-} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -17,19 +13,14 @@ import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts
 import {
   localizeTerminalCardModel, terminalCardModel, terminalFailed,
 } from '../src/client/tool/models/terminal-card-model.ts'
-import { createChatStore } from '@deepseek-ai/dsh-client-ui-chat/src/client/stores.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
-import { DetailsPanel } from '@deepseek-ai/dsh-client-ui-chat/src/client/details/DetailsPanel.tsx'
 import { BashRow } from '../src/client/tool/toolviews/bash-sample.tsx'
-import { renderToolDetails, toolChatSnapshot, useEmptyTrajectory } from './tool-details-render.client.tsx'
 import { en, zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
-import { zh as chatZh } from '@deepseek-ai/dsh-client-ui-chat/src/client/locale.ts'
 
 type BashRowProps = Parameters<typeof BashRow>[0]
 
 const t: GenericToolCardProps['t'] = makeTranslate(zh, commonZh)
 const enT: GenericToolCardProps['t'] = makeTranslate(en, commonEn)
-const chatT = makeTranslate(chatZh, commonZh)
 
 afterEach(cleanup)
 
@@ -220,7 +211,7 @@ describe('terminalCardModel', () => {
     expect(terminalCardModel(settled({ call: null }))).toBeNull()
   })
 
-  it('derives the same terminal card for root calls and Code Dispatch children', () => {
+  it('derives the same terminal card for root calls and PTC dispatch children', () => {
     expect(terminalCardModel(settled({ parentCallId: 'parent' }))).toEqual(terminalCardModel(settled()))
     expect(terminalCardModel(running({ parentCallId: 'parent' }))).toEqual(terminalCardModel(running()))
   })
@@ -529,263 +520,5 @@ describe('BashRow terminal card', () => {
     expect(view.getByText('输出')).toBeTruthy()
     expect(view.getByText(/"command": "ls -la"/)).toBeTruthy()
     expect(view.container.querySelector('[data-error]')?.textContent).toBe('Error: command aborted')
-  })
-})
-
-describe('DetailsPanel Output section', () => {
-  function mount(snapshot: ChatSnapshot, selection: SelectionTarget | null, cwd?: string) {
-    localStorage.clear()
-    const chat = createChatStore().create()
-    if (selection !== null) chat.actions.select(selection)
-    const sessions = createSnapshotStore<SessionListState>(cwd === undefined
-      ? { ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined }
-      : {
-        ids: [SID],
-        byId: { [SID]: { id: SID, displayTitle: 'r', running: false, blank: false, updatedAt: 0, cwd } },
-        current: SID,
-        phase: 'ready',
-        subagentsByParent: {}, jobsBySession: {},
-        currentAddress: undefined,
-      })
-    const session = createSnapshotStore(sessionSnapshot(SID))
-    const conversation = createSnapshotStore(conversationSnapshot())
-    const workspaces = createSnapshotStore(workspaceSnapshot())
-    const attention = createSnapshotStore(new Map())
-    return render(
-      <DetailsPanel
-        renderSlot={renderToolDetails(t)}
-        SessionProvider={({ children }) => children}
-        sessionId={SID}
-        useSession={bindSnapshotSelector(session)}
-        useSessions={bindSnapshotSelector(sessions)}
-        useSessionPendingInteraction={bindSnapshotSelector(attention)}
-        useWorkspaces={bindSnapshotSelector(workspaces)}
-        useConversation={bindSnapshotSelector(conversation)}
-        useChat={bindSnapshotSelector({ getSnapshot: () => snapshot, subscribe: () => () => {} })}
-        useTrajectory={useEmptyTrajectory}
-        useInput={(() => { throw new Error('unused') })}
-        inputActions={{
-          setDraft: () => {}, addAttachments: () => true, removeAttachment: () => {},
-          pruneAttachments: () => {}, submit: () => {},
-        }}
-        useProjection={(() => undefined)}
-        useStore={bindSnapshotSelector(chat)}
-        actions={chat.actions}
-        closeDetails={vi.fn()}
-        t={chatT}
-      />,
-    )
-  }
-
-  function snapshot(over: {
-    nodes?: readonly ConversationNode[]
-    runningCalls?: readonly RunningToolCall[]
-  } = {}): ChatSnapshot {
-    const nodes = over.nodes ?? []
-    const runningCalls = over.runningCalls ?? []
-    return toolChatSnapshot(nodes, runningCalls)
-  }
-
-  const target: SelectionTarget = { turnSeq: 10, callId: 'c1', toolName: 'bash' }
-
-  // The panel never unmounts between selections, so per-call view state has to
-  // be keyed off the selected call or it leaks into the next one.
-  it('resets the card\'s expand state when the selected call changes', () => {
-    const long = Array.from({ length: 20 }, (_, i) => `row-${i}`)
-    const view = mount(snapshot({
-      nodes: [settled({ content: [{ type: 'text', text: `${long.join('\n')}\n` }] })],
-    }), target)
-    fireEvent.click(view.getByRole('button', { name: '展开其余 4 行输出' }))
-    expect(view.getByRole('button', { name: '收起输出' })).toBeTruthy()
-    // A second call, selected without unmounting the panel, starts collapsed.
-    cleanup()
-    const second = mount(snapshot({
-      nodes: [settled({
-        callId: 'c2', content: [{ type: 'text', text: `${long.join('\n')}\n` }],
-      })],
-    }), { turnSeq: 10, callId: 'c2', toolName: 'bash' })
-    expect(second.getByRole('button', { name: '展开其余 4 行输出' })).toBeTruthy()
-  })
-
-  it('renders the raw call description above the card', () => {
-    const view = mount(snapshot({
-      nodes: [settled({ call: { name: 'bash', argsRaw: shellArgs({ description: 'Terminal 3' }) } })],
-    }), target)
-    const description = view.getByText('Terminal 3')
-    const card = view.container.querySelector('[data-terminal]')
-    expect(card).not.toBeNull()
-    // Above, not below: document order is what places it as the card's heading.
-    expect(description.compareDocumentPosition(card!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-
-  it('localizes terminal_send copy in Details', () => {
-    const argsRaw = JSON.stringify({ sessionId: 'pty-3', text: '' })
-    const view = mount(snapshot({
-      nodes: [settled({
-        call: { name: 'terminal_send', argsRaw },
-        content: [{ type: 'text', text: 'ok' }],
-      })],
-    }), { ...target, toolName: 'terminal_send' })
-    expect(view.getByText('终端 pty-3')).toBeTruthy()
-    expect(view.getByText('（发送输入）')).toBeTruthy()
-  })
-
-  it('resolves the prompt cwd against the session workspace', () => {
-    const view = mount(snapshot({ nodes: [settled()] }), target, '/w/app')
-    // No workdir in the call args: the prompt label is the workspace basename.
-    expect(view.getByText('app')).toBeTruthy()
-  })
-
-  it('renders the terminal card at full height, keeping the JSON Input section', () => {
-    const long = Array.from({ length: 20 }, (_, i) => `row-${i}`)
-    const view = mount(snapshot({
-      nodes: [settled({ content: [{ type: 'text', text: `${long.join('\n')}\n` }] })],
-    }), target)
-    expect(view.getByText(/"command"/)).toBeTruthy()
-    expect(view.getByText('ls -la')).toBeTruthy()
-    // The panel takes the primitive's own default cap (16), not the row's.
-    expect(view.getByText(`… 其余 ${20 - 16} 行`)).toBeTruthy()
-    expect(view.getByText('row-0')).toBeTruthy()
-  })
-
-  it('a running terminal call shows the prompt line, not the 运行中… placeholder', () => {
-    const view = mount(snapshot({ runningCalls: [running()] }), target)
-    expect(view.getByText('ls -la')).toBeTruthy()
-    expect(view.queryByText('运行中…')).toBeNull()
-    expect(runStateOf(view.container)).toBe('ongoing')
-  })
-
-  it('a running non-terminal call keeps the 运行中… placeholder', () => {
-    const view = mount(snapshot({ runningCalls: [running({ argsRaw: shellArgs({ run_in_background: true }) })] }), target)
-    expect(view.getByText('运行中…')).toBeTruthy()
-  })
-
-  it('a non-terminal result keeps the flattened pre with its error styling', () => {
-    const view = mount(snapshot({
-      nodes: [settled({
-        isError: true,
-        content: [{ type: 'text', text: 'permission denied' }],
-      })],
-    }), target)
-    const pre = view.container.querySelector('pre[data-error]')
-    expect(pre?.textContent).toBe('permission denied')
-  })
-
-  it('a Code Dispatch child renders its terminal output in Details', () => {
-    const child = settled({ callId: 'c1', parentCallId: 'p1' })
-    const view = mount(snapshot({
-      runningCalls: [running({ callId: 'p1', subCalls: [child] })],
-    }), target)
-    expect(view.container.querySelector('[data-terminal]')?.textContent).toContain('a.ts  b.ts')
-    expect(view.getByText('ls -la')).toBeTruthy()
-    expect(runStateOf(view.container)).toBe('done')
-  })
-
-  it('a running Code Dispatch child renders its terminal prompt in Details', () => {
-    const view = mount(snapshot({
-      // The leading non-matching sub-call exercises the scan's skip.
-      runningCalls: [running({
-        callId: 'p1',
-        subCalls: [
-          running({ callId: 'other', parentCallId: 'p1' }),
-          running({ parentCallId: 'p1' }),
-        ],
-      })],
-    }), target)
-    expect(view.queryByText('运行中…')).toBeNull()
-    expect(view.getByText('ls -la')).toBeTruthy()
-    expect(runStateOf(view.container)).toBe('ongoing')
-  })
-
-  it('a window-truncated call head titles the panel by callId and drops the Input section', () => {
-    const view = mount(snapshot({
-      nodes: [settled({ call: null })],
-    }), target)
-    expect(view.getByText('c1')).toBeTruthy()
-    expect(view.queryByText('输入')).toBeNull()
-    expect(view.getByText('输出')).toBeTruthy()
-  })
-
-  it('scans past other nodes and other calls before reporting the call out of window', () => {
-    const view = mount(snapshot({
-      nodes: [
-        { kind: 'assistant', seq: 1, time: 1_000, turn: 1, step: 1, blocks: [] },
-        settled({ callId: 'elsewhere' }),
-      ],
-      runningCalls: [running({ callId: 'also-elsewhere' })],
-    }), target)
-    expect(view.getByText('该调用不在当前窗口内')).toBeTruthy()
-  })
-
-  it('no selection at all renders the guidance line and the default title', () => {
-    const view = mount(snapshot(), null)
-    expect(view.getByText('详情')).toBeTruthy()
-    expect(view.getByText('点击消息流中的工具行查看详情')).toBeTruthy()
-  })
-
-  it('a step selection without a callId renders the guidance line too', () => {
-    const view = mount(snapshot(), { turnSeq: 3, stepSeq: 1 })
-    expect(view.getByText('点击消息流中的工具行查看详情')).toBeTruthy()
-  })
-
-  it('the close button reaches closeDetails', () => {
-    localStorage.clear()
-    const chat = createChatStore().create()
-    const closeDetails = vi.fn()
-    const snap = snapshot()
-    const session = createSnapshotStore(sessionSnapshot(SID))
-    const conversation = createSnapshotStore(conversationSnapshot())
-    const workspaces = createSnapshotStore(workspaceSnapshot())
-    const attention = createSnapshotStore(new Map())
-    const view = render(
-      <DetailsPanel
-        renderSlot={renderToolDetails(t)}
-        SessionProvider={({ children }) => children}
-        sessionId={SID}
-        useSession={bindSnapshotSelector(session)}
-        useSessions={bindSnapshotSelector(createSnapshotStore<SessionListState>(
-          {
-            ids: [], byId: {}, current: undefined, phase: 'ready',
-            subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined,
-          }))}
-        useSessionPendingInteraction={bindSnapshotSelector(attention)}
-        useWorkspaces={bindSnapshotSelector(workspaces)}
-        useConversation={bindSnapshotSelector(conversation)}
-        useChat={bindSnapshotSelector({ getSnapshot: () => snap, subscribe: () => () => {} })}
-        useTrajectory={useEmptyTrajectory}
-        useInput={(() => { throw new Error('unused') })}
-        inputActions={{
-          setDraft: () => {}, addAttachments: () => true, removeAttachment: () => {},
-          pruneAttachments: () => {}, submit: () => {},
-        }}
-        useProjection={(() => undefined)}
-        useStore={bindSnapshotSelector(chat)}
-        actions={chat.actions}
-        closeDetails={closeDetails}
-        t={chatT}
-      />,
-    )
-    fireEvent.click(view.getByRole('button', { name: '关闭详情' }))
-    expect(closeDetails).toHaveBeenCalledTimes(1)
-  })
-
-  it('a non-text result block renders as JSON, and an empty result falls back to its error', () => {
-    const nonText = mount(snapshot({
-      nodes: [settled({
-        content: [{ type: 'reasoning', text: 'why' }],
-      })],
-    }), target)
-    // Scope to the Output section: the Input section's CodeBlock renders a
-    // <pre> of its own, and it comes first in document order.
-    expect(nonText.getByText('输出').closest('section')?.querySelector('pre')?.textContent)
-      .toBe('{\n  "type": "reasoning",\n  "text": "why"\n}')
-    cleanup()
-    const empty = mount(snapshot({
-      nodes: [settled({
-        content: [], isError: true,
-        error: { name: 'ToolError', code: 'interrupted' },
-      })],
-    }), target)
-    expect(empty.getByText('ToolError: interrupted')).toBeTruthy()
   })
 })

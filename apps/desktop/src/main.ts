@@ -15,16 +15,31 @@ import {
 import { resolveDesktopPaths } from './paths.ts'
 import { DesktopProjectManager, type DesktopProjectHooks } from './project-manager.ts'
 import { DesktopHostProcess } from './host-process.ts'
+import { DesktopBackendController, type DesktopBackendState } from './backend-controller.ts'
 import { DESKTOP_IPC, type DesktopUpdateState } from './ipc.ts'
 import { formatDesktopMessage, resolveDesktopLocale } from './locale.ts'
 import { claimDesktopSingleInstance } from './single-instance.ts'
 import { DesktopUpdateCoordinator } from './update-coordinator.ts'
+import { desktopErrorState } from './startup-error.ts'
+import { startupFailureDocument } from './startup-document.ts'
 
 const SCHEME = 'dsh-app'
 let focusPrimaryWindow = (): void => {}
+type RecoveryAction = 'restart' | 'plugins' | 'reset'
+let profileRecoveryAvailable = (): boolean => false
+const emergencyPages = new WeakMap<BrowserWindow, { url: string; message: string; busy: boolean }>()
+let recoverApplication = (action: RecoveryAction): Promise<void> => {
+  if (action !== 'restart') return Promise.reject(new Error('Desktop recovery could not initialize; reinstall the application'))
+  app.relaunch()
+  app.quit()
+  return Promise.resolve()
+}
 
-function errorOf(reason: unknown, fallback: string): Error {
-  return reason instanceof Error ? reason : new Error(fallback)
+async function showEmergencyDocument(window: BrowserWindow, message: string): Promise<void> {
+  const document = startupFailureDocument(resolveDesktopLocale(app.getLocale()), message, profileRecoveryAvailable())
+  const url = `data:text/html;charset=utf-8,${encodeURIComponent(document)}`
+  emergencyPages.set(window, { url, message, busy: false })
+  await window.loadURL(url)
 }
 
 protocol.registerSchemesAsPrivileged([{
@@ -49,7 +64,7 @@ const MIME: Readonly<Record<string, string>> = {
 interface RuntimeResources {
   readonly node: string
   readonly pnpm: string
-  readonly seed: string
+  readonly dsh: string
 }
 
 function runtimeResources(): RuntimeResources {
@@ -58,15 +73,8 @@ function runtimeResources(): RuntimeResources {
     ?? join(process.resourcesPath, 'runtime', 'node', process.platform === 'win32' ? 'node.exe' : 'node')
   const pnpm = (development ? process.env.DSH_DESKTOP_PNPM_ENTRY : undefined)
     ?? join(process.resourcesPath, 'runtime', 'pnpm', 'bin', 'pnpm.mjs')
-  const seed = (development ? process.env.DSH_DESKTOP_SEED_DIR : undefined) ?? join(process.resourcesPath, 'seed')
-  return { node, pnpm, seed }
-}
-
-function developmentProject(): string | undefined {
-  const configured = process.env.DSH_DESKTOP_DEV_PROJECT_DIR
-  if (configured === undefined || configured === '') return undefined
-  if (app.isPackaged) throw new Error('dsh desktop: development project override is unavailable in packaged applications')
-  return resolve(configured)
+  const dsh = (development ? process.env.DSH_DESKTOP_DSH_DIR : undefined) ?? join(process.resourcesPath, 'dsh')
+  return { node, pnpm, dsh }
 }
 
 function developmentHostInspectPort(enabled: boolean): number | undefined {
@@ -79,13 +87,13 @@ function developmentHostInspectPort(enabled: boolean): number | undefined {
   return port
 }
 
-function createWindow(preload: string): BrowserWindow {
+function createWindow(preload: string, show = false): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 840,
     minWidth: 880,
     minHeight: 600,
-    show: false,
+    show,
     webPreferences: {
       preload,
       nodeIntegration: false,
@@ -97,6 +105,15 @@ function createWindow(preload: string): BrowserWindow {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event, url) => {
     if (new URL(url).protocol !== `${SCHEME}:`) event.preventDefault()
+    const page = emergencyPages.get(window)
+    if (page === undefined || page.busy || window.webContents.getURL() !== page.url) return
+    const action = new URL(url)
+    if (action.protocol !== 'dsh-recovery:' || !['restart', 'plugins', 'reset'].includes(action.hostname)) return
+    if (action.hostname !== 'restart' && !profileRecoveryAvailable()) return
+    page.busy = true
+    void recoverApplication(action.hostname as RecoveryAction).catch(async (error: unknown) => {
+      if (!window.isDestroyed()) await showEmergencyDocument(window, `${page.message}\n${desktopErrorState(error).message}`)
+    }).catch((error: unknown) => { console.error(error) }).finally(() => { page.busy = false })
   })
   return window
 }
@@ -133,12 +150,13 @@ async function serveShellAsset(request: Request): Promise<Response> {
 async function main(): Promise<void> {
   const resources = runtimeResources()
   const paths = resolveDesktopPaths()
-  const development = developmentProject()
+  const development = app.isPackaged ? undefined : join(app.getAppPath(), '.desktop-build', 'development', 'project')
   const activeProject = development ?? paths.profile
-  const hostInspectPort = developmentHostInspectPort(development !== undefined)
   const manager = new DesktopProjectManager(paths, resources)
-  if (development === undefined) manager.recover()
-  let host: DesktopHostProcess | undefined
+  profileRecoveryAvailable = () => development === undefined && manager.canRecoverProfile()
+  let pageError: Extract<DesktopBackendState, { phase: 'error' }> | undefined
+  let quitting = false
+  let startup: Promise<void> | undefined
   let mainWindow: BrowserWindow | undefined
   let pluginWindow: BrowserWindow | undefined
   let shellInstallerOwnsQuit = false
@@ -147,6 +165,56 @@ async function main(): Promise<void> {
   const messages = locale.messages
   const appPreload = fileURLToPath(new URL('./preload-app.cjs', import.meta.url))
   const managementPreload = fileURLToPath(new URL('./preload.cjs', import.meta.url))
+  const startupUrl = `${SCHEME}://shell/startup.html`
+  const applicationUrl = `${SCHEME}://app/index.html`
+  let navigation: { window: BrowserWindow; url: string; promise: Promise<void> } | undefined
+  let emergencyDocument = false
+
+  const showEmergencyError = async (error: unknown): Promise<void> => {
+    if (quitting || emergencyDocument) return
+    emergencyDocument = true
+    const diagnostic = desktopErrorState(error).message
+    pageError = { phase: 'error', message: diagnostic }
+    if (mainWindow !== undefined) await showEmergencyDocument(mainWindow, diagnostic)
+  }
+
+  const navigateMain = (url: string): Promise<void> => {
+    const window = mainWindow
+    if (quitting || emergencyDocument || window === undefined || window.isDestroyed()) return Promise.resolve()
+    if (navigation?.window === window && navigation.url === url) return navigation.promise
+    const next = { window, url, promise: Promise.resolve() }
+    next.promise = window.loadURL(url).catch((error: unknown) => {
+      if (quitting || window.isDestroyed() || navigation !== next) return
+      navigation = undefined
+      throw error
+    })
+    navigation = next
+    return next.promise
+  }
+  const backendState = (): DesktopBackendState => {
+    const state = pageError ?? backend.state
+    return state.phase === 'error' ? { ...state, profileRecovery: profileRecoveryAvailable() } : state
+  }
+  const publishBackend = (state: DesktopBackendState): void => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send(DESKTOP_IPC.backendState, state)
+    }
+  }
+  const backend = new DesktopBackendController((onFailure) => {
+    if (development === undefined) manager.assertProfileRuntime(activeProject)
+    const hostInspectPort = developmentHostInspectPort(development !== undefined)
+    const host = new DesktopHostProcess(resources.node, development ?? resources.dsh, activeProject,
+      hostInspectPort, process.env, onFailure)
+    return {
+      start: () => host.start(),
+      stop: () => host.stop(),
+      fetch: (request: Request) => host.fetch(request),
+    }
+  }, (state) => {
+    if (state.phase === 'starting' && !emergencyDocument) pageError = undefined
+    publishBackend(backendState())
+    if (state.phase === 'error') void navigateMain(startupUrl).catch((error: unknown) => { console.error(error) })
+  })
 
   const publishUpdate = (state: DesktopUpdateState): DesktopUpdateState => {
     updateState = state
@@ -156,76 +224,73 @@ async function main(): Promise<void> {
     return state
   }
 
-  const startHost = async (projectDir = activeProject): Promise<DesktopHostProcess> => {
-    const next = new DesktopHostProcess(resources.node, projectDir, hostInspectPort)
-    await next.start()
-    return next
-  }
   const hooks: DesktopProjectHooks = {
-    healthCheck: async (projectDir) => {
-      const active = host
-      host = undefined
-      await active?.stop()
-      let healthFailure: unknown
-      let probe: DesktopHostProcess | undefined
-      try {
-        probe = await startHost(projectDir)
-        await probe.stop()
-      } catch (error) {
-        healthFailure = error
-        await probe?.stop().catch(() => undefined)
-      }
-      let restartFailure: unknown
-      if (active !== undefined) {
-        try {
-          host = await startHost()
-        } catch (error) {
-          restartFailure = error
-        }
-      }
-      if (healthFailure !== undefined && restartFailure !== undefined) {
-        throw new AggregateError([
-          errorOf(healthFailure, 'desktop project: staged health check failed'),
-          errorOf(restartFailure, 'desktop project: active backend restart failed'),
-        ], 'desktop project: staged health check and active backend restart failed')
-      }
-      if (healthFailure !== undefined) throw errorOf(healthFailure, 'desktop project: staged health check failed')
-      if (restartFailure !== undefined) throw errorOf(restartFailure, 'desktop project: active backend restart failed')
-    },
-    beforeActivate: async () => {
-      const active = host
-      host = undefined
-      await active?.stop()
-    },
-    afterActivate: async () => {
-      host = await startHost()
-    },
+    beforeChange: () => backend.stop(),
+    afterChange: () => backend.start(async () => {}),
   }
 
-  if (development === undefined) {
-    await manager.applyRelease(resources.seed, app.getVersion(), {
-      ...hooks,
-      beforeActivate: async () => {},
-      afterActivate: async () => {},
-    })
+  recoverApplication = async (action): Promise<void> => {
+    await startup?.catch(() => undefined)
+    await backend.stop()
+    if (action === 'restart') {
+      app.relaunch()
+      app.quit()
+      return
+    }
+    if (!profileRecoveryAvailable()) throw new Error(messages.startupReinstallAdvice)
+    if (action === 'reset') await manager.resetConfiguration(hooks)
+    else await manager.mutate({ type: 'plugins-disable-all' }, hooks)
+    emergencyDocument = false
+    pageError = undefined
+    navigation = undefined
+    await navigateMain(applicationUrl)
   }
-  host = await startHost()
+
+  const showStartupError = async (error: unknown): Promise<void> => {
+    if (quitting) return
+    pageError = desktopErrorState(error)
+    try { await navigateMain(startupUrl) }
+    catch (navigationError) {
+      await showEmergencyError(new AggregateError([error, navigationError], messages.startupFailed))
+    }
+    publishBackend(backendState())
+  }
+  const reconcileBackend = (): Promise<void> => {
+    startup ??= (async () => {
+      pageError = undefined
+      await navigateMain(startupUrl)
+      await backend.start(async () => {
+        if (development === undefined) {
+          await manager.applyRelease()
+        }
+      })
+      if (backend.host !== undefined) await navigateMain(applicationUrl)
+    })().catch(async (error: unknown) => {
+      await showStartupError(error)
+      throw error
+    }).finally(() => { startup = undefined })
+    return startup
+  }
 
   const updates = new DesktopUpdateCoordinator(
     publishUpdate,
     async () => {
       shellInstallerOwnsQuit = true
-      const active = host
-      host = undefined
-      await active?.stop()
+      await backend.stop()
     },
   )
 
   protocol.handle(SCHEME, (request) => {
     const url = new URL(request.url)
-    if (url.hostname === 'shell') return serveShellAsset(request)
+    if (url.hostname === 'shell') return serveShellAsset(request).then((response) => {
+      if (response.status >= 400 && ['/startup.html', '/startup.js', '/startup.css'].includes(url.pathname)) {
+        void showEmergencyError(new Error(`Desktop recovery resource could not be loaded: ${url.pathname} (HTTP ${response.status})`))
+          .catch((error: unknown) => { console.error(error) })
+      }
+      return response
+    })
     if (url.hostname !== 'app') return Promise.resolve(new Response(null, { status: 404 }))
-    const active = host
+    const active = backend.host
     if (active === undefined) return Promise.resolve(new Response('backend unavailable', { status: 503 }))
     return active.fetch(request)
   })
@@ -235,8 +300,16 @@ async function main(): Promise<void> {
     if (development !== undefined) {
       throw new Error('dsh desktop: plugin package changes require a packaged application')
     }
-    await manager.mutate(mutation, hooks)
-    if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.webContents.reload()
+    await startup?.catch(() => undefined)
+    pageError = undefined
+    await navigateMain(startupUrl)
+    try {
+      await manager.mutate(mutation, hooks)
+      await navigateMain(applicationUrl)
+    } catch (error) {
+      await showStartupError(error)
+      throw error
+    }
   }
   ipcMain.handle(DESKTOP_IPC.localeGet, (event) => {
     assertDesktopSender(event, ['shell'])
@@ -260,6 +333,42 @@ async function main(): Promise<void> {
       throw new Error('dsh desktop: plugin name and version must be strings')
     }
     return mutate(event, { type: 'plugin-update', name, version })
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsToggle, (event, name: unknown, enabled: unknown) => {
+    if (typeof name !== 'string' || typeof enabled !== 'boolean') throw new Error('dsh desktop: invalid plugin activation request')
+    return mutate(event, { type: 'plugin-toggle', name, enabled })
+  })
+  ipcMain.handle(DESKTOP_IPC.pluginsDisableAll, event => mutate(event, { type: 'plugins-disable-all' }))
+  ipcMain.handle(DESKTOP_IPC.backendStatus, (event) => {
+    assertDesktopSender(event, ['shell'])
+    return backendState()
+  })
+  ipcMain.handle(DESKTOP_IPC.backendRetry, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    await reconcileBackend()
+    focusPrimaryWindow()
+  })
+  ipcMain.handle(DESKTOP_IPC.applicationRestart, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    try {
+      await recoverApplication('restart')
+    } catch (error) {
+      await showStartupError(error)
+    }
+  })
+  ipcMain.handle(DESKTOP_IPC.configurationReset, async (event) => {
+    assertDesktopSender(event, ['shell'])
+    if (development !== undefined) throw new Error('Desktop configuration reset requires a packaged application')
+    const failure = backendState()
+    if (failure.phase !== 'error') {
+      throw new Error('Desktop profile reset requires a startup failure')
+    }
+    await startup?.catch(() => undefined)
+    try {
+      await recoverApplication('reset')
+    } catch (error) {
+      await showStartupError(error)
+    }
   })
   ipcMain.handle(DESKTOP_IPC.updatesCheck, async (event) => {
     assertDesktopSender(event, ['shell'])
@@ -341,31 +450,32 @@ async function main(): Promise<void> {
   }]))
 
   const createMainWindow = (): BrowserWindow => {
-    const window = createWindow(appPreload)
+    const window = createWindow(appPreload, true)
     mainWindow = window
-    window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show() })
     window.on('closed', () => { if (mainWindow === window) mainWindow = undefined })
+    window.webContents.on('preload-error', (_event, _path, error) => {
+      void showEmergencyError(error).catch((failure: unknown) => { console.error(failure) })
+    })
+    window.webContents.on('render-process-gone', (_event, details) => {
+      navigation = undefined
+      emergencyDocument = false
+      void showStartupError(new Error(`Desktop renderer exited: ${details.reason}`))
+        .catch((failure: unknown) => { console.error(failure) })
+    })
     return window
   }
   focusPrimaryWindow = () => {
     const window = mainWindow
     if (window === undefined || window.isDestroyed()) {
-      const replacement = createMainWindow()
-      void replacement.loadURL(`${SCHEME}://app/index.html`)
+      createMainWindow()
+      void navigateMain(backendState().phase === 'ready' ? applicationUrl : startupUrl)
+        .catch((error: unknown) => { console.error(error) })
       return
     }
     if (window.isMinimized()) window.restore()
     window.show()
     window.focus()
   }
-
-  mainWindow = createMainWindow()
-  await mainWindow.loadURL(`${SCHEME}://app/index.html`)
-  if (development !== undefined && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
-    mainWindow.webContents.openDevTools({ mode: 'detach' })
-  }
-  publishUpdate(updateState)
-  setTimeout(() => { void checkAndPrompt(false) }, 10_000)
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) focusPrimaryWindow()
@@ -374,13 +484,23 @@ async function main(): Promise<void> {
     if (process.platform !== 'darwin') app.quit()
   })
   app.on('before-quit', (event) => {
-    if (shellInstallerOwnsQuit) return
-    if (host === undefined) return
+    if (shellInstallerOwnsQuit || quitting) return
     event.preventDefault()
-    const active = host
-    host = undefined
-    void active.stop().finally(() => { app.quit() })
+    quitting = true
+    void backend.close().catch((error: unknown) => { console.error(error) }).finally(() => { app.quit() })
   })
+
+  mainWindow = createMainWindow()
+  await reconcileBackend().catch(() => undefined)
+  // Window lifecycle callbacks run while backend startup is pending.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (quitting) return
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  if (mainWindow !== undefined && development !== undefined && process.env.DSH_DESKTOP_OPEN_DEVTOOLS !== '0') {
+    mainWindow.webContents.openDevTools({ mode: 'detach' })
+  }
+  publishUpdate(updateState)
+  setTimeout(() => { void checkAndPrompt(false) }, 10_000)
 }
 
 const ownsDesktopInstance = claimDesktopSingleInstance(app, () => { focusPrimaryWindow() })
@@ -392,6 +512,10 @@ if (ownsDesktopInstance) void app.whenReady().then(main).catch(async (error: unk
   if (diagnosticFile !== undefined) {
     await writeFile(diagnosticFile, `${error instanceof Error ? error.stack ?? message : message}\n`).catch(() => undefined)
   }
-  dialog.showErrorBox(resolveDesktopLocale(app.getLocale()).messages.startupFailed, message)
+  const window = BrowserWindow.getAllWindows()[0] ?? createWindow(fileURLToPath(new URL('./preload-app.cjs', import.meta.url)), true)
+  window.once('closed', () => { app.quit() })
+  await showEmergencyDocument(window, message)
+}).catch((error: unknown) => {
+  console.error(error)
   app.exit(1)
 })

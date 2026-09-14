@@ -1,0 +1,7 @@
+/* The owner supplies scrolling; Markdown uses prose whitespace inside its source-oriented container. */
+.document {
+  min-width: 0;
+  padding: 10px 12px;
+  font-family: var(--dsw-font, inherit);
+  white-space: normal;
+}

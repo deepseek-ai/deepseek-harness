@@ -220,7 +220,7 @@ Session-list `updatedAt` is `max(header.createdAt, sessionListMetadata.lastPromp
 
 `packages/api/workspace-controller` provides Host `ctx.workspaceController` and the generated `ctx.remote.workspace` namespace.
 
-It owns create, rename, delete, insertBefore, insertSessionBefore, archiveSession, and `follow`. Workspace registry remains the durable source of truth; the Controller owns Remote commands, projection, and error mapping.
+It owns create, rename, delete, insertBefore, insertSessionBefore, archiveSession, unarchiveSession, and `follow`. Workspace registry remains the durable source of truth; the Controller owns Remote commands, projection, and error mapping.
 
 `WorkspaceFeed` synchronously observes storage `domain/changed`, and each follow generation emits a complete baseline before `upsert`, `remove`, `order`, and `archived` deltas.
 

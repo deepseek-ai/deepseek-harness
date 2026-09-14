@@ -1,0 +1,9 @@
+# Add one one-shot binding beside the shipped continuable delegation tool so
+# this integration lane covers both in-process lifecycle modes.
+- insert:
+    - id: auto-review-one-shot-subagent
+      name: '@deepseek-ai/dsh-tool-subagent'
+      config:
+        provider: spawn
+        toolName: subagent_one_shot
+        backgroundMode: one-shot

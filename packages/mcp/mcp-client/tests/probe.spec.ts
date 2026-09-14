@@ -27,9 +27,14 @@ const { mockConnect, mockClose, mockListTools, mockGetServerVersion, MockClient 
   return { mockConnect, mockClose, mockListTools, mockGetServerVersion, MockClient }
 })
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ Client: MockClient }))
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ StdioClientTransport: vi.fn() }))
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ StreamableHTTPClientTransport: vi.fn() }))
+vi.mock('@modelcontextprotocol/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
+  Client: MockClient,
+  StreamableHTTPClientTransport: vi.fn(),
+}))
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
+  StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+}))
 
 import { probeServer } from '@deepseek-ai/dsh-mcp-client/src/probe.ts'
 

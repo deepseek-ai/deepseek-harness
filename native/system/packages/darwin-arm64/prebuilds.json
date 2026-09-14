@@ -1,0 +1,6 @@
+{
+  "platform": "darwin-arm64",
+  "binaries": [
+    { "tool": "flock", "kind": "node-api", "napi": 8, "path": "bin/system.node" }
+  ]
+}

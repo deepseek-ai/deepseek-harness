@@ -31,6 +31,12 @@
     },
     {
       "path": "../../boot/cmdline"
+    },
+    {
+      "path": "../../session-query/session-query"
+    },
+    {
+      "path": "../../fs/fs"
     }
   ]
 }

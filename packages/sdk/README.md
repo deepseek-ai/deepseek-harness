@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This group lets another process drive a complete DeepSeek Harness runtime: the JSON-RPC wire protocol defines the messages, the server plugin serves external clients over stdio, and the TypeScript and Python clients launch `dsh` with a named profile and ordered patches. No package in this group defines a separate application or creates developer projects. SDK clients open sessions, send prompts, and observe session events, agent status transitions, and subagent completions as they happen. The TypeScript client is the design twin of the [Python SDK](../../python/README.md), which speaks the same protocol. This page maps the group; each package README owns its per-package contract.
+The SDK family lets another process drive a complete DeepSeek Harness runtime over newline-delimited JSON-RPC. Its protocol package defines the public messages, the TypeScript client launches `dsh` with a named profile and ordered patches, and the server accepts SDK requests over stdio. Clients can open sessions, send prompts, and observe session events, agent status changes, and subagent completions. The TypeScript client and [Python SDK](../../python/README.md) use the same protocol, and these packages do not create developer projects or define another application.
 
 ## Table of Contents
 

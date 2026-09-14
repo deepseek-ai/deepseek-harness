@@ -44,6 +44,7 @@ function validateDeliveryAccepted(session: Session, event: SessionEvent<'session
 
 /** Validate acceptance watermarks already present in one Session. */
 function validateSession(session: Session, fail: InvariantFailure): void {
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   for (const event of session.snapshotEvents()) {
     if (event.type === 'session-log-deepseek/delivery-accepted') validateDeliveryAccepted(session, event, fail)
   }

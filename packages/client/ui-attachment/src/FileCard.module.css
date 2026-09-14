@@ -106,6 +106,18 @@
   opacity: 1;
 }
 
+@media (pointer: coarse) {
+  .remove {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remove {
+    transition: none;
+  }
+}
+
 .card:hover .name,
 .card:focus-within .name {
   padding-right: 18px;

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-todo` 为 agent 提供一份可用于规划的结构化任务列表：把多步工作拆成具体任务、标记正在进行的任务、完成后逐项勾掉。列表跨轮次、跨重新打开的会话持续存在，agent 与 UI 始终看到最新计划。一个配置开关决定是否允许多个任务同时处于进行中，适用于并行开展工作的 agent。凡是希望 agent 维护可见任务列表的场景都可以使用它；每次更新整体替换列表，只有拥有该列表的 agent 会话才能修改。
+`dsh-tool-todo` 为 agent（智能体）提供一份可用于规划的结构化任务列表：把多步工作拆成具体任务、标记正在进行的任务、完成后逐项勾掉。列表跨轮次、跨重新打开的会话持续存在，agent 与 UI 始终看到最新计划。一个配置开关决定是否允许多个任务同时处于进行中，适用于并行开展工作的 agent。凡是希望 agent 维护可见任务列表的场景都可以使用它；每次更新整体替换列表，只有拥有该列表的 agent 会话才能修改。
 
 ## 目录
 
@@ -29,11 +29,11 @@ kind: "package-reference"
 
 ### 何时选择
 
-当某个 agent 会话应当拥有任务列表、且整表更新即可满足需求时选择它——这是规划工具的常见形态。当多个 agent 必须共享同一份列表、或需要逐项编辑时，请避开：列表只属于一个 agent，每次更新都会替换整个列表。它要求环境中确实存在 agent 会话；从不运行 agent 的纯自动化表面无法使用它。
+当某个 agent 会话应当拥有任务列表、且整表更新即可满足需求时选择它——这是规划工具的常见形态。当多个 agent 必须共享同一份列表、或需要逐项编辑时，请避开：列表只属于一个 agent，每次更新都会替换整个列表。它要求环境中确实存在 agent 会话；从不运行 agent 的纯自动化入口无法使用它。
 
 ### 最小配置
 
-`allowParallelInProgress` 是必填项、没有默认值：省略它的组合会在加载时失败，非布尔值也会被拒绝。可能并发运行工作的 agent（subagent、后台命令、workflow 扇出）设为 `true`，需要单活跃项纪律的设为 `false`。
+`allowParallelInProgress` 是必填项、没有默认值：省略它的组合会在加载时失败，非布尔值也会被拒绝。可能并发运行工作的 agent（subagent、后台命令、工作流扇出）设为 `true`，需要单活跃项纪律的设为 `false`。
 
 ```yaml
 - name: '@deepseek-ai/dsh-tool-todo'
@@ -71,8 +71,8 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 
 - **整表替换、日志承载状态。** 模型重新发送整个列表；`todo/write` 快照存放在事件溯源的会话日志上，持久性、回放与恢复重建都来自日志而非服务。
 - **单一所有者。** 列表属于调用 agent 会话；不存在共享或 swarm 作用域，非 agent 调用方会被拒绝。
-- **部署策略，而非编码规则。** `allowParallelInProgress` 是必填组合选择，因为工具无法观测运行时并发；持久日志不变式刻意不跟随它，因此一种策略下写入的日志在部署收紧另一种策略后仍可回放。
-- **校验让落库快照保持诚实。** schema 层拒绝未知键、`execute` 层拒绝空或重复 content，使持久快照与模型自认为写入的内容一致。
+- **部署策略，而非编码规则。** `allowParallelInProgress` 是必填组合选择，因为工具无法观测运行时并发；持久日志不变式刻意不跟随它，因此一种策略下写入的日志在切换到另一种策略后仍可回放。
+- **校验确保日志快照如实反映输入。** schema 层拒绝未知键、`execute` 层拒绝空或重复 content，使持久快照与模型自认为写入的内容一致。
 
 [todo_write 工具 Agent Note](../../../.agents/notes/archived/feature/2026-06-29-todo-write-tool.md) 记录原始设计与备选方案；[并行 in-progress Agent Note](../../../.agents/notes/archived/feature/2026-07-26-todo-parallel-in-progress.md) 记录该策略决策。
 
@@ -87,7 +87,7 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 
 ### 导出形状
 
-本插件是函数／命名空间插件：导出 `name` / `inject` / `apply`，没有默认导出。多余的 `export default` 会让 Loader 的 `unwrapExports` 折叠模块并丢弃 `inject`（参见 [postmortem 0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md)）。
+本插件是函数／命名空间插件：导出 `name`、`inject`、`apply`，没有默认导出。多余的 `export default` 会让 Loader 的 `unwrapExports` 折叠模块并丢弃 `inject`（参见 [postmortem 0001](../../../docs/postmortem/0001-acp-default-export-drops-inject.zh.md)）。
 
 ### 会话投影
 
@@ -114,7 +114,7 @@ agent 每次更新都发送完整列表；新列表替换旧列表，因此没�
 - [todo 组映射](../README.zh.md)——同级组页面及其包表格。
 - [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-todo)——模型接收的 `todo_write` schema。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-todo)——每个受支持配置字段及其源声明。
-- [todo_write 工具 Agent Note](../../../.agents/notes/archived/feature/2026-06-29-todo-write-tool.md)——原始设计、备选方案与砍掉的字段。
+- [todo_write 工具 Agent Note](../../../.agents/notes/archived/feature/2026-06-29-todo-write-tool.md)——原始设计、备选方案与未采纳的字段。
 - [并行 in-progress Agent Note](../../../.agents/notes/archived/feature/2026-07-26-todo-parallel-in-progress.md)——为何活跃计数上限成为部署策略。
 
 -----
@@ -157,7 +157,7 @@ token 用量随模型每次提交的完整列表增长，这些调用参数会�
 
 这些限制说明工具何时不合适。它们是当前包约束，不是任务积压。
 
-- **仅单一所有者作用域**——列表属于唯一调用 agent 会话；subagent、共享与 swarm 作用域是有意砍掉的部分，非 agent 调用方会被拒绝。
+- **仅单一所有者作用域**——列表属于唯一调用 agent 会话；subagent、共享与 swarm 作用域是有意设置的限制，非 agent 调用方会被拒绝。
 - **条目形状刻意保持最小**——`content` 加三态 `status`；整表替换不需要稳定 id、优先级或 active-form 字段。
 - **整表替换是唯一操作**——没有部分更新、没有回读工具、没有逐项编辑；模型每次调用都必须重新发送完整列表。
 
@@ -171,6 +171,6 @@ token 用量随模型每次提交的完整列表增长，这些调用参数会�
 
 #### 未来：跨 agent 与共享列表
 
-单一所有者作用域是有意砍掉的部分，跨 agent 或共享列表仍是独立的未来设计：它们需要逐项日志增量与显式作用域选择，并会改变模型可见约定。目前尚不存在设计。
+单一所有者作用域是有意设置的限制，跨 agent 或共享列表仍是独立的未来设计：它们需要逐项日志增量与显式作用域选择，并会改变模型可见约定。目前尚不存在设计。
 
 </details>

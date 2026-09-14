@@ -139,7 +139,7 @@ export function createSessionFormatCatalog(options: SessionFormatCatalogOptions)
     const collector = new SessionFormatEventCollector()
     const migration = chain.createStream(
       decoder.header,
-      requiredHistoricalCut(storedVersion, sourceCut),
+      sourceCut,
       collector,
     )
     return new MigratingSessionFormatRestore(
@@ -277,13 +277,6 @@ function restoreCurrentVersion(
 
 function identityArtifact(artifact: SessionFormatArtifact): SessionFormatArtifact {
   return artifact
-}
-
-function requiredHistoricalCut(version: number, cut: number | undefined): number {
-  if (cut === undefined) {
-    throw new SessionFormatError(`format v${version} decoder must expose its inherited cut before migration`)
-  }
-  return cut
 }
 
 function malformed(targetVersion: number, error: unknown, storedVersion?: number): SessionFormatHeaderReadResult {

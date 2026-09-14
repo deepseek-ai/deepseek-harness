@@ -3,6 +3,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type { Session, SessionEvent } from '@deepseek-ai/dsh-session'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
+import { AUTO_PRESET } from './index.ts'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-permission-presets'
 
@@ -13,7 +14,9 @@ export const inject = ['invariants']
 
 /** Validate the package-owned event fields and ignore unrelated events. */
 function validateEvent(ctx: Context, event: SessionEvent, fail: InvariantFailure): void {
-  if (event.type === 'permission/preset' && !ctx.permissionPresets.names.includes(event.data.preset)) {
+  if (event.type === 'permission/preset'
+    && event.data.preset !== AUTO_PRESET
+    && !ctx.permissionPresets.names.includes(event.data.preset)) {
     fail(`permission/preset names unknown preset ${JSON.stringify(event.data.preset)}`)
   }
 }
@@ -21,6 +24,7 @@ function validateEvent(ctx: Context, event: SessionEvent, fail: InvariantFailure
 /** Install validation that loaded and newly appended preset events remain resolvable. */
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   for (const session of ctx.sessions.list()) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     for (const event of session.snapshotEvents()) validateEvent(ctx, event, fail)
   }
   ctx.on('internal/dispatch', (_mode, eventName, args) => {

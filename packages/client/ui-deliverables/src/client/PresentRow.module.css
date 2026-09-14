@@ -1,0 +1,6 @@
+/** Present status remains readable beside long workspace paths. */
+.summary { margin-left: 8px; display: flex; align-items: center; gap: 8px; min-width: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.summary > :first-child { flex-shrink: 0; }
+.paths { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.output { margin: 8px 0; padding: 12px; border-radius: 8px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.inspect { align-self: flex-start; border: none; padding: 4px 0; background: transparent; color: var(--dsw-alias-link); font: inherit; font-size: 12px; cursor: pointer; }

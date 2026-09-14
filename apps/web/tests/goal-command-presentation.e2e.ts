@@ -51,7 +51,7 @@ describe('web e2e: /goal human transcript presentation', () => {
     const input = page.locator('[data-composer-input]').first()
     await input.fill('/go')
     const menu = page.getByRole('listbox', { name: 'Trigger suggestions' })
-    await menu.getByRole('option', { name: 'goal set or view the goal for a long-running task' })
+    await menu.getByRole('option', { name: 'Goal Set or view the goal for a long-running task' })
       .waitFor({ timeout: 10_000 })
     await input.press('Tab')
     await expect.poll(() => input.textContent()).toBe('/goal ')

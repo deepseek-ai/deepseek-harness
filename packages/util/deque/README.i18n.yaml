@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/util/deque/README.md
 README.md: 7ddf9ae1645a60b85def0d64cfb261ec48c3cb36
-README.zh.md: fafcc2499afe5df54b1197a2e4b7cdb6e589c2d3
+README.zh.md: 14b89c0589b27c52468401ccc7d711c7911e2d37

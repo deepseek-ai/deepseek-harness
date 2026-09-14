@@ -11,7 +11,7 @@ import {
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
-    /** User preference sampled when a new Agent receives its delegation tools. */
+    /** User preference sampled when a new Session receives delegation tools. */
     subagentModelSelection: SubagentModelSelectionConfig
   }
 }
@@ -41,7 +41,7 @@ export interface Config {
   allowedModels?: AllowedModelRoute[]
 }
 
-/** Singleton settings owner read by delegation tools when an Agent is published. */
+/** Singleton settings owner read when delegation tools are composed for a Session. */
 export class SubagentModelSelectionConfig extends Service {
   static Config: z<Config> = z.object({
     enabled: z.boolean().default(false),
@@ -69,8 +69,8 @@ export class SubagentModelSelectionConfig extends Service {
         {
           setSource: (source) => { this.source = source },
           validate: (value) => { this.validate(value) },
-          // Consumers sample at Agent publication, so a settings update never
-          // rebuilds the tool definitions of an Agent that is already running.
+          // Consumers snapshot per Session, so a settings update never rebuilds
+          // the tool definitions of a Session that is already running.
           onChange: () => {},
         },
       )
@@ -78,7 +78,7 @@ export class SubagentModelSelectionConfig extends Service {
   }
 
   /**
-   * Read a detached selection preference for the next eligible Agent publication.
+   * Read a detached selection preference for the next eligible Session composition.
    * @returns the enabled state and exact allowed routes.
    */
   current(): SubagentModelSelectionSettings {

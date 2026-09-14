@@ -211,7 +211,7 @@ jobs:
         with:
           packages-dir: dist/runtime/
           # Public attestations reveal the private publisher repository. OIDC
-          # authentication remains enabled without uploading that provenance.
+          # authentication remains enabled without uploading that repository identity.
           attestations: false
 
   # Keep the SDK in a dependent job. If its upload fails after the immutable

@@ -34,6 +34,12 @@
     },
     {
       "path": "../../util/http-proxy"
+    },
+    {
+      "path": "../mcp-resources"
+    },
+    {
+      "path": "../../core/system-prompt"
     }
   ]
 }

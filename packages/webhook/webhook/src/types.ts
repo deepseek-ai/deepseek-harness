@@ -16,7 +16,7 @@ export interface VerifiedWebhookDelivery<K extends string = string> {
   readonly kind: K
   /** Configured adapter instance such as `primary-github`. */
   readonly source: WebhookSourceId
-  /** Provider identity exposed as provenance, never as built-in deduplication state. */
+  /** Provider delivery identifier exposed in message sources, never as built-in deduplication state. */
   readonly deliveryId: WebhookDeliveryId
   /** Provider-normalized lossless JSON. */
   readonly event: WebhookEventOf<K>

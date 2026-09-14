@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-slots` is the pure core of the web client's slot system: the type-level contract every UI feature composes through. One `register({ name, children?, store?, inject?, ...kind }, Component)` call contributes a component into a declared slot and, in the same breath, declares child slots, a store seat, and the registrant's business face. The component is checked at the call site against `ComposedProps` — the intersection of four shares, each derived from its single source of truth — so a wrong composition fails to compile. Chain-kind slots invert keyed routing: entries self-nominate through a pure selector instead of the dispatch site picking an `entryKey`. The package is React-free and Cordis-free at runtime (React types only); `ui-renderer` owns the engine implementation and React bindings.
+`dsh-client-ui-slots` lets web client plugins define and compose typed UI regions. Callers can add components, declare nested regions, attach scoped state, and supply business props through one compile-time-checked API. It supports single, ordered-list, keyed, and self-selecting chain composition, and reports conflicting compositions during plugin loading. Choose it for framework-neutral slot composition; pair it with `ui-renderer` when the client needs React rendering.
 
 ## Table of Contents
 
@@ -101,4 +101,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. A zero-dependency pure registry core — it emits no cordis events itself (the `ui-renderer` SlotRegistry owns the event bridge and its invariants); define/register/dispose sequencing is asserted directly by this package's behavior specs.
+**Runtime invariant:** No companion is published. This is a zero-dependency pure registry core; it emits no Cordis events itself (the `ui-renderer` SlotRegistry owns the event bridge and its invariants); define/register/dispose sequencing is asserted directly by this package's behavior specs.

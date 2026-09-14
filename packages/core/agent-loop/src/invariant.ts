@@ -28,6 +28,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
       fail('a loop-built request must carry a frozen messages array')
     }
 
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const events = session.snapshotEvents()
     if (!events.some(event => event.type === 'step/start')) {
       return fail('a loop-built request with no step/start in its session log')
@@ -41,8 +42,9 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
       fail(`llm request for session "${String(session.id)}" diverges from the dispatch-time durable derivation (log-reconstruction desync)`)
     }
 
+    // The system prompt travels inside `messages` as surface node 0, never as `system`.
     const headerMatches = options.model === header.config.model
-      && options.system === header.system
+      && options.system === undefined
       && options.temperature === header.config.temperature
       && options.maxTokens === header.config.maxTokens
       && JSON.stringify(options.stop) === JSON.stringify(header.config.stop)

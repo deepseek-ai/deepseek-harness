@@ -34,6 +34,8 @@ This low-level Win32 process library is consumed by the Windows ACL sandbox and 
 
 The Windows ACL sandbox adds SID, DACL, grant, workspace, and public child policy above these primitives.
 
+- **Inherited control descriptor** — Job creation accepts an optional fd-7 pipe. `STARTUPINFO.cbReserved2/lpReserved2` carries an eight-slot CRT descriptor table with standard handles, closed slots 3–6, and the control pipe at slot 7. The table is allocated until CreateProcess returns; temporary handle inheritance is reset on success and failure. Initializing the slot before Node starts avoids overwriting descriptors Node has already allocated.
+
 <a id="header-verification"></a>
 ## Header verification
 

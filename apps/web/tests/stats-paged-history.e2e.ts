@@ -1,5 +1,5 @@
 // Web e2e scenario: full-session stats over paged history. A deterministic
-// 28-turn log (56 surface messages — more than one 50-message history page)
+// 28-turn log (56 chat messages — more than one 50-message history page)
 // seeded cold through the REAL persistence API must render whole-log turn/step
 // counts from the sessionStats projection on first open, and loading the
 // older page must NOT change them. This pins the bug the projection fixed:
@@ -9,6 +9,8 @@
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
+import { createSystemMessage } from '@deepseek-ai/dsh-llm'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -21,20 +23,21 @@ const UI_EXPECTED = fileURLToPath(new URL('./expected/stats-paged-history/ui.exp
 const MODE = webSnapshotMode()
 const SEED_ID = 'stats-paged-history-web-e2e'
 
-/** Turn count: 2 surface messages per turn, so 28 turns overflow one 50-message page. */
+/** Turn count: 2 chat messages per turn, so 28 turns overflow one 50-message page. */
 const TURNS = 28
-const FULL_COUNTS = `${TURNS} turns · ${TURNS} steps`
+const FULL_COUNTS = `${TURNS} turns ${TURNS} steps`
 
 /**
  * Generate the seed: TURNS closed single-step turns of one short user prompt
- * and one short assistant reply each. Times are fixed so the fixture is
- * byte-deterministic; message ids are synthetic uuids (aria normalizes them).
+ * and one short assistant reply each. Fixed times pin displayed dates;
+ * the empty system head precedes every user message in the current format.
  * @param turns - closed turns to generate.
  * @returns session.jsonl text for {@link seedSession}.
  */
 function buildSeed(turns: number): string {
   const lines = [JSON.stringify({
-    type: 'session', version: 0, id: '{{sessionId}}', createdAt: 1784974100000, cwd: '{{cwd}}/workspace',
+    type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}',
+    createdAt: 1784974100000, cwd: '{{cwd}}/workspace', isSeeded: false, delegationDepth: 0,
   })]
   let seq = 0
   let time = 1784974100000
@@ -43,6 +46,14 @@ function buildSeed(turns: number): string {
   }
   for (let turn = 1; turn <= turns; turn++) {
     at({ type: 'turn/start', data: { turn } })
+    at({ type: 'step/start', data: { turn, step: 1 } })
+    if (turn === 1) {
+      at({
+        type: 'system/message',
+        data: { turn, step: 1, message: createSystemMessage('', '@deepseek-ai/dsh-system-prompt') },
+        surfaceOp: 'append',
+      })
+    }
     at({
       type: 'user/message',
       data: {
@@ -53,10 +64,10 @@ function buildSeed(turns: number): string {
       },
       surfaceOp: 'append',
     })
-    at({ type: 'step/start', data: { turn, step: 1 } })
     at({
       type: 'assistant/message',
       data: {
+        stream: [],
         turn,
         step: 1,
         message: {
@@ -66,7 +77,6 @@ function buildSeed(turns: number): string {
           source: { kind: 'model', provider: 'snapshot', model: 'snapshot-replier' },
         },
       },
-      sourceEventSeqs: [],
       surfaceOp: 'append',
     })
     at({ type: 'step/end', data: { turn, step: 1 } })

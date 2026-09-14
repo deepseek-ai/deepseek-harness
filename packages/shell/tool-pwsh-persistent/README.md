@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-pwsh-persistent` gives the agent a `pwsh` tool whose PowerShell state persists across calls for the owning agent: cwd, `$env:` variables, functions, and background jobs survive between commands. It is the Windows counterpart of `dsh-tool-bash-persistent` — the same persistent-state contract in PowerShell dialect. Each agent gets its own shell backed by an owner-scoped PTY session with a pwsh-dialect backend, and commands for the same agent run one at a time. Configuration selects the backend and the wall-clock limit for one command; a timeout or an explicit `exit` closes the shell, and the next call starts fresh. Mount it with a pwsh-dialect terminal backend (Windows ConPTY or a POSIX pwsh) and the `ctx.terminals` service.
+`dsh-tool-pwsh-persistent` gives each agent a `pwsh` tool that preserves its current directory, environment variables, functions, and background jobs across calls. Commands for one agent run sequentially, while different agents keep separate shell state. Choose it for multi-step PowerShell work; use `dsh-tool-pwsh` when every command should start clean, and use a terminal tool when commands require interactive stdin. Configure a pwsh-capable backend and per-command timeout; timeout or explicit `exit` discards the shell, so the next call starts fresh.
 
 ## Table of Contents
 

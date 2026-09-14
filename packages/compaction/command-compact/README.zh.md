@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-command-compact` 为聊天 UI 添加 `/compact` 命令：输入它，对话就会按需压缩——即使尚未触发自动压力，较早历史也会被替换为一条摘要。该命令适用于任何压缩后端，且不消耗模型轮次；完成后你会看到压缩了多少历史项以及估算节省的 token 数。当 agent 正在轮次中或压缩已在运行时，它会告诉你压缩暂不可用。运行期间你发送的提示词会保持排队，并在压缩结束后才开始。
+`dsh-command-compact` 为聊天 UI 添加 `/compact` 命令：输入它，对话就会按需压缩（compaction）——即使尚未触发自动压力，较早历史也会被替换为一条摘要。该命令适用于任何压缩后端，且不消耗模型轮次；完成后你会看到压缩了多少历史项以及估算节省的 token 数。当 agent（智能体）正在执行轮次或压缩已在运行时，它会告诉你压缩暂不可用。运行期间你发送的提示词会保持排队，并在压缩结束后才开始。
 
 ## 目录
 
@@ -42,8 +42,8 @@ kind: "package-reference"
 | 情形 | 你看到的消息 |
 |---|---|
 | 压缩已在运行，或 agent 正在轮次中 | `Compaction is unavailable because this process has an active compaction, or the agent is not idle.` |
-| 压缩过程中历史发生了变化 | `The history selected for compaction changed before it could be replaced. The conversation is unchanged; the attempt is recorded in the session log.` |
-| 无法产生有用的摘要 | `Compaction could not produce a useful summary. The conversation is unchanged; the attempt is recorded in the session log.` |
+| 压缩过程中历史发生了变化 | `The history selected for compaction changed before it could be replaced. The attempt is recorded in the session log.` |
+| 无法产生有用的摘要 | `Compaction could not produce a useful summary. The attempt is recorded in the session log.` |
 | 压缩未干净地完成 | `Compaction did not finish cleanly; some session history may have changed. Inspect the current session state before retrying.` |
 | 会话无法保存 | `Compaction finished, but the session could not be saved.` |
 
@@ -82,9 +82,9 @@ kind: "package-reference"
 
 该命令建立在三项承诺之上：
 
-- **与后端无关的控制。** 处理器只依赖 `compactNow(agent, signal)`，因此可与任何 `CompactionEngine` 实现协作。调用该命令的 agent（智能体）就是操作的确切目标，发起分发的 UI 会通过 seam 转发取消信号。
+- **与后端无关的控制。** 处理器只依赖 `compactNow(agent, signal)`，因此可与任何 `CompactionEngine` 实现协作。调用该命令的 agent 就是操作的确切目标，发起分发的 UI 会通过 seam 转发取消信号。
 - **命令生命周期不进入模型历史。** `command/run` 与 `command/done` 都是仅日志事件；`sourceEventSeq` 将成功结果与 `compaction/summary` 事件关联，不依赖文本或行相邻关系。
-- **安静地销毁。** 生命周期 effect 会先注销 `/compact`，再等待已开始处理器结算，因此已中止命令的闭合与 flush 工作在根级销毁完成前安定下来。
+- **资源销毁必须完全停稳。** 生命周期 effect 会先注销 `/compact`，再等待已开始处理器结算，因此已中止命令的闭合与 flush 工作会在根级资源释放完成前结算完毕。
 
 ### 生命周期与关联
 
@@ -95,7 +95,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`/compact` 注册、参数拒绝、错误码映射、生命周期排空 |
-| — | 不发布运行时不变式伴生入口；压缩 seam 与命令注册表拥有持久约定。 |
+| — | 不发布运行时不变式伴随条目；该命令适配器不拥有任何状态或事件流；压缩 seam 拥有平衡且具持久性的事务，命令注册表拥有注册与分发生命周期。 |
 
 </details>
 
@@ -117,7 +117,7 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-### 人类 `/compact` 控制
+### 用户 `/compact` 控制
 
 #### 模型看到的内容
 

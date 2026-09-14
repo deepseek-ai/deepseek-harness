@@ -1,0 +1,9 @@
+version: 1
+scenario: document-preview
+profile: web
+composition: web-default
+recording: authored
+header:
+  class: web-default
+session:
+  source: ../lifecycle-chrome/session.v3.jsonl

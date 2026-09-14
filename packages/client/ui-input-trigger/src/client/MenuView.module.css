@@ -6,14 +6,20 @@
   left: 0;
   right: 0;
   z-index: 100;
-  /* Height cap: the 320px design maximum, clamped at runtime to the space
-   * above the composer (inline max-height set in MenuView.tsx). */
-  max-height: 320px;
+  box-sizing: border-box;
+  /* Fits the built-in rows without scrolling and still clamps at runtime to
+   * the space above the composer (inline max-height set in MenuView.tsx). */
+  max-height: 400px;
   overflow: hidden;
   /* Elevated surface: the scrollbar thumb takes the l2 elevation tokens
      (see ui-theme styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  /* A 10px draggable rail carries a quiet 4px thumb, inset from the card's
+     rounded ends. ui-theme's global scrollbar sheet renders these values. */
+  --dsh-scrollbar-width: 10px;
+  --dsh-scrollbar-thumb-border: 3px;
+  --dsh-scrollbar-track-margin: 12px;
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -22,6 +28,19 @@
   background: var(--dsw-specific-menu);
   --dsw-elevation-stroke-color: var(--dsw-alias-border-l1);
   box-shadow: var(--dsw-elevation-prominent);
+}
+
+/* The hint covers content, not the scrollbar rail, and disappears once the
+   viewport reaches the final row. */
+.menu[data-overflow-below]::after {
+  content: '';
+  position: absolute;
+  right: 14px;
+  bottom: 4px;
+  left: 4px;
+  height: 16px;
+  background: linear-gradient(to bottom, transparent, var(--dsw-specific-menu));
+  pointer-events: none;
 }
 
 .viewport {
@@ -86,12 +105,26 @@
   white-space: nowrap;
 }
 
+/* The command name beside a localized title, in the description's ink so
+   the row reads title first. */
+.itemAlias {
+  flex: none;
+  max-width: 20%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* Right-aligned so every description ends at the same edge and the titles
+   read as one left column. */
 .itemDescription {
   flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
   color: var(--dsw-alias-label-tertiary);
 }
 

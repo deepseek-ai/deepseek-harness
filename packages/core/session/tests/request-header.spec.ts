@@ -17,26 +17,23 @@ describe('canonicalHeader', () => {
     expect(canonicalHeader({
       config: CONFIG,
       adapterDefaults: {},
-      system: '',
       tools: [],
     })).toEqual({ config: CONFIG })
     const full = canonicalHeader({
       config: { ...CONFIG, maxTokens: 256_000 },
       adapterDefaults: { maxTokens: true },
-      system: 's',
       tools: [tool('a')],
     })
     expect(full).toEqual({
       config: { ...CONFIG, maxTokens: 256_000 },
       adapterDefaults: { maxTokens: true },
-      system: 's',
       tools: [tool('a')],
     })
   })
 })
 
 describe('headerEquals', () => {
-  const base = canonicalHeader({ config: CONFIG, system: 's', tools: [tool('a')] })
+  const base = canonicalHeader({ config: CONFIG, tools: [tool('a')] })
 
   it('compares every canonical field and preserves tool order', () => {
     expect(headerEquals(base, structuredClone(base))).toBe(true)
@@ -53,7 +50,6 @@ describe('headerEquals', () => {
         adapterDefaults: { maxTokens: true },
       },
     )).toBe(false)
-    expect(headerEquals(base, { ...base, system: 'other' })).toBe(false)
     expect(headerEquals(base, { ...base, tools: [] })).toBe(false)
     expect(headerEquals(base, { ...base, tools: [tool('a', 'changed')] })).toBe(false)
     expect(headerEquals({ config: CONFIG, tools: [tool('a'), tool('b')] }, { config: CONFIG, tools: [tool('b'), tool('a')] })).toBe(false)
@@ -61,12 +57,14 @@ describe('headerEquals', () => {
 
   it('treats absent and empty tool arrays as equivalent canonical absence', () => {
     expect(headerEquals({ config: CONFIG }, { config: CONFIG, tools: [] })).toBe(true)
+    expect(headerEquals({ config: CONFIG, tools: [] }, { config: CONFIG })).toBe(true)
+    expect(headerEquals({ config: CONFIG }, { config: CONFIG })).toBe(true)
   })
 })
 
 describe('foldRequestHeader', () => {
   it('returns the supplied baseline when no snapshot follows', () => {
-    const from: EpochHeader = { config: CONFIG, system: 'baseline' }
+    const from: EpochHeader = { config: CONFIG, tools: [tool('baseline')] }
     const unrelated: SessionEvent[] = [
       { type: 'turn/start', seq: SessionSeq(0), time: 1, data: { turn: 1 } },
     ]
@@ -77,11 +75,11 @@ describe('foldRequestHeader', () => {
   it('takes the latest full snapshot and skips unrelated events', () => {
     const session = Session.create(SessionId('fold'))
     session.append('turn/start', { turn: 1 })
-    session.append('request/header', { header: { config: CONFIG, system: 'first' }, reason: 'initial' })
+    session.append('request/header', { header: { config: CONFIG, tools: [tool('first')] }, reason: 'initial' })
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'hi' }], source: { kind: 'user' },
     }), { surfaceOp: 'append' })
-    session.append('request/header', { header: { config: { provider: 'mock', model: 'other' }, tools: [] }, reason: 'change' })
+    session.append('request/header', { header: { config: { provider: 'mock', model: 'other' } }, reason: 'change' })
     expect(foldRequestHeader(session.snapshotEvents())).toEqual({ config: { provider: 'mock', model: 'other' } })
   })
 })

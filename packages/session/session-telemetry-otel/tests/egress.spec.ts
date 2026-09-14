@@ -109,7 +109,7 @@ describe('session-telemetry-otel egress', () => {
           session.append('request/header', { header: { config: { provider, model: 'm' } }, reason: 'initial' })
         }
         session.append('turn/start', { turn: 1 })
-        recordFeedback(session, 'explicit egress feedback')
+        recordFeedback(session, { text: 'explicit egress feedback' })
         session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
         await fiber.dispose()
 

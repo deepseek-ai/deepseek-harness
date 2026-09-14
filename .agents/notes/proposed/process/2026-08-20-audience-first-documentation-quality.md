@@ -51,7 +51,7 @@ Adopt one audience-first quality contract with five definitions:
 The [dsh-doc skill](../../../skills/dsh-doc/SKILL.md) owns the first executable version of these rules. The `session-persistence-jsonl` README pair uses the shipped append, recovery, and encoding behavior as evidence rather than treating its prior prose as authority.
 
 - Every authored package README starts with searchable YAML. A Skill-style `description` and mechanically derived `kind` are required. Four kinds map one-to-one to four skill templates: `package-group` (group map), `package-reference` (plugin or service package), `package-library` (plain module entry), and `package-bundle` (`dsh.bundle.patch`). The counterpart path, hashes, and physical line alignment belong to the merge-safe sidecar and its gate, so README frontmatter contains no `i18n` block. The title or package manifest already owns the name, the document job expresses its audience, and tags remain absent until a governed taxonomy and search consumer proves value beyond full-text search.
-- Authored pages start with a three-to-five-sentence `Summary`, then a linked `Table of Contents`. Format-owned Agent Notes, postmortems, generated fragments, and machine files keep their required skeletons.
+- Authored pages start with a three-to-five-sentence `Summary`, then a linked `Table of Contents`. An English package README Summary stays within 100 `wc -w`-style words. It describes reader-visible capability instead of Cordis roles, registrations, or internal components, and omits source identifiers unless readers use them directly in configuration, commands, or a public API. Format-owned Agent Notes, postmortems, generated fragments, and machine files keep their required skeletons.
 - Each substantive section starts with a short orientation before subsections, tables, or code, and the page progresses from basic user use to advanced developer and maintainer detail.
 - English technical prose uses an ASD-STE100-inspired, non-certified clarity review: explicit actors and actions, stable terms, direct verbs, separated instructions and conditions, and preserved modality, exceptions, timing, and numbers. The 20-word instruction and 25-word description limits are review prompts. Precision overrides them.
 - Package contracts remain beside code. Cross-package material moves deliberately toward `docs/learn/overview/`, `docs/learn/cordis/`, `docs/learn/practices/`, `docs/user/`, `docs/developer/`, `docs/developer/discussion/`, `docs/scratch/`, and the parallel `docs/subsystems/` tier.
@@ -87,11 +87,11 @@ The first prototype should use one large catalog and one mixed subsystem page. I
 
 1. Create and validate `dsh-doc`, then rewrite one package README pair as a line-aligned, metadata-bearing prototype without changing runtime claims.
 2. Review the rendered prototype with newcomer, user, developer, and agent tasks; revise the skill before enforcing the format elsewhere.
-3. Add narrow metadata, section-order, line-alignment, link-resolution, and pairing fixtures. Keep sidecars until every merge and recovery consumer has replacement support.
+3. Add narrow metadata, Summary-length, section-order, line-alignment, link-resolution, and pairing fixtures. Migrate every existing package Summary that violates the accepted entry limit, and keep sidecars until every merge and recovery consumer has replacement support.
 4. Extract accepted standing rules into one canonical quality reference, condense `docs/AGENTS.md` below its target, and organize one coherent `docs/` topic at a time with atomic link/navigation repair.
 5. Prototype generated-reference entry/detail separation on `config-catalog.md` and `docs/subsystems/core.md`; apply confirmed patterns elsewhere only after measured lookup cost falls without lost facts or route churn.
 
-This sequence keeps each change independently reviewable. The first three slices improve criteria and correctness without rewriting the corpus; the generated-doc prototype supplies evidence before a broader information-architecture change.
+This sequence keeps each change independently reviewable. The first three slices improve criteria and package entry points without changing the broader information architecture; the generated-doc prototype supplies evidence before a broader structural change.
 
 Slices 1–3 have shipped in this form: `dsh-doc` is the consolidated standard (`dsh-doc-standards` and `dsh-doc-site-sync` are folded into it, and the site workflow carries the corrected sidebar values), the `session-persistence-jsonl` README pair is the reference example, and `pnpm run test:docs` enforces the metadata, pairing, and quick documentation checks. Slices 4–5 remain open.
 
@@ -107,7 +107,7 @@ This proposal does not shorten exhaustive facts, merge audience tiers, publish i
 
 **Use readability scores as the quality gate.** Rejected because formulas penalize exact technical terms and cannot detect wrong ownership, missing failure behavior, stale commands, or a broken reader journey.
 
-**Rewrite or split the full corpus immediately.** Rejected because the current system is mechanically healthy and many long references are appropriately exhaustive. A prototype should prove a retrieval improvement before route and translation churn spreads.
+**Rewrite or split the full documentation corpus immediately.** Rejected because the current system is mechanically healthy and many long references are appropriately exhaustive. The bounded package-Summary migration does not alter routes or exhaustive reference content; larger structural changes still require measured evidence.
 
 **Keep the existing gates and rely on review for friendliness.** Rejected because the stale workflow values and budget-policy mismatch show that review alone does not preserve copied semantic claims, and the current gates do not ask whether a reader can complete a task.
 
@@ -116,6 +116,7 @@ This proposal does not shorten exhaustive facts, merge audience tiers, publish i
 - One canonical quality reference defines brief, intuitive, friendly, accurate, and agent-readable documentation by document job.
 - `.agents/skills/dsh-doc` validates and directly links its metadata, structure/hierarchy, and review/prototype references without duplicating their detailed rules in `SKILL.md`.
 - The `session-persistence-jsonl` README pair demonstrates searchable YAML, Summary, Table of Contents, user-to-developer progression, Further Exploration, final Dev Note, structural parity, and exact line-count equality while preserving verified package contracts.
+- Every English package README Summary stays within 100 `wc -w`-style words; the focused gate reports the measured count and directs failures to `dsh-doc` and the selected kind template.
 - `docs/AGENTS.md` links that reference, remains sufficient as standing instruction, and is below its target with at least 5% headroom.
 - The root user path, Web quick start, first-plugin tutorial, contributor setup, and architecture overview each name an observable outcome and a verification owner without duplicating implementation detail.
 - The budget manifest records both target and temporary ceiling, and its check reports or rejects a violated headroom/ratchet state.
@@ -128,7 +129,7 @@ This proposal does not shorten exhaustive facts, merge audience tiers, publish i
 ## Risks
 
 - Metadata can become boilerplate; the package README check therefore permits only fields with current retrieval, template-selection, or bilingual-consistency consumers.
-- Hard sentence limits can fragment explanations or separate a condition from its consequence. The controlled-English word counts remain review prompts, and exact contracts override them.
+- Hard sentence limits can fragment explanations or separate a condition from its consequence. The controlled-English sentence counts remain review prompts, while the separate 100-word package-Summary ceiling bounds only the entry paragraph and leaves exact contracts in the owning sections.
 - Exact line alignment can pressure translators into unnatural prose; review must protect meaning and may revise both sides together rather than weaken one.
 - Splitting generated references can increase routes and link maintenance; prototypes must preserve aliases and measure the trade-off.
 - A semantic check can become a repository-topology scanner that blocks legitimate changes; checks should cover high-risk copied values and representative journeys, while review owns prose meaning.

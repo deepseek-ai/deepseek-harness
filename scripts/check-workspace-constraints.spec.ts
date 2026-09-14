@@ -2,6 +2,10 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  isPublicExperimentalPackageDirectory,
+  PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
+} from './experimental-package-policy.ts'
+import {
   checkDshFamilyVersion,
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
@@ -9,10 +13,13 @@ import {
   type WorkspaceManifest,
 } from './check-workspace-constraints.ts'
 
-const experimental: WorkspaceManifest = {
+const experimental = {
   dir: 'packages/experimental/prototype',
-  manifest: { name: '@deepseek-ai/dsh-experimental-prototype', private: true },
-}
+  manifest: {
+    name: '@deepseek-ai/dsh-experimental-prototype',
+    publishConfig: { access: 'public' },
+  },
+} satisfies WorkspaceManifest
 
 describe('experimental workspace constraints', () => {
   it('requires the experimental package-name prefix', () => {
@@ -24,15 +31,44 @@ describe('experimental workspace constraints', () => {
     ])
   })
 
-  it('requires private manifests without publication metadata', () => {
+  it('requires public metadata for unlisted experimental packages', () => {
     expect(checkExperimentalManifest(experimental)).toEqual([])
     expect(checkExperimentalManifest({
       ...experimental,
-      manifest: { ...experimental.manifest, private: false, publishConfig: { access: 'public' } },
+      manifest: { name: experimental.manifest.name, private: true },
     })).toEqual([
-      '@deepseek-ai/dsh-experimental-prototype: experimental package must set "private": true',
-      '@deepseek-ai/dsh-experimental-prototype: experimental package must omit publishConfig',
+      '@deepseek-ai/dsh-experimental-prototype: public experimental package must not set "private": true',
+      '@deepseek-ai/dsh-experimental-prototype: public experimental package must set publishConfig.access to "public"',
     ])
+  })
+
+  it('requires private metadata for an explicitly excluded prototype', () => {
+    const { dir, manifest: { name } } = experimental
+    const privateDirectories = [dir]
+    expect(isPublicExperimentalPackageDirectory(dir, privateDirectories)).toBe(false)
+    expect(checkExperimentalManifest({ dir, manifest: { name, private: true } }, privateDirectories)).toEqual([])
+    expect(checkExperimentalManifest(experimental, privateDirectories)).toEqual([
+      `${name}: experimental package must set "private": true`,
+      `${name}: experimental package must omit publishConfig`,
+    ])
+  })
+
+  it('keeps the current experimental publication set unrestricted', () => {
+    expect(PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES).toEqual([])
+  })
+
+  it('limits the public default to experimental package directories', () => {
+    expect(isPublicExperimentalPackageDirectory(experimental.dir)).toBe(true)
+    for (const dir of [
+      'packages/core/session',
+      'apps/cli',
+      'vendor/cordis',
+      'packages/experimental',
+      'packages/experimental/prototype/src',
+      ...PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
+    ]) {
+      expect(isPublicExperimentalPackageDirectory(dir)).toBe(false)
+    }
   })
 
   it.each(['dependencies', 'optionalDependencies', 'peerDependencies'] as const)(
@@ -102,7 +138,7 @@ describe('dsh family version coherence', () => {
   it('leaves other sequences to their own version lines', () => {
     expect(checkDshFamilyVersion({ name: '@deepseek-ai/cordis', version: '4.0.1' }, '0.1.2-rc.1')).toBeUndefined()
     expect(checkDshFamilyVersion(
-      { name: '@deepseek-ai/node-addon-landlock-run', version: '0.1.1' },
+      { name: '@deepseek-ai/node-addon-system', version: '0.1.1' },
       '0.1.2-rc.1',
     )).toBeUndefined()
     expect(checkDshFamilyVersion({ version: '0.1.2-alpha.5' }, '0.1.2-rc.1')).toBeUndefined()

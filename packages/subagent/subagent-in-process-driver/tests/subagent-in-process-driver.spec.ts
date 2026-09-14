@@ -207,6 +207,39 @@ describe('startInProcessRun', () => {
     expect(child.session.header.isSeeded).toBe(true)
     expect(child.session.inheritedEventCount).toBe(seed.length)
     expect(child.session.snapshotEvents().slice(0, seed.length)).toEqual(seed)
+    // The seeded `system/message` stays surface node 0: the child renders the
+    // same prompt, so its loop appends no second system node.
+    const seededSystem = seed.find(event => event.type === 'system/message')
+    expect(seededSystem).toBeDefined()
+    expect(child.session.snapshotEvents().filter(event => event.type === 'system/message')).toHaveLength(1)
+    expect(child.session.surface.nodes[0]).toBe(seededSystem?.seq)
+    expect(child.session.deriveMessages()[0]).toEqual(parent.session.deriveMessages()[0])
+    await run.dispose()
+  })
+
+  it('replaces a seeded system node in place when the forked child renders a different prompt', async () => {
+    const { ctx, parent, adapter } = await setup([textResponse('parent answer'), textResponse('child answer')])
+    parent.followup(createUserMessage({ content: [{ type: 'text', text: 'parent question' }], source: { kind: 'user' } }))
+    await parent.whenIdle()
+    const seed = parent.session.snapshotEvents()
+    const seededSystem = seed.find(event => event.type === 'system/message')
+    if (seededSystem === undefined) throw new Error('the parent log lacks a system node')
+    ctx.systemPrompt.section({ name: 'test:after-fork', order: 10, text: 'Registered after the fork seed.' })
+
+    const run = await startInProcessRun(request(parent), { seed })
+    await run.result
+    const child = ctx.agents.get(run.id)!
+    const systemNodes = child.session.snapshotEvents().filter(event => event.type === 'system/message')
+    expect(systemNodes.map(event => event.seq)).toEqual([seededSystem.seq, systemNodes[1]?.seq])
+    expect(systemNodes[1]?.surfaceOp).toEqual({ op: 'replace', startSeq: seededSystem.seq, endSeq: seededSystem.seq })
+    expect(systemNodes[1]?.sourceEventSeqs).toEqual([seededSystem.seq])
+    expect(child.session.surface.nodes[0]).toBe(systemNodes[1]?.seq)
+    const childRequest = adapter.requests.at(-1)!
+    expect(childRequest.system).toBeUndefined()
+    expect(childRequest.messages[0]).toMatchObject({
+      role: 'system',
+      content: [{ type: 'text', text: expect.stringContaining('Registered after the fork seed.') as unknown }],
+    })
     await run.dispose()
   })
 

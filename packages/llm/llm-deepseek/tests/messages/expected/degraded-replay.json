@@ -1,0 +1,48 @@
+[
+  {
+    "role": "user",
+    "content": [
+      {
+        "type": "text",
+        "text": "hello"
+      }
+    ]
+  },
+  {
+    "role": "assistant",
+    "content": [
+      {
+        "type": "thinking",
+        "thinking": "Read the file."
+      },
+      {
+        "type": "text",
+        "text": "Checking a."
+      },
+      {
+        "type": "tool_use",
+        "id": "a",
+        "name": "read",
+        "input": {
+          "path": "a"
+        }
+      }
+    ]
+  },
+  {
+    "role": "user",
+    "content": [
+      {
+        "type": "tool_result",
+        "tool_use_id": "a",
+        "content": [
+          {
+            "type": "text",
+            "text": "result"
+          }
+        ],
+        "is_error": false
+      }
+    ]
+  }
+]

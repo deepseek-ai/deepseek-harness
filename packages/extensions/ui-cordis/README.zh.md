@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-cordis` 给 web 客户端提供动态 Cordis 包的浏览器面：一个覆盖整个框架的面板，操作 host 持有的全部定义；会话里渲染 `cordis_define`、`cordis_run`、`cordis_stop` 与 `cordis_undefine` 调用的工具卡片；以及一个补全本会话已定义插件的 `@pluginId` 输入源。面板做成全局是刻意的——模型驱动的 run 阻塞在人的审批上，而无论当前在看哪个会话，这个审批都必须可达。本包不撰写任何模型可见的内容：它所操作的一切都来自浏览器 runner 与 host 的清单，卡片渲染的是会话已经记录下的 call 与 result 内容。
+`dsh-client-ui-cordis` 为 web 客户端中的动态 Cordis 包提供框架级控制面板、会话工具卡片与 `@pluginId` 补全。人可以从任意会话批准或拒绝阻塞模型的请求、运行、停止或移除定义，并查看其实时状态。会话卡片会回放已记录的调用与结果。本包不增加模型可见内容或会话事件；页面刷新后，定义必须重新运行。
 
 ## 目录
 
@@ -33,7 +33,7 @@ kind: "package-reference"
 
 ### 工具卡片显示什么
 
-`cordis_define` 卡片是一份记录：模型写下的 name 与 purpose、它写的源码，以及该定义是否在跑——没有开关、没有审批，只有一句指向面板的指引。`cordis_run` 卡片显示模式、插件、包与运行标识、结果，并在包注册了业务视图时经 `tool.view.cordis` 槽位提供它。`cordis_stop` 与 `cordis_undefine` 渲染紧凑的动作行。所有卡片都渲染会话记录下的 call 与 result，因此 replay 显示同一张卡。
+`cordis_define` 卡片是一份记录：模型写下的 name 与 purpose、它写的源码，以及该定义是否在跑——没有开关、没有审批，只有一句指向面板的指引。`cordis_run` 卡片显示模式、插件标识、包标识与运行标识、结果，并在包注册了业务视图时经 `tool.view.cordis` slot 提供它。`cordis_stop` 与 `cordis_undefine` 渲染紧凑的动作行。所有卡片都渲染会话记录下的 call 与 result，因此回放显示同一张卡。
 
 ### @pluginId 输入源
 
@@ -41,7 +41,7 @@ kind: "package-reference"
 
 ### 需要规划的边界
 
-定义以进程为本：刷新后的页面手上什么都没有，直到有人再次运行某个包；面板在每次公告时重读清单。审批按设计是框架级的，所以某个标签页里的人可以批准模型为另一个标签页正在看的会话所发起的 run；首个应答生效，其余收敛。
+定义仅存在于进程内：刷新后的页面手上什么都没有，直到有人再次运行某个包；面板在每次公告时重读清单。审批按设计是框架级的，所以某个标签页里的人可以批准模型为另一个标签页正在看的会话所发起的 run；首个应答生效，其余收敛。
 
 -----
 
@@ -61,7 +61,7 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/client/index.ts`](src/client/index.ts) | 插件入口：槽位注册、清单接线、`@pluginId` 输入源 |
+| [`src/client/index.ts`](src/client/index.ts) | 插件入口：slot 注册、清单接线、`@pluginId` 输入源 |
 | [`src/client/CordisPanel.tsx`](src/client/CordisPanel.tsx) | 全局面板及其运行控件 |
 | [`src/client/CordisDefineRow.tsx`](src/client/CordisDefineRow.tsx) | 只读的 `cordis_define` 卡片 |
 | [`src/client/CordisRunRow.tsx`](src/client/CordisRunRow.tsx) | `cordis_run` 卡片及其业务视图席位 |
@@ -69,7 +69,7 @@ kind: "package-reference"
 | [`src/client/card-model.ts`](src/client/card-model.ts) | 从冻结 call/result 切片派生的可回放视图模型 |
 | [`src/client/inventory.ts`](src/client/inventory.ts) | 单飞清单读取及其重连处理 |
 | [`src/client/status.ts`](src/client/status.ts) | 基于清单与本页 live set 的可见状态读数 |
-| [`src/client/slots.ts`](src/client/slots.ts) | 注入面与包自有的 `tool.view.cordis` 槽位声明 |
+| [`src/client/slots.ts`](src/client/slots.ts) | 注入面与包自有的 `tool.view.cordis` slot 声明 |
 | [`src/client/run-card-index.ts`](src/client/run-card-index.ts) | 每会话「最新合格 `cordis_run` 卡片」索引 |
 
 ### 面板如何保持最新
@@ -89,18 +89,18 @@ kind: "package-reference"
 - [Host runner](../cordis-host-runner/README.zh.md)——面板背后的清单与生命周期动词。
 - [工具包](../tool-cordis/README.zh.md)——调用被这些卡片渲染的模型侧工具。
 - [extensions 子系统](../../../docs/subsystems/extensions.zh.md)——生成的 `ctx.dynamicCordisRunner` API 与转发的 `cordis/*` 事件。
-- [slots 子系统](../../../docs/subsystems/slots.zh.md)——槽位注册的浏览器 UI 如何归其包所有。
+- [slots 子系统](../../../docs/subsystems/slots.zh.md)——slot 注册的浏览器 UI 如何归其包所有。
 
 -----
 
 <a id="model-experience"></a>
 ## 模型体验
 
-间接影响，经由这些界面驱动的 run 与 stop 动词——run 走浏览器侧 runner 的编排，stop 与 remove 走 host 的动词，与模型的 `cordis_run` / `cordis_stop` 工具是同一批 host 动词。因此正在运行的定义随后贡献了什么是 runner 的效果，而本包不产生任何模型可见输入：它只渲染已落日志的 call 与 result 切片和一次 host 清单读取，不加 prompt 内容、不写会话事件，并刻意不为「有人批准 / 拒绝 / 运行 / 停止」留下会话日志痕迹。
+间接影响，经由这些界面驱动的 run 与 stop 动词——run 走浏览器侧 runner 的编排，stop 与 remove 走 host 的动词，与模型的 `cordis_run` / `cordis_stop` 工具是同一批 host 动词。因此正在运行的定义随后贡献的任何内容，都是 runner 的效果，而本包不产生任何模型可见输入：它只渲染已落日志的 call 与 result 切片和一次 host 清单读取，不加提示词内容、不写会话事件，并刻意不为「有人批准、拒绝、运行或停止」留下会话日志痕迹。
 
 #### KV Cache 影响
 
-无：没有任何 prompt 输入源自这里，应答一次 run 请求既不延长也不改写历史尾部。
+无：没有任何提示词输入源自这里，应答一次 run 请求既不延长也不改写历史尾部。
 
 ## 已知限制与延期工作
 
@@ -127,4 +127,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。插件只注册一个 keyed toolview，HMR 测试覆盖释放；per-definition run-state 只存在于浏览器进程，Host 不变式无法观察。
+**运行时不变式：** 不发布伴生入口。插件只注册一个 keyed toolview，其资源释放已由 HMR 安全性测试证明。本包拥有的唯一可变关系，即 per-definition run-state 观察量，只存在于浏览器进程中，Host 不变式服务无法触及；Node 端不发出任何 Cordis 事件，也不持有任何跨插件状态。

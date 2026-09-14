@@ -10,7 +10,7 @@ The Python runtime lane's `Install (immutable)` step runs `pnpm install` on ever
 
 ## Decision
 
-The install step retries `pnpm install --frozen-lockfile` up to three attempts total with a ten-second pause between failures, running under `bash` on every platform (Git Bash is on the hosted Windows images). Success on any attempt ends the step immediately; a file-lock check or native-build error that would fail every attempt still fails the step after the bounded budget. This mirrors the Wine lane's documented bounded-transfer policy without pulling in a mirror, because these installs also resolve native addons whose second-download provenance matters.
+The install step retries `pnpm install --frozen-lockfile` up to three attempts total with a ten-second pause between failures, running under `bash` on every platform (Git Bash is on the hosted Windows images). Success on any attempt ends the step immediately; a file-lock check or native-build error that would fail every attempt still fails the step after the bounded budget. This mirrors the Wine lane's documented bounded-transfer policy without pulling in a mirror, because these installs also resolve native addons whose second-download source matters.
 
 ## Alternatives considered
 

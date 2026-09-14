@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Assembled todo snapshot: boots the real built `packages/client/*/lib/
 // client.js` bundles through AppWebEntry's ModuleLoader path against the
-// keyless fixture Connection RPC, opens the fixture session, and pins the
+// keyless RemoteMock transport, opens the fixture session, and pins the
 // two surfaces the fixture's parallel plan (turn 74, two items `in_progress`)
 // reaches — the `todo_write` tool row and the dock's plan strip.
 //

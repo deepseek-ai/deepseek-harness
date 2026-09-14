@@ -25,7 +25,7 @@ import type {
 export const TASK_WAIT_TIMEOUT = 'TASK_WAIT_TIMEOUT'
 
 /** Default maximum number of active jobs in one exact-owner bucket. */
-const DEFAULT_MAX_CONCURRENT_TASKS_PER_OWNER = 10
+const DEFAULT_MAX_CONCURRENT_JOBS_PER_OWNER = 10
 
 /** Configuration for the process-local job registry. */
 export interface Config {
@@ -37,7 +37,7 @@ export interface Config {
 }
 
 /** The registry's mutable per-job record (never handed out — see {@link LocalJobRegistry.snapshot}). */
-interface TrackedTask {
+interface TrackedJob {
   id: JobId
   kind: JobKind
   label: string
@@ -94,12 +94,12 @@ export class LocalJobRegistry extends JobRegistry {
       .step(1)
       .min(1)
       .max(Number.MAX_SAFE_INTEGER)
-      .default(DEFAULT_MAX_CONCURRENT_TASKS_PER_OWNER),
+      .default(DEFAULT_MAX_CONCURRENT_JOBS_PER_OWNER),
   })
 
   /** Schemastery-defaulted active-job limit. */
   private readonly maxConcurrentJobsPerOwner: number
-  private store = new Map<JobId, TrackedTask>()
+  private store = new Map<JobId, TrackedJob>()
   private counters = new Map<string, number>()
   /**
    * Surfaces and listeners layered by the scope that registered them, in the
@@ -140,7 +140,7 @@ export class LocalJobRegistry extends JobRegistry {
     }
     if (spec.owner !== undefined) this.ensureOwnerCleanup(spec.owner)
 
-    const active = this.activeTaskCount(spec.owner)
+    const active = this.activeJobCount(spec.owner)
     if (active >= this.maxConcurrentJobsPerOwner) {
       throw new Error(
         `background job limit reached for this owner (limit: ${this.maxConcurrentJobsPerOwner}); use job_kill to stop an unneeded job, wait for it to finish, then retry`,
@@ -154,7 +154,7 @@ export class LocalJobRegistry extends JobRegistry {
 
     let markSettled!: () => void
     const settled = new Promise<void>((resolve) => { markSettled = resolve })
-    const job: TrackedTask = {
+    const job: TrackedJob = {
       id,
       kind: spec.kind,
       label: spec.label,
@@ -319,7 +319,7 @@ export class LocalJobRegistry extends JobRegistry {
   }
 
   /** Count authoritative active records for one exact owner or the shared unowned bucket. */
-  private activeTaskCount(owner: Agent | undefined): number {
+  private activeJobCount(owner: Agent | undefined): number {
     let count = 0
     for (const job of this.store.values()) {
       if (job.owner === owner && (job.status === 'running' || job.status === 'stopping')) count += 1
@@ -342,7 +342,7 @@ export class LocalJobRegistry extends JobRegistry {
   }
 
   /** Look up a job or fail loud. */
-  private expect(id: JobId): TrackedTask {
+  private expect(id: JobId): TrackedJob {
     const job = this.store.get(id)
     if (job === undefined) throw new Error(`unknown job ${id}`)
     return job
@@ -353,14 +353,14 @@ export class LocalJobRegistry extends JobRegistry {
    * whose session id matches (`!== undefined` semantics — an unowned job is
    * open, and a no-agent caller can never match an owned one).
    */
-  private assertAccess(job: TrackedTask, caller?: Agent): void {
+  private assertAccess(job: TrackedJob, caller?: Agent): void {
     if (job.owner !== undefined && job.owner.id !== caller?.id) {
       throw new Error(`job ${job.id} belongs to another session`)
     }
   }
 
   /** Project a fresh read-only snapshot from the mutable record. */
-  private snapshot(job: TrackedTask): JobSnapshot {
+  private snapshot(job: TrackedJob): JobSnapshot {
     const ownerSession = job.owner?.id
     return {
       id: job.id,
@@ -413,7 +413,7 @@ export class LocalJobRegistry extends JobRegistry {
    * synchronously: every other observer of this settlement must already have
    * seen the committed record.
    */
-  private settle(job: TrackedTask, outcome: JobOutcome): void {
+  private settle(job: TrackedJob, outcome: JobOutcome): void {
     if (isTerminal(job.status)) return
     job.status = outcome.status
     job.detail = outcome.detail
@@ -504,7 +504,7 @@ export class LocalJobRegistry extends JobRegistry {
    * force-fails the record and reports a possible orphan; a cancel that returns
    * without settling remains indistinguishable from a slow stop and may stall.
    */
-  private cancelForTeardown(jobs: TrackedTask[], reason: string): void {
+  private cancelForTeardown(jobs: TrackedJob[], reason: string): void {
     for (const job of jobs) {
       if (isTerminal(job.status)) continue
       // Teardown cancellation is a kill without a caller, so it claims the

@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当组合想要一份用户可编辑的设置文档时，挂载此提供方。常用路径是显式的：挂载提供方、经 `ctx.settings` 注册 namespace，然后让用户编辑文档或让配置界面经服务写入。
+当组合需要一份用户可编辑的设置文档时，挂载此提供方。常用路径是显式的：挂载提供方、经 `ctx.settings` 注册 namespace，然后让用户编辑文档或让配置界面经服务写入。
 
 ### 何时选择
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 提供方：spec 解析、加载/解析、写锁下的读-改-写、watcher 生命周期、YAML/JSON 渲染 |
-| — | 不发布运行时不变式伴生入口；文件往返、watcher 时序与原子写入行为由包测试证明，进程内提交关系归 `dsh-settings` 所有。 |
+| — | 不发布运行时不变式伴生入口；文件往返、watcher 时序与原子写入行为由包测试证明，进程内提交关系归 `@deepseek-ai/dsh-settings` 所有。 |
 
 ### 文档生命周期
 
@@ -121,7 +121,7 @@ YAML 渲染把缓存文本解析成可变的保留注释树，再对一个 names
 <a id="model-experience"></a>
 ## 模型体验
 
-间接生效：经由 `ctx.settings` 的消费方，它们拥有存储值所喂给的任何模型面行为；本文件提供方只存储并发布 namespace 分节，自身不注册任何模型面内容。
+间接生效：存储值会影响的任何面向模型的行为均由 `ctx.settings` 的消费方负责；文件提供方只存储并发布 namespace 分节，自身不注册任何面向模型的内容。
 
 #### KV Cache 影响
 

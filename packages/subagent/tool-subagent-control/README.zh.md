@@ -1,5 +1,5 @@
 ---
-description: "全局 send_message、interrupt_agent 与 list_agents 工具，供用户与维护者组合或排查可继续子级的控制。"
+description: "供用户与维护者在组合或调试可继续子级控制功能时使用的全局 send_message、interrupt_agent 与 list_agents 工具。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-subagent-control` 为可继续子级添加全局控制工具：`send_message` 在直接 parent 与 child 之间 steer，`interrupt_agent` 停止 child 当前轮次但保留其 inbox 与后代，`list_agents`（来自可单独加载的 `list-agents` 插件）按持久化 id 与标签列出可继续 child。parent 与可继续 child 继承相同的 `send_message` 定义和顺序，因此模型通信不会增加 child 专属工具 schema。是否加载这些工具不会决定委派工具是否启动可继续工作。
+`dsh-tool-subagent-control` 为可继续子级添加全局控制工具：`send_message` 在直接父级与子级之间进行 steering（中途引导），`interrupt_agent` 停止子级当前轮次但保留其收件箱与后代，`list_agents`（来自可单独加载的 `list-agents` 插件）按持久化 ID 与标签列出可继续子级。父级与可继续子级继承相同的 `send_message` 定义和顺序，因此模型通信不会增加子级专属工具 schema。是否加载这些工具不会决定委派工具是否启动可继续工作。
 
 ## 目录
 
@@ -46,15 +46,15 @@ kind: "package-reference"
 
 ### send_message
 
-向 `agent_id` 指定的 Agent 发送消息：任何确切在线 Agent 都可以指定自己的直接可继续 child，而驻留的可继续 child 还可以指定自己的直接 parent。正在工作的目标通过 Steer 在最近的 step 边界接收消息；空闲目标会启动一个轮次，冷状态的直接 child 会通过继续执行生命周期恢复。调用只返回接受结果（被接受消息的稳定 `messageId`），绝不返回回复。失败——不受支持的目标、不可用的 parent、未知 child、缺少描述符而无法恢复的 child，或准入被拒——会明确说明消息未送达。
+向 `agent_id` 指定的 Agent 发送消息：任何确切在线 Agent 都可以向自己的直接可继续子级发送消息，驻留的可继续子级还可以向自己的直接父级发送消息。正在工作的目标通过 Steer 在最近的步骤边界接收消息；空闲目标会启动一个轮次，冷状态的直接子级会通过继续执行生命周期恢复。调用只返回接受结果（被接受消息的稳定 `messageId`），绝不返回回复。失败——不受支持的目标、不可用的父级、未知子级、缺少描述符而无法恢复的子级，或准入被拒——会明确说明消息未送达。
 
 ### interrupt_agent
 
-只停止目标当前轮次：已排队消息保持暂停直到之后的 `send_message`，后代继续运行，子级仍可接受后续消息。调用在停止请求被接受后立即返回，不等待目标完全停稳；中断已结束的 agent 是被接受的 no-op，而 self、sibling、陈旧与非 ancestor 调用方会收到出错结果。
+只停止目标当前轮次：已排队消息保持暂停，直到之后调用 `send_message`；后代继续运行，子级仍可接受后续消息。调用在停止请求被接受后立即返回，不等待目标完全停稳；中断已结束的 agent 会被接受并按空操作处理，而自身、同级、陈旧及非祖先调用方会收到出错结果。
 
 ### list_agents
 
-列出调用 agent 下方的可继续子级：`children`（默认）只显示直接子级，`descendants` 按稳定 pre-order 遍历整棵树，并为每个条目标注其持久化直接父级会话 id 与深度。状态来自在线 Agent 注册表——`running`、`idle` 或 `ready`。一次性子级因无法接受 `send_message` 而被有意排除，无法读取的候选项以 diagnostic 呈现。
+列出调用方 agent 下方的可继续子级：`children`（默认）只显示直接子级，`descendants` 按稳定前序遍历整棵树，并为每个条目标注其持久化直接父级会话 ID 与深度。状态来自在线 Agent 注册表——`running`、`idle` 或 `ready`。一次性子级因无法接受 `send_message` 而被有意排除，无法读取的候选项以诊断信息呈现。
 
 -----
 
@@ -84,7 +84,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | `send_message` 与 `interrupt_agent` 注册 |
 | [`src/list-agents.ts`](src/list-agents.ts) | `list_agents` 注册：作用域、状态细化、投影 |
-| — | 不发布运行时不变式伴生入口；这个模型侧 adapter 没有独立 lifecycle stream；delivery 与 activation 关系由 subagent service 负责。 |
+| — | 不发布运行时不变式伴生入口；这个面向模型的适配器没有独立的生命周期流；投递与激活关系由其调用的 subagent 服务负责。 |
 
 </details>
 
@@ -126,7 +126,7 @@ kind: "package-reference"
 
 #### Token 影响
 
-每次调用产生一条简短确认消息；被中断轮次的中止只在子级自己的 transcript 中可见。
+每次调用产生一条简短确认消息；被中断轮次的中止只在子级自己的 transcript（文本记录）中可见。
 
 #### KV Cache 影响
 
@@ -136,11 +136,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-接受时返回 `message delivered to agent <agent_id>`；规范输出携带被接受的 `messageId`。失败——非相邻目标、不可用的 parent、未知 child、缺少描述符而无法恢复的 child，或准入被拒——会成为出错的结果，其消息说明该消息未送达。
+接受时返回 `message delivered to agent <agent_id>`；规范输出携带被接受的 `messageId`。失败——非相邻目标、不可用的父级、未知子级、缺少描述符而无法恢复的子级，或准入被拒——会成为出错的结果，其消息说明该消息未送达。
 
 #### Token 影响
 
-每次调用产生一条简短确认消息；目标的响应绝不会通过本次调用返回。child 使用同一个工具和初始任务中的 parent id，把选定内容追加到 parent 历史中。
+每次调用产生一条简短确认消息；目标的响应绝不会通过本次调用返回。子级使用同一个工具，并传入其初始任务中的父级 ID，将选定内容追加到父级历史中。
 
 #### KV Cache 影响
 
@@ -150,11 +150,11 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-按稳定目录顺序，每个可继续子级占一行：`<id> [<status>] — <label>`（`running` 表示 driver 活跃，`idle` 表示驻留但处于轮次之间，`ready` 表示仅存于存储，可恢复而非终态），另为无法读取的候选项渲染 `<id> [diagnostic: <reason>]`。`descendants` scope 会在每行 label 破折号之前按 pre-order 插入 ` parent=<id> depth=<n>`。一次性子级会被有意排除；`(no subagents)` 表示投影后没有留下可继续子级或 diagnostic。
+按稳定目录顺序，每个可继续子级占一行：`<id> [<status>] — <label>`（`running` 表示驱动器活跃，`idle` 表示驻留但处于轮次之间，`ready` 表示仅存于存储，可恢复而非终态），另为无法读取的候选项渲染 `<id> [diagnostic: <reason>]`。`descendants` 作用域会在每行标签的破折号之前按前序插入 ` parent=<id> depth=<n>`。一次性子级会被有意排除；`(no subagents)` 表示投影后没有留下可继续子级或诊断信息。
 
 #### Token 影响
 
-随所列可继续子级数量线性增长——`descendants` scope 下为整棵树；没有 cursor 或上限，因此长期存活且有许多持久化子级的父级每次调用都会承担完整列表成本。
+随所列可继续子级数量线性增长——`descendants` 作用域下为整棵树；没有游标或上限，因此长期存活且有许多持久化子级的父级每次调用都会承担完整列表成本。
 
 #### KV Cache 影响
 
@@ -168,7 +168,7 @@ kind: "package-reference"
 这些限制说明控制工具无法观察或引导什么；它们是当前包约束。
 
 - **已投递消息没有独立结果**——接受时只返回其 inbox `messageId`；目标后续工作会落入该目标的持久化会话，绝不会通过本工具收集。回复是另一条显式指定地址的 `send_message`，而非本次调用的结果。
-- **只有受支持的相邻 Agent 可以通信**——每个 sender 都可以指定直接可继续 child，只有具备驻留可继续 Activation 的 sender 可以指定自己的直接 parent，且该 parent 必须仍在线；sibling 与更深的后代不能作为消息目标，只有直接 child 投递支持冷激活。
+- **只有受支持的相邻 Agent 可以通信**——每个发送方都可以向直接可继续子级发送消息；只有具备驻留可继续 Activation 的发送方可以向自己的直接父级发送消息，且该父级必须仍在线；同级与更深的后代不能作为消息目标，只有向直接子级投递才支持冷激活。
 - **列表是快照，而非投递承诺**——它可能与发布、dispose（资源释放）或后续消息发生竞态，另一个进程也可能激活当前进程报告为 `ready` 的子级；跨进程准确性需要共享租约。`interrupt_agent` 自己执行权威的在线 lineage 检查，因此过期的发现结果不会授予权限。
 - **没有分页或删除**——系统返回完整且稳定排序的集合；只要子级会话仍在持久化存储中，它就会继续出现在列表中，服务级上限或删除操作留待后续产品决策。
 

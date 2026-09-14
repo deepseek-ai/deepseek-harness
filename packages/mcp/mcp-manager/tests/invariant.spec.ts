@@ -9,16 +9,22 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import * as McpManagerInvariant from '@deepseek-ai/dsh-mcp-manager/invariant'
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
-  Client: vi.fn(function (this: { connect: unknown; close: unknown; request: unknown; setNotificationHandler: unknown }) {
+vi.mock('@modelcontextprotocol/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
+  Client: vi.fn(function (this: Record<string, unknown>) {
+    this.transport = {}
     this.connect = vi.fn(async () => {})
     this.close = vi.fn(async () => {})
-    this.request = vi.fn(async () => ({ tools: [], nextCursor: undefined }))
-    this.setNotificationHandler = vi.fn()
+    this.listTools = vi.fn(async () => ({ tools: [], nextCursor: undefined }))
+    this.getServerCapabilities = () => ({ tools: {} })
+    this.getInstructions = (): string | undefined => undefined
+    this.listResources = async () => ({ resources: [] })
   }),
+  StreamableHTTPClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
 }))
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ StdioClientTransport: vi.fn(function () { return {} }) }))
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ StreamableHTTPClientTransport: vi.fn(function () { return {} }) }))
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
+  StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+}))
 
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 

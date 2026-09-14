@@ -14,9 +14,9 @@ Python runtime builds on macOS Intel and ARM and Linux ARM64, plus Windows build
 
 Wine runs once as an independent hosted Ubuntu master job. Its existing image-keyed apt cache restore/save also supplies default-branch cache production, so it needs no separate cache-seeding job. The native Linux and Windows serial aggregates do not invoke Wine. Keeping Wine hosted avoids shared-host apt transactions and shared Wine-prefix cleanup on the persistent Linux VM. The script owns a scratch snapshot, a checkout-local Wine prefix, and a checksum-verified Windows Node cache; provisioning, failure propagation, and always-run cleanup remain intact.
 
-The parent and reusable runtime workflows preserve running master-push checks against subsequent master pushes. GitHub concurrency still permits replacement of pending runs; manual benchmarks can cancel the parent run. A master push schedules all three selected carriers but does not guarantee every intermediate commit reaches a result. PR, manual, and release cancellation retain their existing behavior.
+The [superseded-CI cancellation policy](2026-09-09-cancel-superseded-ci.md) applies to the parent and reusable runtime workflows: newer master pushes or manual runs cancel older validation in the same workflow/ref group, while release-owned builds remain protected. A master push schedules all three selected carriers but does not guarantee every intermediate commit reaches a result.
 
-This decision partially supersedes scheduling in the [installed-wheel validation](../testing/2026-08-23-installed-python-wheel-black-box-ci.md), [native Windows CI](2026-08-08-native-windows-pull-request-ci.md), [serial references](2026-07-21-serial-cross-platform-ci-reference.md), and [failover runbook](2026-07-26-ci-failover-runbook.md). Those notes remain active for artifact provenance, platform fidelity, serial completeness, and trust rules.
+This decision partially supersedes scheduling in the [installed-wheel validation](../testing/2026-08-23-installed-python-wheel-black-box-ci.md), [native Windows CI](2026-08-08-native-windows-pull-request-ci.md), [serial references](2026-07-21-serial-cross-platform-ci-reference.md), and [failover runbook](2026-07-26-ci-failover-runbook.md). Those notes remain active for artifact origin, platform fidelity, serial completeness, and trust rules.
 
 ## Alternatives considered
 

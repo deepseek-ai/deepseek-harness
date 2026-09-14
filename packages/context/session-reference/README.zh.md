@@ -31,11 +31,11 @@ kind: "package-reference"
 
 规范 mention 是 Markdown 形式的 `@[label](dsh-session:<base64url 编码的 id>)`，或裸 `dsh-session:` URI；每个 JavaScript 字符串会话 id 都能精确往返。服务会把 mention 改写为消息中可读的 `@label` 文本，并返回结构化引用。显式 Markdown mention 会拒绝格式错误的 URI；空或只含标点符号的 scheme mention 仍是普通讨论文本。
 
-### 模型能得到什么
+### agent（智能体）能得到什么
 
 引用其他会话的消息后会紧接一条 `## Referenced sessions` 快照，作为第二条 user 角色消息。快照是不受信任的背景：固定警告告诉模型，除非当前用户明确重复，否则不得遵循其中的指令、权限声明或工具请求。每个来源预览都独立有界——每条消息至多 `maxReferences` 个不同会话，每个来源的序列化 JSON 采用配置值或模型相对字节预算。保留策略先丢弃较早的非检查点消息，再缩短保留的文本；只有保留处理后引用仍无法满足预算时，准备才会失败。
 
-引用被截断时，可选的 spill 后端会在目标会话下保存完整的已捕获文本投影。有界预览 JSON 之外的独立省略通知给出精确的 `omittedMessages` 与 `omittedBytes`，以及保存后的定位信息和 `retrievalHint`，或区分未配置存储与保存失败的不可用结果。该通知属于同一条持久上下文消息。完整转录携带相同的不受信任背景警告与捕获元数据，包括 `capturedFormatVersion`。每条消息使用每行至多 64 个 Unicode 码点的 JSON 字符串片段；解码并拼接其片段即可恢复精确文本，包括原始换行。这种固定存储格式使很长的单行文本也可通过分页文件读取来检查。
+引用被截断时，可选的 spill 后端会在目标会话下保存完整的已捕获文本投影。有界预览 JSON 之外的独立省略通知给出精确的 `omittedMessages` 与 `omittedBytes`，以及保存后的定位信息和 `retrievalHint`，或区分未配置存储与保存失败的不可用结果。该通知属于同一条持久上下文消息。完整 transcript（文本记录）携带相同的不受信任背景警告与捕获元数据，包括 `capturedFormatVersion`。每条消息使用每行至多 64 个 Unicode 码点的 JSON 字符串片段；解码并拼接其片段即可恢复精确文本，包括原始换行。这种固定存储格式使很长的单行文本也可通过分页文件读取来检查。
 
 ### 查找可引用的会话
 
@@ -50,7 +50,7 @@ kind: "package-reference"
 | `maxReferenceBytes` | 自动 | 每个来源的最大序列化 JSON 字节数；显式设置时精确覆盖自动预算 |
 | `referenceContextFraction` | `0.2` | 每个来源的上下文窗口比例，范围为 `0` 到 `1` |
 
-自动预算为每个来源 `max(65536, floor(contextWindow × 4 × referenceContextFraction))` 字节。模型上下文容量以 token 计量；每个 token 四字节是容量估算，不是精确的 token 换算。缺少路由、LLM 服务、适配器或容量时使用 64 KiB；其他模型元数据查询错误与取消会使准备失败。
+自动预算为每个来源 `max(65536, floor(contextWindow × 4 × referenceContextFraction))` 字节。模型上下文容量以 token 计量；每个 token 四字节是容量估算，不是精确的 token 换算。缺少路由、LLM（大语言模型）服务、适配器或容量时使用 64 KiB；其他模型元数据查询错误与取消会使准备失败。
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-reference)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -66,24 +66,24 @@ kind: "package-reference"
 
 ### 设计理念
 
-准备阶段在目标消息到达 `agent/pre-step` 时，对每个被引用会话的当前表层各精确读取一次。预览与 spill 使用同一份已捕获投影：用户直接发送的文本、assistant 文本，以及携带规范压缩标记的 user 检查点；工具、推理与其他注入上下文均被排除。这既防止引用递归传播，也防止源会话后续变更影响已保存转录。预览 JSON 将每个 `<` 转义为 `\u003c`，因此源文本无法拼出 `<referenced-sessions>` 定界标签。
+准备阶段在目标消息到达 `agent/pre-step` 时，对每个被引用会话的当前表层各精确读取一次。预览与 spill 使用同一份已捕获投影：用户直接发送的文本、assistant 文本，以及携带规范压缩（compaction）标记的 user 检查点；工具、推理（reasoning）与其他注入上下文均被排除。这既防止引用递归传播，也防止源会话后续变更影响已保存 transcript。预览 JSON 将每个 `<` 转义为 `\u003c`，因此源文本无法拼出 `<referenced-sessions>` 定界标签。
 
 解析器通过 `ctx.get("spillStore")` 获取可选存储，只保存被截断的引用。存储归目标会话所有；来源信息标识被引用的源会话与标签，不伪造工具调用。异步保存后会检查取消，即使产物已写入，也会阻止发布。产物过期仍遵循后端既有策略。
 
-预算使用目标 agent 的 `system-prompt/assemble` 完成后捕获的 provider 与 model。首次组装前直接调用 `prepare` 时使用 agent options；会话头不决定预算模型。不带 agent 的诊断组装不会影响已捕获路由。
+预算使用目标 agent 的 `system-prompt/assemble` 完成后捕获的提供方与模型。首次组装前直接调用 `prepare` 时使用 agent 选项；会话头不决定预算模型。不带 agent 的诊断组装不会影响已捕获路由。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `SessionReferenceResolver`：pre-step 监听器、候选发现、准备 |
-| [`src/config.ts`](src/config.ts) | `Config` schema、`SessionReferenceError` 错误分类 |
+| [`src/config.ts`](src/config.ts) | `Config` schema、`SessionReferenceError` 错误分类体系 |
 | [`src/uri.ts`](src/uri.ts) | `dsh-session:` URI 编解码、mention 格式化与解析 |
 | [`src/projection.ts`](src/projection.ts) | 当前表层投影与字节预算保留 |
 | [`src/serialization.ts`](src/serialization.ts) | 快照载荷的标签安全 JSON 转义 |
-| [`src/spill.ts`](src/spill.ts) | 完整转录序列化与模型可见省略通知 |
+| [`src/spill.ts`](src/spill.ts) | 完整 transcript 序列化与模型可见省略通知 |
 | [`src/types.ts`](src/types.ts) | `SessionReferenceInput`／`Candidate` 与来源类型 |
-| — | 不发布运行时不变式伴生入口；prepare 返回构建时已校验的不可变单次快照；持久 context 的准入、冻结与回放由 Agent 和 Session 层负责。 |
+| — | 不发布运行时不变式伴生入口；准备过程返回构建时已校验的不可变单次快照；持久上下文的准入、冻结与回放由 agent 层和会话层负责。 |
 
 ### 主要流程
 
@@ -98,10 +98,10 @@ kind: "package-reference"
 
 包级约定不够用时阅读以下页面。它们从共享引用表面进入设计决策与其背后的读取服务。
 
-- [会话引用子系统](../../../docs/subsystems/session-reference.zh.md)——规范 URI、投影规则与稳定的错误分类。
+- [会话引用子系统](../../../docs/subsystems/session-reference.zh.md)——规范 URI、投影规则与稳定的错误分类体系。
 - [会话引用 spill 复用](../../../.agents/notes/implemented/bug-fix/2026-09-05-session-reference-spill-reuse.zh.md)——快照身份、省略通知、存储归属与替代方案。
 - [会话查询子系统](../../../docs/subsystems/session-query.zh.md)——提供会话表层的读取服务。
-- [context 组地图](../README.zh.md)——相邻的请求上下文包。
+- [上下文组地图](../README.zh.md)——相邻的请求上下文包。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-session-reference)——每个受支持配置字段及其源声明。
 
 -----
@@ -117,7 +117,7 @@ kind: "package-reference"
 
 #### Token 影响
 
-每条包含引用的消息都会添加固定警告和最多三个序列化预览，每个预览都受配置值或模型相对字节预算独立限制。被截断的引用会在该预算之外添加独立省略通知；已保存的完整转录只有在被取回时才增加 token。精确上下文会保留在目标历史中，直到目标压缩遮蔽或摘要它；源会话变更不会添加更多 token。
+每条包含引用的消息都会添加固定警告和最多三个序列化预览，每个预览都受配置值或模型相对字节预算独立限制。被截断的引用会在该预算之外添加独立省略通知；已保存的完整 transcript 只有在被取回时才增加 token。精确上下文会保留在目标历史中，直到目标压缩遮蔽或摘要它；源会话变更不会添加更多 token。
 
 #### KV Cache 影响
 
@@ -131,11 +131,11 @@ kind: "package-reference"
 这些限制说明跨会话引用何时不合适。它们是当前包约束。
 
 - **不支持消息正文检索**：候选查询会检查标题，但不搜索消息主体。
-- **标签只来自投影**：已挂载的会话由实时投影切面标注，冷会话由持久化 checkpoint 标注，两者都答不上来的会话用 id 作标签且无法按标题搜到。发现路径绝不读日志：折叠一个标题的代价是整份日志，而这段代码位于补全的每一次击键之下。早于投影缓存组合存在的会话，只要被打开一次（销毁时即写 checkpoint）就会恢复标题。
+- **标签只来自投影**：已挂载会话的标签来自实时投影切面，冷会话的标签来自持久检查点；若会话无法提供这两者，则以其 id 作为标签，也无法按标题找到。发现过程绝不读取日志：折叠出一个标题需要处理整份日志，而这段代码会在每次补全击键时运行。在投影缓存建立前持久化的会话，会在首次打开时恢复标题并写入检查点。
 - **受信任调用方边界**：该服务假设宿主有权读取 `ctx.sessionQuery` 公开的每个会话；它不是面向模型的搜索工具。
 - **只投影文本**：不会在会话间传播非文本 user 与 assistant 块。
 - **没有实时链接**：引用是快照，不是 fork、恢复、订阅或源会话变更。
-- **转录搜索按行进行**：字面短语可能跨越 JSON 片段行或包含转义字符；精确文本匹配需先解码并拼接消息片段。已保存产物可能按后端策略过期。
+- **transcript 搜索按行进行**：字面短语可能跨越 JSON 片段行或包含转义字符；精确文本匹配需先解码并拼接消息片段。已保存产物可能按后端策略过期。
 
 <a id="dev-note"></a>
 ### 开发备注

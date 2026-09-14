@@ -13,20 +13,29 @@ const archivedAgentNotePrefix = '.agents/notes/archived/'
 
 const namedReferenceCharacters: Readonly<Record<string, string>> = {
   hyphen: '-',
+  num: '#',
+  period: '.',
+  colon: ':',
   sol: '/',
 }
 
-/** Normalize source spellings that render or decode to repository separators. */
-function canonicalReferenceText(source: string): string {
+/**
+ * Normalize escaped repository references for source-text policy checks.
+ * @param source - Source text containing literal, encoded, or compatibility characters.
+ * @returns Lowercase text with URL, JavaScript, and HTML character escapes decoded.
+ */
+export function canonicalReferenceText(source: string): string {
   return source
+    .normalize('NFKC')
     .replaceAll('\\/', '/')
-    .replace(/\\u(0023|002d|002f)/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
-    .replace(/%(23|2d|2f)/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/\\(?:u([\da-f]{4})|x([\da-f]{2}))/gi, (_match, unicode: string | undefined, byte: string | undefined) =>
+      String.fromCodePoint(Number.parseInt(unicode ?? byte ?? '', 16)))
+    .replace(/%([\da-f]{2})/gi, (_match, code: string) => String.fromCodePoint(Number.parseInt(code, 16)))
     .replace(/&#(?:(\d+)|x([\da-f]+));/gi, (entity, decimal: string | undefined, hexadecimal: string | undefined) => {
       const code = Number.parseInt(decimal ?? hexadecimal ?? '', decimal === undefined ? 16 : 10)
-      return code === 35 || code === 45 || code === 47 ? String.fromCodePoint(code) : entity
+      return code <= 0x10ffff ? String.fromCodePoint(code) : entity
     })
-    .replace(/&(hyphen|num|sol);/gi, (entity, name: string) => namedReferenceCharacters[name.toLowerCase()] ?? entity)
+    .replace(/&(hyphen|num|period|colon|sol);/gi, (entity, name: string) => namedReferenceCharacters[name.toLowerCase()] ?? entity)
     .normalize('NFKC')
     .toLowerCase()
 }

@@ -160,7 +160,7 @@ describe('released v0/v1 physical codecs', () => {
     ['reversed range', [[2, 1]]],
     ['range past event', [[0, 3]]],
     ['overlapping ranges', [[0, 1], [1, 2]]],
-  ])('refuses malformed stored provenance: %s', (_name, sourceEventSeqs) => {
+  ])('refuses malformed stored source-event ranges: %s', (_name, sourceEventSeqs) => {
     const rows = [
       { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
       { type: 'user/message', seq: 1, time: 2, data: {
@@ -216,9 +216,9 @@ describe('released v0/v1 physical codecs', () => {
     })
     expect(runs).toHaveLength(1)
     expect([...((runs[0] as SessionFormatEventRun).expand())]).toHaveLength(2)
-    const provenance = create(header)
-    decodeRow(provenance, { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } })
-    const item = decodeRow(provenance, {
+    const codec = create(header)
+    decodeRow(codec, { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } })
+    const item = decodeRow(codec, {
       type: 'user/message', seq: 1, time: 2,
       data: { id: 'm', role: 'user', content: [], source: { kind: 'user' } },
       sourceEventSeqs: [0], surfaceOp: 'append',

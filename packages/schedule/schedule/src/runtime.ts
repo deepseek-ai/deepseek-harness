@@ -205,6 +205,7 @@ export class ScheduleRuntime {
   /** Fold the current exact runtime suffix and contain a corrupt durable stream. */
   private readFolded(): FoldedSchedules | undefined {
     try {
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       return foldScheduleEvents(this.agent.session.ownEvents())
     } catch (error: unknown) {
       this.faulted = true

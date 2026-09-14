@@ -110,7 +110,7 @@ describe('loop-owned request freezing', () => {
     const replacement = session.append('user/message', {
       ...userEvent.data, content: [{ type: 'text', text: 'compacted' }],
     }, {
-      surfaceOp: { op: 'replace', start: nodes[0]!, end: nodes[1]! },
+      surfaceOp: { op: 'replace', startSeq: nodes[0]!, endSeq: nodes[1]! },
       sourceEventSeqs: [nodes[0]!, nodes[1]!],
     })
     await send(agent, 'third')

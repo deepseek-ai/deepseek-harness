@@ -1,4 +1,4 @@
-# Private Agent Teams Web layer. Apply after dsh-web-app and the host-side
+# Experimental Agent Teams Web layer. Apply after dsh-web-app and the host-side
 # dsh-agent-team-profile so the browser mounts only when the Team service is present.
 
 - insert:

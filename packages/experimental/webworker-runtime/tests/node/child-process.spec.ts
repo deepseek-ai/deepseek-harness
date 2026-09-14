@@ -18,7 +18,7 @@ import { setActiveVfs } from '@deepseek-ai/dsh-experimental-webworker-runtime/sr
 import { spawn, spawnSync } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/node/builtin_modules/implemented/child_process.ts'
 import {
   LAUNCHER_FAILURE_EXIT, grantArgs, launcherPath, probe,
-} from '@deepseek-ai/node-addon-landlock-run'
+} from '@deepseek-ai/node-addon-system/landlock-run'
 import { processAlive, signalProcess } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/node/process-table.ts'
 import { hostFileSystem } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/shell/fs-access.ts'
 import {

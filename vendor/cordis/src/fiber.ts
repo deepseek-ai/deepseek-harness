@@ -730,8 +730,8 @@ export class Fiber {
    *
    * @param config — the new raw config; validated before anything restarts.
    * @param noSave — hint for persistence hooks not to write the change back.
-   * @returns the update waterfall result; the default restart returns a promise.
-   * @throws when validation, an update listener, or the restarted plugin fails.
+   * @returns nothing; the restart runs behind the `internal/update` waterfall.
+   * @throws {ValidationError} when the new config fails validation.
    */
   update(config: any, noSave = false) {
     this.assertActive()
@@ -745,7 +745,7 @@ export class Fiber {
       return
     }
     config = this._resolveConfig(config)
-    return this.context.waterfall(this, 'internal/update', config, noSave, () => {
+    this.context.waterfall(this, 'internal/update', config, noSave, () => {
       this.config = config
       this._error = undefined
       return this.restart()

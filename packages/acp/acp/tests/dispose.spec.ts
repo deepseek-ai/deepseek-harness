@@ -7,10 +7,14 @@ import { makeBridgeHarness, type BridgeHarness } from './harness.ts'
 
 describe('ACP connection ownership', () => {
   let harness: BridgeHarness | undefined
+  let releaseBlockedDisposal: (() => void) | undefined
 
   afterEach(async () => {
-    await harness?.dispose()
+    const bridge = harness
     harness = undefined
+    releaseBlockedDisposal?.()
+    releaseBlockedDisposal = undefined
+    await bridge?.dispose()
   })
 
   it('disposal cancels a running prompt and awaits agent teardown', async () => {
@@ -198,34 +202,58 @@ describe('ACP connection ownership', () => {
     expect(harness.ctx.agents.list()).toHaveLength(0)
   })
 
-  it('a client disconnect disposes every owned session without root-context disposal', async () => {
+  it.each([
+    ['a client disconnect', 'closeClientTransport'],
+    ['a failed client transport', 'abortClientTransport'],
+  ] as const)('%s disposes its session without plugin disposal', async (_name, disconnect) => {
     harness = await makeBridgeHarness({ script: ['hang'] })
-    await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
-    const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
-    void harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }).catch(() => {})
-    await vi.waitFor(() => { expect(agent.status).toBe('running') })
-
-    await harness.closeClientTransport()
-    await harness.acpFiber.dispose()
-    expect(agent.status).toBe('idle')
-    expect(harness.ctx.agents.get(SessionId(sessionId))).toBeUndefined()
-    expect(harness.ctx.sessions.get(SessionId(sessionId))).toBeUndefined()
-  })
-
-  it('a failed client transport still disposes every owned session', async () => {
-    harness = await makeBridgeHarness({ script: ['hang'] })
-    await harness.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
-    const { sessionId } = await harness.client.newSession({ cwd: process.cwd(), mcpServers: [] })
-    const agent = harness.ctx.agents.get(SessionId(sessionId))!
-    void harness.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }).catch(() => {})
-    await vi.waitFor(() => { expect(agent.status).toBe('running') })
-
-    await harness.abortClientTransport()
-    await vi.waitFor(() => {
-      expect(harness!.ctx.agents.get(SessionId(sessionId)) === undefined).toBe(true)
+    const bridge = harness
+    const create = bridge.ctx.agents.create.bind(bridge.ctx.agents)
+    const disposalStarted = Promise.withResolvers<undefined>()
+    const releaseDisposal = Promise.withResolvers<undefined>()
+    releaseBlockedDisposal = () => { releaseDisposal.resolve(undefined) }
+    const disposalCompleted = Promise.withResolvers<undefined>()
+    const createSpy = vi.spyOn(bridge.ctx.agents, 'create').mockImplementation(async (options) => {
+      const handle = await create(options)
+      const dispose = handle.dispose.bind(handle)
+      handle.dispose = () => {
+        const completion = (async () => {
+          disposalStarted.resolve(undefined)
+          await releaseDisposal.promise
+          await dispose()
+          return undefined
+        })()
+        disposalCompleted.resolve(completion)
+        return completion
+      }
+      return handle
     })
-    expect(agent.status).toBe('idle')
+    const running = Promise.withResolvers<undefined>()
+    let stopListening: (() => void) | undefined
+    try {
+      await bridge.client.initialize({ protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} })
+      const { sessionId } = await bridge.client.newSession({ cwd: process.cwd(), mcpServers: [] })
+      const agent = bridge.ctx.agents.get(SessionId(sessionId))!
+      stopListening = bridge.ctx.on('agent/status', ({ agent: changed, status }) => {
+        if (changed === agent && status === 'running') running.resolve(undefined)
+      })
+      void bridge.client.prompt({ sessionId, prompt: [{ type: 'text', text: 'go' }] }).catch(() => {})
+      await running.promise
+
+      await bridge[disconnect]()
+      await disposalStarted.promise
+      expect(bridge.ctx.agents.get(SessionId(sessionId))).toBe(agent)
+      expect(bridge.ctx.sessions.get(SessionId(sessionId))).toBe(agent.session)
+      releaseDisposal.resolve(undefined)
+      await disposalCompleted.promise
+      expect(agent.status).toBe('idle')
+      expect(bridge.ctx.agents.get(SessionId(sessionId))).toBeUndefined()
+      expect(bridge.ctx.sessions.get(SessionId(sessionId))).toBeUndefined()
+    } finally {
+      releaseDisposal.resolve(undefined)
+      stopListening?.()
+      createSpy.mockRestore()
+    }
   })
 
   it('disconnect and plugin disposal share one quiescence boundary', async () => {

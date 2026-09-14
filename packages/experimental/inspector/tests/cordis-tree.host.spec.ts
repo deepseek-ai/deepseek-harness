@@ -2,10 +2,11 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import WebSocket, { type RawData } from 'ws'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi, type TestContext } from 'vitest'
 import { CordisTreeCollector } from '../src/shared/cordis/collector.ts'
 import { observeCordisTree } from '../src/shared/cordis/observer.ts'
-import { startInspector, type InspectorHandle } from '../src/host/bridge/controller.ts'
+import * as inspectorBridge from '../src/host/bridge/controller.ts'
+import type { InspectorHandle, InspectorOptions } from '../src/host/bridge/controller.ts'
 import { publishCordisTree as publishHostCordisTree } from '../src/host/inspection/cordis.ts'
 import { parseCordisTreeSnapshot, type CordisTreeNode } from '../src/shared/cordis/snapshot.ts'
 import { inspectorId } from '../src/shared/bridge/ids.ts'
@@ -76,6 +77,19 @@ class CdpClient {
   }
 }
 
+/** Own pending startup through cancellation; tree assertions do not measure Worker cold-start latency. */
+async function startTestInspector(options: InspectorOptions, test: TestContext): Promise<InspectorHandle> {
+  const pending = inspectorBridge.startInspector({ ...options, startupTimeoutMs: test.task.timeout })
+  test.onTestFinished(async () => {
+    // Failed starts terminate their Worker before rejecting.
+    const [started] = await Promise.allSettled([pending])
+    if (started.status === 'fulfilled') await started.value.close()
+  })
+  const handle = await pending
+  test.signal.throwIfAborted()
+  return handle
+}
+
 describe('Cordis tree inspection', () => {
   let inspector: InspectorHandle | undefined
   let cdp: CdpClient | undefined
@@ -83,6 +97,48 @@ describe('Cordis tree inspection', () => {
   let clientSource: InspectorClientFixture | undefined
   const observers: Array<() => void> = []
   const fibers: Array<{ dispose(): Promise<void> }> = []
+
+  it('closes a late-starting Worker after test cancellation without returning its handle', async (test) => {
+    const release = Promise.withResolvers<undefined>()
+    const controller = new AbortController()
+    const cleanups: Array<Parameters<TestContext['onTestFinished']>[0]> = []
+    let starting: Promise<InspectorHandle> | undefined
+    const start = inspectorBridge.startInspector
+    const spy = vi.spyOn(inspectorBridge, 'startInspector').mockImplementation(async (options) => {
+      starting = start(options)
+      const handle = await starting
+      await release.promise
+      return handle
+    })
+    test.onTestFinished(async () => {
+      release.resolve(undefined)
+      spy.mockRestore()
+      if (starting === undefined) return
+      const [started] = await Promise.allSettled([starting])
+      if (started.status === 'fulfilled') await started.value.close()
+    })
+    const pending = startTestInspector({ port: 0, captureFetch: false }, {
+      ...test,
+      signal: controller.signal,
+      onTestFinished: (cleanup) => { cleanups.push(cleanup) },
+    })
+    const result = pending.then(
+      handle => ({ status: 'fulfilled' as const, handle }),
+      (reason: unknown) => ({ status: 'rejected' as const, reason }),
+    )
+    if (starting === undefined) throw new Error('Inspector startup was not called')
+    const handle = await starting
+    expect(spy).toHaveBeenCalledWith(expect.objectContaining({ startupTimeoutMs: test.task.timeout }))
+    expect(cleanups).toHaveLength(1)
+    const cancelled = new Error('test cancelled during startup')
+    controller.abort(cancelled)
+    release.resolve(undefined)
+    const outcome = await result
+    expect(outcome.status).toBe('rejected')
+    expect('reason' in outcome ? outcome.reason : undefined).toBe(cancelled)
+    await cleanups[0]!(test)
+    await expect(fetch(handle.endpoint.httpUrl)).rejects.toThrow()
+  })
 
   afterEach(async () => {
     for (const dispose of observers.splice(0).reverse()) dispose()
@@ -362,8 +418,8 @@ describe('Cordis tree inspection', () => {
     backend.close()
   })
 
-  it('projects Host and Client trees and resolves both node kinds to RemoteObjects', async () => {
-    inspector = await startInspector({ port: 0, captureFetch: false, maxCordisNodes: 100 })
+  it('projects Host and Client trees and resolves both node kinds to RemoteObjects', async (test) => {
+    inspector = await startTestInspector({ port: 0, captureFetch: false, maxCordisNodes: 100 }, test)
     const host = new Context()
     const hostFiber = host.plugin({ name: 'host-child', apply() {} })
     fibers.push(hostFiber)
@@ -540,8 +596,8 @@ describe('Cordis tree inspection', () => {
     expect(disconnectedTree.clients[0]?.connection.state).toBe('disconnected')
   })
 
-  it('emits only node-level DOM changes for Client snapshots', async () => {
-    inspector = await startInspector({ port: 0, captureFetch: false, maxCordisNodes: 100 })
+  it('emits only node-level DOM changes for Client snapshots', async (test) => {
+    inspector = await startTestInspector({ port: 0, captureFetch: false, maxCordisNodes: 100 }, test)
     cdp = await CdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     const initialDocument = (await cdp.call('DOM.getDocument')).result?.root as CdpNode
     const clientsNode = initialDocument.children?.find(node => node.localName === 'clients')
@@ -598,8 +654,8 @@ describe('Cordis tree inspection', () => {
     })
   })
 
-  it('serves three document levels by default and withheld levels on demand', async () => {
-    inspector = await startInspector({ port: 0, captureFetch: false, maxCordisNodes: 100 })
+  it('serves three document levels by default and withheld levels on demand', async (test) => {
+    inspector = await startTestInspector({ port: 0, captureFetch: false, maxCordisNodes: 100 }, test)
     const host = new Context()
     let innerFiber: { uid: number | null } | undefined
     const outer = host.plugin({
@@ -680,14 +736,14 @@ describe('Cordis tree inspection', () => {
     expect(secondCdp.events.slice(offset).some(event => event.method === 'DOM.setChildNodes')).toBe(false)
   })
 
-  it('restores a disconnected Client tree from a new transport generation', async () => {
-    inspector = await startInspector({
+  it('restores a disconnected Client tree from a new transport generation', async (test) => {
+    inspector = await startTestInspector({
       port: 0,
       captureFetch: false,
       maxCordisNodes: 100,
       clientReconnectBaseMs: 10,
       clientReconnectMaxMs: 20,
-    })
+    }, test)
     clientSource = await InspectorClientFixture.start(inspector.endpoint.client, { label: 'Reconnect Client' })
     cdp = await CdpClient.connect(inspector.endpoint.webSocketDebuggerUrl)
     await cdp.call('Runtime.enable')

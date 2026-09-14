@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertServiceable, Config } from '../src/config.ts'
+import { assertServiceable, Config, resolveProfiles } from '../src/config.ts'
 
 /** Validate one hand-declared route, with the caller's fields layered onto it. */
 const routeWith = (profile: Record<string, unknown>): (() => unknown) =>
@@ -19,6 +19,15 @@ const configWith = (model: Record<string, unknown>): (() => unknown) =>
   routeWith({ models: [{ id: 'm', ...model }] })
 
 describe('reasoning schema boundary', () => {
+  it('accepts an empty provider section and propagates unexpected catalog failures', () => {
+    expect(() => { assertServiceable({}) }).not.toThrow()
+    const failure = new TypeError('model metadata lookup failed')
+    expect(() => resolveProfiles({ openrouter: { models: [{
+      id: '111',
+      get name(): string { throw failure },
+    }], api: 'openai-completions' } }, 'deferred')).toThrow(failure)
+  })
+
   it('rejects a level pi-ai does not know at the write that produced it', () => {
     expect(configWith({ reasoningEfforts: { ultra: 'x' } })).toThrow(/"off"/)
     expect(configWith({ reasoningEfforts: { high: 42 } })).toThrow()

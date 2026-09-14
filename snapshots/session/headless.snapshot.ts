@@ -3,11 +3,15 @@
 import { cp, copyFile, mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { homedir, tmpdir } from 'node:os'
-import { basename, delimiter, dirname, join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { basename, delimiter, dirname, isAbsolute, join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import ts from 'typescript'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
+import { releasedV0SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
+import type { SessionFormatEvent, SessionFormatMigrationContext } from '@deepseek-ai/dsh-session-format'
+import { assertWorkspaceOutsideTemp, outsideTempWorkspaceParent } from '../../scripts/snapshot-workspace-parent.ts'
 import {
   assertPersistedSessionVersion,
   assertSessionFixtureVersion,
@@ -31,8 +35,10 @@ import {
   scrubSystemPrompts,
   scrubToolSchemas,
   sessionFixtureName,
+  systemPromptPrecedesRequests,
   sessionFixtureNames,
   sessionHeaderVersion,
+  writerSnapshotName,
   snapshotSpillRoot,
   stabilizeFixtureMessageIds,
   stabilizeRefreshLog,
@@ -166,13 +172,25 @@ async function persistedSessions(cwd: string): Promise<SessionLog[]> {
   const files = latestPersistedSessionPaths(await readdir(root, { recursive: true }))
   const logs = await Promise.all(files.map(async (file): Promise<SessionLog> => {
     const content = await readFile(join(root, file), 'utf8')
-    assertPersistedSessionVersion(basename(file), content)
+    expect(assertPersistedSessionVersion(basename(file), content), `${file}: current writer`).toBe(SESSION_FORMAT_VERSION)
     return { content, header: headerOf(content) }
   }))
+  // Siblings bind to fixture roles by catalog publication order; concurrent
+  // provider startup can publish an older Session after a newer one.
+  const catalogOrders = new Map(logs.map(log => [log.header.id, new Map(
+    records(log.content)
+      .filter(event => event.type === 'subagent/catalog')
+      .map((event, index) => [(event.data as JsonObject).childId, index]),
+  )]))
   return logs.sort((left, right) => {
     const leftChild = typeof left.header.parentSession === 'string'
     const rightChild = typeof right.header.parentSession === 'string'
     if (leftChild !== rightChild) return leftChild ? 1 : -1
+    if (left.header.parentSession === right.header.parentSession) {
+      const catalogOrder = catalogOrders.get(left.header.parentSession)
+      const childOrder = (catalogOrder?.get(left.header.id) ?? Infinity) - (catalogOrder?.get(right.header.id) ?? Infinity)
+      if (childOrder) return childOrder
+    }
     return Number(left.header.createdAt) - Number(right.header.createdAt)
   })
 }
@@ -200,10 +218,9 @@ async function writeSessionFixtures(
   existing: readonly string[],
   ctx: NormalizeContext,
 ): Promise<string[]> {
-  const names = actualLogs.map((log, index) => sessionFixtureName(
-    index,
-    sessionHeaderVersion(log.content, `harvested Session ${index}`),
-  ))
+  const names = actualLogs.map((log, index) => scenario.manifest.sessionFormat === undefined
+    ? sessionFixtureName(index, sessionHeaderVersion(log.content, `harvested Session ${index}`))
+    : writerSnapshotName(index))
   const prior = names.map((_, index) => existing[index] ?? '')
   const replacements = mode === 'refresh'
     ? refreshFixtureReplacements(actualLogs.map(harvested), prior)
@@ -230,7 +247,9 @@ async function writeHeaderSidecars(
   actualLogs: readonly SessionLog[],
   ctx: NormalizeContext,
 ): Promise<void> {
-  if (scenario.manifest.header.pin === true) {
+  if (scenario.manifest.header.pin === true
+    || [...headerPins.values()].some(pin => pin.manifest.header.systemPromptSource === scenario.name
+      || pin.manifest.header.toolSchemasSource === scenario.name)) {
     const primary = actualLogs[0]
     if (primary === undefined) throw new Error(`${scenario.name}: write-back has no primary session`)
     const prompts = normalizedSystemPrompts(primary.content, ctx)
@@ -531,6 +550,162 @@ function pinOf(scenario: HeadlessScenario): HeadlessScenario {
   return pin
 }
 
+/** Require successful verification and the complete canonical event before refresh can write a fixture. */
+async function verifySessionQuerySpill(log: string, spillRoot: string, locatorRoot: string): Promise<void> {
+  const events = parseSessionLog(log)
+  const results = events.flatMap(event => event.type === 'tool/result'
+    ? event.data.message.content.filter(block => block.type === 'tool-result')
+    : [])
+  const readResult = results.find(result => result.toolCallId === 'call_session_query_spill')
+  const verification = results.find(result => result.toolCallId === 'call_verify_session_query_spill')
+  expect(readResult?.isError).toBe(false)
+  expect(verification).toMatchObject({
+    isError: false,
+    content: [{ type: 'text', text: 'SPILL_CANONICAL_OK\n' }],
+  })
+  const preview = readResult?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+  const locator = preview?.match(/Full formatted result stored at: (.+-session_event_read\.txt)\. Use read/)
+  expect(locator).not.toBeNull()
+  expect(locator?.[1]).toBeDefined()
+  expect(locator![1]!.startsWith(locatorRoot + sep)).toBe(true)
+  const full = await readFile(join(spillRoot, relative(locatorRoot, locator![1]!)), 'utf8')
+  const json = full.match(/```json\n([\s\S]+)\n```/)
+  expect(json).not.toBeNull()
+  const header = events.find(event => event.type === 'request/header')
+  expect(header).toBeDefined()
+  expect(JSON.parse(json![1]!)).toEqual(header)
+  expect(full).toContain('session_event_search')
+}
+
+/** Require real resource results and literal instructions before recording or replay succeeds. */
+function verifyMcpResources(log: string, ptc: boolean): void {
+  const events = parseSessionLog(log)
+  const nativeResults = events.flatMap(event => event.type === 'tool/result'
+    ? event.data.message.content.filter(block => block.type === 'tool-result')
+    : [])
+  const dispatches = events.flatMap(event => event.type === 'tool/ptc-dispatch' ? [event.data] : [])
+  const results = ptc ? dispatches : nativeResults
+  expect(results.length).toBeGreaterThanOrEqual(5)
+  expect(results.every(result => !result.isError)).toBe(true)
+  const calls = ptc ? dispatches.map(dispatch => dispatch.name)
+    : events.flatMap(event => event.type === 'tool/call' ? [event.data.name] : [])
+  expect(calls).toEqual(expect.arrayContaining(['list_mcp_resources', 'list_mcp_resource_templates', 'read_mcp_resource']))
+  const text = results.flatMap(result => result.content
+    .flatMap(block => block.type === 'text' ? [block.text] : [])).join('\n')
+  expect(text).toContain('memo://text')
+  expect(text).toContain('memo://greeting/{name}')
+  expect(text).toContain('MCP resource text with {{braces}} intact.')
+  expect(text).toContain('binary resource')
+  expect(text).toContain('Hello, reader.')
+  if (ptc) {
+    const output = nativeResults.flatMap(result => result.content
+      .flatMap(block => block.type === 'text' ? [block.text] : [])).join('\n')
+    expect(output).toMatch(/"binaryAvailable"\s*:\s*true/)
+  }
+  expect(log).not.toContain('bWNwLXJlc291cmNlLWJpbmFyeQ==')
+  expect(normalizedSystemPrompts(log, contextOf([log])).join('\n'))
+    .toContain('MCP_RESOURCE_INSTRUCTION: keep {{braces}} literal.')
+  expect(normalizedSystemPrompts(log, contextOf([log])).join('\n'))
+    .toContain('server argument: ["catalog"]')
+}
+
+function verifyNoMcpServers(log: string, ptc: boolean): void {
+  const events = parseSessionLog(log)
+  const headers = events.flatMap(event => event.type === 'request/header' ? [event.data.header] : [])
+  const prompts = events.flatMap(event => event.type === 'system/message'
+    ? event.data.message.content.filter(block => block.type === 'text').map(block => block.text) : [])
+  expect(headers.length).toBeGreaterThan(0)
+  expect(prompts.length).toBeGreaterThan(0)
+  for (const header of headers) {
+    const names = header.tools?.map(tool => tool.name) ?? []
+    expect(names.filter(name => name.includes('mcp'))).toEqual([])
+    if (ptc) expect(names).toEqual(['run_code'])
+    else expect(names).toContain('bash')
+  }
+  for (const prompt of prompts) {
+    expect(prompt).not.toMatch(/\bMCP\b|mcp__/)
+    expect(prompt).not.toMatch(/list_mcp_resources|list_mcp_resource_templates|read_mcp_resource/)
+    if (ptc) expect(prompt).toContain('declare const tools:')
+  }
+}
+
+/** Require an admitted failed job and zero process allocations before updating its recorded oracle. */
+async function verifyBackgroundConfinementFailure(log: string, cwd: string): Promise<void> {
+  const results = parseSessionLog(log).flatMap(event => event.type === 'tool/result'
+    ? event.data.message.content.filter(block => block.type === 'tool-result') : [])
+  const started = results.find(result => result.toolCallId === 'async-confinement-start')
+  const inspected = results.find(result => result.toolCallId === 'async-confinement-result')
+  expect(started).toMatchObject({ isError: false, content: [{ type: 'text', text: 'started background job bash-1' }] })
+  expect(inspected?.isError).toBe(false)
+  const text = inspected?.content.flatMap(block => block.type === 'text' ? [block.text] : []).join('')
+  expect(text).toContain('[status: failed,')
+  expect(text).toContain('fixture asynchronous confinement refused')
+  expect(JSON.parse(await readFile(join(cwd, 'confinement-audit.json'), 'utf8'))).toEqual({ confineCalls: 1, spawnCalls: 0 })
+}
+
+/** Exercise provider-cwd adoption through the shipped launcher without normalizing away the observation. */
+async function verifyProviderCwdResume(
+  scenario: HeadlessScenario,
+  cwd: string,
+  initial: readonly SessionLog[],
+  patches: readonly string[],
+  model: { provider: string; model: string },
+  fixture: string,
+  task: string,
+): Promise<void> {
+  const providerCwd = scenario.manifest.environment?.DSH_SNAPSHOT_PROVIDER_CWD
+  const primary = initial[0]
+  expect(providerCwd).toBeDefined()
+  expect(primary?.header.cwd).toBe(providerCwd)
+  expect(primary?.header.cwd).not.toBe(cwd)
+  const otherHostCwd = await mkdtemp(join(tmpdir(), 'dsh-provider-resume-'))
+  const env = {
+    DSH_HOME: join(cwd, '.dsh'),
+    DSH_SNAPSHOT: 'replay',
+    DSH_SNAPSHOT_FILE: fixture,
+    DSH_SNAPSHOT_PROVIDER: model.provider,
+    DSH_SNAPSHOT_MODEL: model.model,
+    DSH_PERMISSION_MODE: 'read-only',
+    DSH_TELEMETRY_DISABLED: '1',
+    NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
+  }
+  const launch = {
+    cwd: otherHostCwd,
+    binScript: dshBin,
+    configPath: patches[0] as string,
+    tsconfigPath,
+    binArgs: [
+      '--profile', 'headless',
+      ...patches.flatMap(file => ['--patch', isAbsolute(file) ? file : join(cwd, file)]),
+      '--session-id', String(primary?.header.id), task,
+    ],
+  }
+  try {
+    const refused = await runLoaderSmoke({
+      ...launch, label: 'provider-cwd mismatched resume', expectedExitCode: 1,
+      env: { ...env, DSH_SNAPSHOT_PROVIDER_CWD: `${providerCwd}/other` },
+    })
+    expect(refused.stdout).toBe('')
+    expect(refused.stderr).toContain(`was recorded in "${providerCwd}", not "${providerCwd}/other"`)
+    expect(await persistedSessions(cwd)).toEqual(initial)
+    const resumed = await runLoaderSmoke({
+      ...launch, label: 'provider-cwd matching resume',
+      binArgs: [...launch.binArgs.slice(0, -1), '--json', task],
+      env: { ...env, DSH_SNAPSHOT_PROVIDER_CWD: providerCwd },
+    })
+    const output = records(resumed.stdout)
+    expect(output[0]).toEqual({ type: 'session', sessionId: primary?.header.id, cwd: providerCwd })
+    expect(output.at(-1)).toEqual({ type: 'final', text: finalTextFromSession(primary!.content) })
+    const continued = await persistedSessions(cwd)
+    expect(continued).toHaveLength(1)
+    expect(continued[0]?.header).toEqual(primary?.header)
+    expect(continued[0]?.content.startsWith(primary!.content)).toBe(true)
+    expect(records(continued[0]!.content).filter(event => event.type === 'turn/start')).toHaveLength(2)
+  } finally {
+    await rm(otherHostCwd, { recursive: true, force: true })
+  }
+}
+
 async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly SessionLog[], ctx: NormalizeContext): Promise<void> {
   const pin = pinOf(scenario)
   const fixture = await readFile(join(pin.dir, await primaryFixtureFile(pin.dir)), 'utf8')
@@ -563,9 +738,13 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
   }
 
   for (const [logIndex, log] of actualLogs.entries()) {
-    const headers = normalizedHeaders(scrubSystemPrompts(log.content), ctx)
+    const headers = normalizedHeaders(log.content, ctx)
     const prompts = normalizedSystemPrompts(log.content, ctx)
-    expect(prompts, `${scenario.name}: every header has a system prompt`).toHaveLength(headers.length)
+    if (headers.length > 0) {
+      expect(systemPromptPrecedesRequests(log.content), `${scenario.name}: a system/message precedes the first request/header`).toBe(true)
+      expect(prompts.length, `${scenario.name}: system/message count`)
+        .toBe(1 + (logIndex === 0 ? pin.manifest.header.promptChanges ?? 0 : 0))
+    }
     for (const [index, header] of headers.entries()) {
       const selectedSchemas = childSchemas.get(logIndex)?.[index]
       const base = reconstructed[index] ?? reconstructed[0]
@@ -582,10 +761,10 @@ async function verifyHeaders(scenario: HeadlessScenario, actualLogs: readonly Se
 }
 
 describe('headless recorded-session snapshots', () => {
-  it('gives every composition and header class exactly one pin', () => {
+  it('gives every composition and header class exactly one current-writer pin', () => {
     for (const scenario of scenarios) {
       expect(ownerOf(scenario), `${scenario.name}: composition owner`).toBeDefined()
-      expect(pinOf(scenario), `${scenario.name}: header pin`).toBeDefined()
+      expect(pinOf(scenario).manifest.sessionFormat, `${scenario.name}: current-writer header pin`).toBeUndefined()
     }
   })
 
@@ -626,52 +805,34 @@ describe('headless recorded-session snapshots', () => {
   })
 
   it('keeps packed chunk rows logically equal to their unpacked recording', async () => {
-    const sourceDir = join(snapshotsRoot, 'hook-cc-pretool-deny')
     const packedDir = join(snapshotsRoot, 'packed-chunks')
-    const source = await readFile(join(sourceDir, await primaryFixtureFile(sourceDir)), 'utf8')
     const packed = await readFile(join(packedDir, await primaryFixtureFile(packedDir)), 'utf8')
-    const rowTypes = records(packed).flatMap((record) => {
-      const type = record.type
-      return type === 'text-chunks' || type === 'reasoning-chunks' || type === 'tool-call-chunks' ? [type] : []
-    })
-    expect([...new Set(rowTypes)].sort()).toStrictEqual(['reasoning-chunks', 'text-chunks', 'tool-call-chunks'])
-
-    const withoutVolatileMessage = (event: unknown): unknown => {
-      const cloned = structuredClone(event) as {
-        time?: unknown
-        type?: unknown
-        data?: {
-          durationMs?: unknown
-          id?: unknown
-          inserted?: Array<{ id?: unknown }>
-          message?: { id?: unknown }
-          stream?: Array<{ time?: number; time0?: number; dt?: number[] }>
-        }
-      }
-      delete cloned.time
-      if (cloned.type === 'agent/inbox/spliced') {
-        for (const message of cloned.data?.inserted ?? []) delete message.id
-      }
-      if (cloned.type === 'user/message') delete cloned.data?.id
-      if (cloned.type === 'assistant/message' || cloned.type === 'tool/result') delete cloned.data?.message?.id
-      if (cloned.type === 'assistant/message' || cloned.type === 'assistant/attempt') {
-        for (const record of cloned.data?.stream ?? []) {
-          if (record.time !== undefined) record.time = 0
-          if (record.time0 !== undefined) record.time0 = 0
-          if (record.dt !== undefined) record.dt = record.dt.map(() => 0)
-        }
-      }
-      if (cloned.type === 'hook/result') delete cloned.data?.durationMs
-      return cloned
+    const [header, ...rows] = records(packed)
+    const packedTypes = new Set(['text-chunks', 'reasoning-chunks', 'tool-call-chunks'])
+    expect([...new Set(rows.filter(row => packedTypes.has(String(row.type))).map(row => row.type))].sort())
+      .toStrictEqual(['reasoning-chunks', 'text-chunks', 'tool-call-chunks'])
+    const decoder = releasedV0SessionFormatCodec.createDecoder({ ...header, cwd: '/snapshot' }, 'strict')
+    const expanded: SessionFormatEvent[] = []
+    const output: SessionFormatMigrationContext = {
+      emitEvent: event => { expanded.push(event) },
+      emitRun: run => { expanded.push(...run.expand()) },
     }
-    const logical = (fixture: string): unknown[] => {
-      const current = prepareSessionSnapshotFixtureForComparison(fixture)
-      return [
-        records(current)[0],
-        ...parseSessionLog(current).map(withoutVolatileMessage),
-      ]
+    let seq = 0
+    for (const row of rows) {
+      if (packedTypes.has(String(row.type))) {
+        const data = row.data as JsonObject
+        const values = (row.type === 'tool-call-chunks' ? data.args : data.texts) as unknown[]
+        decoder.decodeRow({ ...row, seq0: seq, time0: 0 }, output)
+        seq += values.length
+      } else {
+        decoder.decodeRow({ ...row, seq: seq++, time: 0 }, output)
+      }
     }
-    expect(logical(packed)).toStrictEqual(logical(source))
+    decoder.finish(output)
+    const unpacked = [header, ...expanded.map(({ seq: _seq, time: _time, ...event }) => event)]
+      .map(row => JSON.stringify(row)).join('\n') + '\n'
+    const context = contextOf([packed])
+    expect(normalizeSessionSnapshots([packed], context)).toEqual(normalizeSessionSnapshots([unpacked], context))
   })
 
   it('replays original inbox mentions before normalized user messages', () => {
@@ -751,6 +912,31 @@ describe('headless recorded-session snapshots', () => {
     expect(stderrFromSession(log)).toBe('dsh: reasoning:\nfirst thought\ndsh: reasoning:\nsecond\n')
   })
 
+  it.each([10, 20])('assigns sibling roles by catalog order when the first child timestamp is %i', async (firstCreatedAt) => {
+    const cwd = await mkdtemp(join(tmpdir(), 'dsh-headless-catalog-order-'))
+    try {
+      const logs = [
+        [
+          { type: 'session', version: SESSION_FORMAT_VERSION, id: 'parent', createdAt: 1 },
+          { type: 'subagent/catalog', data: { childId: 'child-z' } },
+          { type: 'subagent/catalog', data: { childId: 'child-a' } },
+        ],
+        [{ type: 'session', version: SESSION_FORMAT_VERSION, id: 'child-z', createdAt: firstCreatedAt, parentSession: 'parent' }],
+        [{ type: 'session', version: SESSION_FORMAT_VERSION, id: 'child-a', createdAt: 10, parentSession: 'parent' }],
+      ].map(rows => rows.map(row => JSON.stringify(row)).join('\n') + '\n')
+      for (const content of logs) {
+        const directory = join(cwd, '.dsh', 'sessions', String(headerOf(content).id))
+        await mkdir(directory, { recursive: true })
+        await writeFile(join(directory, `session.v${SESSION_FORMAT_VERSION}.jsonl`), content)
+      }
+      const actual = await persistedSessions(cwd)
+      expect(actual.map(log => log.header.id)).toEqual(['parent', 'child-z', 'child-a'])
+      expect(actual.map(log => log.content)).toEqual(logs)
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
+  })
+
   it('writes header sidecars without replacing a retained Session generation', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'dsh-headless-sidecars-'))
     try {
@@ -768,20 +954,25 @@ describe('headless recorded-session snapshots', () => {
         },
       }
       const header = {
-        type: 'session', version: 2, id: 'sidecar-session', createdAt: 1,
+        type: 'session', version: SESSION_FORMAT_VERSION, id: 'sidecar-session', createdAt: 1,
         cwd: '/tmp/sidecar-session', isSeeded: false, delegationDepth: 0,
       }
       const content = [
         header,
         { type: 'turn/start', seq: 0, time: 2, data: { turn: 1 } },
+        { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+        { type: 'system/message', seq: 2, time: 3, data: {
+          turn: 1, step: 1,
+          message: { role: 'system', content: [{ type: 'text', text: 'fresh system prompt' }],
+            source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }, id: 'fresh-msg' },
+        }, surfaceOp: 'append' },
         {
           type: 'request/header',
-          seq: 1,
-          time: 3,
+          seq: 3,
+          time: 4,
           data: {
             header: {
               config: { provider: 'test', model: 'test' },
-              system: 'fresh system prompt',
               tools: [{ name: 'fresh_tool', description: 'fresh schema', parameters: {} }],
             },
             reason: 'initial',
@@ -802,7 +993,7 @@ describe('headless recorded-session snapshots', () => {
       expect(await readFile(join(directory, 'tool-schemas.expected.json'), 'utf8'))
         .toContain('"name": "fresh_tool"')
       expect(await readFile(join(directory, 'session.v1.jsonl'), 'utf8')).toBe(retained)
-      expect(await readdir(directory)).not.toContain('session.v2.jsonl')
+      expect(sessionFixtureNames(await readdir(directory))).toEqual(['session.v1.jsonl'])
     } finally {
       await rm(directory, { recursive: true, force: true })
     }
@@ -846,14 +1037,14 @@ describe('headless recorded-session snapshots', () => {
       let actualLogs: SessionLog[] = []
       let initialWorkspace: WorkspaceSnapshotEntry[] | undefined
       let finalWorkspace: WorkspaceSnapshotEntry[] | undefined
-      const spillRoot = snapshotSpillRoot(join(scenario.dir, fixtureFiles[0] as string))
-      await rm(spillRoot, { recursive: true, force: true })
+      const spillRoot = await mkdtemp(join(tmpdir(), 'acp-snap-spill-'))
+      const locatorRoot = snapshotSpillRoot(join(scenario.dir, fixtureFiles[0] as string))
       let result: Awaited<ReturnType<typeof runLoaderSmoke>>
       try {
         result = await runLoaderSmoke({
           label: `${scenario.name} headless snapshot`,
           tempDirPrefix: 'dsh-log-snap-',
-          ...(scenario.manifest.workspace?.parent === 'home' ? { tempDirParent: homedir() } : {}),
+          ...(scenario.manifest.workspace?.parent === 'outside-temp' ? { tempDirParent: outsideTempWorkspaceParent() } : {}),
           binScript: dshBin,
           configPath: join(baseComposition.dir, 'cordis.yml'),
           binArgs: [
@@ -871,6 +1062,7 @@ describe('headless recorded-session snapshots', () => {
             DSH_SNAPSHOT_PROVIDER: model.provider,
             DSH_SNAPSHOT_MODEL: model.model,
             DSH_SNAPSHOT_SPILL_ROOT: spillRoot,
+            DSH_SNAPSHOT_SPILL_LOCATOR_ROOT: locatorRoot,
             DSH_SNAPSHOT_FILE: join(scenario.dir, fixtureFiles[0] as string),
             ...(replaying && fixtureFiles.length > 1
               ? { DSH_SNAPSHOT_CHILD_FILES: fixtureFiles.slice(1).map(file => join(scenario.dir, file)).join(delimiter) }
@@ -882,10 +1074,14 @@ describe('headless recorded-session snapshots', () => {
               ? {}
               : { DSH_PERMISSION_MODE: scenario.manifest.permission }),
             ...scenario.manifest.environment,
+            ...(scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc' ? {
+              DSH_MCP_RESOURCES_FIXTURE: join(repoRoot, 'packages/mcp/mcp-client/tests/fixtures/resources-server.ts'),
+            } : {}),
             NODE_OPTIONS: [process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'].filter(Boolean).join(' '),
             DSH_TELEMETRY_DISABLED: '1',
           },
           prepare: async (cwd) => {
+            if (scenario.manifest.workspace?.parent === 'outside-temp') assertWorkspaceOutsideTemp(cwd)
             await mkdir(join(cwd, patchRoot), { recursive: true })
             patchSources.forEach((source, index) => {
               if (source.endsWith('.snapshot.yml')) {
@@ -899,6 +1095,23 @@ describe('headless recorded-session snapshots', () => {
           },
           inspect: async (cwd) => {
             actualLogs = await persistedSessions(cwd)
+            if (scenario.name === 'session-query-spill') {
+              await verifySessionQuerySpill(actualLogs[0]!.content, spillRoot, locatorRoot)
+            }
+            if (scenario.name === 'mcp-resources' || scenario.name === 'mcp-resources-ptc') {
+              verifyMcpResources(actualLogs[0]!.content, scenario.name === 'mcp-resources-ptc')
+            }
+            if (scenario.name === 'mcp-empty' || scenario.name === 'mcp-empty-ptc') {
+              verifyNoMcpServers(actualLogs[0]!.content, scenario.name === 'mcp-empty-ptc')
+            }
+            if (scenario.name === 'provider-cwd') {
+              await verifyProviderCwdResume(
+                scenario, cwd, actualLogs, patches, model, join(scenario.dir, fixtureFiles[0] as string), task,
+              )
+            }
+            if (scenario.name === 'background-confinement-failure') {
+              await verifyBackgroundConfinementFailure(actualLogs[0]!.content, cwd)
+            }
             finalWorkspace = await captureWorkspaceSnapshot(cwd, {
               ignoredRootEntries: RUNTIME_WORKSPACE_ENTRIES,
             })
@@ -930,11 +1143,24 @@ describe('headless recorded-session snapshots', () => {
       expect(result.stdout).toBe(`${finalTextFromSession(fixtures[0] as string)}\n`)
       expect(result.stderr).toBe(expectedStderr)
       expect(actualLogs, `${scenario.name}: persisted session count`).toHaveLength(fixtures.length)
-      const fixtureContext = contextOf(fixtures)
+      const writerFiles = (await readdir(scenario.dir)).filter(name => /^writer(?:\.[1-9]\d*)?\.expected\.jsonl$/u.test(name)).sort()
+      if (mode === 'replay') {
+        expect(writerFiles, 'native writer oracle inventory').toEqual(scenario.manifest.sessionFormat === undefined
+          ? [] : fixtures.map((_, index) => writerSnapshotName(index)).sort())
+      }
+      let expected = fixtures
+      if (scenario.manifest.sessionFormat !== undefined) {
+        if (mode === 'refresh') await writeSessionFixtures(scenario, actualLogs, fixtures, actualContext)
+        expected = await Promise.all(fixtures.map((_, index) => readFile(join(scenario.dir, writerSnapshotName(index)), 'utf8')))
+        for (const [index, content] of expected.entries()) {
+          expect(sessionHeaderVersion(content, writerSnapshotName(index))).toBe(SESSION_FORMAT_VERSION)
+        }
+        expect(await fixtureSessions(scenario), 'historical replay input remains unchanged').toEqual(fixtures)
+      }
       const actualSnapshots = normalizeSessionSnapshots(actualLogs.map(log => log.content), actualContext)
-      const expectedSnapshots = normalizeSessionSnapshots(fixtures, fixtureContext)
+      const expectedSnapshots = normalizeSessionSnapshots(expected, contextOf(expected))
       for (const [index, actual] of actualSnapshots.entries()) {
-        expect(actual, `${scenario.name}: session ${index}`).toBe(expectedSnapshots[index])
+        expect(records(actual), `${scenario.name}: session ${index}`).toEqual(records(expectedSnapshots[index] as string))
       }
       await verifyHeaders(scenario, actualLogs, actualContext)
 
@@ -947,6 +1173,6 @@ describe('headless recorded-session snapshots', () => {
       } else {
         expect(finalWorkspace, `${scenario.name}: a changed workspace requires workspace.final`).toEqual(initialWorkspace)
       }
-    }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+    }, scenario.name === 'provider-cwd' ? 3 * LOADER_SMOKE_TEST_TIMEOUT_MS : LOADER_SMOKE_TEST_TIMEOUT_MS)
   }
 })

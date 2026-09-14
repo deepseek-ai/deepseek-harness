@@ -5,9 +5,11 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { PtcRuntime } from '@deepseek-ai/dsh-ptc-runtime'
+import { createScope, type Scope } from '@deepseek-ai/dsh-scope'
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
+import { join, sep } from 'node:path'
 import { turnBoundaryProjectionDefinition } from '@deepseek-ai/dsh-agent-loop'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt, { renderPrompt } from '@deepseek-ai/dsh-system-prompt'
@@ -81,6 +83,9 @@ class FakeFs extends FileSystem {
     }
     return bytes
   }
+  override async readByteRange(target: FsTarget, range: { offset: number; length: number }): Promise<Uint8Array> {
+    return new TextEncoder().encode(this.files.get(target.targetKey) ?? '').subarray(range.offset, range.offset + range.length)
+  }
   override async listDir(_target: FsTarget): Promise<FsDirEntry[]> {
     return []
   }
@@ -132,12 +137,12 @@ describe('session cwd resolution', () => {
     ? {}
     : { agent: { session: { header: { cwd } } } }
 
-  it('retains ordinary spelling but resolves the cwd before parent traversal', () => {
+  it('preserves cwd spelling so the filesystem provider resolves parent traversal', () => {
     const cwd = process.cwd()
     const throughParent = `${cwd}${sep}..`
-    expect(sessionCwd(execution() as never, 'file.txt')).toBeUndefined()
-    expect(sessionCwd(execution(cwd) as never, 'file.txt')).toBe(cwd)
-    expect(sessionCwd(execution(throughParent) as never, 'file.txt')).toBe(realpathSync.native(throughParent))
+    expect(sessionCwd(execution() as never)).toBeUndefined()
+    expect(sessionCwd(execution(cwd) as never)).toBe(cwd)
+    expect(sessionCwd(execution(throughParent) as never)).toBe(throughParent)
 
     const root = mkdtempSync(join(tmpdir(), 'dsh-tool-fs-session-cwd-'))
     const physical = join(root, 'physical')
@@ -145,8 +150,7 @@ describe('session cwd resolution', () => {
     try {
       mkdirSync(physical)
       symlinkSync(physical, link, process.platform === 'win32' ? 'junction' : 'dir')
-      expect(sessionCwd(execution(link) as never, 'child.txt')).toBe(link)
-      expect(sessionCwd(execution(link) as never, `..${sep}parent.txt`)).toBe(realpathSync.native(link))
+      expect(sessionCwd(execution(link) as never)).toBe(link)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -887,7 +891,7 @@ describe('sandbox escalation API (write/edit)', () => {
     await call(ctx, 'write', { file_path: 'a.txt', content: 'x' }, escalationAgent())
     expect(fs.stamped).toEqual([{
       mode: 'workspace-write',
-      workspaceRoot: resolve('/session-project'),
+      workspaceRoot: '/session-project',
       sessionId: SessionId('sess-fs-esc'),
     }])
   })
@@ -897,7 +901,7 @@ describe('sandbox escalation API (write/edit)', () => {
     await call(ctx, 'write', { file_path: 'a.txt', content: 'x' }, escalationAgent([{ type: 'sandbox/mode', data: { mode: 'read-only' } }]))
     expect(fs.stamped).toEqual([{
       mode: 'read-only',
-      workspaceRoot: resolve('/session-project'),
+      workspaceRoot: '/session-project',
       sessionId: SessionId('sess-fs-esc'),
     }])
   })
@@ -934,7 +938,7 @@ describe('sandbox escalation API (write/edit)', () => {
     })
     expect(fs.stamped).toEqual([{
       mode: 'danger-full-access',
-      workspaceRoot: resolve('/session-project'),
+      workspaceRoot: '/session-project',
       sessionId: SessionId('sess-fs-esc'),
     }])
   })
@@ -974,5 +978,106 @@ describe('sandbox escalation API (write/edit)', () => {
     const result = await call(ctx, 'write', { file_path: 'a.txt', content: 'x', sandbox_permissions: 'workspace-write', justification: 'why' }, escalationAgent())
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('not available in this composition')
+  })
+})
+
+/** Create a real per-agent scope over the mounted tool plugins. */
+async function guidanceScope(ctx: Context) {
+  const key = {}
+  let scope!: Scope
+  await ctx.plugin(Object.assign((inner: Context) => { scope = createScope(inner, key) },
+    { inject: ['tools', 'systemPrompt'] }))
+  return { key, scope }
+}
+
+const originalGuidance = {
+  read: 'Use the read tool — not shell commands like cat — to inspect text files. Results include line numbers. Use offset and limit to continue reading large files.',
+  write: 'Use the write tool to create files or completely replace file contents. Existing files are overwritten, so read an existing file first (the default fs-observation-policy requires it) and prefer edit for targeted changes.',
+  edit: 'Use the edit tool for targeted changes to existing UTF-8 text files. It replaces literal old_string with new_string; by default old_string must appear exactly once. If old_string appears multiple times, provide a more specific old_string or set replace_all to true. Read the file first (the default fs-observation-policy requires it), unless you just created or edited it in this session.',
+}
+
+describe('scope-aware filesystem guidance', () => {
+  it.each(Array.from({ length: 8 }, (_, mask) => mask))('preserves exact text for visible tools (mask %i)', async (mask) => {
+    const { ctx } = await setup()
+    const { key, scope } = await guidanceScope(ctx)
+    const names = ['read', 'write', 'edit'] as const
+    const allow = names.filter((_, index) => (mask & (1 << index)) !== 0)
+    const baseline = withPersona(...names.map(name => originalGuidance[name]))
+    expect(renderPrompt(await ctx.systemPrompt.assemble())).toBe(baseline)
+    const release = scope.ctx.tools.restrict({ allow })
+    try {
+      const assembly = await ctx.systemPrompt.assemble({ scope: key })
+      expect(assembly.tools.map(tool => tool.name)).toEqual([...allow].sort())
+      const expected = withPersona(...allow.map(name => name === 'write' && !allow.includes('edit')
+        ? originalGuidance.write.replace(' and prefer edit for targeted changes', '')
+        : originalGuidance[name]))
+      expect(renderPrompt(assembly)).toBe(expected)
+      expect(renderPrompt(await ctx.systemPrompt.assemble())).toBe(baseline)
+      release()
+      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toBe(baseline)
+    } finally {
+      await scope.dispose()
+    }
+  })
+
+  it('honors deny filters and the existing exemption for own-scope tools', async () => {
+    const { ctx } = await setup()
+    const { key, scope } = await guidanceScope(ctx)
+    const write = ctx.tools.get('write')!
+    scope.ctx.tools.restrict({ deny: ['write', 'edit'] })
+    try {
+      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toBe(withPersona(originalGuidance.read))
+      const denied = await call(ctx, 'write', { file_path: '/blocked', content: 'blocked' }, key)
+      expect(denied.isError).toBe(true)
+      expect(text(denied)).toContain('unknown tool "write"')
+      scope.ctx.tools.register(write)
+      const assembly = await ctx.systemPrompt.assemble({ scope: key })
+      expect(assembly.tools.map(tool => tool.name)).toEqual(['read', 'write'])
+      expect(renderPrompt(assembly)).toBe(withPersona(originalGuidance.read,
+        originalGuidance.write.replace(' and prefer edit for targeted changes', '')))
+    } finally {
+      await scope.dispose()
+    }
+  })
+})
+
+/** Preserve the default persona and exact section separators in the oracle. */
+function withPersona(...sections: string[]): string {
+  return ['You are an AI agent powered by DeepSeek Harness.', ...sections].join('\n\n')
+}
+
+/** Schema assembly only: these cases never execute user code. */
+class GuidancePtcRuntime extends PtcRuntime {
+  resolve(request: import('@deepseek-ai/dsh-ptc-runtime').PtcRunRequest): import('@deepseek-ai/dsh-ptc-runtime').PtcRunSpec { return { ...request, cwd: request.cwd ?? process.cwd(), timeoutMs: request.timeoutMs ?? 120_000 } }
+
+  readonly language = 'typescript'
+  readonly isolation = 'fake'
+  run() { return Promise.resolve({ logs: [] }) }
+}
+
+describe('scope-aware PTC guidance', () => {
+  it.each(['ptc', 'both'] as const)('uses capability visibility in %s mode', async (mode) => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(GuidancePtcRuntime)
+    await ctx.plugin(ToolRuntime, { mode })
+    await ctx.plugin(FakeFs)
+    await ctx.plugin(ToolFs)
+    const { key, scope } = await guidanceScope(ctx)
+    try {
+      const baseline = renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))
+      const release = scope.ctx.tools.restrict({ allow: ['read'] })
+      const assembly = await ctx.systemPrompt.assemble({ scope: key })
+      expect(assembly.tools.map(tool => tool.name)).toEqual(mode === 'ptc' ? ['run_code'] : ['read', 'run_code'])
+      expect(assembly.sections.filter(section => ['tool:read', 'tool:write', 'tool:edit'].includes(section.name))
+        .map(section => section.text).filter(Boolean)).toEqual([originalGuidance.read])
+      expect(renderPrompt(assembly)).toContain(originalGuidance.read)
+      expect(renderPrompt(assembly)).not.toContain(originalGuidance.write)
+      expect(renderPrompt(assembly)).not.toContain(originalGuidance.edit)
+      release()
+      expect(renderPrompt(await ctx.systemPrompt.assemble({ scope: key }))).toBe(baseline)
+    } finally {
+      await scope.dispose()
+    }
   })
 })

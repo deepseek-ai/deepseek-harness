@@ -8,7 +8,7 @@ kind: "package-reference"
 
 ## 概述
 
-面向 Session Controller 状态的 React 与 Slot adapter。本包在 root scope 提供 Session list 和 pending-interaction hook，物化逐 Session hook 与 prop，并拥有标准 `SessionProvider` 渲染行为，但不接管 Session transport 或 lifecycle 状态。当浏览器功能需要通过标准 React prop 和 hook 读取 Session 状态时，请使用它。
+面向会话控制器状态的 React 与 Slot 适配器。本包在 root scope 提供会话列表和 pending-interaction 钩子，物化逐会话钩子与 prop，并拥有标准 `SessionProvider` 渲染行为，但不接管会话 transport 或 lifecycle 状态。当浏览器功能需要通过标准 React prop 和钩子读取会话状态时，请使用它。
 
 ## 目录
 
@@ -31,7 +31,7 @@ kind: "package-reference"
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Pending interaction 是进程本地投影**——浏览器重连后，所属 Remote waterfall 必须重放仍未完成的请求。
+- **Pending interaction 是进程本地投影**——浏览器重连后，所属 Remote waterfall（瀑布式事件）必须重放仍未完成的请求。
 
 
 <a id="dev-note"></a>
@@ -44,4 +44,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。adapter materialization 路径已经强制 Session binding 一致。
+**运行时不变式：** 不发布伴生入口。适配器 materialization 路径已经强制 Session 绑定一致。

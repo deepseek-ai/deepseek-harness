@@ -324,22 +324,34 @@
       }
     },
     {
-      "name": "ralph",
-      "description": "Run a foreground fresh-agent Ralph loop toward one immutable objective. Use only when the direct human explicitly asks for Ralph or fresh-agent iteration. Each round opens a new child with no parent conversation or prior child session; the shared workspace is long-term memory, and only a bounded structured report crosses rounds. The call returns when a worker reports completion or a concrete blocker, or at the round limit. Ordinary long-running same-session work belongs to goal tools.",
+      "name": "present",
+      "description": "Declare existing files accessible through the Session filesystem as final deliverables. When a file you create or update is an output the user asked to receive, you must call present after writing it and before your final response, including files created through Bash or code execution. Mentioning its path in your reply does not replace this call. The files must already exist. The user opens the current source files; their contents are not copied or preserved.",
       "parameters": {
         "type": "object",
         "properties": {
-          "objective": {
-            "type": "string",
-            "description": "The immutable completion objective for every fresh Ralph round."
-          },
-          "maxRounds": {
-            "type": "number",
-            "description": "Optional positive safe-integer round cap, bounded by the deployment ceiling."
+          "files": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Path of an existing regular file. Relative paths use the Session working directory."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "Brief description for the user."
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
           }
         },
         "required": [
-          "objective"
+          "files"
         ]
       }
     },

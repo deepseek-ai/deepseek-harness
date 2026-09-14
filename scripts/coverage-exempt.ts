@@ -2,7 +2,7 @@
  * Heavy suites the coverage aggregate runs uninstrumented in a parallel gate.
  * Membership rule: a suite qualifies only when every coverage-measured
  * file it executes in-process (`coverage.include` spans package src trees;
- * typert generator src is threshold-excluded in vitest.config.ts) is already
+ * Typert src is threshold-excluded in vitest.config.ts) is already
  * fully covered by other suites, so removing it from the instrumented run
  * changes no threshold outcome. The aggregate still runs every listed suite
  * plain beside the instrumented gate, so correctness signal is unchanged —
@@ -27,12 +27,12 @@ export const COVERAGE_EXEMPT_ENV = 'DSH_COVERAGE_EXEMPT_HEAVY'
 
 /** Coverage-exempt heavy suites; keep filter and exclude selecting the same files. */
 export const coverageExemptHeavySuites: readonly CoverageExemptSuite[] = [
-  // Whole-workspace compiler analysis per case — the lane's longest tail.
-  // Generator src is threshold-excluded; tools-catalog's registry and
+  // Typert src is threshold-excluded; compiler analysis runs uninstrumented.
+  // The generator's tools-catalog registry and
   // tool-cordis imports are fully covered by those packages' own tests.
   {
-    filter: 'packages/typert/generator/tests/',
-    exclude: 'packages/typert/generator/tests/**',
+    filter: 'packages/typert/',
+    exclude: 'packages/typert/*/tests/**',
   },
   // The webworker-runtime package is outside the coverage requirement by
   // decision: vitest.config.ts threshold-excludes its src, so every suite

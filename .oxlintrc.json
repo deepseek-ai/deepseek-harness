@@ -203,6 +203,19 @@
         "scripts/**/*.spec.{ts,tsx}"
       ],
       "rules": {
+        // Session assertions inspect the log; other deprecated APIs remain errors.
+        "typescript/no-deprecated": [
+          "error",
+          {
+            "allow": [
+              {
+                "from": "file",
+                "name": ["snapshotEvents", "eventAt", "ownEvents"],
+                "path": "packages/core/session/src/index.ts"
+              }
+            ]
+          }
+        ],
         "typescript/no-invalid-void-type": "error",
         "typescript/no-non-null-assertion": "off", // Assertions commonly follow an expect() that proves presence.
         "typescript/no-unnecessary-condition": "off",

@@ -46,6 +46,7 @@ export const Config: z<Config> = z.object({
  * @returns the seed events, contiguous from seq 0; empty when no turn has completed.
  */
 function completedTurnPrefix(parent: Agent): SessionEvent[] {
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   const events = parent.session.snapshotEvents()
   const lastEnd = events.findLast(e => e.type === 'turn/end')
   if (lastEnd === undefined) return []

@@ -64,7 +64,7 @@ kind: "package-reference"
 
 #### KV Cache 影响
 
-无；本包既不组装也不发送 provider 请求。
+无；本包既不组装也不发送提供方请求。
 
 ## 已知限制与延期工作
 
@@ -86,4 +86,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。插件只注册一个 workspace directory-flow owner，HMR 测试覆盖释放；显示的目录内容每次都从 Host 重读。
+**运行时不变式：** 不发布伴生入口。插件只注册一个工作区目录流程持有方，其资源释放由 HMR（热模块替换）安全规范验证；它显示的每个目录列表都会按需从 Host 重新读取，而不会保存在本包中。

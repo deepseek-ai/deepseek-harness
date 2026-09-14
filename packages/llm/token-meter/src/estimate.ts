@@ -21,11 +21,16 @@ export const ROLE_OVERHEAD = 4
 /**
  * Structural JSON price of one block outside the typed pricing arms: the
  * fixed heuristic for merge-extended blocks and for image references, whose
- * request price is route-owned rather than fixed.
+ * request price is route-owned rather than fixed. Image offload marks do not
+ * change this reference-only heuristic; route pricing owns their placeholders.
  * @param block - block to price without mutation.
  * @returns heuristic tokens for the block's JSON structure.
  */
 export function estimateStructuralBlock(block: ContentBlock): number {
+  if (block.type === 'image') {
+    const { offloaded: _offloaded, ...reference } = block
+    return BLOCK_OVERHEAD + Math.ceil(JSON.stringify(reference).length / CHARS_PER_TOKEN)
+  }
   return BLOCK_OVERHEAD + Math.ceil(JSON.stringify(block).length / CHARS_PER_TOKEN)
 }
 
@@ -61,39 +66,40 @@ export function estimateContent(blocks: readonly ContentBlock[]): number {
 }
 
 /**
+ * Price the rendered system prompt: the `system/message` surface node's text.
+ * Adapters serialize the prompt as a plain string — a system-role message or
+ * the request's system field — not as a typed content block, so the price is
+ * text density plus role framing with no per-block overhead.
+ * @param message - system-role message to price without mutation.
+ * @returns heuristic system-prompt tokens; 0 for empty content ("no system prompt").
+ */
+export function estimateSystemMessage(message: Message): number {
+  if (message.content.length === 0) return 0
+  let characters = 0
+  for (const block of message.content) {
+    characters += block.type === 'text' ? block.text.length : JSON.stringify(block).length
+  }
+  return Math.ceil(characters / CHARS_PER_TOKEN) + ROLE_OVERHEAD
+}
+
+/**
  * Heuristically price one model-visible message.
  * @param message - message to price without mutation.
- * @returns content and role-framing tokens under the fixed heuristic.
+ * @returns content and role-framing tokens under the fixed heuristic; a
+ *   system-role message prices as {@link estimateSystemMessage}.
  */
 export function estimateMessage(message: Message): number {
+  if (message.role === 'system') return estimateSystemMessage(message)
   return estimateContent(message.content) + ROLE_OVERHEAD
 }
 
 /**
- * Price the system-prompt part of a canonical request envelope.
- * @param header - canonical envelope, or undefined before any request.
- * @returns heuristic system-prompt tokens; 0 when absent.
- */
-export function estimateSystemTokens(header: EpochHeader | undefined): number {
-  if (header?.system === undefined) return 0
-  return Math.ceil(header.system.length / CHARS_PER_TOKEN) + ROLE_OVERHEAD
-}
-
-/**
- * Price the tool-schema part of a canonical request envelope.
+ * Price the tool-schema part of a canonical request envelope — the envelope's
+ * only priced field, since the system prompt is a surface node.
  * @param header - canonical envelope, or undefined before any request.
  * @returns heuristic tool-schema tokens; 0 when absent or empty.
  */
 export function estimateToolsTokens(header: EpochHeader | undefined): number {
   if (header?.tools === undefined || header.tools.length === 0) return 0
   return Math.ceil(JSON.stringify(header.tools).length / CHARS_PER_TOKEN) + BLOCK_OVERHEAD
-}
-
-/**
- * Price the complete non-surface request envelope.
- * @param header - canonical envelope, or undefined before any request.
- * @returns heuristic system plus tool tokens.
- */
-export function estimateHeader(header: EpochHeader | undefined): number {
-  return estimateSystemTokens(header) + estimateToolsTokens(header)
 }

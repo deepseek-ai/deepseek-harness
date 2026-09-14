@@ -35,10 +35,12 @@ import { seedStoredSession } from './persistence-helpers.ts'
 type Script = ConstructorParameters<typeof MockAdapter>[0]
 
 const roots: string[] = []
+const projectionCacheDisposers: Array<() => Promise<void>> = []
 const persistenceDisposers: Array<() => Promise<void>> = []
 const projCacheRoots: string[] = []
 
 afterEach(async () => {
+  await Promise.all(projectionCacheDisposers.splice(0).map(dispose => dispose()))
   await Promise.all(persistenceDisposers.splice(0).map(dispose => dispose()))
   for (const root of projCacheRoots.splice(0)) rmSync(root, { recursive: true, force: true })
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
@@ -64,7 +66,8 @@ async function setup(
     await ctx.plugin(Storage)
     await ctx.plugin({ name: storageJsonName, inject: storageJsonInject, apply: storageJsonApply, Config: storageJsonConfig }, { root })
     await ctx.plugin({ name: storageDomainName, inject: storageDomainInject, apply: storageDomainApply, Config: storageDomainConfig }, { backend: 'json' })
-    await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
+    const cache = await ctx.plugin(SessionProjectionCache, { writeEveryEvents: 100, writeIntervalMs: 60_000 })
+    projectionCacheDisposers.push(() => cache.dispose())
   }
   await ctx.plugin(TestSessionQuery)
   await ctx.plugin(SubagentRuntime)
@@ -556,7 +559,7 @@ describe('SubagentRuntime.listChildren', () => {
       seq: SessionSeq(3),
       time: 3,
       data: { version: SUBAGENT_DESCRIPTOR_VERSION, mode: 'continuable', provider: 7 },
-    } as SessionEvent)
+    } as unknown as SessionEvent)
     events[4] = { ...events[4]!, seq: SessionSeq(4) }
     const invalidated = await authorChild(ctx, '00000000-0000-4000-8000-00000000ad01', {
       parentSession: parent.id,
@@ -659,8 +662,8 @@ describe('SubagentRuntime.listChildren', () => {
 
   it('maps a child rejected by persistence validation to corrupt', async () => {
     const { ctx, parent } = await setup([])
-    // The surface-eligible user/message lacks its required surfaceOp, so the
-    // first-party inspection rejects before any projection fold can run.
+    // The canonical envelope contains a message without an id; persistence
+    // adoption rejects it before any projection fold can run.
     const invalid = await authorChild(ctx, '00000000-0000-4000-8000-0000000000ee', {
       parentSession: parent.id,
       origin: 'subagent',
@@ -670,9 +673,10 @@ describe('SubagentRuntime.listChildren', () => {
         type: 'user/message',
         seq: SessionSeq(1),
         time: 2,
-        data: createUserMessage({ content: [{ type: 'text', text: 'work' }], source: { kind: 'user' } }),
+        data: { role: 'user', content: [{ type: 'text', text: 'work' }], source: { kind: 'user' } },
+        surfaceOp: 'append',
       },
-      { type: 'subagent/descriptor', seq: SessionSeq(2), time: 3, data: descriptorPayload('broken surface') },
+      { type: 'subagent/descriptor', seq: SessionSeq(2), time: 3, data: descriptorPayload('broken message') },
     ] as SessionEvent[])
     const entries = await ctx.subagents.listChildren(parent.id)
     expect(entries).toEqual([{ kind: 'diagnostic', id: invalid, reason: 'corrupt' }])
@@ -836,7 +840,7 @@ describe('SubagentRuntime.listChildren', () => {
         content: [{ type: 'text', text: 'summary of everything' }],
         source: { kind: 'plugin', plugin: 'compact' },
       }),
-      surfaceOp: { op: 'replace', start: SessionSeq(1), end: SessionSeq(1) },
+      surfaceOp: { op: 'replace', startSeq: SessionSeq(1), endSeq: SessionSeq(1) },
       sourceEventSeqs: [SessionSeq(1)],
     })
     const compacted = await authorChild(ctx, '00000000-0000-4000-8000-00000000c1de', {

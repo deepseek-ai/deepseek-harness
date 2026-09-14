@@ -95,7 +95,7 @@ describe.skipIf(process.platform === 'win32')('semantic checkpoint hard-crash re
     const events = await load(crashed.root)
     expect(events.map(event => event.type)).toEqual([
       'agent/inbox/spliced', 'turn/start', 'agent/inbox/spliced',
-      'step/start', 'user/message', 'request/header', 'request/context', 'step/end', 'turn/end',
+      'step/start', 'system/message', 'user/message', 'request/header', 'request/context', 'step/end', 'turn/end',
     ])
     expect(events.at(-1)).toMatchObject({
       type: 'turn/end', data: { reason: { kind: 'interrupted' } },

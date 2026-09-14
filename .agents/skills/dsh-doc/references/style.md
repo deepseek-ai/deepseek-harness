@@ -15,7 +15,7 @@ Page-level style preferences that make DSH pages scannable and difficult to misr
 
 ## Short summary
 
-Open every authored page with a short `Summary`: three to five sentences in one paragraph stating what the subject is, why the reader cares, the operating model, and the most important boundary. The Table of Contents and the sections carry the detail; placement and section order live in [structure-hierarchy.md](structure-hierarchy.md).
+Open every authored page with a short `Summary`: three to five sentences in one paragraph stating what the reader can do or observe, why the reader cares, the operating model, and the most important boundary. The Table of Contents and the sections carry the detail; placement and section order live in [structure-hierarchy.md](structure-hierarchy.md). An English package README Summary is additionally limited to 100 `wc -w`-style words by `verify-package-readme-summaries`.
 
 ## Controlled technical English
 

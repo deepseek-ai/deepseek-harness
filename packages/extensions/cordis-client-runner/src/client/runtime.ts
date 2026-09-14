@@ -451,7 +451,9 @@ export class DynamicCordisPackageRunner {
     this.failures.delete(id)
     // Entry removal disposes the fiber (slot entries and facade effects
     // cascade); the factory invalidation makes a later re-load legal.
-    await this.env.loader.remove(entryId)
+    const disposal = this.env.loader.resolve(entryId).fiber?.dispose()
+    this.env.loader.remove(entryId)
+    await disposal
     this.env.modules.invalidate(moduleIdOf(id))
     styles.dispose()
   }

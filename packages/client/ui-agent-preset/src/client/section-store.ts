@@ -18,10 +18,12 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the ctx.remote merge into this program.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import { beginRosterRead, writeDefaultPreset } from './settings-store.ts'
+import { beginRosterRead, writeDefaultPreset, writeModeSelectionEnabled } from './settings-store.ts'
 
 /** Ids a preset directory may be named, mirroring the host's own rule. */
 const PRESET_ID = /^[a-z0-9][a-z0-9-]*$/
+
+const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
 /** One preset row the page renders. */
 export interface PresetRow {
@@ -79,6 +81,10 @@ export interface AgentPresetSectionState {
   authorable: boolean
   /** Whether the host can open a preset directory on a native desktop. */
   hasDocument: boolean
+  /** Whether new-session surfaces expose preset selection. */
+  showPicker: boolean
+  /** Whether a mode-selection policy write is in flight. */
+  policySaving: boolean
   /** Every preset the deployment currently supplies. */
   rows: readonly PresetRow[]
   /** The open copy dialog, or null. */
@@ -101,6 +107,8 @@ const INITIAL: AgentPresetSectionState = {
   error: null,
   authorable: false,
   hasDocument: false,
+  showPicker: false,
+  policySaving: false,
   rows: [],
   copy: null,
   view: null,
@@ -134,6 +142,10 @@ export class AgentPresetSectionController {
   /** Page snapshot the renderer subscribes to. */
   readonly store: SnapshotStore<AgentPresetSectionState> = createSnapshotStore(INITIAL)
 
+  /** The one roster load whose completion current callers await. */
+  private loadFlight: Promise<void> | undefined
+  private reloadRequested = false
+
   constructor(
     private readonly ctx: ClientContext,
     /**
@@ -151,6 +163,49 @@ export class AgentPresetSectionController {
     this.store.set({ ...this.store.getSnapshot(), ...patch })
   }
 
+  /** Read back and reflect the Host-effective default after a policy write. */
+  private async confirmEffectiveDefault(showPicker: boolean): Promise<string | undefined> {
+    await this.load()
+    if (this.store.getSnapshot().status === 'error') await this.load()
+    const state = this.store.getSnapshot()
+    if (state.status !== 'ready' || state.showPicker !== showPicker) return undefined
+    return state.rows.find(row => row.isDefault)?.id
+  }
+
+  /**
+   * Show or hide new-session preset selection without changing the saved
+   * default. The Host roster resolves that saved default while selection is
+   * shown and the deployment default while it is hidden.
+   * @param showPicker - whether the new-session picker should be exposed.
+   * @param syncBlankSession - optional current-blank-task sync kept inside the saving state.
+   * @returns once the Host state and optional blank-task sync settle.
+   */
+  async setPickerVisible(
+    showPicker: boolean,
+    syncBlankSession?: (id: string) => Promise<string | undefined>,
+  ): Promise<void> {
+    const state = this.store.getSnapshot()
+    if (state.status !== 'ready' || state.policySaving || state.showPicker === showPicker) return
+    this.set({ policySaving: true, error: null })
+    try {
+      const failure = await writeModeSelectionEnabled(this.ctx, showPicker)
+      if (failure !== undefined) {
+        await this.load()
+        this.set({ error: failure })
+        return
+      }
+      const effectiveDefault = await this.confirmEffectiveDefault(showPicker)
+      if (effectiveDefault === undefined) return
+      const syncFailure = await syncBlankSession?.(effectiveDefault)
+      if (syncFailure !== undefined) this.set({ error: syncFailure })
+    } catch (error: unknown) {
+      await this.load()
+      this.set({ error: errorMessage(error) })
+    } finally {
+      this.set({ policySaving: false })
+    }
+  }
+
   private patchCopy(patch: Partial<CopyDraft>): void {
     const { copy } = this.store.getSnapshot()
     if (copy === null) return
@@ -164,21 +219,40 @@ export class AgentPresetSectionController {
    * @returns once the snapshot reflects the host.
    */
   async load(): Promise<void> {
+    this.reloadRequested = true
+    this.loadFlight ??= this.drainLoads()
+    await this.loadFlight
+  }
+
+  /** Coalesce invalidations without losing changes received during a read. */
+  private async drainLoads(): Promise<void> {
+    try {
+      do {
+        await this.loadOnce()
+      } while (this.reloadRequested)
+    } finally {
+      this.loadFlight = undefined
+    }
+  }
+
+  /** Perform the section's one owned roster read. */
+  private async loadOnce(): Promise<void> {
+    this.reloadRequested = false
     // Whether a preset's directory can be opened is the Host's opener
     // capability rather than a roster property, so the page joins the two.
-    // Issued together: one round trip decides the page, and a load that waited
-    // for them in turn would hold the section in `loading` twice as long,
-    // where a concurrent reload silently returns instead of refreshing.
+    // Both reads start together; one missing capability does not hide the roster.
     const opener = this.ctx.remote.settings.canOpenAgentPresetDirectory()
     const roster = await beginRosterRead(this.ctx, this.store)
     // A refused describe leaves the reveal-the-path path, which needs no opener.
     const described = await opener
     if (roster === undefined) return
-    const { presets, authorable } = roster
+    const { presets, authorable, modeSelectionEnabled: showPicker } = roster
     const hasDocument = described.ok && described.value
     if (presets.length === 0) {
       // Nothing to manage leaves nothing to keep a dialog open over.
-      this.set({ status: 'unavailable', rows: [], authorable, hasDocument, copy: null, view: null })
+      this.set({
+        status: 'unavailable', rows: [], authorable, hasDocument, showPicker, copy: null, view: null,
+      })
       return
     }
     // A reveal outlives a reload but not its preset: a path for a row the
@@ -191,6 +265,7 @@ export class AgentPresetSectionController {
       error: null,
       authorable,
       hasDocument,
+      showPicker,
       rows: presets.map(preset => ({ ...preset })),
       revealedPaths: kept,
     })
@@ -331,14 +406,32 @@ export class AgentPresetSectionController {
    * Make one preset the default for sessions created later. Running sessions
    * keep the composition they began with, so this never disturbs work.
    * @param id - the preset to make default.
-   * @returns once the write settled and the roster was re-read.
+   * @param syncBlankSession - optional current-blank-task sync kept inside the policy lock.
+   * @returns once the write and optional blank-task sync settle.
    */
-  async makeDefault(id: string): Promise<void> {
-    const failure = await writeDefaultPreset(this.ctx, id)
-    if (failure !== undefined) {
-      this.set({ error: failure })
-      return
+  async makeDefault(
+    id: string,
+    syncBlankSession?: (id: string) => Promise<string | undefined>,
+  ): Promise<void> {
+    const state = this.store.getSnapshot()
+    if (!state.showPicker || state.policySaving) return
+    this.set({ policySaving: true, error: null })
+    try {
+      const failure = await writeDefaultPreset(this.ctx, id)
+      if (failure !== undefined) {
+        this.set({ error: failure })
+        return
+      }
+      const effectiveDefault = await this.confirmEffectiveDefault(true)
+      if (effectiveDefault === undefined) return
+      const syncFailure = await syncBlankSession?.(effectiveDefault)
+      if (syncFailure !== undefined) this.set({ error: syncFailure })
+    } catch (error: unknown) {
+      this.set({
+        error: errorMessage(error),
+      })
+    } finally {
+      this.set({ policySaving: false })
     }
-    await this.load()
   }
 }

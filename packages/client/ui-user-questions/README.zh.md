@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-ui-user-questions` 是 Web 提问功能插件：其浏览器侧把 `question` 条目注册到会话拥有的 `conversation.composer` chain 中，因此当 agent 向用户提问时，编辑器会被提问 UI 接管。组件每次渲染一个问题，提供进度导航、单选与多选选项、推荐徽标与自定义答案，并为整个请求提交一批结构化答案。若某个请求的唯一问题声明了呈现意图，则改为渲染该意图自己的界面——最典型的是 `plan-review` 等待审批卡片，带 `Chat about it` / `Refuse` / `Approve`。其主机侧刻意为空：在那里挂载 `dsh-tool-ask-user` 会把工具放进注册表的全局层，并把它并入每一个 agent，无论它由哪个 preset 组装。
+当 agent（智能体）在 Web 客户端中提问时，本包会用交互式提问界面接管聊天编辑器。用户可以在问题之间导航、选择一个或多个选项、输入自定义答案、跳过问题，并提交一批结构化答案。选择单选项后会立即前进，而草稿会在当前页面的生命周期内跨会话导航保留。若唯一的问题声明了受支持的呈现意图，则可使用专用界面，包括带 `Chat about it`、`Refuse` 和 `Approve` 操作的 plan-review 卡片。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 作答
 
-用户打开或编辑自定义答案时，多选题草稿会保留已选中的标签，因此提交项可以同时携带 `selected` 与 `custom`；单选题的自定义答案仍保持互斥。问题详情复用助手输出的 `MarkdownText` 原语，包括其 GFM 渲染与不受信任内容策略。限高卡片保持标题、导航与提交动作固定，超长的详情与选项共享内部滚动区。「跳过此问题」会保留其他草稿，并为该项发出既有的空 `{ selected: [] }` 结果；关闭则以 `ASK_CANCELLED` 拒绝整个等待。
+用户打开或编辑自定义答案时，多选题草稿会保留已选中的标签，因此提交项可以同时携带 `selected` 与 `custom`；单选题的自定义答案仍保持互斥。问题详情复用助手输出的 `MarkdownText` 原语，包括其 GFM 渲染与不受信任内容策略。限高卡片保持标题、导航与提交动作固定，超长的详情与选项共享内部滚动区。「跳过」会保留其他草稿，并为该项发出既有的空 `{ selected: [] }` 结果；关闭则以 `ASK_CANCELLED` 拒绝整个等待。
 
 ### plan-review 卡片
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-通用提问流程把当前题号、已选标签、自定义文本和显式跳过状态保存在非持久化 Slot store 中；该 store 归属对应 Session，并以待处理请求的本地渲染标识为 key。从 Session A 切换到 B 会重新挂载严格 Session 级编辑器条目，但返回 A 时会复用 A 的 store 并恢复未完成草稿。不同的请求标识读取空草稿，并在首次编辑时替换旧值；成功回答或取消会清除相符的值。请求是否仍在等待由主机保持权威。
+通用提问流程把当前题号、已选标签、自定义文本和显式跳过状态保存在非持久化 slot 存储中；该存储归属对应会话，并以待处理请求的本地渲染标识为键。从会话 A 切换到 B 会重新挂载严格的会话级编辑器条目，但返回 A 时会复用 A 的存储并恢复未完成草稿。不同的请求标识读取空草稿，并在首次编辑时替换旧值；成功回答或取消会清除相符的值。请求是否仍在等待由主机保持权威。
 
 -----
 
@@ -49,7 +49,7 @@ kind: "package-reference"
 
 本包是一条归属规则：渲染提问是宿主的 UI 能力，拥有该工具则是 agent 的能力，因此 `tool-ask-user` 行属于需要它的各个 preset（以及没有 preset 的 TUI 组装）。
 
-### 意图表面选举
+### 意图界面选择
 
 卡片只在能够发出该请求允许的每一个答案时才接管：只有一个问题、声明了意图、计划以 `detail` 存在、提供了被指名的批准标签，且是二元单选（除批准外最多一个选项，且非多选）。其他任何情形都留在能够表达它的通用流程上。意图改变的只是布局，从不改变可达的答案。
 
@@ -67,9 +67,9 @@ kind: "package-reference"
 以下页面覆盖编辑器宿主、工具 seam 与 plan-mode 消费方。
 
 - [ui-conversation](../ui-conversation/README.zh.md)——拥有 `conversation.composer` 链的聊天界面。
-- [tool-ask-user](../../interaction/tool-ask-user/README.zh.md)——本 UI 所渲染其 schema 与答案的面向模型工具。
+- [tool-ask-user](../../interaction/tool-ask-user/README.zh.md)——面向模型的工具；本 UI 会渲染其 schema 与答案。
 - [ui-plan](../ui-plan/README.zh.md)——设置 `plan-review` 意图的 plan-mode 界面。
-- [user-questions](../../interaction/user-questions/README.zh.md)——Host 侧提问 seam 及其 answerer waterfall。
+- [user-questions](../../interaction/user-questions/README.zh.md)——Host 侧提问 seam 及其应答方 waterfall（瀑布式事件）。
 
 -----
 
@@ -89,7 +89,7 @@ kind: "package-reference"
 
 这些限制定义草稿持久性与编辑器归属；它们是当前包约束。
 
-- **未提交草稿的生命周期限于当前页面与 Session**：只要该 Session scope 仍留在页面内，Session 导航就会保留草稿；完整刷新页面、Session 被裁剪，或待处理请求以新的本地标识重新交付时，则从空草稿开始。store 从不把草稿写入主机、`localStorage` 或磁盘。
+- **未提交草稿的生命周期限于当前页面与会话**：只要该会话作用域仍留在页面内，会话导航就会保留草稿；完整刷新页面、会话被裁剪，或待处理请求以新的本地标识重新交付时，则从空草稿开始。存储从不把草稿写入主机、`localStorage` 或磁盘。
 - **每次只有一个请求拥有编辑器**：后续待处理请求仍留在会话快照中，并在较早请求落定后显示。
 
 <a id="dev-note"></a>
@@ -102,4 +102,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。tool 与 slot 注册都是由各自 registry 持有和观察的 effect；Host pending table 通过公开 wire protocol 测试。
+**运行时不变式：** 不发布伴生入口。工具与 slot 注册都是由各自注册表持有和观察的 effect；Host 待处理表通过公开的 wire protocol 测试。

@@ -12,6 +12,8 @@ Status: implemented
 
 ## 决策
 
+全局主面板选择及其 root 生命周期由[全局主面板决策](2026-09-08-global-main-panels.zh.md)定义。
+
 一句话：**ui-renderer 只渲染 `'root'`；插件用单独一次 `register` 调用组合 UI——这一次调用同时占用 slot、声明并授权子 slot、声明 store、注入业务面；组件是纯函数，props 分四份额到达，每一份额都从各自唯一的真源自动推导。**
 
 ### 'root' 是唯一的先验 slot
@@ -25,7 +27,7 @@ ctx.slots.register({
   name: 'root',
   children: {
     'sidebar':      { kind: 'single', scope: 'root' },
-    'conversation': { kind: 'single', scope: 'session' },
+    'main':         { kind: 'keyed', scope: 'root' },
   },
   store: createLayoutStore,      // StoreHandle or factory (below)
   inject: injectFrame,           // business face (below)

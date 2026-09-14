@@ -10,10 +10,10 @@ import SessionStore, {
   type SessionEvent,
 } from '@deepseek-ai/dsh-session'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createSystemMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import * as SessionLogDeepSeek from '../src/index.ts'
-import type { DeepSeekSessionLogExtension } from '../src/types.ts'
+import type { DeepSeekSessionLogExtension, DeepSeekSessionLogWireEvent, DeepSeekSessionLogWireSurfaceOp } from '../src/types.ts'
 
 const contexts: Context[] = []
 const SIGNAL = new AbortController().signal
@@ -57,6 +57,93 @@ describe('incremental DeepSeek session-log upload', () => {
     expectTypeOf<DeepSeekSessionLogExtension['events'][number]['data']>().toEqualTypeOf<JsonValue>()
     expectTypeOf<DeepSeekSessionLogExtension['session']['seedLength']>()
       .toEqualTypeOf<number | undefined>()
+  })
+
+  it('requires surface placement and restricts sources to non-assistant surface wire events', () => {
+    type System = Extract<DeepSeekSessionLogWireEvent, { type: 'system/message' }>
+    type Assistant = Extract<DeepSeekSessionLogWireEvent, { type: 'assistant/message' }>
+    type User = Extract<DeepSeekSessionLogWireEvent, { type: 'user/message' }>
+    type Tool = Extract<DeepSeekSessionLogWireEvent, { type: 'tool/result' }>
+    type LogOnly = Extract<DeepSeekSessionLogWireEvent, { type: 'turn/start' }>
+    type Replace = Exclude<DeepSeekSessionLogWireSurfaceOp, 'append'>
+    expectTypeOf<System['surfaceOp']>().toEqualTypeOf<DeepSeekSessionLogWireSurfaceOp>()
+    expectTypeOf<System['sourceEventSeqs']>().toEqualTypeOf<readonly number[] | undefined>()
+    expectTypeOf<Assistant['surfaceOp']>().toEqualTypeOf<DeepSeekSessionLogWireSurfaceOp>()
+    expectTypeOf<User['surfaceOp']>().toEqualTypeOf<DeepSeekSessionLogWireSurfaceOp>()
+    expectTypeOf<Tool['surfaceOp']>().toEqualTypeOf<DeepSeekSessionLogWireSurfaceOp>()
+    expectTypeOf<Assistant['sourceEventSeqs']>().toEqualTypeOf<undefined>()
+    expectTypeOf<LogOnly['sourceEventSeqs']>().toEqualTypeOf<undefined>()
+    expectTypeOf<LogOnly['surfaceOp']>().toEqualTypeOf<undefined>()
+    expectTypeOf<User['sourceEventSeqs']>().toEqualTypeOf<readonly number[] | undefined>()
+    expectTypeOf<Tool['sourceEventSeqs']>().toEqualTypeOf<readonly number[] | undefined>()
+    expectTypeOf<Replace>().toEqualTypeOf<{
+      readonly op: 'replace'
+      readonly startSeq: number
+      readonly endSeq: number
+    }>()
+  })
+
+  it('uploads Assistant provider metadata only through its embedded stream', async () => {
+    const { ctx, session } = await harness('wire-assistant')
+    const assistant = session.append('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: createAssistantMessage({
+        content: [{ type: 'text', text: 'Answer' }],
+        source: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      }),
+      stream: [{ type: 'text-chunks', time0: 1, index: 0, dt: [], texts: ['Answer'] }],
+    }, { surfaceOp: 'append' })
+    const prepared = await ctx.deepseekLlmApiExtensions.prepare({
+      body: body(), signal: SIGNAL, sessionId: session.id,
+    })
+    expect(prepared.fields.dsh_session_log?.events).toEqual([{
+      type: assistant.type,
+      seq: Number(assistant.seq),
+      time: assistant.time,
+      data: assistant.data,
+      surfaceOp: 'append',
+    }])
+  })
+
+  it('uploads system append and replacement placement with unchanged data and source-event references', async () => {
+    const { ctx, session } = await harness('wire-system')
+    const headData = { turn: 1, step: 1, message: createSystemMessage('head', 'fixture'), extra: { retained: true } }
+    const head = session.append('system/message', headData, { surfaceOp: 'append' })
+    session.append('system/message', {
+      turn: 1, step: 2, message: createSystemMessage('later', 'fixture'),
+    }, { surfaceOp: 'append' })
+    session.append('system/message', {
+      turn: 1, step: 3, message: createSystemMessage('new head', 'fixture'),
+    }, { surfaceOp: { op: 'replace', startSeq: head.seq, endSeq: head.seq }, sourceEventSeqs: [head.seq] })
+    const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+    expect(prepared.fields.dsh_session_log?.events).toEqual(session.snapshotEvents())
+  })
+
+  it.each(['extension/event', 'tool/code-dispatch', 'tool/code-dispatch-start'])('uploads opaque ignorable %s without interpreting its metadata', async (type) => {
+    for (const metadata of [
+      {},
+      { surfaceOp: null },
+      { sourceEventSeqs: null },
+      { surfaceOp: { opaque: ['retained'] }, sourceEventSeqs: { opaque: [null] } },
+    ]) {
+      const event = {
+        type, seq: SessionSeq(0), time: 1, data: { nested: [null, true] }, ignorable: true, ...metadata,
+      } as unknown as SessionEvent
+      const { ctx, session } = await harness('wire-opaque', [event])
+      const prepared = await ctx.deepseekLlmApiExtensions.prepare({ body: body(), signal: SIGNAL, sessionId: session.id })
+      expect(prepared.fields.dsh_session_log?.events[0]).toStrictEqual(event)
+      expect(session.deriveMessages()).toEqual([])
+    }
+  })
+
+  it.each(['turn/start', 'assistant/attempt', 'request/context', 'tool/ptc-dispatch'])('rejects known log-only %s metadata before uploading', async (type) => {
+    for (const metadata of [{ surfaceOp: 'append' }, { sourceEventSeqs: [0] }]) {
+      const event = {
+        type, seq: SessionSeq(0), time: 1, data: { turn: 1, step: 1, stream: [] }, ignorable: true, ...metadata,
+      } as unknown as SessionEvent
+      await expect(harness('wire-invalid', [event])).rejects.toThrow(/not surface-eligible/)
+    }
   })
 
   it('does not contribute the session log under its default configuration', async () => {
@@ -301,7 +388,7 @@ describe('incremental DeepSeek session-log upload', () => {
         time: 2,
         data: replacementMessage,
         sourceEventSeqs: [SessionSeq(0)],
-        surfaceOp: { op: 'replace', start: SessionSeq(0), end: SessionSeq(0) },
+        surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(0) },
       },
     ] satisfies SessionEvent[]
     const { ctx, session } = await harness('wire-child', seed, {
@@ -344,7 +431,7 @@ describe('incremental DeepSeek session-log upload', () => {
     expect(events[1]).toMatchObject({
       seq: 1,
       sourceEventSeqs: [0],
-      surfaceOp: { op: 'replace', start: 0, end: 0 },
+      surfaceOp: { op: 'replace', startSeq: 0, endSeq: 0 },
     })
   })
 
@@ -372,7 +459,7 @@ describe('incremental DeepSeek session-log upload', () => {
           source: { kind: 'user' },
         }),
         sourceEventSeqs: [SessionSeq(1)],
-        surfaceOp: { op: 'replace', start: SessionSeq(1), end: SessionSeq(1) },
+        surfaceOp: { op: 'replace', startSeq: SessionSeq(1), endSeq: SessionSeq(1) },
       },
     ]
     const { ctx, session } = await harness('wire-events', seed)
@@ -383,6 +470,7 @@ describe('incremental DeepSeek session-log upload', () => {
     const events = prepared.fields.dsh_session_log?.events ?? []
 
     expect(events[0]).not.toHaveProperty('surfaceOp')
+    expect(events[0]).not.toHaveProperty('sourceEventSeqs')
     expect(events[1]).toMatchObject({
       type: 'user/message',
       ignorable: true,
@@ -392,7 +480,7 @@ describe('incremental DeepSeek session-log upload', () => {
     expect(events[2]).toMatchObject({
       type: 'user/message',
       sourceEventSeqs: [1],
-      surfaceOp: { op: 'replace', start: 1, end: 1 },
+      surfaceOp: { op: 'replace', startSeq: 1, endSeq: 1 },
     })
   })
 

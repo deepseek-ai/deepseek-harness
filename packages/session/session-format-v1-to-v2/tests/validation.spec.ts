@@ -337,30 +337,30 @@ describe('released v2 seed and surface relationships', () => {
   })
 
   it.each([
-    ['assistant chunk provenance', artifact([
+    ['assistant chunk references', artifact([
       event('user/message', 0, userData(), { surfaceOp: 'append' }),
       event('assistant/message', 1, assistantData({ content: [], stream: [], usage: null, replayState: null }), {
         surfaceOp: 'append', sourceEventSeqs: [0],
       }),
-    ]), /obsolete chunk provenance/],
-    ['non-array provenance', artifact([
+    ]), /obsolete chunk references/],
+    ['non-array source-event references', artifact([
       event('feedback/record', 0, { text: 'x' }),
       event('user/message', 1, userData(), { surfaceOp: 'append', sourceEventSeqs: 0 }),
     ]), /must be an array/],
-    ['invalid provenance member', artifact([
+    ['invalid source-event reference', artifact([
       event('feedback/record', 0, { text: 'x' }),
       event('user/message', 1, userData(), { surfaceOp: 'append', sourceEventSeqs: [-1] }),
     ]), /sourceEventSeqs member/],
-    ['current provenance member', artifact([
+    ['current source-event reference', artifact([
       event('feedback/record', 0, { text: 'x' }),
       event('user/message', 1, userData(), { surfaceOp: 'append', sourceEventSeqs: [1] }),
     ]), /unique earlier seqs/],
-    ['duplicate provenance member', artifact([
+    ['duplicate source-event reference', artifact([
       event('feedback/record', 0, { text: 'x' }),
       event('feedback/record', 1, { text: 'y' }),
       event('user/message', 2, userData(), { surfaceOp: 'append', sourceEventSeqs: [0, 0] }),
     ]), /unique earlier seqs/],
-    ['empty provenance', artifact([
+    ['empty source-event references', artifact([
       event('feedback/record', 0, { text: 'x' }),
       event('user/message', 1, userData(), { surfaceOp: 'append', sourceEventSeqs: [] }),
     ]), /must be non-empty/],

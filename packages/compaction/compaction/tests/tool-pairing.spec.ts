@@ -172,7 +172,7 @@ describe('tool-pairing surface identity', () => {
       content: [{ type: 'text', text: 'checkpoint' }],
       source: { kind: 'plugin', plugin: 'compact' },
     }), {
-      surfaceOp: { op: 'replace', start: nodes[0]!, end: nodes.at(-1)! },
+      surfaceOp: { op: 'replace', startSeq: nodes[0]!, endSeq: nodes.at(-1)! },
       sourceEventSeqs: [...nodes],
     })
 
@@ -323,7 +323,7 @@ describe('tool-pairing cache refresh', () => {
       data: createUserMessage({
         content: [{ type: 'text', text: 'replacement' }], source: { kind: 'user' },
       }),
-      surfaceOp: { op: 'replace', start: SessionSeq(0), end: SessionSeq(6) },
+      surfaceOp: { op: 'replace', startSeq: SessionSeq(0), endSeq: SessionSeq(6) },
     })
     nodes.splice(0, nodes.length, SessionSeq(7))
     generation += 1

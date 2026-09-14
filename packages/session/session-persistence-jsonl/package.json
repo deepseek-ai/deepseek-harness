@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-session-persistence-jsonl",
   "description": "JSONL durable session persistence backend for the DeepSeek Harness",
-  "version": "0.1.3-alpha.2",
+  "version": "0.1.5-rc.2",
   "publishConfig": {
     "access": "public"
   },
@@ -36,7 +36,8 @@
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-session-format": "workspace:^",
     "@deepseek-ai/dsh-session-format-catalog": "workspace:^",
-    "fs-ext": "2.1.1",
+    "@deepseek-ai/dsh-session-format-v2-to-v3": "workspace:^",
+    "@deepseek-ai/node-addon-system": "workspace:^",
     "koffi": "^3.1.0",
     "@deepseek-ai/schemastery": "workspace:^"
   },
@@ -44,7 +45,6 @@
     "@deepseek-ai/dsh-session": "workspace:^",
     "@deepseek-ai/dsh-session-format-v0-to-v1": "workspace:^",
     "@deepseek-ai/dsh-session-persistence": "workspace:^",
-    "@deepseek-ai/cordis": "workspace:^",
-    "@types/fs-ext": "2.0.3"
+    "@deepseek-ai/cordis": "workspace:^"
   }
 }

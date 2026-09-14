@@ -141,14 +141,22 @@ describe('the shipped preset root', () => {
     }
   })
 
-  it('omits the general workflow tool only from PTC while retaining Ralph infrastructure', async () => {
+  it('omits the general workflow tool and its unused engine only from PTC', async () => {
     const ptc = await shippedEntries('ptc')
     expect(findEntry(ptc, 'tool-workflow')?.disabled).toBe(true)
-    expect(findEntry(ptc, 'workflow-worker-thread')?.disabled).not.toBe(true)
-    expect(findEntry(ptc, 'tool-ralph')?.disabled).not.toBe(true)
+    expect(findEntry(ptc, 'workflow-ptc')?.disabled).toBe(true)
 
     for (const id of ['standard', 'cordis']) {
-      expect(findEntry(await shippedEntries(id), 'tool-workflow')?.disabled, id).not.toBe(true)
+      const entries = await shippedEntries(id)
+      expect(findEntry(entries, 'tool-workflow')?.disabled, id).not.toBe(true)
+      expect(findEntry(entries, 'workflow-ptc')?.disabled, id).not.toBe(true)
     }
+  })
+
+  it('disables the ralph tool in every shipped preset that carries it', async () => {
+    for (const id of ['cordis', 'ptc', 'standard']) {
+      expect(findEntry(await shippedEntries(id), 'tool-ralph')?.disabled, id).toBe(true)
+    }
+    expect(findEntry(await shippedEntries('minimal'), 'tool-ralph')).toBeUndefined()
   })
 })

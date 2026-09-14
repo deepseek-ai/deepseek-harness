@@ -215,10 +215,13 @@ describe('released event and payload inventory', () => {
   it('has an executable valid fixture for every frozen released-v0 event type', () => {
     expect(Object.keys(validPayloads).sort()).toEqual([...RELEASED_V0_EVENT_TYPES].sort())
     expect(RELEASED_V0_EVENT_TYPES).toHaveLength(51)
-    expect(RELEASED_V0_EVENT_TYPES
-      .filter(type => type !== 'assistant/chunk')
-      .every(type => KNOWN_SESSION_EVENT_TYPES.has(type))).toBe(true)
-    expect(KNOWN_SESSION_EVENT_TYPES.has('assistant/chunk')).toBe(false)
+    expect(RELEASED_V0_EVENT_TYPES.filter(type => !KNOWN_SESSION_EVENT_TYPES.has(type))).toEqual([
+      'assistant/chunk',
+      'tool/code-dispatch',
+      'tool/code-dispatch-start',
+    ])
+    expect(KNOWN_SESSION_EVENT_TYPES.has('tool/ptc-dispatch')).toBe(true)
+    expect(KNOWN_SESSION_EVENT_TYPES.has('tool/ptc-dispatch-start')).toBe(true)
     for (const [type, data] of Object.entries(validPayloads)) {
       expect(() => { assertPayload(type, data) }, type).not.toThrow()
     }
@@ -366,7 +369,7 @@ describe('released event and payload inventory', () => {
     }) }).toThrow(/unknown historical event/)
   })
 
-  it('permits empty Assistant provenance only under the released-v1 policy', () => {
+  it('permits empty Assistant source-event references only under the released-v1 policy', () => {
     const assistant = {
       type: 'assistant/message', seq: 1, time: 2, data: {},
       sourceEventSeqs: [], surfaceOp: 'append',
@@ -374,7 +377,7 @@ describe('released event and payload inventory', () => {
     expect(() => { assertReleasedSurfaceMetadata(assistant, 1, assistant.type, 'allow-empty-assistant') })
       .not.toThrow()
     expect(() => { assertReleasedSurfaceMetadata(assistant, 1, assistant.type, 'forbid-assistant') })
-      .toThrow(/obsolete chunk provenance/)
+      .toThrow(/obsolete chunk references/)
   })
 
   it('keeps capturedFormatVersion v1-only inside session-reference sources', () => {

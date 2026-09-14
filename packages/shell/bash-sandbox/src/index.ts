@@ -93,34 +93,42 @@ export class SandboxBashExecutor extends LocalBashExecutor {
       const result = await super.run(spec)
       return { ...result, sandbox: { mode, denied: false } }
     }
-    const confined = this.confine(spec.command, { ...policy, mode })
+    let confined: ConfinedArgv | undefined
     let result: ShellRunResult
+    let spawnRequested: boolean
     try {
-      result = await this.runArgv(spec, confined.argv)
+      ({ result, spawnRequested } = await this.runArgv(spec, async (signal) => {
+        const prepared = await this.confine(spec.command, { ...policy, mode }, signal)
+        signal.throwIfAborted()
+        confined = prepared
+        return prepared.argv
+      }))
     } catch (error) {
       // An upstream abort remains cancellation even when it prevents spawn.
       if (spec.signal?.aborted === true) spec.signal.throwIfAborted()
-      if (isRunnerSpawnFailure(error, confined.argv[0], spec.workdir)) {
+      if (confined !== undefined && isRunnerSpawnFailure(error, confined.argv[0], spec.workdir)) {
         throw new SandboxUnavailableError(mode, String(error))
       }
       throw error
     }
+    if (!spawnRequested) return { ...result, sandbox: { mode, denied: false } }
+    // Spawn admission follows the successful preparation that captured these facts.
+    const facts = confined as ConfinedArgv
     // Runner failure outranks denial because the command did not run. Carry
     // the matched fatal line, not an informational line that preceded it.
-    const runnerFailure = classifyRunnerFailure(result.exitCode, result.stderr.text, confined.runnerFailureRules)
+    const runnerFailure = classifyRunnerFailure(result.exitCode, result.stderr.text, facts.runnerFailureRules)
     if (runnerFailure !== undefined) {
       throw new SandboxUnavailableError(mode, runnerFailure.detail)
     }
-    return { ...result, sandbox: { mode, denied: classifyDenial(result, confined.denialSignatures), enforcement: confined.enforcement } }
+    return { ...result, sandbox: { mode, denied: classifyDenial(result, facts.denialSignatures), enforcement: facts.enforcement } }
   }
 
-  override start(spec: ShellExecSpec): ShellProcess {
+  override async start(spec: ShellExecSpec): Promise<ShellProcess> {
     const policy = spec.sandboxPolicy as SandboxExecutionPolicy
     const { mode } = policy
     if (mode === 'danger-full-access') return super.start(spec)
-    // Once startArgv returns, install facts synchronously; promise settlement
-    // cannot run before start() returns.
-    const confined = this.confine(spec.command, { ...policy, mode })
+    const confined = await this.confine(spec.command, { ...policy, mode }, spec.signal)
+    spec.signal?.throwIfAborted()
     let proc: ShellProcess
     try {
       proc = this.startArgv(spec, confined.argv)
@@ -174,10 +182,11 @@ export class SandboxBashExecutor extends LocalBashExecutor {
    * executor's subprocess path.
    * @param command - shell source for the confined inner `bash -c`.
    * @param policy - resolved confined execution policy.
+   * @param signal - cancellation of confinement preparation.
    * @returns the provider's exact argv and settlement-classification facts.
    */
-  private confine(command: string, policy: SandboxPolicy): ConfinedArgv {
-    return this.ctx.sandbox.confine(['bash', '-c', command], policy)
+  private confine(command: string, policy: SandboxPolicy, signal?: AbortSignal): Promise<ConfinedArgv> {
+    return this.ctx.sandbox.confine(['bash', '-c', command], policy, signal)
   }
 }
 

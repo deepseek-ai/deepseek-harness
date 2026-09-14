@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The hooks group lets agent runs use the shell hooks you already wrote for Claude Code or Codex: mount the matching bridge, point it at your existing `hooks.json`, and those hooks fire at the corresponding moments in agent runs — when a session starts, when a prompt is submitted, before and after a tool runs, or when a run is about to stop. Hooks can block a prompt or tool call with a message the model sees, attach extra context to the conversation, or force the run to continue. Choose this group when existing hook configs should keep working without being rewritten as native plugins; each bridge covers the command-hook subset its reference tool documents. `hook-protocol` is the shared hook engine both bridges use, so the two dialects behave the same way where their protocols agree.
+The hooks group lets agent runs reuse shell hooks written for Claude Code or Codex. Point the matching integration at an existing `hooks.json` to run supported command hooks when sessions start, prompts arrive, tools run, or runs stop. These hooks can block prompts or tool calls with model-visible messages, add conversation context, or require the run to continue. Choose this group to preserve existing hook configurations; each integration supports only the command-hook subset documented by its source tool.
 
 ## Table of Contents
 

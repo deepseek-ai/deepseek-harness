@@ -28,10 +28,12 @@ export interface TypertRemoteEventFrame {
 
 /** Live Host values used to project one scoped Remote Event. */
 export interface TypertRemoteEventContext {
-  /** Live Host Context identified by the registered Host adapters. */
+  /** Live Agent Context that owns cancellation of the forwarded waterfall. */
   readonly value: Context
   /** Agent object carried directly by the waterfall request. */
   readonly subject: object
+  /** Agent identity read directly from the scoped event subject. */
+  readonly agentId: string
 }
 
 /** Result returned from a Client waterfall, or delegation back to the Host chain. */

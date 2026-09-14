@@ -29,7 +29,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
   saveFile: ReturnType<typeof vi.fn>
   saveFileStream: ReturnType<typeof vi.fn>
   saveImages: ReturnType<typeof vi.fn>
-  disposeAgent: () => void
+  disposeAgent: () => Promise<void>
   uploadRoute: (request: Request) => Promise<Response>
 }> {
   const ctx = new Context()
@@ -52,7 +52,7 @@ async function uploadHarness(origin?: 'subagent'): Promise<{
     cancel: vi.fn(),
   } as unknown as Agent
   ;(agent as { ctx: Context }).ctx = createScope(ctx, agent).ctx
-  const disposeAgent = ctx.agents.register(agent)
+  const disposeAgent = await ctx.agents.register(agent)
   const saveFile = vi.fn((input: SaveFileAttachment): Promise<FileAttachmentRef> => Promise.resolve({
     attachmentId: AttachmentId(`sha256:${'cd'.repeat(32)}`),
     name: input.name ?? 'file',
@@ -226,7 +226,7 @@ describe('Session file uploads', () => {
     saveFile.mockReturnValueOnce(saved.promise)
     const uploading = uploads.upload(agent, { data: 'AAAA', name: 'late.bin' }, new AbortController().signal)
     await vi.waitFor(() => { expect(saveFile).toHaveBeenCalledOnce() })
-    disposeAgent()
+    await disposeAgent()
     saved.resolve({
       attachmentId: AttachmentId(`sha256:${'ab'.repeat(32)}`), name: 'late.bin', bytes: 3,
     })
@@ -235,9 +235,9 @@ describe('Session file uploads', () => {
 
   it('resolves a cold ordinary Agent and releases the resolver registration', async () => {
     const { ctx, uploads, agent, disposeAgent } = await uploadHarness()
-    disposeAgent()
+    await disposeAgent()
     const resolveAgent = vi.fn(async () => {
-      ctx.agents.register(agent)
+      await ctx.agents.register(agent)
       return agent
     })
     const disposeResolver = uploads.registerAgentResolver(resolveAgent)
@@ -258,7 +258,7 @@ describe('Session file uploads', () => {
 
   it('rejects a cold upload when no Agent resolver is registered', async () => {
     const { uploads, disposeAgent } = await uploadHarness()
-    disposeAgent()
+    await disposeAgent()
     await expect(uploads.uploadStream({
       sessionId: SESSION,
       data: (async function* (): AsyncIterable<Uint8Array> {})(),
@@ -366,7 +366,7 @@ describe('Session file uploads', () => {
       { type: 'image', mediaType: 'image/png', data: 'AAAA' },
     ]))
     await vi.waitFor(() => { expect(saveImages).toHaveBeenCalledOnce() })
-    disposeAgent()
+    await disposeAgent()
     admitted.resolve([{
       attachmentId: AttachmentId('admitted-image'), mediaType: 'image/png', bytes: 3, width: 1, height: 1,
     }])

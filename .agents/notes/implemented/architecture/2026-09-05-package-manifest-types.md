@@ -10,11 +10,11 @@ External packages need Harness manifest types without depending on boot or clien
 
 ## Decision
 
-[`@deepseek-ai/dsh-package-manifest`](../../../../packages/util/package-manifest/README.md) owns `DshManifest` and its member declarations in one type-only file. The package belongs to the existing utility group and exports no runtime values. Author declarations and launcher-generated module fallback metadata are explicitly distinguished.
+[`@deepseek-ai/dsh-package-manifest`](../../../../packages/util/package-manifest/README.md) owns `DshManifest` and its member declarations in one type-only file. The package belongs to the existing utility group and exports no runtime values. The [public package metadata decision](2026-09-10-public-package-manifest.md) owns the public field set and the separation from internal tool metadata.
 
 Readers import the shared declarations directly. Boot retains profile loading, raw JSON checks, defaults, and resolved runtime data. Client modules retain their normalized boot graph. The image packer resolves declared paths into directories. The Session catalog generator derives a read-only validated entry with a resolved import path; raw inputs and discovery rules remain local.
 
-App-boot declares a production dependency because its published declarations reference the shared types. Client modules, the private packer, and root scripts use development dependencies because their published APIs do not expose these types. Every package consumer has a TypeScript project reference. External authors import from the utility package; app-boot provides no compatibility re-exports.
+App-boot declares a production dependency because its published declarations reference the shared types. Client modules use a development dependency because their published APIs do not expose these types. Internal image-packer and Session catalog declarations stay with their readers. Every package consumer has a TypeScript project reference. External authors import from the utility package; app-boot provides no compatibility re-exports.
 
 ## Alternatives considered
 
@@ -29,3 +29,5 @@ App-boot declares a production dependency because its published declarations ref
 Authors gain one public import path at the cost of a published package and explicit dependency edges. Existing app-boot manifest type imports must use the new package. The [profile composition design](2026-08-05-profile-plugin-bundles.md) continues to own runtime semantics; type extraction does not change configuration acceptance or model-visible behavior.
 
 Compiler and packaged NodeNext consumer checks cover public imports. Existing profile, client, image configuration, and Session catalog tests cover reader behavior; documentation checks cover the utility classification and generated package catalogs. Optional declaration fields still require deliberate consumer updates when added.
+
+Manifest format and host compatibility declarations have no enforcement in current installers or loaders. The type-only package supplies neither a SemVer parser nor an installation policy; its README records that limitation so an author declaration is not mistaken for a compatibility check.

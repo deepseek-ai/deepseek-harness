@@ -18,7 +18,7 @@ Status: proposed
 
 每个直接调用方提供自己持有的信号，或从自身必填的操作上下文继续传递信号。实现可以派生子截止时间或取消作用域，但派生信号在委托期间仍须与上游信号关联。能力实现不得生成永不中止信号、使用环境式异步本地取消，也不得仅为重复类型化同进程约定而在运行时校验 `AbortSignal`。
 
-迁移首先从每个第一方 `ToolDefinition.execute()` 出发，沿其等待的能力调用进行清点；随后按内聚的 Service Definition／Service Provider／Consumer seam，将测试与生成的 API 文档一并修改。文件系统、Bash 与任务、Web 与提供方、工作流与 subagent、代码运行时等能力族可以通过独立 PR（Pull Request）迁移，以保持每项变更可审查；但根据仓库的预发布原则，已经迁移的接口不得保留可选兼容重载。
+迁移首先从每个第一方 `ToolDefinition.execute()` 出发，沿其等待的能力调用进行清点；随后按内聚的 Service Definition／Service Provider／Consumer seam，将测试与生成的 API 文档一并修改。文件系统、Bash 与任务、Web 与提供方、工作流与 subagent、PTC 运行时等能力族可以通过独立 PR（Pull Request）迁移，以保持每项变更可审查；但根据仓库的预发布原则，已经迁移的接口不得保留可选兼容重载。
 
 ### 范围边界
 

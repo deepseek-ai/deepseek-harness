@@ -9,7 +9,7 @@
       name: './github-ready-review-rule.mjs'
       config:
         source: primary-github
-        repository: deepseek-harness/deepseek-harness
+        repository: deepseek-ai/deepseek-harness
         workspacePath: !!js process.env.DSH_GITHUB_REVIEW_WORKSPACE ?? process.cwd()
         agentPreset: standard
         permissionPreset: read-only

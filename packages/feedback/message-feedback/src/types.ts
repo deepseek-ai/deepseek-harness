@@ -8,6 +8,7 @@
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { FeedbackCategory } from '@deepseek-ai/dsh-command-feedback/types'
 
 /** Opaque compare-and-set token for one exact feedback item revision. */
 export type MessageFeedbackVersion = Branded<'MessageFeedbackVersion'>
@@ -23,6 +24,8 @@ export interface MessageFeedbackItem {
   readonly rating: MessageFeedbackRating
   /** Optional explanation, preserved verbatim after validation. */
   readonly note?: string
+  /** Category the human filed the judgment under. */
+  readonly category?: FeedbackCategory
   /** Equality-only token replaced by every material create or update. */
   readonly version: MessageFeedbackVersion
   /** Host-assigned creation time in Unix epoch milliseconds. */
@@ -78,6 +81,8 @@ export interface MessageFeedbackPutRequest {
   readonly rating: MessageFeedbackRating
   /** Optional non-blank explanation. */
   readonly note?: string
+  /** Optional category; absent keeps the item uncategorized. */
+  readonly category?: FeedbackCategory
   /** Observed item version, or `null` to require that no item exists. */
   readonly ifVersion: MessageFeedbackVersion | null
 }

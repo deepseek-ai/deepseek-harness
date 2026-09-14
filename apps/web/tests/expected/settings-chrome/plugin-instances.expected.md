@@ -1,0 +1,37 @@
+- list:
+  - listitem:
+    - button "tool-subagent-control, tool-subagent-control, 已启用":
+      - strong: tool-subagent-control
+      - text: 已启用
+      - img
+      - code: tool-subagent-control
+  - listitem:
+    - button "tool-subagent-control/list-agents, tool-subagent-list-agents, 已启用":
+      - strong: tool-subagent-control/list-agents
+      - text: 已启用
+      - img
+      - code: tool-subagent-list-agents
+  - listitem:
+    - button "tool-subagent, tool-subagent, 已启用":
+      - strong: tool-subagent
+      - text: 已启用
+      - img
+      - code: tool-subagent
+  - listitem:
+    - button "tool-subagent, tool-subagent-fork, 已启用":
+      - strong: tool-subagent
+      - text: 已启用
+      - img
+      - code: tool-subagent-fork
+  - listitem:
+    - button "tool-subagent, tool-subagent-codex, 已停用":
+      - strong: tool-subagent
+      - text: 已停用
+      - img
+      - code: tool-subagent-codex
+  - listitem:
+    - button "tool-subagent, tool-subagent-claude-code, 已停用":
+      - strong: tool-subagent
+      - text: 已停用
+      - img
+      - code: tool-subagent-claude-code

@@ -2,8 +2,8 @@
  * Agent-preset roster store shared by the display surfaces.
  *
  * Options come from one `agentPresets.list` call. Writes target the settings
- * namespace's `default` field, which is what the host resolves at creation;
- * the management section is the surface that writes it.
+ * namespace fields the host resolves at creation; the management section is
+ * the surface that writes them.
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -15,6 +15,15 @@ import type { AgentPresetRoster } from '@deepseek-ai/dsh-agent-presets/types'
 /** The agent-preset settings namespace on the host wire. */
 export const AGENT_PRESET_SETTINGS_NS = 'agent-presets'
 
+/** Write only the named agent-preset settings fields. */
+async function writeAgentPresetSettings(
+  ctx: ClientContext,
+  patch: { default?: string; modeSelectionEnabled?: boolean },
+): Promise<string | undefined> {
+  const response = await ctx.remote.settings.update(AGENT_PRESET_SETTINGS_NS, patch, undefined)
+  return response.ok ? undefined : response.error.message
+}
+
 /**
  * Persist one preset as the default for sessions created later.
  *
@@ -25,16 +34,24 @@ export const AGENT_PRESET_SETTINGS_NS = 'agent-presets'
  * @param id - the preset to make default.
  * @returns the failure message, or undefined once the write landed.
  */
-export async function writeDefaultPreset(
+export function writeDefaultPreset(
   ctx: ClientContext,
   id: string,
 ): Promise<string | undefined> {
-  const response = await ctx.remote.settings.update(
-    AGENT_PRESET_SETTINGS_NS,
-    { default: id },
-    undefined,
-  )
-  return response.ok ? undefined : response.error.message
+  return writeAgentPresetSettings(ctx, { default: id })
+}
+
+/**
+ * Persist whether new-session surfaces expose preset selection.
+ * @param ctx - the browser plugin context carrying the Remote namespaces.
+ * @param enabled - whether the picker should be exposed.
+ * @returns the failure message, or undefined once the write landed.
+ */
+export function writeModeSelectionEnabled(
+  ctx: ClientContext,
+  enabled: boolean,
+): Promise<string | undefined> {
+  return writeAgentPresetSettings(ctx, { modeSelectionEnabled: enabled })
 }
 
 /** One selectable preset. */
@@ -55,7 +72,7 @@ export type RosterPreset = AgentPresetRoster['presets'][number]
 /** The roster, or the message to show in its place. */
 export type RosterRead = { ok: true; value: AgentPresetRoster } | { ok: false; error: string }
 
-const EMPTY_ROSTER: AgentPresetRoster = { presets: [], authorable: false }
+const EMPTY_ROSTER: AgentPresetRoster = { presets: [], authorable: false, modeSelectionEnabled: false }
 
 /**
  * Read the roster, turning a refusal into the message every surface shows.

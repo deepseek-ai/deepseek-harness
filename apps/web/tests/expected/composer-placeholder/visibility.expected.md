@@ -1,0 +1,8 @@
+- Empty draft: placeholder visible
+- Single space: placeholder hidden
+- Consecutive spaces: placeholder hidden
+- Focus restored: placeholder hidden
+- Whitespace submission rejected: placeholder hidden
+- All content deleted: placeholder visible
+- Pasted spaces: placeholder hidden
+- Pasted content deleted: placeholder visible

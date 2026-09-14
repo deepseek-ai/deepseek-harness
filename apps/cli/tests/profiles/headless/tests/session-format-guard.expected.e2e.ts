@@ -32,6 +32,10 @@ const binScript = fileURLToPath(new URL('../../../../../../packages/test-support
 const tsconfigPath = fileURLToPath(new URL('../../../../../../tsconfig.json', import.meta.url))
 // The resumed-agent fixture in the shared config resumes exactly this id.
 const sessionId = SessionId('workspace-context-resume')
+const fixtureEnv = {
+  DSH_SNAPSHOT_FILE: replayFixture,
+  DSH_LOADER_SMOKE_REQUIRED_ENTRY_ID: 'resumed-agent',
+}
 
 /** Persist one session with the given header version and events, returning its log path. */
 async function seedSession(root: string, cwd: string, version: number, events: SessionEvent[]): Promise<string> {
@@ -84,7 +88,7 @@ describe('session format guard through the assembled app', () => {
       configPath,
       binArgs: [configPath, 'Continue the migrated session.'],
       tsconfigPath,
-      env: { DSH_SNAPSHOT_FILE: replayFixture },
+      env: fixtureEnv,
       prepare: async (runCwd) => {
         sourcePath = await seedSession(join(runCwd, '.sessions'), runCwd, 0, closedTurn())
         source = await readFile(sourcePath)
@@ -124,7 +128,7 @@ describe('session format guard through the assembled app', () => {
       configPath,
       binArgs: [configPath, 'Try to resume.'],
       tsconfigPath,
-      env: { DSH_SNAPSHOT_FILE: replayFixture },
+      env: fixtureEnv,
       expectedExitCode: 1,
       prepare: async (runCwd) => {
         sessionPath = await seedSession(join(runCwd, '.sessions'), runCwd, SESSION_FORMAT_VERSION + 99, closedTurn())
@@ -139,6 +143,54 @@ describe('session format guard through the assembled app', () => {
     expect(result.stderr).toContain(sessionPath.slice(sessionPath.indexOf('/.sessions/')))
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
+  it('refuses unaudited V2 queued content before resume without publishing a successor', async () => {
+    let sourcePath = ''
+    let source = Buffer.alloc(0)
+    let sourceIdentity: { readonly dev: bigint; readonly ino: bigint } | undefined
+    const result = await runLoaderSmoke({
+      label: 'unaudited V2 content resume refusal',
+      tempDirPrefix: 'dsh-format-guard-content-',
+      binScript,
+      libBinScript: binScript,
+      configPath,
+      binArgs: [configPath, 'Try to resume.'],
+      tsconfigPath,
+      env: fixtureEnv,
+      expectedExitCode: 1,
+      prepare: async (runCwd) => {
+        sourcePath = generationLogPath(join(runCwd, '.sessions'), runCwd, sessionId, 2, 'none')
+        await mkdir(dirname(sourcePath), { recursive: true })
+        const rows = [
+          { type: 'session', version: 2, id: sessionId, createdAt: 1, cwd: runCwd, isSeeded: false, delegationDepth: 0 },
+          { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+          { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+          { type: 'team/message/queued', seq: 2, time: 3, data: {
+            version: 1, teamId: 'team', message: {
+              id: 'queued', senderId: 'sender', senderName: 'Sender', targetId: 'target', delivery: 'quiet',
+              content: [{ type: 'future-message-block', localSeq: 1 }],
+            },
+          } },
+        ]
+        source = Buffer.from(rows.map(row => JSON.stringify(row)).join('\n') + '\n')
+        await writeFile(sourcePath, source)
+        const identity = await stat(sourcePath, { bigint: true })
+        sourceIdentity = { dev: identity.dev, ino: identity.ino }
+      },
+      inspect: async () => {
+        expect(await readFile(sourcePath)).toEqual(source)
+        const identity = await stat(sourcePath, { bigint: true })
+        expect({ dev: identity.dev, ino: identity.ino }).toEqual(sourceIdentity)
+        expect((await readdir(dirname(sourcePath))).filter(name => name !== 'session.lock'))
+          .toEqual(['session.v2.jsonl'])
+      },
+    })
+    expect(result.stderr).toContain(
+      'format v2 team/message/queued at seq 2 data.message.content[0]: cannot safely transform unclassified message content kind "future-message-block"',
+    )
+    expect(result.stderr).toContain('source v2 artifact remains unchanged')
+    expect(result.stderr).toContain(sourcePath.slice(sourcePath.indexOf('/.sessions/')))
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
   it('refuses to resume a log with an unknown required event type', async () => {
     let sessionPath = ''
     const result = await runLoaderSmoke({
@@ -149,7 +201,7 @@ describe('session format guard through the assembled app', () => {
       configPath,
       binArgs: [configPath, 'Try to resume.'],
       tsconfigPath,
-      env: { DSH_SNAPSHOT_FILE: replayFixture },
+      env: fixtureEnv,
       expectedExitCode: 1,
       prepare: async (runCwd) => {
         sessionPath = await seedSession(join(runCwd, '.sessions'), runCwd, SESSION_FORMAT_VERSION, [

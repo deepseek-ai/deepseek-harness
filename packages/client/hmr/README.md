@@ -63,11 +63,11 @@ The chain is two halves with one contract: the node half owns bundle detection a
 
 ### The browser swap
 
-On a `rebuilt` frame the revision makes `invalidate` select that plugin's immutable one-resource combo URL instead of its initial multi-resource URL. `prefetch` loads and registers the new factory while the old fiber still serves. The remaining order is registry-first teardown (`registry.delete` before the fiber's disposer emits `internal/plugin`, or the vendored Loader flags the entry disabled), drain the old fiber's unload, delete `entry.fiber`, remove owned `<style data-plugin>` tags, then `entry.refresh()` re-imports and remounts, and `fiber.await()` rethrows startup failures loud. The swap is safe because execution is pure registration under the lazy-CJS model: every module side effect lives in the factory closure and runs at materialization.
+On a `rebuilt` frame the revision makes `invalidate` select that plugin's immutable one-resource combo URL instead of its initial multi-resource URL. `prefetch` loads and registers the new factory while the old fiber still serves. The remaining order is registry-first teardown (`registry.delete` before the fiber's disposer emits `internal/plugin`, or the vendored Loader flags the entry disabled), drain the old fiber's unload, delete `entry.fiber`, remove owned `<style data-plugin>` tags, then `entry.refresh()` re-imports and remounts, and `fiber.await()` rethrows startup failures loudly. The swap is safe because execution is pure registration under the lazy-CJS model: every module side effect lives in the factory closure and runs at materialization.
 
 ### Cascade and self-reload
 
-A fiber's activation epoch strings its service providers' uids, so replacing a provider's fiber re-cascades every dependent through cordis itself with zero HMR-side bookkeeping. This plugin is itself a graph entry, so a rebuilt frame may name it; the in-flight reload keeps running in the old bundle's closure and the new bundle's apply opens a fresh channel.
+A fiber's activation epoch strings its service providers' uids, so replacing a provider's fiber re-cascades every dependent through Cordis itself with zero HMR-side bookkeeping. This plugin is itself a graph entry, so a rebuilt frame may name it; the in-flight reload keeps running in the old bundle's closure and the new bundle's apply opens a fresh channel.
 
 ### Failure policy
 

@@ -42,6 +42,8 @@ Status: implemented
 
 `agent.ctx` 就是这样一个派生上下文。服务调用仍然到达共享实例，而注册操作可以检查其调用上下文并将贡献存储在最近的作用域键下。普通的插件上下文不携带作用域键，因此注册到全局。
 
+Agent 上下文就是 `createScope` 返回的上下文，不携带第二份指回 Agent 的关联。需要主体的 API 显式传递 Agent，因此注册所有权与路由只依赖一种正式的作用域机制。
+
 ### Fiber 与 effect 使清理成为结构性的
 
 Cordis fiber 是插件或子上下文被激活时创建的活跃实例。其状态记录该生命周期是 active、unloading、failed 还是 disposed。`ctx.effect()` 和 `ctx.on()` 返回 disposer，同时将这些 disposer 附加到注册所在的 fiber，因此卸载一个插件或 agent 作用域会移除通过该上下文注册的一切，无需单独的清单。
@@ -70,7 +72,7 @@ scope 包实现了 Cordis 路由所需的最小对象。其载体仅持有一个
 
 `createScope(parent, key)` 返回一个作用域，其 `ctx` 共享父级的服务，其 effect 被标记为该键。`scopeOf(ctx)` 读取最近的注册键。`scopeTarget(base, key)` 创建事件接收器，其过滤器保留 base receiver 的 Cordis 服务过滤器，然后接纳无作用域的监听器和具有该确切键的监听器。
 
-Receiver 是一个小型载体而非领域对象的透明代理。需要 agent 的代码接收显式的事件参数；需要注册所有权的代码接收 `agent.ctx`。
+Receiver 是一个小型载体而非领域对象的透明代理。需要 agent 的代码接收显式的 setup 参数或事件参数；需要注册所有权的代码接收 `agent.ctx`。
 
 ### 注册表读取叠加一个精确 layer
 
@@ -102,11 +104,11 @@ detach 闭包捕获其确切注册表条目。它仅在映射仍指向该注册�
 
 创建准备一个新 Session。恢复加载并验证持久化的 Session，然后准备相同的活跃会话标识。两条路径随后构建作用域、agent 和 driver，并调用相同的 setup/发布算法。
 
-工厂存储具体的 trace 目标，但通过调用方绑定的 Cordis trace 调用它们。这保留了依赖来源和调用方所有权，而不堆叠 trace 代理。
+工厂存储具体的 trace 目标，但通过调用方绑定的 Cordis trace 调用它们。运行时子 Agent 的创建方在 create 或 resume options 中设置 `parentAgent`，AgentRegistry 转交这些 options，不从调用方 Context 推导父级。这既保留了依赖来源和两种所有权事实，又不堆叠 trace 代理，也不把领域对象附着到 Context。作用域 Remote 事件适配器同样从 request 接收 Agent，校验它就是 carrier key，再直接投影其 Context 与 wire identity。系统不会通过作用域索引从 Context 重建 Agent。[显式运行时身份决策](2026-08-31-explicit-agent-runtime-identity.zh.md)拥有这项分离原则及由此确定的可续跑子级归属规则。
 
 ### Setup 是私有世界内的可信组合
 
-Setup 接收完整的子上下文，可以等待插件激活。它可以注册工具、提示词段、限制、监听器和其他 effect，但公开约定不支持通过强制转换或内部注册表调用来驱动或发布正在创建中的 agent。
+Setup 接收完整的子上下文和确切的未发布 Agent，可以等待插件激活。它可以注册工具、提示词段、限制、监听器和其他 effect；需要子 Session 的消费者从 Agent 参数读取它。公开约定不支持通过强制转换或内部注册表调用来驱动或发布正在创建中的 agent。
 
 事务将异步加载和 setup 与停用进行竞争，而非无限等待外部代码拥有的 promise。如果取消或所有者卸载获胜，即使外部 promise 永不结算，公开创建也会在事务拥有的清理之后拒绝。
 
@@ -117,30 +119,28 @@ Setup 接收完整的子上下文，可以等待插件激活。它可以注册�
 1. 将会话写入注册表。
 2. 将 agent 写入注册表。
 3. 宣告 `session/created`。
-4. 宣告 `agent/created`。
-5. 启用公开驱动。
-6. 发射 `agent/session-start`。
-7. 启动 driver。
+4. 等待串行 `agent/created` 监听器。
+5. 向驱动器释放已排队输入。
 
-Agent 在两个注册表和创建通知都达成一致之前绝不驱动。同步监听器可以否决或 dispose 一个所有者；事务记录发布进行中，并等待该回调栈展开后再继续拆除。每个已开始的创建宣告在回滚期间都有匹配的销毁宣告。
+Agent 在两个注册表与创建监听器都完成前绝不驱动。监听器可以拒绝或 dispose 一个所有者；事务保留作用域与会话，等待分发结算后再继续拆除。每个已开始的创建宣告在回滚期间都有匹配的销毁宣告。[可等待创建决策](2026-09-09-awaited-agent-creation.zh.md)拥有异步初始化器时序。
 
-以下序列图隔离了非显而易见的竞态：同步创建监听器可以在发布调用栈仍拥有两个注册表条目时请求 dispose。拆除必须立即停用，但要等待该栈展开后才停止和分离任何东西。
+创建监听器可以在发布仍拥有两个注册表条目时请求 dispose。Teardown 会立即停用，并等待所调用的异步分发完成后才停止和分离资源。
 
 ```mermaid
 sequenceDiagram
   participant Tx as AgentCreationTransaction
   participant Registries
-  participant Listener as Synchronous listener
+  participant Listener as Creation listener
   participant Driver
 
   Tx->>Tx: mark publication in progress
   Tx->>Registries: announce agent/created
-  Registries->>Listener: invoke inside the same call stack
+  Registries->>Listener: await listener
   Listener->>Tx: dispose reentrantly
   Tx->>Tx: deactivate, teardown waits for publication
   Tx-->>Listener: disposal request accepted
-  Listener-->>Registries: return
-  Registries-->>Tx: announcement unwound
+  Listener-->>Registries: settle
+  Registries-->>Tx: dispatch settled
   Tx->>Tx: resolve publication settlement
   Tx->>Driver: stop and drain
   Tx->>Registries: detach agent, then session
@@ -151,7 +151,7 @@ sequenceDiagram
 
 每个拆除请求加入一条记忆化路径。顺序为：
 
-1. 停用创建或驱动，让同步发布完成。
+1. 停用创建或驱动，并等待创建分发。
 2. 停止并排空 driver，丢弃仍处于待处理状态的注入。
 3. 分离 agent。
 4. 分离会话。
@@ -306,15 +306,15 @@ Worker 和子进程桥接比同进程注册表需要更多状态，因为消息�
 
 工作流宿主保持待定的提供方 start promise 和已发布的子级记录。子级仅在异步 `SubagentRuntime.start()` 兑现时才从待定变为已发布；被拒绝的 start 清理其部分提供方工作且不产生子级生命周期对。
 
-一个宿主拥有的 AbortController 向待定和活跃子级提供必需的 signal。关闭工作流准入中止该 signal，因此没有重复的 `ChildCancel` worker RPC 或显式的宿主侧 `run.cancel()` 扇出。完全停稳需要等待待定 start 和已发布子级 dispose 两者。
+一个宿主拥有的 AbortController 向待定和活跃子级提供必需的 signal。关闭工作流准入中止该 signal；完全停稳需要等待待定 start 和已发布子级 dispose 两者。[工作流沙箱复用](2026-09-13-workflow-ptc-sandbox-reuse.zh.md)负责 PTC 进程取消和不另设工作流清理定时器的规则。
 
-Worker 边界仍然序列化请求和结果。宿主保留首个终端结果仲裁、精确的子级计数、worker 死亡处理、优雅终止、迟到/重复消息拒绝和有界清理，因为结果接收、worker 退出和子级完全停稳是真正独立的事实。
+PTC 序列化请求和结果并负责进程终止。工作流适配器保留终态结果仲裁和子级归属，因为程序结算、进程退出和子级完全停稳仍是独立事实。
 
 ### 终端结果与物理清理保持分离
 
-工作流结果按公开优先级规则记录首个被接受的终端结果。该结果选定后清理可以继续：活跃子级仍需 dispose，worker 仍需终止，慢速外部后端可能超出配置的优雅期限。
+工作流结果按公开优先级规则记录首个被接受的终端结果。选定结果不会释放资源：PTC 进程和活跃子级仍需清理，子级资源释放必须履行其提供方约定。
 
-公开 dispose 在调用回调之前取得其记忆化 promise 的所有权。Worker 死亡在处理任何排队的迟到子级请求之前关闭准入，合成缺失的生命周期结束，并启动子级/进程清理而不重写已声明的结果。
+公开 dispose 汇入同一个清理操作。运行结算关闭子级准入，合成缺失的生命周期结束并清理子级，不重写已经认领的结果。
 
 ### ACP 提示词结算不依赖更新投递
 
@@ -342,7 +342,7 @@ TypeScript 无法管控 JavaScript 强制转换、直接 Cordis dispatch、进�
 
 事件目录、服务目录、生产者/消费方矩阵、配置目录、模块图、工具目录、type-equiv 块和作用域事件解析器映射都是从源码生成或受新鲜度门禁约束的。[TypeScript 语义门禁 Agent Note](../../archived/process/2026-07-14-typescript-program-backed-semantic-gates.md) 拥有 Program 构造、语义事件发现和解析器生成规则。
 
-行为测试固定了作用域路由和 dispose、最终写入注册表时的碰撞清理、发布回滚、有序完全停稳、持久化前/后提交行为、跨展示和执行的活跃工具过滤、协作式提示词组装、原生和 PTC mode 中的结构化输出提交、异步 subagent 启动和信号取消、worker 终端仲裁、ACP 结算和进程拆除。
+行为测试固定了作用域路由和 dispose、最终写入注册表时的碰撞清理、发布回滚、有序完全停稳、持久化前/后提交行为、跨展示和执行的活跃工具过滤、协作式提示词组装、原生和 PTC mode 中的结构化输出提交、异步 subagent 启动和信号取消、工作流终态仲裁、ACP 结算和进程拆除。
 
 ## 曾考虑的替代方案
 

@@ -288,8 +288,7 @@ export function apply(ctx: Context, config: Config): void {
         signal: exec.signal,
       })
       const recordsRun = exec.parent === undefined
-      // The shipped worker-thread engine publishes member events from later
-      // worker messages, after start() returns and this run record is active.
+      // The engine publishes member events after start() returns and this run record is active.
       if (recordsRun) recorder.start(parent.session, run)
 
       // Bridge the tool's abort signal to the run: if the parent step is aborted while the

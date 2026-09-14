@@ -1,13 +1,29 @@
 import { Fragment, memo, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { JsonBlock, MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { MarkdownFileMentions, MarkdownPathImages } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatNodeOwnerProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { AssistantBlock } from '../contract/snapshot.ts'
 import { markdownLabels } from '../markdown-labels.ts'
 import { ReasoningRow } from './ReasoningRow.tsx'
 import { useSearchableHidden } from './searchable-hidden.ts'
 import css from './AssistantMarkdown.module.css'
+
+/**
+ * Map one authored media destination to the same-origin workspace-file URL.
+ * @param protocol - `window.location.protocol` at render time.
+ * @param origin - `window.location.origin` at render time.
+ * @param value - The authored markdown destination, exactly as written.
+ * @returns The API URL for an absolute POSIX path on an HTTP(S) page, or
+ * undefined when the destination cannot be a Host-served local file
+ * (non-HTTP transport such as Electron `file://`, protocol-relative or
+ * relative destinations).
+ */
+export function localPathMediaUrl(protocol: string, origin: string, value: string): string | undefined {
+  if (protocol !== 'http:' && protocol !== 'https:') return undefined
+  if (value.length === 0 || !value.startsWith('/') || value.startsWith('//')) return undefined
+  return `${origin}/api/file?path=${encodeURIComponent(value)}`
+}
 
 export interface AssistantMarkdownProps {
   blocks: readonly AssistantBlock[]
@@ -34,7 +50,16 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
   // Stable per locale revision (t identity changes on switch): a fresh object
   // per render would rebuild MarkdownText's component table every chunk.
   const labels = useMemo(() => markdownLabels(t), [t])
+  // Local media paths in the closing prose rewrite to the same-origin file
+  // API (policy re-validation lives host-side). The vocabulary identity is
+  // stable per page load because MarkdownText memoizes on it.
+  const pathImages = useMemo<MarkdownPathImages>(() => {
+    const { protocol, origin } = window.location
+    return { resolve: value => localPathMediaUrl(protocol, origin, value) }
+  }, [])
   const last = blocks.length - 1
+  const hasBodyOrToolCall = blocks.some(block => block.kind === 'tool-call'
+    || (block.kind === 'text' && block.text.trim() !== ''))
   // Tool-call heads render as tool rows in the chat view's grouping pass, so
   // a node that is only those heads (or empty) would paint an empty root
   // between tool groups — skip the shell unless something visible remains.
@@ -55,6 +80,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             streaming={streaming}
             labels={labels}
             fileMentions={mentions}
+            pathImages={pathImages}
           />,
         )
         break
@@ -65,7 +91,12 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             hidden={reasoningHidden}
             reveal={revealProcess}
           >
-            <ReasoningRow text={block.text} running={streaming && i === last} t={t} />
+            <ReasoningRow
+              text={block.text}
+              running={streaming && i === last}
+              defaultExpanded={!hasBodyOrToolCall && block.text.trim() !== ''}
+              t={t}
+            />
           </ProcessReasoning>,
         )
         break

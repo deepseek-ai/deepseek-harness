@@ -1,4 +1,4 @@
-# Both mode adds `ctx.codeRuntime` while keeping native tools on the wire and
+# Both mode adds `ctx.ptcRuntime` while keeping native tools on the wire and
 # adding `run_code` plus its generated TypeScript SDK prompt. Recording applies
 # this profile patch; replay applies its sibling patch.
 - id: agent-default-model

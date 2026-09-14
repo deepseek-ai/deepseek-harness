@@ -1,5 +1,5 @@
 ---
-description: "面向用户与维护者的 agent 平面呈现选择器说明，用于选择、配置或调试 agent preset 的模型看到其工具的哪种形态。"
+description: "面向用户与维护者的 agent（智能体）平面呈现选择器说明，用于选择、配置或调试 agent preset 的模型看到其工具的哪种形态。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-[agent preset](../../preset/agent-presets/README.zh.md) 携带 `dsh-agent-tool-presentation`，用来声明「模型看到其工具的哪一种形态」：`native`（每个可见 schema）、`ptc`（只有 `run_code` 加一份生成的 SDK）或 `both`。工具注册表本身仍在宿主平面——这一行只声明挂载 agent 的呈现方式，因此一个 PTC mode 会话可以与多个 native 会话同进程并存，各自看到各自的目录。PTC 模式在挂载前会等待代码运行时，因此针对未组装运行时的部署选择 PTC mode 的 preset 会在挂载时失败，而不是在第一次请求时失败。`mode` 字段是必填的：不带这一行的 preset 本来就会拿到部署默认值。当 agent preset 需要固定其 agent 的模型所看到的工具形态时，请选择本包。
+在 [agent preset](../../preset/agent-presets/README.zh.md) 中使用 `dsh-agent-tool-presentation`，可固定模型看到全部原生工具 schema、只有带生成 SDK 的 `run_code`，还是同时看到两种形态。每个 preset 可独立选择，因此 native 与 PTC agent 可以共享同一进程，而不共享工具目录。选择 `ptc` 或 `both` 需要兼容的 PTC 运行时；没有该运行时的部署会在挂载时拒绝 preset，不会等到收到第一条提示词。使用本包时 `mode` 字段为必填；省略本包则沿用部署默认值。
 
 ## 目录
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 
 ### PTC 模式需要什么
 
-选择 `ptc` 或 `both` 需要已组合的代码运行时（`ctx.codeRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-code-runtime-worker-thread`](../../code-runtime/code-runtime-worker-thread/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tools` 中。针对未组装此类运行时的部署选择 PTC 模式的 preset 会拒绝挂载并点名这一行，使失败落在操作者可以行动的地方，而不是落在会话的第一次请求上。
+选择 `ptc` 或 `both` 需要已组合的 PTC 运行时（`ctx.ptcRuntime`），且其语言有已注册的 SDK 渲染器——TypeScript 运行时经 [`dsh-ptc-runtime-node`](../../ptc-runtime/ptc-runtime-node/README.zh.md) 交付，TypeScript 与 Python 的 SDK 渲染器都内置在 `dsh-tools` 中。针对未组装此类运行时的部署选择 PTC 模式的 preset 会拒绝挂载并点名这一行，使失败落在操作者可以行动的地方，而不是落在会话的第一次请求上。
 
 ### 每个 agent 只声明一次呈现方式
 
@@ -61,18 +61,18 @@ kind: "package-reference"
 
 ### 设计理念
 
-工具注册表搬不进 preset：它的消费者全在宿主平面——agent loop 读它的调度器，API proxy 读它的 presenter，每个工具插件都往里注册——而一个服务只有在所有消费者一起下沉时才能下沉。preset 能拥有的是这份注册表的呈现方式。`ctx.tools.presentAs()` 为挂载作用域声明它，而挂载作用域就是 preset 的常驻挂载，因此该声明覆盖每个加入该 preset 的 agent，一个 PTC mode preset 可以与多个 native 会话同进程并存。每个组合一行，而不是每个会话一行。
+工具注册表搬不进 preset：它的消费方全在宿主平面——agent loop（智能体循环）读它的调度器，API proxy 读它的展示转换器，每个工具插件都往里注册——而一个服务只有在所有消费方一起下沉时才能下沉。preset 能拥有的是这份注册表的呈现方式。`ctx.tools.presentAs()` 为挂载作用域声明它，而挂载作用域就是 preset 的常驻挂载，因此该声明覆盖每个加入该 preset 的 agent，一个 PTC mode preset 可以与多个 native preset 同进程并存。每个组合一行，而不是每个会话一行。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：`mode` 配置、把 `ctx.tools.presentAs` 接到挂载作用域的 `apply` |
-| — | 不发布运行时不变式伴生入口；本包只对 `ctx.tools` 发起一次 scoped 调用，不持有事件或快照；所选 presentation 的关系由 tool registry 持有并由 `dsh-tools` 观察。 |
+| — | 不发布运行时不变式伴生入口；本包只对 `ctx.tools` 发起一次 scoped 调用，不持有自己的事件或快照；它建立的是「某个 agent 的组装采用哪种呈现方式」这一关系，该关系由工具注册表持有，`dsh-tools` 会在工具注册表中观察该关系。 |
 
 ### 行为说明
 
-`native` 立即生效。PTC 模式则等待 `ctx.codeRuntime`——这是一个宿主平面服务：针对未组装运行时的部署选择 PTC mode 的 preset 会让这一行停在 pending，`dsh-agent-presets` 会指名此 id 拒绝挂载。`presentAs` 本身就是 effect，因此该声明随这一行撤销，无需第二个包装层拥有它。
+`native` 立即生效。PTC 模式则等待 `ctx.ptcRuntime`——这是一个宿主平面服务：针对未组装运行时的部署选择 PTC mode 的 preset 会让这一行停在 pending，`dsh-agent-presets` 会指名此 id 拒绝挂载。`presentAs` 本身就是 effect，因此该声明随这一行撤销，无需第二个包装层拥有它。
 
 </details>
 
@@ -85,7 +85,7 @@ kind: "package-reference"
 
 - [tools 包](../tools/README.zh.md)——工具呈现模式与 `presentAs` API。
 - [agent-presets 包](../../preset/agent-presets/README.zh.md)——preset 如何组合 agent 及其常驻挂载。
-- [code-runtime worker-thread 包](../../code-runtime/code-runtime-worker-thread/README.zh.md)——PTC 模式所需的 TypeScript 运行时。
+- [Node ptc-runtime 包](../../ptc-runtime/ptc-runtime-node/README.zh.md)——PTC 模式所需的 TypeScript 运行时。
 - [PTC mode 执行器塌缩 note](../../../.agents/notes/implemented/bug-fix/2026-08-07-ptc-executor-collapse.zh.md)——通告面与可调用面为何保持一致。
 - [core 分组地图](../README.zh.md)——core 各包如何组合。
 

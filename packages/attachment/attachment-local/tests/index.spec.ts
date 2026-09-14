@@ -85,7 +85,7 @@ describe('local attachment service', () => {
         String(ref.attachmentId).slice('sha256:'.length),
       ))
       await expect(readFile(hostPath)).resolves.toEqual(Buffer.from(data))
-      const request = await service.readImageRequest(ref, { maxPixels: 1, maxBytes: 1024 })
+      const request = await service.readImageRequest(ref, { width: 1, height: 1, maxBytes: 1024 })
       expect(request).not.toHaveProperty('access')
 
       const fileData = Uint8Array.of(0, 1, 2, 255)

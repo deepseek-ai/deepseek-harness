@@ -44,8 +44,7 @@ function retryableWriteError(error: unknown): boolean {
  * Apply patch lists to an entry list — THE patch semantics of this include,
  * shared by mounting (`applyPatches`) and offline config tooling
  * (`dsh --dump-config`) so a dump can never drift from what boots. The input
- * is never mutated and the result is always detached from it (even with no
- * patches): patching or mounting shared entry objects would bake earlier
+ * is never mutated: patching shared entry objects would bake earlier patch
  * values into the cached parse, so repeated application (config hot-reloads)
  * could never revert a removed or changed patch. Inserted entries are indexed
  * as they are added, so a later patch in the same list can target a row an
@@ -60,8 +59,8 @@ export function applyEntryPatches(
   patches: PatchOptions[] | undefined,
   warn: (message: string, ...args: any[]) => void,
 ): EntryOptions[] {
+  if (!patches?.length) return [...data]
   data = structuredClone(data)
-  if (!patches?.length) return data
 
   const entryMap = new Map<string, EntryOptions>()
   const buildMap = (entries: EntryOptions[]) => {
@@ -127,20 +126,6 @@ export function applyEntryPatches(
   return data
 }
 
-type ConfigUpdateStage = 'read' | 'parse' | 'validate'
-
-interface ReadCandidate {
-  content: string
-  data: EntryOptions[]
-}
-
-class ConfigFileError extends Error {
-  constructor(public readonly stage: ConfigUpdateStage, path: string, cause: unknown) {
-    super(`failed to ${stage} config file ${path}`, { cause })
-    this.name = 'ConfigFileError'
-  }
-}
-
 /** Runtime patch applied to entries loaded from an included config file. */
 export interface PatchOptions {
   id?: string
@@ -189,7 +174,6 @@ export class Include extends EntryTree {
   private writeTask?: NodeJS.Timeout | undefined
   private pendingWrite?: EntryOptions[]
   private writeQueue: Promise<void> = Promise.resolve()
-  private applyQueue: Promise<unknown> = Promise.resolve()
 
   constructor(ctx: Context, public config: Include.Config) {
     super(ctx)
@@ -203,29 +187,18 @@ export class Include extends EntryTree {
     this.readonly = !this.type
     this.ctx.baseUrl = new URL('.', pathToFileURL(this.filename)).href
 
-    ctx.on('internal/update', async (config, _, next) => {
+    ctx.on('internal/update', (config, _, next) => {
       if (config.path !== this.config.path) return next()
-      await this.enqueue(async () => {
-        const data = this.applyPatches(this.data!, config.patches)
-        await this.root.update(data)
-        this.config = config
+      // Veto the fiber restart (children update in place), but persist the new
+      // config ourselves — `Fiber.update` only assigns `this.config` behind
+      // `next()`, and a stale `this.config.patches` would make the next
+      // `refresh()` re-apply the old overlay.
+      this.config = config
+      this.root.update(this.applyPatches(this.data!, config.patches)).catch((error) => {
+        this.ctx.logger.warn('config update at %C failed', this.filename)
+        this.ctx.logger.warn(error)
       })
     })
-  }
-
-  /**
-   * Serialize one child-tree mutation behind every earlier one. The group's
-   * transactional `update` is not reentrant: two concurrent applies (the init
-   * apply racing an HMR-triggered refresh from the watcher's initial scan)
-   * interleave create and rollback on the same entries and strand the include
-   * fiber without settling, so every apply path funnels through this queue.
-   * A predecessor's failure is its own caller's outcome and never gates the
-   * next task.
-   */
-  private enqueue<T>(task: () => Promise<T>): Promise<T> {
-    const run = this.applyQueue.then(task, task)
-    this.applyQueue = run.then(() => {}, () => {})
-    return run
   }
 
   private async checkAccess() {
@@ -237,87 +210,80 @@ export class Include extends EntryTree {
     }
   }
 
-  private async read(forced = false): Promise<ReadCandidate | undefined> {
-    let content: string
-    try {
-      content = await readFile(this.filename, 'utf8')
-    } catch (error) {
-      throw new ConfigFileError('read', this.filename, error)
-    }
-    if (!forced && this.content === content) return
+  private async read(forced = false) {
+    const content = await readFile(this.filename, 'utf8')
+    if (!forced && this.content === content) return false
     let data: any
-    try {
-      if (this.type === 'application/yaml') {
-        data = yaml.load(content, { schema })
-      } else if (this.type === 'application/json') {
-        data = JSON.parse(content)
-      } else {
-        const module = await import(/* @vite-ignore */ this.filename)
-        data = module.default || module
-      }
-    } catch (error) {
-      throw new ConfigFileError('parse', this.filename, error)
+    if (this.type === 'application/yaml') {
+      data = yaml.load(content, { schema: entryListSchema })
+    } else if (this.type === 'application/json') {
+      data = JSON.parse(content)
+    } else {
+      const module = await import(/* @vite-ignore */ this.filename)
+      data = module.default || module
     }
+    // An empty or truncated file (common mid-edit: editors and `sed -i` write
+    // through temp states) parses to `undefined`, not an error; reject every
+    // non-array shape here so callers see one "invalid file" signal. Content
+    // and data commit only on success, so an edit that is later reverted to
+    // the exact last good content correctly reads as "unchanged".
     if (!Array.isArray(data)) {
-      throw new ConfigFileError('validate', this.filename, new TypeError('config file must be a top-level array'))
+      throw new TypeError(`config file must be a top-level array of entries: ${this.filename}`)
     }
-    return { content, data }
+    this.content = content
+    this.data = data
+    await this.checkAccess()
+    return true
   }
 
-  private applyPatches(data: EntryOptions[], patches?: PatchOptions[]): EntryOptions[] {
+  private applyPatches(data: EntryOptions[], patches = this.config.patches): EntryOptions[] {
     return applyEntryPatches(data, patches, (message, ...args) => {
       this.ctx.root.logger?.('loader').warn(message, ...args)
     })
   }
 
   async* [Service.init]() {
-    let candidate: ReadCandidate
     try {
-      candidate = (await this.read(true))!
+      await this.read()
     } catch (error) {
-      if (!(error instanceof ConfigFileError) || error.stage !== 'read' || (error.cause as NodeJS.ErrnoException)?.code !== 'ENOENT') throw error
+      // Only a missing file falls back to `initial` (or the not-found error):
+      // an existing-but-invalid file must fail loud with its real parse error,
+      // never be mislabelled as absent or silently overwritten.
+      if ((error as NodeJS.ErrnoException | null)?.code !== 'ENOENT') throw error
       if (this.config.initial) {
         await this._writeFile(this.config.initial as any)
-        candidate = (await this.read(true))!
+        await this.read(true)
       } else {
         throw new Error(`config file not found: ${this.filename}`)
       }
     }
 
     yield () => this.stop()
-    await this.apply(candidate)
+    await this.root.update(this.applyPatches(this.data!))
   }
 
   async stop() {
-    await this.root.stop()
-    await this.flushWrite()
+    try {
+      await this.flushWrite()
+    } finally {
+      this.root.stop()
+      await this.flushWrite()
+    }
   }
 
   /**
-   * Re-read the file and transactionally refresh child entries when content changed.
-   * @returns a promise resolving after the new tree commits, or immediately when unchanged.
-   * @throws when reading, parsing, validation, application, or rollback fails; the last good tree remains active when rollback succeeds.
+   * Re-read the file and refresh child entries when content changed. An
+   * unreadable or unparsable file logs a warning and keeps the last good
+   * tree: a hot-reload of a live app must never take the process down.
    */
   async refresh() {
-    // Read inside the queue so the changed-content check compares against the
-    // predecessor's committed state, not a mid-apply snapshot.
-    await this.enqueue(async () => {
-      const candidate = await this.read()
-      if (!candidate) return
-      await this._apply(candidate)
-    })
-  }
-
-  private apply(candidate: ReadCandidate) {
-    return this.enqueue(() => this._apply(candidate))
-  }
-
-  private async _apply(candidate: ReadCandidate) {
-    const data = this.applyPatches(candidate.data, this.config.patches)
-    await this.root.update(data)
-    this.content = candidate.content
-    this.data = candidate.data
-    await this.checkAccess()
+    try {
+      if (!await this.read()) return
+      await this.root.update(this.applyPatches(this.data!))
+    } catch (error) {
+      this.ctx.logger.warn('config reload at %C failed; keeping the running tree', this.filename)
+      this.ctx.logger.warn(error)
+    }
   }
 
   private async _writeFile(config: EntryOptions[]) {

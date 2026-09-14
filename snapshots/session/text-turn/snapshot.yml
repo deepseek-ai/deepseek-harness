@@ -8,4 +8,3 @@ sessionFormat:
   coverage: [adjacent-migration]
 header:
   class: default
-  pin: true

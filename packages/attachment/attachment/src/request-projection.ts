@@ -1,7 +1,13 @@
 /**
- * Pure request-projection geometry shared by attachment providers and
- * provider-side request pricing. @module @deepseek-ai/dsh-attachment/request-projection
+ * Pure request-projection geometry shared by model routes and provider-side
+ * request pricing. @module @deepseek-ai/dsh-attachment/request-projection
  */
+
+/** Integer width and height of one projected image. */
+export interface ProjectedDimensions {
+  width: number
+  height: number
+}
 
 /**
  * Compute aspect-preserving integer dimensions within a hard total-pixel budget.
@@ -14,7 +20,7 @@ export function requestImageDimensions(
   width: number,
   height: number,
   maxPixels: number,
-): { width: number; height: number } {
+): ProjectedDimensions {
   const scale = Math.min(1, Math.sqrt(maxPixels / (width * height)))
   if (scale === 1) return { width, height }
   if (width >= height) {
@@ -33,4 +39,24 @@ export function requestImageDimensions(
     projectedWidth = Math.max(1, Math.round(projectedHeight * width / height))
   }
   return { width: projectedWidth, height: projectedHeight }
+}
+
+/**
+ * Compute aspect-preserving integer dimensions with an exact long edge; the
+ * short edge rounds to the nearest pixel, as an encoder resize by the
+ * long edge alone.
+ * @param width - positive source width.
+ * @param height - positive source height.
+ * @param longEdge - positive target for the longer source edge.
+ * @returns the target dimensions; a long edge at or above the source returns the source unchanged.
+ */
+export function longEdgeDimensions(
+  width: number,
+  height: number,
+  longEdge: number,
+): ProjectedDimensions {
+  if (longEdge >= Math.max(width, height)) return { width, height }
+  return width >= height
+    ? { width: longEdge, height: Math.max(1, Math.round(longEdge * height / width)) }
+    : { width: Math.max(1, Math.round(longEdge * width / height)), height: longEdge }
 }

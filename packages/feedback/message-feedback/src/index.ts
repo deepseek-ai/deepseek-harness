@@ -9,6 +9,7 @@ import { isDeepStrictEqual } from 'node:util'
 import { Context, Service } from '@deepseek-ai/cordis'
 import s from '@deepseek-ai/schemastery'
 import { z } from 'zod'
+import { FEEDBACK_CATEGORIES } from '@deepseek-ai/dsh-command-feedback'
 import { SessionSeq } from '@deepseek-ai/dsh-session/types'
 import { deriveEventMessage, isAppendSurfaceEvent } from '@deepseek-ai/dsh-session/surface'
 import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
@@ -63,6 +64,7 @@ const itemSchema = z.object({
   messageId: z.string().min(1),
   rating: z.enum(['positive', 'negative']),
   note: z.string().refine(note => note.trim().length > 0).optional(),
+  category: z.enum(FEEDBACK_CATEGORIES).optional(),
   version: z.uuid(),
   createdAt: timestamp,
   updatedAt: timestamp,
@@ -176,7 +178,8 @@ export class MessageFeedbackService extends TypertRemoteService {
       if (request.ifVersion !== (existing?.version ?? null)) {
         return rejected(this.versionConflict(existing ?? null))
       }
-      if (existing !== undefined && existing.rating === request.rating && existing.note === note.value) {
+      if (existing !== undefined && existing.rating === request.rating && existing.note === note.value
+        && existing.category === request.category) {
         await append()
         return success(snapshotItem(existing))
       }
@@ -185,6 +188,7 @@ export class MessageFeedbackService extends TypertRemoteService {
         messageId: request.messageId,
         rating: request.rating,
         ...(note.value === undefined ? {} : { note: note.value }),
+        ...(request.category === undefined ? {} : { category: request.category }),
         version: randomUUID() as MessageFeedbackVersion,
         createdAt: existing?.createdAt ?? now,
         updatedAt: existing === undefined ? now : Math.max(now, existing.updatedAt),
@@ -226,10 +230,12 @@ export class MessageFeedbackService extends TypertRemoteService {
     }
     const live = this.ctx.sessions.get(sessionId)
     if (live !== undefined) {
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       return operation(live.snapshotEvents(), async (event) => {
         if (event !== undefined) {
           live.append(event.type, event.data)
         }
+        // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
         const last = live.snapshotEvents().at(-1)
         if (!(await this.ctx.sessions.flush(live))) {
           throw new Error(

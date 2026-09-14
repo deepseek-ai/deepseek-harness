@@ -1,5 +1,5 @@
 ---
-description: "面向用户与维护者的全消息 LLM 会话标题提供方说明，用于选择标题策略或排查自动标题生成。"
+description: "面向用户与维护者的全消息 LLM（大语言模型）会话标题提供方说明，用于选择标题策略或排查自动标题生成。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-title-all-prompts-llm` 作为可选的 `ctx.sessionTitle` 提供方，通过 `ctx.llm` 总结所有符合条件的用户消息。它注册 `all-prompts` 节奏，并在每条新用户提示词后启动新修订，使用预置历史与子会话提示词。较新的修订会中止并取代旧工作，即使提供方忽略取消，也无法提交陈旧输出。它使用 `dsh-session-title-llm` 的完整必填共享 LLM 配置，因此路由、提示词、预算与取消行为不会漂移。自动行为与配置在前；实现是对共享策略的薄注册。
+`dsh-session-title-all-prompts-llm` 作为可选的 `ctx.sessionTitle` 提供方，通过 `ctx.llm` 总结所有符合条件的用户消息。它注册 `all-prompts` 节奏，并在每条新用户提示词后启动新修订，使用预置历史与子会话提示词。较新的修订会中止并取代旧工作，即使提供方忽略取消，也无法提交陈旧输出。它使用 `dsh-session-title-llm` 的完整必填共享 LLM 配置，因此路由、提示词、预算与取消行为不会漂移。本文优先介绍自动行为与配置；实现只是基于共享策略进行的轻量注册。
 
 ## 目录
 
@@ -90,7 +90,7 @@ kind: "package-reference"
 
 #### Token 影响
 
-每条符合条件的新提示词之后都可能发出一次辅助请求，每次请求受 `maxInputBytes` 与 `maxOutputTokens` 约束；显式刷新可能增加调用。主 agent 请求不会增加 token。
+每条符合条件的新提示词之后都可能发出一次辅助请求，每次请求受 `maxInputBytes` 与 `maxOutputTokens` 约束；显式刷新可能增加调用。主 agent（智能体）请求不会增加 token。
 
 #### KV Cache 影响
 
@@ -116,4 +116,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。这个薄 provider 把 request/result 校验委托给共享 title service 与 LLM helper，不保留独立可变状态。
+**运行时不变式：** 不发布伴生入口。这个轻量提供方将请求与结果校验委托给共享标题服务和 LLM 辅助模块，并且不保留独立的可变状态。

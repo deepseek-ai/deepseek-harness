@@ -137,6 +137,10 @@
   width: 122px;
 }
 
+.eventColumn:where(:lang(zh)) {
+  width: 84px;
+}
+
 .contentColumn {
   width: auto;
 }
@@ -446,6 +450,10 @@
   align-items: flex-end;
   justify-content: flex-end;
   width: 76px;
+}
+
+.kindSlot:where(:lang(zh)) {
+  width: 44px;
 }
 
 .kindSlot :global([role='tooltip']) {
@@ -1038,6 +1046,7 @@
 .detailBodySummary > .overview {
   flex: 0 1 auto;
   min-height: 0;
+  padding-bottom: 0;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -1176,13 +1185,13 @@
   display: flex;
   flex: 1 1 0;
   max-height: max-content;
-  min-height: 28px;
+  min-height: 24px;
   flex-direction: column;
   overflow: hidden;
 }
 
 .overviewSection + .overviewSection {
-  padding-top: 8px;
+  padding-top: 2px;
 }
 
 .overviewHeading {
@@ -1191,7 +1200,7 @@
   align-items: flex-end;
   box-sizing: border-box;
   width: 100%;
-  height: 28px;
+  height: 24px;
   margin: 0;
   padding: 0 0 3px 14px;
   color: var(--dsw-alias-label-secondary);
@@ -1243,13 +1252,157 @@
   background: var(--dsw-alias-bg-layer-1);
 }
 
+.overviewPreview[data-scroll-more] {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 12px), transparent);
+}
+
 .overviewPreview > :last-child {
   margin-bottom: 0;
   padding-bottom: 0;
 }
 
+.programDescription {
+  flex: none;
+  margin: 0;
+  padding: 8px 14px 2px;
+  color: var(--dsw-alias-label-primary);
+  font: var(--dsw-font-xs-13);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.programIcon {
+  margin-right: 4px;
+  vertical-align: -2px;
+}
+
+.programSummary {
+  margin-left: 5px;
+  font-family: var(--dsw-font-family);
+}
+
+.detailBodyProgram,
+.programPanel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.programPanel {
+  flex: 1;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.programActions {
+  display: inline-flex;
+  flex: none;
+  height: 16px;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding-right: 14px;
+}
+
+.programLanguage {
+  padding-right: 4px;
+  color: var(--dsw-alias-label-tertiary);
+  font: 11px/16px var(--ds-font-family-code);
+}
+
+.programAction {
+  display: inline-flex;
+  box-sizing: border-box;
+  width: 20px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.programAction:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.programAction[aria-pressed='true'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.programAction[data-state='failed'] {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.programAction:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: -1px;
+}
+
+.programContent {
+  min-width: 0;
+  min-height: 0;
+}
+
+.programPanel > .programContent {
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.programSource {
+  margin: 0 !important;
+  border-radius: 0;
+  background: var(--dsw-alias-bg-layer-1);
+  --dsl-code-block-line-white-space: pre;
+}
+
+.programSource :where(pre) {
+  padding: 2px 14px 8px;
+  overflow: visible;
+  border-radius: 0;
+  background: var(--dsw-alias-bg-layer-1) !important;
+  font: 12px/16px var(--ds-font-family-code);
+  overflow-wrap: normal;
+  word-break: normal;
+  tab-size: 2;
+}
+
+.programSource pre code > :global(.line) {
+  box-sizing: border-box;
+  width: max-content;
+  min-width: 100%;
+}
+
+.programContent[data-wrap='true'] .programSource {
+  --dsl-code-block-line-white-space: pre-wrap;
+}
+
+.programContent[data-wrap='true'] .programSource pre code > :global(.line) {
+  width: auto;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.programOutput {
+  margin: 0;
+  padding: 2px 14px 8px;
+  color: var(--dsw-alias-label-primary);
+  font: 12px/16px var(--ds-font-family-code);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.programError::first-line {
+  color: var(--dsw-alias-state-error-primary);
+  font-weight: 600;
+}
+
 .overviewPreview .jsonPreview > :first-child,
 .overviewPreview .schemaTree > :first-child {
+  padding-top: 2px;
   padding-bottom: 0;
 }
 
@@ -1405,7 +1558,7 @@
 }
 
 .markdownPreview {
-  padding: 6px 14px 8px;
+  padding: 2px 14px 8px;
 }
 
 .markdownPayload {
@@ -1435,7 +1588,7 @@
 }
 
 .schemaPreview .schemaIntro {
-  padding-top: 6px;
+  padding-top: 2px;
 }
 
 .schemaName {
@@ -1482,7 +1635,7 @@
 
 .payloadPreview {
   min-height: 0;
-  padding: 6px 14px 8px;
+  padding: 2px 14px 8px;
 }
 
 .sourceBlocks {
@@ -1733,7 +1886,7 @@
 
 .resultBlocksPreview {
   min-height: 0;
-  padding: 6px 14px 8px;
+  padding: 2px 14px 8px;
   gap: 6px;
 }
 
@@ -1748,7 +1901,7 @@
 }
 
 .overviewPreview .noPayload {
-  padding: 6px 14px 8px;
+  padding: 2px 14px 0;
 }
 
 .noPayload {

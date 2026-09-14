@@ -34,7 +34,7 @@ export const releasedV2SessionFormatCodec = Object.freeze({
     return encodeHeader(header, inheritedEventCount)
   },
   encodeEvent(event: SessionFormatEvent) {
-    return encodeProvenance(event)
+    return encodeSourceEventRanges(event)
   },
 } satisfies SessionFormatCodec & SessionFormatCurrentEncoder)
 
@@ -175,7 +175,7 @@ function encodeHeader(
   }
 }
 
-function encodeProvenance(event: SessionFormatEvent): SessionFormatJsonObject {
+function encodeSourceEventRanges(event: SessionFormatEvent): SessionFormatJsonObject {
   if (event.sourceEventSeqs === undefined) return event
   return {
     ...event,

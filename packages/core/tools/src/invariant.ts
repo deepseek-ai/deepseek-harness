@@ -29,13 +29,13 @@ function validateResult(
   }
 }
 
-/** Install monotonic pipeline, final-snapshot, and code-dispatch enclosure checks. */
+/** Install monotonic pipeline, final-snapshot, and PTC dispatch enclosure checks. */
 const install: InvariantInstaller = Object.assign((ctx: Context, fail: InvariantFailure) => {
   const stages = new WeakMap<object, ToolStage>()
   const openTurns = new WeakMap<Session, number | null>()
   const dispatchRoots = new WeakMap<Session, Map<string, string>>()
   const validateDispatch = (session: Session, event: SessionEvent): void => {
-    if (event.type !== 'tool/code-dispatch-start' && event.type !== 'tool/code-dispatch') return
+    if (event.type !== 'tool/ptc-dispatch-start' && event.type !== 'tool/ptc-dispatch') return
     const root = String(event.data.rootCallId)
     const parent = String(event.data.parentCallId)
     const child = String(event.data.subCallId)
@@ -51,19 +51,20 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
     }
   }
   const commitDispatch = (session: Session, event: SessionEvent): void => {
-    if (event.type !== 'tool/code-dispatch-start' && event.type !== 'tool/code-dispatch') return
+    if (event.type !== 'tool/ptc-dispatch-start' && event.type !== 'tool/ptc-dispatch') return
     const roots = dispatchRoots.get(session) as Map<string, string>
     roots.set(String(event.data.subCallId), String(event.data.rootCallId))
   }
   const seed = (session: Session): number | null => {
     let openTurn: number | null = null
     dispatchRoots.set(session, new Map())
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     for (const event of session.snapshotEvents()) {
       validateDispatch(session, event)
       commitDispatch(session, event)
       if (event.type === 'turn/start') openTurn = event.data.turn
       else if (event.type === 'turn/end') openTurn = null
-      else if ((event.type === 'tool/code-dispatch-start' || event.type === 'tool/code-dispatch')
+      else if ((event.type === 'tool/ptc-dispatch-start' || event.type === 'tool/ptc-dispatch')
         && openTurn === null) {
         fail(`${event.type} appended outside any open turn`)
       }
@@ -85,7 +86,7 @@ const install: InvariantInstaller = Object.assign((ctx: Context, fail: Invariant
     if (eventName === 'session/event') {
       const [session, event] = args as [Session, SessionEvent]
       validateDispatch(session, event)
-      if ((event.type === 'tool/code-dispatch-start' || event.type === 'tool/code-dispatch')
+      if ((event.type === 'tool/ptc-dispatch-start' || event.type === 'tool/ptc-dispatch')
         && openTurnFor(session) === null) {
         fail(`${event.type} appended outside any open turn`)
       }

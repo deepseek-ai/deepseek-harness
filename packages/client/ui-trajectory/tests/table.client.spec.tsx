@@ -6,7 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type { ComponentProps } from 'react'
 import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
-import type { TrajectoryTurnModel } from '../src/client/layout.ts'
+import { deriveTrajectoryLayout, type TrajectoryTurnModel } from '../src/client/layout.ts'
 import { trajectoryRecordId } from '../src/client/trajectory-record.ts'
 import { t, tZh } from './locale.client.ts'
 
@@ -124,6 +124,20 @@ const FOLD_PROPS = {
 }
 
 describe('TrajectoryTable', () => {
+  it('shows known standalone prompt text without a fabricated tool catalog or request options', () => {
+    const turns = deriveTrajectoryLayout({
+      nodes: [], partial: null, runningCalls: [],
+      systemPrompts: [{ seq: 10, time: 10, turn: 2, step: 1, text: '# Known instructions', update: false }],
+    }, t)
+    expect(turns.flatMap(turn => turn.groups.flatMap(group => group.cells))).toMatchObject([
+      { kind: 'system', text: 'Initial System Prompt', systemPromptDetail: '# Known instructions' },
+    ])
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /SYSTEM/ }))
+    expect(screen.getByRole('heading', { name: 'Known instructions' })).toBeTruthy()
+    expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['System Prompt'])
+  })
+
   it('shows a muted placeholder for an assistant response containing only tool calls', () => {
     const turns: readonly TrajectoryTurnModel[] = [{
       turn: 1,
@@ -217,7 +231,12 @@ describe('TrajectoryTable', () => {
     expect(panel.querySelector('[data-summary-scroll-region]')).toBeNull()
   })
 
-  it('keeps long thinking collapsed until the user asks to render it', () => {
+  it.each([
+    { outputDetail: undefined, toolCall: false },
+    { outputDetail: 'Visible answer', toolCall: false },
+    { outputDetail: undefined, toolCall: true },
+    { outputDetail: 'Visible answer', toolCall: true },
+  ])('opens thinking with output=$outputDetail and toolCall=$toolCall', ({ outputDetail, toolCall }) => {
     const thinking = 'private chain '.repeat(1_000)
     const turns: readonly TrajectoryTurnModel[] = [{
       turn: 1,
@@ -228,6 +247,10 @@ describe('TrajectoryTable', () => {
           kind: 'message',
           text: 'private chain…',
           thinkingDetail: thinking,
+          ...(outputDetail === undefined ? {} : { outputDetail }),
+          ...(toolCall ? { sourceBlocks: [{
+            type: 'tool-call', content: '{}', callId: 'call-1', toolName: 'read',
+          }] } : {}),
           timeSeconds: 1,
         }],
       }],
@@ -235,14 +258,39 @@ describe('TrajectoryTable', () => {
     render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
 
     fireEvent.click(screen.getByRole('row', { name: /ASSISTANT/ }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Preview' }))
     const toggle = screen.getByRole('button', { name: 'Thinking' })
-    expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByText(thinking)).toBeNull()
-
-    fireEvent.click(toggle)
-    expect(screen.getByRole('button', { name: 'Thinking' })).toBe(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect(toggle.parentElement?.textContent?.length).toBeGreaterThan(thinking.length)
+
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByText(thinking)).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Summary' }))
+    expect(screen.getByRole('button', { name: 'Thinking' }).getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(screen.getByRole('tab', { name: 'Preview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
+    expect(screen.getByRole('button', { name: 'Thinking' }).getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('opens thinking on another record after collapsing the selected record', () => {
+    const turns: readonly TrajectoryTurnModel[] = [{
+      turn: 1,
+      groups: [{
+        title: 'Step 1',
+        cells: [1, 2].map(index => ({
+          index, kind: 'message', text: `Answer ${index}`, outputDetail: `Answer ${index}`,
+          thinkingDetail: `Reasoning ${index}`, timeSeconds: 1,
+        })),
+      }],
+    }]
+    render(<TrajectoryTable turns={turns} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /ASSISTANT, Answer 1/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Thinking' }))
+    expect(screen.getByRole('button', { name: 'Thinking' }).getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(screen.getByRole('row', { name: /ASSISTANT, Answer 2/ }))
+    expect(screen.getByRole('button', { name: 'Thinking' }).getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText('Reasoning 2')).toBeTruthy()
   })
 
   it('keeps raw HTML tags in a Markdown-derived context preview', () => {

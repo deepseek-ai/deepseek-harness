@@ -48,7 +48,7 @@ try {
     const [agent] = ctx.get('agents')?.roots() ?? []
     if (agent === undefined) throw new Error('session-telemetry-otel driver requires one root agent')
     if (process.env.DSH_TELEMETRY_E2E_FEEDBACK !== 'none') {
-      recordFeedback(agent.session, 'fixture feedback')
+      recordFeedback(agent.session, { text: 'fixture feedback' })
     }
     await runFixtureTurn(ctx, { task: 'post-feedback private suffix' })
     ctx.emit('agent/error', { agent, turn: 2, step: 1, error: new Error('private operational error') })

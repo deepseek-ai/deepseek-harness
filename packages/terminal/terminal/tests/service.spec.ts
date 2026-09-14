@@ -160,8 +160,8 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     ctx.terminals.registerBackend(b.provider)
     const owner = stubAgent(ctx, 'owner')
     const foreign = stubAgent(ctx, 'foreign')
-    ctx.agents.register(owner)
-    ctx.agents.register(foreign)
+    await ctx.agents.register(owner)
+    await ctx.agents.register(foreign)
 
     const created = await ctx.terminals.spawn(owner, { type: 'stub', name: 'main', cwd: '/tmp' })
     expect(created).toMatchObject({ sessionId: 'pty-1', name: 'main', type: 'stub', pid: 123, motd: 'stub ready', status: { kind: 'running' } })
@@ -177,7 +177,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     const ctx = await harness()
     const owner = stubAgent(ctx, 'owner')
     await expect(ctx.terminals.spawn(owner, { type: 'missing' })).rejects.toMatchObject({ code: 'OWNER_NOT_LIVE' })
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     await expect(ctx.terminals.spawn(owner, { type: 'missing' })).rejects.toMatchObject({ code: 'NO_BACKEND' })
     const b = backend()
     ctx.terminals.registerBackend(b.provider)
@@ -209,7 +209,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     const session = new StubSession()
     ctx.terminals.registerBackend({ type: 'slow', spawn: () => gate.promise })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const pending = ctx.terminals.spawn(owner, { type: 'slow', name: 'main' })
     await expect(ctx.terminals.spawn(owner, { type: 'slow', name: 'main' })).rejects.toMatchObject({ code: 'DUPLICATE_NAME' })
     const disposal = disposeAgentScope(owner)
@@ -225,7 +225,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     const session = new StubSession()
     ctx.terminals.registerBackend({ type: 'slow', spawn: () => gate.promise })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const controller = new AbortController()
     const reason = new Error('cancelled by caller')
 
@@ -245,7 +245,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     session.rejectClose = true
     ctx.terminals.registerBackend({ type: 'slow', spawn: () => gate.promise })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const controller = new AbortController()
     const reason = new Error('cancelled by caller')
 
@@ -274,7 +274,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       }),
     })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const controller = new AbortController()
     const reason = new Error('cancelled by caller')
 
@@ -300,7 +300,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       }),
     })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const controller = new AbortController()
     const reason = new Error('cancelled by caller')
 
@@ -337,7 +337,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       },
     })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
 
     const pending = ctx.terminals.spawn(owner, { type: 'slow' })
     const pendingFailure = pending.then(
@@ -369,7 +369,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     session.rejectClose = true
     ctx.terminals.registerBackend({ type: 'slow', spawn: () => gate.promise })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
 
     const pending = ctx.terminals.spawn(owner, { type: 'slow' })
     const pendingFailure = expect(pending).rejects.toThrow('PTY spawn and rollback both failed')
@@ -402,7 +402,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       }),
     })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
 
     const pending = ctx.terminals.spawn(owner, { type: 'cleanup-failing' })
     await started.promise
@@ -438,7 +438,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
       spawn: () => ++count === 1 ? firstGate.promise : secondGate.promise,
     })
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const first = ctx.terminals.spawn(owner, { type: 'slow', name: 'one' })
     const second = ctx.terminals.spawn(owner, { type: 'slow', name: 'two' })
     firstGate.resolve(new StubSession())
@@ -458,7 +458,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
   it('omits optional pid metadata when a backend has no process id', async () => {
     const ctx = await harness()
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const session = new StubSession()
     Object.defineProperty(session, 'pid', { value: undefined })
     ctx.terminals.registerBackend({ type: 'virtual', spawn: () => Promise.resolve(session) })
@@ -468,7 +468,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
   it('reports rollback and close failures without publishing false success', async () => {
     const ctx = await harness()
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const failedSpawn = new StubSession()
     failedSpawn.rejectClose = true
     let ownerDisposal = Promise.resolve()
@@ -494,7 +494,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     await expect(ownerDisposal).rejects.toThrow('failed to clean up PTY lifecycle')
 
     const nextOwner = stubAgent(ctx, 'next')
-    ctx.agents.register(nextOwner)
+    await ctx.agents.register(nextOwner)
     const b = backend('bad-close')
     ctx.terminals.registerBackend(b.provider)
     const created = await ctx.terminals.spawn(nextOwner, { type: 'bad-close' })
@@ -506,7 +506,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
   it('joins an already-running close and refuses new sends while closing', async () => {
     const ctx = await harness()
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const b = backend()
     ctx.terminals.registerBackend(b.provider)
     const created = await ctx.terminals.spawn(owner, { type: 'stub' })
@@ -525,7 +525,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     const b = backend()
     const disposeBackend = ctx.terminals.registerBackend(b.provider)
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     const created = await ctx.terminals.spawn(owner, { type: 'stub' })
     disposeBackend()
     expect(ctx.terminals.listBackends()).toEqual([])
@@ -542,8 +542,8 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     ctx.terminals.registerBackend(b.provider)
     const first = stubAgent(ctx, 'first')
     const second = stubAgent(ctx, 'second')
-    ctx.agents.register(first)
-    ctx.agents.register(second)
+    await ctx.agents.register(first)
+    await ctx.agents.register(second)
     const a = await ctx.terminals.spawn(first, { type: 'stub' })
     await ctx.terminals.spawn(second, { type: 'stub' })
     expect(await ctx.terminals.kill(first, a.sessionId)).toBe(true)
@@ -561,7 +561,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     const b = backend()
     ctx.terminals.registerBackend(b.provider)
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     await ctx.terminals.spawn(owner, { type: 'stub' })
     b.sessions[0]!.rejectClose = true
     const internal = service as unknown as {
@@ -587,7 +587,7 @@ describe('TerminalSessionService ownership and lifecycle', () => {
     const b = backend()
     service.registerBackend(b.provider)
     const owner = stubAgent(ctx, 'owner')
-    ctx.agents.register(owner)
+    await ctx.agents.register(owner)
     await service.spawn(owner, { type: 'stub' })
     b.sessions[0]!.rejectClose = true
     const internal = service as unknown as {

@@ -5,7 +5,7 @@ import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ISession } from '@deepseek-ai/dsh-api-session-controller/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import {
-  RemoteError, SlotTestRuntime, TestRemote, stubSettingsScope, usePinnedBrowserLanguages,
+  SlotTestRuntime, TestRemote, stubSettingsScope, usePinnedBrowserLanguages,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionBehaviorOverrides } from '@deepseek-ai/dsh-client-test-runtime'
 import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
@@ -13,9 +13,10 @@ import {
   apply as applyConversation, inject as injectConversation,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import {
-  apply as applyChat, inject as injectChat, type ChatViewInjected, type DetailsInjected,
+  apply as applyChat, inject as injectChat, type ChatViewInjected,
 } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { SessionSeq, type SessionId } from '@deepseek-ai/dsh-session/types'
+import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import { createChatStore } from '../src/client/stores.ts'
 
 usePinnedBrowserLanguages('zh-CN')
@@ -48,14 +49,20 @@ function sessionFakeFor() {
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
-  const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
+  const layout = { closeRightbar: vi.fn(), openRightbar: vi.fn() }
   runtime.ctx.provide('layout', layout as never)
+  const sidebarRight = { openResource: vi.fn<(address: string) => void>() }
+  runtime.ctx.provide('sidebarRight', sidebarRight as never)
   const openWorkspacePath = vi.fn<ClientRemote['session']['openWorkspacePath']>(
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
   new TestRemote(runtime.ctx, { session: { openWorkspacePath } })
   runtime.ctx.provide('uiWorkspace', {
-    connectWorkspace: vi.fn(async () => ROOT),
+    openWorkspace: vi.fn(async (_workspaceId: WorkspaceId, beforeOpen: (id: SessionId) => void) => {
+      beforeOpen(ROOT)
+      runtime.sessions.open(ROOT)
+    }),
+    openSession: (id: SessionId) => { runtime.sessions.open(id) },
   } as never)
   const session = sessionFakeFor()
   await runtime.sessions.add({
@@ -67,8 +74,7 @@ async function bench() {
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   await runtime.root.declare({
-    'conversation': { kind: 'single', scope: 'session-maybe' },
-    'details': { kind: 'single', scope: 'session' },
+    'main': { kind: 'keyed', scope: 'root' },
   }, (_props: { renderSlot?: unknown }) => null)
   await runtime.mount({ inject: [...injectConversation], apply: applyConversation })
   await runtime.mount({ inject: [...injectChat], apply: applyChat })
@@ -83,7 +89,7 @@ async function bench() {
     ) => ChatViewInjected)(id, instance.actions)
     return { instance, injected }
   }
-  return { runtime, layout, openWorkspacePath, session, chatViewApi }
+  return { runtime, layout, openWorkspacePath, sidebarRight, session, chatViewApi }
 }
 
 describe('Chat inject API', () => {
@@ -112,28 +118,61 @@ describe('Chat inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('writes Chat selection before opening details', async () => {
-    const b = await bench()
-    const { instance, injected } = b.chatViewApi(ROOT)
-    injected.openDetails({ turnSeq: 2, callId: 'c1' })
-    expect(instance.store.getSnapshot().selection).toEqual({ turnSeq: 2, callId: 'c1' })
-    expect(b.layout.openDetails).toHaveBeenCalledOnce()
-    expect(b.runtime.storeOf('details', ROOT)).toBe(instance)
-    expect(b.runtime.storeOf('conversation.session', ROOT)).not.toBe(instance)
-    await b.runtime.dispose()
-  })
-
-  it('resolves file paths against the Session cwd and preserves failures', async () => {
+  it('addresses file paths under the Session\'s scope and opens them in the right Sidebar', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(ROOT)
     await injected.openFile('src/a.ts')
-    expect(b.openWorkspacePath).toHaveBeenCalledWith({ path: '/proj/src/a.ts' })
+    // Files stay in the product: a relative path is handed to the Sidebar as an
+    // address under this session's scope, not to a desktop opener.
+    expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+    expect(b.openWorkspacePath).not.toHaveBeenCalled()
 
-    b.openWorkspacePath.mockResolvedValueOnce({
-      ok: false,
-      error: new RemoteError('gateway/internal', 'xdg-open is not available', {}),
-    })
-    await expect(injected.openFile('src/b.ts')).rejects.toThrow('path open failed: xdg-open is not available')
+    // An absolute path inside the session's workspace is the same session-relative address.
+    await injected.openFile('/proj/src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts')
+
+    // A name a URL would otherwise mangle survives the round trip.
+    await injected.openFile('src/a b#c.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a%20b%23c.ts')
+
+    // A line travels as the `file` type's navigation parameter, not in the address.
+    await injected.openFile('src/a.ts', { line: 7 })
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-1/src/a.ts', { params: { line: 7 } })
+    await b.runtime.dispose()
+  })
+
+  it('routes sent skill previews through the viewed Session source and tolerates an absent provider', async () => {
+    const b = await bench()
+    const { injected } = b.chatViewApi(ROOT)
+    injected.openSkill('review')
+    const openReference = vi.fn(() => true)
+    const sessionOf = vi.fn(() => ({ openReference }))
+    b.runtime.ctx.provide('inputTriggers', { sessionOf } as never)
+    injected.openSkill('review')
+    expect(sessionOf).toHaveBeenCalledWith(b.runtime.sessions.scope(ROOT))
+    expect(openReference).toHaveBeenCalledWith('skill', { ref: '/review' })
+    vi.spyOn(b.runtime.sessions, 'scope').mockReturnValueOnce(undefined)
+    injected.openSkill('review')
+    expect(openReference).toHaveBeenCalledTimes(1)
+    await b.runtime.dispose()
+  })
+
+  it('keeps a relative path under the Session without a cwd, and addresses a path outside the workspace absolutely', async () => {
+    const b = await bench()
+    const NO_CWD = 'root-2' as SessionId
+    await b.runtime.sessions.add({
+      id: NO_CWD,
+      summary: { title: 'N', displayTitle: 'N' },
+      session: sessionFakeFor(),
+    }, { current: false })
+    const { injected } = b.chatViewApi(NO_CWD)
+    // The Host resolves the relative path against the root it holds for the
+    // Session; the Client need not know it.
+    await injected.openFile('src/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenCalledWith('dsh-resource://file/session/root-2/src/a.ts')
+    // An absolute path outside every known root still names its Session.
+    await injected.openFile('/abs/a.ts')
+    expect(b.sidebarRight.openResource).toHaveBeenLastCalledWith('dsh-resource://file/session/root-2//abs/a.ts')
     await b.runtime.dispose()
   })
 
@@ -149,17 +188,6 @@ describe('Chat inject API', () => {
     await b.runtime.dispose()
   })
 
-  it('closes details while sharing selection through the Chat store', async () => {
-    const b = await bench()
-    const entry = b.runtime.slots.entries('details')[0]!
-    const injected = (entry.inject as unknown as () => DetailsInjected)()
-    expect(Object.keys(injected)).toEqual(['closeDetails'])
-    injected.closeDetails()
-    expect(b.layout.closeDetails).toHaveBeenCalledOnce()
-    expect(b.runtime.storeOf('details', ROOT)).toBe(b.runtime.storeOf('conversation.view', ROOT))
-    await b.runtime.dispose()
-  })
-
   it('owns image loading, scroll memory, and optional closing-file mentions', async () => {
     const b = await bench()
     const { injected } = b.chatViewApi(ROOT)
@@ -170,7 +198,7 @@ describe('Chat inject API', () => {
     const forClosing = vi.fn(() => mentions)
     b.runtime.ctx.provide('chatFileMentions', { forClosing } as never)
     expect(injected.fileMentions(owner)).toBe(mentions)
-    expect(forClosing).toHaveBeenCalledWith(owner)
+    expect(forClosing).toHaveBeenCalledWith(owner, ROOT)
 
     expect(injected.chatScroll.read()).toBeNull()
     const position = { anchorKey: 'node-1', anchorTop: 4, scrollTop: 12 }

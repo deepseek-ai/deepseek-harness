@@ -34,6 +34,8 @@
  *                        handler is in flight (it has streamed its chunk). A test
  *                        polls for this file to cancel on a CONDITION rather than
  *                        an arbitrary timeout (subprocess cold-start is variable).
+ * - `MOCK_PROMPT_HOLD` — if set, prompt waits while this file exists; removing
+ *                        it releases the response without a timing assumption.
  * - `MOCK_MISSING_SESSION_ID` — if `1`, return a malformed empty `session/new`
  *                        response to exercise startup rollback.
  * - `MOCK_FLUSH_ON_EOF` — if set, on stdin EOF the agent takes an async beat
@@ -59,7 +61,8 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { existsSync, writeFileSync } from 'node:fs'
+import { existsSync, watch, writeFileSync } from 'node:fs'
+import { dirname } from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import {
   agent as createAcpAgentApp,
@@ -141,6 +144,19 @@ function makeAgent() {
     },
     async prompt(params: PromptRequest, conn: AgentContext): Promise<PromptResponse> {
       if (CRASH_ON_PROMPT) process.exit(1)
+      const hold = process.env.MOCK_PROMPT_HOLD
+      if (hold !== undefined) {
+        const released = Promise.withResolvers<undefined>()
+        const check = (): void => { if (!existsSync(hold)) released.resolve(undefined) }
+        const watcher = watch(dirname(hold), check)
+        watcher.on('error', released.reject)
+        try {
+          check()
+          await released.promise
+        } finally {
+          watcher.close()
+        }
+      }
       if (WANT_PERMISSION) {
         // Ask the client to approve before answering; honor its decision. Under
         // MOCK_NO_ALLOW the only options are reject-shaped, so an `allow`-policy

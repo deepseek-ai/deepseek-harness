@@ -12,7 +12,7 @@
       "path": "../../core/session"
     },
     {
-      "path": "../../code-runtime/code-runtime"
+      "path": "../../ptc-runtime/ptc-runtime"
     },
     {
       "path": "../../../vendor/cosmokit"
@@ -37,6 +37,12 @@
     },
     {
       "path": "../../runtime-diagnostics/invariants"
+    },
+    {
+      "path": "../../sandbox/sandbox"
+    },
+    {
+      "path": "../../sandbox/sandbox-policy"
     }
   ]
 }

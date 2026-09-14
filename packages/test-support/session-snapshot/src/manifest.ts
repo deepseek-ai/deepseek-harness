@@ -25,6 +25,8 @@ export interface SnapshotHeaderManifest {
   childToolSchemas?: number[]
   /** Legitimate changed-header count after the initial request header. */
   changes?: number
+  /** Legitimate later `system/message` count (replacements or in-history appends) after the initial system prompt. */
+  promptChanges?: number
 }
 
 /** Replay facts that cannot be reconstructed from successful model chunks. */
@@ -45,8 +47,8 @@ export interface SnapshotWorkspaceManifest {
   setup?: string
   /** Whether `workspace.expected/` owns the complete final world state. */
   final?: true
-  /** Place the generated cwd under the user's home instead of a temporary root. */
-  parent?: 'home'
+  /** Place the generated cwd outside automatically writable temporary roots. */
+  parent?: 'outside-temp'
 }
 
 /** Controller input that cannot enter a session because admission rejects it. */
@@ -248,12 +250,15 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
         'childSystemPrompts',
         'childToolSchemas',
         'changes',
+        'promptChanges',
       ], 'manifest.header')
       if (value.pin !== undefined && value.pin !== true) {
         throw new Error('manifest.header.pin must equal true when present')
       }
-      if (value.changes !== undefined && (!Number.isInteger(value.changes) || Number(value.changes) < 0)) {
-        throw new Error('manifest.header.changes must be a non-negative integer')
+      for (const field of ['changes', 'promptChanges'] as const) {
+        if (value[field] !== undefined && (!Number.isInteger(value[field]) || Number(value[field]) < 0)) {
+          throw new Error(`manifest.header.${field} must be a non-negative integer`)
+        }
       }
       header = {
         class: name(value.class, 'manifest.header.class'),
@@ -271,6 +276,7 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
           ? {}
           : { childToolSchemas: positiveIndexes(value.childToolSchemas, 'manifest.header.childToolSchemas') }),
         ...(value.changes === undefined ? {} : { changes: Number(value.changes) }),
+        ...(value.promptChanges === undefined ? {} : { promptChanges: Number(value.promptChanges) }),
       }
     }
 
@@ -314,13 +320,13 @@ export function parseSnapshotManifest(source: string, path = 'snapshot.yml'): Sn
       if (value.final !== undefined && value.final !== true) {
         throw new Error('manifest.workspace.final must equal true when present')
       }
-      if (value.parent !== undefined && value.parent !== 'home') {
-        throw new Error('manifest.workspace.parent must equal home')
+      if (value.parent !== undefined && value.parent !== 'outside-temp') {
+        throw new Error('manifest.workspace.parent must equal outside-temp')
       }
       workspace = {
         ...(value.setup === undefined ? {} : { setup: name(value.setup, 'manifest.workspace.setup') }),
         ...(value.final === true ? { final: true as const } : {}),
-        ...(value.parent === 'home' ? { parent: 'home' as const } : {}),
+        ...(value.parent === 'outside-temp' ? { parent: 'outside-temp' as const } : {}),
       }
       if (Object.keys(workspace).length === 0) throw new Error('manifest.workspace must not be empty')
     }

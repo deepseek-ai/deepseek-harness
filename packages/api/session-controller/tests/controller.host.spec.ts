@@ -74,7 +74,7 @@ describe('SessionController facade', () => {
       status: 'idle',
       ctx,
     } as Agent
-    ctx.agents.register(agent)
+    await ctx.agents.register(agent)
     const resolveUploadAgent = (id: SessionId): Promise<Agent> => {
       if (uploadResolver === undefined) throw new Error('file upload resolver was not registered')
       return uploadResolver(id)

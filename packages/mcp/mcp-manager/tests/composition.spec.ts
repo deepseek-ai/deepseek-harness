@@ -20,24 +20,27 @@ import FileSettingsProvider from '@deepseek-ai/dsh-settings-file'
 
 const { MockClient } = vi.hoisted(() => {
   class MockClient {
+    transport: object | undefined = {}
     onclose: (() => void) | undefined
     connect = vi.fn(async () => {})
     close = vi.fn(async function (this: { onclose?: () => void }) { this.onclose?.() })
-    request = vi.fn(async (request: { method: string }) => {
-      if (request.method === 'tools/list') {
-        return { tools: [{ name: 'remote', inputSchema: { type: 'object' } }], nextCursor: undefined }
-      }
-      throw new Error(`unexpected MCP request: ${request.method}`)
-    })
-    setNotificationHandler = vi.fn()
+    listTools = vi.fn(async () => ({ tools: [{ name: 'remote', inputSchema: { type: 'object' } }], nextCursor: undefined }))
+    getServerCapabilities = () => ({ tools: {} })
+    getInstructions(): string | undefined { return undefined }
+    listResources = async () => ({ resources: [] })
     getServerVersion = (): { name: string; version: string } => ({ name: 'fixture', version: '1.0.0' })
   }
   return { MockClient }
 })
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ Client: MockClient }))
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({ StdioClientTransport: vi.fn(function () { return {} }) }))
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({ StreamableHTTPClientTransport: vi.fn(function () { return {} }) }))
+vi.mock('@modelcontextprotocol/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
+  Client: MockClient,
+  StreamableHTTPClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+}))
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
+  StdioClientTransport: vi.fn(function () { return { close: () => Promise.resolve() } }),
+}))
 
 import McpServerManager from '@deepseek-ai/dsh-mcp-manager/src/index.ts'
 

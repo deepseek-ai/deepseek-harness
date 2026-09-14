@@ -16,6 +16,13 @@ const shared = {
 export default defineConfig([
   {
     ...shared,
+    entry: { 'terminal-io.worker': 'terminal-io/terminal-io.worker.ts' },
+    outDir: '.dsh-build/terminal-io',
+    clean: true,
+    tsconfig: 'tsconfig.host.json',
+  },
+  {
+    ...shared,
     entry: { 'reconnect.worker': 'active-stream-reconnect/reconnect.worker.client.ts' },
     outDir: '.dsh-build/active-stream-reconnect',
     clean: true,

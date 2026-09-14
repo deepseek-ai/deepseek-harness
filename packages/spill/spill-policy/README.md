@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-spill-policy` keeps oversized plain-text tool results out of the model's context: when a final result exceeds `maxInlineBytes`, it saves the full text through `ctx.spillStore` and replaces the model-facing result with a bounded head/tail preview plus the backend's locator and retrieval guidance, which the model can use to read or grep the spill file. It registers no service and owns no storage or preview mechanics — storage is the mounted `SpillStore` backend and previews come from `dsh-output-retention`; it only decides when to spill and composes the notice. It is opt-in and best-effort: omitted `maxInlineBytes` disables it entirely, and a spill failure leaves the original result visible. A second arm applies the same cap to the durable log copy of `run_code` sub-call results, so replay and UIs never grow unbounded either.
+Mount this package when oversized plain-text tool results should stay out of model context. Results above `maxInlineBytes` become a bounded head/tail preview with a locator and retrieval guidance, while the full text remains available through the configured spill backend. Spill failures leave the original result visible, and omitting `maxInlineBytes` disables the policy. The same limit bounds durable `run_code` sub-call log copies without changing the value returned to the program.
 
 ## Table of Contents
 

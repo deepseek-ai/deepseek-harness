@@ -22,11 +22,10 @@ Set `DEEPSEEK_BASE_URL` for a compatible proxy, `DSH_MODEL` for the script's def
 The shipped [`@deepseek-ai/dsh-sdk-minimal` bundle](../../../packages/bundle/sdk-minimal/README.md) is the complete explicit Cordis tree for this mode. It exposes exactly:
 
 - owner-scoped persistent `bash` on Linux/macOS or `pwsh` on Windows
-- `str_replace_editor` with `view`, `create`, `str_replace`, and `insert`
 
-The bundle does not include `dsh-base`, so every additional row is an explicit profile change. Runtime context, local instruction discovery, compaction, settings, managed credentials, telemetry, Web tools, subagents, and the full default tool roster are absent. The tree retains SDK startup and JSON-RPC serving, one environment-configured DeepSeek adapter, local execution, and JSONL persistence.
+The bundle does not include `dsh-base`, so every additional row is an explicit profile change. Runtime context, filesystem tools, local instruction discovery, compaction, settings, managed credentials, telemetry, Web tools, subagents, and the full default tool roster are absent. The tree retains SDK startup and JSON-RPC serving, one environment-configured DeepSeek adapter, local execution, and JSONL persistence.
 
-The persistent PTY and editor can modify any path available to the runtime process, so use a disposable checkout or container.
+The persistent PTY can modify any path available to the runtime process, so use a disposable checkout or container.
 
 ## Add plugins
 

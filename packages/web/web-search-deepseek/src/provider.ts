@@ -27,10 +27,9 @@ import type {
 export const DEEPSEEK_PROVIDER_ID = 'deepseek-official'
 
 /**
- * Default endpoint: DeepSeek's Anthropic-compatible API, `/v1` included
- * (`/messages` is appended). This is NOT the chat-completions base
- * (`https://api.deepseek.com`) `@deepseek-ai/dsh-llm-deepseek` uses, so this
- * provider does NOT reuse `$DEEPSEEK_BASE_URL` — only the API key is shared.
+ * Default auxiliary-search endpoint, including `/v1`; `/messages` is appended.
+ * `$DEEPSEEK_SEARCH_BASE_URL` overrides it independently of the conversation
+ * adapter's endpoint. Both providers share the API key.
  */
 export const DEEPSEEK_DEFAULT_BASE_URL = 'https://api.deepseek.com/anthropic/v1'
 

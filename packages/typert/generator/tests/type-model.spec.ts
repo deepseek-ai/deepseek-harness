@@ -622,6 +622,227 @@ describe('WorkspaceAnalyzer', { timeout: 60_000 }, () => {
     )
   })
 
+  describe('package-local forwarding modules', () => {
+    const hostPayload = '@fixture/host:packages/host/src/models.ts#Payload'
+
+    function consumerPayloadTarget(root: string): TypeTargetModel | undefined {
+      const host = new WorkspaceAnalyzer({ root }).analyze().faces.find(face => face.face === 'host')
+      const schema = host?.packages.find(candidate => candidate.name === '@fixture/consumer')?.schemas[0]
+      const consumer = host?.graph.declarations.find(candidate => candidate.id === schema?.symbol)
+      const value = consumer?.kind === 'interface'
+        ? consumer.members.find(member => member.name === 'value')
+        : undefined
+      const node = value?.kind === 'property'
+        ? host?.graph.nodes.find(candidate => candidate.id === value.type)
+        : undefined
+      return node?.kind === 'reference' ? node.target : undefined
+    }
+
+    it('follows a named re-export to the original declaration', () => {
+      const root = copyFixture('typert-forward-named-')
+      addSameFacePackage(root, './forward.ts', 'Payload', {
+        'forward.ts': "export type { Payload } from '@fixture/host/models'\n",
+      })
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('follows renamed hops through several forwarding modules', () => {
+      const root = copyFixture('typert-forward-chain-')
+      addSameFacePackage(root, './outer.ts', 'Forwarded', {
+        'outer.ts': "export type { Inner as Forwarded } from './inner.ts'\n",
+        'inner.ts': "export type { Payload as Inner } from '@fixture/host/models'\n",
+      })
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('follows an import re-exported without a module specifier', () => {
+      const root = copyFixture('typert-forward-import-export-')
+      addSameFacePackage(root, './forward.ts', 'Payload', {
+        'forward.ts': "import type { Payload as Imported } from '@fixture/host/models'\nexport type { Imported as Payload }\n",
+      })
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('follows a star re-export', () => {
+      const root = copyFixture('typert-forward-star-')
+      addSameFacePackage(root, './forward.ts', 'Payload', {
+        'forward.ts': "export * from '@fixture/host/models'\n",
+      })
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('follows a namespace import of the forwarding module', () => {
+      const root = copyFixture('typert-forward-namespace-')
+      addSameFacePackage(root, '@fixture/host/models', 'Payload', {
+        'forward.ts': "export type { Payload } from '@fixture/host/models'\n",
+      })
+      const sourcePath = join(root, 'packages/consumer/src/index.ts')
+      writeFileSync(
+        sourcePath,
+        readFileSync(sourcePath, 'utf8')
+          .replace("import type { Payload } from '@fixture/host/models'", "import type * as Forward from './forward.ts'")
+          .replace('readonly value: Payload', 'readonly value: Forward.Payload'),
+      )
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('rejects a forwarded type absent from the package export', () => {
+      const root = copyFixture('typert-forward-private-')
+      writeFileSync(
+        join(root, 'packages/host/src/private.ts'),
+        'export interface PrivateHost { readonly value: string }\n',
+      )
+      addSameFacePackage(root, './forward.ts', 'PrivateHost', {
+        'forward.ts': "export type { PrivateHost } from '@fixture/host/private'\n",
+      })
+
+      expect(() => new WorkspaceAnalyzer({ root }).analyze()).toThrow(
+        'package reference PrivateHost is not exported by @fixture/host at ./private',
+      )
+    })
+
+    it('rejects a forwarding module that reaches another package by relative path', () => {
+      const root = copyFixture('typert-forward-relative-')
+      addSameFacePackage(root, './forward.ts', 'Payload', {
+        'forward.ts': "export type { Payload } from '../../host/src/models.ts'\n",
+      })
+
+      expect(() => new WorkspaceAnalyzer({ root }).analyze()).toThrow(
+        'reference to Payload crosses a package without an explicit package import',
+      )
+    })
+
+    it('follows a forwarding module across faces', () => {
+      const root = copyFixture('typert-forward-cross-face-')
+      writeFileSync(
+        join(root, 'packages/client/src/forward.ts'),
+        "export type { Payload as ForwardedPayload } from '@fixture/host'\n",
+      )
+      const sourcePath = join(root, 'packages/client/src/index.ts')
+      writeFileSync(
+        sourcePath,
+        readFileSync(sourcePath, 'utf8')
+          .replace(
+            "import type { HostAgent, Payload } from '@fixture/host'",
+            "import type { HostAgent } from '@fixture/host'\nimport type { ForwardedPayload as Payload } from './forward.ts'",
+          ),
+      )
+      const model = new WorkspaceAnalyzer({ root }).analyze()
+      const client = model.faces.find(face => face.face === 'client')
+      const payload = client?.graph.nodes.find(candidate =>
+        candidate.kind === 'reference' && candidate.name === 'Payload' && candidate.id.includes('packages/client/'))
+
+      expect(payload?.kind === 'reference' ? payload.target : undefined).toEqual({
+        kind: 'cross-face',
+        face: 'host',
+        package: '@fixture/host',
+        subpath: '.',
+        name: 'Payload',
+      })
+      expect(model.crossFaceLinks).toContainEqual({
+        fromFace: 'client',
+        fromPackage: '@fixture/client',
+        toFace: 'host',
+        toPackage: '@fixture/host',
+        subpath: '.',
+        name: 'Payload',
+      })
+    })
+
+    it('prefers an explicit re-export over a star edge that loops back', () => {
+      const root = copyFixture('typert-forward-cycle-explicit-')
+      addSameFacePackage(root, './outer.ts', 'Payload', {
+        'outer.ts': "export * from './inner.ts'\n",
+        'inner.ts': "export * from './outer.ts'\nexport type { Payload } from '@fixture/host/models'\n",
+      })
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('follows a valid renamed route after another route reaches the same module', () => {
+      const root = copyFixture('typert-forward-shared-module-')
+      addSameFacePackage(root, './outer.ts', 'Payload', {
+        'outer.ts': "export * from './left.ts'\nexport * from './right.ts'\n",
+        'left.ts': "export { Left as Payload } from './shared.ts'\n",
+        'right.ts': "export { Right as Payload } from './shared.ts'\n",
+        'shared.ts': [
+          "export { Payload as Left } from './relative.ts'",
+          "export type { Payload as Right } from '@fixture/host/models'",
+          '',
+        ].join('\n'),
+        'relative.ts': "export type { Payload } from '../../host/src/models.ts'\n",
+      })
+
+      expect(consumerPayloadTarget(root)).toEqual({ kind: 'declaration', symbol: hostPayload })
+    })
+
+    it('rejects a forwarding cycle whose only exit crosses a package by relative path', () => {
+      const root = copyFixture('typert-forward-cycle-relative-')
+      addSameFacePackage(root, './outer.ts', 'Payload', {
+        'outer.ts': "export * from './inner.ts'\n",
+        'inner.ts': "export * from './outer.ts'\nexport type { Payload } from '../../host/src/models.ts'\n",
+      })
+
+      expect(() => new WorkspaceAnalyzer({ root }).analyze()).toThrow(
+        'reference to Payload crosses a package without an explicit package import',
+      )
+    })
+
+    it('rejects a namespace re-export in a forwarding module', () => {
+      const root = copyFixture('typert-forward-namespace-export-')
+      addSameFacePackage(root, '@fixture/host/models', 'Payload', {
+        'forward.ts': "export * as models from '@fixture/host/models'\n",
+      })
+      const sourcePath = join(root, 'packages/consumer/src/index.ts')
+      writeFileSync(
+        sourcePath,
+        readFileSync(sourcePath, 'utf8')
+          .replace("import type { Payload } from '@fixture/host/models'", "import type * as Forward from './forward.ts'")
+          .replace('readonly value: Payload', 'readonly value: Forward.models.Payload'),
+      )
+
+      expect(() => new WorkspaceAnalyzer({ root }).analyze()).toThrow(
+        'reference to Payload crosses a package without an explicit package import',
+      )
+    })
+
+    it('rejects a forwarding module that exports a namespace import binding', () => {
+      const root = copyFixture('typert-forward-namespace-binding-')
+      addSameFacePackage(root, '@fixture/host/models', 'Payload', {
+        'forward.ts': "import type * as Models from '@fixture/host/models'\nexport type { Models }\n",
+      })
+      const sourcePath = join(root, 'packages/consumer/src/index.ts')
+      writeFileSync(
+        sourcePath,
+        readFileSync(sourcePath, 'utf8')
+          .replace("import type { Payload } from '@fixture/host/models'", "import type { Models } from './forward.ts'")
+          .replace('readonly value: Payload', 'readonly value: Models.Payload'),
+      )
+
+      expect(() => new WorkspaceAnalyzer({ root }).analyze()).toThrow(
+        'reference to Payload crosses a package without an explicit package import',
+      )
+    })
+
+    it('produces one model regardless of batch size or package order', () => {
+      const root = copyFixture('typert-forward-batches-')
+      addSameFacePackage(root, './forward.ts', 'Payload', {
+        'forward.ts': "export type { Payload } from '@fixture/host/models'\n",
+      })
+      const packages = ['@fixture/host', '@fixture/client', '@fixture/consumer']
+      const direct = new WorkspaceAnalyzer({ root, packages }).analyze()
+
+      expect(new WorkspaceAnalyzer({ root, packages }).analyzeInBatches(1)).toEqual(direct)
+      expect(new WorkspaceAnalyzer({ root, packages }).analyzeInBatches(2)).toEqual(direct)
+      expect(new WorkspaceAnalyzer({ root, packages: [...packages].reverse() }).analyzeInBatches(2)).toEqual(direct)
+    })
+  })
+
   it('rejects TypeScript projects with source diagnostics before modeling them', () => {
     const root = copyFixture('typert-invalid-project-')
     const sourcePath = join(root, 'packages/host/src/index.ts')
@@ -1280,9 +1501,15 @@ function configureDualRuntimeClient(root: string, splitProjects: boolean): void 
   writeFileSync(clientAggregatePath, `${JSON.stringify(clientAggregate, null, 2)}\n`)
 }
 
-function addSameFacePackage(root: string, specifier: string, importedName: string): void {
+function addSameFacePackage(
+  root: string,
+  specifier: string,
+  importedName: string,
+  files: Readonly<Record<string, string>> = {},
+): void {
   const packageRoot = join(root, 'packages/consumer')
   mkdirSync(join(packageRoot, 'src'), { recursive: true })
+  for (const [file, source] of Object.entries(files)) writeFileSync(join(packageRoot, 'src', file), source)
   writeFileSync(join(packageRoot, 'package.json'), JSON.stringify({
     name: '@fixture/consumer',
     private: true,

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The command attachment envelope over the BUILT client graph (real
-// bundles via AppWebEntry, keyless fixture Connection RPC): an enter
+// bundles via AppWebEntry, keyless RemoteMock transport): an enter
 // submission carrying composer attachments resolves only through a command whose
 // descriptor declares `input.attachments`. A non-declaring command refuses with
 // one composer error banner and everything retained; a declaring command
@@ -21,7 +21,7 @@ async function freshComposer(): Promise<HTMLElement> {
   fireEvent.click(start)
   return await waitFor(() => {
     const surface = document.querySelector<HTMLElement>(
-      '[data-composer-input][data-placeholder="Describe what you want to build... / commands, @ files or sessions"]',
+      '[data-composer-input][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]',
     )
     if (surface === null) throw new Error('composer surface missing')
     return surface

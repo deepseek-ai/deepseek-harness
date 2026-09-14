@@ -55,6 +55,7 @@ function validateReleasedV2Artifact(
   artifact: SessionFormatArtifact,
   mode: 'current' | 'physical',
   knownEventTypes?: ReadonlySet<string>,
+  relationshipHeaderVersion: number = artifact.header.version,
 ): void {
   assertReleasedV2Header(artifact.header)
   const cut = sessionFormatCount(artifact.inheritedEventCount, 'format v2 inherited event count')
@@ -95,7 +96,9 @@ function validateReleasedV2Artifact(
     throw new SessionFormatError('format v2 unseeded Session contains an inherited end-seed marker')
   }
   if (mode === 'current') {
-    assertReleasedArtifactRelationships(artifact, RELEASED_V2_RELATIONSHIP_EXTENSIONS)
+    assertReleasedArtifactRelationships({
+      ...artifact, header: { ...artifact.header, version: relationshipHeaderVersion },
+    }, RELEASED_V2_RELATIONSHIP_EXTENSIONS)
   }
 }
 
@@ -139,13 +142,15 @@ export function assertReleasedV2Keys(
  * Restore and validate one decoded released-v2 artifact.
  * @param artifact - detached vocabulary-restored artifact.
  * @param knownEventTypes - event types understood by the installed current Session package.
+ * @param relationshipHeaderVersion - logical generation whose version-sensitive relationships are checked.
  * @returns the same validated artifact.
  */
 export function restoreReleasedV2Artifact(
   artifact: SessionFormatArtifact,
   knownEventTypes: ReadonlySet<string>,
+  relationshipHeaderVersion: number = artifact.header.version,
 ): SessionFormatArtifact {
-  validateReleasedV2Artifact(artifact, 'current', knownEventTypes)
+  validateReleasedV2Artifact(artifact, 'current', knownEventTypes, relationshipHeaderVersion)
   return artifact
 }
 

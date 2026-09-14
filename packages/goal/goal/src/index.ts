@@ -252,17 +252,18 @@ export class GoalService extends TypertRemoteService {
     this.resolved = {
       defaultMaxGoalRounds: resolveMaxGoalRounds(config.defaultMaxGoalRounds ?? 256),
     }
-    ctx.on('agent/session-start', ({ agent }) => {
-      this.runtimeState(agent.session).activation = 'disarmed'
+    ctx.on('agent/created', ({ agent }) => {
+      this.setActivation(agent.session, 'disarmed')
     })
     ctx.sessionProjections.register(goalProjectionDefinition)
     ctx.on('session/event', (session, event) => {
       if (event.type !== 'goal/change') return
       const runtime = this.runtimeState(session)
-      runtime.activation = runtime.pendingActivation !== undefined
+      const activation = runtime.pendingActivation !== undefined
         && SessionSeq(runtime.pendingActivation.offset) === event.seq
         ? runtime.pendingActivation.activation
         : 'disarmed'
+      this.setActivation(session, activation)
     })
   }
 
@@ -272,6 +273,7 @@ export class GoalService extends TypertRemoteService {
    * @returns a fresh view or `undefined` when no goal is current.
    * @throws {@link GoalError} when the agent is not the registry's live instance.
    */
+  @Remote('get')
   get(agent: Agent): GoalView | undefined {
     this.assertLive(agent)
     return this.view(this.state(agent.session), this.runtimeState(agent.session))
@@ -286,8 +288,8 @@ export class GoalService extends TypertRemoteService {
    */
   disarm(agent: Agent): GoalView | undefined {
     this.assertLive(agent)
+    this.setActivation(agent.session, 'disarmed')
     const runtime = this.runtimeState(agent.session)
-    runtime.activation = 'disarmed'
     return this.view(this.state(agent.session), runtime)
   }
 
@@ -488,6 +490,28 @@ export class GoalService extends TypertRemoteService {
     }
     this.runtimeStates.set(session, runtime)
     return runtime
+  }
+
+  /** Publish one process-local activation edge when it actually changes. */
+  private setActivation(session: Session, activation: GoalActivation): void {
+    const runtime = this.runtimeState(session)
+    if (runtime.activation === activation) return
+    runtime.activation = activation
+    const state = this.ctx.sessionProjections.stateOf(session, 'goal')
+    /* v8 ignore next -- static inject requires the projection registry before this service activates. */
+    if (state === undefined) return
+    if (state.failure !== null) return
+    const goal = this.view(state.current, runtime)
+    this.ctx.emit('goal/activation-changed', {
+      sessionId: session.id,
+      ...goal === undefined ? {} : {
+        goal: {
+          id: goal.id,
+          revision: goal.revision,
+          activation: goal.activation,
+        },
+      },
+    })
   }
 
   /** Build a new revision with one replacement phase. */

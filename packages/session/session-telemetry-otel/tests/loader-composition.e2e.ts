@@ -73,7 +73,7 @@ function eventTypes(captures: OtlpCapture[]): string[] {
 }
 
 describe('session-telemetry-otel through the production headless profile', () => {
-  it('rejects FULL before any session can be uploaded', async () => {
+  it('continues the headless task without telemetry when FULL is rejected', async () => {
     const { stdout, stderr } = await runLoaderSmoke({
       label: 'session-telemetry-otel rejected FULL loader smoke',
       tempDirPrefix: 'telemetry-otel-full-e2e-',
@@ -82,8 +82,8 @@ describe('session-telemetry-otel through the production headless profile', () =>
       configPath,
       tsconfigPath: repoTsconfig,
       env: { DSH_TELEMETRY_E2E_MODE: 'FULL' },
-      expectedExitCode: 1,
     })
+    expect(stdout + stderr).toContain('warning: 1 entry did not activate')
     expect(stdout + stderr).toContain('FULL')
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 

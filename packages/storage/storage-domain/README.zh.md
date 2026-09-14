@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-storage-domain` 是使用存储家族的类型化方式：由所属包声明一次领域——其名称、格式版本与 zod 记录 schema——宿主消费方在已路由后端上打开它，并通过 `ctx.storageDomain` 读写记录。读取同步取自具有最终决定权的内存状态；每次写入在 resolve 前都已持久，并发出 `domain/changed` 事件，因此读取永远不会与已存介质分叉。它是后端约定的唯一消费方——产品包绝不直接触碰后端。本层只面向宿主侧：它不注册工具、不注入提示词，也不追加会话事件，因此模型与 agent loop（智能体循环）永远不会看到它。
+使用本包声明经过 schema 校验的键值领域，并通过 `ctx.storageDomain` 在已配置的存储后端上打开它们。读取同步返回经过校验的内存状态；每次写入在完成前都已达到持久状态，并按顺序发出 `domain/changed`。产品包使用领域句柄，而不直接访问存储后端。这些宿主侧状态不会添加工具、提示词或会话事件，因此模型与 agent loop（智能体循环）无法看到它们。
 
 ## 目录
 
@@ -66,11 +66,11 @@ domain.table('workspaces').update(id, (r) => ({ ...r, path: newPath }))
 | `backend` | 必填 | 未显式路由的每个领域的默认后端名称 |
 | `routes` | `{}` | 逐领域覆盖：领域名称 → 后端名称 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-storage-domain)是每个受支持字段及其 JSDoc 的穷尽式真源。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-storage-domain)是所有受支持字段及其 JSDoc 的完整真源。
 
 ### 可观察行为与失败
 
-每次写入只在后端确认持久后 resolve，并按写入顺序各发出一次 `domain/changed` 事件。失败携带稳定的 `DomainError` 代码：`already-open`（名称已打开或仍在关闭）、`facet-unsupported`（已路由后端不提供 `kv` 分面）、`invalid-record`（已存记录或全局不符合其 schema，并指明表与键）、`missing-key`（对不存在的记录执行 `update`）与 `closed`（关闭后的任何使用）。`version-mismatch` 等后端失败会原样透传。
+每次写入都要等后端确认已持久化后才完成，并按写入顺序各发出一次 `domain/changed` 事件。失败携带稳定的 `DomainError` 代码：`already-open`（名称已打开或仍在关闭）、`facet-unsupported`（已路由后端不提供 `kv` 分面）、`invalid-record`（已存记录或全局不符合其 schema，并指明表与键）、`missing-key`（对不存在的记录执行 `update`）与 `closed`（关闭后的任何使用）。`version-mismatch` 等后端失败会原样透传。
 
 -----
 
@@ -84,14 +84,14 @@ domain.table('workspaces').update(id, (r) => ({ ...r, path: newPath }))
 
 ### 设计理念
 
-- **spec 对象是唯一真源。** `defineDomain` 固定 spec 的字面类型，并在所属包的模块加载时、任何介质被触碰之前校验其字段。记录 schema 使用 zod，因此 `z.infer` 不会重复消费方类型；插件 `Config` 仍由 schemastery 负责。
+- **spec 对象是唯一真源。** `defineDomain` 固定 spec 的字面类型，并在所属包的模块加载时、任何介质被触碰之前校验其字段。记录 schema 使用 zod，因此 `z.infer` 可避免重复定义消费方类型；插件 `Config` 仍由 schemastery 负责。
 - **内存具有最终决定权；介质是持久投影。** 读取同步取自经过校验的内存状态。每次写入都在每个领域一条的写入链上排队：先到达后端持久状态，再变更内存，然后发出 `domain/changed`——被拒绝的后端写入不会触碰内存，因此读取永远不会与介质分叉。
 - **每个领域一条写入链。** `put`、`delete`、`update` 与 `global.set` 都在其上排队；`update` 的变换在链上自己的槽位运行，因此并发更新绝不会交错。记录是普通不可变数据——返回值就是已存对象本身，绝不能原地修改。
-- **写入在提交点之后发出。** `domain/changed` 是通知，不是事务参与者：抛异常的监听器会被兜住并记录警告，而不会让已经持久的写入被拒绝。
+- **写入在提交点之后发出。** `domain/changed` 是通知，不是事务参与者：监听器抛出异常时，系统会隔离该异常并记录警告，而不会让已经持久的写入被拒绝。
 
 ### 打开顺序
 
-`DomainFacility.open(spec)` 按严格顺序执行，任一步骤失败都会让整个调用失败：拒绝已打开或仍在关闭的名称（`already-open`）；解析路由（`backend-not-found`）；要求 `kv` 分面（`facet-unsupported`）；打开单元（后端 `version-mismatch`／`malformed-medium` 透传）；加载并根据 spec 的 schema 校验每条已存记录与全局（`invalid-record`）；构造领域。调用方持有句柄；设施会在卸载时关闭任何仍打开的领域，已关闭领域的名称只在 teardown 完成后才能重新打开。
+`DomainFacility.open(spec)` 按严格顺序执行，任一步骤失败都会让整个调用失败：拒绝已打开或仍在关闭的名称（`already-open`）；解析路由（`backend-not-found`）；要求 `kv` 分面（`facet-unsupported`）；打开单元（后端 `version-mismatch`／`malformed-medium` 透传）；加载并根据 spec 的 schema 校验每条已存记录与全局（`invalid-record`）；构造领域。调用方持有句柄；设施会在卸载时关闭任何仍打开的领域，已关闭领域的名称只在资源销毁完成后才能重新打开。
 
 ### 源码地图
 
@@ -150,7 +150,7 @@ domain.table('workspaces').update(id, (r) => ({ ...r, path: newPath }))
 
 - **变更只在单进程内可见**——`domain/changed` 是进程内事件；在跨进程修订模式落地前，第二个主机进程或重新连接的 GUI 无法观察变更（[Agent Note](../../../.agents/notes/proposed/architecture/2026-07-24-domain-kv-storage-and-workspace.zh.md)）。
 - **没有跨表事务、二级索引或多段键**——每次写入只触碰一条记录；这些扩展列在 Agent Note 的范围外清单中。
-- **没有数据迁移**——已存版本与 spec 不同的领域会在打开时拒绝（`version-mismatch`）；修改 schema 需要手工迁移已存数据。
+- **没有数据迁移**——领域的已存版本与 spec 不同时，打开操作会被拒绝（`version-mismatch`）；修改 schema 需要手工迁移已存数据。
 
 <a id="dev-note"></a>
 ### 开发备注

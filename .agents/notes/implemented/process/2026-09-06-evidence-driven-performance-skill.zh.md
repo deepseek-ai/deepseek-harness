@@ -22,18 +22,18 @@ Status: implemented
 
 | 证据 | 测量路径与结果 | 可复用经验 |
 |---|---|---|
-| [#3535](https://github.com/deepseek-harness/deepseek-harness/pull/3535)，已合并 | [最终基准设计](https://github.com/deepseek-harness/deepseek-harness/pull/3535#issuecomment-5552779119)报告首次打开负向对照 4,394 ms，预算 550 ms；首屏历史 4,452，预算 550；恢复 4,333，预算 450；128 MB 堆检查失败。Client fold：123.9 ms / 10.84×，预算 40 ms / 3.125×。 | built-JS 用户路径门禁与正／负向对照比早期 PR 正文设计更重要。 |
-| [#3536](https://github.com/deepseek-harness/deepseek-harness/pull/3536)，关闭未合并 | 重复 snapshot／freeze 工作占采样 CPU 的约 70%；合成打开从 4,734–4,921 改善为 707–823 ms。 | 流式迁移替代了该身份注册表提案。没有当前所有权证据时，不恢复它。 |
-| [#3585](https://github.com/deepseek-harness/deepseek-harness/pull/3585)，已合并 | 历史物理解码：7.527 s / 7,219 MB 峰值 RSS 降至 1.467 s / 908 MB；流式迁移加串行发布：6.241 s，2.107 GB 峰值，477 MB 保留。已结算的 500,000-delta Client fold：3.2 ms。 | 跨消费者保持紧凑表示；限制中间状态。归因估计重叠，不能相加。 |
-| [#3586](https://github.com/deepseek-harness/deepseek-harness/pull/3586)，已合并 | 当前 v2 打开快照：2,011.4→1,027.9 ms；恢复：598.5→16 ms；保留堆：1,025.3→478.7 MB。 | 分离只读准备与必须等待的写发布；通过按修订号共享准备和调用方局部取消共享不可变所有权。 |
-| [#3537](https://github.com/deepseek-harness/deepseek-harness/pull/3537)，已合并 | 合成 200 轮投影：28→5.4 ms；总计：76.9→50 ms；峰值 RSS：137.2→94.9 MB。 | 按紧凑记录读取统计、usage、文本和图像引用。展开流缓存保留不必要的表示成本。Chat／Trajectory 属于前置迁移改动。 |
-| [#2587](https://github.com/deepseek-harness/deepseek-harness/pull/2587)，已合并 | 历史 416,756 事件由 696 记录表示：Client 历史 4,682→276 ms；采样额外 V8 峰值 612.5→199.4 MB。 | 验证和折叠过程保持紧凑；[基线审查](https://github.com/deepseek-harness/deepseek-harness/pull/2587#discussion_r3803082730)要求相同验证与保留输出，而不是解析后丢弃。 |
-| [#3331](https://github.com/deepseek-harness/deepseek-harness/pull/3331)，已合并 | 10,000 个折叠工具行：22.5→7.5 ms，保留 12.2→1.6 MiB；非活动 Trajectory 刷新：4,082→15.5 ms。 | 延迟未使用的解析和实体化；首次激活与保留 Context 仍有成本。 |
-| [#3391](https://github.com/deepseek-harness/deepseek-harness/pull/3391) 和 [#3383](https://github.com/deepseek-harness/deepseek-harness/pull/3383)，已合并 | 缩小订阅范围、稳定身份、批量发布和视口触发高亮。10,000 节点计时表是估计，不是浏览器测量。 | 延迟不等于虚拟化：访问过的 token DOM 仍被保留。 |
-| [#3292](https://github.com/deepseek-harness/deepseek-harness/pull/3292)，已合并 | 两百万条 FIFO 排空：中位数 9.656 ms，不含入队。 | deque 删除 shift 复制，不删除队列准入或背压义务。 |
-| [#1161](https://github.com/deepseek-harness/deepseek-harness/pull/1161)，已合并 | 无密钥的 100,000-chunk 浏览器压力测试，每 16 ms 推送 128 个 chunk。 | [生产者追赶](https://github.com/deepseek-harness/deepseek-harness/pull/1161#discussion_r3699970161)和[最后一次心跳停顿](https://github.com/deepseek-harness/deepseek-harness/pull/1161#discussion_r3699970162)可能扭曲测量；定时派发事件不是真实键盘／指针输入。 |
+| #3535，已合并 | 最终基准设计 (PR #3535, comment 5552779119)报告首次打开负向对照 4,394 ms，预算 550 ms；首屏历史 4,452，预算 550；恢复 4,333，预算 450；128 MB 堆检查失败。Client fold：123.9 ms / 10.84×，预算 40 ms / 3.125×。 | built-JS 用户路径门禁与正／负向对照比早期 PR 正文设计更重要。 |
+| #3536，关闭未合并 | 重复 snapshot／freeze 工作占采样 CPU 的约 70%；合成打开从 4,734–4,921 改善为 707–823 ms。 | 流式迁移替代了该身份注册表提案。没有当前所有权证据时，不恢复它。 |
+| #3585，已合并 | 历史物理解码：7.527 s / 7,219 MB 峰值 RSS 降至 1.467 s / 908 MB；流式迁移加串行发布：6.241 s，2.107 GB 峰值，477 MB 保留。已结算的 500,000-delta Client fold：3.2 ms。 | 跨消费者保持紧凑表示；限制中间状态。归因估计重叠，不能相加。 |
+| #3586，已合并 | 当前 v2 打开快照：2,011.4→1,027.9 ms；恢复：598.5→16 ms；保留堆：1,025.3→478.7 MB。 | 分离只读准备与必须等待的写发布；通过按修订号共享准备和调用方局部取消共享不可变所有权。 |
+| #3537，已合并 | 合成 200 轮投影：28→5.4 ms；总计：76.9→50 ms；峰值 RSS：137.2→94.9 MB。 | 按紧凑记录读取统计、usage、文本和图像引用。展开流缓存保留不必要的表示成本。Chat／Trajectory 属于前置迁移改动。 |
+| #2587，已合并 | 历史 416,756 事件由 696 记录表示：Client 历史 4,682→276 ms；采样额外 V8 峰值 612.5→199.4 MB。 | 验证和折叠过程保持紧凑；基线审查 (PR #2587, comment 3803082730)要求相同验证与保留输出，而不是解析后丢弃。 |
+| #3331，已合并 | 10,000 个折叠工具行：22.5→7.5 ms，保留 12.2→1.6 MiB；非活动 Trajectory 刷新：4,082→15.5 ms。 | 延迟未使用的解析和实体化；首次激活与保留 Context 仍有成本。 |
+| #3391 和 #3383，已合并 | 缩小订阅范围、稳定身份、批量发布和视口触发高亮。10,000 节点计时表是估计，不是浏览器测量。 | 延迟不等于虚拟化：访问过的 token DOM 仍被保留。 |
+| #3292，已合并 | 两百万条 FIFO 排空：中位数 9.656 ms，不含入队。 | deque 删除 shift 复制，不删除队列准入或背压义务。 |
+| #1161，已合并 | 无密钥的 100,000-chunk 浏览器压力测试，每 16 ms 推送 128 个 chunk。 | 生产者追赶 (PR #1161, comment 3699970161)和最后一次心跳停顿 (PR #1161, comment 3699970162)可能扭曲测量；定时派发事件不是真实键盘／指针输入。 |
 
-[取消审查](https://github.com/deepseek-harness/deepseek-harness/pull/3586#discussion_r3940578092)、[源修订审查](https://github.com/deepseek-harness/deepseek-harness/pull/3586#discussion_r3940569241)和[类型化读取器审查](https://github.com/deepseek-harness/deepseek-harness/pull/3537#discussion_r3942974015)说明删除重复工作不等于允许删除验证或发布义务。[备用 runner 审查](https://github.com/deepseek-harness/deepseek-harness/pull/3535#discussion_r3927945561)区分独立 job 与隔离的物理主机。
+取消审查 (PR #3586, comment 3940578092)、源修订审查 (PR #3586, comment 3940569241)和类型化读取器审查 (PR #3537, comment 3942974015)说明删除重复工作不等于允许删除验证或发布义务。备用 runner 审查 (PR #3535, comment 3927945561)区分独立 job 与隔离的物理主机。
 
 ## 考虑过的替代方案
 

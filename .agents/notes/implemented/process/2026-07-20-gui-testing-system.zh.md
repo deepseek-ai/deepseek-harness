@@ -20,12 +20,12 @@ GUI 栈需要考虑多种应用形态，同应用形态内的不同运行环境�
 |---|---|---|---|
 | 1 协议同构层 | 生成的 Typert Remote 描述符 + `ApiGateway` + Connection RPC 承载（参数/结果/错误/流/取消） | **同构点全链**：gateway host/client 套件在进程内验证描述符 codec 与 Remote 分派；Connection host 套件不经浏览器即可运行相同的 `/api` 承载帧与信任检查 | `packages/api/gateway/tests/`、`packages/client/connection/tests/` |
 | 2 对象层编排 | `Session`/`SessionManager`/`ConnectionController`（状态机与时序：缝合/去重/翻页/乐观清稿/pendingBuffers/重连/退避） | **「事件序列进→快照出」黄金路径**：可编程假体 + deferred 控时序 + fake timers 控退避 | `packages/client/{runtime,connection}/tests/` |
-| 3 组装呈现层 | 构建产物 × 真实 client loader 与插件组合 | 归应用所有的语义快照会在 jsdom 下启动全部 8 个已构建的 client 插件，以确定性方式驱动跨插件状态变化；另有最简 Playwright 冒烟测试负责验证真实浏览器/承载层边界，真 host 用例在无密钥时自行跳过；无密钥浏览器 e2e 车道会禁用交付配置中的模型适配器行，并通过 `dsh-llm-replay` 在真实进程内 web 组装中回放录制的会话 fixture（测试前置数据），与会话区 aria 预期输出比对（[web e2e 车道](../testing/2026-07-24-web-gui-browser-e2e-lane.zh.md)、[必需 CI 门禁](../testing/2026-07-30-web-browser-snapshot-ci-gate.zh.md)） | `apps/web/tests/*.snapshot.ts`、`apps/web/tests/smoke-{fixture,real}.e2e.ts`、`apps/web/tests/{replay-round-trip,seeded-history}.e2e.ts` |
+| 3 组装呈现层 | 构建产物 × 真实 client loader 与插件组合 | 归应用所有的语义快照在 jsdom 下用测试持有的 `RemoteMock` 启动构建后 Client 图；Playwright 用例分别验证真实浏览器与 Host 载体，并通过 `dsh-llm-replay` 回放已录制的模型会话（[整机客户端测试档](../testing/2026-09-06-client-assembly-test-line.zh.md)、[web e2e 车道](../testing/2026-07-24-web-gui-browser-e2e-lane.zh.md)） | `apps/web/tests/*.expected.e2e.ts`、`apps/web/tests/*.e2e.ts`、`apps/web/tests/*.snapshot.ts` |
 
 层间纪律：**各层各测各的，上层不重测下层**：应用语义快照只固定组装后插件边界上的用户可见投影，Playwright 冒烟测试负责验证浏览器与承载层是否存活；wire 语义归 1 层，数据语义归 2 层。纯函数层（lineage/partial/notifier/transcript-adapter）随 2 层同包 tests/ 零假体直测。
 
 - **host 与 client 源码**均纳入全仓 per-file 100% 覆盖率门禁，仅排除 `vitest.config.ts` 中带注释的少量浏览器级例外；组件套件通过逐文件 jsdom pragma 和 Testing Library 运行，不会改变 Node 套件。
-- **归应用所有的语义快照**读取已构建的 client bundle，通过真实 loader 执行它们，并且只驱动确定性的 fixture 钩子。它们负责固定侧边栏标签、面包屑和 `document.title` 等稳定可见状态，而不固定 CSS 像素或下层状态机细节。
+- **归应用所有的语义快照**读取已构建的 client bundle，通过真实 loader 执行它们，并驱动确定性的 RemoteMock 场景。它们负责固定侧边栏标签、面包屑和 `document.title` 等稳定可见状态，而不固定 CSS 像素或下层状态机细节。
 
 ## 车道地图
 
@@ -33,7 +33,7 @@ GUI 栈需要考虑多种应用形态，同应用形态内的不同运行环境�
 |---|---|---|---|
 | 基础 | `pnpm run test:gui` | 1+2 层 vitest（`packages/client packages/host`），秒级、无浏览器、无 server | 改 GUI 任意源码后随手跑 |
 | 语义快照 | `DSH_EXAMPLE_MODE=lib pnpm run test:snapshot` | 无需密钥的组装应用语义，以及仓库按传输形态划分的预期输出 | 用户可见的 GUI 变更后；交付前 |
-| 浏览器端到端 | `pnpm run test:web` | 先重建前端 dist，再跑 3 层浏览器全集：双级冒烟测试（fixture 级 + 真 host 级 self-skip）加上无密钥回放 e2e 场景（`DSH_SNAPSHOT=record`/`refresh` 重录 fixture / 重写期望输出） | 改构建面/boot/承载后；交付前 |
+| 浏览器端到端 | `pnpm run test:web` | 先重建前端 dist，再运行 built-client RemoteMock 用例与真实 Host 浏览器场景，其中包括无密钥的录制会话回放（`DSH_SNAPSHOT=record`/`refresh` 重录 fixture／重写预期输出） | 改构建面/boot/承载后；交付前 |
 | 浏览器预期输出门禁 | `DSH_SNAPSHOT=replay pnpm run test:web:built` | 复用 CI 构建的产物，并在不写入的情况下比较每份已提交的浏览器预期输出 | 每个 Linux 拉取请求 |
 | 门禁 | `pnpm run test:coverage` | 全仓门禁（host 与 client GUI 包均纳入，仅排除带注释的浏览器级例外） | PR（Pull Request）窗口 |
 
@@ -42,7 +42,7 @@ GUI 栈需要考虑多种应用形态，同应用形态内的不同运行环境�
 ## 防回归纪律
 
 - **修一个 bug 钉一条断言**：浏览器可见的 bug 钉进所属浏览器 spec（冒烟测试或 e2e 场景）；数据层 bug 钉进对应 spec（先例：res-close 误判钉在 webserver 桥 suite——纯 Node 秒级复现，不再需要 12s 浏览器哨兵作唯一防线）。
-- **fixture 全绿不算完，真 wire 也要过**：fixture 短路的恰是 wire 承载链（node:http 桥 close 语义、真网络时序），两次实证 bug 都藏在那里。改动触及连接/桥/handler/SSE 的，浏览器车道（`pnpm run test:web`）必跑——其无密钥 e2e 场景驱动真实 HTTP/SSE 承载，带密钥的真 host 冒烟测试仍是真模型侧的补充。
+- **RemoteMock 全绿不算完，真 wire 也要过**：已解码的进程内载体会刻意绕过 HTTP/WebSocket 链及其网络时序。改动触及 connection、bridge、handler 或流式 transport 时必须运行浏览器车道（`pnpm run test:web`），由其中的无密钥 e2e 场景驱动真实载体；带密钥的真实 Host 冒烟仍是真模型侧的补充。
 - 落盘代码即答案的对表工作流：行为改动落盘打红既有用例时，当场对表校准（改测试还是改代码以 RFC/约定为裁），不留悬红。
 
 ## Consequences
@@ -55,6 +55,6 @@ GUI 栈需要考虑多种应用形态，同应用形态内的不同运行环境�
 |---|---|
 | 单一 e2e（全走浏览器） | 浏览器起步秒级×N 倍慢+时序不可控；wire/对象层不变量在 node env 可毫秒级全断言 |
 | verify 脚本迁 vitest | 有序脚本共享浏览器会话，拆 case 要么形式化（sequential+共享 page）要么重走前置×N；PASS/FAIL 流式输出正是 agent（智能体）定位接口 |
-| 测试复用 FixtureApiClient | 演示脚本走真实时钟，测试需要 deferred 手控时序——用途正交，硬复用把测试绑死在演示节奏上 |
+| 为测试保留生产 Client fixture | 它把交付代码耦合到场景数据和 query 选择的 transport；RemoteMock 与真实 Host 测试分别直接持有两个所需层级 |
 | GUI 包独立 vitest config（曾设计 vitest.gui.config.ts） | 包级 tests/ 本就被根 include 扫到，`vitest run packages/client packages/host` 路径过滤即窄循环——零新 config |
 | 钩子/组件层暂缓单测 | jsdom 仍是覆盖率主线，因为它能快速验证逐文件组件行为；必需的浏览器回放门禁在组装层与之互补，而非取代它（[CI 门禁决策](../testing/2026-07-30-web-browser-snapshot-ci-gate.zh.md)） |

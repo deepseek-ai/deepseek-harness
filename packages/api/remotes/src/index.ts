@@ -2,6 +2,7 @@
 
 import { homedir } from 'node:os'
 import type { Context } from '@deepseek-ai/cordis'
+import type { Agent } from '@deepseek-ai/dsh-agent'
 import type {
   TypertRemoteEventDispatch,
   TypertRemoteEventInvocation,
@@ -20,8 +21,10 @@ import { API_REMOTE_FORWARDED_EVENTS } from './remote-events.ts'
 import type {} from '@deepseek-ai/dsh-commands/types'
 import type {} from '@deepseek-ai/dsh-cordis-host-runner/types'
 import type {} from '@deepseek-ai/dsh-credentials/types'
+import type {} from '@deepseek-ai/dsh-goal/types'
 import type {} from '@deepseek-ai/dsh-llm/types'
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
+import type {} from '@deepseek-ai/dsh-permission-presets/types'
 import type {} from '@deepseek-ai/dsh-settings/types'
 import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-user-questions'
@@ -56,17 +59,17 @@ function remoteEventSource(ctx: Context): TypertRemoteEventSource {
         request: object,
         next: () => unknown,
       ) {
-        const subject = carrierKeyOf(this)
-        if (subject === undefined) return next()
-        const value = Reflect.get(subject, 'ctx') as unknown
-        if (typeof value !== 'object' || value === null) {
-          throw new TypeError(`forwarded scoped event ${JSON.stringify(event)} has no live Context`)
+        const carrierAgent = carrierKeyOf(this)
+        if (carrierAgent === undefined) return next()
+        const agent = (request as { readonly agent?: Agent }).agent
+        if (agent === undefined || agent !== carrierAgent) {
+          throw new TypeError(`forwarded scoped event ${JSON.stringify(event)} must carry its Agent directly`)
         }
         return forwardWaterfall(
           queue,
           event,
           request,
-          { value: value as Context, subject },
+          { value: agent.ctx, subject: agent, agentId: agent.id },
           next,
         )
       }) as never)

@@ -5,17 +5,18 @@
  */
 
 import { brandString } from '@deepseek-ai/dsh-brand'
-import { contentHasImage, LlmError, offloadedImageText, offloadRequestImagesWithPolicy, requestImageHandleText } from '@deepseek-ai/dsh-llm'
+import { contentHasImage, IMAGE_OFFLOAD_REQUIRED_CODE, LlmError, offloadedImageText, projectOffloadedImages, requestImageHandleText, requiredImageOffload } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, GenerateOptions, ImageAttachmentAccessResolver, Message, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type {
   AttachmentId,
   AttachmentStore,
   ImageAttachmentRef,
-  ImageRequestPolicy,
+  ImageRequestTarget,
   RequestImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
 import type { Context as PiContext, ImageContent, Message as PiMessage, TextContent, Tool as PiTool } from '@earendil-works/pi-ai'
 import { toPiAssistant } from './replay.ts'
+import { requestImageDimensions } from '@deepseek-ai/dsh-attachment'
 import { DEFAULT_REQUEST_IMAGE_MAX_BYTES, DEFAULT_REQUEST_IMAGE_PIXEL_BUDGET } from './config.ts'
 
 /** Join the text blocks of a harness message. */
@@ -94,22 +95,25 @@ function collectImageRefs(
   refs: Map<AttachmentId, ImageAttachmentRef>,
 ): void {
   for (const block of blocks) {
-    if (block.type === 'image') refs.set(block.attachment.attachmentId, block.attachment)
-    else if (block.type === 'tool-result') collectImageRefs(block.content, refs)
+    if (block.type === 'image') {
+      if (block.offloaded !== true) refs.set(block.attachment.attachmentId, block.attachment)
+    } else if (block.type === 'tool-result') {
+      collectImageRefs(block.content, refs)
+    }
   }
 }
 
 async function prepareRequestImages(
   messages: readonly Message[],
   attachments: AttachmentStore,
-  policy: ImageRequestPolicy,
+  budget: PiImageRequestBudget,
   signal?: AbortSignal,
 ): Promise<Map<AttachmentId, RequestImageAttachment>> {
   const refs = new Map<AttachmentId, ImageAttachmentRef>()
   for (const message of messages) collectImageRefs(message.content, refs)
   const orderedRefs = [...refs.values()]
   const prepared = await Promise.all(orderedRefs.map(
-    ref => attachments.readImageRequest(ref, policy, signal),
+    ref => attachments.readImageRequest(ref, requestImageTarget(ref, budget), signal),
   ))
   const versions = new Map<AttachmentId, RequestImageAttachment>()
   for (const [index, ref] of orderedRefs.entries()) {
@@ -128,11 +132,34 @@ function toolsOf(options: GenerateOptions): PiTool[] | undefined {
   }))
 }
 
+/** The request split into pi-ai's single `systemPrompt` slot and the history that converts to `messages`. */
+interface SystemPromptSplit {
+  /** Text for pi-ai's `systemPrompt`; `undefined` sends no system prompt. */
+  systemPrompt: string | undefined
+  /** History messages that convert to pi-ai `messages`. */
+  messages: readonly Message[]
+}
+
+/**
+ * Select the pi-ai `systemPrompt` source shared by both conversion paths.
+ * `options.system` wins when defined and every history message converts,
+ * including a leading `system` message, which then folds into a `user`
+ * message. Otherwise a leading `system` history message supplies the prompt
+ * and leaves the converted history; empty leading text sends no prompt.
+ */
+function splitSystemPrompt(options: GenerateOptions): SystemPromptSplit {
+  if (options.system !== undefined) return { systemPrompt: options.system, messages: options.messages }
+  const [first, ...rest] = options.messages
+  if (first?.role !== 'system') return { systemPrompt: undefined, messages: options.messages }
+  const text = flattenText(first)
+  return { systemPrompt: text.length > 0 ? text : undefined, messages: rest }
+}
+
 /** Assemble the request-level pi-ai context envelope shared by both conversion paths. */
-function piContext(options: GenerateOptions, messages: PiMessage[]): PiContext {
+function piContext(systemPrompt: string | undefined, options: GenerateOptions, messages: PiMessage[]): PiContext {
   const tools = toolsOf(options)
   return {
-    ...options.system !== undefined ? { systemPrompt: options.system } : {},
+    ...systemPrompt !== undefined ? { systemPrompt } : {},
     messages,
     ...tools !== undefined && tools.length > 0 ? { tools } : {},
   }
@@ -152,13 +179,17 @@ function appendAssistant(
 }
 
 function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: string) => void): PiContext {
+  assertSupportedImageRoles(options.messages)
+  const split = splitSystemPrompt(options)
   const toolNames = new Map<ToolCallId, string>()
   const messages: PiMessage[] = []
-  for (const message of options.messages) {
+  for (const message of split.messages) {
     if (contentHasImage(message.content)) {
       throw new LlmError('pi-ai image conversion requires the durable attachment service', 'UNSUPPORTED_CONTENT')
     }
     if (message.role === 'system') {
+      // pi-ai has a single systemPrompt slot; a system message that did not
+      // supply it folds into a user message to preserve order.
       messages.push({ role: 'user', content: flattenText(message), timestamp: 0 })
       continue
     }
@@ -183,7 +214,7 @@ function textOnlyContext(options: GenerateOptions, onReplayDegrade?: (reason: st
       })
     }
   }
-  return piContext(options, messages)
+  return piContext(split.systemPrompt, options, messages)
 }
 
 /** Inputs that bind deterministic request images to one current tool execution world. */
@@ -192,19 +223,33 @@ export interface PiImageRequestContext {
   attachments: AttachmentStore
   /** Resolve current tool access separately from deterministic request-image versions. */
   resolveImageAccess: ImageAttachmentAccessResolver
-  /** Request-level bound on base64-encoded image payload; omission leaves every image in place. */
+  /** Request-level bound on the base64-encoded payload of retained images; omission leaves the bound unchecked. */
   maxRequestImageBytes?: number
   /** Route pixel and raw encoded-byte budgets. */
-  requestImagePolicy?: ImageRequestPolicy
+  requestImagePolicy?: PiImageRequestBudget
+}
+
+/** Per-route budgets from which each request image's target is derived. */
+export interface PiImageRequestBudget {
+  /** Total-pixel budget; larger sources are downscaled proportionally. */
+  maxPixels: number
+  /** Encoded-byte target for one request image. */
+  maxBytes: number
+}
+
+/** Deterministic request target for one source under the route budgets. */
+function requestImageTarget(ref: ImageAttachmentRef, budget: PiImageRequestBudget): ImageRequestTarget {
+  return { ...requestImageDimensions(ref.width, ref.height, budget.maxPixels), maxBytes: budget.maxBytes }
 }
 
 /**
  * Convert text-only harness history to a synchronous pi-ai Context. Tool
  * result names are recovered from preceding assistant tool calls.
- * @param options - the harness request; `options.system` maps to pi-ai's single `systemPrompt` slot.
+ * @param options - the harness request; `options.system`, else a leading `system` message, maps to pi-ai's single `systemPrompt` slot.
  * @param images - absent; selects the synchronous conversion.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @returns the pi-ai context; `tools` is omitted when the request declares none.
+ * @throws {LlmError} `UNSUPPORTED_CONTENT` for images in any history role, including a leading system message.
  */
 export function toPiContext(
   options: GenerateOptions,
@@ -213,11 +258,12 @@ export function toPiContext(
 ): PiContext
 /**
  * Convert harness history to a pi-ai Context while resolving durable images.
- * Tool result names are recovered from preceding assistant tool calls. When
- * the accumulated base64 image payload exceeds `maxRequestImageBytes`, the
- * oldest images are replaced by text placeholders until the request fits, so
- * an image-heavy session keeps clearing gateway request-size caps.
- * @param options - the harness request; `options.system` maps to pi-ai's single `systemPrompt` slot.
+ * Tool result names are recovered from preceding assistant tool calls. Image
+ * occurrences the surface marks offloaded become text placeholders; when the
+ * retained occurrences' exact base64 payload still exceeds
+ * `maxRequestImageBytes`, the call fails with `IMAGE_OFFLOAD_REQUIRED` naming
+ * how many more oldest occurrences must be offloaded.
+ * @param options - the harness request; `options.system`, else a leading `system` message, maps to pi-ai's single `systemPrompt` slot.
  * @param images - attachment provider, current path resolver, and request limits.
  * @param onReplayDegrade - forwarded to {@link toPiAssistant} for each assistant message.
  * @returns the asynchronously resolved pi-ai context.
@@ -248,29 +294,33 @@ async function toPiContextWithImages(
     maxBytes: DEFAULT_REQUEST_IMAGE_MAX_BYTES,
   }
   assertSupportedImageRoles(options.messages)
-  const requestMessages = offloadRequestImagesWithPolicy(options.messages, {
-    representation: 'base64',
-    ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
-    byteQuantum: 1,
-    byteLength: ref => Math.min(ref.bytes, requestImagePolicy.maxBytes),
-    placeholder: ref => offloadedImageText(ref, resolveImageAccess(ref)),
-  })
-  const requestImages = await prepareRequestImages(requestMessages, attachments, requestImagePolicy, options.signal)
-  const exactMessages = offloadRequestImagesWithPolicy(requestMessages, {
-    representation: 'base64',
-    ...maxRequestImageBytes === undefined ? {} : { maxBytes: maxRequestImageBytes },
-    byteQuantum: 1,
-    byteLength: ref => (requestImages.get(ref.attachmentId) as RequestImageAttachment).bytes,
-    placeholder: ref => offloadedImageText(ref, resolveImageAccess(ref)),
-  })
+  const split = splitSystemPrompt(options)
+  const requestImages = await prepareRequestImages(split.messages, attachments, requestImagePolicy, options.signal)
+  if (maxRequestImageBytes !== undefined) {
+    const offloadImages = requiredImageOffload(
+      split.messages,
+      { representation: 'base64', maxBytes: maxRequestImageBytes },
+      block => (requestImages.get(block.attachment.attachmentId) as RequestImageAttachment).bytes,
+    )
+    if (offloadImages > 0) {
+      throw new LlmError(
+        `pi-ai request images exceed the ${maxRequestImageBytes}-byte base64 bound; ${offloadImages} more oldest occurrence(s) must be offloaded.`,
+        IMAGE_OFFLOAD_REQUIRED_CODE,
+        { offloadImages },
+      )
+    }
+  }
+  const exactMessages = projectOffloadedImages(
+    split.messages,
+    ref => offloadedImageText(ref, resolveImageAccess(ref)),
+  )
   const toolNames = new Map<ToolCallId, string>()
   const messages: PiMessage[] = []
 
   for (const message of exactMessages) {
     if (message.role === 'system') {
-      // pi-ai has a single systemPrompt slot; in-history system messages are
-      // folded into user messages to preserve order (rare in practice — the
-      // harness sends the system prompt via options.system).
+      // pi-ai has a single systemPrompt slot; a system message that did not
+      // supply it folds into a user message to preserve order.
       messages.push({ role: 'user', content: flattenText(message), timestamp: 0 })
       continue
     }
@@ -302,5 +352,5 @@ async function toPiContextWithImages(
     }
   }
 
-  return piContext(options, messages)
+  return piContext(split.systemPrompt, options, messages)
 }

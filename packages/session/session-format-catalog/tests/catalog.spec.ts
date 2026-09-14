@@ -1,8 +1,33 @@
 import { describe, expect, it } from 'vitest'
+import type { SessionFormatEvent } from '@deepseek-ai/dsh-session-format'
 import { sessionFormatCatalog } from '../src/index.ts'
+import { currentSessionMessageProjections } from '../src/message-projections.ts'
+import { MESSAGE_PROJECTION_EVENT_TYPES } from '@deepseek-ai/dsh-session/src/known-event-types.ts'
+import { validateInstalledCurrentSessionArtifact } from '../src/current.ts'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import { createUserMessage } from '@deepseek-ai/dsh-llm'
+
+function deepFreeze<T>(value: T): T {
+  if (value !== null && typeof value === 'object') {
+    for (const child of Object.values(value)) deepFreeze(child)
+    Object.freeze(value)
+  }
+  return value
+}
 
 describe('first-party Session format catalog', () => {
-  it('statically owns the complete adjacent v0 to v2 chain', () => {
+  it('supplies every required current message interpreter and validates its durable references', () => {
+    expect(currentSessionMessageProjections.map(projection => projection.type).sort())
+      .toEqual([...MESSAGE_PROJECTION_EVENT_TYPES].sort())
+    const session = Session.create(SessionId('projection-catalog'))
+    session.append('user/message', createUserMessage({ content: [{ type: 'text', text: 'no image' }], source: { kind: 'user' } }), { surfaceOp: 'append' })
+    const artifact = {
+      header: { ...session.header, delegationDepth: 0 }, inheritedEventCount: 0,
+      events: [...session.snapshotEvents() as unknown as SessionFormatEvent[], { type: 'image/offload', seq: 1, time: 0, data: { targets: [{ seq: 0, imageIndexes: [0] }] } }],
+    }
+    expect(() => { validateInstalledCurrentSessionArtifact(artifact) }).toThrow(/image index 0 does not exist/)
+  })
+  it('statically owns the complete adjacent v0 to v3 chain', () => {
     const header = {
       type: 'session',
       version: 0,
@@ -12,13 +37,13 @@ describe('first-party Session format catalog', () => {
       delegationDepth: 0,
     }
 
-    expect(sessionFormatCatalog.currentVersion).toBe(2)
+    expect(sessionFormatCatalog.currentVersion).toBe(3)
     expect(sessionFormatCatalog.readHeader(header)).toEqual({
       status: 'migration-required',
       storedVersion: 0,
-      targetVersion: 2,
+      targetVersion: 3,
       header: {
-        version: 2,
+        version: 3,
         id: 'catalog',
         createdAt: 1,
         isSeeded: true,
@@ -32,13 +57,13 @@ describe('first-party Session format catalog', () => {
     })
     restore.decodeRow({ type: 'turn/start', seq: 0, time: 2, data: { turn: 1 } })
     expect(restore.finish()).toMatchObject({
-      header: { version: 2, id: 'catalog' },
+      header: { version: 3, id: 'catalog' },
     })
   })
 
   it('restores the installed current vocabulary without freezing ordinary payload additions', () => {
     const header = {
-      type: 'session', version: 2, id: 'current-growth', createdAt: 1, isSeeded: false, delegationDepth: 0,
+      type: 'session', version: 3, id: 'current-growth', createdAt: 1, isSeeded: false, delegationDepth: 0,
     }
     const restore = (rows: readonly unknown[]) => {
       const current = sessionFormatCatalog.createRestore(header, {
@@ -64,6 +89,178 @@ describe('first-party Session format catalog', () => {
     expect(extension.events).toEqual([{
       type: 'ordinary/external', seq: 0, time: 1, data: null, ignorable: true,
     }])
+  })
+
+  it.each([0, 1])('restores v%i empty and non-empty inherited prefixes through every adjacent edge', (version) => {
+    for (const seedLength of [0, 1]) {
+      const sourceHeader = {
+        type: 'session', version, id: 'seed-chain', createdAt: 1,
+        parentSession: 'parent', seedLength, delegationDepth: 0,
+      }
+      const restore = sessionFormatCatalog.createRestore(sourceHeader, { recovery: 'strict', validation: 'current' })
+      if (seedLength > 0) {
+        restore.decodeRow({ type: 'feedback/record', seq: 0, time: 1, data: { text: 'inherited' } })
+      }
+      const artifact = restore.finish()
+      expect(artifact.header.version).toBe(3)
+      expect(artifact.inheritedEventCount).toBe(seedLength)
+      expect(artifact.events.at(-1)).toEqual({
+        type: 'session/end-seed', seq: seedLength, time: 1, data: { inherited: true },
+      })
+      expect(sourceHeader.version).toBe(version)
+    }
+  })
+
+  it.each([false, true])('inserts the v3 system head and remaps the inherited cut (seeded=%s)', (isSeeded) => {
+    const header = { type: 'session', version: 2, id: 'v2-identity', createdAt: 1, isSeeded, delegationDepth: 0 }
+    const rows = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+      { type: 'feedback/record', seq: 2, time: 3, data: { text: 'unchanged' } },
+      ...(isSeeded ? [{ type: 'session/end-seed', seq: 3, time: 4, data: { inherited: true } }] : []),
+    ]
+    const before = JSON.stringify({ header, rows })
+    const restore = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation: 'current' })
+    for (const row of rows) restore.decodeRow(row)
+    expect(restore.finish()).toEqual({
+      header: { version: 3, id: 'v2-identity', createdAt: 1, isSeeded, delegationDepth: 0 },
+      inheritedEventCount: isSeeded ? 4 : 0,
+      events: [
+        { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+        { type: 'step/start', seq: 1, time: 2, data: { turn: 1, step: 1 } },
+        {
+          type: 'system/message', seq: 2, time: 2, surfaceOp: 'append',
+          data: {
+            turn: 1, step: 1,
+            message: {
+              id: 'v2-to-v3-system-9673c4ed630de6c21ea6bd6b573094ea8e5e216843a1b572a68657499ad9667b',
+              role: 'system', source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' }, content: [],
+            },
+          },
+        },
+        { type: 'feedback/record', seq: 3, time: 3, data: { text: 'unchanged' } },
+        ...(isSeeded ? [{ type: 'session/end-seed', seq: 4, time: 4, data: { inherited: true } }] : []),
+      ],
+    })
+    expect(JSON.stringify({ header, rows })).toBe(before)
+  })
+
+  it.each(['current', 'transformed'] as const)('refuses unclassified ignorable v2 events (%s)', (validation) => {
+    const header = { type: 'session', version: 2, id: 'v2-unknown', createdAt: 1, isSeeded: false, delegationDepth: 0 }
+    const row = { type: 'external/event', seq: 0, time: 1, data: { extra: ['unchanged'] }, ignorable: true }
+    const before = JSON.stringify({ header, row })
+    const restore = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation })
+    expect(() => { restore.decodeRow(row) }).toThrow(/cannot safely transform unclassified event external\/event/)
+    expect(JSON.stringify({ header, row })).toBe(before)
+  })
+
+  it.each([0, 1, 2])('migrates frozen v%i PTC records and reopens the actual current representation without rewriting IDs', (version) => {
+    const sourceHeader = deepFreeze({
+      type: 'session', version, id: 'tools-code-mode:session', createdAt: 1, delegationDepth: 0,
+      ...(version === 2 ? { isSeeded: false } : {}),
+    })
+    const message = (id: string) => ({
+      id, role: 'user', source: { kind: 'plugin', plugin: 'tools-code-mode' },
+      content: [{ type: 'text', text: 'tool/code-dispatch-start tools-code-mode tools-ptc' }],
+    })
+    const oldId = 'tools-code-mode:message'
+    const newId = 'tools-ptc:message'
+    const rootId = 'tools-code-mode:root'
+    const childId = 'tools-code-mode:child'
+    const dispatch = {
+      rootCallId: rootId, parentCallId: rootId, subCallId: childId, name: 'read',
+      arguments: { text: 'tools-code-mode', nested: { type: 'tool/code-dispatch' } },
+    }
+    const rows: SessionFormatEvent[] = deepFreeze([
+      { type: 'turn/start', seq: 0, time: 10, data: { turn: 1 } },
+      { type: 'step/start', seq: 1, time: 10, data: { turn: 1, step: 1 } },
+      { type: 'user/message', seq: 2, time: 11, data: message(oldId), surfaceOp: 'append' },
+      { type: 'user/message', seq: 3, time: 12, data: message(newId), surfaceOp: 'append' },
+      { type: 'agent/inbox/spliced', seq: 4, time: 13, data: { target: 'next-turn', start: 0, inserted: [message(oldId), message(newId)] } },
+      { type: 'tool/code-dispatch-start', seq: 5, time: 14, data: dispatch },
+      { type: 'tool/code-dispatch', seq: 6, time: 15, data: { ...dispatch, isError: false, content: [{ type: 'text', text: childId }] } },
+      { type: 'user/message', seq: 7, time: 16, data: message('tools-code-mode:replacement'), sourceEventSeqs: [2, 3], surfaceOp: { op: 'replace', start: 2, end: 3 } },
+      { type: 'step/end', seq: 8, time: 17, data: { turn: 1, step: 1 } },
+      { type: 'turn/end', seq: 9, time: 17, data: { turn: 1, reason: { kind: 'completed' } } },
+    ])
+    const before = JSON.stringify({ sourceHeader, rows })
+    const restore = sessionFormatCatalog.createRestore(sourceHeader, { recovery: 'strict', validation: 'current' })
+    for (const row of rows) restore.decodeRow(row)
+    const artifact = restore.finish()
+    const renamedMessage = (id: string) => ({ ...message(id), source: { kind: 'plugin', plugin: 'tools-ptc' } })
+    const expected = [
+      rows[0], rows[1],
+      expect.objectContaining({ type: 'system/message', seq: 2 }),
+      { ...rows[2], seq: 3, data: renamedMessage(oldId) },
+      { ...rows[3], seq: 4, data: renamedMessage(newId) },
+      { ...rows[4], seq: 5, data: { target: 'next-turn', start: 0, inserted: [renamedMessage(oldId), renamedMessage(newId)] } },
+      { ...rows[5], seq: 6, type: 'tool/ptc-dispatch-start' },
+      { ...rows[6], seq: 7, type: 'tool/ptc-dispatch' },
+      { ...rows[7], seq: 8, sourceEventSeqs: [3, 4], surfaceOp: { op: 'replace', startSeq: 3, endSeq: 4 }, data: renamedMessage('tools-code-mode:replacement') },
+      { ...rows[8], seq: 9 }, { ...rows[9], seq: 10 },
+    ]
+    expect(artifact).toEqual({
+      header: { version: 3, id: sourceHeader.id, createdAt: 1, isSeeded: false, delegationDepth: 0 },
+      inheritedEventCount: 0, events: expected,
+    })
+    const currentHeader = deepFreeze(sessionFormatCatalog.encodeCurrentHeader(artifact.header, artifact.inheritedEventCount))
+    const currentRows = deepFreeze(artifact.events.map(event => sessionFormatCatalog.encodeCurrentEvent(event)))
+    const encodedBefore = JSON.stringify({ currentHeader, currentRows })
+    const reopened = sessionFormatCatalog.createRestore(currentHeader, { recovery: 'strict', validation: 'current' })
+    for (const row of currentRows) reopened.decodeRow(row)
+    expect(reopened.finish()).toEqual(artifact)
+    expect(JSON.stringify({ sourceHeader, rows })).toBe(before)
+    expect(JSON.stringify({ currentHeader, currentRows })).toBe(encodedBefore)
+  })
+
+  it.each(['current', 'transformed'] as const)('rejects native v3 obsolete required tags with %s validation and retains ignorable tags', (validation) => {
+    const header = deepFreeze({ type: 'session', version: 3, id: 'native-ptc', createdAt: 1, isSeeded: false, delegationDepth: 0 })
+    for (const type of ['tool/code-dispatch-start', 'tool/code-dispatch']) {
+      const required = deepFreeze({ type, seq: 0, time: 1, data: null })
+      const rejected = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation })
+      expect(() => { rejected.decodeRow(required) }).toThrow(/unknown event type/)
+      const ignorable = deepFreeze({ ...required, ignorable: true, data: { text: 'tools-code-mode', source: { kind: 'plugin', plugin: 'tools-code-mode' } } })
+      const accepted = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation })
+      accepted.decodeRow(ignorable)
+      expect(accepted.finish().events).toEqual([ignorable])
+    }
+  })
+
+  it.each(['current', 'transformed'] as const)('refuses V3 dispatch tag collisions in V2 input with %s validation', (validation) => {
+    const header = deepFreeze({ type: 'session', version: 2, id: 'v2-collision', createdAt: 1, isSeeded: false, delegationDepth: 0 })
+    for (const type of ['tool/ptc-dispatch-start', 'tool/ptc-dispatch']) {
+      for (const ignorable of [false, true]) {
+        const restore = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation })
+        const row = deepFreeze({ type, seq: 0, time: 1, data: null, ...(ignorable ? { ignorable: true } : {}) })
+        expect(() => { restore.decodeRow(row) }).toThrow(/format v2.*ptc-dispatch/)
+      }
+    }
+  })
+
+  it.each(['current', 'transformed'] as const)('renames V2-owned ignorable dispatch tags with %s validation', (validation) => {
+    const header = deepFreeze({ type: 'session', version: 2, id: 'v2-owned', createdAt: 1, isSeeded: false, delegationDepth: 0 })
+    const data = { rootCallId: 'root', parentCallId: 'root', subCallId: 'child', name: 'read', arguments: {} }
+    const rows = deepFreeze([
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      { type: 'tool/code-dispatch-start', seq: 1, time: 2, data, ignorable: true },
+      { type: 'tool/code-dispatch', seq: 2, time: 3, data: { ...data, isError: false, content: [] }, ignorable: true },
+    ])
+    const restore = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation })
+    for (const row of rows) restore.decodeRow(row)
+    expect(restore.finish().events).toEqual([
+      rows[0], { ...rows[1], type: 'tool/ptc-dispatch-start' }, { ...rows[2], type: 'tool/ptc-dispatch' },
+    ])
+  })
+
+  it.each(['current', 'transformed'] as const)('refuses a v3 delivery marker in v2 input (%s)', (validation) => {
+    const header = { type: 'session', version: 2, id: 'future-delivery', createdAt: 1, isSeeded: false, delegationDepth: 0 }
+    const restore = sessionFormatCatalog.createRestore(header, { recovery: 'strict', validation })
+    restore.decodeRow({ type: 'feedback/record', seq: 0, time: 1, data: { text: 'unaccepted' } })
+    expect(() => {
+      restore.decodeRow({ type: 'session-log-deepseek/delivery-accepted', seq: 1, time: 2,
+        data: { sessionId: header.id, throughSeq: 0, sessionFormatVersion: 3 } })
+      restore.finish()
+    }).toThrow(/format v2 delivery marker claims target format v3/)
   })
 
   it('validates complete relationships after streaming migration', () => {

@@ -153,6 +153,7 @@ export class SessionTelemetryCoordinator {
       ?? (this.options.includeHistory === true || session.firstLiveSeq === 0 ? -1 : SessionSeq(session.firstLiveSeq - 1))
     // Containment is PER EVENT: one rejected record is withheld fail-closed
     // while the rest of the historical replay proceeds.
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     for (const event of session.snapshotEvents(SessionLogOffset(cursor + 1))) {
       if (throughSeq !== undefined && event.seq > throughSeq) break
       this.contain(() => {

@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ## The kind system
 
-`kind` selects the document template directly; every kind maps to exactly one template that exists in this skill, and no template exists without a kind. Derive the kind mechanically, in this order:
+`kind` selects the document template directly; every kind maps to exactly one template that exists in this skill, and no template exists without a kind. Files named `docs/persistence-changes/YYYY-MM-DD-slug.md` use `persistence-change`; files named `docs/persistence-changes/releases/dsh-v*.md` use `persistence-release`. Files named `docs/persistence-changes/historical-formats/vN.md` use `persistence-format`. Their Chinese siblings use the same kind. Folder READMEs are indexes, not records. Derive package README kinds mechanically, in this order:
 
 1. The README is `packages/README.md` or `packages/<group>/README.md` → `package-group`.
 2. The package manifest declares `dsh.bundle.patch` → `package-bundle`.
@@ -42,6 +42,9 @@ kind: "package-reference"
 | `package-reference` | `packages/<group>/<package>/README.md` with a plugin entry | [package-reference.md](../templates/package-reference.md) | Package contract: follow the [package README review standard](review.md#package-readme-review) and the canonical [package documentation requirements](../../../../docs/cookbook/adding-a-package.md#4-write-the-package-readme). |
 | `package-library` | `packages/<group>/<package>/README.md` with a plain module entry | [package-library.md](../templates/package-library.md) | Library contract: consumer entry points and boundaries; no profile-install path and no mount configuration. |
 | `package-bundle` | `packages/<group>/<package>/README.md` declaring `dsh.bundle.patch` | [package-bundle.md](../templates/package-bundle.md) | Installable layer: the verified `dsh plugin` install path, layer semantics, and patch document. |
+| `persistence-change` | `docs/persistence-changes/YYYY-MM-DD-slug.md` and its Chinese sibling | [persistence-change.md](../templates/persistence-change.md) | Historical acknowledgement: mechanically detected type changes, per-root predecessor references, compatibility decision, and generated after schemas. |
+| `persistence-release` | `docs/persistence-changes/releases/dsh-v*.md` and its Chinese sibling | [persistence-release.md](../templates/persistence-release.md) | Retrospective observation: pinned tag, adjacent before/after digests, actual version constants, and changed after schemas; no compatibility acknowledgement. |
+| `persistence-format` | `docs/persistence-changes/historical-formats/vN.md` and its Chinese sibling | [persistence-format.md](../templates/persistence-format.md) | Selected historical format: source evidence, complete root schemas and reachable types; the current writer uses the generated catalog. |
 
 Before assigning `package-library` or `package-bundle`, inspect the facts: read `package.json` for `dsh.bundle.patch` and `src/index.ts` for the entry shape (`apply` export or a default service export is a plugin; a plain module API is a library). `dsh plugin --profile <name> add <package>` installs any npm dependency, but the profile reconcile activates a layer only for a package that declares `dsh.bundle`; never present that command as an install path for a library or a plain plugin. The documentation check derives the expected kind from these same facts, rejects another value, and rejects `name`, `audience`, `tags`, and README-local `i18n` metadata. Add a new kind only with a distinct template, an unambiguous repository position or declared owner, and a focused check that maps documents to it.
 

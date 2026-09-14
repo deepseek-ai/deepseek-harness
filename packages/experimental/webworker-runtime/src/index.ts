@@ -19,6 +19,8 @@ export {
   type Resolution, type StaticModuleFactory, type WorkerModuleLoaderOptions, type WorkerRequire,
 } from './module-system/module-loader.ts'
 export * as posixPath from './module-system/posix-path.ts'
+export { MODULE_PROXIES, MODULE_PROXY_PREFIXES } from './module-proxies.ts'
+export { REPLACED_EXTERNAL_PACKAGES } from './node/external_packages/replaced-externals.ts'
 export {
   createSyntheticExchange,
   type RequestListener, type ResponseSink, type SyntheticExchange,

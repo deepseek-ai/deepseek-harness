@@ -1,5 +1,6 @@
 /** Linux user-systemd scope launch and managed-range ownership. */
 
+import { controlPipe } from './control-spawn.ts'
 import { execFile, spawn, spawnSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -156,20 +157,41 @@ export function probeLinuxNative(internals: LinuxScopeInternals = {}): boolean {
 
 interface DirectRange {
   running(): boolean
-  signal(signal: 'SIGTERM' | 'SIGKILL'): void
+  /** True for group TERM delivery, direct signal submission, or proven direct-PID absence. */
+  signal(signal: 'SIGTERM' | 'SIGKILL'): boolean
+  /** Direct exit/error settlement, independent of output drain and managed-range completion. */
+  settled: Promise<unknown>
+}
+
+class LinuxScopeStartup {
+  readonly terminationSignals = new Set<NodeJS.Signals>()
+
+  constructor(readonly files: LinuxLaunchFiles, private readonly kind: 'subprocess' | 'terminal') {}
+
+  resolveOutcome(outcome: SubprocessOutcome): SubprocessOutcome {
+    const startup = readLinuxStartupError(this.files.startupErrorPath)
+    if (startup !== undefined) throw deserializeRunnerError(startup.error)
+    if (existsSync(this.files.requestPath)
+      && !(outcome.signal !== null && this.terminationSignals.has(outcome.signal))) {
+      throw new Error(`${this.kind} scope exited before its bootstrap consumed the launch request`)
+    }
+    return outcome
+  }
 }
 
 class SystemdScopeOwner implements BoundProcessOwner {
   private establishment: 'pending' | 'established' = 'pending'
   private stopped = false
+  private terminationRequested = false
   private observation: Promise<void> | undefined
   private killFailure: Error | undefined
+  private directKillSettlement: Promise<void> | undefined
   private wakeGeneration = 0
   private wakeWaiter: { generation: number; resolve: () => void } | undefined
 
   constructor(
     private readonly unit: string,
-    private readonly files: LinuxLaunchFiles,
+    private readonly startup: LinuxScopeStartup,
     private readonly direct: DirectRange,
     private readonly systemctl: string,
     private readonly runSync: typeof spawnSync,
@@ -179,9 +201,12 @@ class SystemdScopeOwner implements BoundProcessOwner {
 
   signal(signal: 'SIGTERM' | 'SIGKILL'): void {
     if (this.stopped) return
+    this.terminationRequested = true
+    if (this.direct.running()) this.startup.terminationSignals.add(signal)
     this.observeRequestConsumption()
     const directFallbackRequired = this.establishment === 'pending'
-    if (directFallbackRequired && this.direct.running()) this.direct.signal(signal)
+    let directSignalled = false
+    if (directFallbackRequired && this.direct.running()) directSignalled = this.direct.signal(signal)
     const result = this.runSync(this.systemctl, [
       '--user',
       'kill',
@@ -191,16 +216,23 @@ class SystemdScopeOwner implements BoundProcessOwner {
     ], { encoding: 'utf8', env: managerEnvironment(), timeout: SYSTEMCTL_TIMEOUT_MS })
     this.wakeObservation()
     if (result.error === undefined && result.status === 0) {
-      if (signal === 'SIGKILL') this.killFailure = undefined
+      if (signal === 'SIGKILL') {
+        this.killFailure = undefined
+        this.directKillSettlement = undefined
+      }
       return
     }
-    if (!directFallbackRequired && this.direct.running()) this.direct.signal(signal)
+    if (!directFallbackRequired && this.direct.running()) directSignalled = this.direct.signal(signal)
     if (signal === 'SIGKILL') {
       const output = `${result.stdout}\n${result.stderr}`
       if (!MISSING_UNIT.test(output)) {
         this.killFailure = result.error ?? new Error(
           `systemctl could not signal ${this.unit}: ${output.trim() || `exit ${String(result.status)}`}`,
         )
+        // The direct outcome retains errors; this barrier only joins its physical settlement.
+        this.directKillSettlement = directSignalled
+          ? this.direct.settled.then(() => {}, () => {})
+          : undefined
       }
     }
   }
@@ -224,7 +256,7 @@ class SystemdScopeOwner implements BoundProcessOwner {
   }
 
   private observeRequestConsumption(): void {
-    if (this.establishment === 'pending' && !existsSync(this.files.requestPath)) {
+    if (this.establishment === 'pending' && !existsSync(this.startup.files.requestPath)) {
       this.establishment = 'established'
     }
   }
@@ -232,14 +264,40 @@ class SystemdScopeOwner implements BoundProcessOwner {
   private absentUnit(): boolean {
     this.observeRequestConsumption()
     if (this.establishment === 'established') return false
-    if (!this.direct.running() && existsSync(this.files.requestPath)) {
+    if (!this.direct.running() && existsSync(this.startup.files.requestPath)) {
       return false
     }
     if (this.killFailure !== undefined) throw this.killFailure
     return true
   }
 
-  private parseUnitState(stdout: string): { loadState: string; activeState: string } {
+  /**
+   * Prove an active unit with no processes is the empty managed range rather
+   * than a launch still placing its payload. systemd ends a scope only on the
+   * populated-to-empty transition, so a payload killed before it entered the
+   * cgroup leaves the unit active forever. A departed client cannot add another
+   * payload; a consumed request proves the payload already entered the scope,
+   * even while its direct-process exit notification is pending.
+   */
+  private emptyRange(tasksCurrent: number | undefined): boolean {
+    return this.terminationRequested && tasksCurrent === 0
+      && (!this.direct.running() || !existsSync(this.startup.files.requestPath))
+  }
+
+  /** Release a leftover empty scope so the transient unit is collected and cannot accumulate. */
+  private releaseEmptyRange(): void {
+    try {
+      this.runSync(this.systemctl, ['--user', 'stop', this.unit], {
+        env: managerEnvironment(),
+        stdio: 'ignore',
+        timeout: SYSTEMCTL_TIMEOUT_MS,
+      })
+    } catch {
+      // The range is already empty; a failed cleanup leaves only the transient unit.
+    }
+  }
+
+  private parseUnitState(stdout: string): { loadState: string; activeState: string; tasksCurrent: number | undefined } {
     const values = new Map<string, string>()
     for (const line of stdout.split(/\r?\n/u)) {
       if (line === '') continue
@@ -255,24 +313,40 @@ class SystemdScopeOwner implements BoundProcessOwner {
     }
     const loadState = values.get('LoadState')
     const activeState = values.get('ActiveState')
-    if (values.size !== 2 || loadState === undefined || activeState === undefined) {
+    // The manager prints this sentinel for a property the unit does not carry.
+    const reportedTasks = values.get('TasksCurrent')
+    const tasksCurrent = reportedTasks === '[not set]' ? undefined : reportedTasks
+    if (values.size !== (reportedTasks === undefined ? 2 : 3)
+      || loadState === undefined || activeState === undefined) {
       throw new Error(`systemctl returned incomplete state for ${this.unit}: ${JSON.stringify(stdout.trim())}`)
     }
-    return { loadState, activeState }
+    if (tasksCurrent !== undefined && !/^\d+$/u.test(tasksCurrent)) {
+      throw new Error(`systemctl returned a non-numeric TasksCurrent for ${this.unit}: ${JSON.stringify(tasksCurrent)}`)
+    }
+    return {
+      loadState,
+      activeState,
+      tasksCurrent: tasksCurrent === undefined ? undefined : Number(tasksCurrent),
+    }
   }
 
   private async rangeActive(): Promise<boolean> {
     this.observeRequestConsumption()
+    const generation = this.wakeGeneration
+    const directRunning = this.direct.running()
     const result = await this.query(this.systemctl, [
       '--user',
       'show',
       this.unit,
       '--property=LoadState',
       '--property=ActiveState',
+      '--property=TasksCurrent',
     ])
+    // A signal invalidates state queried before its delivery and direct fallback.
+    if (generation !== this.wakeGeneration) return true
     const output = `${result.stdout}\n${result.stderr}`
     if (result.status === 0) {
-      const { loadState, activeState } = this.parseUnitState(result.stdout)
+      const { loadState, activeState, tasksCurrent } = this.parseUnitState(result.stdout)
       if (loadState === 'not-found' && activeState === 'inactive') return this.absentUnit()
       if (loadState !== 'loaded') {
         throw new Error(
@@ -284,7 +358,20 @@ class SystemdScopeOwner implements BoundProcessOwner {
       if (!['active', 'activating', 'reloading', 'deactivating'].includes(activeState)) {
         throw new Error(`systemctl returned unknown ActiveState for ${this.unit}: ${JSON.stringify(activeState)}`)
       }
-      if (this.killFailure !== undefined) throw this.killFailure
+      if (this.emptyRange(tasksCurrent)) {
+        this.releaseEmptyRange()
+        return false
+      }
+      if (this.killFailure !== undefined) {
+        if (directRunning && this.directKillSettlement !== undefined) {
+          const settlement = this.directKillSettlement
+          this.directKillSettlement = undefined
+          await settlement
+          // A query preceding direct exit cannot prove that its signalled processes survived.
+          return this.rangeActive()
+        }
+        throw this.killFailure
+      }
       return true
     }
     if (!MISSING_UNIT.test(output)) {
@@ -337,7 +424,7 @@ class SystemdScopeOwner implements BoundProcessOwner {
   }
 
   cleanup(): void {
-    cleanupLinuxLaunchFiles(this.files)
+    cleanupLinuxLaunchFiles(this.startup.files)
   }
 }
 
@@ -358,7 +445,7 @@ function scopeArgs(unitBase: string, invocation: RunnerInvocation, argv: readonl
 
 function directOutcome(
   child: ReturnType<typeof spawn>,
-  files: LinuxLaunchFiles,
+  startup: LinuxScopeStartup,
 ): Promise<SubprocessOutcome> {
   return new Promise((resolveOutcome, rejectOutcome) => {
     let settled = false
@@ -371,16 +458,7 @@ function directOutcome(
       if (settled) return
       settled = true
       try {
-        const startup = readLinuxStartupError(files.startupErrorPath)
-        if (startup !== undefined) {
-          rejectOutcome(deserializeRunnerError(startup.error))
-          return
-        }
-        if (existsSync(files.requestPath)) {
-          rejectOutcome(new Error('subprocess scope exited before its bootstrap consumed the launch request'))
-          return
-        }
-        resolveOutcome({ exitCode, signal })
+        resolveOutcome(startup.resolveOutcome({ exitCode, signal }))
       } catch (error) {
         /* v8 ignore next -- Node filesystem operations throw Error instances. */
         const failure = error instanceof Error ? error : new Error(String(error))
@@ -390,12 +468,33 @@ function directOutcome(
   })
 }
 
-function signalChildGroup(child: ReturnType<typeof spawn>, signal: 'SIGTERM' | 'SIGKILL'): void {
+/**
+ * Send a direct-process signal, distinguishing an absent PID from failed delivery.
+ * @param pid - owned direct-process identity whose exit notification can still be pending.
+ * @param send - platform signal operation; true means the signal was submitted.
+ * @returns whether the signal was submitted or the owned PID is already absent.
+ */
+export function signalLinuxDirectProcess(pid: number, send: () => boolean): boolean {
   try {
-    process.kill(-(child.pid as number), signal)
-  } catch {
-    try { child.kill(signal) } catch { /* The direct process already exited. */ }
+    if (send()) return true
+  } catch { /* A failed signal still permits an independent absence observation. */ }
+  try {
+    process.kill(pid, 0)
+    return false
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'ESRCH'
   }
+}
+
+function signalChildGroup(child: ReturnType<typeof spawn>, signal: 'SIGTERM' | 'SIGKILL'): boolean {
+  let groupSignalled = false
+  try {
+    groupSignalled = process.kill(-(child.pid as number), signal)
+  } catch { /* A missing or inaccessible group still permits a direct-process attempt. */ }
+  if (groupSignalled && signal === 'SIGTERM') return true
+  // Group success can reflect another member; joining direct exit requires its own SIGKILL submission.
+  // ChildProcess.kill can emit an error that settles directOutcome before the real exit.
+  return signalLinuxDirectProcess(child.pid as number, () => process.kill(child.pid as number, signal))
 }
 
 /** Linux PTY invocation and owner for the exact one-shot scope/bootstrap. */
@@ -414,7 +513,7 @@ export interface LinuxTerminalScopeLaunch {
  * @param spec - terminal target request.
  * @param targetEnv - validated complete target environment.
  * @param internals - optional runner and systemd seams used by tests.
- * @returns invocation facts and ownership callbacks for node-pty.
+ * @returns invocation and ownership callbacks; requested termination preserves the observed signal even before bootstrap consumption.
  */
 export function prepareLinuxTerminalScope(
   spec: SubprocessTerminalSpawnSpec,
@@ -423,6 +522,7 @@ export function prepareLinuxTerminalScope(
 ): LinuxTerminalScopeLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
   const files = createLinuxLaunchFiles({ cwd: spec.cwd, env: targetEnv })
+  const startup = new LinuxScopeStartup(files, 'terminal')
   const unitBase = unitStem('dsh-terminal')
   return {
     command: internals.systemdRun ?? 'systemd-run',
@@ -431,21 +531,14 @@ export function prepareLinuxTerminalScope(
     env: runnerEnvironment(files.requestPath, invocation),
     bindOwner: direct => new SystemdScopeOwner(
       `${unitBase}.scope`,
-      files,
+      startup,
       direct,
       internals.systemctl ?? 'systemctl',
       internals.spawnSync ?? spawnSync,
       internals.systemctlQuery ?? querySystemctl,
       internals.sleep ?? sleepWithAbort,
     ),
-    resolveOutcome: (outcome) => {
-      const startup = readLinuxStartupError(files.startupErrorPath)
-      if (startup !== undefined) throw deserializeRunnerError(startup.error)
-      if (existsSync(files.requestPath)) {
-        throw new Error('terminal scope exited before its bootstrap consumed the launch request')
-      }
-      return outcome
-    },
+    resolveOutcome: outcome => startup.resolveOutcome(outcome),
     cleanup: () => { cleanupLinuxLaunchFiles(files) },
   }
 }
@@ -455,7 +548,7 @@ export function prepareLinuxTerminalScope(
  * @param spec - ordinary target request.
  * @param targetEnv - validated complete target environment.
  * @param internals - optional runner and systemd seams used by tests.
- * @returns direct streams, result, and managed-scope owner.
+ * @returns streams, result, and scope owner; requested termination preserves the observed signal even before bootstrap consumption.
  */
 export function launchLinuxScope(
   spec: SubprocessSpawnSpec,
@@ -463,7 +556,11 @@ export function launchLinuxScope(
   internals: LinuxScopeInternals = {},
 ): ManagedProcessLaunch {
   const invocation = internals.runnerInvocation ?? spawnRunnerInvocation()
-  const files = createLinuxLaunchFiles({ cwd: spec.cwd, env: targetEnv })
+  const files = createLinuxLaunchFiles({
+    cwd: spec.cwd, env: targetEnv,
+    ...spec.stdio.control === undefined ? {} : { control: spec.stdio.control },
+  })
+  const startup = new LinuxScopeStartup(files, 'subprocess')
   const unitBase = unitStem('dsh-subprocess')
   let child: ReturnType<typeof spawn>
   try {
@@ -481,12 +578,14 @@ export function launchLinuxScope(
     cleanupLinuxLaunchFiles(files)
     throw error
   }
+  const direct = directOutcome(child, startup)
   const owner = new SystemdScopeOwner(
     `${unitBase}.scope`,
-    files,
+    startup,
     {
       running: () => child.pid !== undefined && child.exitCode === null && child.signalCode === null,
-      signal: (signal) => { signalChildGroup(child, signal) },
+      signal: signal => signalChildGroup(child, signal),
+      settled: direct,
     },
     internals.systemctl ?? 'systemctl',
     internals.spawnSync ?? spawnSync,
@@ -497,7 +596,8 @@ export function launchLinuxScope(
     stdin: child.stdin,
     stdout: child.stdout,
     stderr: child.stderr,
-    direct: directOutcome(child, files),
+    control: controlPipe(child, spec.stdio.control),
+    direct,
     owner,
   }
 }

@@ -31,7 +31,7 @@ async function observe(run: () => Promise<unknown>): Promise<string[]> {
   try { await run().catch(() => undefined) } finally { await dispose() }
   return seen
 }
-import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 describe('mcp streamable-http egress', () => {
   it('goes through the proxy', async () => {
     const t = new StreamableHTTPClientTransport(new URL('http://mcp-probe.invalid/mcp'))

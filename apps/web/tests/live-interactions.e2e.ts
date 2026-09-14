@@ -30,7 +30,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/live-interactions', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.v2.jsonl')
+const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 // One golden pins the empty mid-turn loading state, one pins the sendable draft
 // state, and the other four capture what remains after cancel, after a
 // non-retryable failure, after retry recovery, and after retry exhaustion.
@@ -99,6 +99,8 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     }
     scaffold = await launchWebScaffold({
       replayFixture: FIXTURE,
+      // Throughput snapshots need a nonzero interval between replayed chunks.
+      paceMs: 1,
       ...(overridePath === undefined ? {} : { replayOverride: overridePath }),
       ...(overridePath === undefined ? {} : { compareReplaySession: false }),
       ...(retryPolicy === undefined ? {} : { replayRetryPolicy: retryPolicy }),
@@ -166,9 +168,12 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
 
     const input = page.locator('[data-composer-input]').first()
     await input.fill(RUNNING_DRAFT)
-    const send = page.getByRole('button', { name: 'Send message', exact: true })
+    // The running primary names its delivery: the default busy-state
+    // preference is Queue, so the button reads Queue rather than plain Send.
+    const send = page.getByRole('button', { name: 'Queue message', exact: true })
     await send.waitFor({ timeout: 10_000 })
     expect(await page.getByRole('button', { name: 'Stop generating', exact: true }).count()).toBe(0)
+    expect(await page.getByRole('button', { name: 'Send message', exact: true }).count()).toBe(0)
     const runningDraftSnapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
     await compareOrRefreshGolden(RUNNING_DRAFT_EXPECTED, runningDraftSnapshot, MODE)
     await send.click()
@@ -179,7 +184,10 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     await queuedRow.getByRole('button', { name: 'Remove queued message' }).click()
     await expect.poll(() => queuedRow.count(), { timeout: 10_000 }).toBe(0)
 
-    await page.getByRole('button', { name: 'Stop generating' }).click()
+    const stopButton = page.getByRole('button', { name: 'Stop generating' })
+    await stopButton.hover()
+    await page.getByRole('tooltip', { name: 'Stop generating', exact: true }).waitFor()
+    await stopButton.click()
     await settled
     expect(turnEndReasons(sessionEvents).at(-1)).toBe('aborted')
     // Composer recovered; no streaming node lingers. The host settled first
@@ -187,6 +195,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
     // frozen-partial swap is eventually consistent, so poll rather than count.
     await expect.poll(() => page.locator('[data-composer-input]').first().isEnabled(), { timeout: 10_000 }).toBe(true)
     await expect.poll(() => page.locator('[data-streaming="true"]').count(), { timeout: 10_000 }).toBe(0)
+    await expect.poll(() => page.getByRole('tooltip').count()).toBe(0)
     // Golden of the aborted end-state: the prompt bubble plus the frozen
     // partial ('partial' is the hang entry's replayed prefix) and no more.
     const snapshot = await captureStableAria(page, '[class*="centerCol"]', scaffold!.workspaceCwd)
@@ -325,7 +334,7 @@ describe('web e2e: live-turn interactions (cancel / error / retry)', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.v2.jsonl', 'cancel.expected.md', 'cancel-expanded.expected.md',
+      'session.v3.jsonl', 'cancel.expected.md', 'cancel-expanded.expected.md',
       'loading.expected.md', 'running-draft.expected.md', 'error-auth.expected.md',
       'retry.expected.md', 'retry-expanded.expected.md', 'retry-exhausted.expected.md',
     ])

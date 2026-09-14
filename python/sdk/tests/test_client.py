@@ -13,7 +13,7 @@ from deepseek_harness import DeepSeekHarness, HarnessClient, HarnessConfig, Noti
 from deepseek_harness.errors import JsonRpcError
 
 
-def test_high_level_sdk_runs_turn_and_collects_final_response(tmp_path: Path) -> None:
+def test_high_level_sdk_runs_turn_and_preserves_auto_review_errors(tmp_path: Path) -> None:
     script = tmp_path / "fake_runtime.py"
     env_dump = tmp_path / "env.json"
     init_dump = tmp_path / "init.json"
@@ -43,6 +43,77 @@ for line in sys.stdin:
         print(json.dumps({"jsonrpc": "2.0", "method": "session.event", "params": {"sessionId": params["sessionId"], "event": {"type": "agent/inbox/spliced", "data": {"target": "next-turn", "start": 0, "inserted": [{"id": "message-1"}]}}}}), flush=True)
         print(json.dumps({"jsonrpc": "2.0", "method": "session.status", "params": {"sessionId": params["sessionId"], "status": "running"}}), flush=True)
         print(json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": {"messageId": "message-1"}}), flush=True)
+        print(json.dumps({
+            "jsonrpc": "2.0",
+            "method": "session.event",
+            "params": {
+                "sessionId": params["sessionId"],
+                "event": {
+                    "type": "tool/result",
+                    "data": {
+                        "turn": 1,
+                        "step": 1,
+                        "message": {
+                            "source": {"kind": "tool", "callId": "native-call"},
+                            "content": [{
+                                "type": "tool-result",
+                                "toolCallId": "native-call",
+                                "content": [{"type": "text", "text": "Error: blocked by policy"}],
+                                "isError": True,
+                            }],
+                            "role": "user",
+                            "id": "native-result",
+                        },
+                        "error": {
+                            "name": "AutoReviewDeniedError",
+                            "code": "AUTO_REVIEW_DENIED",
+                            "reason": " native raw\\nreason ",
+                        },
+                    },
+                },
+            },
+        }), flush=True)
+        print(json.dumps({
+            "jsonrpc": "2.0",
+            "method": "session.event",
+            "params": {
+                "sessionId": params["sessionId"],
+                "event": {
+                    "type": "tool/ptc-dispatch-start",
+                    "data": {
+                        "rootCallId": "run-code-call",
+                        "parentCallId": "run-code-call",
+                        "subCallId": "run-code-call:ptc:1",
+                        "name": "bash",
+                        "arguments": {"command": "git push --force"},
+                    },
+                },
+            },
+        }), flush=True)
+        print(json.dumps({
+            "jsonrpc": "2.0",
+            "method": "session.event",
+            "params": {
+                "sessionId": params["sessionId"],
+                "event": {
+                    "type": "tool/ptc-dispatch",
+                    "data": {
+                        "rootCallId": "run-code-call",
+                        "parentCallId": "run-code-call",
+                        "subCallId": "run-code-call:ptc:1",
+                        "name": "bash",
+                        "arguments": {"command": "git push --force"},
+                        "isError": True,
+                        "content": [{"type": "text", "text": "Error: blocked by policy"}],
+                        "error": {
+                            "name": "AutoReviewDeniedError",
+                            "code": "AUTO_REVIEW_DENIED",
+                            "reason": " ptc raw\\nreason ",
+                        },
+                    },
+                },
+            },
+        }), flush=True)
         print(json.dumps({
             "jsonrpc": "2.0",
             "method": "session.event",
@@ -110,6 +181,27 @@ for line in sys.stdin:
     assert result.final_response == "hello from runtime"
     assert result.finish_reason == "max-tokens"
     assert result.events[-1]["type"] == "turn/end"
+    projected_errors = [
+        event["data"]["error"]
+        for event in result.events
+        if event["type"] in {"tool/result", "tool/ptc-dispatch"}
+    ]
+    assert projected_errors == [
+        {
+            "name": "AutoReviewDeniedError",
+            "code": "AUTO_REVIEW_DENIED",
+            "reason": " native raw\nreason ",
+        },
+        {
+            "name": "AutoReviewDeniedError",
+            "code": "AUTO_REVIEW_DENIED",
+            "reason": " ptc raw\nreason ",
+        },
+    ]
+    ptc_events = [event for event in result.events if event["type"].startswith("tool/ptc-dispatch")]
+    assert [event["type"] for event in ptc_events] == ["tool/ptc-dispatch-start", "tool/ptc-dispatch"]
+    for event in ptc_events:
+        assert not {"description", "parameters", "schema"}.intersection(event["data"])
     dumped_env = json.loads(env_dump.read_text())
     assert dumped_env["DEEPSEEK_API_KEY"] == "env-key"
     assert dumped_env["DEEPSEEK_BASE_URL"] == "http://127.0.0.1:4321"

@@ -9,7 +9,7 @@ function configured(compat: Record<string, unknown>, api = 'openai-completions')
 }
 
 function resolved(compat: Record<string, unknown>, api = 'openai-completions') {
-  return resolveProfiles(configured(compat, api).providers).get('gateway')?.piProvider.getModels()[0]?.compat
+  return resolveProfiles(configured(compat, api).providers).get('gateway')?.piProvider?.getModels()[0]?.compat
 }
 
 describe('pi-ai gateway compatibility declarations', () => {

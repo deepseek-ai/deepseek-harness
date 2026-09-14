@@ -38,9 +38,9 @@ function codec(version: number, inheritedEventCount = 0): SessionFormatCodec & S
   }
 }
 
-function identityMigrationStage(inheritedEventCount: number) {
+function identityMigrationStage(inheritedEventCount: number | undefined) {
   return {
-    headerInheritedEventCount: inheritedEventCount,
+    ...(inheritedEventCount === undefined ? {} : { headerInheritedEventCount: inheritedEventCount }),
     transformEvent(
       event: SessionFormatEvent,
       context: SessionFormatMigrationContext,
@@ -53,7 +53,7 @@ function identityMigrationStage(inheritedEventCount: number) {
     ) {
       context.emitRun(run)
     },
-    finish: () => inheritedEventCount,
+    finish: () => inheritedEventCount ?? 0,
   }
 }
 
@@ -336,10 +336,10 @@ describe('Session format catalog', () => {
         }
       },
     }
-    expect(() => catalog(edge(), 1, deferredCut).createRestore(
+    expect(catalog(edge(), 1, deferredCut).createRestore(
       oldHeader,
       { recovery: 'strict', validation: 'current' },
-    )).toThrow(/must expose its inherited cut/)
+    ).finish().inheritedEventCount).toBe(0)
   })
 
   it('expands an unhandled compact run without an intermediate array', () => {

@@ -26,13 +26,18 @@ const { mockConnect, mockClose, mockListTools, MockClient, instances, transportC
     throw new Error(`unexpected MCP request: ${request.method}`)
   })
   class MockClient {
+    transport: object | undefined = {}
     onclose: (() => void) | undefined
     connect = mockConnect
     ping = (): Promise<void> => Promise.resolve()
     close = mockClose
+    // The probe pages through request(); the supervised connection lists through listTools().
     request = mockRequest
+    listTools = mockListTools
+    getServerCapabilities = () => ({ tools: {} })
+    getInstructions(): string | undefined { return undefined }
+    listResources = async () => ({ resources: [] })
     getServerVersion = (): { name: string; version: string } => ({ name: 'fixture', version: '1.0.0' })
-    setNotificationHandler = vi.fn()
     constructor() { instances.push(this) }
   }
   const instances: MockClient[] = []
@@ -40,12 +45,16 @@ const { mockConnect, mockClose, mockListTools, MockClient, instances, transportC
   return { mockConnect, mockClose, mockListTools, MockClient, instances, transportConfigs }
 })
 
-vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({ Client: MockClient }))
-vi.mock('@modelcontextprotocol/sdk/client/stdio.js', () => ({
+vi.mock('@modelcontextprotocol/client/stdio', () => ({
   // Constructible mock: `new` on an arrow-implemented vi.fn throws.
-  StdioClientTransport: vi.fn(function (config: Record<string, unknown>) { transportConfigs.push(config); return {} }),
+  StdioClientTransport: vi.fn(function (config: Record<string, unknown>) {
+    transportConfigs.push(config)
+    return { close: () => Promise.resolve() }
+  }),
 }))
-vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
+vi.mock('@modelcontextprotocol/client', async importOriginal => ({
+  ...await importOriginal<typeof import('@modelcontextprotocol/client')>(),
+  Client: MockClient,
   StreamableHTTPClientTransport: vi.fn(function (url: URL, options: Record<string, unknown>) {
     transportConfigs.push({ url: url.href, ...options })
     return {}

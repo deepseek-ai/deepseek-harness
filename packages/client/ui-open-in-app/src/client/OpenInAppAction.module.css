@@ -1,13 +1,13 @@
-/* The split button sits beside the session-log capsule at the same compact
-   scale (26px tall, pill radius, hairline l4 border, 11px primary-color label). */
+/* The split button matches the header's 28px control row (pill radius,
+   hairline l4 border, 11px primary-color label) beside the round icon buttons. */
 
 .split {
   display: inline-flex;
   align-items: stretch;
   box-sizing: border-box;
-  height: 26px;
+  height: 28px;
   border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 13px;
+  border-radius: 14px;
   overflow: hidden;
   font-family: var(--dsw-font-family);
 }

@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-[CI](../../../../.github/workflows/ci.yml) 将 Linux 故障切换变量应用于这三个作业，要求作者不是 Dependabot，且非 fork 的头部仓库与当前仓库相同。标准托管回退仍然可用。这些条件约束本作业，而非所有可进入该池的工作流。仓库身份和 fork 状态均显式保留，以便在仓库设置改变时保持本作业的信任限制；现有兄弟选择器不属于本次迁移范围。
+[CI](../../../../.github/workflows/ci.yml) 将 Linux 故障切换变量应用于这三个作业，要求作者不是 Dependabot，且非 fork 的头部仓库与当前仓库相同。标准托管回退仍然可用。这些条件约束本作业，而非所有可进入该池的工作流。仓库身份和 fork 状态均显式保留，以便在仓库设置改变时保持本作业的信任限制；现有兄弟选择器不属于本次迁移范围。`blacksmith` 故障切换取值下的分支放弃这些条件：它面向临时的 Blacksmith 运行器，因此仓库身份与 fork 状态不参与门控（见 [blacksmith 故障切换支路笔记](2026-09-09-blacksmith-failover-leg.zh.md)）。
 
 临时工具缓存以重复下载 Node 为代价，换取并发运行器与 Node 版本之间的隔离。仅用于 setup-node 的 [ESM 预加载模块](../../../../scripts/ci-compatible-toolcache.mjs) 在 action 进程内指定缓存：Actions 运行器在读取步骤配置后会覆盖保留的环境变量。实际执行的路径检查拒绝运行器临时目录之外的安装；兼容性进程不继承预加载设置。pnpm 保留现有的私有安装目录和持久化内容寻址 store。编译缓存与 node-gyp 头文件在首次调用 pnpm 前就使用运行器临时目录。不引入全局 Node 符号链接或系统软件包变更。托管作业保留其工具与软件包缓存；自托管作业不恢复或上传托管软件包缓存。运行器负责作业之间的临时目录清理，共享镜像提供原生 npm 软件包所需的编译器和 Python 前置依赖。
 
@@ -32,4 +32,4 @@ Status: implemented
 
 聚焦的[工作流回归测试](../../../../scripts/ci-compatible-selfhosted.spec.ts) 执行真实的路由表达式和环境设置。移除 fork 条件的负对照使托管回退断言失败。它检查维护者重跑 Dependabot PR、仓库不匹配、fork 标志、禁用变量以及运行器范围内的缓存路径。
 
-实施基线上的[成功热备运行 33984559660](https://github.com/deepseek-harness/deepseek-harness/actions/runs/33984559660) 提供 Linux Node 24.19.0 和 Windows Node 24.20.0 基线证据。Linux 作业 101359402557 使用数据卷上运行器专属的临时目录和工具目录。[只读能力探测 34012679056](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34012679056/job/101431064925) 报告 Linux x64、192 个在线逻辑 CPU、GCC/G++ 13.3、Make 4.3 和 Python 3.12.3。Python 3.10 缺失，进一步说明 SDK 需要单独配置。`282519d2` 上的 [PR 运行 34013779750](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34013779750) 验证了自托管 Linux 上的 Node 22.19.0、24.9.0 和 26.8.1，包括设置、可执行文件路径检查、兼容性测试和 post actions。可执行文件位于各运行器的 `_temp/node-compat-toolcache/node/<version>/x64/bin` 下；完成的作业分别耗时 228s、94s 和 101s。这些观测证明版本与路径兼容性，而非独占主机的容量保证。
+实施基线上的成功热备运行 33984559660 提供 Linux Node 24.19.0 和 Windows Node 24.20.0 基线证据。Linux 作业 101359402557 使用数据卷上运行器专属的临时目录和工具目录。只读能力探测 34012679056 (job 101431064925) 报告 Linux x64、192 个在线逻辑 CPU、GCC/G++ 13.3、Make 4.3 和 Python 3.12.3。Python 3.10 缺失，进一步说明 SDK 需要单独配置。PR 运行 34013779750 验证了自托管 Linux 上的 Node 22.19.0、24.9.0 和 26.8.1，包括设置、可执行文件路径检查、兼容性测试和 post actions。可执行文件位于各运行器的 `_temp/node-compat-toolcache/node/<version>/x64/bin` 下；完成的作业分别耗时 228s、94s 和 101s。这些观测证明版本与路径兼容性，而非独占主机的容量保证。

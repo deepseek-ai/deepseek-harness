@@ -46,7 +46,7 @@ Status: proposed
 - `history_read(checkpoint, offset?)`：把日志中任意检查点（包括已被取代的检查点）遮蔽的区段渲染为 `User:`／`Assistant:`／`Tool result:` transcript（文本记录），并按配置预算分页，提供续传游标。
 - `history_search(query, checkpoint?, limit?)`：对每个被遮蔽区段进行不区分大小写的字面量扫描；返回带检查点 id 的片段与覆盖元数据（`scanned`／`matched`／`truncated`）。零匹配提示会说明扫描按字面量执行，并建议对可能的检查点直接使用 `history_read`。
 
-两个工具都读取 `exec.agent.session.snapshotEvents()`（沿用 tool-todo 访问模式；拒绝非 agent（智能体）调用方），只渲染表面类型的消息事件，并返回普通 `tool/result`：回溯字节会进入上下文尾部并记录到日志，因此无需特殊处理即可满足可重建性。系统不增加新存储或伴随索引：会话日志存储内容，`compaction/summary.shadowedRange` 和 `shadowedSeqs` 指明每个检查点替换了什么，这些工具读取两者。工具 schema 与该包唯一的系统提示词章节都是静态字符串；检查点 id 只会通过页脚抵达模型。transcript 渲染器从 `compaction-basic` 移入 `dsh-session`，供摘要器与工具共享。
+两个工具都按[同步事件读取弃用规则](../../implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.zh.md)使用显式异步分页历史读取（拒绝非 agent（智能体）调用方），只渲染表面类型的消息事件，并返回普通 `tool/result`：回溯字节会进入上下文尾部并记录到日志，因此无需特殊处理即可满足可重建性。系统不增加新存储或伴随索引：会话日志存储内容，`compaction/summary.shadowedRange` 和 `shadowedSeqs` 指明每个检查点替换了什么，这些工具读取两者。工具 schema 与该包唯一的系统提示词章节都是静态字符串；检查点 id 只会通过页脚抵达模型。transcript 渲染器从 `compaction-basic` 移入 `dsh-session`，供摘要器与工具共享。
 
 ### 缓存与成本
 
@@ -86,7 +86,7 @@ Status: proposed
 - **一次摘要调用输出全部结果**：不予采纳，因为摘要路径没有结构化输出约束；解析一份自由文本响应并将其拆开，正是保守失败设计要避免的脆弱边界。
 - **由模型选择分片边界**：延后实现，因为相对于未经证明的收益，解析与校验成本过高；分片策略由配置控制。
 - **由模型编写指针**：不予采纳，因为指针必须精确，应由确定性代码组装。
-- **FTS／向量索引伴随存储**：在会话内不予采纳，因为实时日志已在内存中且大小有界，在预算内进行字面量扫描已经足够；只有跨会话范围才能证明索引的价值。
+- **FTS／向量索引伴随存储**：以实时日志常驻内存且大小有界为依据的否决，被[事件读取策略](../../implemented/architecture/2026-09-09-deprecate-synchronous-session-event-reads.zh.md)取代。实现回溯前，需要针对分页历史读取重新评估索引选择。
 - **回溯路径中的语义搜索回退／次级模型提取**：不予采纳，因为其中的 LLM 或嵌入调用会破坏无密钥回放的确定性；回溯必须保持为日志的纯函数。
 - **使用原始事件而不是渲染后的 transcript**：不予采纳，因为这会泄漏仅日志可见的词汇与分片噪声；模型应读取模型曾经看到的内容。
 - **什么都不做（用恢复／fork 补救）**：不予采纳，因为这会把恢复变成人工操作。

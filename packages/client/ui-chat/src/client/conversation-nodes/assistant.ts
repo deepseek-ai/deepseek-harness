@@ -4,6 +4,7 @@ import type {
   ConversationNodeContext, ConversationNodeDefinition,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type {} from '@deepseek-ai/dsh-llm-retry/types'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { AssistantChatData } from '../contract/chat-nodes.ts'
@@ -161,6 +162,17 @@ function updateChunk(
   }
 }
 
+/** The Step retains its first token across live chunks and settled retry attempts. */
+function settleTiming(
+  state: AssistantState,
+  event: SessionEvent<'assistant/message' | 'assistant/attempt'>,
+): AssistantState {
+  return {
+    ...state,
+    firstTokenTime: state.firstTokenTime ?? assistantStreamFirstTokenTime(event.data.stream),
+  }
+}
+
 function settleMessage(
   state: AssistantState,
   match: ConversationMatch,
@@ -168,7 +180,7 @@ function settleMessage(
 ): AssistantState {
   const blocks = toAssistantBlocks(event.data.message.content)
   return {
-    ...state,
+    ...settleTiming(state, event),
     blocks,
     visibleBlocks: countVisibleBlocks(blocks),
     hidden: false,
@@ -236,6 +248,11 @@ function fallbackState(context: ConversationNodeContext<AssistantState>): Assist
       state = updateChunk(state, match.event.data.chunk, match.event.seq, match.event.time)
       continue
     }
+    if (match.event.type === 'assistant/attempt') {
+      state ??= initialState(match.event.data.turn, match.event.data.step)
+      state = settleTiming(state, match.event)
+      continue
+    }
     if (match.event.type === 'assistant/message') {
       state ??= initialState(match.event.data.turn, match.event.data.step)
       state = settleMessage(state, match, match.event)
@@ -296,6 +313,7 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
   match: (event) => {
     if (event.type === 'step/start') return { id: `${event.data.turn}:${event.data.step}`, role: 'start' }
     if (event.type === 'assistant/live-chunk'
+      || event.type === 'assistant/attempt'
       || (event.type === 'assistant/message' && event.surfaceOp === 'append')) {
       return { id: `${event.data.turn}:${event.data.step}`, role: 'update' }
     }
@@ -313,13 +331,14 @@ export const assistantDefinition: ConversationNodeDefinition<AssistantState> = {
       return updateChunk(context.state, match.event.data.chunk, match.event.seq, match.event.time)
     }
     if (match.event.type === 'assistant/message') return settleMessage(context.state, match, match.event)
+    if (match.event.type === 'assistant/attempt') return settleTiming(context.state, match.event)
     if (match.event.type === 'llm/retry') {
       return resetForRetry(context.state)
     }
     return context.state
   },
   publication: (match) => {
-    if (match.event.type === 'step/start') return 'none'
+    if (match.event.type === 'step/start' || match.event.type === 'assistant/attempt') return 'none'
     if (match.event.type !== 'assistant/live-chunk') return 'immediate'
     const type = match.event.data.chunk.type
     return type === 'usage' || type === 'finish' ? 'none' : 'animation-frame'

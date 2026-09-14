@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-subagent 组是委派能力家族：它让 agent（智能体）把任务交给子 agent，等待或继续子 agent 的工作，并让每个子 agent 随时可被发现。一个约定（`ctx.subagents`）服务任意数量的具名提供方，因此单个组合可以混合进程内子 agent（全新启动，或从父级已完成历史派生）与进程外子 agent——ACP agent、真实 Codex 或 Claude Code 安装，或经 SDK 运行的完整 Harness 运行时。面向模型的工具向 agent 公开委派、相邻 Agent 消息与列举，父级总能看到存在哪些子级、它们在线还是仅存于存储。本页是组的映射；各包 README 负责各自的包约定。
+subagent 包家族让 agent（智能体）将任务委派给子 agent、继续其工作，并发现自己创建的每个子级。隔离工作可选择全新的进程内子级；需要既有对话时可选择带父级历史的进程内子级；也可选择由 ACP（Agent Client Protocol）、Codex、Claude Code 或另一 Harness 运行时支持的进程外子级。面向模型的工具还让 agent 能够向相邻 agent 发送消息、中断工作并列出子级状态。无论子级正在运行还是已存储，父级都能看到它；各包 README 说明各提供方特定的设置与限制。
 
 ## 目录
 
@@ -33,7 +33,7 @@ subagent 组是委派能力家族：它让 agent（智能体）把任务交给�
 | [`subagent-claude-code/`](subagent-claude-code/README.zh.md) | 经官方 Agent SDK 运行真实 Claude Code 子 agent | 注册到 `ctx.subagents` |
 | [`subagent-dsh-sdk/`](subagent-dsh-sdk/README.zh.md) | 经 TypeScript SDK 运行进程外 Harness 子 agent | 注册到 `ctx.subagents` |
 | [`tool-subagent/`](tool-subagent/README.zh.md) | 向模型公开委派 | 注册到 `ctx.tools` |
-| [`tool-subagent-control/`](tool-subagent-control/README.zh.md) | 向模型公开相邻 Agent 消息、中断与列举 | 注册到 `ctx.tools` |
+| [`tool-subagent-control/`](tool-subagent-control/README.zh.md) | 向模型提供向相邻 agent 发送消息、中断工作和列出子级状态的操作 | 注册到 `ctx.tools` |
 
 -----
 
@@ -43,7 +43,7 @@ subagent 组是委派能力家族：它让 agent（智能体）把任务交给�
 - [Subagent 子系统](../../docs/subsystems/subagent.zh.md)——服务约定、提供方约定与终态结果语义。
 - [Subagent 能力 seam](../../.agents/notes/implemented/feature/2026-06-21-subagent-capability-seam.zh.md)——委派能力家族的设计记录。
 - [可继续的 subagent](../../.agents/notes/implemented/feature/2026-07-28-continuable-subagent-conversations.zh.md)——接受后续轮次的持久子级。
-- [tool-subagent-control README](tool-subagent-control/README.zh.md)——后续消息、中断与列举面。
+- [tool-subagent-control README](tool-subagent-control/README.zh.md)——后续消息、中断与列举接口。
 
 <a id="dev-note"></a>
 ## 开发备注

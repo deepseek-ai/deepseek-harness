@@ -31,7 +31,7 @@ Status: rejected — 下列每一项替换在证据上都未达到净简化门�
 **数据与校验：**
 
 - **以 Ajv 承担 tools 的 JSON Schema 校验器**：[schema DSL 决策](../../implemented/architecture/2026-07-20-unified-json-value-schema-dsl.zh.md)已明确否决接纳更大的 schema 语言；这个校验器还会做 Ajv 不做的、针对 realm 内建原型的检查。
-- **以 `structuredClone` 替换会话的 `snapshotJsonValue`/`isJsonValue`**：它是校验器加分离器，以「每个 getter 只读一次」和跨 realm 内建对象检查强制执行无损 JSON 边界；`structuredClone` 接受 Map/Date/-0，什么都不强制。有意保持零依赖、针对被模型篡改的 realm 做过加固的 `code-runtime-worker` 镜像实现同理。
+- **以 `structuredClone` 替换会话的 `snapshotJsonValue`/`isJsonValue`**：它是校验器加分离器，以「每个 getter 只读一次」和跨 realm 内建对象检查强制执行无损 JSON 边界；`structuredClone` 接受 Map/Date/-0，什么都不强制。有意保持零依赖、针对被模型篡改的 realm 做过加固的 `ptc-runtime-worker` 镜像实现同理。
 - **以 `fast-deep-equal` 替换会话接口面的 `isDeepEqualJson`**、**以 `safe-stable-stringify` 承担 repeat-tool-reminder 的规范化**：两项替换在机械层面都可行，但每一项都是拿约 17–20 行带注释、有测试的代码，去换一个核心包的第一个外部运行时依赖——在这个体量上是净亏损。
 - **以 zod/valibot 承担持久事件的严格解码器**（goal fold、tool-ralph、session）：它们是位于持久化边界、键集精确匹配、失败即明确报错、带事件专属报错信息的解码器；在仓库标准 schemastery 之外再放一个 schema 库是政策变更，不是删除。
 - **以 `gpt-tokenizer`/tiktoken 替换 token-meter**：[回放 token 计量决策](../../archived/architecture/2026-07-15-replay-token-meter-service.md)已明确否决分词器后端；GPT 的 BPE 对 DeepSeek 模型来说也是错误的分词器，而且这个包约 350 行是回放折叠簿记，任何分词器都覆盖不了。

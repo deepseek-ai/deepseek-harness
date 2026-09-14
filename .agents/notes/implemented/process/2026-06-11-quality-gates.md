@@ -19,7 +19,7 @@ Every mechanically checkable AGENTS.md promise gets a command that exits non-zer
 - jscpd detects cross-file clones in package production TypeScript and repository scripts; narrow source-range exceptions document deliberately parallel implementations.
 - Per-file 100% coverage on `packages/*/*/src` (v8); unreachable defensive guards carry `/* v8 ignore */ ` with stated reasons instead of deletion.
 - publint (package correctness), workspace constraints (workspace rules: private, cordis peer+dev, uniform version, ESM), and a NodeNext consumer typecheck for built package declarations. [The unused-code gate removal](2026-08-19-remove-knip.md) records why static dead-code scanning is outside this suite.
-- lefthook pre-commit applies project-free Oxlint validation and [safe fixes with a bounded retry](../../archived/process/2026-08-09-oxlint-only-fix-workflow.md), rejects staged whitespace, and checks the vendor manifest; pre-push runs incremental typecheck. CI runs the full matrix on node 22.19/24/26 plus built application smokes for the Headless, TUI, ACP, JSON-RPC, workflow, and code-runtime entry paths.
+- lefthook pre-commit applies project-free Oxlint validation and [safe fixes with a bounded retry](../../archived/process/2026-08-09-oxlint-only-fix-workflow.md), rejects staged whitespace, and checks the vendor manifest; pre-push runs incremental typecheck. CI runs the full matrix on node 22.19/24/26 plus built application smokes for the Headless, TUI, ACP, JSON-RPC, workflow, and ptc-runtime entry paths.
 
 ## Consequences
 

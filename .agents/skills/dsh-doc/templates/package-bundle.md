@@ -22,7 +22,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Three to five sentences: what a profile gains from this layer, which profiles already include it, how a user adds or removes it, and the main boundary.
+Three to five sentences and at most 100 `wc -w`-style words: what a profile gains from this layer, which profiles already include it, how a user adds or removes it, and the main boundary. Apply the [Summary voice rules](../SKILL.md#voice-rules).
 
 ## Table of Contents
 

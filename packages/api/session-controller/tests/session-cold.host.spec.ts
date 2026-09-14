@@ -17,6 +17,7 @@ import { snapshotSubagentDescriptor } from '@deepseek-ai/dsh-subagent'
 import { createInboxStub } from '@deepseek-ai/dsh-agent-loop-testkit'
 import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
 import type { SessionEvent, SessionHeader, SessionId } from '@deepseek-ai/dsh-session'
+import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import {
   SessionPersistenceRevision,
@@ -201,7 +202,7 @@ describe('attached updatedAt tracks human prompts', () => {
       ],
       meta: { cwd: '/proj', createdAt: 500 },
     })
-    ctx.agents.register({ id: resumed.id, session: resumed, status: 'idle', ctx } as Agent)
+    await ctx.agents.register({ id: resumed.id, session: resumed, status: 'idle', ctx } as Agent)
     const boundary = resumed.snapshotEvents().at(-1)
     expect(boundary?.type).toBe('session/end-seed')
     expect(boundary?.time).toBeGreaterThan(worked)
@@ -329,7 +330,7 @@ describe('Remote Agent and Session lookup policy', () => {
       meta: { cwd: '/proj', parentSession: sid('session-parent'), origin: 'subagent' },
     })
     const liveAgent = { id: liveSession.id, session: liveSession, status: 'idle', ctx } as Agent
-    ctx.agents.register(liveAgent)
+    await ctx.agents.register(liveAgent)
     const resume = vi.spyOn(ctx.agents, 'resume')
     const defaultAgentLookup = ctx.typert.lookups.get('agent')
     const defaultSessionLookup = ctx.typert.lookups.get('session')
@@ -477,7 +478,7 @@ describe('subagent ownership fence', () => {
     await ctx.plugin(AgentRegistry)
     const parentSession = ctx.sessions.create(sid('session-parent'), { meta: { cwd: '/proj' } })
     const parent = { id: parentSession.id, session: parentSession, status: 'idle', ctx } as Agent
-    ctx.agents.register(parent)
+    await ctx.agents.register(parent)
 
     const originSession = ctx.sessions.create(sid('session-origin-child'), {
       meta: { cwd: '/proj', parentSession: parent.id, origin: 'subagent' },
@@ -492,7 +493,7 @@ describe('subagent ownership fence', () => {
       cancel,
       updateInbox,
     } as unknown as Agent
-    ctx.agents.register(originChild)
+    await ctx.agents.register(originChild)
 
     const startingSession = ctx.sessions.create(sid('session-starting-child'), {
       meta: { cwd: '/proj', parentSession: parent.id },
@@ -548,7 +549,7 @@ describe('subagent ownership fence', () => {
     const agent = {
       id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
     } as unknown as Agent
-    ctx.agents.register(agent)
+    await ctx.agents.register(agent)
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })
 
     const response = await remote.prompt(promptRequest({
@@ -569,7 +570,7 @@ describe('subagent ownership fence', () => {
     const agent = {
       id: session.id, session, inbox: inboxFor(), status: 'idle', ctx, followup,
     } as unknown as Agent
-    ctx.agents.register(agent)
+    await ctx.agents.register(agent)
     const remote = createSessionTestRemote(ctx, {
       defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
       cwd: '/tmp',
@@ -678,6 +679,101 @@ describe('degenerate composition (no persistence, no factory)', () => {
 })
 
 describe('sessions.prompt synchronous rejection', () => {
+  it('rejects content without non-whitespace text or an attachment before delivery or Session events', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SessionStore)
+    await ctx.plugin(AgentRegistry)
+    const session = ctx.sessions.create(sid('session-empty-prompt'))
+    const followup = vi.fn()
+    const steer = vi.fn()
+    await ctx.agents.register({
+      id: session.id,
+      session,
+      inbox: inboxFor(),
+      status: 'idle',
+      ctx,
+      followup,
+      steer,
+    } as unknown as Agent)
+    const savedImage = {
+      attachmentId: 'accepted-image',
+      mediaType: 'image/png' as const,
+      bytes: 1,
+      width: 1,
+      height: 1,
+    }
+    const saveImages = vi.fn(() => Promise.resolve([savedImage]))
+    ctx.provide('attachments', Object.setPrototypeOf(
+      { saveImages },
+      AttachmentStore.prototype,
+    ) as never)
+    ctx.provide('llm', {
+      listProviders: () => [{ id: 'p', name: 'Provider' }],
+      resolveModelInfo: () => Promise.resolve({
+        provider: 'p', id: 'm', name: 'Model', inputModalities: ['text', 'image'],
+      }),
+    } as never)
+    const remote = createSessionTestRemote(ctx, {
+      defaultModelSelection: () => ({ provider: 'p', model: 'm' }),
+      cwd: '/tmp',
+    })
+    const initialEvents = session.snapshotEvents()
+    const rejectedContent: readonly SessionPromptRequest['content'][] = [
+      [],
+      [{ type: 'text', text: '' }],
+      [{ type: 'text', text: ' \t\n' }, { type: 'text', text: '' }],
+    ]
+
+    for (const [index, content] of rejectedContent.entries()) {
+      const response = await remote.prompt(promptRequest({
+        sessionId: session.id,
+        mode: index === 1 ? 'steer' : 'queue',
+        content,
+      }))
+      expect(response).toMatchObject({
+        ok: false,
+        error: {
+          code: 'gateway/bad-request',
+          message: 'prompt content must include non-whitespace text or an attachment',
+          details: {},
+        },
+      })
+    }
+    expect(followup).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
+    expect(session.snapshotEvents()).toEqual(initialEvents)
+
+    const queued = await remote.prompt(promptRequest({
+      sessionId: session.id,
+      mode: 'queue',
+      content: [{ type: 'text', text: ' queued ' }],
+    }))
+    const steered = await remote.prompt(promptRequest({
+      sessionId: session.id,
+      mode: 'steer',
+      content: [{ type: 'text', text: 'steered' }],
+    }))
+    const imageQueued = await remote.prompt(promptRequest({
+      sessionId: session.id,
+      mode: 'queue',
+      content: [{ type: 'image', mediaType: 'image/png', data: 'AQ==' }],
+    }))
+    expect(queued).toMatchObject({ ok: true, value: { accepted: true } })
+    expect(steered).toMatchObject({ ok: true, value: { accepted: true } })
+    expect(imageQueued).toMatchObject({ ok: true, value: { accepted: true } })
+    expect(followup).toHaveBeenCalledWith(expect.objectContaining({
+      content: [{ type: 'text', text: ' queued ' }],
+    }))
+    expect(steer).toHaveBeenCalledWith(expect.objectContaining({
+      content: [{ type: 'text', text: 'steered' }],
+    }))
+    expect(saveImages).toHaveBeenCalledOnce()
+    expect(followup).toHaveBeenCalledWith(expect.objectContaining({
+      content: [{ type: 'image', attachment: savedImage }],
+    }))
+    await ctx.fiber.dispose()
+  })
+
   it('maps a synchronous send throw (disposed/invalid input) to agent-busy with the reason attached', async () => {
     const ctx = new Context()
     await ctx.plugin(SessionStore)
@@ -685,7 +781,7 @@ describe('sessions.prompt synchronous rejection', () => {
     const session = ctx.sessions.create(sid('session-throwing'))
     // A live structural stub whose delivery verbs throw synchronously, the
     // shape a disposed loop presents at this gateway boundary.
-    ctx.agents.register({
+    await ctx.agents.register({
       id: session.id,
       session,
       inbox: inboxFor(),
@@ -724,7 +820,7 @@ describe('sessions.prompt synchronous rejection', () => {
     // while the generic cold resume is in flight, so the resume collides.
     const parentSession = ctx.sessions.create(sid('race-parent'), { meta: { cwd: '/proj' } })
     const parent = { id: parentSession.id, session: parentSession, status: 'idle', ctx } as Agent
-    ctx.agents.register(parent)
+    await ctx.agents.register(parent)
     const childSession = ctx.sessions.create(sessionId, {
       meta: { cwd: '/proj', parentSession: parent.id, origin: 'subagent' },
     })
@@ -732,7 +828,7 @@ describe('sessions.prompt synchronous rejection', () => {
     vi.spyOn(ctx.agents, 'resume').mockImplementationOnce(async () => {
       // The parent's `enter()` wins the identity between the pre-resume
       // re-check and publication; the generic resume then collides.
-      ctx.agents.register(child)
+      await ctx.agents.register(child)
       throw new Error('session id already published')
     })
     const remote = createSessionTestRemote(ctx, { defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/tmp' })

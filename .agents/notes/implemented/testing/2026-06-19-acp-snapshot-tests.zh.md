@@ -20,7 +20,7 @@ Status: implemented
 
 每个场景数值最高的选定 parent generation 都从真实运行中采集：v0 为 `session.jsonl`，正 generation 为 `session.vN.jsonl`。`assistant/message` 与 `assistant/attempt` 中嵌入的紧凑 stream 会复现模型 attempt；工具、message 与 boundary event 捕获 harness 行为。因此，一份普通 Session generation 同时充当 replay source 与行为预期输出。
 
-每个当前 v2 Session-format fixture 都为每个持久事件使用一条物理行。保留的 v0 与 v1 predecessor generation 可以包含其冻结 packed-row 表示，并保持不可变。普通 replay 与 log 比较证明组装进程会选择、迁移、消费并复现当前 generation。
+每个当前 Session-format fixture 都为每个持久事件使用一条物理行。保留的 v0 与 v1 predecessor generation 可以包含其冻结 packed-row 表示，并保持不可变。普通 replay 与 log 比较证明组装进程会选择、迁移、消费并复现当前 generation。
 
 ### 回放从日志推导模型脚本
 

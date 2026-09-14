@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -11,13 +11,16 @@ import {
   collectPackageDependencyViolations,
   collectRuntimeSourceExportUses,
   discoverPackageDependencyScope,
+  expectedPackageDependencies,
   fixPackageDependencies,
   formatManagedRuntimeDependencies,
   formatPeerRequiredRuntimeDependencies,
   readPackageDependencyFacts,
+  readPackageDependencyState,
   repairPackageDependencyManifest,
   type PackageDependencyFacts,
   type PackageDependencyManifest,
+  type PackageDependencyRole,
   type WorkspacePackageManifest,
 } from './verify-package-dependencies.ts'
 
@@ -85,6 +88,63 @@ function facts(manifest: PackageDependencyManifest): PackageDependencyFacts {
     configurationOnlyDevDependencies: new Set(),
     clientInject: new Set(),
   }
+}
+
+function sourceFacts(
+  files: Readonly<Record<string, string>>,
+  manifest: Partial<PackageDependencyManifest> = {},
+  role: PackageDependencyRole = 'client-host',
+): PackageDependencyFacts {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-dependency-source-'))
+  roots.push(root)
+  const subject = pkg('@f/probe', 'packages/g/probe/package.json', manifest)
+  for (const [path, source] of Object.entries(files)) {
+    const absolute = join(root, subject.dir, path)
+    mkdirSync(dirname(absolute), { recursive: true })
+    writeFileSync(absolute, source)
+  }
+  return readPackageDependencyFacts(root, subject, role, new Set([CORDIS, subject.name]), policy())
+}
+
+function generatedHostFixture(mode: 'schema' | 'object'): { root: string; manifestPath: string; source: string } {
+  const root = mkdtempSync(join(tmpdir(), 'dsh-generated-host-dependencies-'))
+  roots.push(root)
+  const manifestPath = 'packages/client/probe/package.json'
+  const source = `/** @typert ${mode} */\nexport interface Payload { value: string }\n`
+  const manifest = {
+    name: '@fixture/generated',
+    type: 'module',
+    dsh: { client: {} },
+    exports: {
+      '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+      './typert': { types: './lib/typert.host.d.ts', default: './lib/typert.host.js' },
+    },
+    files: ['lib/typert.host.js', 'lib/typert.host.d.ts'],
+    dependencies: { zod: '^4.0.0' },
+    devDependencies: { [CORDIS]: 'workspace:^' },
+    peerDependencies: { [CORDIS]: 'workspace:^' },
+  }
+  const files = {
+    'tsconfig.base.json': JSON.stringify({
+      compilerOptions: {
+        target: 'ES2024', module: 'ESNext', moduleResolution: 'Bundler', strict: true,
+        composite: true, noEmit: true, types: [], skipLibCheck: true,
+      },
+    }),
+    'tsconfig.host.json': JSON.stringify({
+      extends: './tsconfig.base.json', files: [], references: [{ path: './packages/client/probe' }],
+    }),
+    'packages/client/probe/tsconfig.json': JSON.stringify({
+      extends: '../../../tsconfig.base.json', compilerOptions: { rootDir: 'src' }, include: ['src'],
+    }),
+    [manifestPath]: JSON.stringify(manifest),
+    'packages/client/probe/src/index.ts': source,
+  }
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(dirname(join(root, path)), { recursive: true })
+    writeFileSync(join(root, path), content)
+  }
+  return { root, manifestPath, source }
 }
 
 function hostRuntimeFixture(): {
@@ -254,6 +314,231 @@ describe('package dependency scope', () => {
 })
 
 describe('face-aware source classification', () => {
+  it('keeps generated Host schema imports in dependencies without reading or writing lib', () => {
+    const { root, manifestPath, source } = generatedHostFixture('schema')
+    const before = readFileSync(join(root, manifestPath), 'utf8')
+    const state = readPackageDependencyState(root, policy())
+    const subject = state.facts[0]
+    if (subject === undefined) throw new Error('generated Host fixture was not classified')
+
+    expect(subject.allSourceUses.has('zod')).toBe(false)
+    expect(subject.hostRuntimeExportUses).toContainEqual(expect.objectContaining({
+      packageName: 'zod', specifier: 'zod', exportName: 'z',
+      sourcePath: 'packages/client/probe/lib/typert.host.js',
+    }))
+    const standalone = readPackageDependencyFacts(root, pkg('@fixture/generated', manifestPath, subject.manifest),
+      subject.role, state.workspaceNames, policy())
+    expect(standalone.hostRuntimeExportUses).toEqual(subject.hostRuntimeExportUses)
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.dependencies?.zod).toBe('^4.0.0')
+    expect(subject.manifest.devDependencies?.zod).toBeUndefined()
+
+    delete subject.manifest.dependencies?.zod
+    subject.manifest.devDependencies = { ...subject.manifest.devDependencies, zod: '^4.0.0' }
+    expect(collectPackageDependencyViolations(state)).toContainEqual(
+      expect.stringContaining('must be dependencies-only; found devDependencies'),
+    )
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.dependencies?.zod).toBe('^4.0.0')
+    expect(subject.manifest.devDependencies?.zod).toBeUndefined()
+
+    delete subject.manifest.dependencies?.zod
+    expect(() => { repairPackageDependencyManifest(subject) }).toThrow('undeclared third-party dependency zod')
+    expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
+    expect(readFileSync(join(root, manifestPath), 'utf8')).toBe(before)
+    expect(readFileSync(join(root, 'packages/client/probe/src/index.ts'), 'utf8')).toBe(source)
+  })
+
+  it('does not infer a zod runtime dependency from a metadata-only Typert export', () => {
+    const { root } = generatedHostFixture('object')
+    const state = readPackageDependencyState(root, policy())
+    const subject = state.facts[0]
+    if (subject === undefined) throw new Error('generated Host fixture was not classified')
+
+    expect(subject.hostRuntimeSourceUses.has('zod')).toBe(false)
+    expect(expectedPackageDependencies(subject).get('zod')?.section).toBe('devDependencies')
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.dependencies?.zod).toBeUndefined()
+    expect(subject.manifest.devDependencies?.zod).toBe('^4.0.0')
+    expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
+  })
+
+  it('rejects a declared Host Typert module absent from the Host program', () => {
+    const { root } = generatedHostFixture('schema')
+    rmSync(join(root, 'tsconfig.host.json'))
+
+    expect(() => readPackageDependencyState(root, policy())).toThrow(
+      'packages/client/probe/package.json: declared Host Typert export has no generated module',
+    )
+    expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
+  })
+
+  it('propagates generator publication errors without writing or repairing manifests', () => {
+    const { root, manifestPath } = generatedHostFixture('schema')
+    const manifest = JSON.parse(readFileSync(join(root, manifestPath), 'utf8')) as { files: string[] }
+    manifest.files = []
+    const before = JSON.stringify(manifest)
+    writeFileSync(join(root, manifestPath), before)
+
+    expect(() => readPackageDependencyState(root, policy())).toThrow(
+      'package files must include lib/typert.host.js',
+    )
+    expect(readFileSync(join(root, manifestPath), 'utf8')).toBe(before)
+    expect(existsSync(join(root, 'packages/client/probe/lib'))).toBe(false)
+  })
+
+  it('counts browser imports, JSX, type-only references, and augmentations as development inputs', () => {
+    const subject = sourceFacts({
+      'src/index.ts': [
+        "import { readFile } from 'node:fs'",
+        "import { join } from 'path'",
+        "import type { HostType } from 'host-types'",
+        "import { type MixedType } from 'mixed-types'",
+        "import type { Hidden } from './type-helper.ts'",
+      ].join('\n'),
+      'src/type-helper.ts': "import { hidden } from 'hidden-value'; export type Hidden = typeof hidden",
+      'src/client/index.tsx': [
+        "import { browser } from '@browser/kit/subpath'",
+        "import 'react-dom/client'",
+        "import '#local'",
+        "import 'https://example.test/browser.js'",
+        'export const view = <div />',
+      ].join('\n'),
+      'src/client/augmentation.d.ts': [
+        "declare module 'augmented' { interface Extra {} }",
+        "declare module '*.css' {}",
+        "declare module '*.module.css' {}",
+      ].join('\n'),
+    })
+
+    expect([...subject.hostRuntimeSourceUses]).toEqual([])
+    expect([...expectedPackageDependencies(subject)].map(([name, rule]) => [name, rule.section]).sort()).toEqual([
+      ['@browser/kit', 'devDependencies'],
+      [CORDIS, 'peer-dev'],
+      ['augmented', 'devDependencies'],
+      ['hidden-value', 'devDependencies'],
+      ['host-types', 'devDependencies'],
+      ['mixed-types', 'devDependencies'],
+      ['react', 'devDependencies'],
+      ['react-dom', 'devDependencies'],
+    ])
+  })
+
+  it.each(['client-host', 'configured-host'] as const)('retains Host and shared third-party values in dependencies for %s', (role) => {
+    const subject = sourceFacts({
+      'src/index.ts': "import 'host-only'; export { shared } from './nested.ts'",
+      'src/nested.ts': "export { shared } from 'shared-runtime'",
+      'src/client/index.ts': "import 'browser-only'; import 'shared-runtime'",
+    }, {}, role)
+
+    const expected = expectedPackageDependencies(subject)
+    expect(expected.get('browser-only')?.section).toBe('devDependencies')
+    expect(expected.get('host-only')?.section).toBe('dependencies')
+    expect(expected.get('shared-runtime')?.section).toBe('dependencies')
+  })
+
+  it('uses declared DefinitelyTyped providers only for erased source references', () => {
+    const subject = sourceFacts({
+      'src/index.ts': "import type { ReactNode } from 'react'",
+      'src/client/index.ts': "import type { Root } from 'mdast'; import type { Kind } from '@scope/types'",
+    }, {
+      dependencies: { '@types/mdast': '^4.0.0' },
+      devDependencies: { '@types/react': '^18.0.0', '@types/scope__types': '^1.0.0' },
+    })
+
+    expect([...subject.allSourceUses.keys()].sort()).toEqual(['@types/mdast', '@types/react', '@types/scope__types'])
+    expect([...subject.hostRuntimeSourceUses]).toEqual([])
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.devDependencies?.['@types/mdast']).toBe('^4.0.0')
+    expect(subject.manifest.dependencies?.['@types/mdast']).toBeUndefined()
+    expect(subject.manifest.devDependencies?.mdast).toBeUndefined()
+  })
+
+  it.each(["import 'runtime-library'", 'export const view = <div />'])('does not let type providers satisfy runtime imports or JSX: %s', (source) => {
+    const name = source.includes('<div') ? 'react' : 'runtime-library'
+    const subject = sourceFacts({
+      'src/index.ts': 'export function apply() {}',
+      'src/client/index.tsx': source,
+    }, { devDependencies: { [`@types/${name}`]: '^1.0.0' } })
+
+    expect(subject.allSourceUses.has(name)).toBe(true)
+    expect(() => { repairPackageDependencyManifest(subject) }).toThrow(`undeclared third-party dependency ${name}`)
+  })
+
+  it('does not treat static browser library entries as Host modules', () => {
+    const subject = sourceFacts({
+      'src/index.tsx': "import 'static-input'; export const view = <div />",
+      'src/invariant.ts': "import 'browser-companion'",
+    }, {
+      exports: {
+        '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+        './invariant': { types: './lib/types/invariant.d.ts', default: './lib/invariant.js' },
+      },
+    }, 'client-only')
+
+    expect([...subject.hostRuntimeSourceUses]).toEqual([])
+    for (const name of ['static-input', 'react', 'browser-companion']) {
+      expect(expectedPackageDependencies(subject).get(name)?.section).toBe('devDependencies')
+    }
+  })
+
+  it('scans published Node companions, conditional entries, and emitted-tree subpaths from source', () => {
+    const subject = sourceFacts({
+      'src/index.ts': 'export function apply() {}',
+      'src/invariant.ts': "import 'invariant-runtime'; import type { Kind } from 'invariant-types'",
+      'src/node/helper.ts': "export { helper } from 'node-helper'",
+      'src/node.mts': "import 'node-import'",
+      'src/node.cts': "require('node-require')",
+      'src/emitted.tsx': 'export const view = <div />',
+      'src/worker/one.ts': "import 'worker-one'",
+      'src/worker/two.ts': "import('worker-two')",
+      'src/client/index.ts': "import 'browser-only'",
+      'src/types-only.ts': "import 'type-export-only'",
+    }, {
+      exports: {
+        '.': { types: './lib/types/index.d.ts', default: './lib/index.js' },
+        './invariant': { types: './lib/types/invariant.d.ts', default: './lib/invariant.js' },
+        './renamed': { types: './lib/types/node/helper.d.ts', default: './lib/node-bundle.js' },
+        './conditional': { browser: './lib/browser.js', node: { import: './lib/node.mjs', require: './lib/node.cjs' } },
+        './emitted': { types: './lib/types/emitted.d.ts', default: './lib/types/emitted.js' },
+        './worker/*': './lib/worker/*.js',
+        './client': { types: './lib/types/client/index.d.ts', default: './lib/client.js' },
+        './client/extra': './lib/missing-browser.js',
+        './types-only': { types: './lib/types/types-only.d.ts' },
+        './src/*': './src/*',
+        './package.json': './package.json',
+        './disabled': null,
+      },
+    })
+
+    expect([...subject.hostRuntimeSourceUses.keys()].sort()).toEqual([
+      'invariant-runtime', 'node-helper', 'node-import', 'node-require', 'react', 'worker-one', 'worker-two',
+    ])
+    const expected = expectedPackageDependencies(subject)
+    for (const name of subject.hostRuntimeSourceUses.keys()) expect(expected.get(name)?.section).toBe('dependencies')
+    for (const name of ['browser-only', 'invariant-types', 'type-export-only']) {
+      expect(expected.get(name)?.section).toBe('devDependencies')
+    }
+  })
+
+  it.each([
+    './lib/missing.js',
+    { types: './lib/types/missing.d.ts', default: './lib/renamed.js' },
+    ['./lib/missing.cjs'],
+    './lib/missing/*.js',
+  ])('rejects a published Node entry with no matching source: %j', (target) => {
+    expect(() => sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+      exports: { './node': target },
+    })).toThrow('Host export ./node has no source entry')
+  })
+
+  it('rejects a Node export outside the source mapping', () => {
+    expect(() => sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+      exports: { './node': './other/node.js' },
+    })).toThrow('Host export ./node cannot map ./other/node.js to a source entry')
+  })
+
   it('fails when a managed Host package has no Host entry', () => {
     const root = mkdtempSync(join(tmpdir(), 'dsh-package-missing-host-'))
     roots.push(root)
@@ -349,6 +634,131 @@ describe('face-aware source classification', () => {
 })
 
 describe('dependency sections', () => {
+  it.each(['client-only', 'client-host'] as const)('moves unused third-party and CSS inputs to development dependencies for %s', (role) => {
+    const subject = sourceFacts({
+      'src/index.ts': "import 'host-runtime'",
+    }, {
+      dependencies: { 'unused-browser-dep': '^1.2.3', '@fontsource/test-font': '~2.0.0', 'host-runtime': '^3.0.0' },
+      optionalDependencies: { 'unused-optional': '^4.0.0' },
+    }, role)
+
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.devDependencies).toMatchObject({
+      'unused-browser-dep': '^1.2.3',
+      '@fontsource/test-font': '~2.0.0',
+      'unused-optional': '^4.0.0',
+    })
+    expect(subject.manifest.dependencies).toEqual(role === 'client-host' ? { 'host-runtime': '^3.0.0' } : undefined)
+    expect(subject.manifest.optionalDependencies).toBeUndefined()
+    const repaired = structuredClone(subject.manifest)
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest).toEqual(repaired)
+  })
+
+  it('preserves unreferenced third-party declarations in configured Host packages', () => {
+    const subject = sourceFacts({ 'src/index.ts': 'export function apply() {}' }, {
+      dependencies: { 'unused-host-dep': '^1.0.0' },
+      optionalDependencies: { 'unused-host-optional': '^2.0.0' },
+    }, 'configured-host')
+
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.dependencies).toEqual({ 'unused-host-dep': '^1.0.0' })
+    expect(subject.manifest.optionalDependencies).toEqual({ 'unused-host-optional': '^2.0.0' })
+  })
+
+  it.each(['peerDependencies', 'optionalDependencies'] as const)('rejects browser-only imports declared in %s', (section) => {
+    const subject = sourceFacts({
+      'src/index.ts': 'export function apply() {}',
+      'src/client/index.ts': "import 'external'",
+    }, {
+      devDependencies: { [CORDIS]: 'workspace:^' },
+      peerDependencies: { [CORDIS]: 'workspace:^' },
+      [section]: { [CORDIS]: 'workspace:^', external: '~1.2.3' },
+      peerDependenciesMeta: { external: { optional: true } },
+    })
+    if (section === 'optionalDependencies') delete subject.manifest.optionalDependencies?.[CORDIS]
+    const state = { facts: [subject], packages: [], policyViolations: [], workspaceNames: subject.workspaceNames }
+
+    expect(collectPackageDependencyViolations(state)).toContainEqual(
+      expect.stringContaining(`must be devDependencies-only; found ${section}`),
+    )
+    repairPackageDependencyManifest(subject)
+    expect(subject.manifest.devDependencies?.external).toBe('~1.2.3')
+    expect(subject.manifest[section]?.external).toBeUndefined()
+    expect(subject.manifest.peerDependenciesMeta).toBeUndefined()
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+  })
+
+  it('rejects a missing third-party declaration and leaves the in-memory manifest unchanged', () => {
+    const subject = sourceFacts({
+      'src/index.ts': 'export function apply() {}',
+      'src/client/index.ts': "import 'undeclared'",
+    })
+    const before = structuredClone(subject.manifest)
+    const state = { facts: [subject], packages: [], policyViolations: [], workspaceNames: subject.workspaceNames }
+
+    expect(collectPackageDependencyViolations(state)).toContain(
+      'packages/g/probe/package.json: undeclared (packages/g/probe/src/client/index.ts) '
+      + 'must be devDependencies-only; found no dependency section',
+    )
+    expect(() => { repairPackageDependencyManifest(subject) }).toThrow(
+      'packages/g/probe/package.json: cannot repair undeclared third-party dependency undeclared; declare its version range first',
+    )
+    expect(subject.manifest).toEqual(before)
+  })
+
+  it('validates every third-party range before writing any manifest in a repair batch', () => {
+    const root = mkdtempSync(join(tmpdir(), 'dsh-dependency-batch-'))
+    roots.push(root)
+    const valid = { ...facts({ name: '@deepseek-ai/dsh-first' }), manifestPath: 'first.json' }
+    const base = facts({ name: '@deepseek-ai/dsh-second' })
+    const invalid: PackageDependencyFacts = {
+      ...base,
+      manifestPath: 'second.json',
+      allSourceUses: new Map([...base.allSourceUses, ['undeclared', ['src/client/index.ts']]]),
+    }
+    const subjects = [valid, invalid]
+    const originals = subjects.map(subject => ({ subject, content: `${JSON.stringify(subject.manifest)}\n` }))
+    for (const { subject, content } of originals) writeFileSync(join(root, subject.manifestPath), content)
+    const state = { facts: subjects, packages: [], policyViolations: [], workspaceNames: valid.workspaceNames }
+
+    expect(fixPackageDependencies(root, { ...state, policyViolations: ['unclassified Host export'] })).toEqual([])
+    expect(() => fixPackageDependencies(root, state)).toThrow(
+      'second.json: cannot repair undeclared third-party dependency undeclared; declare its version range first',
+    )
+    for (const { subject, content } of originals) {
+      expect(readFileSync(join(root, subject.manifestPath), 'utf8')).toBe(content)
+      expect(`${JSON.stringify(subject.manifest)}\n`).toBe(content)
+    }
+  })
+
+  it('moves browser-only third-party imports to development dependencies without changing their ranges', () => {
+    const manifest: PackageDependencyManifest = {
+      name: '@deepseek-ai/dsh-probe',
+      dependencies: { '@deepseek-ai/dsh-runtime': 'workspace:^', external: '^1.2.3' },
+      devDependencies: { [CORDIS]: 'workspace:^', '@deepseek-ai/dsh-types': 'workspace:^' },
+      peerDependencies: { [CORDIS]: 'workspace:^' },
+    }
+    const base = facts(manifest)
+    const subject: PackageDependencyFacts = {
+      ...base,
+      allSourceUses: new Map([...base.allSourceUses, ['external', ['packages/core/probe/src/client/index.ts']]]),
+    }
+    const state = { facts: [subject], packages: [], policyViolations: [], workspaceNames: subject.workspaceNames }
+
+    expect(collectPackageDependencyViolations(state)).toEqual([
+      'packages/core/probe/package.json: external (packages/core/probe/src/client/index.ts) '
+      + 'must be devDependencies-only; found dependencies',
+    ])
+    repairPackageDependencyManifest(subject)
+    expect(manifest.dependencies?.external).toBeUndefined()
+    expect(manifest.devDependencies?.external).toBe('^1.2.3')
+    expect(collectPackageDependencyViolations(state)).toEqual([])
+    const repaired = structuredClone(manifest)
+    repairPackageDependencyManifest(subject)
+    expect(manifest).toEqual(repaired)
+  })
+
   it('does not leak repository configuration into captured dependency facts', () => {
     const manifest: PackageDependencyManifest = {
       name: '@deepseek-ai/dsh-client-locale',
@@ -380,22 +790,29 @@ describe('dependency sections', () => {
         ['@deepseek-ai/dsh-runtime', ['packages/core/probe/src/index.ts']],
         ['external', ['packages/core/probe/src/index.ts']],
       ]),
+      allSourceUses: new Map([
+        ...facts(manifest).allSourceUses,
+        ['external', ['packages/core/probe/src/client/index.ts']],
+      ]),
     }
     const state = {
       facts: [subject], packages: [], policyViolations: [], workspaceNames: subject.workspaceNames,
     }
 
     expect(collectPackageDependencyViolations(state)).toContain(
-      'packages/core/probe/package.json: external (packages/core/probe/src/index.ts) '
+      'packages/core/probe/package.json: external (packages/core/probe/src/client/index.ts, packages/core/probe/src/index.ts) '
       + 'must be dependencies-only; found devDependencies',
     )
     repairPackageDependencyManifest(subject)
     expect(manifest.dependencies?.external).toBe('^1.0.0')
     expect(manifest.devDependencies?.external).toBeUndefined()
+    const repaired = structuredClone(manifest)
+    repairPackageDependencyManifest(subject)
+    expect(manifest).toEqual(repaired)
 
     delete manifest.dependencies?.external
     expect(collectPackageDependencyViolations(state)).toContain(
-      'packages/core/probe/package.json: external (packages/core/probe/src/index.ts) '
+      'packages/core/probe/package.json: external (packages/core/probe/src/client/index.ts, packages/core/probe/src/index.ts) '
       + 'must be dependencies-only; found no dependency section',
     )
   })

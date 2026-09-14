@@ -2,7 +2,7 @@
  * HMR plugin, node half: the host end of the dev reload chain. One interval
  * stat-polls every graph row's client bundle (polling by design: network mounts
  * deliver no inotify events), reports changes through
- * `clientModuleHost.rebuilt(id)`, and serves the `/plugins/events` SSE channel
+ * `clientModules.rebuilt(id)`, and serves the `/plugins/events` SSE channel
  * broadcasting graph/rebuilt frames to the browser half (src/client/).
  * The web bundle mounts this row unconditionally: without a rebuild
  * watcher rewriting client bundles, the poll observes no changes and the
@@ -12,7 +12,7 @@ import { statSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-// Empty type imports carry the clientModuleHost/webServer Context merges.
+// Type imports carry the clientModules/webServer Context merges.
 import type { ClientArtifactBaseline } from '@deepseek-ai/dsh-client-modules'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import type { PluginsEventFrame } from './events.ts'
@@ -62,7 +62,7 @@ function sameBundleStat(left: WatchedBundleStat, right: WatchedBundleStat): bool
 
 /**
  * Mount the dev chain: bundle watches, rebuilt reporting, and the SSE channel.
- * @param ctx - host plugin context carrying clientModuleHost and webServer.
+ * @param ctx - host plugin context carrying clientModules and webServer.
  * @param config - validated {@link Config}.
  */
 export function apply(ctx: Context, config: Config): void {

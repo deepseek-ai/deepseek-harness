@@ -70,6 +70,16 @@ function inheritedApi(overrides: Partial<Win32ProcessBindings> = {}): {
 describe('spawnInheritedJobProcess', () => {
   const token = 70n as NativePtr
 
+  it('inherits the control carrier into a restricted child before resume', () => {
+    const descriptorHandle = vi.fn(() => 107n as NativePtr)
+    const { api, events } = inheritedApi({ uvGetOsfhandle: descriptorHandle, getFileType: vi.fn(() => 3) })
+    const child = spawnInheritedJobProcess(api, { command: 'node.exe', args: [], cwd: 'C:\\work', token, controlFileDescriptor: 7 })
+    expect(child.pid).toBe(1234)
+    expect(descriptorHandle).toHaveBeenCalledExactlyOnceWith(7)
+    expect(events.filter(event => event === 'inherit')).toHaveLength(4)
+    expect(events.indexOf('assign')).toBeLessThan(events.indexOf('resume'))
+  })
+
   it('creates suspended, assigns the Job, then resumes the restricted child', () => {
     const {
       api,

@@ -238,9 +238,10 @@ describe('AgentLoop initiator scope', () => {
         const handle = await exec.agent.ctx.agents.create({
           sessionId: SessionId('child-session'),
           agentOptions: { provider: 'mock', model: 'mock' },
-          setup: (agentCtx) => {
+          parentAgent: exec.agent,
+          setup: (agentCtx, childAgent) => {
             parentDuringSetup = ctx.agents.requireInitiator()
-            explicitChild = agentCtx.agent
+            explicitChild = childAgent
             agentCtx.tools.register(defineContentToolFixture({
               name: 'observe-child',
               description: 'observe child execution identity',

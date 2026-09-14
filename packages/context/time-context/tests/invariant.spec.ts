@@ -24,6 +24,7 @@ function event(
 ): SessionEvent<'user/message'> {
   return {
     type: 'user/message',
+    surfaceOp: 'append',
     seq: SessionSeq(0),
     time,
     data: createUserMessage({
@@ -101,7 +102,7 @@ describe('time-context invariants', () => {
     }).not.toThrow()
   })
 
-  it('requires browser-zone policy and timestamp to match current-turn request provenance', async () => {
+  it('requires browser-zone policy and timestamp to match current-turn request sources', async () => {
     const ctx = await setup()
     const policy = 'Browser time zone for this request: Asia/Shanghai. '
       + 'Interpret otherwise-unqualified dates and times in this zone.'
@@ -149,7 +150,7 @@ describe('time-context invariants', () => {
     }
   })
 
-  it('rejects invalid browser provenance loaded across the durable boundary', async () => {
+  it('rejects invalid browser-zone data loaded across the durable boundary', async () => {
     const ctx = await setup()
     const timeZone = 'Not/A_Real_Zone'
     const policy = `Browser time zone for this request: ${timeZone}. `
@@ -282,7 +283,7 @@ describe('time-context invariants', () => {
     }).toThrow(message)
   })
 
-  it('requires exact snapshot provenance without copied request authority', async () => {
+  it('requires the exact snapshot source without copied request authority', async () => {
     const ctx = await setup()
     const base = event(reading())
     for (const source of [

@@ -1,0 +1,56 @@
+{
+  "tools": [
+    {
+      "name": "take_screenshot",
+      "description": "Take a screenshot of the page or element.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pageId": {
+            "type": "number",
+            "description": "Targets a specific page by ID."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg",
+              "webp"
+            ],
+            "default": "png",
+            "description": "Type of format to save the screenshot as. Default is \"png\""
+          },
+          "quality": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Compression quality for JPEG and WebP formats (0-100). Higher values mean better quality but larger file sizes. Ignored for PNG format."
+          },
+          "uid": {
+            "type": "string",
+            "description": "The uid of an element on the page from the page content snapshot. If omitted, takes a page screenshot."
+          },
+          "fullPage": {
+            "type": "boolean",
+            "description": "If set to true takes a screenshot of the full page instead of the currently visible viewport. Incompatible with uid."
+          },
+          "filePath": {
+            "type": "string",
+            "description": "The absolute path, or a path relative to the current working directory, to save the screenshot to instead of attaching it to the response."
+          }
+        },
+        "required": [
+          "pageId"
+        ],
+        "additionalProperties": true,
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "execution": {
+        "taskSupport": "forbidden"
+      }
+    }
+  ]
+}

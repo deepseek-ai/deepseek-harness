@@ -7,7 +7,7 @@
  * (HMR safety), and the service satisfies the frozen CommandUiContract.
  */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { createScope, scopeOf } from '@deepseek-ai/dsh-api-session-controller/client'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
@@ -32,8 +32,11 @@ async function bench() {
   ctx.provide('sessions', {
     scope: (id: SessionId) => scopes.get(id),
     scopeOf: (c: Context) => scopeOf(c),
+    subagentAddress: (id: SessionId) => id === sid('child')
+      ? { parentSessionId: sid('parent'), childSessionId: id, mode: 'continuable' as const }
+      : undefined,
   })
-  const commandsRemote = { list: () => Promise.resolve([]) }
+  const commandsRemote = { list: () => Promise.resolve({ ok: true as const, value: [] }) }
   // The service subscribes its cache-invalidation events on construction, so
   // the Remote face needs `$on` even where this spec dispatches none.
   ctx.provide('remote', { commands: commandsRemote, $on: () => () => {} })
@@ -71,6 +74,15 @@ describe('apply', () => {
     await fiber.dispose()
     expect(sources.size).toBe(0)
     expect(slots.entries('conversation.input.overlay')).toHaveLength(0)
+  })
+
+  it('provides no File action without its composer owner', async () => {
+    const { fiber, sources } = await bench()
+    onTestFinished(() => fiber.dispose())
+    const source = sources.get('/ command')!
+    const req = { query: '', position: 'leading' as const, drilled: false, signal: new AbortController().signal }
+    expect(await source.candidates({ sessionId: sid('s1') }, req)).toEqual([])
+    expect(await source.candidates({ sessionId: sid('child') }, req)).toEqual([])
   })
 
   it('the overlay inject resolves the per-session popup controller by sessionId and fails loud on an unknown id', async () => {

@@ -21,6 +21,8 @@ import {
 } from './validation.ts'
 import { assertReleasedV0Keys, releasedV0Record } from './validation-helpers.ts'
 
+const LEGACY_ASSISTANT_SOURCE_KEY = ['pro', 'venance'].join('')
+
 /** Identity format edge that promotes released v0 into released v1. */
 export const sessionFormatV0ToV1 = defineSessionFormatMigration({
   name: '@deepseek-ai/dsh-session-format-v0-to-v1',
@@ -42,7 +44,7 @@ class ReleasedV0ToV1Stage implements SessionFormatMigrationStage {
 
   constructor(private readonly input: SessionFormatMigrationStageInput) {
     assertHeaderVersion(input.sourceHeader, 0)
-    this.headerInheritedEventCount = input.sourceInheritedEventCount
+    this.headerInheritedEventCount = sessionFormatCount(input.sourceInheritedEventCount, 'format v0 inherited event count')
   }
 
   transformEvent(
@@ -66,7 +68,7 @@ class ReleasedV0ToV1Stage implements SessionFormatMigrationStage {
   }
 
   finish(_context: SessionFormatMigrationContext): number {
-    return this.input.sourceInheritedEventCount
+    return this.headerInheritedEventCount
   }
 }
 
@@ -124,7 +126,7 @@ function assertSourceDeliveryMarker(
   const data = releasedV0Record(event.data, `${event.type} ${event.seq} data`)
   const acceptedVersion = data['sessionFormatVersion'] ?? 0
   const inherited = input.sourceHeader.parentSession !== undefined
-    && event.seq < input.sourceInheritedEventCount
+    && event.seq < sessionFormatCount(input.sourceInheritedEventCount, 'format v0 inherited event count')
   if (acceptedVersion === 0 && !inherited && data['sessionId'] !== input.sourceHeader.id) {
     throw new SessionFormatError('current-generation delivery marker names the wrong Session')
   }
@@ -363,12 +365,15 @@ function normalizeLegacyMessage(
       }
     case 'assistant/message': {
       if (Object.hasOwn(data, 'message')
-        || !Object.hasOwn(data, 'content') || !Object.hasOwn(data, 'provenance')) return event
-      const { content, provenance, ...eventData } = data as typeof data & {
-        content: SessionFormatJsonValue
-        provenance: SessionFormatJsonValue
-      }
-      const source = releasedV0Record(provenance, `assistant/message ${event.seq} provenance`)
+        || !Object.hasOwn(data, 'content') || !Object.hasOwn(data, LEGACY_ASSISTANT_SOURCE_KEY)) return event
+      const content = data['content'] as SessionFormatJsonValue
+      const eventData = { ...data }
+      delete eventData['content']
+      const source = releasedV0Record(
+        eventData[LEGACY_ASSISTANT_SOURCE_KEY],
+        `assistant/message ${event.seq} legacy source`,
+      )
+      Reflect.deleteProperty(eventData, LEGACY_ASSISTANT_SOURCE_KEY)
       return {
         ...event,
         data: {

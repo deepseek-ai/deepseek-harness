@@ -6,15 +6,16 @@
  */
 
 import { randomUUID } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { chmod, link, lstat, mkdir, open, readFile, realpath, readdir, rename, rm, stat } from 'node:fs/promises'
+import { createReadStream, realpath as realpathCallback } from 'node:fs'
+import { chmod, link, lstat, mkdir, open, readFile, readdir, rename, rm, stat } from 'node:fs/promises'
 import type { BigIntStats, Dirent, Stats } from 'node:fs'
-import { basename, dirname, join, resolve } from 'node:path'
-import { TextDecoder } from 'node:util'
+import { basename, dirname, isAbsolute, join, resolve, sep } from 'node:path'
+import { TextDecoder, promisify } from 'node:util'
 import { FsError, FsTargetKey, FsVersion } from '@deepseek-ai/dsh-fs'
 import { copyFileDaclWin32, replaceFileWin32 } from './win32.ts'
 
 const BINARY_SAMPLE_BYTES = 8192
+const realpath = promisify(realpathCallback.native)
 // Bound one non-abortable FileHandle.read so cancellation is observed between chunks.
 const DIFF_BASIS_READ_CHUNK_BYTES = 64 * 1024
 
@@ -136,6 +137,20 @@ export interface LocalDirEntry {
 }
 
 /**
+ * Anchor a path using native drive semantics and POSIX physical parent traversal.
+ * @param cwd - provider base directory for relative paths.
+ * @param path - non-empty requested path.
+ * @returns absolute display spelling shared by target resolution and no-follow metadata.
+ */
+export function localDisplayPath(cwd: string, path: string): string {
+  const absoluteCwd = isAbsolute(cwd) ? cwd : `${process.cwd()}${sep}${cwd}`
+  const raw = isAbsolute(path) ? path : `${absoluteCwd}${sep}${path}`
+  const physicalSpelling = /(?:^|[\\/])\.\.(?:[\\/]|$)/u.test(raw) ? raw : resolve(cwd, path)
+  /* v8 ignore next -- Native Windows tests cover DOS drive-relative resolution; POSIX preserves physical traversal. */
+  return process.platform === 'win32' ? resolve(cwd, path) : physicalSpelling
+}
+
+/**
  * Resolve a path to its absolute display path and realpath identity. For a missing target,
  * realpath the nearest existing ancestor and append the missing suffix, preserving identity
  * across symlinked ancestors before and after creation.
@@ -145,7 +160,7 @@ export interface LocalDirEntry {
  */
 export async function resolveLocalTarget(cwd: string, path: string): Promise<LocalTarget> {
   if (path.trim().length === 0) throw new FsError('file_path must be a non-empty string', 'FS_NOT_FOUND')
-  const displayPath = resolve(cwd, path)
+  const displayPath = localDisplayPath(cwd, path)
   try {
     // Prefer the file's own realpath (resolves a symlinked file to its target).
     return { displayPath, targetKey: FsTargetKey(await realpath(displayPath)) }
@@ -166,6 +181,8 @@ export async function resolveLocalTarget(cwd: string, path: string): Promise<Loc
   while (true) {
     try {
       const realAncestor = await realpath(ancestor)
+      /* v8 ignore next -- POSIX rejects this traversal; Windows normalizes parent segments before filesystem lookup. */
+      if (missing.includes('..')) throw new FsError(`cannot resolve "${displayPath}": parent traversal crosses a missing directory`, 'FS_NOT_FOUND')
       // On Windows, realpath of a regular file succeeds where POSIX returns
       // ENOTDIR (the OS reports ENOENT for `regular-file/child`, not ENOTDIR).
       // Stat the ancestor to restore the semantic distinction: a non-directory
@@ -268,7 +285,7 @@ function listingIoError(displayPath: string, error: unknown): FsError {
 
 async function resolveListedChildTarget(parent: LocalTarget, name: string): Promise<LocalTarget> {
   const identity = await resolveLocalTarget(parent.targetKey, name)
-  return { displayPath: join(parent.displayPath, name), targetKey: identity.targetKey }
+  return { displayPath: localDisplayPath(parent.displayPath, name), targetKey: identity.targetKey }
 }
 
 /**
@@ -313,7 +330,7 @@ export async function listDirectory(target: LocalTarget, signal?: AbortSignal): 
         ...(childInfo?.type === 'file' ? { size: childInfo.size } : {}),
       })
     } catch (error: unknown) {
-      throw listingIoError(join(target.displayPath, entry.name), error)
+      throw listingIoError(localDisplayPath(target.displayPath, entry.name), error)
     }
     throwIfAborted(signal, 'list')
   }
@@ -421,6 +438,44 @@ export async function readWholeBytes(
   } catch (error: unknown) {
     /* v8 ignore next 2 -- a mid-stream abort needs cancellation racing an active read; pre-abort is deterministic. */
     if (isAbortError(error)) throw new FsError('read aborted', 'FS_ABORTED')
+    throw error
+  }
+  return Buffer.concat(chunks, bytes)
+}
+
+/**
+ * Read the bytes at `[offset, offset + length)` of a regular file with no
+ * decoding or binary rejection. The window is the bound: the stream opens at
+ * `offset` and closes after `length` bytes, so no more than the window is ever
+ * buffered whatever the file's size; a window at or past the end is empty.
+ * @param target - the resolved file to read.
+ * @param range - `offset`, the 0-based first byte, and `length`, the largest byte count.
+ * @param signal - aborts the read (`FS_ABORTED`).
+ * @returns the window's bytes, at most `length` long.
+ */
+export async function readByteWindow(
+  target: LocalTarget,
+  range: { offset: number; length: number },
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  await statRegularFile(target, 'read', signal)
+  if (range.length === 0) return new Uint8Array(0)
+  const stream = createReadStream(target.targetKey, {
+    start: range.offset,
+    end: range.offset + range.length - 1,
+    ...signal ? { signal } : {},
+  })
+  const chunks: Buffer[] = []
+  let bytes = 0
+  try {
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+      chunks.push(chunk)
+      bytes += chunk.length
+    }
+  } catch (error: unknown) {
+    /* v8 ignore next 2 -- a mid-stream abort needs cancellation racing an active read; pre-abort is deterministic. */
+    if (isAbortError(error)) throw new FsError('read aborted', 'FS_ABORTED')
+    /* v8 ignore next -- any other stream failure needs an I/O fault after a successful stat. */
     throw error
   }
   return Buffer.concat(chunks, bytes)

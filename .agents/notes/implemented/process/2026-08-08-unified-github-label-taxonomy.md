@@ -47,6 +47,8 @@ The area set is intentionally extensible. When no existing description honestly 
 
 Issues use native Issue Type instead of `kind/*`; their `area/*` labels remain optional. `source/*` labels record how an Issue was created and do not apply to pull requests. Priority, GitHub defaults, and workflow triggers remain independent operational metadata.
 
+The repository lifecycle removes pull request `kind/*` labels and reserved aliases from an Issue before auditing it. Policy comments report only violations whose intended value cannot be derived from the Issue, such as a missing native Type or an unsupported Priority.
+
 Label migrations preserve meaning before removing aliases: add the canonical replacement, verify the labelable, then remove the obsolete assignment. A label is deleted only after no pull request or Issue still uses it, and unrelated labels are never replaced as a set.
 
 ## Alternatives considered
@@ -65,8 +67,10 @@ Label migrations preserve meaning before removing aliases: add the canonical rep
 
 **Kinds on Issues.** Native Issue Type already owns that classification; duplicating it as a label creates drift.
 
+**Comment-only Issue enforcement.** A comment preserves invalid metadata and requires human cleanup even when the only valid result is removal. The lifecycle applies that removal and retains comments for choices it cannot infer.
+
 **Exactly one area per pull request.** Coherent changes can materially affect several independent APIs or behaviors, and dropping secondary areas hides affected scope.
 
 ## Consequences
 
-Reviewers and automation can query intent, semantic scope, how an Issue was created, priority, and operational triggers independently. Maintainers must read the change and the live label descriptions instead of inferring classification from title prefixes or paths. The live catalog, this rationale, and policy enforcement must move together when a kind or a non-obvious area boundary changes, and taxonomy migrations carry an explicit historical backfill and verification cost.
+Reviewers and automation can query intent, semantic scope, how an Issue was created, priority, and operational triggers independently. Invalid Issue labels disappear without a policy comment, and the label event records the repair; when no other violation remains, the lifecycle deletes any earlier policy comment. Maintainers must read the change and the live label descriptions instead of inferring classification from title prefixes or paths. The live catalog, this rationale, and policy enforcement must move together when a kind or a non-obvious area boundary changes, and taxonomy migrations carry an explicit historical backfill and verification cost.

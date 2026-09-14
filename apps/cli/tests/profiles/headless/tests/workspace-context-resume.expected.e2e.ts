@@ -15,7 +15,7 @@ import {
   type NormalizeContext,
 } from '@deepseek-ai/dsh-session-snapshot'
 import { LOADER_SMOKE_TEST_TIMEOUT_MS, runLoaderSmoke } from '@deepseek-ai/dsh-loader-smoke'
-import { createUserMessage } from '@deepseek-ai/dsh-llm'
+import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import {
   SESSION_FORMAT_VERSION,
   SessionId,
@@ -25,7 +25,7 @@ import {
 } from '@deepseek-ai/dsh-session'
 import JsonlSessionPersistence from '@deepseek-ai/dsh-session-persistence-jsonl'
 import { logPath } from '../../../../../../packages/session/session-persistence-jsonl/src/format.ts'
-import { renderWorkspaceContext } from '@deepseek-ai/dsh-agent-instructions'
+import { renderAgentInstructions } from '@deepseek-ai/dsh-agent-instructions'
 import { resolveConfig, workspaceBaselineIdentity } from '@deepseek-ai/dsh-agent-instructions/src/config.ts'
 import { describe, expect, it } from 'vitest'
 
@@ -73,7 +73,7 @@ async function seedVisibleBaseline(
     delegationDepth: 0,
   }
   const files = options.files ?? [{ name: 'AGENTS.md', content: oldInstruction }]
-  const baseline = renderWorkspaceContext(files.map(file => ({
+  const baseline = renderAgentInstructions(files.map(file => ({
     absolutePath: join(cwd, file.name),
     displayPath: file.name,
     content: file.content,
@@ -87,17 +87,23 @@ async function seedVisibleBaseline(
   })
   const events: SessionEvent[] = [
     { type: 'turn/start', seq: SessionSeq(0), time: 10, data: { turn: 1 } },
+    { type: 'step/start', seq: SessionSeq(1), time: 11, data: { turn: 1, step: 1 } },
+    {
+      type: 'system/message', seq: SessionSeq(2), time: 12,
+      data: { turn: 1, step: 1, message: createMessage({ role: 'system', content: [], source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' } }) },
+      surfaceOp: 'append',
+    },
     {
       type: 'user/message',
-      seq: SessionSeq(1),
-      time: 11,
+      seq: SessionSeq(3),
+      time: 13,
       data: createUserMessage({ content: [{ type: 'text', text: 'Remember the workspace instruction.' }], source: { kind: 'user' } }),
       surfaceOp: 'append',
     },
     {
       type: 'user/message',
-      seq: SessionSeq(2),
-      time: 12,
+      seq: SessionSeq(4),
+      time: 14,
       data: createUserMessage({
         content: [{ type: 'text', text: baseline.text }],
         source: {
@@ -115,7 +121,8 @@ async function seedVisibleBaseline(
       }),
       surfaceOp: 'append',
     },
-    { type: 'turn/end', seq: SessionSeq(3), time: 13, data: { turn: 1, reason: { kind: 'completed' } } },
+    { type: 'step/end', seq: SessionSeq(5), time: 15, data: { turn: 1, step: 1 } },
+    { type: 'turn/end', seq: SessionSeq(6), time: 16, data: { turn: 1, reason: { kind: 'completed' } } },
   ]
   try {
     const handle = await ctx.sessionPersistence.create(meta)

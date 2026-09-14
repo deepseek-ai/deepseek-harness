@@ -31,7 +31,7 @@ function messageEvent(
   seq: number,
   turn = 1,
   step = 1,
-  surfaceOp: 'append' | { readonly op: 'replace'; readonly start: number; readonly end: number } = 'append',
+  surfaceOp: 'append' | { readonly op: 'replace'; readonly startSeq: number; readonly endSeq: number } = 'append',
 ): SessionLiveEventEntry {
   return entry({
     type: 'assistant/message',
@@ -48,7 +48,7 @@ function messageEvent(
     },
     surfaceOp: surfaceOp === 'append'
       ? surfaceOp
-      : { ...surfaceOp, start: SessionSeq(surfaceOp.start), end: SessionSeq(surfaceOp.end) },
+      : { ...surfaceOp, startSeq: SessionSeq(surfaceOp.startSeq), endSeq: SessionSeq(surfaceOp.endSeq) },
   })
 }
 
@@ -127,7 +127,7 @@ describe('ClientAssistantStream', () => {
     stream.acceptFrame(start(ATTEMPT, 1))
     for (const durable of [
       ordinary(1),
-      messageEvent(2, 1, 1, { op: 'replace', start: 0, end: 0 }),
+      messageEvent(2, 1, 1, { op: 'replace', startSeq: 0, endSeq: 0 }),
       attemptEvent(0),
       attemptEvent(3, 2, 1),
       attemptEvent(4, 1, 2),

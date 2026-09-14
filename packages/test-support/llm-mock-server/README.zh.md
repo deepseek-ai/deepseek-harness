@@ -1,5 +1,5 @@
 ---
-description: "用于在无提供方密钥的情况下测试 LLM 适配器与恢复策略的可编脚本 OpenAI 兼容故障服务器，面向测试作者与演示。"
+description: "用于在无提供方密钥的情况下测试 LLM（大语言模型）适配器与恢复策略的可通过脚本控制的 OpenAI 兼容故障服务器，面向测试作者与演示。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-llm-mock-server` 在测试期间以可编脚本的 OpenAI 兼容 HTTP／SSE（Server-Sent Events）服务器代替真实模型提供方：你脚本化一串协议行为——流重置、停滞、畸形分片、限流、服务器错误、成功补全、工具调用——每个已接受的 `/chat/completions` 请求依次消费下一个。它通过真实 HTTP 服务发布的 DeepSeek 适配器与 agent loop（智能体循环），因此重试、退避与超时等恢复策略会在真实协议边界上得到检验，且无需提供方密钥。CLI（`pnpm run mock:llm`）可独立运行服务器；库入口 `startMockLlmServer` 将其嵌入测试并返回捕获的请求。`random` 行为配合带种子的权重可混合故障，用于开放式压力运行。
+本包为测试与演示提供可编脚本的 OpenAI 兼容 HTTP／SSE（Server-Sent Events）端点，使其无需提供方密钥即可检验模型提供方的失败与成功。每个已接受的 `/chat/completions` 请求依次消费下一个脚本行为，包括重置、停滞、畸形分片、限流、服务器错误、补全与工具调用。测试作者可以通过 `pnpm run mock:llm` 运行服务器，也可以调用 `startMockLlmServer`，后者会返回捕获的请求供断言使用。带种子的 `random` 行为支持可复现的混合故障压力运行。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-library"
 <a id="use-this-package"></a>
 ## 使用本包
 
-本包让测试或演示无需提供方即可讲提供方协议：启动服务器，脚本化你想检验的协议行为，然后把真实 LLM（大语言模型）适配器指向它的 base URL。
+本包让测试或演示无需实际提供方即可使用提供方协议进行通信：启动服务器，脚本化你想检验的协议行为，然后把真实 LLM 适配器指向它的 base URL。
 
 ### 独立运行
 
@@ -64,7 +64,7 @@ pnpm dsh --profile headless "test provider recovery"
 | `malformed_json` / `malformed_event` | 发送无效 SSE JSON 或无效提供方分片形态 |
 | `rate_limit` / `server_error` / `service_unavailable` | 返回面向重试的 429/500/503 JSON 错误 |
 | `auth_error` / `invalid_request` / `context_overflow` / `quota_exceeded` | 返回终止性错误或需要单独恢复的提供方错误 |
-| `success` / `slow_success` / `reasoning_success` | 流式发送完整文本响应，可选延迟或先发送 reasoning |
+| `success` / `slow_success` / `reasoning_success` | 流式发送完整文本响应，可选延迟或先发送推理（reasoning） |
 | `tool_call_success` / `max_tokens` | 以工具调用或结束原因 `length` 完成 |
 | `wrong_content_type` | 以 `application/json` 内容类型发送有效 SSE 正文 |
 | `random` | 按带权重的种子随机选择具体请求行为 |
@@ -88,7 +88,7 @@ pnpm run mock:llm \
 
 ### 时序与内容控制
 
-CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-size`、`--chunk-delay-ms`、`--disconnect-delay-ms`、`--retry-after-ms`、`--request-id`、`--tool-name` 与 `--tool-arguments`。毫秒延迟是 Node timer 范围内的有界整数；`retryAfterMs` 还必须为正数。库接受相同的 camel-case 选项。可选的精确 `apiKey` 验证 `Authorization: Bearer <token>`；省略时接受任何 token。
+CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-size`、`--chunk-delay-ms`、`--disconnect-delay-ms`、`--retry-after-ms`、`--request-id`、`--tool-name` 与 `--tool-arguments`。毫秒延迟是 Node 定时器范围内的有界整数；`retryAfterMs` 还必须为正数。库接受相同的 camel-case 选项。可选的 `apiKey` 会精确验证 `Authorization: Bearer <token>`；省略时接受任何 token。
 
 ### 可能出什么问题
 
@@ -114,10 +114,10 @@ CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-s
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | `startMockLlmServer`：listener、行为表、种子随机、遥测、捕获的请求记录 |
+| [`src/index.ts`](src/index.ts) | `startMockLlmServer`：listener、行为表、种子随机、遥测（telemetry）、捕获的请求记录 |
 | [`src/cli.ts`](src/cli.ts) | `--sequence` 与时序/内容选项解析、JSONL stdout 遥测 |
 | [`src/bin.ts`](src/bin.ts) | `pnpm run mock:llm` 源入口 |
-| — | 不发布运行时不变式伴生入口；协议行为通过 HTTP 测试检验。 |
+| — | 不发布运行时不变式伴生组件；该独立测试服务器不拥有 Cordis 事件流或共享数据；其协议行为和生命周期通过直接 HTTP 测试及组装后的循环测试进行检验。 |
 
 ### 协议流程
 
@@ -130,7 +130,7 @@ CLI 公开 `--success-text`、`--partial-text`、`--reasoning-text`、`--chunk-s
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从故障服务器逐步进入它所检验的适配器约定，以及用于已记录成功 transcript 的无密钥替代方案。
+当包级约定不够用时阅读以下页面。它们从故障服务器逐步进入它所检验的适配器约定，以及用于已记录成功 transcript（文本记录）的无密钥替代方案。
 
 - [LLM 包](../../llm/llm/README.zh.md)——本服务器所检验的提供方流约定与重试策略。
 - [llm-replay](../llm-replay/README.zh.md)——回放已记录成功 transcript 而非制造故障的无密钥替代方案。

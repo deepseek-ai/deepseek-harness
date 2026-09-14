@@ -1,0 +1,107 @@
+- banner:
+  - navigation "Session hierarchy":
+    - button "Use one run_code program to" [disabled]
+  - img
+  - text: PTC mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
+  - tablist:
+    - tab "Chat" [selected]
+    - tab "Trajectory"
+- button "System prompt":
+  - img
+  - img
+  - text: System prompt
+- text: "Use one run_code program to do the following in order. Call present for missing.txt and catch its error without creating that file. Use bash to run exactly `printf \"DELIVERED_REPORT\\n\" > report.txt; printf \"DELIVERED_NOTE\\n\" > 说明.txt`. Call present for report.txt and 说明.txt. After present succeeds, deliberately throw the string \"AFTER_PRESENT\" (not an Error object) from that same run_code program. Do not retry the program or create any other files. Finish by mentioning `report.txt` and `说明.txt` in inline code, and put PRESENT_DONE in a separate paragraph. {{clock}}"
+- button "Copy":
+  - img
+- button "1 tool call" [expanded]:
+  - text: 1 tool call
+  - img
+- button "Context injection @deepseek-ai/dsh-system-prompt":
+  - img
+  - img
+  - text: Context injection @deepseek-ai/dsh-system-prompt
+- button "Think The user wants one run_code program that:":
+  - img
+  - img
+  - text: "Think The user wants one run_code program that:"
+- text: Failed
+- 'button "Code Error: code run failed (exception): AFTER_PRESENT"':
+  - img
+  - text: "Code Error: code run failed (exception): AFTER_PRESENT"
+- button "Present files Delivery failed missing.txt":
+  - img
+  - text: Present files Delivery failed missing.txt
+- button "Bash Write DELIVERED_REPORT and DELIVERED_NOTE to files":
+  - img
+  - img
+  - text: Bash Write DELIVERED_REPORT and DELIVERED_NOTE to files
+- button "Present files Delivered report.txt, 说明.txt":
+  - img
+  - text: Present files Delivered report.txt, 说明.txt
+- button "Think The program ran as intended:":
+  - img
+  - img
+  - text: "Think The program ran as intended:"
+- paragraph:
+  - text: "The single program ran exactly as ordered:"
+  - code: present
+  - text: for
+  - code: missing.txt
+  - text: failed and was caught (no file created), bash ran the exact command successfully, then
+  - code: present
+  - text: succeeded for
+  - code:
+    - button "Open report.txt in sidebar": report.txt
+  - text: and
+  - code:
+    - button "Open 说明.txt in sidebar": 说明.txt
+  - text: ", after which the program deliberately threw the string"
+  - code: AFTER_PRESENT
+  - text: — no retries, no extra files.
+- paragraph: PRESENT_DONE
+- button "Preview report.txt in sidebar"
+- text: report.txt
+- status: Opened in default app
+- button "Open report.txt in sidebar": Open
+- button "More file actions for report.txt":
+  - img
+- button "Preview 说明.txt in sidebar"
+- text: 说明.txt
+- status: Opened in default app
+- button "Open 说明.txt in sidebar": Open
+- button "More file actions for 说明.txt":
+  - img
+- button "Copy":
+  - img
+- button "Good response":
+  - img
+- button "Bad response":
+  - img
+- button "Branch into a new conversation":
+  - img
+- button "Usage 19K tok":
+  - img
+  - text: Usage 19K tok
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
+  - img
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "8% of context used"
+- button "Send message" [disabled]
+- button "1 turns 2 steps · {{throughput}} tok/s":
+  - img
+  - text: 1 turns 2 steps{{throughput}} tok/s
+- button "19K tok · Cache hit 94%":
+  - img
+  - text: 19K tokCache hit 94%

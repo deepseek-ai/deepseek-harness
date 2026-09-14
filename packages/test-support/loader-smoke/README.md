@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-loader-smoke` runs a real application bin and its `cordis.yml` through the Cordis Loader inside an isolated temporary directory, capturing stdout and stderr, so a smoke test exercises the true composition path — plugin loading, service wiring, and the agent loop — rather than a hand-built test context. `runFixtureTurn` drives one task through the composition's single root agent and returns the final assistant text and accumulated token usage. The package also provides the mode-aware launch resolver (`src` under tsx for zero-build dev, built `lib` under plain Node for CI) shared by package-local subprocess harnesses. It is support-tier test infrastructure, not a product API.
+Use `dsh-loader-smoke` to boot an application fixture from its real bin and `cordis.yml` in an isolated temporary directory, with captured output and cleanup. `runFixtureTurn` drives one task through the configured root agent and returns the final assistant text plus token usage. Tests can select zero-build source execution or built-package execution, so local and CI smoke tests use the intended consumer path for each environment. This support-tier library is for test authors, not product integrations.
 
 ## Table of Contents
 
@@ -29,7 +29,7 @@ This package boots an application fixture the way an installed consumer would an
 
 ### Booting an application fixture
 
-`runLoaderSmoke` takes bin and config paths, optional complete bin arguments, environment overrides, stdin, pre-run setup, and pre-cleanup inspection. It owns the isolated cwd, DSH homes, diagnostics, deadline, termination, EOF, and cleanup, and returns both streams after a zero exit or rejects with both streams on failure:
+`runLoaderSmoke` takes bin and config paths, optional complete bin arguments, environment overrides, stdin, pre-run setup, and pre-cleanup inspection. It owns the isolated cwd, DSH homes, diagnostics, deadline, termination, EOF, and cleanup of a cwd it created (a caller-provided cwd is left in place), and returns both streams after a zero exit or rejects with both streams on failure:
 
 ```text
 const result = await runLoaderSmoke({
@@ -73,7 +73,7 @@ This section explains the design of the harness; the observable behavior is full
 
 ### Design
 
-The harness is built on one separation: the smoke runs in a child process under an isolated world, and the test process only observes and asserts. `runLoaderSmoke` creates a temporary cwd, prepares world state there, spawns the resolved bin with isolated DSH homes (`DSH_HOME`, `DSH_AGENTS_HOME` under the temp cwd), closes stdin immediately, and awaits a clean exit within the deadline before inspecting and cleaning up on every outcome. `runFixtureTurn` stays in-process: it looks up the composition's single root agent, follows the task from its durable inbox receipt through whole-agent idle, sums per-step usage, and flushes the session before returning.
+The harness is built on one separation: the smoke runs in a child process under an isolated world, and the test process only observes and asserts. `runLoaderSmoke` creates a temporary cwd (or reuses a caller-provided one), prepares world state there, spawns the resolved bin with isolated DSH homes (`DSH_HOME`, `DSH_AGENTS_HOME` under that cwd), closes stdin immediately, and awaits a clean exit within the deadline before inspecting on every outcome and removing only a cwd it created. `runFixtureTurn` stays in-process: it looks up the composition's single root agent, follows the task from its durable inbox receipt through whole-agent idle, sums per-step usage, and flushes the session before returning.
 
 ### Source map
 

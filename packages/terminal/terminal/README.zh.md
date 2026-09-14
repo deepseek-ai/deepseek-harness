@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时选择
 
-当工作状态存在于终端而非文件时，选择持久终端：逐步调试 gdb、在 Python 或 Node REPL 中探索，或中断前台命令后回到 shell。对于有界操作，请选择单次 bash、read、write 与 edit 工具——它们保留更强的校验、审批、输出上限与回放约定。会话只存在于进程本地：harness 进程退出时它们会消失，因此需要持久的工作应写入文件或其他持久系统。
+当工作状态存在于终端而非文件时，选择持久终端：在调试器中单步执行、在 Python 或 Node REPL 中探索，或中断前台命令后回到 shell。对于有界操作，请选择单次 bash、read、write 与 edit 工具——它们保留更强的校验、审批、输出上限与回放约定。会话只存在于进程本地：harness 进程退出时它们会消失，因此需要持久的工作应写入文件或其他持久系统。
 
 ### 组合方式
 
@@ -49,11 +49,11 @@ kind: "package-reference"
 
 ### 所有权与隔离
 
-每个会话都由打开它的确切 agent 拥有。凡是指名会话的操作，只要调用方不是该 agent 就会被拒绝，因此即使模型获知另一个 agent 的 id，也无法操作其终端。可选的会话 `name` 是所有者本地的显示元数据——例如 `main` 或 `gdb` 这样的标签——并且只在所有者范围内唯一。
+每个会话都由打开它的确切 agent 拥有。凡是指名会话的操作，只要调用方不是该 agent 就会被拒绝，因此即使模型获知另一个 agent 的会话 id，也无法操作其终端。可选的会话 `name` 是所有者本地的显示元数据——例如 `main` 或 `gdb` 这样的标签——并且只在所有者范围内唯一。
 
 ### 可观察结果与失败
 
-成功打开会返回会话 id、类型、后端存在时的 pid、状态与有界启动消息。发送以等待原因结算：`stdin_read`（shell 正在等待输入）、`inferred_idle`（输出静默）、`timeout` 或 `session_exit`（顶层 shell 已退出）。失败携带稳定的机器可路由错误码：后端类型缺失（`NO_BACKEND`）、会话未知（`NO_SESSION`）、属于其他 agent 的会话（`FOREIGN_SESSION`）、并发第二次发送（`SEND_ACTIVE`），或所有者不再存活（`OWNER_NOT_LIVE`）。后端设置失败会在发布任何内容之前拒绝打开；清理失败会拒绝关闭，而不是声称成功。
+成功打开会返回会话 id、类型、后端提供的 pid（如有）、状态与有界启动消息。发送以等待原因结算：`stdin_read`（shell 正在等待输入）、`inferred_idle`（输出静默）、`timeout` 或 `session_exit`（顶层 shell 已退出）。失败携带稳定的机器可路由错误码：后端类型缺失（`NO_BACKEND`）、会话未知（`NO_SESSION`）、属于其他 agent 的会话（`FOREIGN_SESSION`）、并发第二次发送（`SEND_ACTIVE`），或所有者不再存活（`OWNER_NOT_LIVE`）。后端设置失败会在发布任何内容之前拒绝打开；清理失败会拒绝关闭，而不是声称成功。
 
 -----
 
@@ -75,7 +75,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | `TerminalSessionService`：后端注册表、spawn/send/read/signal/kill/list、所有者清理与 dispose |
 | [`src/types.ts`](src/types.ts) | 共享约定：后端接口、会话类型、等待原因、信号集合、错误码 |
-| — | 不发布运行时不变式伴生入口；注册表是私有可变状态。 |
+| — | 不发布运行时不变式伴生入口；后端与限定所有者范围的会话注册表均为私有可变状态，且服务既不暴露独立的生命周期流，也不暴露不限定范围的快照。 |
 
 ### 数据模型与生命周期
 
@@ -89,7 +89,7 @@ kind: "package-reference"
 
 ### 发送预留
 
-服务在返回操作之前同步为一个活跃发送预留会话，包括在后台 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。
+服务在返回操作之前同步为一个活跃发送预留会话，包括在后台任务的 job id 可见之前；第二次发送会以 `SEND_ACTIVE` 失败，因此输出与取消永远不会跨操作所有权。
 
 </details>
 

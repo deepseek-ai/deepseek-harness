@@ -1,4 +1,4 @@
-/** End-to-end SDK continuation through the built dsh sdk-minimal profile and real file tools. */
+/** End-to-end SDK continuation through built dsh sdk-minimal with an explicitly mounted file editor. */
 
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -27,7 +27,10 @@ async function run(root: string): Promise<ProfileReport> {
   await writeFile(patch, [
     '- id: llm-deepseek', '  disabled: true',
     '- id: sessions', '  config:', '    root: ' + JSON.stringify(join(root, 'profile-sessions')), '    compression: zstd',
-    '- insert:', '    - id: benchmark-model', '      name: ' + JSON.stringify(join(import.meta.dirname, 'profile-adapter.js')),
+    '- insert:',
+    '    - id: fs-local', "      name: '@deepseek-ai/dsh-fs-local'",
+    '    - id: str-replace-editor', "      name: '@deepseek-ai/dsh-tool-str-replace-editor'",
+    '    - id: benchmark-model', '      name: ' + JSON.stringify(join(import.meta.dirname, 'profile-adapter.js')),
     '',
   ].join('\n'))
   const env: NodeJS.ProcessEnv = {

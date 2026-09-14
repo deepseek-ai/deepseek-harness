@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `interaction/` group is where a human collaborates with a running agent. It provides the slash-command plane users type into, the one-shot approval decisions behind sensitive actions, named permission presets that bundle sandbox mode with an approval policy, and the question/answer service an agent pauses on when it needs a human decision. All five packages are product packages — the real interfaces a person drives — and the product `dsh` CLI composes them directly. Interactive applications drive the command, approval, and question interfaces directly, while automation uses the ACP transport. The subsystem references own the exhaustive contracts; this map points at each package and its neighbors.
+The `interaction/` group covers the ways a person can guide a running agent. Use slash commands for immediate actions that do not require a model round trip, one-shot approvals for sensitive operations, permission presets to choose sandbox and approval behavior together, and questions when the agent needs information or a decision. Interactive applications expose these capabilities to people; automation handles its own approvals through ACP. The package map below distinguishes each capability and links to its full behavior and configuration.
 
 ## Table of Contents
 
@@ -39,7 +39,7 @@ Each package README and its subsystem reference own the exhaustive contracts.
 
 Start with the subsystem references for the shared vocabularies, then the neighboring automation and composition surfaces.
 
-- [Commands subsystem](../../docs/subsystems/commands.md) — command registry semantics and the `ctx.commands` cordis surface.
+- [Commands subsystem](../../docs/subsystems/commands.md) — command registry semantics and the `ctx.commands` Cordis surface.
 - [Approval subsystem](../../docs/subsystems/approval.md) — request/outcome vocabulary, the answerer waterfall, and per-session policy.
 - [Permission presets subsystem](../../docs/subsystems/permission-presets.md) — the preset table and the knob write-through.
 - [User interaction subsystem](../../docs/subsystems/user-questions.md) — question vocabulary, answerer waterfall, and presentation intent.

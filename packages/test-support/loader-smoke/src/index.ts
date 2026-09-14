@@ -130,14 +130,10 @@ export function resolveExampleLaunch(options: ExampleLaunchOptions): ExampleLaun
   return { command: process.execPath, args: [options.libBin ?? toLibBin(options.srcBin), ...configArgs], env }
 }
 
-/** Inputs that vary between real-Loader example smokes. */
-export interface LoaderSmokeOptions {
+/** Inputs every real-Loader example smoke supplies. */
+interface LoaderSmokeBaseOptions {
   /** Human-readable example name used in failure diagnostics. */
   readonly label: string
-  /** Prefix for the isolated temporary process cwd. */
-  readonly tempDirPrefix: string
-  /** Existing parent for the generated cwd; defaults to the platform temporary directory. */
-  readonly tempDirParent?: string
   /** Absolute app-bin source path (`<pkg>/src/bin.ts`); the `lib` bin is derived from it. */
   readonly binScript: string
   /** Explicit plain-Node entry for `lib` mode; intended for test fixtures outside a package `src/` tree. */
@@ -167,6 +163,27 @@ export interface LoaderSmokeOptions {
   readonly expectedExitCode?: number
 }
 
+/**
+ * Inputs that vary between real-Loader example smokes. The cwd is either one
+ * the harness expands from a prefix and owns, or a caller-provided directory it
+ * reuses and leaves in place; the two cannot be combined.
+ */
+export type LoaderSmokeOptions = LoaderSmokeBaseOptions & (
+  | {
+    /** Prefix for the isolated temporary process cwd. */
+    readonly tempDirPrefix: string
+    /** Existing parent for the generated cwd; defaults to the platform temporary directory. */
+    readonly tempDirParent?: string
+    readonly cwd?: never
+  }
+  | {
+    /** Existing directory to use as the process cwd; the caller owns its cleanup. */
+    readonly cwd: string
+    readonly tempDirPrefix?: never
+    readonly tempDirParent?: never
+  }
+)
+
 /** Captured output from a Loader smoke that exited successfully. */
 export interface LoaderSmokeResult {
   /** Complete stdout after clean exit. */
@@ -175,15 +192,27 @@ export interface LoaderSmokeResult {
   readonly stderr: string
 }
 
+/** Whether the options supply the cwd instead of a prefix the harness expands. */
+function hasProvidedCwd(
+  options: LoaderSmokeOptions,
+): options is LoaderSmokeBaseOptions & { readonly cwd: string } {
+  return options.cwd !== undefined
+}
+
 /**
  * Boot one real Loader tree from an isolated cwd, close stdin immediately, and
- * await a clean exit. The helper owns process kill and temp-directory cleanup on
- * every outcome, and picks src/lib via {@link resolveExampleLaunch}.
+ * await a clean exit. The helper owns process kill on every outcome and removes
+ * the temporary directory it created; a caller-provided cwd is left in place so
+ * consecutive smokes can share one world. It picks src/lib via
+ * {@link resolveExampleLaunch}.
  * @param options - example paths, mode, environment, and diagnostic identity.
  * @returns captured stdout and stderr after a zero exit.
  */
 export async function runLoaderSmoke(options: LoaderSmokeOptions): Promise<LoaderSmokeResult> {
-  const cwd = await mkdtemp(join(options.tempDirParent ?? tmpdir(), options.tempDirPrefix))
+  const providedCwd = hasProvidedCwd(options)
+  const cwd = providedCwd
+    ? options.cwd
+    : await mkdtemp(join(options.tempDirParent ?? tmpdir(), options.tempDirPrefix))
   const processTimeoutMs = options.processTimeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS
   try {
     await options.prepare?.(cwd)
@@ -222,6 +251,6 @@ export async function runLoaderSmoke(options: LoaderSmokeOptions): Promise<Loade
     await options.inspect?.(cwd)
     return { stdout: result.stdout, stderr: result.stderr }
   } finally {
-    await rm(cwd, { recursive: true, force: true })
+    if (!providedCwd) await rm(cwd, { recursive: true, force: true })
   }
 }

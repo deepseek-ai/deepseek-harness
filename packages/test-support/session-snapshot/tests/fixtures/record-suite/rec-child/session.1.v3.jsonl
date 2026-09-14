@@ -1,0 +1,6 @@
+{"type":"session","version":3,"id":"{{session:2}}","createdAt":800,"cwd":"{{cwd}}","parentSession":"{{session:1}}","isSeeded":false,"delegationDepth":1}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"step/start","data":{"turn":1,"step":1}}
+{"type":"system/message","data":{"turn":1,"step":1,"message":{"id":"{{message:1}}","role":"system","content":[{"type":"text","text":"{{system}}"}],"source":{"kind":"plugin","plugin":"@deepseek-ai/dsh-system-prompt"}}},"surfaceOp":"append"}
+{"type":"request/header","data":{"header":{"config":{"provider":"fake","model":"fake"},"tools":"{{tools}}"},"reason":"initial"}}
+{"type":"user/message","data":{"role":"user","content":[{"type":"text","text":"same inherited message"}],"source":{"kind":"user"},"id":"{{message:2}}"},"surfaceOp":"append"}

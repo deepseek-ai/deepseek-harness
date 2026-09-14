@@ -5,3 +5,6 @@ composition: default
 recording: live
 header:
   class: default
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

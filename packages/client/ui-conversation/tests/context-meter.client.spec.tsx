@@ -58,7 +58,7 @@ describe('ContextMeter', () => {
     expect(panel.textContent).toContain('25%')
     expect(panel.textContent).toContain('上下文已用')
     expect(panel.textContent).toContain('系统提示词~120')
-    expect(panel.textContent).toContain('工具~21.5K')
+    expect(panel.textContent).toContain('工具定义~21.5K')
     expect(panel.textContent).toContain('对话消息~477K')
     // The occupancy bar splits into one colored segment per composition row.
     expect(panel.getElementsByClassName(segmentClass)).toHaveLength(3)

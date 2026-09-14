@@ -32,7 +32,7 @@ Every query disables `AskUserQuestion`. Non-bypass permission callbacks deny ins
 
 ### Codex
 
-Codex defaults to `never` and accepts the three native non-interactive modes exposed by Codex 0.149.1. The Provider starts the fixed app-server command, then maps the selected mode into official `thread/start` fields because CLI-global permission flags do not configure threads created later by an app-server client:
+Codex defaults to `never` and accepts the three native non-interactive modes exposed by Codex 0.153.4. The Provider starts the fixed app-server command, then maps the selected mode into official `thread/start` fields because CLI-global permission flags do not configure threads created later by an app-server client:
 
 | Value | `thread/start` fields | Native behavior |
 | --- | --- | --- |
@@ -63,7 +63,7 @@ The foreground consumer presents the stop-reason headline, then the optional dia
 
 ## Verification
 
-Package tests pin every allowed and rejected Config value, the exact SDK and app-server field mappings, dangerous confirmations, unattended terminal responses, diagnostic sanitization and UTF-8 bound, successful-result omission, concurrent-run isolation, foreground ordering, Job detail, stderr observer disposal, and process cleanup. The real Claude Agent SDK 0.3.241 and Claude Code 2.1.241 fixture proves its safe default, restricted denial, explicit bypass, and whole-tree quiescence. The real Codex 0.149.1 app-server fixture proves that thread-level `never` overrides ambient `on-request`, automatic review starts, dangerous bypass writes only inside suite-owned temporary storage, a rejected escalation leaves no side effect or raw command or path in the diagnostic, stderr remains Host-only, and the wrapper/native tree exits. Loader composition proves non-default modes can be published without starting either product, and the keyless ACP snapshot records each product's failure diagnostic through foreground and Job presentation while the model-facing product tool schemas contain no permission parameter.
+Package tests pin every allowed and rejected Config value, the exact SDK and app-server field mappings, dangerous confirmations, unattended terminal responses, diagnostic sanitization and UTF-8 bound, successful-result omission, concurrent-run isolation, foreground ordering, Job detail, stderr observer disposal, and process cleanup. The real Claude Agent SDK 0.3.263 and Claude Code 2.1.263 fixture proves its safe default, restricted denial, explicit bypass, and whole-tree quiescence. The real Codex 0.153.4 app-server fixture proves that thread-level `never` overrides ambient `on-request`, automatic review starts, dangerous bypass writes only inside suite-owned temporary storage, a rejected escalation leaves no side effect or raw command or path in the diagnostic, stderr remains Host-only, and the wrapper/native tree exits. Loader composition proves non-default modes can be published without starting either product, and the keyless ACP snapshot records each product's failure diagnostic through foreground and Job presentation while the model-facing product tool schemas contain no permission parameter.
 
 ## Alternatives considered
 

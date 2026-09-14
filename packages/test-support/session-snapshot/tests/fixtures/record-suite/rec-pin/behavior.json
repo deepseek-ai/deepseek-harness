@@ -1,11 +1,15 @@
 {
   "prompt": "respond",
-  "logs": [{
-    "file": "b/main/session.v2.jsonl",
-    "lines": [
-      { "type": "session", "version": 2, "id": "{{SID}}", "createdAt": 600, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
-      { "type": "turn/start", "seq": 0, "time": 3, "data": { "turn": 1 } },
-      { "type": "request/header", "seq": 1, "time": 4, "data": { "header": { "config": { "provider": "fake", "model": "fake" }, "system": "SYS PROMPT", "tools": [{ "name": "t1", "description": "D1", "parameters": { "type": "object" } }] }, "reason": "initial" } }
-    ]
-  }]
+  "logs": [
+    {
+      "file": "b/main/session.v3.jsonl",
+      "lines": [
+        {"type":"session","version":3,"id":"{{SID}}","createdAt":600,"cwd":"{{CWD}}","isSeeded":false,"delegationDepth":0},
+        {"type":"turn/start","seq":0,"time":3,"data":{"turn":1}},
+        {"type":"step/start","seq":1,"time":4,"data":{"turn":1,"step":1}},
+        {"type":"system/message","seq":2,"time":4,"data":{"turn":1,"step":1,"message":{"id":"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","role":"system","content":[{"type":"text","text":"SYS PROMPT"}],"source":{"kind":"plugin","plugin":"@deepseek-ai/dsh-system-prompt"}}},"surfaceOp":"append"},
+        {"type":"request/header","seq":3,"time":4,"data":{"header":{"config":{"provider":"fake","model":"fake"},"tools":[{"name":"t1","description":"D1","parameters":{"type":"object"}}]},"reason":"initial"}}
+      ]
+    }
+  ]
 }

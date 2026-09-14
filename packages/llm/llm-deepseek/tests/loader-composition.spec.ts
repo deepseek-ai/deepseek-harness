@@ -29,12 +29,14 @@ import * as DeepSeekPluginPackageInventory from '@deepseek-ai/dsh-plugin-package
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
+import { server as messagesServer } from './messages/helpers.ts'
 
 const NS = 'llm-deepseek'
 const KEY_REF = credentialRef('DEEPSEEK_API_KEY')
 
 let root: string | undefined
 let context: Context | undefined
+const closeMessagesServers: (() => Promise<void>)[] = []
 
 afterEach(async () => {
   await context?.fiber.dispose()
@@ -42,11 +44,12 @@ afterEach(async () => {
   if (root !== undefined) await rm(root, { recursive: true, force: true })
   root = undefined
   await closeMockServers()
+  while (closeMessagesServers.length) await closeMessagesServers.pop()!()
   vi.unstubAllEnvs()
 })
 
 async function loadComposition(
-  options: { withDynamic: boolean; baseURL: string; reuseRoot?: string; enableSessionLog?: boolean },
+  options: { withDynamic: boolean; baseURL: string; reuseRoot?: string; enableSessionLog?: boolean; protocol?: 'chat-completions' | 'messages' },
 ): Promise<{ ctx: Context; settingsPath: string; credentialsPath: string }> {
   // A reused root is the restart case: the same harness home, its documents
   // exactly as the previous process left them.
@@ -94,6 +97,7 @@ async function loadComposition(
     '- id: llm-deepseek',
     "  name: '@deepseek-ai/dsh-llm-deepseek'",
     '  config:',
+    `    protocol: ${options.protocol ?? 'chat-completions'}`,
     `    baseURL: ${JSON.stringify(options.baseURL)}`,
     '',
   ].join('\n'))
@@ -140,11 +144,18 @@ async function loadComposition(
   return { ctx, settingsPath, credentialsPath }
 }
 
+async function extensionServer(protocol: 'chat-completions' | 'messages') {
+  if (protocol === 'chat-completions') return mockServer([{ kind: 'sse', events: textEvents }])
+  const server = await messagesServer()
+  closeMessagesServers.push(() => server.close())
+  return { url: server.url, get requests() { return server.requests.map(request => request.body) } }
+}
+
 describe('llm-deepseek real dynamic composition', () => {
-  it('keeps session upload off and package inventory on by default in the real Loader composition', async () => {
+  it.each(['chat-completions', 'messages'] as const)('keeps session upload off and package inventory on by default through %s Loader composition', async (protocol) => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
-    const server = await mockServer([{ kind: 'sse', events: textEvents }])
-    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url })
+    const server = await extensionServer(protocol)
+    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, protocol })
     const session = ctx.sessions.create(SessionId('extension-composition'))
     session.append('turn/start', { turn: 1 })
 
@@ -160,13 +171,14 @@ describe('llm-deepseek real dynamic composition', () => {
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
   })
 
-  it('sends the canonical session suffix when the Loader composition explicitly enables upload', async () => {
+  it.each(['chat-completions', 'messages'] as const)('sends the canonical session suffix when the %s Loader composition explicitly enables upload', async (protocol) => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
-    const server = await mockServer([{ kind: 'sse', events: textEvents }])
+    const server = await extensionServer(protocol)
     const { ctx } = await loadComposition({
       withDynamic: false,
       baseURL: server.url,
       enableSessionLog: true,
+      protocol,
     })
     const session = ctx.sessions.create(SessionId('extension-composition-enabled'))
     session.append('turn/start', { turn: 1 })

@@ -17,7 +17,7 @@ zsh: command not found: 4cecho
 
 Loader 并发挂载各个条目，因此条目失败的顺序并不等于启动顺序。`ui-tui` 会先激活并调用 pi-tui 的 `ProcessTerminal.start()`，它把 stdin 置为 raw 模式、启用 bracketed paste，并写出 Kitty 键盘协议探测序列——该序列以一个 Device Attributes 查询（`ESC [ c`）结尾。随后某个同级条目（这里是 `llm-pi-ai`）因自身配置而 rejection。
 
-在当时，该 rejection 以未处理 rejection 的形式浮现，而 `installFailLoud` 只写一行 stderr 就立即调用 `process.exit(1)`。（事务化 Loader 现在让配置树失败经 `boot()` 结算，由它自行 dispose（资源释放）部分构建的上下文；release 钩子仍然守护 `boot()` 看不到的 rejection——插件游离的异步工作在挂载期间或挂载之后失败。）没有任何环节 dispose 这棵树，因此 `ProcessTerminal.stop()` 从未执行：raw 模式、bracketed paste 和键盘协议都残留在比进程活得更久的 shell 上。终端对 Device Attributes 查询的回应（`1;2;4c`）在进程退出之后才到达，被 shell 当作用户输入读入——也就是上面那段字面文本。
+在当时，该 rejection 以未处理 rejection 的形式浮现，而 `installFailLoud` 只写一行 stderr 就立即调用 `process.exit(1)`。（[Loader 激活检查](../simplification/2026-09-09-nontransactional-loader.zh.md) 让配置树失败经 `boot()` 报告，由它自行 dispose（资源释放）部分构建的上下文；release 钩子仍然守护 `boot()` 看不到的 rejection——插件游离的异步工作在挂载期间或挂载之后失败。）没有任何环节 dispose 这棵树，因此 `ProcessTerminal.stop()` 从未执行：raw 模式、bracketed paste 和键盘协议都残留在比进程活得更久的 shell 上。终端对 Device Attributes 查询的回应（`1;2;4c`）在进程退出之后才到达，被 shell 当作用户输入读入——也就是上面那段字面文本。
 
 `/exit` 路径从不受影响，因为它会 dispose 整棵树，从而进入 TUI 自身的 `shutdown()`：先 `drainInput()`（吸收尚未返回的响应），再 `ui.stop()`。缺陷在于**启动失败**没有通往这同一套拆卸流程的路径。
 

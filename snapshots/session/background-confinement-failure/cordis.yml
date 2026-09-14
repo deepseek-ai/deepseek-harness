@@ -1,0 +1,10 @@
+# Keep job admission real while an asynchronous provider refuses every launch.
+- id: subprocess
+  disabled: true
+
+- id: sandbox
+  disabled: true
+
+- insert:
+    - id: async-confinement-fixture
+      name: '../../../packages/shell/bash-sandbox/tests/fixtures/async-confinement-failure.ts'

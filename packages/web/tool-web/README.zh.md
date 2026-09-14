@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-有了 `dsh-tool-web`，模型可以通过 `web_search` 与 `web_fetch` 工具搜索 web 或抓取页面，二者构建于 harness web 服务（`ctx.web`）之上。当模型需要搜索 web 或抓取页面时选择它；两个工具独立注册，因此产品可以通过配置禁用任一工具。每个成功结果都把提供方控制的文本标记为外部不可信数据，HTML 转换会删除活动或隐藏内容。即使选中的提供方缺失或不可用，工具仍保持可见：执行随后以模型可读的结构化错误失败。两个工具都不公开面向模型的超时；每个工具预算都是部署配置，由超时策略强制执行。
+`dsh-tool-web` 让模型使用 `web_search` 搜索 web，并使用 `web_fetch` 取回页面。当 agent（智能体）需要当前信息或完整来源文本时选择它，并通过包配置独立启用任一工具。结果会把提供方控制的文本标记为外部不可信数据，而抓取到的 HTML 会排除活动与隐藏内容。如果配置的提供方缺失或不可用，工具仍保持可见，并返回模型可据此采取行动的结构化错误。超时与结果大小上限属于部署设置，而非模型参数。
 
 ## 目录
 
@@ -103,7 +103,7 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段、非�
 | [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、启用状态、超时预算、工具注册 |
 | [`src/search.ts`](src/search.ts) | `web_search` 工具：参数校验、查询扇出、合并、格式化、呈现元数据 |
 | [`src/fetch.ts`](src/fetch.ts) | `web_fetch` 工具：HTML→markdown 转换、输出上限、格式化、呈现元数据 |
-| — | 不发布运行时不变式伴生入口；约定在工具处强制执行。 |
+| — | 不发布运行时不变量配套入口；这个面向模型的适配器没有独立的生命周期事件流；执行关系由它调用的能力 seam 负责。 |
 
 ### 搜索流程
 
@@ -143,7 +143,7 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段、非�
 
 #### 模型看到的内容
 
-搜索与抓取分别贡献以下 web-search 与 web-fetch 指引。搜索会在注册时根据配置选用启用抓取或仅搜索的文本。scope 工具限制不会移除这些独立注册的区段。
+组装时，每个区段通过 `ctx.tools.get(name, scope)` 检查对应工具，仅在其可见时输出。搜索根据抓取配置及其在该 scope 中的可见性，选择原有的启用抓取或仅搜索文本。抓取仅在搜索可见时包含搜索结果示例。两个工具都可用时原文保持不变；这也适用于通过 `run_code` 暴露的 PTC 能力。
 
 ##### 启用抓取时的 Web 搜索指引
 
@@ -165,11 +165,11 @@ Use the web_fetch tool to retrieve the content of a specific HTTP(S) URL (for ex
 
 #### Token 影响
 
-每个通过配置启用的工具都会为每次请求增加固定的指引 token 开销，即使限制隐藏了其 schema。切换抓取状态或更改 `searchMaxQueries` 会改变搜索指引；切换抓取状态还会注册或移除抓取区段。
+指引成本取决于可见工具。配置或 scope 限制可以移除段落或选择原有的仅搜索文本；更改 `searchMaxQueries` 会改变公布的上限。
 
 #### KV Cache 影响
 
-只要启用工具、scope 与指引文本不变，前缀就保持稳定。配置启用状态——包括因切换抓取状态而改变搜索指引分支——更改 `searchMaxQueries` 或插件生命周期可能使从第一个变化的提示词区段起的复用失效；scope schema 限制不会移除该区段。
+可见工具、scope 与指引文本不变时，前缀保持稳定。配置、scope 限制、`searchMaxQueries` 或插件生命周期变化可能从首个变化的提示词区段开始使复用失效。
 
 ### 工具 schema
 
@@ -179,7 +179,7 @@ Use the web_fetch tool to retrieve the content of a specific HTTP(S) URL (for ex
 
 #### Token 影响
 
-对于已解析的 `searchMaxQueries`，每次请求都会产生固定的 schema token 开销；通过配置禁用会同时移除 schema 与指引，scope 限制只移除 schema。
+对于已解析的 `searchMaxQueries`，每次请求都会产生固定的 schema token 开销；通过配置禁用或施加 scope 限制，都会移除工具 schema 及其指引。
 
 #### KV Cache 影响
 
@@ -248,7 +248,7 @@ schema 校验会在执行前拒绝缺失或非数组的 `queries` 字段以及�
 
 这些限制说明工具在哪些情况下不完整或需要部署配合。它们是当前包约束。
 
-- **没有覆盖整个批次的原生搜索计数器**：`searchMaxQueries` 限制 `ctx.web.search` 调用数，但提供方可以在每次调用内执行多次原生搜索；例如，配置了 `maxUses` 的模型型提供方最多可以执行 `searchMaxQueries × maxUses` 次原生搜索，`searchMaxResults` 只限制返回给调用方的组合来源。部署通过这些独立的消费方与提供方设置控制成本，因为服务不知道提供方内部的搜索计量单位。
+- **没有覆盖整个批次的原生搜索计数器**：`searchMaxQueries` 限制 `ctx.web.search` 调用数，但提供方可以在每次调用内执行多次原生搜索；例如，配置了 `maxUses` 的以模型为后端的提供方最多可以执行 `searchMaxQueries × maxUses` 次原生搜索，`searchMaxResults` 只限制返回给调用方的组合来源。部署通过这些独立的消费方与提供方设置控制成本，因为服务不知道提供方内部的搜索计量单位。
 - **HTML→markdown 转换会省略无法安全表示的输入**——[turndown](https://github.com/mixmark-io/turndown) 会通过真实 DOM 转换至多 `fetchMaxOutputChars` 个源字符。512 层嵌套守卫与转换异常会产生固定省略标记，而不是返回原始 HTML；表格 `colspan` 仍不受支持，因为 GFM 无法表示跨列单元格（[已归档的依赖决策](../../../.agents/notes/archived/simplification/2026-07-26-turndown-for-tool-web-html-markdown.md)）。
 - **面向模型的接口有意保持精简，后续扩展暂缓**：`max_results` 保持为配置上限（不是模型参数），`web_fetch` 只接受 `url`（没有 `format`／`prompt`／LLM（大语言模型）摘要模式）；两项都列为 [seam Agent Note](../../../.agents/notes/implemented/architecture/2026-06-24-web-capability-seam.zh.md) 中的后续步骤。
 - **公开抓取不请求审批**——随产品交付的 `cordis`、`code` 与 `standard` preset 在所有 sandbox 和审批模式下公开 `web_fetch`。HTTP 提供方会阻止非公开目标，但模型仍可向公开 URL 发送数据。需要逐次确认的部署必须添加 `tools/pre-execute` 策略或禁用抓取。

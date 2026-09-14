@@ -69,7 +69,7 @@ This section explains the design decisions behind the registry and points at the
 
 ### Design philosophy
 
-- **In-memory records, fresh snapshots.** `LocalJobRegistry` keeps one `TrackedTask` per job and projects a new read-only snapshot per call; callers never receive live state.
+- **In-memory records, fresh snapshots.** `LocalJobRegistry` keeps one `TrackedJob` per job and projects a new read-only snapshot per call; callers never receive live state.
 - **Owner-relative layers, one process-wide registry.** Controllers, completion listeners, and change observers are filed into the scope that registered them (`ScopedLayers`), and reads union the global layer with the owner's scope chain — so one preset's job controls never hold `start()` open for an agent whose own composition loads none, and a settlement reaches only the listeners its owner's composition registered.
 - **Preflight before start.** `start()` checks controller service, spec validity, live ownership, and capacity before invoking the producer, so a rejection leaves no job id or execution resource; registration commits without a later failable step.
 - **First-wins settlement, completion last.** The earliest terminal outcome records once, releases waiters, and notifies listeners once with per-listener containment; completion is announced after the record is committed and the visible-set change published, because a reporter may open a model turn synchronously.
@@ -88,7 +88,7 @@ This section explains the design decisions behind the registry and points at the
 
 ### Admission and settlement
 
-`activeTaskCount` counts authoritative records per exact owner or in the shared unowned bucket. `settle` marks a job reported when waiters are pending, resolves every waiter, records the terminal snapshot, announces the visible-set change, then notifies completion listeners. Pending waits mark the job reported before listeners run so completion reporters do not duplicate notices; a teardown cancel marks it for the same reason — nothing will read a notice addressed to an owner being destroyed.
+`activeJobCount` counts authoritative records per exact owner or in the shared unowned bucket. `settle` marks a job reported when waiters are pending, resolves every waiter, records the terminal snapshot, announces the visible-set change, then notifies completion listeners. Pending waits mark the job reported before listeners run so completion reporters do not duplicate notices; a teardown cancel marks it for the same reason — nothing will read a notice addressed to an owner being destroyed.
 
 ### Teardown
 
@@ -103,7 +103,7 @@ Owner disposal (`disposeOwned`) cancels the owner's jobs, awaits their settlemen
 
 Read these pages when the package-level contract is not enough. They move from the registry contract to the model-facing controls and the design records.
 
-- [Background task runtime subsystem](../../../docs/subsystems/jobs.md) — the job types, snapshot fields, and `ctx.jobs` cordis surface.
+- [Background task runtime subsystem](../../../docs/subsystems/jobs.md) — the job types, snapshot fields, and `ctx.jobs` Cordis surface.
 - [jobs group map](../README.md) — the sibling group page and its package table.
 - [Registry contract](../jobs/README.md) — the abstract `ctx.jobs` service this package implements.
 - [Model-facing job controls](../tool-jobs/README.md) — the `job_output`, `job_list`, and `job_kill` tools and completion notices.

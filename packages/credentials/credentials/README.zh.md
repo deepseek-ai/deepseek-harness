@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-credentials` 让机密值留在配置之外：API 密钥只存一次，在 settings 或 `cordis.yml` 中按名引用（`DEEPSEEK_API_KEY`），产品在提供方请求需要时提供该值。在这些引用之外，它还保存持久化的凭据记录——按插件组织的条目，例如授权 grant 或提供方环境值——让插件跨重启持有它为自身 id 管理的凭据。轮换后的密钥会作用于紧随其后的下一次请求——无需重启，无需改配置。配置界面能告诉你某个密钥或记录是否已设置、来自哪里、能否修改，而绝不显示值本身。存储空值等于「没有密钥」，因此空白永远不会伪装成已配置的机密；记录的存在本身就是全部事实，一条不含任何值的条目是有意陈述，而不是空白。
+`dsh-credentials` 通过让 settings 与 `cordis.yml` 引用 `DEEPSEEK_API_KEY` 等密钥名称，使机密值留在配置之外。它还存储持久化的按插件组织的凭据记录，包括授权 grant 与提供方环境值。轮换后的已存储密钥会作用于下一次请求，无需重启或修改配置。配置界面可以报告密钥或记录是否已设置、来自哪里及能否写入，而不会暴露值。空密钥值视为不存在，而空记录仍表示一项有意存储的凭据。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 何时使用
 
-只要配置需要与机密值绝缘，就使用凭据存储：需要同步、共享或渲染进配置界面的设置文件，或希望在不改配置的情况下轮换密钥的团队。当插件必须保存没有单一环境变量的凭据——登录流程产生的授权 grant，或提供方环境值——并希望配置界面能列出用户已授权什么时，请使用记录。配置界面能显示某个密钥或记录是否已设置、来自哪里、能否修改——但绝不显示值本身。如果只需要一个固定的环境变量，直接读该变量即可，无需存储。
+只要配置需要与机密值绝缘，就使用凭据存储：需要同步、共享或渲染进配置界面的设置文件，或希望在不改配置的情况下轮换密钥的团队。当插件必须保存没有单一环境变量的凭据——登录流程产生的授权 grant，或提供方环境值——并希望配置界面能列出用户获得了哪些授权时，请使用记录。配置界面能显示某个密钥或记录是否已设置、来自哪里、能否修改——但绝不显示值本身。如果只需要一个固定的环境变量，直接读该变量即可，无需存储。
 
 ### 加入你的组合
 
@@ -78,7 +78,7 @@ await ctx.credentials.modifyRecord(key, async () => ({ kind: 'grant', payload: {
 await ctx.credentials.deleteRecord(key)                  // no-op when absent
 ```
 
-`modifyRecord` 是唯一写路径：它让你的变更函数看到写入取得独占那一刻的记录，返回 `undefined` 则保持原状。记录没有空值规则——一条既无 key 也无环境值的记录，陈述的是其拥有者确认了 ambient 认证——配置界面还可以枚举每条记录，显示你已授权什么，并找出已卸载插件留下的记录。
+`modifyRecord` 是唯一写路径：它让你的变更函数看到写入取得独占那一刻的记录，返回 `undefined` 则保持原状。记录没有空值规则——一条既无 key 也无环境值的记录，陈述的是其拥有者确认了 ambient 认证——配置界面还可以枚举每条记录，显示你获得了哪些授权，并找出已卸载插件留下的记录。
 
 ### 在配置中使用密钥
 
@@ -114,7 +114,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 - **消费方按操作解析。** 解析是一次按调用读取，无跨操作缓存；这次读取正是热更新机制。
 - **空的存储值等于不存在。** `resolve` 跳过它，`describe` 报告未配置——空白永远不会伪装成已配置的机密。
 - **记录是持久化的，存在即事实。** 记录按 `<scope>/<id>` 存储并跨重启保留；空值规则不适用，因此一条既无 key 也无环境值的 `api-key` 记录是有意陈述，而不是空白。
-- **监听器失败被包含。** `notifyUpdated` 扇出 `credentials/reference-updated`，保证每个监听器都会运行；同步抛出与异步拒绝都会被记录，不改变已提交操作的结果，`INVARIANT` 编码的失败除外——它们在所有监听器运行完毕后重新抛出。
+- **监听器失败受到隔离。** `notifyUpdated` 扇出 `credentials/reference-updated`，保证每个监听器都会运行；同步抛出与异步拒绝都会被记录，不改变已提交操作的结果，`INVARIANT` 编码的失败除外——它们在所有监听器运行完毕后重新抛出。
 
 ### credentials/reference-updated 事件
 
@@ -130,7 +130,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Service Definition：`credentialRef`/`credentialKey` 品牌、`ResolvedCredential`/`CredentialRecordInfo`、覆盖两个键空间的抽象提供方、包含式扇出 |
+| [`src/index.ts`](src/index.ts) | Service Definition：`credentialRef`/`credentialKey` 品牌、`ResolvedCredential`/`CredentialRecordInfo`、覆盖两个键空间的抽象提供方、带失败隔离的扇出 |
 | [`src/types.ts`](src/types.ts) | 客户端安全类型面：`CredentialRef` 与 `CredentialKey` 品牌、存储记录联合类型、`CredentialInfo` 引用视图、`credentials/reference-updated` 与 `credentials/record-updated` 事件声明 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件：`credentials/reference-updated` 只在凭据服务存活时触发 |
 
@@ -140,7 +140,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 
 ### 生命周期
 
-服务是提供方注册的 Cordis `Service`：释放挂载 fiber 会移除 `ctx.credentials`。不变式伴生插件检查 `credentials/reference-updated` 绝不在服务存活之前触发——释放后仍有发射意味着提供方把工作泄漏到了 teardown 完全停稳之后。
+服务是提供方注册的 Cordis `Service`：释放挂载 fiber 会移除 `ctx.credentials`。不变式伴生插件检查 `credentials/reference-updated` 绝不在服务未存活时触发——释放后仍有发射意味着提供方把工作泄漏到了 teardown 完全停稳之后。
 
 </details>
 
@@ -151,7 +151,7 @@ apiKeyEnv: DEEPSEEK_API_KEY
 
 当包级约定不够用时阅读以下页面。它们从共享子系统词汇逐步进入随附存储与能力架构。
 
-- [凭据子系统参考](../../../docs/subsystems/credentials.zh.md)——`CredentialRef`/`CredentialKey`、按操作解析、对 UI 安全的信息、提供方层与生成的 cordis 接口面。
+- [凭据子系统参考](../../../docs/subsystems/credentials.zh.md)——`CredentialRef`/`CredentialKey`、按操作解析、对 UI 安全的信息、提供方层与生成的 Cordis 接口面。
 - [本地凭据存储](../credentials-local/README.zh.md)——默认本机存储：密钥与记录存放在哪里、环境层如何排序。
 - [能力 seam](../../../docs/capability-seams.zh.md)——本包遵循的 Service Definition / Service Provider / Consumer 拆分。
 
@@ -173,10 +173,10 @@ apiKeyEnv: DEEPSEEK_API_KEY
 
 这些限制说明本包何时不合适或需要特别注意。它们是当前包约束，不是任务积压。
 
-- **引用不提供枚举**——seam 只回答被问到的引用；配置界面从 settings schema 得知引用集合，对这一半做 `list()` 没有当前消费方。记录出于无 schema 可发现的原因则可枚举。
+- **引用不提供枚举**——seam 只回答被问到的引用；配置界面从 settings schema 得知引用集合，对这一半做 `list()` 没有当前消费方。记录则可以枚举，因为没有可用于发现记录的 schema。
 - **引用限定为环境变量形状**——单一扁平的 POSIX 标识符命名空间，因为引用同时就是它借以解析的环境变量名。记录使用更丰富的 `<owner>/<id>` 寻址。
 - **进程环境变化不可见**——无法为启动 shell 中改变的变量发出通知；界面只能在自身导航时重新读取 `describe()`。
-- **记录的拥有者就是它的 scope，而没有任何环节核验该 scope 是否已挂载**——seam 存下被交予的内容，并报告它存了什么；识别孤儿是调用方在 `listRecords()` 与拥有该 scope 的注册表之间做的连接，seam 自身没有可供核对的注册表。
+- **记录的拥有者就是它的 scope，而没有任何环节核验该 scope 是否已挂载**——seam 存下被交予的内容，并报告它存了什么；识别遗留记录需要调用方将 `listRecords()` 的结果与拥有该 scope 的注册表关联起来，seam 自身没有可供核对的注册表。
 
 <a id="dev-note"></a>
 ### 开发备注

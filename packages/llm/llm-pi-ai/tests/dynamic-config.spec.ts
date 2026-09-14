@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import LlmRuntime, { LlmAdapter } from '@deepseek-ai/dsh-llm'
@@ -9,6 +9,7 @@ import { LocalCredentialProvider } from '@deepseek-ai/dsh-credentials-local'
 import { FileSettingsProvider } from '@deepseek-ai/dsh-settings-file'
 import * as LlmPiAi from '@deepseek-ai/dsh-llm-pi-ai'
 import AuthorizationService from '@deepseek-ai/dsh-authorization'
+import { getBuiltinModels } from '@earendil-works/pi-ai/providers/all'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 
@@ -39,14 +40,14 @@ async function home(): Promise<string> {
 async function boot(
   dir: string,
   config: LlmPiAi.Config,
-  options: { authorization?: boolean } = {},
+  options: { authorization?: boolean; watchSettings?: boolean } = {},
 ): Promise<Context> {
   const ctx = new Context()
   cleanups.push(async () => {
     await ctx.fiber.dispose()
   })
   await ctx.plugin(LlmRuntime)
-  await ctx.plugin(FileSettingsProvider, { path: join(dir, 'settings.yaml'), watch: false })
+  await ctx.plugin(FileSettingsProvider, { path: join(dir, 'settings.yaml'), watch: options.watchSettings ?? false })
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
   if (options.authorization === true) await ctx.plugin(AuthorizationService)
   await ctx.plugin(LlmPiAi, config)
@@ -74,6 +75,99 @@ describe('login flows in a real composition', () => {
 })
 
 describe('request-level dynamic profiles', () => {
+  // Real filesystem notifications can lag behind chokidar's stability window on busy hosts.
+  it('retains the last accepted profiles after an invalid external edit and accepts a repaired file', { timeout: 30_000 }, async () => {
+    const dir = await home()
+    const path = join(dir, 'settings.yaml')
+    await writeFile(path, JSON.stringify({ [NS]: { providers: { deepseek: {} } } }))
+    const ctx = await boot(dir, {}, { watchSettings: true })
+
+    await writeFile(path, JSON.stringify({ [NS]: { providers: { openrouter: { models: [{ id: '111' }] } } } }))
+    // The raw section proves the watcher processed the edit even though validation kept the old resolved value.
+    await expect.poll(() => ctx.settings.describe().find(section => section.ns === NS)?.user, { timeout: 10_000 })
+      .toEqual({ providers: { openrouter: { models: [{ id: '111' }] } } })
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek', name: 'deepseek' }])
+
+    await writeFile(path, JSON.stringify({ [NS]: { providers: {
+      openrouter: { api: 'openai-completions', models: [{ id: '111' }] },
+    } } }))
+    await expect.poll(() => ctx.llm.listProviders(), { timeout: 10_000 })
+      .toEqual([{ id: 'openrouter', name: 'openrouter' }])
+    expect((await ctx.llm.listModels('openrouter')).map(model => model.id)).toEqual(['111'])
+  })
+
+  it('keeps stored catalog failures editable while isolating requests and validating changed providers', async () => {
+    vi.stubEnv('PI_DYNAMIC_KEY', '')
+    const dir = await home()
+    const server = await mockServer([{ events: textEvents }, { events: textEvents }])
+    const known = getBuiltinModels('openrouter').find(model => model.api === 'openai-completions')!
+    const path = join(dir, 'settings.yaml')
+    const stored = JSON.stringify({
+      [NS]: { providers: { openrouter: {
+        apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url,
+        models: [{ id: known.id }, { id: '111' }],
+      } } },
+    })
+    await writeFile(path, stored)
+    await writeFile(join(dir, '.credentials.yaml'), 'version: 1\nrefs:\n  PI_DYNAMIC_KEY: fake-key\n', { mode: 0o600 })
+    const ctx = await boot(dir, {})
+    const failure = 'llm-pi-ai: provider "openrouter" model "111" needs an api; '
+      + 'the installed catalog does not describe it, so set the route\'s api to the wire protocol its endpoint speaks'
+
+    expect(ctx.settings.describe().map(section => section.ns)).toContain(NS)
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'openrouter', name: 'openrouter' }])
+    expect(ctx.llm.listConfigurableProviders()).toContainEqual({
+      provider: 'openrouter', displayName: 'openrouter', settingsNs: NS,
+      settingsPath: ['providers', 'openrouter'], declared: false, error: failure,
+    })
+    expect(await readFile(path, 'utf8')).toBe(stored)
+    expect((await ctx.llm.listModels('openrouter')).map(model => model.id)).toEqual([known.id])
+    const bad = await assemble(ctx, { provider: 'openrouter', model: '111', messages: [] })
+    expect(bad.finish).toMatchObject({ kind: 'error', failure: { code: 'INVALID_CONFIG', message: failure } })
+    expect(server.requests).toHaveLength(0)
+    const good = await assemble(ctx, { provider: 'openrouter', model: known.id, messages: [] })
+    expect(good.message.content).toEqual([{ type: 'text', text: 'hello' }])
+
+    await ctx.settings.update(NS, { providers: { deepseek: { apiKeyEnv: 'PI_DYNAMIC_KEY', baseURL: server.url } } })
+    expect(ctx.llm.listProviders().map(provider => provider.id)).toEqual(['openrouter', 'deepseek'])
+    const beforeRejected = await readFile(path, 'utf8')
+    await expect(ctx.settings.update(NS, { providers: { openrouter: { displayName: 'Edited' } } })).rejects.toThrow(failure)
+    expect(await readFile(path, 'utf8')).toBe(beforeRejected)
+
+    const diagnostics: Array<string | undefined> = []
+    ctx.on('llm/adapters-updated', () => {
+      diagnostics.push(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'openrouter')?.error)
+    })
+    await ctx.settings.mutate(NS, [{ op: 'set', path: ['providers', 'openrouter', 'api'], value: 'openai-completions' }])
+    expect(diagnostics).toEqual([undefined])
+    expect(ctx.llm.listProviders()[0]).toEqual({ id: 'openrouter', name: 'openrouter' })
+    const repaired = await assemble(ctx, { provider: 'openrouter', model: '111', messages: [] })
+    expect(repaired.message.content).toEqual([{ type: 'text', text: 'hello' }])
+    expect(server.requests).toHaveLength(2)
+  })
+
+  it('allows removing an obsolete override and deleting a route whose catalog cannot be built', async () => {
+    const dir = await home()
+    await writeFile(join(dir, 'settings.yaml'), JSON.stringify({ [NS]: { providers: {
+      anthropic: { modelOverrides: { 'removed-model': { maxTokens: 4096 } } },
+      'retired-route': {},
+    } } }))
+    const ctx = await boot(dir, {})
+    expect(ctx.settings.describe().map(section => section.ns)).toContain(NS)
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'anthropic')?.error)
+      .toContain('modelOverrides names "removed-model"')
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'retired-route')?.error)
+      .toContain('resolves no models')
+    expect((await ctx.llm.listModels('anthropic')).length).toBeGreaterThan(0)
+    await expect(ctx.llm.resolveModelInfo('anthropic', 'removed-model')).rejects.toThrow('modelOverrides names "removed-model"')
+    await expect(ctx.llm.resolveModelInfo('retired-route', 'anything')).rejects.toThrow('resolves no models')
+    await ctx.settings.mutate(NS, [{ op: 'unset', path: ['providers', 'retired-route'] }])
+    await ctx.settings.mutate(NS, [{ op: 'unset', path: ['providers', 'anthropic', 'modelOverrides', 'removed-model'] }])
+    expect(ctx.llm.listProviders()).toEqual([{ id: 'anthropic', name: 'anthropic' }])
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'retired-route')).toBeUndefined()
+    expect(ctx.llm.listConfigurableProviders().find(entry => entry.provider === 'anthropic')?.error).toBeUndefined()
+  })
+
   it('mounts bare and dormant, then registers routes the moment settings supply providers', async () => {
     vi.stubEnv('PI_DYNAMIC_KEY', '')
     const dir = await home()

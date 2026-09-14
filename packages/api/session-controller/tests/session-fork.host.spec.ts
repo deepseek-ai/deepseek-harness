@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { agentEvents } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentHandle, CreateAgentOptions } from '@deepseek-ai/dsh-agent'
+import { mountAgentLoopTestDependencies, mountAgentLoopTestHarness } from '@deepseek-ai/dsh-agent-loop-testkit'
+import { MockAdapter, textResponse } from '../../../core/agent-loop/tests/mock-adapter.ts'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { LlmCallConfig } from '@deepseek-ai/dsh-llm'
 import SessionStore, { SESSION_FORMAT_VERSION, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
@@ -37,10 +39,10 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
           : { inheritedEventCount: options.inheritedEventCount },
       })
       const agent = {} as Agent
-      const agentCtx = ownerCtx.extend({ agent })
+      const agentCtx = ownerCtx
       Object.assign(agent, { id: session.id, session, status: 'idle', ctx: agentCtx })
-      await options.setup?.(agentCtx)
-      ctx.agents.register(agent)
+      await options.setup?.(agentCtx, agent)
+      await ctx.agents.register(agent)
       return { agent, dispose: () => Promise.resolve() }
     },
     resume: () => Promise.reject(new Error('fork test sources are live')),
@@ -51,13 +53,13 @@ async function composed(workspaces: readonly Workspace[] = []): Promise<Context>
 /** Tail turn appended after the completed ones: left open, or closed as aborted (a stopped turn). */
 type Tail = 'none' | 'open' | 'aborted'
 
-function liveAgent(
+async function liveAgent(
   ctx: Context,
   id: string,
   turns: number,
   tail: Tail = 'none',
   lineage: { parentSession?: SessionId; origin?: 'subagent' } = {},
-): Session {
+): Promise<Session> {
   const session = ctx.sessions.create(sid(id), { meta: { cwd: '/proj', ...lineage } })
   for (let turn = 1; turn <= turns; turn++) {
     session.append('turn/start', { turn })
@@ -78,7 +80,7 @@ function liveAgent(
       reason: { kind: 'aborted', reason: { kind: 'user' } },
     })
   }
-  ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
+  await ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
   return session
 }
 
@@ -88,9 +90,56 @@ const remote = (ctx: Context) => createSessionTestRemote(ctx, {
 })
 
 describe('sessions.fork', () => {
+  it.each(['message', 'turn-end', 'omitted', 'past-end'] as const)(
+    'excludes the next user input when forking at %s', async (anchor) => {
+      const ctx = new Context()
+      try {
+        await mountAgentLoopTestDependencies(ctx)
+        const harness = await mountAgentLoopTestHarness(ctx)
+        const adapter = new MockAdapter(Array.from({ length: 4 }, () => textResponse('reply')))
+        ctx.llm.registerAdapter(['mock'], adapter)
+        ctx.provide('workspaceRegistry', { list: () => [] } as never)
+        const source = await harness.create(sid('source'), { provider: 'mock', model: 'mock' })
+        const message = (text: string) => createUserMessage({
+          content: [{ type: 'text', text }], source: { kind: 'user' },
+        })
+        source.followup(message('A'))
+        await source.whenIdle()
+        const boundary = source.session.snapshotEvents().at(-1)!.seq
+        if (anchor === 'message' || anchor === 'turn-end') {
+          source.followup(message('B'))
+          await source.whenIdle()
+        } else {
+          source.inbox.append('next-turn', message('B'))
+        }
+        const original = source.session.snapshotEvents()
+        const atSeq = anchor === 'omitted' ? undefined
+          : anchor === 'past-end' ? source.session.seq + 1
+            : anchor === 'turn-end' ? boundary
+              : original.find(event => event.type === 'assistant/message')!.seq
+        const response = await createSessionTestRemote(ctx, {
+          defaultModelSelection: () => ({ provider: 'mock', model: 'mock' }), cwd: '/tmp',
+        }).fork({ sessionId: source.id, ...(atSeq === undefined ? {} : { atSeq }) })
+        if (!response.ok) throw response.error
+        const child = ctx.agents.get(response.value.sessionId)!
+        const requestCount = adapter.requests.length
+        child.followup(message('C'))
+        await child.whenIdle()
+        const userTexts = child.session.deriveMessages().flatMap(item => item.role === 'user'
+          ? item.content.flatMap(part => part.type === 'text' ? [part.text] : []) : [])
+        expect(userTexts).toEqual(['A', 'C'])
+        expect(adapter.requests.slice(requestCount)).toHaveLength(1)
+        expect(child.session.inheritedEventCount).toBe(boundary + 1)
+        expect(source.session.snapshotEvents()).toEqual(original)
+      } finally {
+        await ctx.fiber.dispose()
+      }
+    },
+  )
+
   it('cuts at the anchored completed turn and records lineage and cwd', async () => {
     const ctx = await composed()
-    const source = liveAgent(ctx, 'session-source', 2)
+    const source = await liveAgent(ctx, 'session-source', 2)
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: 1 }))
     expect(response.ok ? null : response.error).toBeNull()
     if (!response.ok) return
@@ -112,13 +161,13 @@ describe('sessions.fork', () => {
       attachSession,
     } as unknown as Workspace
     const ctx = await composed([workspace])
-    const owner = liveAgent(ctx, 'session-owner', 1)
+    const owner = await liveAgent(ctx, 'session-owner', 1)
     accounted.push(owner.id)
-    const child = liveAgent(ctx, 'session-child', 1, 'none', {
+    const child = await liveAgent(ctx, 'session-child', 1, 'none', {
       parentSession: owner.id,
       origin: 'subagent',
     })
-    const grandchild = liveAgent(ctx, 'session-grandchild', 1, 'none', {
+    const grandchild = await liveAgent(ctx, 'session-grandchild', 1, 'none', {
       parentSession: child.id,
       origin: 'subagent',
     })
@@ -204,7 +253,7 @@ describe('sessions.fork', () => {
 
   it('uses the last completed turn only for omitted and past-end anchors', async () => {
     const ctx = await composed()
-    const source = liveAgent(ctx, 'session-tail', 2, 'open')
+    const source = await liveAgent(ctx, 'session-tail', 2, 'open')
     const proxy = remote(ctx)
     const expectedTypes = [
       'turn/start', 'user/message', 'turn/end',
@@ -240,7 +289,7 @@ describe('sessions.fork', () => {
 
   it('cuts through an aborted turn: stopped is closed, not open', async () => {
     const ctx = await composed()
-    const source = liveAgent(ctx, 'session-aborted', 1, 'aborted')
+    const source = await liveAgent(ctx, 'session-aborted', 1, 'aborted')
     // What a stopped message's fork button anchors on: the frozen node sits
     // one event before its turn/end, floored client-side to that event's seq.
     const anchor = (source.snapshotEvents().at(-1)?.seq ?? 0) - 1
@@ -257,7 +306,7 @@ describe('sessions.fork', () => {
 
   it('rejects an in-log anchor whose turn is still open', async () => {
     const ctx = await composed()
-    const source = liveAgent(ctx, 'session-open', 1, 'open')
+    const source = await liveAgent(ctx, 'session-open', 1, 'open')
     const anchor = source.snapshotEvents().at(-1)?.seq ?? 0
     const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: anchor }))
     expect(response).toMatchObject({
@@ -268,9 +317,10 @@ describe('sessions.fork', () => {
     await ctx.fiber.dispose()
   })
 
-  it('installs the latest logged model selection before the child can run', async () => {
+  it('inherits model selection through the completed turn and excludes later changes', async () => {
     const ctx = await composed()
-    const source = liveAgent(ctx, 'session-routed', 1)
+    const source = await liveAgent(ctx, 'session-routed', 0)
+    source.append('turn/start', { turn: 1 })
     source.append('request/header', {
       header: {
         config: {
@@ -281,11 +331,23 @@ describe('sessions.fork', () => {
       },
       reason: 'initial',
     })
-    const response = await remote(ctx).fork(request({ sessionId: source.id }))
+    const boundary = source.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    const inherited = source.snapshotEvents()
+    source.append('session/title', {
+      title: 'Title after the selected turn', messageSeqs: [], source: { kind: 'user' },
+    })
+    source.append('turn/start', { turn: 2 })
+    source.append('request/header', {
+      header: { config: { provider: 'later-provider', model: 'later-model' } },
+      reason: 'change',
+    })
+    source.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+    const response = await remote(ctx).fork(request({ sessionId: source.id, atSeq: boundary.seq }))
     expect(response.ok).toBe(true)
     if (!response.ok) return
     const child = ctx.agents.get(response.value.sessionId)
     if (child === undefined) throw new Error('fork did not publish the child agent')
+    expect(child.session.snapshotEvents().slice(0, child.session.inheritedEventCount)).toEqual(inherited)
     const assembly = await child.ctx.systemPrompt.assemble()
     expect(assembly.variables).toMatchObject({
       provider: 'inherited-provider',

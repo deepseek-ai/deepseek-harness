@@ -37,7 +37,7 @@ Status: implemented
 
 拒绝是结构化的 `FS_SANDBOX_DENIED`，携带生效模式——区别于 `FS_PERMISSION_DENIED`（宿主 EACCES 是世界在拒绝；这里是策略在拒绝）。无文本推断：进程内围栏确切知道它拒绝了什么。per-call 载体是 `writeText`/`editText` 上一个末尾可选的 `SandboxExecutionPolicy`（文件系统侧对应 `ShellExecRequest.sandboxPolicy`）；该 seam 保持无会话依赖，而裸的本地后端会忽略它。`FileSystem.sandboxMode` 是能力事实（在基类与 `fs-local` 上为 `undefined`，在 `SandboxedFileSystem` 上为默认值），所以工具层按组合真相来宣告升级。
 
-威胁模型写在包 README 里：一道位于可信代码中、针对模型可控路径的策略围栏，而非内核边界——操作是 seam 自身的，只有目标路径不可信，所以「先规范化再判包含」足以完整覆盖这一调用面（`code-runtime` 的「containment, not a security boundary」先例）。对不可信代码的内核级隔离仍是 `ctx.shell` 的职责。resolve 到系统调用之间残留的竞态被就地重新规范化收窄，只有平台原语（`openat2` `RESOLVE_BENEATH`）能彻底消除它，而在此不值得为其付出可移植性代价。
+威胁模型写在包 README 里：一道位于可信代码中、针对模型可控路径的策略围栏，而非内核边界——操作是 seam 自身的，只有目标路径不可信，所以「先规范化再判包含」足以完整覆盖这一调用面（`ptc-runtime` 的「containment, not a security boundary」先例）。对不可信代码的内核级隔离仍是 `ctx.shell` 的职责。resolve 到系统调用之间残留的竞态被就地重新规范化收窄，只有平台原语（`openat2` `RESOLVE_BENEATH`）能彻底消除它，而在此不值得为其付出可移植性代价。
 
 ### 工具对等——一个拒绝标记、一条升级流程
 

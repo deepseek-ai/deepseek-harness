@@ -8,7 +8,7 @@ English | [中文](2026-06-18-compaction-capability-seam.zh.md)
 
 A long-running agent conversation grows without bound. As the event log accumulates turns, the derived message history eventually approaches the model's context window — the model then truncates mid-response (`max-tokens`) or degrades. **Compaction** is the mitigation: replace a run of older history with a concise summary, keeping recent context intact.
 
-The [session surface](../architecture/2026-06-18-session-surface.md) was built as the foundation for exactly this — an ordered projection over the event log with a `surfaceOp: { op: 'replace', start, end }` operation purpose-built to shadow a range of entries and insert a replacement, with `sourceEventSeqs` listing every source event so replay can validate that the replacement cites every event it removes. What remained was the plugin that *decides what to compact and produces the summary*.
+The [session surface](../architecture/2026-06-18-session-surface.md) was built as the foundation for exactly this — an ordered projection over the event log with a `surfaceOp: { op: 'replace', startSeq, endSeq }` operation purpose-built to shadow a range of entries and insert a replacement, with `sourceEventSeqs` listing every source event so replay can validate that the replacement cites every event it removes. What remained was the plugin that *decides what to compact and produces the summary*.
 
 Two forces shape the design. First, compaction policy and reusable token measurement vary independently: measurement belongs to the LLM-family [`ctx.tokenMeter` service](../../archived/architecture/2026-07-15-replay-token-meter-service.md), while summarization can be a model call, a template, or a remote service. Second, `SurfaceEventType` is closed to the message-producing event types (`user/message`, `assistant/message`, `tool/result`); only those may carry `surfaceOp`. A bespoke `compaction/*` event therefore **cannot** itself appear on the surface — the compiler and Session's always-on append/seed boundary reject `surfaceOp` on it.
 
@@ -71,13 +71,13 @@ Auto-compaction always starts at the surface head, merging the prior checkpoint 
 
 ### Surface replacement: `compaction/*` events are log-only; one `user/message` carries the summary
 
-Because `SurfaceEventType` is closed, the summary cannot ride on a `compaction/*` event. The backend instead appends a **single `user/message`** with `source: COMPACT_CHECKPOINT_SOURCE` and `surfaceOp: { op: 'replace', start, end }` whose `content` is the (framed) summary and whose `sourceEventSeqs` covers the shadowed entries *and* the bookkeeping events. The interface exports that source and `isCompactCheckpointSource()` so consumers recognize a persisted or cloned checkpoint without depending on backend package identity. The `compaction/*` events record the lock, summary, selected range, shadowed seqs, token count, and model call without joining the surface. The surface mutation sits **inside** the lock — `compaction/end` is the last event appended:
+Because `SurfaceEventType` is closed, the summary cannot ride on a `compaction/*` event. The backend instead appends a **single `user/message`** with `source: COMPACT_CHECKPOINT_SOURCE` and `surfaceOp: { op: 'replace', startSeq, endSeq }` whose `content` is the (framed) summary and whose `sourceEventSeqs` covers the shadowed entries *and* the bookkeeping events. The interface exports that source and `isCompactCheckpointSource()` so consumers recognize a persisted or cloned checkpoint without depending on backend package identity. The `compaction/*` events record the lock, summary, selected range, shadowed seqs, token count, and model call without joining the surface. The surface mutation sits **inside** the lock — `compaction/end` is the last event appended:
 
 ```
 compaction/start    → log-only. Acquires the lock.
 [summarize older range via the backend]
 compaction/summary  → log-only. Records the raw summary, local-call marker, range, shadowed seqs, and token count.
-user/message     → canonical checkpoint source + surfaceOp { op:'replace', start, end }.
+user/message     → canonical checkpoint source + surfaceOp { op:'replace', startSeq, endSeq }.
                    THE surface mutation (framed summary).
                    deriveMessages() renders it as a user-role message.
 compaction/end      → log-only. Releases the lock (carries `error` on a recoverable failure).

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-tool-ask-user` gives the model one tool — `ask_user_question` — for asking the human a concise question when it needs confirmation, a choice, or missing information before continuing. The tool pauses until the first scoped answerer accepts the request, then feeds that answer back into the agent loop as an ordinary tool result, so no loop mechanics change. The tool returns the canonical `{ answers: [...] }` shape, rendered as compact JSON text. It renders no UI itself and does not know how input is collected; the Web client contributes its answerer through Remote Events. A runtime-owned child agent cannot ask the user; it must include the unresolved question in its final result.
+`ask_user_question` lets a model pause work and ask the human for confirmation, a choice, or missing information. It accepts one or more questions and returns their answers as compact JSON. The call waits until an answer is accepted or the turn is cancelled; if no answer handler accepts it, the model receives an error. A live child agent owned by another agent cannot call this tool and must report unresolved questions in its final result. The package does not render or collect input, so callers must provide a compatible user interaction surface.
 
 ## Table of Contents
 

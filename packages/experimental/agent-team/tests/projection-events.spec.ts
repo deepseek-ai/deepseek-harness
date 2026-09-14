@@ -10,8 +10,8 @@ const ROOT = SessionId('team-root')
 const TEAM = TeamId(ROOT)
 const CHILD = SessionId('child-a')
 
-function event<T extends SessionEventType>(type: T, data: SessionEventMap[T], seq: SessionSeq): SessionEvent<T> {
-  return { type, data, seq, time: seq } as SessionEvent<T>
+function event<T extends Extract<SessionEventType, `team/${string}`>>(type: T, data: SessionEventMap[T], seq: SessionSeq): SessionEvent<T> {
+  return { type, data, seq, time: seq } as unknown as SessionEvent<T>
 }
 
 function project(rootId: SessionId, events: readonly SessionEvent[]): TeamProjectionState {

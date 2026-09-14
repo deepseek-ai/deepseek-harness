@@ -38,6 +38,12 @@ function evaluate(expression: string, context: Record<string, string | boolean>)
   return runInNewContext(source, { fromJSON: JSON.parse }, { timeout: 1000 }) as unknown
 }
 
+function assertSharedPersistentStore(run: string | undefined): void {
+  expect(run).toContain('store_root="$HOME/.local/share/pnpm/store"')
+  expect(run).toContain('echo "PNPM_CONFIG_STORE_DIR=$store_root" >> "$GITHUB_ENV"')
+  expect(run).toContain('store_path=$(PNPM_CONFIG_STORE_DIR="$store_root" pnpm store path --silent)')
+}
+
 const trustedPr = {
   'vars.DSH_CI_FAILOVER_LINUX': 'selfhosted',
   'github.repository': repository,
@@ -82,7 +88,7 @@ for (const [file, jobIds] of [['release.yml', ['dependencies', 'pack']], ['relea
       expect(Object.keys(release.jobs)).toEqual(jobIds)
       expect(release.on).toEqual({ pull_request: null, push: { branches: ['master'] }, workflow_dispatch: null })
       expect(release.permissions).toEqual({ contents: 'read' })
-      expect(release.concurrency).toEqual({ group: '${{ github.workflow }}-${{ github.ref }}', 'cancel-in-progress': false })
+      expect(release.concurrency).toEqual({ group: '${{ github.workflow }}-${{ github.ref }}', 'cancel-in-progress': true })
     })
     for (const jobId of jobIds) {
       describe(jobId, () => {
@@ -108,8 +114,18 @@ for (const [file, jobIds] of [['release.yml', ['dependencies', 'pack']], ['relea
             .toBe('${{ runner.temp }}/setup-pnpm-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}')
           expect(job.steps.find(step => step.name === 'Install (immutable)')?.run).toBe('pnpm install --frozen-lockfile')
         })
-        it('uses the persistent store without remote cache reads or writes on self-hosted', () => {
-          expect(job.steps.find(step => step.name === 'Configure pnpm store path')?.run).toContain('store_root="$HOME/.local/share/pnpm/store"')
+        it('retains the configured shared npm cache', () => {
+          expect(JSON.stringify(release)).not.toMatch(/npm_config_cache/i)
+        })
+        it.each(['', 'store_root="${RUNNER_TEMP%/*}/pnpm-store"', 'store_root="$RUNNER_TEMP/pnpm-store"'])(
+          'rejects missing, runner-private, or job-temporary store placement: %s', (replacement) => {
+            const run = job.steps.find(step => step.name === 'Configure pnpm store path')?.run
+              ?.replace('store_root="$HOME/.local/share/pnpm/store"', replacement)
+            expect(() => { assertSharedPersistentStore(run) }).toThrow()
+          },
+        )
+        it('uses the shared persistent store without remote cache reads or writes on self-hosted', () => {
+          assertSharedPersistentStore(job.steps.find(step => step.name === 'Configure pnpm store path')?.run)
           const caches = job.steps.filter(step => step.uses?.startsWith('actions/cache'))
           expect(caches.map(step => step.uses)).toEqual(['actions/cache/restore@v4'])
           for (const step of caches) {

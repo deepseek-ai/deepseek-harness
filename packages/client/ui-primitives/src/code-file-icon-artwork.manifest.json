@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "owner": "DeepSeek Harness product design",
+  "sources": [
+    {
+      "name": "square-icons-export",
+      "kind": "internal-design-export",
+      "sha256": "9b90bec3e20d99f179126d0981da01bcffa14060a284a844a0073472919e230e",
+      "icons": [
+        "angular",
+        "c",
+        "clojure",
+        "cmake",
+        "cpp",
+        "csharp",
+        "css",
+        "dart",
+        "docker",
+        "elixir",
+        "env",
+        "erlang",
+        "flutter",
+        "git",
+        "go",
+        "graphql",
+        "haskell",
+        "ini",
+        "java",
+        "javascript",
+        "json",
+        "kotlin",
+        "lua",
+        "makefile",
+        "node",
+        "objective-c",
+        "perl",
+        "php",
+        "powershell",
+        "protobuf",
+        "python",
+        "r",
+        "react",
+        "ruby",
+        "rust",
+        "scala",
+        "shell",
+        "solidity",
+        "sql",
+        "svelte",
+        "toml",
+        "typescript",
+        "vue",
+        "wasm",
+        "xml",
+        "yaml",
+        "zig"
+      ]
+    },
+    {
+      "name": "swift-square-icon",
+      "kind": "internal-design-export",
+      "sha256": "2afa6d5db27f6f9da5a2011613410891ef904f55420187bb7cc88a350daaa0bf",
+      "icons": [
+        "swift"
+      ]
+    }
+  ],
+  "excluded": [
+    "markdown"
+  ]
+}

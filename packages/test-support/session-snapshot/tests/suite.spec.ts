@@ -15,6 +15,7 @@ import {
   sessionFixtureName,
   sessionFixtureNames,
   sessionHeaderVersion,
+  writerSnapshotName,
   stabilizeFixtureMessageIds,
   tokenizeSessionFixtureCwd,
   type HarvestedLog,
@@ -31,6 +32,7 @@ import {
   normalizedHeaders,
   normalizedSystemPrompts,
   normalizedToolSchemas,
+  parseSystemPromptSnapshot,
   parseToolSchemasSnapshot,
   refreshFixtureReplacements,
   scenarioSkipped,
@@ -38,6 +40,7 @@ import {
   type SharedSnapshotClaim,
   stabilizeRefreshLog,
   stdoutExpectedVariants,
+  systemPromptPrecedesRequests,
   unknownToolCallIds,
 } from '../src/suite.ts'
 
@@ -74,13 +77,22 @@ const RECORD_SRC = fileURLToPath(new URL('./fixtures/record-suite', import.meta.
 
 // Replay pins explicit header classes; recording covers the default fallback.
 const REPLAY_SCENARIOS: Scenario[] = [
-  { name: 'pin-turn', hasModelTurn: true, recorded: true, pinsHeader: true, expectedHeaderChanges: 1, headerClass: 'main' },
+  {
+    name: 'pin-turn',
+    hasModelTurn: true,
+    recorded: true,
+    pinsHeader: true,
+    expectedHeaderChanges: 1,
+    expectedPromptChanges: 1,
+    headerClass: 'main',
+  },
   {
     name: 'shared-pin',
     hasModelTurn: true,
     recorded: true,
     pinsHeader: true,
     expectedHeaderChanges: 1,
+    expectedPromptChanges: 1,
     headerClass: 'shared',
     systemPromptSource: 'pin-turn',
     toolSchemasSource: 'pin-turn',
@@ -116,13 +128,14 @@ const RECORD_SCENARIOS: Scenario[] = [
 // committed record fixtures and expected outputs in place.
 const BOOTSTRAP = process.env.ACP_SNAPSHOT_SPEC_BOOTSTRAP === '1'
 const recordDir = BOOTSTRAP ? RECORD_SRC : mkdtempSync(join(tmpdir(), 'acp-snap-record-suite-'))
-const retiredChildFixture = readFileSync(join(RECORD_SRC, 'rec-child', 'session.1.jsonl'), 'utf8')
+const retiredChildFixture = readFileSync(join(RECORD_SRC, 'rec-child', 'session.1.v3.jsonl'), 'utf8')
 if (!BOOTSTRAP) {
   cpSync(RECORD_SRC, recordDir, { recursive: true })
   // Record mode owns its output inventory: a new scenario has no primary yet,
   // while a changed child count can leave old numbered fixtures behind.
   rmSync(join(recordDir, 'rec-pin', 'session.jsonl'))
-  writeFileSync(join(recordDir, 'rec-child', 'session.2.jsonl'), retiredChildFixture)
+  rmSync(join(recordDir, 'rec-pin', 'session.v3.jsonl'))
+  writeFileSync(join(recordDir, 'rec-child', 'session.2.v3.jsonl'), retiredChildFixture)
 }
 const refreshDir = mkdtempSync(join(tmpdir(), 'acp-snap-refresh-suite-'))
 cpSync(REPLAY_DIR, refreshDir, { recursive: true })
@@ -179,47 +192,60 @@ describe('defineAcpSnapshotSuite: refresh write-back', () => {
     // The scenario's own env layer reached the subprocess.
     expect(stdout).toContain('\\"permissionMode\\":\\"never\\"')
 
-    const blocked = readFileSync(join(refreshDir, 'blocked-log', 'session.v2.jsonl'), 'utf8')
+    const blocked = readFileSync(join(refreshDir, 'blocked-log', 'session.v3.jsonl'), 'utf8')
     expect(blocked).toContain('"decision":"block"')
     expect(blocked).not.toContain('"decision":"stale"')
 
-    const authored = readFileSync(join(refreshDir, 'authored-error', 'session.v2.jsonl'), 'utf8')
+    const authored = readFileSync(join(refreshDir, 'authored-error', 'session.v3.jsonl'), 'utf8')
     expect(authored).toContain('"message":"model exploded"')
     expect(authored).not.toContain('"error":"stale"')
 
     expect(readFileSync(join(refreshDir, 'pin-turn', 'system-prompt.expected.md'), 'utf8')).toBe([
       'SYS PROMPT',
       '',
-      '<!-- request/header change 1 -->',
+      '<!-- system/message change 1 -->',
       '',
       'SYS PROMPT',
       '',
       'NEW PROMPT LINE',
       '',
     ].join('\n'))
-    const schemas = readFileSync(join(refreshDir, 'pin-turn', 'tool-schemas.expected.json'), 'utf8')
-    expect(schemas).toContain('"description": "D1"')
-    expect(schemas).not.toContain('"name":"stale"')
+    const schemas = parseToolSchemasSnapshot(readFileSync(join(refreshDir, 'pin-turn', 'tool-schemas.expected.json'), 'utf8'))
+    expect(schemas.initial.map(tool => (tool as { name: string }).name)).toEqual(['t1'])
+    expect(schemas.changes.map(set => set.map(tool => (tool as { name: string }).name))).toEqual([['t1', 't2']])
     const childSchemas = readFileSync(join(refreshDir, 'plain-turn', 'tool-schemas.1.expected.json'), 'utf8')
     expect(childSchemas).toContain('"name": "child-only"')
     expect(childSchemas).not.toContain('stale-child')
     const childPrompt = readFileSync(join(refreshDir, 'plain-turn', 'system-prompt.1.expected.md'), 'utf8')
     expect(childPrompt).toBe('SYS PROMPT\n\nCHILD GUIDANCE\n')
 
-    const pinSession = readFileSync(join(refreshDir, 'pin-turn', 'session.v2.jsonl'), 'utf8')
+    const pinSession = readFileSync(join(refreshDir, 'pin-turn', 'session.v3.jsonl'), 'utf8')
     expect(pinSession).toContain('"cwd":"{{cwd}}"')
     expect(readFileSync(join(refreshDir, 'pin-turn', 'session.jsonl'), 'utf8'))
       .not.toContain('"version"')
+    expect(pinSession.match(/"text":"{{system}}"/g)).toHaveLength(2)
+    expect(pinSession).toContain('"surfaceOp":{"op":"replace","startSeq":2,"endSeq":2}')
+    expect(pinSession).not.toContain('NEW PROMPT LINE')
   })
 })
 
 describe('defineAcpSnapshotSuite: record inventory write-back', () => {
+  it('uses complete UUIDs for the shared parent and child system message', () => {
+    const behavior = JSON.parse(readFileSync(join(RECORD_SRC, 'rec-child', 'behavior.json'), 'utf8')) as {
+      logs: { lines: { type: string; data?: { message?: { id: string } } }[] }[]
+    }
+    const ids = behavior.logs.map(log => log.lines.find(event => event.type === 'system/message')?.data?.message?.id)
+    expect(ids).toHaveLength(2)
+    for (const id of ids) expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+    expect(ids[0]).toBe(ids[1])
+  })
+
   it('creates a missing primary fixture and preserves generations for a retired child role', () => {
-    const fixture = readFileSync(join(recordDir, 'rec-pin', 'session.v2.jsonl'), 'utf8')
+    const fixture = readFileSync(join(recordDir, 'rec-pin', 'session.v3.jsonl'), 'utf8')
     expect(fixture).toContain('"type":"session"')
     expect(fixture).toContain('"cwd":"{{cwd}}"')
     if (!BOOTSTRAP) {
-      expect(readFileSync(join(recordDir, 'rec-child', 'session.2.jsonl'), 'utf8')).toBe(retiredChildFixture)
+      expect(readFileSync(join(recordDir, 'rec-child', 'session.2.v3.jsonl'), 'utf8')).toBe(retiredChildFixture)
     }
     expect(readFileSync(join(recordDir, 'rec-child', 'tool-schemas.1.expected.json'), 'utf8'))
       .toContain('"name": "t1"')
@@ -228,7 +254,7 @@ describe('defineAcpSnapshotSuite: record inventory write-back', () => {
   it('retains an unchanged message relationship across the recorded parent and child fixtures', () => {
     const existingMessageId = '22222222-2222-4222-8222-222222222222'
     const freshMessageId = '11111111-1111-4111-8111-111111111111'
-    const fixtures = ['session.v2.jsonl', 'session.1.v2.jsonl']
+    const fixtures = ['session.v3.jsonl', 'session.1.v3.jsonl']
       .map(file => readFileSync(join(recordDir, 'rec-child', file), 'utf8'))
 
     for (const fixture of fixtures) {
@@ -291,9 +317,14 @@ describe('defineAcpSnapshotSuite: registration contract', () => {
     }).toThrow(/duplicate scenario name "duplicate"/)
   })
 
-  it.each(['systemPromptSource', 'toolSchemasSource'] as const)(
+  it.each([
+    ['systemPromptSource', 'owner'],
+    ['toolSchemasSource', 'owner'],
+    ['expectedHeaderChanges', 1],
+    ['expectedPromptChanges', 1],
+  ] as const)(
     'rejects %s away from a header pin',
-    (field) => {
+    (field, value) => {
       expect(() => {
         defineAcpSnapshotSuite({
           agent: AGENT,
@@ -302,7 +333,7 @@ describe('defineAcpSnapshotSuite: registration contract', () => {
             name: 'plain',
             hasModelTurn: true,
             recorded: true,
-            [field]: 'owner',
+            [field]: value,
           }],
           mode: 'replay',
         })
@@ -398,7 +429,34 @@ describe('defineAcpSnapshotSuite: registration contract', () => {
         ],
         mode: 'replay',
       })
-    }).toThrow(/consumer and owner declare different header-change counts for shared tool-schema snapshot/)
+    }).toThrow(/consumer and owner declare different expectedHeaderChanges counts for shared tool-schema snapshot/)
+  })
+
+  it('rejects shared prompt sidecars with different prompt-change counts', () => {
+    expect(() => {
+      defineAcpSnapshotSuite({
+        agent: AGENT,
+        snapshotsDir: REPLAY_DIR,
+        scenarios: [
+          {
+            name: 'owner',
+            hasModelTurn: true,
+            recorded: true,
+            pinsHeader: true,
+            expectedPromptChanges: 1,
+          },
+          {
+            name: 'consumer',
+            hasModelTurn: true,
+            recorded: true,
+            pinsHeader: true,
+            headerClass: 'consumer',
+            systemPromptSource: 'owner',
+          },
+        ],
+        mode: 'replay',
+      })
+    }).toThrow(/consumer and owner declare different expectedPromptChanges counts for shared system-prompt snapshot/)
   })
 })
 
@@ -427,6 +485,19 @@ describe('shared snapshot content', () => {
         { path: 'two/system-prompt.expected.md', content: 'same\n' },
       ])
     }).toThrow(/identical prompt snapshots appear in one\/system-prompt\.expected\.md and two\/system-prompt\.expected\.md/)
+  })
+})
+
+describe('writerSnapshotName', () => {
+  it('keeps native writer expectations outside historical replay selection', () => {
+    expect(writerSnapshotName(0)).toBe('writer.expected.jsonl')
+    expect(writerSnapshotName(2)).toBe('writer.2.expected.jsonl')
+    expect(sessionFixtureNames(['session.v1.jsonl', writerSnapshotName(0), writerSnapshotName(1)]))
+      .toEqual(['session.v1.jsonl'])
+  })
+
+  it.each([-1, -0, 0.5, Number.MAX_SAFE_INTEGER + 1])('rejects invalid role %s', (index) => {
+    expect(() => writerSnapshotName(index)).toThrow('writer snapshot index must be a non-negative safe integer')
   })
 })
 
@@ -640,8 +711,8 @@ describe('fixtureContext', () => {
 })
 
 describe('normalizedHeaders', () => {
-  const header = (system: string): string => JSON.stringify({
-    type: 'request/header', seq: 0, time: 9, data: { header: { config: { model: 'm' }, system }, reason: 'initial' },
+  const header = (tool: string): string => JSON.stringify({
+    type: 'request/header', seq: 0, time: 9, data: { header: { config: { model: 'm' }, tools: [{ name: tool }] }, reason: 'initial' },
   })
 
   it('extracts every request/header payload in log order, normalized', () => {
@@ -650,8 +721,8 @@ describe('normalizedHeaders', () => {
       + `${JSON.stringify({ type: 'turn/start', seq: 1, time: 9, data: { turn: 1 } })}\n${header('two')}\n`
     const headers = normalizedHeaders(log, { sessionIds: [id], cwd: '/w' })
     expect(headers).toEqual([
-      { config: { model: 'm' }, system: 'one' },
-      { config: { model: 'm' }, system: 'two' },
+      { config: { model: 'm' }, tools: [{ name: 'one' }] },
+      { config: { model: 'm' }, tools: [{ name: 'two' }] },
     ])
   })
 
@@ -662,17 +733,50 @@ describe('normalizedHeaders', () => {
 })
 
 describe('normalizedSystemPrompts', () => {
-  it('extracts normalized string prompts and omits absent or non-string fields', () => {
+  const systemMessage = (seq: number, data: unknown): string => JSON.stringify({ type: 'system/message', seq, time: 9, data })
+
+  it('extracts every system/message text in log order, normalized, and reads empty content as no prompt', () => {
     const log = [
       '{"type":"session","id":"a","createdAt":5,"cwd":"/w"}',
-      '{"type":"request/header","seq":0,"time":9,"data":{"header":{"system":"work in /w"}}}',
-      '{"type":"request/header","seq":1,"time":9,"data":{"header":{}}}',
-      '{"type":"request/header","seq":2,"time":9,"data":{"header":{"system":null}}}',
-      '{"type":"request/header","seq":3,"time":9,"data":{"header":null}}',
-      '{"type":"request/header","seq":4,"time":9,"data":{"header":"invalid"}}',
+      systemMessage(0, { turn: 1, step: 1, message: { role: 'system', content: [{ type: 'text', text: 'work in /w' }] } }),
+      '{"type":"request/header","seq":1,"time":9,"data":{"header":{"tools":[]},"reason":"initial"}}',
+      systemMessage(2, { turn: 1, step: 2, message: { role: 'system', content: [] } }),
+      systemMessage(3, { turn: 1, step: 3, message: { role: 'system', content: [{ type: 'text', text: 'replaced' }] } }),
       '',
     ].join('\n')
-    expect(normalizedSystemPrompts(log, { sessionIds: [], cwd: '/w' })).toEqual(['work in {{cwd}}'])
+    expect(normalizedSystemPrompts(log, { sessionIds: [], cwd: '/w' })).toEqual(['work in {{cwd}}', '', 'replaced'])
+  })
+
+  it('omits system/message records without a text block', () => {
+    const log = [
+      '{"type":"session","id":"a","createdAt":5,"cwd":"/w"}',
+      systemMessage(0, { turn: 1, step: 1 }),
+      systemMessage(1, { turn: 1, step: 1, message: { role: 'system', content: 'text' } }),
+      systemMessage(2, { turn: 1, step: 1, message: { role: 'system', content: [{ type: 'image', data: 'x' }] } }),
+      systemMessage(3, { turn: 1, step: 1, message: { role: 'system', content: [{ type: 'text', text: 'kept' }] } }),
+      '',
+    ].join('\n')
+    expect(normalizedSystemPrompts(log, { sessionIds: [], cwd: '/w' })).toEqual(['kept'])
+  })
+})
+
+describe('systemPromptPrecedesRequests', () => {
+  const session = '{"type":"session","id":"a","createdAt":5,"cwd":"/w"}'
+  const system = '{"type":"system/message","seq":0,"time":9,"data":{"turn":1,"step":1,"message":{"role":"system","content":[]}}}'
+  const header = '{"type":"request/header","seq":1,"time":9,"data":{"header":{"tools":[]},"reason":"initial"}}'
+
+  it('accepts a log whose first request/header follows a system/message', () => {
+    expect(systemPromptPrecedesRequests(`${session}\n${system}\n${header}\n${header}\n`)).toBe(true)
+  })
+
+  it('accepts a log without any request/header', () => {
+    expect(systemPromptPrecedesRequests(`${session}\n`)).toBe(true)
+    expect(systemPromptPrecedesRequests(`${session}\n${system}\n`)).toBe(true)
+  })
+
+  it('rejects a request/header with no preceding system/message', () => {
+    expect(systemPromptPrecedesRequests(`${session}\n${header}\n`)).toBe(false)
+    expect(systemPromptPrecedesRequests(`${session}\n${header}\n${system}\n`)).toBe(false)
   })
 })
 
@@ -701,12 +805,26 @@ describe('formatSystemPromptSnapshot', () => {
 
   it('renders readable changed-prompt sections', () => {
     expect(formatSystemPromptSnapshot('prompt', ['new\nlines']))
-      .toBe('prompt\n\n<!-- request/header change 1 -->\n\nnew\nlines\n')
+      .toBe('prompt\n\n<!-- system/message change 1 -->\n\nnew\nlines\n')
   })
 
   it('does not double the newline of a changed prompt', () => {
     expect(formatSystemPromptSnapshot('prompt\n', ['changed\n']))
-      .toBe('prompt\n\n<!-- request/header change 1 -->\n\nchanged\n')
+      .toBe('prompt\n\n<!-- system/message change 1 -->\n\nchanged\n')
+  })
+})
+
+describe('parseSystemPromptSnapshot', () => {
+  it('splits a formatted sidecar back into its initial prompt and each replacement', () => {
+    const snapshot = formatSystemPromptSnapshot('initial\n', ['first change', 'second\nchange\n'])
+    expect(parseSystemPromptSnapshot(snapshot)).toEqual({
+      initial: 'initial\n',
+      changes: ['first change\n', 'second\nchange\n'],
+    })
+  })
+
+  it('reads a single-prompt sidecar as having no changes', () => {
+    expect(parseSystemPromptSnapshot('prompt\n')).toEqual({ initial: 'prompt\n', changes: [] })
   })
 })
 
@@ -728,9 +846,9 @@ describe('assertChildSystemPromptSnapshot', () => {
 
   it('rejects a child prompt that duplicates its class pin', () => {
     const classSnapshot = readFileSync(join(REPLAY_DIR, 'pin-turn', 'system-prompt.expected.md'), 'utf8')
-    const marker = classSnapshot.indexOf('\n<!-- request/header change ')
-    expect(marker).toBeGreaterThan(0)
-    const initialClassPin = classSnapshot.slice(0, marker)
+    const parsed = parseSystemPromptSnapshot(classSnapshot)
+    expect(parsed.changes).toHaveLength(1)
+    const initialClassPin = parsed.initial
 
     expect(() => {
       assertChildSystemPromptSnapshot(initialClassPin, initialClassPin, label)

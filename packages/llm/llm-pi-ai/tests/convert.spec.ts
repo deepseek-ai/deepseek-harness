@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
-import type { AttachmentStore, ImageAttachmentRef, ImageRequestPolicy, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
+import type { AttachmentStore, ImageAttachmentRef, ImageRequestTarget, RequestImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, EMPTY_RESPONSE_CODE, createMessage } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, StreamChunk } from '@deepseek-ai/dsh-llm'
 import type { AssistantMessage, AssistantMessageEvent, Usage } from '@earendil-works/pi-ai'
@@ -62,7 +62,7 @@ function requestVersion(ref: ImageAttachmentRef): RequestImageAttachment {
 
 function attachmentStore(readImageRequest: (
   ref: ImageAttachmentRef,
-  policy: ImageRequestPolicy,
+  policy: ImageRequestTarget,
   signal?: AbortSignal,
 ) => Promise<RequestImageAttachment>): AttachmentStore {
   return { readImageRequest, imageHostPath: () => undefined } as unknown as AttachmentStore
@@ -105,7 +105,7 @@ describe('toPiContext', () => {
       width: 1,
       height: 1,
     }
-    const readImageRequest = vi.fn((value: ImageAttachmentRef, _policy: ImageRequestPolicy) => (
+    const readImageRequest = vi.fn((value: ImageAttachmentRef, _target: ImageRequestTarget) => (
       Promise.resolve(requestVersion(value))
     ))
     const context = await toPiContext({
@@ -119,7 +119,7 @@ describe('toPiContext', () => {
 
     expect(readImageRequest).toHaveBeenCalledWith(
       attachment,
-      { maxPixels: 2048 * 2048, maxBytes: 1024 * 1024 },
+      { width: 1, height: 1, maxBytes: 1024 * 1024 },
       undefined,
     )
     expect(context.messages[0]).toEqual({
@@ -141,7 +141,7 @@ describe('toPiContext', () => {
       width: 1,
       height: 1,
     }
-    const readImageRequest = vi.fn((value: ImageAttachmentRef, _policy: ImageRequestPolicy) => (
+    const readImageRequest = vi.fn((value: ImageAttachmentRef, _target: ImageRequestTarget) => (
       Promise.resolve(requestVersion(value))
     ))
     const context = await toPiContext({
@@ -333,7 +333,7 @@ describe('toPiContext', () => {
     })
   })
 
-  it('splits mixed user text + tool results and folds history system messages', () => {
+  it('splits mixed user text + tool results and lifts a leading system message into systemPrompt', () => {
     const context = toPiContext({
       provider: 'deepseek',
       model: 'm',
@@ -351,7 +351,8 @@ describe('toPiContext', () => {
         }),
       ],
     })
-    expect(context.messages.map(message => message.role)).toEqual(['user', 'user', 'toolResult'])
+    expect(context.systemPrompt).toBe('rule')
+    expect(context.messages.map(message => message.role)).toEqual(['user', 'toolResult'])
   })
 
   it('skips plugin-added (unknown) blocks in assistant content', () => {

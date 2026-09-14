@@ -15,16 +15,9 @@
       { "type": "block-start", "index": 0, "blockType": "tool-call" },
       { "type": "tool-call-delta", "index": 0, "id": "call_acp_background", "name": "subagent_acp", "argumentsDelta": "{\"description\":\"Observe ACP background failure\",\"prompt\":\"Return the scripted ACP failure.\",\"run_in_background\":true}" },
       { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_acp_background", "name": "subagent_acp", "arguments": "{\"description\":\"Observe ACP background failure\",\"prompt\":\"Return the scripted ACP failure.\",\"run_in_background\":true}" } },
-      { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
-      { "type": "finish", "reason": { "kind": "tool-calls" } }
-    ]
-  },
-  {
-    "kind": "chunks",
-    "chunks": [
-      { "type": "block-start", "index": 0, "blockType": "tool-call" },
-      { "type": "tool-call-delta", "index": 0, "id": "call_acp_output", "name": "job_output", "argumentsDelta": "{\"job_id\":\"subagent-1\",\"wait\":true}" },
-      { "type": "block-end", "index": 0, "block": { "type": "tool-call", "id": "call_acp_output", "name": "job_output", "arguments": "{\"job_id\":\"subagent-1\",\"wait\":true}" } },
+      { "type": "block-start", "index": 1, "blockType": "tool-call" },
+      { "type": "tool-call-delta", "index": 1, "id": "call_acp_output", "name": "job_output", "argumentsDelta": "{\"job_id\":\"subagent-1\",\"wait\":true}" },
+      { "type": "block-end", "index": 1, "block": { "type": "tool-call", "id": "call_acp_output", "name": "job_output", "arguments": "{\"job_id\":\"subagent-1\",\"wait\":true}" } },
       { "type": "usage", "usage": { "inputTokens": 10, "outputTokens": 5 } },
       { "type": "finish", "reason": { "kind": "tool-calls" } }
     ]

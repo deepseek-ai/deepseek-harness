@@ -34,23 +34,17 @@
   --dsh-composer-dock-inset: 8px;
 }
 
+/* 76px with its rule: the height of the Sidebar's tab strip and header row
+   (ui-dockkit `.tabStrip` 38px + the pane header's 38px), so the two rules
+   meet at the column edge. The rows add up to it — 10px top inset, the 30px
+   title row, the tab strip's 10px margin, a 16px tab line, and its 9px bottom
+   inset — so no row below may grow past its figure. */
 .header {
-  position: relative;
   flex: none;
-  padding: 12px 28px 0 20px;
-  border-bottom: 1px solid transparent;
-}
-
-.header::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 1px;
-  left: 0;
-  z-index: 0;
-  height: 0.5px;
-  background: var(--dsw-alias-border-l3);
-  pointer-events: none;
+  box-sizing: border-box;
+  min-height: 76px;
+  padding: 10px 28px 0 20px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
 }
 
 /* Blank hero/settling: keep the strict Session header mounted without taking
@@ -63,7 +57,7 @@
   display: flex;
   align-items: center;
   gap: 0;
-  min-height: 32px;
+  min-height: 30px;
 }
 
 .titleCluster {
@@ -146,20 +140,39 @@
   display: none;
 }
 
-/* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned. */
+/* The far-right corner seat reaches 16px into the header's 28px right padding,
+   so its control sits past the utilities' edge; it is laid out only while its
+   occupant renders something. Its left margin equals the utilities' 8px gap so
+   the header's trailing controls space evenly. */
+.headerCorner {
+  display: flex;
+  flex: none;
+  align-items: center;
+  margin-left: 8px;
+  margin-right: -16px;
+}
+
+.headerCorner:empty {
+  display: none;
+}
+
+/* figma Tab_Group 34:11441: 35px strip, gap 36, pad-left 8, tabs bottom-aligned.
+   Positioned above the header's own paint, so the active bar covers the rule. */
 .tabs {
   position: relative;
   z-index: 1;
   display: flex;
   gap: 36px;
-  margin-top: 4px;
+  margin-top: 10px;
   padding-left: 8px;
 }
 
-/* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500), gap 8 to the 2px bar. */
+/* figma .Tab 34:11442: 13/16 text (figma wt510, rendered 500). The 2px bar
+   reaches 1px past the tab's box to end flush with the header's bottom edge,
+   sitting over the rule. */
 .tab {
   position: relative;
-  padding: 0 0 11px;
+  padding: 0 0 9px;
   border: none;
   background: transparent;
   font-size: 13px;
@@ -173,7 +186,7 @@
   content: '';
   position: absolute;
   right: 0;
-  bottom: 1px;
+  bottom: -1px;
   left: 0;
   height: 2px;
   border-radius: 2px;
@@ -330,12 +343,22 @@
   flex: 1;
   flex-direction: column;
   min-height: 0;
+  /* The product-wide 2px scrollbar offset (ui-workspace WorkspaceBrowser
+     `.list`, ui-sidebar-files FilesBody `.body`): the bar sits 2px clear of
+     the column's edge instead of flush against it. */
+  margin-right: 2px;
   overflow-y: auto;
   /* Reserved unconditionally: the composer seat rides this box's content box in
      Chat and its padding box under a view's composer overlay, so an `auto`
      gutter moves the input card sideways by the bar's width whenever the two
      differ ([decision](../../../../../../.agents/notes/archived/bug-fix/2026-08-04-composer-tab-gutter-reservation.md)). */
   scrollbar-gutter: stable;
+}
+
+/* The bar also stops 2px short of the scroller's ends, matching its 2px edge
+   offset. WebKit-only: the Firefox path has no track to inset. */
+.scrollBody::-webkit-scrollbar-track {
+  margin: 2px;
 }
 
 .root[data-phase='active'] .viewArea {
@@ -433,9 +456,10 @@
   gap: 2px;
   min-width: 0;
   margin-top: 4px;
-  /* figma drew px 8; nudged +12 so the chip's folder glyph lines up closer to
-     the card's inner controls below. */
-  padding-left: 20px;
+  /* figma drew px 8; left nudged +12 so the chip's folder glyph lines up
+     closer to the card's inner controls below; right keeps the trailing
+     preset seat off the card edge. */
+  padding: 0 16px 0 20px;
 }
 
 /* Hero: the composer sits inside the session scroll body; center there so

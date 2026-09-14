@@ -50,7 +50,9 @@ function textOf(event: SessionEvent): string {
 describe('WebWorker preview VFS example', () => {
   it('matches its deterministic source byte for byte', () => {
     const expected = buildVfsExampleFiles()
-    expect(filesUnder(VFS_EXAMPLE_ROOT)).toEqual([...expected.keys()].sort())
+    const predecessors = Object.values(VFS_EXAMPLE_SESSION_IDS)
+      .map(id => `home/sessions/--dsh-workspace--/${id}/session.v2.jsonl`)
+    expect(filesUnder(VFS_EXAMPLE_ROOT)).toEqual([...expected.keys(), ...predecessors].sort())
     for (const [path, content] of expected) {
       expect(readFileSync(join(VFS_EXAMPLE_ROOT, path), 'utf8'), path).toBe(content)
     }

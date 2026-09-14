@@ -1,0 +1,60 @@
+.renderer {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.renderer .code {
+  --dsl-code-block-border-radius: 0px;
+  --dsl-code-block-line-white-space: pre;
+  /* In a sidebar pane the code sits on the pane's own background; the chat
+     card's gray fill stays a chat-only default. */
+  --dsl-code-block-background: transparent;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  position: static;
+  margin: 0;
+  min-width: 0;
+}
+
+/* The banner is the scrollport's sibling, so the source scrollbar starts
+   below it. */
+.renderer .code > [data-code-block-content] {
+  position: relative;
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.renderer .code > [data-code-block-content]::-webkit-scrollbar-track {
+  margin: 2px;
+}
+
+.renderer .code pre {
+  box-sizing: border-box;
+  min-width: 100%;
+  overflow: visible;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.renderer[data-wrap='true'] .code {
+  --dsl-code-block-line-white-space: pre-wrap;
+}
+
+.renderer[data-wrap='true'] .code pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

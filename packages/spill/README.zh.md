@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`spill/` 组在模型上下文之外保存全文，并返回定位信息与取回指引。该家族拆分为 `spill/` 中的存储服务、`spill-local/` 中的本地文件系统后端，以及 `spill-policy/` 中的工具结果策略。工具结果 spill 通过 `maxInlineBytes` 按需启用，存储失败时保留原始结果。[会话引用](../context/session-reference/README.zh.md)也直接使用存储来保存被截断的已捕获转录，并负责自己的预览与失败通知；它不需要工具结果策略。
+`spill/` 组在模型上下文之外保存全文，并返回定位信息与取回指引。该家族拆分为 `spill/` 中的存储服务、`spill-local/` 中的本地文件系统后端，以及 `spill-policy/` 中的工具结果策略。工具结果 spill 通过 `maxInlineBytes` 按需启用，存储失败时保留原始结果。[会话引用](../context/session-reference/README.zh.md)也直接使用存储来保存已捕获但被截断的 transcript（文本记录），并自行提供预览和失败通知；它不需要工具结果策略。
 
 ## 目录
 
@@ -22,7 +22,7 @@ kind: "package-group"
 <a id="packages"></a>
 ## 包
 
-三个包分别承担 spill 角色；子系统参考文档拥有穷尽式词汇与约定。
+三个包分别承担 spill 相关角色；完整的词汇定义和约定以子系统参考文档为准。
 
 | 包 | 职责 | ctx 键 |
 |---|---|---|

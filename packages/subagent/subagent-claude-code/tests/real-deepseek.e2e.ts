@@ -20,7 +20,7 @@ import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as claudeCode from '../src/index.ts'
 
 const execFileAsync = promisify(execFile)
-const OFFICIAL_DEEPSEEK_BASE_URL = 'https://api.deepseek.com'
+const OFFICIAL_DEEPSEEK_MESSAGES_BASE_URL = 'https://api.deepseek.com/anthropic'
 const DEEPSEEK_MODEL = 'deepseek-v4-flash'
 const sdkRoot = dirname(fileURLToPath(
   import.meta.resolve('@anthropic-ai/claude-agent-sdk'),
@@ -47,15 +47,6 @@ afterEach(async () => {
   await Promise.all(contexts.splice(0).map(ctx => ctx.fiber.dispose()))
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
-
-function deepSeekBaseUrl(): string {
-  const configured = (process.env.DEEPSEEK_BASE_URL ?? OFFICIAL_DEEPSEEK_BASE_URL)
-    .replace(/\/+$/, '')
-  if (configured !== OFFICIAL_DEEPSEEK_BASE_URL) {
-    throw new Error('Claude Code DeepSeek e2e requires the official DeepSeek base URL')
-  }
-  return configured
-}
 
 async function expectQuiescent(handles: readonly SubprocessHandle[]): Promise<void> {
   expect(handles.length).toBeGreaterThan(0)
@@ -90,7 +81,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)(
 
       const env = {
         ANTHROPIC_AUTH_TOKEN: apiKey,
-        ANTHROPIC_BASE_URL: `${deepSeekBaseUrl()}/anthropic`,
+        ANTHROPIC_BASE_URL: OFFICIAL_DEEPSEEK_MESSAGES_BASE_URL,
         ANTHROPIC_MODEL: DEEPSEEK_MODEL,
         ANTHROPIC_DEFAULT_OPUS_MODEL: DEEPSEEK_MODEL,
         ANTHROPIC_DEFAULT_SONNET_MODEL: DEEPSEEK_MODEL,
@@ -126,13 +117,13 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)(
       })
       await ctx.plugin(claudeCode, { env, disposeGraceMs: 3_000 })
 
-      expect(sdkPackage.version).toBe('0.3.241')
-      expect(sdkPackage.claudeCodeVersion).toBe('2.1.241')
-      expect(sdkPackage.optionalDependencies[platformPackage]).toBe('0.3.241')
+      expect(sdkPackage.version).toBe('0.3.263')
+      expect(sdkPackage.claudeCodeVersion).toBe('2.1.263')
+      expect(sdkPackage.optionalDependencies[platformPackage]).toBe('0.3.263')
       const version = await execFileAsync(claudeBin, ['--version'], {
         env: { ...process.env, ...env },
       })
-      expect(version.stdout.trim()).toBe('2.1.241 (Claude Code)')
+      expect(version.stdout.trim()).toBe('2.1.263 (Claude Code)')
 
       const nonce = `DSH_CLAUDE_DEEPSEEK_${randomUUID()}`
       const parent = {

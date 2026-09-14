@@ -6,13 +6,13 @@ English | [中文](2026-09-05-base-default-file-editor.zh.md)
 
 ## Problem
 
-The shared base selects both `read`/`write`/`edit` and `str_replace_editor`, which offer overlapping file editing interfaces. [Issue #3599](https://github.com/deepseek-harness/deepseek-harness/issues/3599) requests one default interface for base-backed profiles while preserving the dedicated minimal compositions.
+The shared base selects both `read`/`write`/`edit` and `str_replace_editor`, which offer overlapping file editing interfaces. Issue #3599 requests one default interface for base-backed profiles while preserving the dedicated minimal compositions.
 
 ## Decision
 
 The [base patch](../../../../packages/bundle/base/cordis.patch.yml) selects `read`, `write`, and `edit` for file editing. It does not insert `tool-str-replace-editor`; SDK and Web application patches therefore need no disabling override. The editor package remains available to compositions that insert it explicitly.
 
-[Web minimal](../../../../packages/preset/agent-presets/presets/minimal/agent.cordis.yml) inserts its own `str-replace-editor` row in the agent scope. The standalone [sdk-minimal bundle](../../../../packages/bundle/sdk-minimal/cordis.patch.yml) inserts its own row without inheriting base. Both minimal compositions retain their editor.
+Web minimal and the standalone `sdk-minimal` bundle own their tool selection independently of base. The [persistent-shell-only decision](2026-09-03-minimal-profiles-persistent-shell-only.md) owns their single-tool defaults.
 
 This refines the shared tool defaults in [one dsh launcher](../architecture/2026-08-22-single-dsh-application-launcher.md). That note remains active for launch ownership, shared services, and patch precedence; no active note is fully superseded.
 
@@ -20,7 +20,7 @@ This refines the shared tool defaults in [one dsh launcher](../architecture/2026
 
 **Disable the editor separately in each application.** This leaves overlapping defaults in base and requires each consumer to opt out. The base owns the shared choice directly.
 
-**Delete the tool package or remove it from minimal.** The dedicated minimal compositions use this interface for file operations. Keeping the package and their explicit rows preserves that behavior.
+**Delete the tool package.** Explicit custom compositions still use this interface. Base default selection does not remove the package or constrain independently owned minimal defaults.
 
 ## Consequences
 
@@ -28,4 +28,4 @@ Base-backed SDK, headless, ACP, and custom profiles omit the editor schema by de
 
 ## Verification
 
-The [SDK process tests](../../../../apps/cli/tests/profiles/sdk/keyless-smoke.e2e.ts) capture actual model requests for default file tools, explicit editor insertion, and the standalone minimal roster. The [headless process test](../../../../apps/cli/tests/profiles/headless/tests/keyless-smoke.e2e.ts) checks the shared default through its application. [Web minimal snapshots](../../../../apps/web/tests/minimal-preset.snapshot.ts) exercise the editor through the minimal preset. The [headless](../../../../snapshots/session/headless.snapshot.ts), [SDK](../../../../snapshots/sdk/sdk.snapshot.ts), and [ACP](../../../../snapshots/acp/acp.snapshot.ts) recorded sessions pin the assembled model-visible outputs, including the SDK fixture that explicitly inserts the editor.
+The [SDK process tests](../../../../apps/cli/tests/profiles/sdk/keyless-smoke.e2e.ts) capture actual model requests for default file tools, explicit editor insertion, and the standalone minimal roster. The [headless process test](../../../../apps/cli/tests/profiles/headless/tests/keyless-smoke.e2e.ts) checks the shared default through its application. The [headless](../../../../snapshots/session/headless.snapshot.ts), [SDK](../../../../snapshots/sdk/sdk.snapshot.ts), and [ACP](../../../../snapshots/acp/acp.snapshot.ts) recorded sessions pin the assembled model-visible outputs, including the SDK fixture that explicitly inserts the editor.

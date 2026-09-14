@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { agentEvents, installModelSelection, type Agent, type ModelSelectionRef } from '@deepseek-ai/dsh-agent'
 import { CompactionId, compactCheckpointSource } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, ToolCallId , createMessage, createToolResultMessage, LlmError } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createMessage, createSystemMessage, createToolResultMessage, createUserMessage, LlmError, ToolCallId } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SessionQueryEngine from '@deepseek-ai/dsh-session-query'
@@ -75,6 +75,11 @@ function checkpointSource(id: string) {
 }
 
 function appendConversation(session: Session): void {
+  session.append(
+    'system/message',
+    { turn: 1, step: 1, message: createSystemMessage('system prompt secret', 'system-prompt') },
+    { surfaceOp: 'append' },
+  )
   const oldUser = session.append(
     'user/message',
     createUserMessage({
@@ -106,7 +111,7 @@ function appendConversation(session: Session): void {
       source: checkpointSource('conversation'),
     }),
     {
-      surfaceOp: { op: 'replace', start: oldUser.seq, end: oldAssistant.seq },
+      surfaceOp: { op: 'replace', startSeq: oldUser.seq, endSeq: oldAssistant.seq },
       sourceEventSeqs: [oldUser.seq, oldAssistant.seq],
     },
   )
@@ -381,6 +386,7 @@ describe('session reference spill outcomes', () => {
       const target = ctx.sessions.create(SessionId('target'))
       const source = ctx.sessions.create(SessionId('source'))
       appendConversation(source)
+      const capturedThroughSeq = source.seq - 1
       const read = vi.spyOn(ctx.sessionQuery, 'readSurface')
       const save = vi.spyOn(ctx.spillStore, 'saveText').mockImplementation(async (input) => {
         appendText(source, 'later mutation must not appear')
@@ -394,7 +400,7 @@ describe('session reference spill outcomes', () => {
         expect(full).not.toContain(text)
         expect(contextText(result)).not.toContain(text)
       }
-      expect(result.additionalContext?.source).toMatchObject({ references: [{ capturedThroughSeq: 13 }] })
+      expect(result.additionalContext?.source).toMatchObject({ references: [{ capturedThroughSeq }] })
     } finally { await ctx.fiber.dispose() }
   })
 
@@ -860,7 +866,7 @@ describe('session reference discovery and preparation', () => {
       sessionId: 'source',
       label: 'source',
       cwd: '/source',
-      capturedThroughSeq: 13,
+      capturedThroughSeq: 14,
       conversation: [
         { role: 'user', text: '<compacted-summary>checkpoint</compacted-summary>' },
         { role: 'user', text: 'recent user' },
@@ -874,7 +880,7 @@ describe('session reference discovery and preparation', () => {
       references: [{
         sessionId: 'source',
         label: 'source',
-        capturedThroughSeq: 13,
+        capturedThroughSeq: 14,
         compacted: true,
         truncated: false,
       }],
@@ -1181,7 +1187,7 @@ describe('session reference discovery and preparation', () => {
         source: checkpointSource('later-source-mutation'),
       }),
       {
-        surfaceOp: { op: 'replace', start: original.seq, end: later.seq },
+        surfaceOp: { op: 'replace', startSeq: original.seq, endSeq: later.seq },
         sourceEventSeqs: [original.seq, later.seq],
       },
     )

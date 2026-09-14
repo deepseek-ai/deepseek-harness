@@ -94,7 +94,7 @@ producer 提供同步的 `cancel`、在资源清理后 settle 且不 reject 的 
 
 ## Web Client 展示
 
-内置 Web Client 不消费 `presentCall` 或 `presentResult`。Session `page` 与 `follow` 运输原始 `tool/call` 和 `tool/result` 事件，包括持久化的 `result.meta`。Client 插件在 keyed slot `tool.call.toolview` 中注册自己的 wire 工具名称，并从 `ToolCallBlock` 的参数、内容、错误、metadata、现有 Code Dispatch `parentCallId` 与 Session 路径事实派生组件 props。插件在本地校验这些 wire 值，并让格式错误或不受支持的输入回退到 generic 行。
+内置 Web Client 不消费 `presentCall` 或 `presentResult`。Session `page` 与 `follow` 运输原始 `tool/call` 和 `tool/result` 事件，包括持久化的 `result.meta`。Client 插件在 keyed slot `tool.call.toolview` 中注册自己的 wire 工具名称，并从 `ToolCallBlock` 的参数、内容、错误、metadata、现有 PTC dispatch `parentCallId` 与 Session 路径事实派生组件 props。插件在本地校验这些 wire 值，并让格式错误或不受支持的输入回退到 generic 行。
 
 现有 Web 卡片需要模型可见内容无法无损保存的有界结构化结果事实时，使用 `output.presentationMeta(args, value)`。不要在 metadata 中保存 React props 或预选卡片，不要把 Host 工具实现导入浏览器 bundle，也不要建立另一套 Client presenter registry。只定义 Host 展示方法不会增加专用 Web 卡片。[Client 派生展示 Agent Note](../../.agents/notes/implemented/architecture/2026-08-23-client-derived-tool-presentation.zh.md)规定 owner、fallback 与对等要求。
 

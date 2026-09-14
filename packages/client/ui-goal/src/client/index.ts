@@ -1,15 +1,14 @@
 /**
  * Goal surface plugin, browser half: the GoalBar entry in the
- * conversation.input.dock strip. Projection-mode surface — the live goal
- * arrives through `useProjection('goal')` (seeded by the history tail page,
- * updated by session/projection frames), so this plugin owns no store, no
- * refresh chain, and no event listener. The inject face carries only the
- * four mutation verbs through the generated Goal Remote API;
- * their CAS ref reads the session's current projected value at call time.
+ * conversation.input.dock strip. The durable goal arrives through
+ * `useProjection('goal')`. A registrant-private activation hook source owns
+ * the live Remote read and event subscription; the inject face carries that
+ * hook plus the four mutation verbs through the generated Goal Remote API.
  * This plugin does not create goals; deployments may expose /goal separately.
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls the generated Remote API and ctx.remote merge through the Client assembly boundary.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 // Type-only: pulls the Session Controller service used for projected goal state.
@@ -26,14 +25,17 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-session/client'
 // Type-only: the `goal` SessionProjectionMap key merge (single source, the domain's pure outlet).
 import type { GoalProjection, GoalRef } from '@deepseek-ai/dsh-goal/client'
-import type { GoalActionResult, GoalBarActions } from './slots.ts'
+import type { GoalActionResult, GoalBarInjected } from './slots.ts'
+import { createGoalActivationSource } from './activation-source.ts'
 import { GoalDock } from './GoalBar.tsx'
 import { GoalCommandInputView } from './GoalCommandInputView.tsx'
 import { goalCommandInputDefinition } from './goal-command-input.ts'
 import { en, zh, type GoalKey } from './locales.ts'
 
 export { GoalBar, GoalDock } from './GoalBar.tsx'
-export type { GoalActionResult, GoalBarActions } from './slots.ts'
+export type {
+  GoalActionResult, GoalBarActions,
+} from './slots.ts'
 export type { GoalKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -83,27 +85,41 @@ export function apply(ctx: ClientContext): void {
     id: 'goal',
     order: 10,
     locale: NS,
-    inject: (sessionId): GoalBarActions => ({
-      onEdit: async (objective) => {
-        const ref = refOf(sessionId)
-        if (ref === undefined) return noCurrentGoal
-        return await ctx.remote.goals.edit(sessionId, ref, { objective })
-      },
-      onPause: async () => {
-        const ref = refOf(sessionId)
-        if (ref === undefined) return noCurrentGoal
-        return await ctx.remote.goals.pause(sessionId, ref)
-      },
-      onResume: async () => {
-        const ref = refOf(sessionId)
-        if (ref === undefined) return noCurrentGoal
-        return await ctx.remote.goals.resume(sessionId, ref)
-      },
-      onClear: async () => {
-        const ref = refOf(sessionId)
-        if (ref === undefined) return noCurrentGoal
-        return await ctx.remote.goals.clear(sessionId, ref)
-      },
-    }),
+    inject: (sessionId): GoalBarInjected => {
+      const binding = sessions.binding(sessionId)
+      if (binding === undefined) throw new Error(`ui-goal: session "${sessionId}" is unavailable`)
+      const goalActivation = createGoalActivationSource({
+        projection: binding.session.projections.faceOf('goal') as HostObservable<GoalProjection | null | undefined>,
+        session: binding.session,
+        getGoal: () => ctx.remote.goals.get(sessionId),
+        subscribeActivation: listener => ctx.remote.$on('goal/activation-changed', (event) => {
+          if (event.sessionId === sessionId) listener(event.goal)
+        }),
+        subscribeReset: listener => ctx.on('connection/reset', listener),
+      })
+      return {
+        hooks: { goalActivation },
+        onEdit: async (objective) => {
+          const ref = refOf(sessionId)
+          if (ref === undefined) return noCurrentGoal
+          return await ctx.remote.goals.edit(sessionId, ref, { objective })
+        },
+        onPause: async () => {
+          const ref = refOf(sessionId)
+          if (ref === undefined) return noCurrentGoal
+          return await ctx.remote.goals.pause(sessionId, ref)
+        },
+        onResume: async () => {
+          const ref = refOf(sessionId)
+          if (ref === undefined) return noCurrentGoal
+          return await ctx.remote.goals.resume(sessionId, ref)
+        },
+        onClear: async () => {
+          const ref = refOf(sessionId)
+          if (ref === undefined) return noCurrentGoal
+          return await ctx.remote.goals.clear(sessionId, ref)
+        },
+      }
+    },
   }, GoalDock))
 }

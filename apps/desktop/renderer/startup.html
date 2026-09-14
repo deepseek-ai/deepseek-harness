@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; img-src 'self' data:">
+    <title id="page-title"></title>
+    <link rel="stylesheet" href="startup.css">
+  </head>
+  <body>
+    <main aria-busy="true">
+      <div id="spinner" aria-hidden="true"></div>
+      <h1 id="title" role="status" aria-live="polite"></h1>
+      <p id="description"></p>
+      <p id="reset-advice" hidden></p>
+      <p id="reinstall-advice" hidden></p>
+      <pre id="error" role="alert" hidden></pre>
+      <div id="actions" hidden>
+        <button id="restart" type="button"></button>
+        <button id="disable-plugins" type="button"></button>
+        <button id="reset-configuration" type="button"></button>
+      </div>
+    </main>
+    <script src="startup.js"></script>
+  </body>
+</html>

@@ -55,14 +55,34 @@
 }
 
 .label {
-  flex: 1 1 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.labelText {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.badge {
+  flex: none;
+  align-self: flex-start;
+  margin-top: -1px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 8px;
+  line-height: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
 .detail {
+  flex: 1;
+  min-width: 0;
   font-size: 12px;
   color: var(--dsw-alias-label-tertiary);
   white-space: nowrap;
@@ -73,6 +93,7 @@
 .check {
   display: inline-flex;
   flex: none;
+  margin-left: auto;
   color: var(--dsw-alias-label-primary);
 }
 

@@ -88,11 +88,13 @@ class CompiledSessionFormatChain implements SessionFormatChain {
 
   createStream(
     sourceHeader: SessionFormatHeader,
-    sourceCut: number,
+    sourceCut: number | undefined,
     output: SessionFormatMigrationContext,
   ): SessionFormatMigrationStream {
     let header = sourceHeader
-    const validatedSourceCut = sessionFormatCount(sourceCut, 'Session inherited event count')
+    const validatedSourceCut = sourceCut === undefined
+      ? undefined
+      : sessionFormatCount(sourceCut, 'Session inherited event count')
     let inheritedEventCount = validatedSourceCut
     const stages: Array<{
       readonly migration: SessionFormatMigration
@@ -114,13 +116,7 @@ class CompiledSessionFormatChain implements SessionFormatChain {
       }
       header = targetHeader
       stages.push({ migration, stage })
-      if (index + 1 < plan.length) {
-        const targetCut = stage.headerInheritedEventCount
-        if (targetCut === undefined) {
-          throw new SessionFormatError(`${migration.name} must expose its inherited cut before the next migration`)
-        }
-        inheritedEventCount = targetCut
-      }
+      inheritedEventCount = stage.headerInheritedEventCount
     }
     return new CompiledSessionFormatMigrationStream(
       header,
@@ -215,7 +211,7 @@ class CompiledSessionFormatMigrationStream implements SessionFormatMigrationStre
 
   constructor(
     readonly header: SessionFormatHeader,
-    private readonly sourceInheritedEventCount: number,
+    private readonly sourceInheritedEventCount: number | undefined,
     entries: readonly CompiledMigrationStage[],
     output: SessionFormatMigrationContext,
   ) {
@@ -241,7 +237,7 @@ class CompiledSessionFormatMigrationStream implements SessionFormatMigrationStre
   finish(): number {
     let inheritedEventCount = this.sourceInheritedEventCount
     for (const stage of this.stages) inheritedEventCount = stage.finish()
-    return inheritedEventCount
+    return sessionFormatCount(inheritedEventCount, 'finished Session inherited event count')
   }
 }
 

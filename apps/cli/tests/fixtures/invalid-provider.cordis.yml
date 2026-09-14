@@ -1,4 +1,4 @@
-# Invalid `--patch` overlay used to prove boot failures settle and exit.
+# Invalid optional provider override used to prove best-effort startup continues.
 
 - id: llm-pi-ai
   config:

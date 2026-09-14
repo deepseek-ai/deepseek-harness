@@ -11,6 +11,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Identifies one goal across its durable revisions. */
 export type GoalId = Branded<'GoalId'>
@@ -70,6 +71,21 @@ export interface GoalSnapshot extends GoalRef {
 /** Whether this live process may automatically continue an active goal. */
 export type GoalActivation = 'armed' | 'disarmed'
 
+/** Live process-local activation update forwarded to UI clients. */
+export interface GoalActivationChanged {
+  /** Session whose live goal activation changed. */
+  readonly sessionId: SessionId
+  /** Current exact activation, absent when no goal is current. */
+  readonly goal?: {
+    /** Exact current goal identity. */
+    readonly id: GoalId
+    /** Exact current goal revision. */
+    readonly revision: number
+    /** Current process-local continuation state. */
+    readonly activation: GoalActivation
+  }
+}
+
 /** Current goal projection, including values derived from the session log. */
 export interface GoalView extends GoalSnapshot {
   /** Highest admitted round number for this goal. */
@@ -121,5 +137,16 @@ declare module '@deepseek-ai/dsh-session-projection/types' {
      * `user/message` events advance `roundsStarted`.
      */
     goal: GoalProjection | null
+  }
+}
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Process-local goal activation changed for one session.
+     * @mode emit
+     * @param payload - session id and the exact current goal activation, or no goal after a clear.
+     */
+    'goal/activation-changed'(payload: GoalActivationChanged): void
   }
 }

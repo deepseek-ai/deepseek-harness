@@ -1,0 +1,31 @@
+{
+  "name": "@deepseek-ai/node-addon-system-darwin-arm64",
+  "version": "0.1.2",
+  "description": "Prebuilt POSIX flock Node-API binding for macOS arm64",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "native/system/packages/darwin-arm64"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "README.md",
+    "bin/",
+    "prebuilds.json"
+  ],
+  "scripts": {
+    "prepack": "node ../../scripts/verify-launcher-binary.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "BSD-3-Clause",
+  "publishConfig": {
+    "access": "public"
+  }
+}

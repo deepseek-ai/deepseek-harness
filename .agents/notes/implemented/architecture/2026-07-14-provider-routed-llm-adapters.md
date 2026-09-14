@@ -30,7 +30,7 @@ A provider has exactly one adapter owner in a Cordis context. `dsh-llm-deepseek`
 
 `dsh-llm-pi-ai` takes one non-empty list of provider profiles. Provider names must be unique within the list and present in pi-ai's `getProviders()` result. Each profile contains the provider name plus optional `apiKey`, `baseURL`, headers, reasoning level and budgets, cache retention, transport, SDK timeouts, a Harness stream-idle timeout, and a provider-owned `retryPolicy`. The adapter forces pi-ai's `maxRetries` to zero so one `stream()` call makes one visible provider attempt, while `dsh-llm-retry` executes the resolved policy at the agent failed-step extension point. Credentials are never global: an explicit key applies only to its profile, while an absent key lets pi-ai resolve its standard environment variable, OAuth token, AWS credential chain, Google ADC, or other provider-native ambient authentication. An explicitly empty key is invalid configuration rather than an environment fallback.
 
-The plugin registers all configured provider names against one `PiAiAdapter` in one all-or-nothing call. A request uses its provider to select the matching profile and finds its model in `getModels(provider)` to obtain the catalog descriptor. An unknown provider fails at plugin load; an unknown model fails before network I/O with `UNKNOWN_MODEL`. The catalog object is never mutated. When a profile supplies `baseURL`, the adapter clones the selected descriptor and overrides only `baseUrl`, so a private endpoint can retain pi-ai's API, capabilities, compatibility flags, context limits, and reasoning map. The private endpoint must implement the selected provider's protocol, and the model id must still exist in the installed pi-ai catalog.
+The plugin registers configured provider names against one `PiAiAdapter` in one atomic call. Each immutable request snapshot combines the effective profiles and their serviceable model descriptors. Catalog-external models require an explicit or inferable protocol and endpoint. Stored catalog errors remain visible and repairable under the [settings catalog recovery decision](../bug-fix/2026-09-07-pi-ai-settings-catalog-recovery.md), while writes validate changed providers and requests reject the selected failed model before network I/O.
 
 The adapter calls pi-ai's `streamSimple()` so each catalog model chooses its registered API implementation, including OpenAI Responses instead of Chat Completions where the descriptor says `openai-responses`. Harness temperature, maximum tokens, signal, session id, and the profile's common stream options flow through directly. Profile headers merge with the mandatory Harness attribution headers, with Harness attribution winning its reserved names. The adapter no longer maintains DeepSeek-specific payload rewrites or a provider-protocol matrix.
 
@@ -54,7 +54,7 @@ Compaction configuration gains `summarizationProvider` beside `summarizationMode
 
 The JSON-RPC runtime receives provider and model explicitly. Its convenience fallback mounts `dsh-llm-deepseek` only for provider `deepseek` when that provider has no registered owner; other missing providers fail without guessing an adapter.
 
-Current v1 seed/load validation rejects request headers and assistant messages that omit required provider/model fields. The frozen v0-to-v1 edge requires the same reconstructable routing identity before migration; it never guesses a missing provider or model, and malformed shapes refuse before publication.
+Current seed/load validation rejects request headers and assistant messages that omit required provider/model fields. The frozen v0-to-v1 edge requires the same reconstructable routing identity before migration; it never guesses a missing provider or model, and malformed shapes refuse before publication.
 
 ## Alternatives considered
 
@@ -78,7 +78,7 @@ Current v1 seed/load validation rejects request headers and assistant messages t
 - pi-ai credentials, transport knobs, SDK timeouts, and the five-minute-default `streamIdleTimeoutMs` watchdog are scoped per provider profile. Hidden provider retries are disabled; bounded retries belong to the separately composed agent recovery policy.
 - `dsh-llm-pi-ai` rejects stop sequences because pi-ai's common stream API cannot express them; the native DeepSeek adapter retains its stop support.
 - Replay state is portable only within the adapter instance that owns both the historical and target providers. Cross-provider and cross-model restoration is an adapter responsibility, and another adapter receives provider-neutral history without the opaque state.
-- Current v1 Session JSONL requires provider/model on request headers and assistant messages. The v0 edge migrates only frozen shapes that already carry reconstructable request identity.
+- Current Session JSONL requires provider/model on request headers and assistant messages. The v0 edge migrates only frozen shapes that already carry reconstructable request identity.
 
 ## Testing
 

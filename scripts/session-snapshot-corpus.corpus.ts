@@ -4,7 +4,6 @@ import { existsSync } from 'node:fs'
 import { lstat, readFile, readdir, realpath } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { expect, it } from 'vitest'
-import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import {
   assertSessionFixtureVersion,
   captureExpectedWorkspaceSnapshot,
@@ -18,7 +17,7 @@ import {
   sessionFixtureNames,
   type SnapshotManifest,
 } from '@deepseek-ai/dsh-session-snapshot'
-import { assertV2SnapshotCorpusPolicy } from './session-snapshot-corpus-policy.ts'
+import { assertSnapshotCorpusPolicy } from './session-snapshot-corpus-policy.ts'
 
 const repoRoot = resolve(import.meta.dirname, '..')
 const corpusRoot = join(repoRoot, 'snapshots')
@@ -26,6 +25,7 @@ const profiles = ['acp', 'sdk', 'session', 'web'] as const
 const snapshotAdapters = [
   'apps/web/tests/message-feedback-protocol.snapshot.ts',
   'apps/web/tests/minimal-preset.snapshot.ts',
+  'apps/web/tests/preset-migration.snapshot.ts',
   'snapshots/acp/acp.snapshot.ts',
   'snapshots/sdk/sdk.snapshot.ts',
   'snapshots/session/headless.snapshot.ts',
@@ -191,8 +191,7 @@ it('keeps every recorded session owned, pinned, redacted, and header-scrubbed', 
   }
 })
 
-it('keeps a current v2 majority plus the bounded declared v0/v1 migration corpus', async () => {
-  expect(SESSION_FORMAT_VERSION).toBe(2)
+it('keeps a current-writer majority plus bounded declared historical migration coverage', async () => {
   const owners = (await scenarios()).filter(scenario => scenario.manifest.session === undefined)
   const inventory = await Promise.all(owners.map(async scenario => ({
     key: scenario.key,
@@ -202,8 +201,8 @@ it('keeps a current v2 majority plus the bounded declared v0/v1 migration corpus
       : { retained: scenario.manifest.sessionFormat }),
   })))
 
-  expect(assertV2SnapshotCorpusPolicy(inventory)).toMatchObject({
-    retainedRoles: 7,
-    retainedScenarios: 5,
+  expect(assertSnapshotCorpusPolicy(inventory)).toMatchObject({
+    retainedRoles: 9,
+    retainedScenarios: 7,
   })
 })

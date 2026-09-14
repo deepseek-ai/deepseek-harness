@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-timeout` lets a capability run one unit of work under a caller-visible timeout and later tell a timeout apart from a cancellation. A caller's optional hint is clamped against a backend default and cap, and upstream cancellation fuses with the deadline into one `AbortSignal`. The deadline signal only notifies — each capability owns the mechanism that stops its work, so no shared layer needs to know how to stop anything. For streamed transports an idle watchdog arms a timeout only while a provider read is outstanding, so consumer think time never counts as idle. A `timeoutMs` of zero is the internal no-timeout sentinel for backend-owned background work, never a public disable switch; the zero-dependency library is shared by the bash, web, subprocess, and tool-timeout-policy consumers.
+`dsh-timeout` lets callers apply bounded deadlines to work, distinguish local timeout from upstream cancellation, and monitor streamed reads for inactivity. `clampTimeout` fills a missing hint from a backend default, caps it at the allowed maximum, and rejects invalid values before work starts. `deadline` combines the chosen timeout with upstream cancellation in one signal, while the caller remains responsible for actually stopping its process, socket, or task. `idleWatchdog` counts only time spent waiting for provider reads, and zero remains reserved for backend-owned untimed work rather than public configuration.
 
 ## Table of Contents
 

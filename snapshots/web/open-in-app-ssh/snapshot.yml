@@ -1,0 +1,9 @@
+version: 1
+scenario: open-in-app-ssh
+profile: web
+composition: web-default
+recording: authored
+header:
+  class: web-default
+session:
+  source: ../seeded-history/session.v3.jsonl

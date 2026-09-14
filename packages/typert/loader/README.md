@@ -44,7 +44,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What gets registered
 
-Each qualifying Loader entry contributes its generated host-face reflection and schemas to the runtime registry. Registration follows the entry lifecycle: it is withdrawn when the entry or the plugin unmounts, and a registration whose import settles after both are gone is discarded.
+Each qualifying Loader entry contributes its generated host-face reflection and schemas to the runtime registry. Registration follows the entry lifecycle: it is withdrawn when the entry or the plugin unmounts, and an import that settles after either owner is gone is discarded.
 
 ### Observable behavior and failures
 

@@ -22,7 +22,7 @@ Responsibility is split between an always-on storage boundary and optional devel
 
 `Session` accepts an event only after one recursive pass has materialized a lossless JSON snapshot. That pass rejects unsupported values and produces the exact detached record that enters the log, so validation and storage cannot observe different values from a stateful getter or retain caller-owned nested references.
 
-The accepted event and all of its descendants are deep-frozen before publication. `append()` returns that owned frozen event, and `session/event` observers and `eventAt(seq)` receive the same record. `snapshotEvents(fromSeq?, toSeqExclusive?)` returns a frozen array snapshot; a previously returned array does not grow after a later append. `seq` and `eventAt()` avoid array materialization when a caller needs only the current length or one event. Seed records pass through the same validation, snapshot, and freeze boundary before construction succeeds.
+The accepted event and all of its descendants are deep-frozen before publication. `append()` returns that owned frozen event, and `session/event` observers and `eventAt(seq)` receive the same record. `snapshotEvents(fromSeq?, toSeqExclusive?)` returns a frozen array snapshot; a previously returned array does not grow after a later append. `seq` reads the current length without materializing an array. Synchronous historical readers are deprecated under the [event-read policy](2026-09-09-deprecate-synchronous-session-event-reads.md). Seed records pass through the same validation, snapshot, and freeze boundary before construction succeeds.
 
 This guarantee belongs in `Session`, not in an optional listener, because every composition relies on trustworthy history. A production deployment, a focused test, or a custom embedding receives the same storage semantics whether or not development support plugins are registered.
 
@@ -53,7 +53,7 @@ Detaching `deriveMessages()` would protect the most common request path but leav
 ## Consequences
 
 - Every accepted live or seeded session event is detached from caller-owned inputs and deeply immutable before any observer can receive it.
-- `snapshotEvents()` exposes stable immutable snapshots instead of the private growing array; `seq` and `eventAt()` serve scalar reads without copying that array.
+- Existing `snapshotEvents()` and `eventAt()` callers retain immutable read results while their migration is deferred; `seq` reads the log length without copying the array.
 - Request-side mutation cannot reach stored history through derived messages.
 - Development builds can enable relational assertions without changing storage behavior, and disposing or filtering a companion does not weaken log immutability.
 - `dsh-invariants` configures global enablement plus package allow/block regex lists; each check remains owned and tested by its product package.

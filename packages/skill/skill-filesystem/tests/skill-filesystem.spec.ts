@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { mkdir, readdir, readFile, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readdir, readFile, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
@@ -16,7 +16,7 @@ afterEach(async () => {
 async function tempDir(name: string): Promise<string> {
   const dir = await import('node:fs/promises').then(fs => fs.mkdtemp(join(tmpdir(), `dsh-${name}-`)))
   tempDirs.push(dir)
-  return dir
+  return await realpath(dir)
 }
 
 async function writeSkill(root: string, name: string, description: string, body = 'Use the skill.'): Promise<void> {
@@ -105,6 +105,10 @@ class TestFileSystem extends FileSystem {
   }
 
   override async readBytes(_target: FsTarget, _signal: AbortSignal | undefined, _maxBytes: number): Promise<Uint8Array> {
+    throw new Error('not needed in skill tests')
+  }
+
+  override async readByteRange(_target: FsTarget, _range: { offset: number; length: number }, _signal?: AbortSignal): Promise<Uint8Array> {
     throw new Error('not needed in skill tests')
   }
 
@@ -414,7 +418,7 @@ describe('FileSystemSkillProvider', () => {
     expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['good-skill'])
   })
 
-  it('discovers symlinked skill directories and flat files', async () => {
+  it.each([false, true])('publishes regular-file paths for linked skills while retaining their resource roots (filesystem service: %s)', async (withFileSystem) => {
     const home = await tempDir('skill-symlink-home')
     const external = await tempDir('skill-symlink-external')
     await writeSkill(external, 'linked-dir', 'Linked directory')
@@ -425,9 +429,36 @@ describe('FileSystemSkillProvider', () => {
     await symlink(join(external, 'missing'), join(home, '.dsh/skills/broken-link'))
     await symlink('/dev/null', join(home, '.dsh/skills/device-link'))
 
-    const ctx = await setupLocal(home)
+    const ctx = new Context()
+    await ctx.plugin(SkillRegistry)
+    if (withFileSystem) {
+      await ctx.plugin(class extends TestFileSystem {
+        override async resolve(path: string): Promise<FsTarget> {
+          return { targetKey: await realpath(path) as never, displayPath: path }
+        }
+      })
+    }
+    const fiber = ctx.plugin(SkillFileSystem, { dshHome: join(home, '.dsh'), agentsHome: join(home, '.agents'), watch: false })
+    await fiber
 
-    expect((await ctx.skills.list()).map(skill => skill.name)).toEqual(['linked-dir', 'linked-flat'])
+    try {
+      const catalog = await ctx.skills.list()
+      expect(catalog.map(skill => skill.name)).toEqual(['linked-dir', 'linked-flat'])
+      for (const name of ['linked-dir', 'linked-flat']) {
+        const path = name === 'linked-dir' ? join(external, name, 'SKILL.md') : join(external, `${name}.md`)
+        expect(catalog.find(skill => skill.name === name)?.path).toBe(path)
+        const loaded = await ctx.skills.get(name)
+        expect(loaded?.path).toBe(path)
+        expect(loaded?.resourceBase).toEqual({ kind: 'directory', path: name === 'linked-dir' ? join(home, '.dsh/skills', name) : join(home, '.dsh/skills') })
+        expect((await lstat(path)).isFile()).toBe(true)
+      }
+      await writeFile(join(external, 'replacement.md'), '---\nname: linked-flat\ndescription: Replacement\n---\n\nReplacement body.\n')
+      await rm(join(home, '.dsh/skills/linked-flat.md'))
+      await symlink(join(external, 'replacement.md'), join(home, '.dsh/skills/linked-flat.md'))
+      expect((await ctx.skills.get('linked-flat'))?.content).toBe('Replacement body.')
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('uses the filesystem service for discovery, reads, and project-root lookup', async () => {

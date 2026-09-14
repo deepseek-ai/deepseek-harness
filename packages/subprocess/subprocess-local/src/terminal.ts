@@ -65,6 +65,7 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   private cleanup: Promise<void> | undefined
   private managedOwnerCleaned = false
   private exited = false
+  private outputPaused = false
   private trackedDescendants: ProcessIdentity[] = []
   /** The spawned shell's start identity; scans stop adopting members once the root pid no longer carries it. */
   private readonly rootIdentity: ProcessIdentity | undefined
@@ -86,7 +87,19 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
     this.pid = terminal.pid
     this.rootIdentity = inspector.snapshot().tree(this.pid).find(member => member.pid === this.pid)
     this.done = this.outcome.promise
-    this.dataDisposable = terminal.onData((data) => { this.output.write(Buffer.from(data, 'utf8')) })
+    const resume = (): void => {
+      if (!this.outputPaused) return
+      this.outputPaused = false
+      if (!this.exited) terminal.resume()
+    }
+    this.output.on('drain', resume)
+    this.output.once('close', () => { this.output.off('drain', resume) })
+    this.dataDisposable = terminal.onData((data) => {
+      if (!this.output.write(Buffer.from(data, 'utf8')) && this.cleanup === undefined && !this.outputPaused) {
+        this.outputPaused = true
+        terminal.pause()
+      }
+    })
     this.exitDisposable = terminal.onExit(({ exitCode, signal: exitSignal }) => {
       if (this.exited) return
       this.exited = true
@@ -113,6 +126,12 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
   async write(data: string): Promise<void> {
     if (this.exited) throw new Error('terminal process has exited')
     this.terminal.write(data)
+  }
+
+  // oxlint-disable-next-line typescript/require-await -- Provider operations share promise rejection semantics.
+  async resize(cols: number, rows: number): Promise<void> {
+    if (this.exited) throw new Error('terminal process has exited')
+    this.terminal.resize(cols, rows)
   }
 
   // Local inspection is synchronous; the seam returns a promise for remote transports.
@@ -154,6 +173,7 @@ export class LocalTerminalHandle implements SubprocessTerminalHandle {
 
   terminate(): Promise<void> {
     if (this.cleanup !== undefined) return this.cleanup
+    if (this.outputPaused) { this.outputPaused = false; this.terminal.resume() }
     const cleanup = this.closeOnce()
     this.cleanup = cleanup
     void cleanup.catch(() => { this.cleanup = undefined })

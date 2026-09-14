@@ -6,7 +6,7 @@ English | [中文](2026-07-15-agent-initiator-scope.zh.md)
 
 ## Problem
 
-The harness has two useful but different notions of context. A Cordis `Context` selects services, registration ownership, and lifetime; `agent.ctx` is the flat registration scope owned by one live Agent. Agent and Session identity instead describe the subject of an asynchronous operation. Changing a root `ctx.agent` to mean “whichever Agent is running” would conflate those meanings and fail when one process drives Agents concurrently.
+The harness has two useful but different notions of context. A Cordis `Context` selects services, registration ownership, and lifetime; `agent.ctx` is the flat registration scope owned by one live Agent. Agent and Session identity instead describe the subject of an asynchronous operation. A dynamic `ctx.agent` meaning “whichever Agent is running” would conflate those meanings and fail when one process drives Agents concurrently.
 
 Deep process-local infrastructure sometimes needs a trusted initiating Agent below explicit loop, tool, and request parameters—for example, a host-aware transport, tracing helper, logger, or gateway client. Requiring every private helper to forward `agent` adds repetition, while a process-global mutable slot is incorrect across `await`. Model-visible arguments are unsuitable because a model must not choose a trusted Session or routing header. The carrier belongs to the Agent service rather than optional model-visible context.
 
@@ -18,9 +18,9 @@ The mandatory `ctx.agents` service uses Node `AsyncLocalStorage` to carry the in
 
 `AgentLoop` already injects `ctx.agents` and wraps each concrete driver's complete `runLoop` lifetime in `agents.withInitiator(agent, ...)`. Its package-private loop, turn, step, and tool-call orchestration entries recover the exact Agent from `ctx.agents`, derive `agent.session` once, and let operation-local helpers capture it instead of forwarding the concrete driver or `Session` through shallow interfaces. A leaf helper keeps a narrow `Session` parameter when that is its actual interface rather than accepting a broader `Context` only for an ambient lookup.
 
-Concurrent drivers receive independent stores. A child driver's continuations carry the child, while the caller resumes in its prior store as soon as `withInitiator()` returns; active-run tracking keeps the returned Promise in the teardown drain until it settles. Creation, persistence load, and unpublished `setup(agentCtx)` remain outside the child's driver boundary: creation initiated by a parent runs under the parent identity, while `agentCtx.agent` explicitly identifies the child.
+Concurrent drivers receive independent stores. A child driver's continuations carry the child, while the caller resumes in its prior store as soon as `withInitiator()` returns; active-run tracking keeps the returned Promise in the teardown drain until it settles. Creation, persistence load, and unpublished `setup(agentCtx, childAgent)` remain outside the child's driver boundary: creation initiated by a parent runs under the parent identity, while the explicit `childAgent` parameter identifies the child.
 
-Ambient identity does not replace explicit contracts. `ToolExecution.agent`, `AssembleContext.agent`, `GenerateOptions.sessionId`, job ownership, parent/child requests, `ctx.agent`, `agentCtx.agent`, approval and hook subjects, `cwd` selection, cancellation, worker/process messages, persistence records, and wire identity remain explicit. A remote boundary materializes the identity it needs into its typed request because ALS is process-local.
+Ambient identity does not replace explicit contracts. `ToolExecution.agent`, `AssembleContext.agent`, the Agent parameter of `AgentSetup`, `GenerateOptions.sessionId`, job ownership, parent/child requests, approval and hook subjects, `cwd` selection, cancellation, worker/process messages, persistence records, and wire identity remain explicit. A remote boundary materializes the identity it needs into its typed request because ALS is process-local.
 
 `AgentRegistry` owns an ordered initiator lifecycle. Teardown first rejects new boundaries; removing `ctx.agents` then drains injected dependents such as AgentLoop, and the registry waits for active returned-Promise boundaries before calling `AsyncLocalStorage.disable()`. If a boundary's inherited async chain starts an owning Cordis fiber's unload, the private run-token lineage releases that nested boundary chain from the drain, which prevents teardown from waiting on itself while unrelated boundaries still drain. `currentInitiator()` and `requireInitiator()` remain usable through a retained in-flight service reference while the ordinary drain runs; after disposal, initiator methods throw `agent initiator scope is disposed`. Root Context disposal may start sibling fiber teardown concurrently, so active-boundary counting remains necessary in addition to Cordis dependency ordering.
 
@@ -28,7 +28,7 @@ Initiator scope does not own detached work: registry drain tracks only the Promi
 
 A host-aware transport may derive a deployment-owned header such as `X-Harness-Session-Id` from `ctx.agents.requireInitiator().session.id`; the header is absent from model-visible schema and arguments. No production MCP or Web transport adopts such a header in this decision. A test-double transport proves the trusted boundary without assigning host routing policy to an existing provider-neutral seam.
 
-This decision extends the [Agent registration-scope contract](2026-07-08-agent-scope-contexts.md) and its [runtime design](2026-07-12-agent-scope-runtime-design.md); it does not change their static `agent.ctx` meaning.
+This decision extends the [Agent registration-scope contract](2026-07-08-agent-scope-contexts.md) and its [runtime design](2026-07-12-agent-scope-runtime-design.md); it does not change their static `agent.ctx` meaning. The [explicit runtime-identity decision](2026-08-31-explicit-agent-runtime-identity.md) keeps initiator scope limited to private asynchronous chains while lifecycle, ownership, event, and wire interfaces carry their subjects directly.
 
 ## Verification
 
@@ -40,7 +40,7 @@ A test-double host-aware transport derives `X-Harness-Session-Id` internally and
 
 **Pass Agent through every function.** Public, worker, process, persistence, and wire boundaries continue to do this, but requiring every process-local private helper to carry Agent adds repetitive forwarding without improving trust. ALS is confined to the asynchronous chain inside those explicit boundaries.
 
-**Make `ctx.agent` dynamic.** `ctx.agent` already means the static Agent associated with an Agent-scoped Cordis context. Changing the root meaning would mix registration and execution scopes and make concurrent behavior surprising.
+**Expose a dynamic `ctx.agent`.** Context carries registration ownership, not a domain subject. Adding an accessor for the executing Agent would mix registration and execution scopes and make concurrent behavior surprising.
 
 **Add a separate `ctx.agentExecution` service.** The carrier has no independent backend, configuration, or identity type: it stores the same `Agent` that `ctx.agents` already owns, and AgentLoop already depends on that service. A second mandatory provider would add package, composition, lifecycle, generated-catalog, and test-harness wiring without separating a real capability.
 

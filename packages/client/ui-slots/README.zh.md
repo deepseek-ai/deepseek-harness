@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-client-ui-slots` 是 Web 客户端 slot 系统的纯核心：每个 UI 功能都经由它组合的类型级约定。一次 `register({ name, children?, store?, inject?, ...kind }, Component)` 调用会向已声明 slot 贡献一个组件，同时声明子 slot、store 席位与注册方的业务表层。组件会在调用点依据 `ComposedProps` 接受类型检查——该类型是四个 share 的交集，每个 share 都从各自的唯一真源派生——因此错误的组合在编译期就会失败。chain-kind slot 会反转键控路由：条目通过纯 selector 自行提名，而不是由分发点选择 `entryKey`。本包在运行时与 Cordis 无关（仅使用 React 类型）；`ui-renderer` 拥有引擎实现与 React 绑定。
+`dsh-client-ui-slots` 让 Web 客户端插件定义并组合带类型检查的 UI 区域。调用方可以通过一个在编译期检查的 API 添加组件、声明嵌套区域、附加作用域状态并提供业务 props。它支持单项、有序列表、键控和自行选择的 chain 组合，并会在插件加载期间报告冲突组合。需要与框架无关的 slot 组合时选择本包；客户端需要 React 渲染时与 `ui-renderer` 配合使用。
 
 ## 目录
 
@@ -29,15 +29,15 @@ kind: "package-library"
 
 ### 四个 props share
 
-每个已注册组件都会收到由四个 share 组合而成的 props：运行时 share（父级 renderSlot 调用点的 `owner`，加上会话标准工具包与全局席位）、child render share（静态缩窄到已声明 children key 的 `renderSlot`）、store share（已声明 handle 的 selector 钩子与移除 draft 的 actions），以及业务 share（从 `inject` factory 返回值推断）。组件引用 `ComposedProps`；它们绝不在本地重新输入任何 share。
+每个已注册组件都会收到由四个 share 组合而成的 props：运行时 share（父级 renderSlot 调用点的 `owner`，加上会话标准工具包与全局席位）、child render share（静态缩窄到已声明 children key 的 `renderSlot`）、store share（已声明句柄的 selector 钩子与移除 draft 的 actions），以及业务 share（从 `inject` factory 返回值推断）。组件引用 `ComposedProps`；它们绝不在本地重新定义任何 share 的类型。
 
 ### Store 席位
 
-register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 推断状态 schema，`actions` 是完整的 draft-transform 写入集合。组件经 selector 钩子读取、经烘焙回调写入；`defineStore` 的引擎实现位于 runtime 包，并满足这里导出的 `DefineStore` 约定。
+register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 推断状态 schema，`actions` 是完整的 draft-transform 写入集合。组件经 selector 钩子读取、经烘焙回调写入；`defineStore` 的引擎实现位于运行时包，并满足这里导出的 `DefineStore` 约定。
 
 ### 声明纪律
 
-声明即认领：注册条目成为唯一被允许渲染该键的条目；注册未声明 slot、声明已声明过的子项、在两个 scope 下挂载同一个共享 handle、或注册缺少 `select` 的 chain，都会在加载时抛出。条目的 disposer 会递归移除其声明的子 slot——账本行、贡献与 store 挂载都随同一生命周期结束而移除。
+声明即认领：注册条目成为唯一被允许渲染该键的条目；注册未声明 slot、声明已声明过的子项、在两个 scope 下挂载同一个共享句柄、或注册缺少 `select` 的 chain，都会在加载时抛出。条目的 disposer 会递归移除其声明的子 slot——账本行、贡献与 store 挂载都随同一生命周期结束而移除。
 
 -----
 
@@ -47,7 +47,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 <details>
 <summary>实现细节——点击展开</summary>
 
-设计就是一张表：声明 = 渲染授权 = 运行时规范。`SlotMap` 在这里声明为空，由消费方通过 `declare module` 增补合并，标准工具包接口（`SessionStandardProps`、`GlobalStandardProps`）也是如此，由 runtime 包以真实成员合并。
+设计就是一张表：声明 = 渲染授权 = 运行时规范。`SlotMap` 在这里声明为空，由消费方通过 `declare module` 增补合并，标准工具包接口（`SessionStandardProps`、`GlobalStandardProps`）也是如此，由运行时包以真实成员合并。
 
 ### 注册与路由
 
@@ -55,7 +55,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 
 ### 渲染器约定
 
-`renderer.ts` 携带安装约定（`SlotRenderer`、`SlotRendererHost`）以及 `StaleAuthorizationError`/`SlotOwnershipError`；ui-renderer 同时持有实现及其插件生命周期安装。引擎产物与渲染器宿主约定携带裸快照 source（`getSnapshot`/`subscribe`），绝不携带 React 钩子——钩子绑定属于渲染机制。
+`renderer.ts` 携带安装约定（`SlotRenderer`、`SlotRendererHost`）以及 `StaleAuthorizationError`/`SlotOwnershipError`；ui-renderer 负责实现，并在其插件生命周期中完成安装。引擎产物与渲染器宿主约定携带裸快照 source（`getSnapshot`/`subscribe`），绝不携带 React 钩子——钩子绑定属于渲染机制。
 
 </details>
 
@@ -86,7 +86,7 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 <a id="known-limitations-and-deferred-work"></a>
 
 
-这些限制定义注册表的扩展行为与已接受的类型噪声；它们是当前包约束。
+这些限制定义注册表的规模扩展特性与已接受的类型噪声；它们是当前包约束。
 
 - **`isLive` 会线性扫描所有记录**：在 UI 插件的注册规模（数十项）下没有问题；如果账本变得频繁访问，再使用条目→记录反向引用改进。
 - **`__renders` 幻象锚点在 `PropsRenderSlots` 上可见**：这是与类型链设计的 `__accepts` 相同且已接受的噪声；泛型方法签名在 key 联合之间比较宽松，因此必须依靠逆变标记强制执行「组件 key 集合 ⊆ children 声明」。
@@ -101,4 +101,4 @@ register 调用可以用 `store: defineStore(...)` 声明 store 席位：`init` 
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。这是零依赖纯 registry core，本身不发出 Cordis 事件；`ui-renderer` SlotRegistry 负责事件桥及其不变式。
+**运行时不变式：** 不发布伴生入口。这是零依赖的纯注册表核心，本身不发出 Cordis 事件；`ui-renderer` SlotRegistry 负责事件桥及其不变式。本包的行为规范直接断言 define/register/dispose 的执行顺序。

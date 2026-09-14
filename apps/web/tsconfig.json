@@ -22,15 +22,20 @@
   // this client-registered project must not also hold them (one program
   // cannot see both sides of the cordis Context merges).
   "exclude": [
+    "tests/default-product-isolation.e2e.ts",
+    "tests/diff-context.e2e.ts",
     "tests/scaffold.ts",
+    "tests/auto-review-fixture.ts",
     "tests/scaffold-generation.spec.ts",
     "tests/scaffold-hermetic.e2e.ts",
     "tests/startup-rpc-budget.e2e.ts",
     "tests/minimal-preset.snapshot.ts",
     "tests/message-feedback-protocol.snapshot.ts",
+    "tests/preset-migration.snapshot.ts",
     "tests/live-interactions.e2e.ts",
     "tests/question-composer.e2e.ts",
     "tests/approval-composer.e2e.ts",
+    "tests/ptc-escalation.e2e.ts",
     "tests/plan-control-row.e2e.ts",
     "tests/plan-review.e2e.ts",
     "tests/steering.e2e.ts",
@@ -39,9 +44,13 @@
     "tests/trajectory-virtualization.e2e.ts",
     "tests/lifecycle-chrome.e2e.ts",
     "tests/details-session-lifecycle.e2e.ts",
+    "tests/document-preview.e2e.ts",
     "tests/plugin-config.e2e.ts",
     "tests/settings-chrome.e2e.ts",
     "tests/models-settings.e2e.ts",
+    "tests/deepseek-messages-settings.e2e.ts",
+    "tests/deepseek-messages-chat.e2e.ts",
+    "tests/models-settings-recovery.e2e.ts",
     "tests/default-model.e2e.ts",
     "tests/github-ready-review.e2e.ts",
     "tests/streaming-fence-highlight.e2e.ts",
@@ -51,6 +60,8 @@
     "tests/remote-welcome.e2e.ts",
     "tests/workspace-new-session-folding.e2e.ts",
     "tests/workspace-management.e2e.ts",
+    "tests/workspace-recency.e2e.ts",
+    "tests/session-unarchive.e2e.ts",
     "tests/replay-round-trip.e2e.ts",
     "tests/hmr-live.e2e.ts",
     "tests/preview-boot.e2e.ts",
@@ -60,13 +71,16 @@
     "tests/rail-search-expand.e2e.ts",
     "tests/conversation-column-overflow.e2e.ts",
     "tests/ptc-round.e2e.ts",
+    "tests/present.e2e.ts",
+    "tests/present-svg.e2e.ts",
     "tests/composer-draft-scroll.e2e.ts",
+    "tests/composer-placeholder.e2e.ts",
     "tests/cordis-tool-round.e2e.ts",
     "tests/web-search-round.e2e.ts",
     "tests/file-upload-round.e2e.ts",
     "tests/message-actions.e2e.ts",
+    "tests/open-in-app-ssh.e2e.ts",
     "tests/message-feedback.e2e.ts",
-    "tests/message-feedback-layout.e2e.ts",
     "tests/markdown-images.e2e.ts",
     "tests/reference-composer.e2e.ts",
     "tests/markdown-wide-table.e2e.ts",
@@ -87,6 +101,8 @@
     "tests/feedback-command.e2e.ts",
     "tests/feedback-release.e2e.ts",
     "tests/agent-team-panel.e2e.ts",
+    "tests/sidebar-right.e2e.ts",
+    "tests/sidebar-terminal.e2e.ts",
     "tests/startup-auto-selection.e2e.ts",
     "tests/produced-files.e2e.ts",
     "tests/produced-file-mentions.e2e.ts",
@@ -97,6 +113,7 @@
     "tests/subagent-interrupt-ui.e2e.ts",
     "tests/sidebar-subagent-activity.e2e.ts",
     "tests/background-job-list.e2e.ts",
+    "tests/auto-review-denial.e2e.ts",
     "tests/bash-abort-row.e2e.ts",
     "tests/skill-tool-row.e2e.ts",
     "tests/turn-tail-actions.e2e.ts",
@@ -111,6 +128,7 @@
     "tests/workflow-run.e2e.ts"
   ],
   "references": [
+    { "path": "../../packages/experimental/auto-review" },
     {
       "path": "../../packages/client/store"
     },
@@ -119,6 +137,12 @@
     },
     {
       "path": "../../packages/client/modules"
+    },
+    {
+      "path": "../../packages/test-support/client-runtime"
+    },
+    {
+      "path": "../../packages/test-support/remote-mock"
     }
   ]
 }

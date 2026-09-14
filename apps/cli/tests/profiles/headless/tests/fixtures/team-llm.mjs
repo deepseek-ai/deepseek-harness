@@ -134,6 +134,12 @@ function implementer(messages) {
 function lead(messages) {
   const names = calls(messages)
   const last = latestAssistantCalls(messages)
+  if (!names.includes('workflow')) {
+    return toolChunks([{ name: 'workflow', args: {
+      meta: { name: 'team-preflight', description: 'Check fresh workflow delegation alongside teammates.' },
+      script: 'return await agent("TEAM_WORKFLOW_CHILD");',
+    } }])
+  }
   const spawned = names.filter(name => name === 'spawn_teammate').length
   if (spawned === 0) {
     return toolChunks([{
@@ -174,12 +180,20 @@ function lead(messages) {
 
 class TeamFixtureAdapter extends LlmAdapter {
   async * stream(options) {
-    const userText = options.messages.flatMap(message => message.role === 'user'
-      ? message.content.filter(block => block.type === 'text').map(block => block.text)
-      : []).join('\n')
-    const chunks = userText.includes('RESEARCHER_MARK')
+    const tools = options.tools.map(tool => tool.name)
+    if (tools.includes('subagent') || tools.includes('subagent_fork')) {
+      throw new Error('Team profile exposes a direct subagent tool')
+    }
+    const initial = options.messages.findLast(message => message.role === 'user' && message.source.kind === 'user')
+    const identity = initial?.content[0]?.text?.trimEnd()
+    if (identity !== 'TEAM_WORKFLOW_CHILD' && (!tools.includes('spawn_teammate') || !tools.includes('workflow'))) {
+      throw new Error('Team profile is missing teammate or workflow tools')
+    }
+    const chunks = identity === 'TEAM_WORKFLOW_CHILD'
+      ? textChunks('Fresh workflow child complete.')
+      : identity === '<system-reminder>\nYou are teammate "researcher".\n</system-reminder>'
       ? researcher(options.messages)
-      : userText.includes('IMPLEMENTER_MARK')
+      : identity === '<system-reminder>\nYou are teammate "implementer".\n</system-reminder>'
         ? implementer(options.messages)
         : lead(options.messages)
     for (const chunk of chunks) {

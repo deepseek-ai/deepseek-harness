@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The core group provides the product API spine of the DeepSeek Harness: an append-only session log, system-prompt assembly, a tool registry, the `Agent` handle, and the concrete loop that drives them. Every composition boots these packages, and plugins and consumers build against their stable contracts. A turn flows through all of them — the loop claims a prompt, opens a turn on the session log, assembles the request through system-prompt, streams the model response, dispatches tool calls through the registry, and appends every model-visible fact back to the log. Choose this group when you build an agent or extend one; the default product composition is [`dsh-base`](../bundle/base/README.md).
+Use the core packages to build or extend an agent that records durable session history, assembles system prompts, exposes tools, selects a default model, and runs model turns. These packages define the shared APIs used by every composition, while executable product assemblies live under [`packages/bundle`](../bundle/README.md). Choose this group when developing agent behavior or replacing one of those capabilities; start with [`dsh-base`](../bundle/base/README.md) when you need the default runnable composition.
 
 ## Table of Contents
 

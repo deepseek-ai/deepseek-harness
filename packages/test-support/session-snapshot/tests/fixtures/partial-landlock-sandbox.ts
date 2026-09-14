@@ -12,7 +12,7 @@ const MISSING_RUNNER_ENV = 'DSH_SNAPSHOT_MISSING_SANDBOX_RUNNER'
  * aligned with `RUNNER_FAILURE_RULES` in `packages/sandbox/sandbox-local/src/index.ts`.
  */
 export default class PartialLandlockSandboxProvider extends SandboxProvider {
-  confine(argv: readonly string[], policy: SandboxPolicy): ConfinedArgv {
+  async confine(argv: readonly string[], policy: SandboxPolicy): Promise<ConfinedArgv> {
     if (process.env[MISSING_RUNNER_ENV] === '1') {
       return {
         argv: [join(policy.workspaceRoot, '.dsh-missing-sandbox-runner'), ...argv],

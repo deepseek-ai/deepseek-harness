@@ -1,14 +1,5 @@
-/**
- * Plain-text reference decoration (the plain-text-reference decision;
- * see .agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md):
- * a `/name` or `@name` token whose name is on the trigger's lexicon, and
- * syntax-recognizable `@dir/` folder tokens, render in the chip family
- * colors. Color only, no icon: a token still carrying its trigger character
- * is editable text, not a settled chip — the domain icon marks exactly the
- * settled state. Pure derivation as before — the entity transform converts
- * matching text into TextRefNode and back as edits move it in and out of
- * match shape; no occurrence identity exists.
- */
+/** Editable reference tokens share chip hover styling while retaining ordinary text semantics. */
+import clsx from 'clsx'
 import type { EditorConfig, LexicalEditor, SerializedTextNode } from 'lexical'
 import { TextNode } from 'lexical'
 import { registerLexicalTextEntity } from '@lexical/text'
@@ -61,7 +52,8 @@ export class TextRefNode extends TextNode {
   /** Style the span the base TextNode mounts. */
   override createDOM(config: EditorConfig): HTMLElement {
     const el = super.createDOM(config)
-    el.classList.add(css.textRef ?? 'textRef')
+    el.className = clsx(el.className, css.reference, css.textRef, this.getTextContent().startsWith('/') && css.openable)
+    el.setAttribute('spellcheck', 'false')
     el.setAttribute('data-composer-text-ref', '')
     return el
   }
@@ -96,7 +88,7 @@ export function registerTextRefDecoration(
   const getMatch = (text: string): { start: number; end: number } | null => {
     const claim = activeToken()
     for (const range of scanTextRefs(text, lexiconOf())) {
-      if (claim !== null && range.start === 0 && text.slice(range.start, range.end) === claim) continue
+      if (claim !== null && range.start === 0 && text.slice(range.start, range.end) === claim.trimEnd()) continue
       return { start: range.start, end: range.end }
     }
     return null

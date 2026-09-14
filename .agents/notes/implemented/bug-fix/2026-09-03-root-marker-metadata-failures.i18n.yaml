@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-03-root-marker-metadata-failures.md
+2026-09-03-root-marker-metadata-failures.md: e31ef646d7190a1239684f7b66a118deb9ae1087
+2026-09-03-root-marker-metadata-failures.zh.md: 4b62f4e01ba56074a10dbcb3ae37c4478fe82379

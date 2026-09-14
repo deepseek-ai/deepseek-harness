@@ -9,6 +9,8 @@
  * ic_photo_outline_20, ic_paper_doc_outline_20, ic_paper_outline_20.
  */
 import type { ReactNode } from 'react'
+import { classifyFileType, fileExtension } from './FileTypeIcon.tsx'
+import { isCodeFileType, isLinkCodeExtension } from './code-file-types.ts'
 import type { IconProps } from './icons/props.ts'
 
 /**
@@ -24,22 +26,6 @@ export interface LinkIconProps extends IconProps {
   kind: LinkIconKind
 }
 
-/** Code, web, and data extensions: all three categories share the code glyph. */
-const CODE_EXTENSIONS = new Set([
-  'ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'cts', 'mts', 'css', 'scss', 'sass', 'less',
-  'html', 'htm', 'vue', 'svelte', 'astro', 'json', 'jsonc', 'json5', 'yaml', 'yml',
-  'toml', 'xml', 'ini', 'env', 'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
-  'py', 'pyi', 'rb', 'rs', 'go', 'java', 'kt', 'kts', 'c', 'cc', 'cpp', 'cxx',
-  'h', 'hh', 'hpp', 'cs', 'php', 'swift', 'sql', 'csv', 'tsv', 'proto', 'graphql',
-  'gql', 'lua', 'r', 'pl', 'scala', 'clj', 'cljs', 'ex', 'exs', 'erl', 'hs', 'dart',
-])
-
-const IMAGE_EXTENSIONS = new Set([
-  'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tif', 'tiff', 'heic', 'heif',
-])
-
-const DOCUMENT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'])
-
 /**
  * Derive a file path's link-icon category from its extension. Unknown and
  * missing extensions fall to `other` (the plain-paper glyph).
@@ -47,13 +33,24 @@ const DOCUMENT_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt',
  * @returns The file's glyph category; never `url` or `folder`.
  */
 export function classifyLinkPath(path: string): LinkIconKind {
-  const name = path.slice(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)
-  const dot = name.lastIndexOf('.')
-  if (dot < 0) return 'other'
-  const extension = name.slice(dot + 1).toLowerCase()
-  if (CODE_EXTENSIONS.has(extension)) return 'code'
-  if (IMAGE_EXTENSIONS.has(extension)) return 'image'
-  return DOCUMENT_EXTENSIONS.has(extension) ? 'document' : 'other'
+  const type = classifyFileType(path)
+  const extension = fileExtension(path)
+  if (isCodeFileType(type)) return isLinkCodeExtension(extension) ? 'code' : 'other'
+  if (extension === '') return 'other'
+  switch (type) {
+    case 'code':
+    case 'html': return 'code'
+    case 'image': return 'image'
+    case 'excel':
+    case 'pdf':
+    case 'ppt':
+    case 'word': return 'document'
+    case 'markdown':
+    case 'other':
+    case 'video': return 'other'
+    /* v8 ignore next -- classifyFileType returns a closed union exhausted above */
+    default: return assertNever(type)
+  }
 }
 
 const GlobeGlyph = ({ size, className }: IconProps) => (

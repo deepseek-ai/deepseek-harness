@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包渲染对话 UI 中与附件相关的一切：composer 下的一条有序草稿附件栏、全视口拖放邀请层、Chat、Trajectory 与工具结果中的持久图片，以及查看原图的灯箱。附件数据、上传状态、图片加载与回调来自声明这些槽位的持有方。需要 DeepSeek Chat 风格的附件体验时选择它。
+本包渲染对话 UI 中与附件相关的一切：composer 下的一条有序草稿附件栏、全视口拖放提示层、Chat、Trajectory 与工具结果中的长期保留的图片，以及查看原图的灯箱。附件数据、上传状态、图片加载与回调来自声明这些 slot 的持有方。需要 DeepSeek Chat 风格的附件体验时选择它。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-与 [`ui-conversation`](../ui-conversation/README.zh.md) 一起挂载本插件，工具结果需要图片图库时也要挂载 [`ui-tool`](../ui-tool/README.zh.md)。插件等待这些槽位的声明，并把组件注册进去。用户会看到混合草稿附件栏、带上传控件的 DeepSeek Web 文件卡、带上限说明的拖放遮罩、按数量定尺寸的消息图片、工具卡片图库，以及支持 Escape、遮罩和关闭按钮的灯箱。
+与 [`ui-conversation`](../ui-conversation/README.zh.md) 一起挂载本插件，工具结果需要图片图库时也要挂载 [`ui-tool`](../ui-tool/README.zh.md)。插件等待这些 slot 的声明，并把组件注册进去。用户会看到混合草稿附件栏、带上传控件的 DeepSeek Web 文件卡、带限制说明的拖放遮罩、按数量定尺寸的消息图片、工具卡片图库，以及支持 Escape、遮罩和关闭按钮的灯箱。
 
 ### 草稿附件
 
@@ -37,7 +37,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 
 ### 拖放遮罩
 
-文件拖拽悬停页面时，全视口遮罩宣布可拖放：插画、标题，接受拖放时再加一行上限说明。遮罩只呈现状态——接受或拒绝由持有方的 document 级监听器决定。
+文件拖到页面上方时，全视口遮罩显示拖放提示，包括插画和标题；接受拖放时还会显示一行限制说明。遮罩只呈现状态——是否接受由持有方的文档级监听器决定。
 
 -----
 
@@ -47,7 +47,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 <details>
 <summary>实现细节——点击展开</summary>
 
-插件通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images`、`conversation.trajectory.images` 与 `tool.call.images`。随后它注册 composer rail、文档拖放目标、供 Chat、Trajectory 与工具结果共用的历史图片 gallery，以及原图灯箱。呈现组件保持纯 props：槽位持有方提供附件数据、图片加载、回调与语言包翻译器；包入口不导出任何组件。
+插件通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images`、`conversation.trajectory.images` 与 `tool.call.images`。随后它注册 composer rail、文档拖放目标、供 Chat、Trajectory 与工具结果共用的历史图片 gallery，以及原图灯箱。呈现组件仅依赖 props：slot 持有方提供附件数据、图片加载、回调与语言包翻译器；包入口不导出任何组件。
 
 | 文件 | 职责 |
 |---|---|
@@ -56,7 +56,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 | [`src/client/MessageImages.tsx`](src/client/MessageImages.tsx) | 每消息画廊＋灯箱的组装 |
 | [`src/MessageImage.tsx`](src/MessageImage.tsx) | 单图尺寸、加载／重试、点击打开；本地提交回显预览直接显示其 object URL |
 | [`src/ImageLightbox.tsx`](src/ImageLightbox.tsx) | 铺在共享遮罩上的文档级模态预览 |
-| [`src/DropOverlay.tsx`](src/DropOverlay.tsx) | 不接收指针事件的拖拽邀请 portal |
+| [`src/DropOverlay.tsx`](src/DropOverlay.tsx) | 不接收指针事件的拖放提示 portal |
 
 </details>
 
@@ -65,10 +65,10 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当附件面不够用时阅读以下页面。它们从本包填充的槽位进入拥有输入流程的会话外壳。
+如果附件界面本身还不够，请阅读以下页面。这些页面从本包填充的 slot 讲到负责输入流程的会话外壳。
 
-- [ui-conversation](../ui-conversation/README.zh.md)——声明附件槽位并拥有 composer 与图片摄入。
-- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册槽位。
+- [ui-conversation](../ui-conversation/README.zh.md)——声明附件 slot，并负责 composer 与图片接收。
+- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册 slot。
 - [客户端包映射](../README.zh.md)——相邻的浏览器 UI 包。
 
 -----
@@ -87,7 +87,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 <a id="known-limitations-and-deferred-work"></a>
 
 
-这些限制界定了当前附件表面。它们是包约束，不是通用图片查看器对比或任务积压。
+这些限制界定了当前附件功能范围。它们是包约束，不是通用图片查看器对比或任务积压。
 
 - **灯箱无缩放与下载**——预览仅以适配视口的尺寸渲染原图。
 - **灯箱不锁定焦点**——它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面。
@@ -102,4 +102,4 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。本包只贡献 effect 所有的 slot entry；slot 注册表负责其生命周期并校验声明。
+**运行时不变式：** 不发布伴生入口。本包只贡献由 effect 持有的 slot entry；slot 注册表负责其生命周期并校验声明。

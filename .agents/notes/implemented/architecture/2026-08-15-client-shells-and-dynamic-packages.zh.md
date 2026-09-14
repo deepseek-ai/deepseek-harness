@@ -51,7 +51,7 @@ Modules Node 半按以下顺序向实际返回的 HTML 注入启动协议：
 4. 赋值 `window.__DSH_BOOT__`，其中包含全部调度描述及每个 row 的单资源 HMR combo URL。
 5. 执行 Vite 主模块。
 
-Bootstrap combo 当前只登记 modules factory。启动内核把原始图与外壳 seed 传给 `__ModuleLoader__.create()`。Facade 移除 modules registration，用拒绝全部 external 的 `require` 函数将其物化，再调用其 `createClientModuleSystem` 导出。Modules bundle 解析图、构造 `ClientModuleSystem`、把自身 exports 缓存为 modules row、在模块闭包中保留该系统，并把同一 facade 切换到 live 模式。因此 modules client face 必须满足零 external 的自举要求。
+Bootstrap combo 当前只登记 modules factory。启动内核把原始图与外壳 seed 传给 `__ModuleLoader__.create()`。Facade 移除 modules registration，用拒绝全部 external 的 `require` 函数将其物化，再调用其 `createClientModuleSystem` 导出。Modules bundle 解析图、构造并返回 `ClientModuleSystem`、把自身 exports 缓存为 modules row，并把同一 facade 切换到 live 模式。内核把该实例装成自身 Loader 的 `internal`，modules 插件从这里读取并提供 `ctx.modules`。因此 modules client face 保持零 external 的自举要求，也没有模块级系统身份。
 
 `immediately` 层级完成 factory 注册后，内核创建全部 Loader entry，等待 Cordis 静止，并要求每个 fiber 都进入 ACTIVE。随后调用 `ctx.uiRenderer.mount(container)`。动态 `ui-renderer` 包拥有 React、slot 渲染、已有启动 DOM 的 hydrate 和 React root 生命周期；启动内核与失败页保持 React-free。
 

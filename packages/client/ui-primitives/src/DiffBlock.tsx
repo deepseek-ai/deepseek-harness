@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import clsx from 'clsx'
+import { structuredPatch } from 'diff'
 import { FoldToggle } from './FoldToggle.tsx'
 import { writeClipboard } from './clipboard.ts'
 import css from './DiffBlock.module.css'
@@ -14,9 +15,9 @@ export const DEFAULT_DIFF_MAX_LINES = 16
 export interface DiffHunk {
   /** The changed file's path, drawn verbatim as the hunk's header (the tool's model-facing path). */
   path: string
-  /** Prior content, or `null` for a new file / an overwrite (nothing on the removed side). */
+  /** Prior content including context, or `null` when no prior content is available. */
   oldText: string | null
-  /** Content after the change (the added side). */
+  /** Content after the change, including any shared context. */
   newText: string
 }
 
@@ -44,7 +45,7 @@ export interface DiffBlockLabels {
 
 /** A single rendered body line and its role, so the height cap slices a flat list. */
 interface DiffRow {
-  kind: 'path' | 'del' | 'add' | 'gap'
+  kind: 'path' | 'del' | 'add' | 'context' | 'gap'
   text: string
 }
 
@@ -59,34 +60,48 @@ const ROW_CLASS: Record<DiffRow['kind'], string | undefined> = {
   path: css.path,
   del: css.del,
   add: css.add,
+  context: css.context,
   gap: css.gap,
 }
 
+/** Bound synchronous edit-graph search; one replacement consumes two edits. */
+const MAX_DIFF_EDIT_LENGTH = 256
+
+/** Derive exact local patches or a whole-fragment replacement when search exceeds the limit. */
+function localHunks(diff: DiffHunk) {
+  const oldLines = contentLines(diff.oldText ?? '')
+  const newLines = contentLines(diff.newText)
+  const normalize = (lines: string[]): string => lines.map(line => `${line}\n`).join('')
+  return structuredPatch('', '', normalize(oldLines), normalize(newLines),
+    undefined, undefined, { context: 3, maxEditLength: MAX_DIFF_EDIT_LENGTH })?.hunks
+    ?? [{ lines: [...oldLines.map(line => `-${line}`), ...newLines.map(line => `+${line}`)] }]
+}
+
 /**
- * Total added/removed line counts across hunks — the same numbers the footer
- * prints, exported so a summary row can show them without rebuilding the body.
- * Every old-side line counts toward `removed` and every new-side line toward
- * `added`, under {@link contentLines}'s terminator rule.
+ * Count displayed additions and deletions. Exact patches exclude shared context;
+ * comparisons exceeding the edit limit count both complete fragments as replaced.
+ * Text follows {@link contentLines}'s terminator rule.
  * @param diffs - the hunks to count.
- * @returns the +/- totals.
+ * @returns the +/- totals for summaries and the card footer.
  */
 export function diffTotals(diffs: DiffHunk[]): { added: number; removed: number } {
   let added = 0
   let removed = 0
   for (const diff of diffs) {
-    if (diff.oldText !== null) removed += contentLines(diff.oldText).length
-    added += contentLines(diff.newText).length
+    for (const hunk of localHunks(diff)) {
+      for (const line of hunk.lines) {
+        if (line.startsWith('+')) added++
+        if (line.startsWith('-')) removed++
+      }
+    }
   }
   return { added, removed }
 }
 
 /**
- * Flatten the hunks into the body's rows plus the footer counts. A path header
- * opens each new file; a same-file second hunk (a scattered edit) opens with a
- * `⋯` gap instead of repeating the path. The +/- totals are
- * {@link diffTotals}'s. The file count is of DISTINCT paths, matching the TUI
- * diff card's footer, so two hunks in one file read as `1 file` on both front
- * ends.
+ * Flatten local patches into rows and count only added and removed lines.
+ * A path header opens each new file. A `⋯` gap separates consecutive same-file
+ * fragments and distant patches within a fragment. File counts use distinct paths.
  * @param diffs - the hunks to render.
  * @returns the body rows, the +/- totals, and the distinct-file count.
  */
@@ -99,16 +114,20 @@ function buildRows(diffs: DiffHunk[]): { rows: DiffRow[]; added: number; removed
     if (diff.path !== prevPath) rows.push({ kind: 'path', text: diff.path })
     else rows.push({ kind: 'gap', text: '⋯' })
     prevPath = diff.path
-    if (diff.oldText !== null) {
-      for (const line of contentLines(diff.oldText)) {
-        rows.push({ kind: 'del', text: line })
+    for (const [index, hunk] of localHunks(diff).entries()) {
+      if (index > 0) rows.push({ kind: 'gap', text: '⋯' })
+      for (const line of hunk.lines) {
+        const kind = line.startsWith('-') ? 'del' : line.startsWith('+') ? 'add' : 'context'
+        rows.push({ kind, text: line.slice(1) })
       }
     }
-    for (const line of contentLines(diff.newText)) {
-      rows.push({ kind: 'add', text: line })
-    }
   }
-  return { rows, ...diffTotals(diffs), files: paths.size }
+  return {
+    rows,
+    added: rows.filter(row => row.kind === 'add').length,
+    removed: rows.filter(row => row.kind === 'del').length,
+    files: paths.size,
+  }
 }
 
 /**
@@ -127,9 +146,8 @@ function contentLines(text: string): string[] {
 }
 
 /**
- * The diff text a reader copies: each row's `-`/`+`/path/gap prefix and its
- * content, exactly what the card shows. The removed and added blocks are the
- * change; the path headers keep a multi-file copy attributable.
+ * Copy the full local diff, including folded rows: removed/added lines have
+ * `- `/`+ ` prefixes, context has two spaces, and paths and gaps stay verbatim.
  * @param rows - the flattened body rows.
  * @returns the diff as plain text.
  */
@@ -138,6 +156,7 @@ function copyText(rows: DiffRow[]): string {
     switch (row.kind) {
       case 'del': return `- ${row.text}`
       case 'add': return `+ ${row.text}`
+      case 'context': return `  ${row.text}`
       case 'path': return row.text
       case 'gap': return row.text
       /* v8 ignore next -- closed-union backstop; only reached if a row kind is forged */

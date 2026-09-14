@@ -8,7 +8,7 @@ Source: [`packages/spill/spill/src/types.ts`](../../packages/spill/spill/src/typ
 
 ## The save request
 
-`saveText` is the sole service operation: persist `content` verbatim, return an opaque locator, a backend-supplied retrieval hint, and the exact byte count. The request carries the save-time storage namespace (`owner`), descriptive producer provenance (`source`, never access control), and a `suggestedName` the backend may use as a naming hint, not a path. Tool provenance identifies the actual tool call; session-reference provenance identifies the captured source session, while its owner is the target session receiving the context.
+`saveText` is the sole service operation: persist `content` verbatim, return an opaque locator, a backend-supplied retrieval hint, and the exact byte count. The request carries the save-time storage namespace (`owner`), descriptive producer details (`source`, never access control), and a `suggestedName` the backend may use as a naming hint, not a path. A tool source identifies the actual tool call; a session-reference source identifies the captured source session, while its owner is the target session receiving the context.
 
 ```ts type-equiv
 /** One request to persist text to a spill artifact. */
@@ -44,7 +44,7 @@ A retention-period cleanup may expire old locators with other old session artifa
 /**
  * Producer of a spilled artifact. Tool results carry their model-issued call id;
  * session references identify the captured source session instead. Descriptive
- * provenance only, never access control.
+ * source description only, never access control.
  */
 type SpillSource = {
   kind: 'tool'

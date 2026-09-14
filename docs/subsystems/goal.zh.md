@@ -69,6 +69,25 @@ interface GoalView extends GoalSnapshot {
 }
 ```
 
+服务还会在不改变持久状态的情况下发布进程本地 activation 边沿；客户端消费该事件获得实时状态。
+
+```ts type-equiv
+/** Live process-local activation update forwarded to UI clients. */
+interface GoalActivationChanged {
+  /** Session whose live goal activation changed. */
+  readonly sessionId: SessionId
+  /** Current exact activation, absent when no goal is current. */
+  readonly goal?: {
+    /** Exact current goal identity. */
+    readonly id: GoalId
+    /** Exact current goal revision. */
+    readonly revision: number
+    /** Current process-local continuation state. */
+    readonly activation: GoalActivation
+  }
+}
+```
+
 ## 持久变更
 
 每次变更都是持久的 `goal/change` 会话事件，其载荷要么是变更后的完整快照，要么是清除墓碑。严格折叠与持久投影只从这些事件派生生命周期状态；inbox 变更不会影响 goal 状态。
@@ -165,7 +184,7 @@ Goal service (`ctx.goals`) backed exclusively by the owning session log.
  * @returns a fresh view or `undefined` when no goal is current.
  * @throws {@link GoalError} when the agent is not the registry's live instance.
  */
-get(agent: Agent): GoalView | undefined
+@Remote('get') get(agent: Agent): GoalView | undefined
 
 /**
  * Remove process-local continuation authority without changing durable goal
@@ -252,6 +271,23 @@ Source: [`packages/goal/goal/src/index.ts`](../../packages/goal/goal/src/index.t
 <a id="goal-events"></a>
 
 ### `goal/*` events
+
+<a id="goalactivation-changed--emit"></a>
+
+#### `goal/activation-changed` — emit
+
+Process-local goal activation changed for one session.
+
+```ts cordis-catalog
+/**
+ * Process-local goal activation changed for one session.
+ * @mode emit
+ * @param payload - session id and the exact current goal activation, or no goal after a clear.
+ */
+'goal/activation-changed'(payload: GoalActivationChanged): void
+```
+
+Source: [`packages/goal/goal/src/types.ts`](../../packages/goal/goal/src/types.ts)
 
 <a id="goalchanged--emit"></a>
 

@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-Python 安装的 `dsh.exe` 控制台命令会在初始化 profile 前间歇性地以 Windows 访问冲突 `0xc0000005` 退出。其冒烟断言遗漏进程状态，只报告空标准流。[原生 faulthandler 探测](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34030851888) 将故障定位在运行时控制台入口调用的 Python 3.10 `os._execvpe`，而非打包的 Node 可执行文件。直接启动可执行文件的对照通过。
+Python 安装的 `dsh.exe` 控制台命令会在初始化 profile 前间歇性地以 Windows 访问冲突 `0xc0000005` 退出。其冒烟断言遗漏进程状态，只报告空标准流。原生 faulthandler 探测 (run 34030851888) 将故障定位在运行时控制台入口调用的 Python 3.10 `os._execvpe`，而非打包的 Node 可执行文件。直接启动可执行文件的对照通过。
 
 ## 决策
 
@@ -24,4 +24,4 @@ Python 安装的 `dsh.exe` 控制台命令会在初始化 profile 前间歇性�
 
 Windows 保留 Python 父进程直到运行时退出，不再依赖 CRT overlay 行为。标准同步子进程实现负责等待和中断清理。不添加自定义进程树管理器或全局主机设置。
 
-[运行时解析测试](../../../../python/sdk/tests/test_runtime_resolution.py) 保留 POSIX 转发验证，并覆盖 Windows 参数／环境转发、状态 0/37/513、真实子进程完成、Unicode 标准流和带空格的参数。宽退出状态由原生 Windows 验证，因为 POSIX 会将进程状态截断为八位。[原生固定次数对照](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34031142773) 中，启用编译缓存的四次修复后启动全部通过；该批次四次未修复对照也全部通过，因此它不是同批次复现。完整安装后 wheel CI 必须独立于本地分支级测试，验证最终产物。
+[运行时解析测试](../../../../python/sdk/tests/test_runtime_resolution.py) 保留 POSIX 转发验证，并覆盖 Windows 参数／环境转发、状态 0/37/513、真实子进程完成、Unicode 标准流和带空格的参数。宽退出状态由原生 Windows 验证，因为 POSIX 会将进程状态截断为八位。原生固定次数对照 (run 34031142773) 中，启用编译缓存的四次修复后启动全部通过；该批次四次未修复对照也全部通过，因此它不是同批次复现。完整安装后 wheel CI 必须独立于本地分支级测试，验证最终产物。

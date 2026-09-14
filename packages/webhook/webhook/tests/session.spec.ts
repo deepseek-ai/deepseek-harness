@@ -22,6 +22,7 @@ interface SessionHarness {
   readonly calls: string[]
   readonly messages: unknown[]
   readonly modelListeners: Map<string, unknown>
+  readonly agent: unknown
   markRequestHeader(): void
   readonly controller: AbortController
   readonly request: WebhookSessionRequest
@@ -116,16 +117,15 @@ function harness(options: HarnessOptions = {}): SessionHarness {
       },
     },
     agents: {
-      async create(createOptions: { setup?: (ctx: unknown) => Promise<void> }) {
+      async create(createOptions: { setup?: (ctx: unknown, agent: unknown) => Promise<void> }) {
         calls.push('agent-create')
         if (options.failAt === 'agent') throw new Error('agent failed')
         await createOptions.setup?.({
-          agent,
           on(event: string, listener: unknown) {
             modelListeners.set(event, listener)
             return () => {}
           },
-        })
+        }, agent)
         if (options.abortAt === 'agent') controller.abort(new Error('abort after agent'))
         return handle
       },
@@ -143,6 +143,7 @@ function harness(options: HarnessOptions = {}): SessionHarness {
     calls,
     messages,
     modelListeners,
+    agent,
     markRequestHeader() { requestHeader = {} },
     controller,
     request: {
@@ -184,10 +185,11 @@ function modelRequestListener(test: SessionHarness): (
   if (typeof listener !== 'function') {
     throw new Error('webhook Session did not install its initial model selection')
   }
-  return listener as (
+  const request = listener as (
     payload: unknown,
     next: () => Promise<LlmCallConfig>,
   ) => Promise<LlmCallConfig>
+  return (_payload, next) => request({ agent: test.agent }, next)
 }
 
 describe('webhook Session creation', () => {

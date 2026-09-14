@@ -1,0 +1,4 @@
+# Native commands are owned fixtures; desktop availability must be identical in headless CI.
+- id: session-controller
+  config:
+    nativeOpen: true

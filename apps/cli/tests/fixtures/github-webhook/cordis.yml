@@ -9,7 +9,7 @@
       name: './github-webhook-rule.mjs'
       config:
         source: github-real-e2e
-        repository: deepseek-harness/deepseek-harness
+        repository: deepseek-ai/deepseek-harness
         workspacePath: !!js process.env.DSH_GITHUB_E2E_WORKSPACE
         marker: !!js process.env.DSH_GITHUB_E2E_MARKER
         agentPreset: minimal

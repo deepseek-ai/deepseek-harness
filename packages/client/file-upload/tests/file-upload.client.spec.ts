@@ -252,17 +252,6 @@ describe('file upload service', () => {
     await fiber.dispose()
   })
 
-  it('leaves the fixture on its generated Remote fallback', async () => {
-    vi.stubGlobal('location', { origin: 'https://fixture.test', search: '?fixture' })
-    const ctx = new Context()
-    const fiber = ctx.plugin(FileUploadRuntime)
-    await fiber
-    expect(ctx.fileUpload.available).toBe(false)
-    await expect((ctx.fileUpload as FileUploadRuntime).post({ path: '/upload', body: new Blob() }))
-      .rejects.toThrow('background upload is unavailable in fixture mode')
-    await fiber.dispose()
-  })
-
   it('fails loud when a served browser has no Worker implementation', async () => {
     vi.stubGlobal('Worker', undefined)
     const ctx = new Context()
@@ -438,8 +427,7 @@ describe('Session-addressed file upload', () => {
     await fiber.dispose()
   })
 
-  it('uses the direct Remote fallback for exact bytes and fixture Blob bodies', async () => {
-    vi.stubGlobal('location', { origin: 'https://fixture.test', search: '?fixture' })
+  it('uses the direct Remote fallback for exact bytes', async () => {
     const remote = vi.fn(() => Promise.resolve({
       ok: true,
       value: {
@@ -450,7 +438,7 @@ describe('Session-addressed file upload', () => {
     const { fiber, service } = await scopedService({ remote })
     await expect(service.upload(SESSION_ID, Uint8Array.of(0, 0, 0), 'bytes.bin'))
       .resolves.toMatchObject({ ok: true })
-    await expect(service.upload(SESSION_ID, new Blob([Uint8Array.of(1)])))
+    await expect(service.upload(SESSION_ID, Uint8Array.of(1)))
       .resolves.toMatchObject({ ok: true })
     expect(remote.mock.calls).toEqual([
       [SESSION_ID, { data: 'AAAA', name: 'bytes.bin' }, undefined],
@@ -459,14 +447,7 @@ describe('Session-addressed file upload', () => {
     await fiber.dispose()
   })
 
-  it('rejects an unavailable stream and malformed background results', async () => {
-    vi.stubGlobal('location', { origin: 'https://fixture.test', search: '?fixture' })
-    const fixture = await scopedService()
-    const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.close() } })
-    await expect(fixture.service.upload(SESSION_ID, stream))
-      .rejects.toThrow('stream file upload requires a background carrier')
-    await fixture.fiber.dispose()
-
+  it('rejects malformed background results', async () => {
     vi.stubGlobal('location', { origin: 'https://preview.test' })
     ;(globalThis as UploadGlobal).__DSH_FILE_UPLOAD__ = {
       fetch: () => Promise.resolve(new Response(null, { status: 413 })),

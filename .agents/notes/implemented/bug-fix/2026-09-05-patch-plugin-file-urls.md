@@ -18,7 +18,7 @@ The optional `HostResolvedRootInclude` import override separately converts absol
 
 **Convert only the Python fixture with `Path.as_uri()`.** This avoids one failure but leaves user-authored profile and overlay patches exposed.
 
-**Change the shared Loader base.** This loses per-patch provenance and changes bare-package resolution. File URLs preserve the selected local file without changing the resolver base.
+**Change the shared Loader base.** This loses each patch's file source and changes bare-package resolution. File URLs preserve the selected local file without changing the resolver base.
 
 ## Consequences
 

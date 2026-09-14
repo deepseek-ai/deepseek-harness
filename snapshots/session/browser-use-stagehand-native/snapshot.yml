@@ -1,0 +1,10 @@
+version: 1
+scenario: browser-use-stagehand-native
+profile: headless
+composition: browser-use-stagehand-native
+recording: authored
+header:
+  class: browser-use-stagehand-native
+  pin: true
+replay:
+  override: true

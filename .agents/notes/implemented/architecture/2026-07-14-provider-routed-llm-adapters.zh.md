@@ -30,7 +30,7 @@ Status: implemented
 
 `dsh-llm-pi-ai` 接受一个非空的提供方配置列表。列表内的提供方名称必须唯一，并且存在于 pi-ai 的 `getProviders()` 结果中。每项配置包含提供方名称，以及可选的 `apiKey`、`baseURL`、headers、推理级别和预算、缓存保留设置、传输方式、SDK 超时、Harness 流空闲超时，以及由提供方拥有的 `retryPolicy`。适配器强制将 pi-ai 的 `maxRetries` 设为零，使一次 `stream()` 调用只发起一次可见的提供方请求；`dsh-llm-retry` 则在 agent 失败步骤扩展点上执行解析后的策略。凭据不设全局值：显式密钥仅对所属配置生效；未提供密钥时，pi-ai 使用标准环境变量、OAuth token、AWS 凭据链、Google ADC 或其他提供方原生环境认证。显式空密钥属于无效配置，不会回退到环境认证。
 
-插件通过一次全有或全无调用，将所有已配置的提供方名称注册到同一个 `PiAiAdapter`。请求按 provider 选择对应配置，并在 `getModels(provider)` 中查找模型以取得目录描述符。未知提供方会在插件加载时失败；未知模型会在网络 I/O 前以 `UNKNOWN_MODEL` 失败。适配器不会修改目录对象。当配置提供 `baseURL` 时，适配器复制选中的描述符，仅覆盖 `baseUrl`，使私有端点保留 pi-ai 的 API、能力、兼容标志、上下文限制与推理映射。私有端点必须实现所选提供方的协议，模型 ID 也仍须存在于已安装的 pi-ai 目录中。
+插件通过一次原子调用，将已配置的提供方名称注册到同一个 `PiAiAdapter`。每个不可变请求快照组合有效 profile 与可服务模型的描述符。目录外模型需要显式指定或可推断的协议与端点。根据[设置目录恢复决策](../bug-fix/2026-09-07-pi-ai-settings-catalog-recovery.zh.md)，已存储的目录错误保持可见、可修复，写入仍会校验已修改提供方，请求则在网络 I/O 前拒绝所选错误模型。
 
 适配器调用 pi-ai 的 `streamSimple()`，因此每个目录模型会选择其注册的 API 实现；描述符为 `openai-responses` 时使用 OpenAI Responses，而非 Chat Completions。Harness 的 temperature、最大 token 数、signal、session ID，以及提供方配置中的通用流选项均直接传递。配置 headers 与 Harness 强制归因 headers 合并；发生保留名称冲突时，以 Harness 归因为准。适配器不再维护 DeepSeek 专用 payload 重写或提供方协议矩阵。
 
@@ -54,7 +54,7 @@ pi-ai 回放状态用其成功 `AssistantMessage` 的带版本最小投影填充
 
 JSON-RPC 运行时显式接收提供方与模型。仅当 `deepseek` 提供方没有注册所有者时，其便利回退才会挂载 `dsh-llm-deepseek`；其他缺失的提供方会直接失败，不会猜测适配器。
 
-当前 v1 的 seed/load 验证会拒绝省略必需提供方／模型字段的请求头和助手消息。冻结的 v0-to-v1 迁移边要求迁移前已具备同一套可重建路由身份；它绝不会猜测缺失的提供方或模型，畸形结构会在发布前被拒绝。
+当前的 seed/load 验证会拒绝省略必需提供方／模型字段的请求头和助手消息。冻结的 v0-to-v1 迁移边要求迁移前已具备同一套可重建路由身份；它绝不会猜测缺失的提供方或模型，畸形结构会在发布前被拒绝。
 
 ## 考虑过的替代方案
 
@@ -78,7 +78,7 @@ JSON-RPC 运行时显式接收提供方与模型。仅当 `deepseek` 提供方�
 - pi-ai 凭据、传输选项、SDK 超时，以及默认五分钟的 `streamIdleTimeoutMs` 空闲超时机制均按提供方配置隔离。系统禁用隐藏的提供方重试；有界重试由单独组合的 agent 恢复策略负责。
 - pi-ai 的通用流 API 无法表达停止序列，因此 `dsh-llm-pi-ai` 会拒绝停止序列；原生 DeepSeek 适配器仍支持停止序列。
 - 仅当历史提供方与目标提供方归同一个适配器实例所有时，回放状态才可移植。适配器负责跨提供方和跨模型恢复；其他适配器只接收不含不透明状态的提供方无关历史。
-- 当前 v1 Session JSONL 要求请求头和助手消息都包含提供方／模型。v0 边只迁移已经携带可重建请求身份的冻结结构。
+- 当前 Session JSONL 要求请求头和助手消息都包含提供方／模型。v0 边只迁移已经携带可重建请求身份的冻结结构。
 
 ## 测试
 

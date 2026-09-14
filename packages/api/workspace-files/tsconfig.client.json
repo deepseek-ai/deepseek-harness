@@ -1,0 +1,27 @@
+{
+  "extends": "../../../tsconfig.base.client.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "lib/types",
+    "tsBuildInfoFile": "lib/tsconfig.client.tsbuildinfo"
+  },
+  "files": [
+    "src/client/index.ts",
+    "src/client/change-feed.ts",
+    "src/client/provider.ts",
+    "src/client/remote.ts",
+    "src/client/types.ts",
+    "src/types.ts"
+  ],
+  "references": [
+    { "path": "../../../vendor/cordis" },
+    { "path": "../gateway/tsconfig.client.json" },
+    { "path": "../../core/session" },
+    { "path": "../../client/resources" },
+    { "path": "../../client/ui-slots" },
+    { "path": "../../util/workspace-path" },
+    {
+      "path": "../../typert/protocol"
+    }
+  ]
+}

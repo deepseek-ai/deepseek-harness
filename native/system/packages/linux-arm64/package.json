@@ -1,0 +1,31 @@
+{
+  "name": "@deepseek-ai/node-addon-system-linux-arm64",
+  "version": "0.1.2",
+  "description": "Linux arm64 system binaries: static Landlock launcher and glibc/musl Node-API flock addons",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "native/system/packages/linux-arm64"
+  },
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "README.md",
+    "bin/",
+    "prebuilds.json"
+  ],
+  "scripts": {
+    "prepack": "node ../../scripts/verify-launcher-binary.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "BSD-3-Clause",
+  "publishConfig": {
+    "access": "public"
+  }
+}

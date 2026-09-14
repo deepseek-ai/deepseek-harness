@@ -86,7 +86,7 @@ describe('PluginInventoryGateway', () => {
       fiberPhase: null,
     })
 
-    await ctx.loader.remove(pendingId)
+    ctx.loader.remove(pendingId)
     expect((await inventory.list()).entries.some(entry => entry.entryId === pendingId)).toBe(false)
   })
 

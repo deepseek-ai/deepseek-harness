@@ -29,7 +29,7 @@ async function harness(withPlanMode: boolean): Promise<Bench> {
   await ctx.plugin(SessionProjectionRegistry)
   if (withPlanMode) await ctx.plugin(PlanModeController, { section: 'plan policy' })
   const session = ctx.sessions.create()
-  ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
+  await ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
   return {
     ctx,
     session,

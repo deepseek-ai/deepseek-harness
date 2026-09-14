@@ -15,6 +15,9 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 const TRUNCATED_MESSAGE = '<response clipped><NOTE>To save on context only part of this file has been shown to you. You should retry this tool after you have searched inside the file with `grep -n` in order to find the line numbers of what you are looking for.</NOTE>'
 const LOST_PREFIX_MESSAGE = '<response clipped><NOTE>The beginning of this command output was dropped by the terminal scrollback limit. The following text is the earliest retained output.</NOTE>\n'
 const SHELL_RESET_MESSAGE = 'The persistent bash shell was reset; the next bash call starts from the workspace with a fresh current directory and environment.'
+// Status trailer for a command that never reported an exit code; settled
+// commands append `[Command finished with exit code N]` instead (see renderCaptured).
+const TIMEOUT_STATUS_MARKER = '[Command timed out or OOM]'
 const TIMEOUT_CODE = 'PERSISTENT_BASH_TIMEOUT'
 // One page is enough to find a just-emitted completion marker; the full
 // scrollback is assembled only when a command settles or needs partial output.
@@ -82,7 +85,7 @@ function wrapCommand(command: string, marker: CommandMarkers): string {
 }
 
 function trimTrailingNewline(text: string): string {
-  return text.replace(/\r?\n$/, '')
+  return text.replace(/(?:\r?\n)+$/, '')
 }
 
 function commandOutput(
@@ -162,8 +165,8 @@ function renderCaptured(output: CapturedOutput, maxOutputChars: number): string 
   const withPrefix = output.incomplete && output.text.length > 0
     ? LOST_PREFIX_MESSAGE + rendered
     : rendered
-  const marker = output.exitCode !== undefined && output.exitCode !== 0
-    ? `[exit code: ${output.exitCode}]`
+  const marker = output.exitCode !== undefined
+    ? `[Command finished with exit code ${output.exitCode}]`
     : undefined
   return appendStatusMarker(withPrefix, marker)
 }
@@ -345,7 +348,7 @@ async function executeCommand(
       return [
         // TODO: Report a timeout only; this signal does not establish an OOM.
         `Your command timed out after ${Math.round(timedOut.timeoutMs / 1000)} seconds or experienced an OOM error. Below is partial output:`,
-        partial,
+        appendStatusMarker(partial, TIMEOUT_STATUS_MARKER),
         SHELL_RESET_MESSAGE,
       ].join('\n')
     }

@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-`terminal/` 组为 agent 提供持久且限定所有者范围的终端会话：shell 与 REPL 状态——cwd、导出的变量、激活的环境、正在运行的交互式子进程——都能跨工具调用存活。三个包共同覆盖整个家族：`terminal/` 提供限定所有者范围的 `ctx.terminals` 会话服务（会话获得不透明 id，每个操作都限制在所属 agent 内）；`terminal-bash/` 在共享沙箱策略下启动交互式 bash 或 pwsh shell；`tool-terminal/` 提供 6 个结果有界的面向模型工具。终端是单次 bash 与文件系统工具的补充：仅在需要交互式 stdin 或跨调用状态时使用。会话只存在于进程本地，harness 重启后不会恢复。
+`terminal/` 家族让 agent（智能体）的交互式 shell 和 REPL 会话跨工具调用持续存在，包括工作目录、环境变量和运行中的子进程。使用 `terminal/` 管理所有者隔离的会话，使用 `terminal-bash/` 启动受沙箱约束的交互式 bash 或 pwsh 会话，使用 `tool-terminal/` 获得 6 个结果有界的面向模型终端操作。任务需要交互式输入或需要保留单次 bash 命令无法保存的状态时，选择这个家族。会话仅存在于一个 harness 进程中，重启后不会恢复。
 
 ## 目录
 

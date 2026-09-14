@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop-host",
   "description": "Private upstream-Node host process for the Electron desktop application",
-  "version": "0.1.3-alpha.2",
+  "version": "0.1.5-rc.2",
   "private": true,
   "license": "MIT",
   "type": "module",

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-checkpoint-policy` is a zero-config plugin that makes a persisted session durable at the moments that matter: before a model request reaches the adapter, before a top-level tool body can produce an external side effect, and at each step boundary so the preceding response and tool results are stored before the next request. Load it beside one persistence backend, and a crash after any checkpoint resumes with the recorded work — a request, a tool call, or a completed step — instead of losing it. The policy adds no prompt, tool schema, or configuration; checkpoint failures are fail-closed, so neither the adapter nor a top-level tool body runs when the durable write cannot be confirmed. Live Assistant frames are transient until one `assistant/message` or `assistant/attempt` settlement commits the compact stream, and a persisted call without a result records an unknown outcome rather than retrying automatically.
+Use this package with a session persistence backend to make work durable before a model request, before a top-level tool can cause external effects, and before the next agent step begins. After each checkpoint, work can resume after a crash from stored requests, tool calls, responses, and results without loss. Checkpoint failures are fail-closed: a model adapter or top-level tool body does not run until the durable write succeeds. The package has no configuration and adds no prompt or tool schema; unfinished Assistant streams remain transient, and interrupted tool calls recover with an unknown outcome instead of an automatic retry.
 
 ## Table of Contents
 

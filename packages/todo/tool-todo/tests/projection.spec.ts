@@ -37,7 +37,7 @@ async function harness(withTodoTool: boolean): Promise<Bench> {
   await ctx.plugin(SessionProjectionRegistry)
   if (withTodoTool) await ctx.plugin(ToolTodo, { allowParallelInProgress: true })
   const session = ctx.sessions.create()
-  ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
+  await ctx.agents.register({ id: session.id, session, status: 'idle', ctx } as Agent)
   return {
     ctx,
     session,

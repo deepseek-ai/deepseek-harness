@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-workflow` runs a plain-JavaScript orchestration script and gives the caller a live run whose result resolves with the script's final JSON value. The script can fan out subagents with `agent()`, combine independent work with `parallel()` and `pipeline()`, and narrate progress with `phase()` and `log()`; agents normally drive this through the `workflow` tool from `dsh-tool-workflow`. A run is holder-owned: its result never rejects, cancellation and disposal are bounded, and every child is attributed to the invoking agent. The package ships no execution engine — `dsh-workflow-worker-thread` is the current one — so a different isolation strategy can replace it without changing what callers or the model see.
+Run a plain-JavaScript orchestration script that fans work out to subagents and returns the script's final JSON value. Scripts can use `agent()`, `parallel()`, `pipeline()`, `phase()`, and `log()`; models normally access them through the `workflow` tool. Each run belongs to its caller, attributes every child to the invoking agent, resolves failures and cancellation without rejecting its result, and awaits script and child cleanup during disposal. The caller must supply an execution engine, allowing the isolation strategy to change without altering visible behavior.
 
 ## Table of Contents
 
@@ -50,7 +50,7 @@ When the script settles, the run's result resolves with the returned value, the 
 
 Plugin consumers can start a run directly: `ctx.workflowEngine.start({ script, meta, args?, parent, signal? })`. `parent` attributes every child to the invoking agent; `signal` cancels the run when aborted. `start()` validates the meta block and parses the script before a run exists, so a malformed request fails immediately with a violation list.
 
-A returned run exposes `id`, `meta`, `result`, `cancel(reason?)`, and `dispose()`. The result never rejects: a script failure resolves with `stopReason: 'error'`, cancellation with `'cancelled'`. The caller owns the run — call `dispose()` on every path; it cancels remaining work and waits for script and children to settle within a bounded grace.
+A returned run exposes `id`, `meta`, `result`, `cancel(reason?)`, and `dispose()`. The result never rejects: a script failure resolves with `stopReason: 'error'`, cancellation with `'cancelled'`. The caller owns the run — call `dispose()` on every path; it cancels remaining work and waits for script and child cleanup under the providers' lifecycle contracts.
 
 ### Failures and recovery
 
@@ -68,7 +68,7 @@ This section explains how the capability is split and where the contracts live; 
 
 ### Design concept
 
-The package separates the script, run, result, and event contracts from execution: any engine can implement `ctx.workflowEngine` behind the same vocabulary, and one engine serves a context at a time — loading a second engine fails loud, so swapping engines means changing which engine plugin the composition loads. The `workflow/*` events are observe-only: payloads carry run identity snapshots, never the live run, so listeners cannot acquire cancellation or disposal authority.
+The package separates the script, run, result, and event contracts from execution: any engine can implement `ctx.workflowEngine` behind the same vocabulary, and one engine serves a context at a time — loading a second engine fails loudly, so swapping engines means changing which engine plugin the composition loads. The `workflow/*` events are observe-only: payloads carry run identity snapshots, never the live run, so listeners cannot acquire cancellation or disposal authority.
 
 ### Source map
 
@@ -81,7 +81,7 @@ The package separates the script, run, result, and event contracts from executio
 
 ### Lifecycle and ownership
 
-A run is holder-owned: engine-plugin unload prevents new starts but does not revoke accepted runs, and the caller must dispose every run it starts. `dispose()` cancels if needed and awaits script and child quiescence within the engine's documented bound, so a consumer awaiting `result` is never wedged past a cancellation.
+A run is holder-owned: engine-plugin unload prevents new starts but does not revoke accepted runs, and the caller must dispose every run it starts. `dispose()` cancels if needed and awaits script and child cleanup. The PTC engine aborts its managed process immediately; child disposal still follows each subagent provider's lifecycle contract.
 
 `workflow/start` and `workflow/end` pair the run; `workflow/phase` and `workflow/log` carry script narration; `workflow/agent-start` and `workflow/agent-end` pair each child call by `seq`. Every listener is independently contained: a throwing listener is logged without starving peers or changing execution, and each receives its own payload clone.
 
@@ -103,7 +103,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [Workflow subsystem](../../../docs/subsystems/workflow.md) — the full type vocabulary, start request, and event payloads.
 - [Group map](../README.md) — the workflow capability family and its packages.
 - [workflow tool](../tool-workflow/README.md) — the model-facing consumer that owns the call schema and result envelope.
-- [Worker-thread engine](../workflow-worker-thread/README.md) — the current execution engine and its isolation boundary.
+- [PTC workflow engine](../workflow-ptc/README.md) — the current execution engine and its isolation boundary.
 - [Dynamic workflows Agent Note](../../../.agents/notes/implemented/feature/2026-07-05-dynamic-workflows.md) — the seam design and its decisions.
 
 -----
@@ -138,6 +138,6 @@ These limits define what the capability does not yet support. They are current c
 
 This Dev Note is working context for maintainers: open directions that are not decided. It is explicitly non-authoritative — shipped behavior, limits, and accepted rationale live in the sections above, the package code, and the linked Agent Notes.
 
-Deferred directions: a background start/poll API with spill handles and detached collection; saved and nested workflows; a token-budget vocabulary across children; and the seam's promise that a future process or sandbox engine can replace the worker-thread engine without changing the model-facing surface.
+Deferred directions: a background start/poll API with spill handles and detached collection; saved and nested workflows; and a token-budget vocabulary across children.
 
 </details>

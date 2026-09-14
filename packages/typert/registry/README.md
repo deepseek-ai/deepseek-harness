@@ -45,7 +45,7 @@ Generated artifacts register through the [loader](../loader/README.md) in Loader
 
 ### Lookup and Context providers
 
-Remote calls resolve Host objects and scoped Contexts through `ctx.typert.lookups` and `ctx.typert.contexts`. `registerHost()` installs one bidirectional Host Context adapter and its wire declaration, while `configureHost()` replaces only its resolver. `registerClient()` installs the bidirectional Client adapter for the same merge-declared kind. `identifyHost(ctx)` asks the Host adapters for the single kind and identity represented by a live Context and rejects ambiguous recognition.
+Remote calls resolve Host objects and scoped Contexts through `ctx.typert.lookups` and `ctx.typert.contexts`. `registerHost()` installs the Host wire declaration and its wire-to-Context resolver, while `configureHost()` replaces only that resolver. `registerClient()` installs the bidirectional Client adapter for the same merge-declared kind. Host-to-Client event sources carry their domain identity explicitly instead of projecting it back from a Context.
 
 -----
 

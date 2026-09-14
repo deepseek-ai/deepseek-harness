@@ -4,7 +4,7 @@
  * shared subprocess/client launcher ({@link launchAcpTestAgent}), the scripted
  * scenario harness ({@link runScenario}), the pure expected-output normalizers
  * ({@link normalizeStdout} / {@link normalizeSessionLog} /
- * {@link scrubRequestHeaders} / {@link scrubSystemPrompts}), and the suite
+ * {@link scrubModelRequestBulk} / {@link scrubSystemPrompts}), and the suite
  * factory ({@link defineAcpSnapshotSuite}) that registers a scenario table as a
  * full describe/it tree. Transport-neutral normalizers and fixture invariants
  * remain reusable by other profile adapters. Ordinary ACP e2e tests can use the launcher directly;
@@ -39,12 +39,12 @@ export {
 } from './launcher.ts'
 export {
   extractSnapshotSpillPaths,
-  normalizeSessionFormatProvenance,
+  normalizeSessionFormatMetadata,
   normalizeSessionLog,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,
   normalizeStdout,
-  scrubRequestHeaders,
+  scrubModelRequestBulk,
   scrubSessionSnapshot,
   scrubSystemPrompts,
   scrubToolSchemas,
@@ -82,6 +82,7 @@ export {
   sessionFixtureName,
   sessionFixtureNames,
   sessionHeaderVersion,
+  writerSnapshotName,
   type PersistedSessionFile,
   type SessionFixtureFile,
 } from './session-files.ts'
@@ -94,11 +95,13 @@ export {
   normalizedHeaders,
   normalizedSystemPrompts,
   normalizedToolSchemas,
+  parseSystemPromptSnapshot,
   parseToolSchemasSnapshot,
   refreshFixtureReplacements,
   restorePinnedToolSchemas,
   stabilizeFixtureMessageIds,
   stabilizeRefreshLog,
+  systemPromptPrecedesRequests,
   type Scenario,
   type SnapshotSuiteOptions,
 } from './suite.ts'

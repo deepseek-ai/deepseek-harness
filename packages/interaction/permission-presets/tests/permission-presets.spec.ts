@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SessionStore, {
+  Session,
+  SessionId,
+} from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import type { SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import type { ApprovalPolicy } from '@deepseek-ai/dsh-user-approval'
 import PermissionPresetService, {
-  CUSTOM_PRESET, PERMISSION_SETTINGS_NAMESPACE,
+  AUTO_PRESET, CUSTOM_PRESET, PERMISSION_SETTINGS_NAMESPACE,
 } from '@deepseek-ai/dsh-permission-presets'
 import type { Config } from '@deepseek-ai/dsh-permission-presets'
 import { SettingsProvider } from '@deepseek-ai/dsh-settings'
@@ -48,6 +51,12 @@ async function mounted(options: {
 
 function freshSession(id: string): Session {
   return Session.create(SessionId(id))
+}
+
+async function mountAuto(ctx: Context, admit: () => void = () => {}) {
+  return ctx.plugin(Object.assign((pluginCtx: Context) => {
+    pluginCtx.permissionPresets.registerAuto(admit)
+  }, { inject: ['permissionPresets'] }))
 }
 
 async function mountedStore(options: { approvalDefault?: ApprovalPolicy | undefined } = {}): Promise<Context> {
@@ -104,6 +113,87 @@ describe('PermissionPresetService', () => {
     expect(ctx.permissionPresets.names).toEqual(['workspace-write', 'danger-full-access'])
     expect(ctx.permissionPresets.resolve('danger-full-access')).toMatchObject({ sandbox: 'danger-full-access', approval: 'never' })
     expect(() => ctx.permissionPresets.resolve('plan')).toThrow(/unknown preset "plan"/)
+  })
+
+  it('publishes an effect-scoped current-session preset and removes it on unload', async () => {
+    const ctx = await mounted()
+    const fiber = await mountAuto(ctx)
+    expect(ctx.permissionPresets.names).toEqual(['workspace-write', 'danger-full-access', AUTO_PRESET])
+    expect(ctx.permissionPresets.resolve(AUTO_PRESET)).toEqual({
+      sandbox: 'danger-full-access', approval: 'never',
+    })
+    expect(ctx.permissionPresets.optionOf(AUTO_PRESET)).toEqual({
+      value: AUTO_PRESET,
+      name: AUTO_PRESET,
+    })
+
+    await fiber.dispose()
+    expect(ctx.permissionPresets.names).toEqual(['workspace-write', 'danger-full-access'])
+    expect(() => ctx.permissionPresets.resolve(AUTO_PRESET)).toThrow(/unknown preset "auto"/)
+  })
+
+  it('rejects a duplicate Auto integration', async () => {
+    const ctx = await mounted()
+    ctx.permissionPresets.registerAuto(() => {})
+    expect(() => ctx.permissionPresets.registerAuto(() => {}))
+      .toThrow(/already registered/)
+  })
+
+  it('runs Auto admission before any write, including a no-op selection', async () => {
+    const ctx = await mounted()
+    let admissions = 0
+    await mountAuto(ctx, () => { admissions += 1 })
+    const session = freshSession('sess-auto-admit')
+
+    ctx.permissionPresets.set(session, AUTO_PRESET)
+    expect(admissions).toBe(1)
+    expect(session.snapshotEvents().map(event => [event.type, event.data])).toEqual([
+      ['permission/preset', { preset: AUTO_PRESET }],
+      ['sandbox/mode', { mode: 'danger-full-access' }],
+      ['approval/policy', { policy: 'never' }],
+    ])
+    expect(ctx.permissionPresets.current(session)).toBe(AUTO_PRESET)
+
+    ctx.permissionPresets.set(session, AUTO_PRESET)
+    expect(admissions).toBe(2)
+    expect(session.snapshotEvents()).toHaveLength(3)
+  })
+
+  it('leaves the session untouched when dynamic admission rejects a selection', async () => {
+    const ctx = await mounted()
+    await mountAuto(ctx, () => {
+      throw new Error('auto review is closing')
+    })
+    const session = freshSession('sess-auto-closed')
+    expect(() => {
+      ctx.permissionPresets.set(session, AUTO_PRESET)
+    }).toThrow(/closing/)
+    expect(session.snapshotEvents()).toEqual([])
+  })
+
+  it('records shared-bundle Auto and Full access switches by preset identity only', async () => {
+    const config = { presets: {
+      'read-only': { sandbox: 'read-only', approval: 'ask' },
+      'workspace-write': { sandbox: 'workspace-write', approval: 'ask' },
+      'danger-full-access': { sandbox: 'danger-full-access', approval: 'never' },
+    } } satisfies Config
+    const ctx = await mounted({ config })
+    await mountAuto(ctx)
+    const session = freshSession('shared-bundle-switch')
+    ctx.permissionPresets.set(session, AUTO_PRESET)
+    const baselineLength = session.snapshotEvents().length
+
+    ctx.permissionPresets.set(session, 'danger-full-access')
+    expect(session.snapshotEvents().slice(baselineLength).map(event => [event.type, event.data])).toEqual([
+      ['permission/preset', { preset: 'danger-full-access' }],
+    ])
+    expect(ctx.permissionPresets.current(session)).toBe('danger-full-access')
+
+    ctx.permissionPresets.set(session, AUTO_PRESET)
+    expect(session.snapshotEvents().slice(baselineLength + 1).map(event => [event.type, event.data])).toEqual([
+      ['permission/preset', { preset: AUTO_PRESET }],
+    ])
+    expect(ctx.permissionPresets.current(session)).toBe(AUTO_PRESET)
   })
 
   it('current() derives from the effective knobs: composition defaults hit workspace-write, a switch hits its preset', async () => {
@@ -199,6 +289,11 @@ describe('PermissionPresetService', () => {
       .rejects.toThrow(/reserved for the derived not-a-preset state/)
   })
 
+  it('reserves auto for an integration contribution instead of configured defaults', async () => {
+    await expect(mounted({ config: { presets: { auto: { sandbox: 'danger-full-access', approval: 'never' } } } }))
+      .rejects.toThrow(/"auto" is reserved/)
+  })
+
   it('requires an explicit default when composition defaults match no preset', async () => {
     await expect(mounted({ approvalDefault: 'never' }))
       .rejects.toThrow(/configure defaultPreset explicitly/)
@@ -214,6 +309,34 @@ describe('PermissionPresetService', () => {
 })
 
 describe('new-session default', () => {
+  it('rejects persisted Auto before publication when its integration is absent', async () => {
+    const ctx = await mounted()
+    const source = freshSession('auto-source')
+    source.append('permission/preset', { preset: AUTO_PRESET })
+    source.append('sandbox/mode', { mode: 'danger-full-access' })
+    source.append('approval/policy', { policy: 'never' })
+
+    const id = SessionId('auto-without-integration')
+    expect(() => ctx.sessions.create(id, { seed: source.snapshotEvents() })).toThrow(/cannot restore preset "auto"/)
+    expect(ctx.sessions.get(id)).toBeUndefined()
+    expect(source.snapshotEvents().at(-1)).toMatchObject({ type: 'approval/policy' })
+  })
+
+  it('admits persisted Auto through the live integration without rewriting it', async () => {
+    const ctx = await mounted()
+    let admissions = 0
+    await mountAuto(ctx, () => { admissions += 1 })
+    const source = freshSession('auto-source-present')
+    source.append('permission/preset', { preset: AUTO_PRESET })
+    source.append('sandbox/mode', { mode: 'danger-full-access' })
+    source.append('approval/policy', { policy: 'never' })
+
+    const resumed = ctx.sessions.create(SessionId('auto-with-integration'), { seed: source.snapshotEvents() })
+    expect(admissions).toBe(1)
+    expect(ctx.permissionPresets.current(resumed)).toBe(AUTO_PRESET)
+    expect(resumed.snapshotEvents().filter(event => event.type === 'permission/preset')).toHaveLength(1)
+  })
+
   it('pins the current setting into each new session without changing earlier sessions', async () => {
     const ctx = await mountedStore()
     const first = ctx.sessions.create(SessionId('first'))
@@ -340,8 +463,9 @@ describe('new-session default', () => {
 
   it('rejects a stored default outside the configured preset table', async () => {
     const ctx = await mountedStore()
+    await mountAuto(ctx)
     await expect(ctx.settings.update(PERMISSION_SETTINGS_NAMESPACE, {
-      defaultPreset: 'missing',
+      defaultPreset: AUTO_PRESET,
     })).rejects.toThrow()
     expect(ctx.permissionPresets.defaultPreset).toBe('workspace-write')
   })

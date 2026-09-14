@@ -1,0 +1,8 @@
+- img
+- text: Inactive Goal guard rapid clear clicks
+- button "Resume goal":
+  - img
+- button "Edit goal":
+  - img
+- button "Clear goal":
+  - img

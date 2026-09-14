@@ -358,6 +358,23 @@ describe('AclSandbox init', () => {
 })
 
 describe('AclSandbox spawn', () => {
+  it('refuses control with piped stdio before starting a restricted process', async () => {
+    const sandbox = new AclSandbox({ writableDirs: [], tempDir: null, mode: 'read-only' })
+    await sandbox.init()
+    expect(() => sandbox.spawn({ command: 'probe.exe', controlFileDescriptor: 7 })).toThrow('control pipe requires inherited stdio')
+    sandbox.dispose()
+  })
+
+  it('forwards the inherited control pipe to the restricted child', async () => {
+    const { api } = state.stubs as HappyStubs
+    Object.assign(api, { uvGetOsfhandle: vi.fn(() => 107n), getFileType: vi.fn(() => 3) })
+    const sandbox = new AclSandbox({ writableDirs: [], tempDir: null, mode: 'read-only' })
+    await sandbox.init()
+    const child = sandbox.spawn({ command: 'probe.exe', stdio: 'inherit', controlFileDescriptor: 7 })
+    await expect(child.wait()).resolves.toEqual({ stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), exitCode: 42 })
+    sandbox.dispose()
+  })
+
   it('refuses to spawn before init', () => {
     const workspace = scratch()
     const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-11', mode: 'workspace-write' })

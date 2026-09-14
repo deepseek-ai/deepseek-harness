@@ -6,7 +6,6 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it } from 'vitest'
 import { TestRemote } from '../src/remote.ts'
-import { scriptedSettingsRemote } from '../src/settings-remote.ts'
 
 describe('TestRemote', () => {
   it('delivers a forwarded event to its subscribers and stops after disposal', async () => {
@@ -58,41 +57,5 @@ describe('TestRemote', () => {
     expect(() => new TestRemote(ctx, { $mount: {} })).toThrow('would shadow')
     expect(() => new TestRemote(ctx, { subscriptions: {} })).toThrow('would shadow')
     await ctx.fiber.dispose()
-  })
-})
-
-describe('scriptedSettingsRemote', () => {
-  it('serves, writes, and replaces its scripted namespace list', async () => {
-    const first = { ns: 'first', revision: 1 }
-    const second = { ns: 'second', revision: 2 }
-    const remote = scriptedSettingsRemote([first])
-
-    await expect(remote.settings.describe()).resolves.toEqual({
-      ok: true,
-      value: { writable: true, hasDocument: false, namespaces: [first] },
-    })
-    await expect(remote.settings.update('first', {}, undefined)).resolves.toEqual({ ok: true, value: first })
-    await expect(remote.settings.replace('missing', {}, undefined)).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'settings/rejected', details: { ns: 'missing' } },
-    })
-    await expect(remote.settings.mutate('first', [], undefined)).resolves.toEqual({ ok: true, value: first })
-    expect(remote.update).toHaveBeenCalledWith('first', {}, undefined)
-    expect(remote.replace).toHaveBeenCalledWith('missing', {}, undefined)
-    expect(remote.mutate).toHaveBeenCalledWith('first', [], undefined)
-
-    remote.publish([second])
-    await expect(remote.settings.describe()).resolves.toEqual({
-      ok: true,
-      value: { writable: true, hasDocument: false, namespaces: [second] },
-    })
-  })
-
-  it('reports explicit deployment facts', async () => {
-    const remote = scriptedSettingsRemote([], { writable: false, hasDocument: true })
-    await expect(remote.settings.describe()).resolves.toEqual({
-      ok: true,
-      value: { writable: false, hasDocument: true, namespaces: [] },
-    })
   })
 })

@@ -14,7 +14,7 @@ Status: implemented
 
 Alpha v0-to-v1 迁移边拥有冻结且完整的已发布 v0 事件与 payload 清单。它在目标 staging 前拒绝每个未知历史事件类型，包括标记了 `ignorable: true` 的事件；除明确分类为 owner 不透明 JSON 的字段外，它也拒绝已知 payload 的意外成员。可合并扩展的嵌套判别字段同样属于这项显式策略：未知 content-block type、message-source kind、assistant finish-reason kind 与 turn-ending reason kind 会作为 owner 不透明 JSON 保留，已知分支则接受结构校验。诊断会点名事件类型、序号和保持不变的源 generation。
 
-该规则只适用于跨越历史格式迁移边。普通当前格式读取保留既有信封行为：未知必需事件被拒绝，带 `ignorable: true` 的未知事件仍可读取。因此新的 v1 外部事件继续使用既有同版本扩展 seam，但不会自动获得未来格式迁移能力。
+该规则只适用于跨越历史格式迁移边。普通当前格式读取保留既有信封行为：未知必需事件被拒绝，带 `ignorable: true` 的未知事件仍可读取。因此原生当前格式的外部事件继续使用既有同版本扩展 seam，但不会自动获得未来格式迁移能力。
 
 每个第一方源事件类型都在迁移边包中拥有可执行 disposition 与目标 validator。catalog 在构建时静态确定且与 profile 无关，因此 producer 插件是否挂载不会改变旧产物能否迁移。
 

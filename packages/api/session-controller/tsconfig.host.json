@@ -17,6 +17,7 @@
     "src/file-references.ts",
     "src/history.ts",
     "src/list.ts",
+    "src/media-references.ts",
     "src/model-selection-projection.ts",
     "src/skill-catalog.ts"
   ],
@@ -30,8 +31,10 @@
     { "path": "../../context/file-reference" },
     { "path": "../../attachment/attachment" },
     { "path": "../../client/file-upload/tsconfig.host.json" },
+    { "path": "../../client/connection/tsconfig.host.json" },
     { "path": "../../interaction/permission-presets" },
     { "path": "../../jobs/jobs" },
+    { "path": "../../fs/fs" },
     { "path": "../../llm/llm" },
     { "path": "../../util/deque" },
     { "path": "../../util/native-command" },

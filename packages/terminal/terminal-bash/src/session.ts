@@ -42,8 +42,22 @@ function utf8Tail(text: string, maxBytes: number): { text: string; truncated: bo
   return { text: chars.slice(start).join(''), truncated: true }
 }
 
+// Bound pending string fragments independently of deployment retention limits.
+const COALESCED_CHUNK_UNITS = 4096
+
+interface TextChunk {
+  text: string
+  start: number
+  next: TextChunk | undefined
+}
+
+/** Retention work is amortized over appended text; reads assemble the retained chunks. */
 class BoundedTextBuffer {
-  private value = ''
+  private head: TextChunk | undefined
+  private tail: TextChunk | undefined
+  private bytes = 0
+  private newlines = 0
+  private lastCodeUnit = 0
   private dropped = false
 
   constructor(
@@ -51,31 +65,94 @@ class BoundedTextBuffer {
     private readonly maxLines?: number,
   ) {}
 
+  get truncated(): boolean {
+    return this.dropped
+  }
+
+  get isEmpty(): boolean {
+    return this.head === undefined
+  }
+
   append(text: string): void {
     if (text.length === 0) return
-    this.value += text
-    if (this.maxLines !== undefined) {
-      const lines = this.value.split('\n')
-      if (lines.length > this.maxLines) {
-        this.value = lines.slice(lines.length - this.maxLines).join('\n')
-        this.dropped = true
-      }
+    // Sanitized text can be a slice retaining discarded controls; copy UTF-16 without replacing lone surrogates.
+    text = Buffer.from(text, 'utf16le').toString('utf16le')
+    this.bytes += Buffer.byteLength(text)
+    const tail = this.tail
+    if (tail !== undefined) {
+      const last = this.lastCodeUnit
+      const first = text.charCodeAt(0)
+      // Concatenation can turn two three-byte lone surrogates into one four-byte code point.
+      if (last >= 0xd800 && last <= 0xdbff && first >= 0xdc00 && first <= 0xdfff) this.bytes -= 2
     }
-    const tail = utf8Tail(this.value, this.maxBytes)
-    this.value = tail.text
-    this.dropped ||= tail.truncated
+    for (let index = text.indexOf('\n'); index !== -1; index = text.indexOf('\n', index + 1)) {
+      this.newlines += 1
+    }
+    this.lastCodeUnit = text.charCodeAt(text.length - 1)
+    // The head never grows, so eviction never rescans a growing string.
+    if (tail !== undefined && tail !== this.head && tail.text.length + text.length <= COALESCED_CHUNK_UNITS) {
+      tail.text += text
+    } else {
+      if (tail !== undefined && tail.text.length <= COALESCED_CHUNK_UNITS) {
+        // Copy coalesced fragments into one string; large tails already own their storage.
+        tail.text = Buffer.from(tail.text, 'utf16le').toString('utf16le')
+      }
+      const chunk: TextChunk = { text, start: 0, next: undefined }
+      if (tail === undefined) this.head = chunk
+      else tail.next = chunk
+      this.tail = chunk
+    }
+
+    while (this.head !== undefined
+      && (this.bytes > this.maxBytes || (this.maxLines !== undefined && this.newlines >= this.maxLines))) {
+      const head = this.head
+      const first = head.text.charCodeAt(head.start)
+      const second = head.start + 1 < head.text.length
+        ? head.text.charCodeAt(head.start + 1)
+        : head.next?.text.charCodeAt(0)
+      const paired = first >= 0xd800 && first <= 0xdbff
+        && second !== undefined && second >= 0xdc00 && second <= 0xdfff
+      this.bytes -= paired ? 4 : first < 0x80 ? 1 : first < 0x800 ? 2 : 3
+      if (first === 10) this.newlines -= 1
+      this.advance(paired ? 2 : 1)
+      this.dropped = true
+    }
+    const head = this.head
+    if (head !== undefined && head.start >= head.text.length / 2) {
+      // Copy UTF-16 verbatim so a small suffix cannot retain an oversized input's backing store.
+      // Copying only after discarding at least half keeps this work amortized over discarded text.
+      head.text = Buffer.from(head.text.slice(head.start), 'utf16le').toString('utf16le')
+      head.start = 0
+    }
+  }
+
+  private advance(units: number): void {
+    while (units > 0 && this.head !== undefined) {
+      const head = this.head
+      const count = Math.min(units, head.text.length - head.start)
+      head.start += count
+      units -= count
+      if (head.start === head.text.length) this.head = head.next
+    }
+    if (this.head === undefined) this.tail = undefined
   }
 
   consume(): TerminalSendRead {
-    const delta = this.value
-    const truncated = this.dropped
-    this.value = ''
+    const { text: delta, truncated } = this.snapshot()
+    this.head = undefined
+    this.tail = undefined
+    this.bytes = 0
+    this.newlines = 0
     this.dropped = false
     return { delta, truncated }
   }
 
   snapshot(): { text: string; truncated: boolean } {
-    return { text: this.value, truncated: this.dropped }
+    const chunks: string[] = []
+    for (let chunk = this.head; chunk !== undefined; chunk = chunk.next) {
+      chunks.push(chunk.text.slice(chunk.start))
+    }
+    return { text: chunks.join(''), truncated: this.dropped }
   }
 }
 
@@ -495,7 +572,7 @@ export class LocalPtySession implements TerminalBackendSession {
         return
       }
       const elapsed = Date.now() - operation.startedAt
-      const startupHasOutput = !this.initializing || this.scrollback.snapshot().text.length > 0
+      const startupHasOutput = !this.initializing || !this.scrollback.isEmpty
       const acceptsStdinWait = startupHasOutput && foreground !== undefined
         && operation.acceptsStdinWait(foreground.processGroupId, foreground.inputWaiting)
       if (elapsed >= this.config.exactProbeAfterMs && acceptsStdinWait) {
@@ -620,7 +697,7 @@ export class LocalPtySession implements TerminalBackendSession {
   private settleActive(waitReason: TerminalWaitReason, retainOwnership = false): void {
     const operation = this.active
     if (operation === undefined) return
-    const scrollbackTruncated = this.scrollback.snapshot().truncated
+    const scrollbackTruncated = this.scrollback.truncated
     if (retainOwnership) {
       this.stopPolling()
       this.activeAbort?.()

@@ -1,14 +1,164 @@
 from __future__ import annotations
 
+import json
 import runpy
 import subprocess
+import urllib.request
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+from deepseek_harness import RunResult
 
 
 ROOT = Path(__file__).resolve().parents[3]
 SMOKE = runpy.run_path(ROOT / "scripts" / "smoke-python-runtime.py")
+
+
+def live_result(**overrides: object) -> RunResult:
+    values = {
+        "session_id": "installed-wheel-live-api",
+        "final_response": SMOKE["LIVE_API_SENTINEL"],
+        "finish_reason": "completed",
+        "events": [{"type": "tool/call", "data": {"name": "unrelated_tool"}}],
+        "notifications": [],
+    }
+    values.update(overrides)
+    return RunResult(**values)
+
+
+@pytest.fixture
+def live_smoke(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    import deepseek_harness
+
+    state = SimpleNamespace(
+        prompts=[], session_ids=[], challenges=[], checked_logs=[], closed=False,
+        create_bytes=SMOKE["LIVE_API_SENTINEL"].encode("utf-8"),
+        create_result=live_result(), verify_result=live_result(), receipt_mode="copy",
+    )
+    globals_ = SMOKE["smoke_sdk_live"].__globals__
+    token_hex = globals_["secrets"].token_hex
+
+    def fresh_challenge(size: int) -> str:
+        assert len(state.prompts) == 1
+        value = token_hex(size)
+        state.challenges.append(value)
+        return value
+
+    class ScriptedHarness:
+        def __init__(self, **kwargs: object) -> None:
+            state.root = Path(kwargs["cwd"])
+            assert "toolChoice" not in kwargs
+
+        def __enter__(self) -> ScriptedHarness:
+            return self
+
+        def __exit__(self, *args: object) -> None:
+            state.closed = True
+
+        def run(self, prompt: str, *, session_id: str) -> RunResult:
+            state.prompts.append(prompt)
+            state.session_ids.append(session_id)
+            if len(state.prompts) == 1:
+                state.marker = Path(prompt.splitlines()[-1])
+                assert state.marker.parent == state.root
+                if state.create_bytes is not None:
+                    state.marker.write_bytes(state.create_bytes)
+                return state.create_result
+
+            assert len(state.prompts) == 2
+            assert len(state.challenges) == 1
+            challenge = state.challenges[0]
+            assert all(challenge not in sent for sent in state.prompts)
+            assert str(state.marker) not in prompt
+            assert "previous turn" in prompt and "changed externally" in prompt
+            assert state.marker.read_bytes() == challenge.encode("ascii")
+            receipt = Path(prompt.splitlines()[-1])
+            assert receipt != state.marker and not receipt.exists()
+            if state.receipt_mode == "copy":
+                receipt.write_bytes(state.marker.read_bytes())
+            elif state.receipt_mode == "stale":
+                receipt.write_bytes(state.create_bytes)
+            elif state.receipt_mode == "wrong":
+                receipt.write_bytes(b"wrong")
+            elif state.receipt_mode == "newline":
+                receipt.write_bytes(state.marker.read_bytes() + b"\n")
+            elif state.receipt_mode == "changed-source":
+                receipt.write_bytes(state.marker.read_bytes())
+                state.marker.write_bytes(b"changed")
+            elif state.receipt_mode != "missing":
+                raise AssertionError(state.receipt_mode)
+            return state.verify_result
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "unit-test-key")
+    monkeypatch.setenv("DEEPSEEK_BASE_URL", "https://api.invalid")
+    monkeypatch.setattr(deepseek_harness, "DeepSeekHarness", ScriptedHarness)
+    monkeypatch.setattr(globals_["secrets"], "token_hex", fresh_challenge)
+    monkeypatch.setitem(globals_, "assert_zstd_session_log", state.checked_logs.append)
+    return state
+
+
+def test_live_smoke_requires_fresh_external_content(live_smoke: SimpleNamespace) -> None:
+    SMOKE["smoke_sdk_live"]()
+    assert len(live_smoke.prompts) == 2
+    assert live_smoke.session_ids == ["installed-wheel-live-api"] * 2
+    assert len(live_smoke.checked_logs) == 1
+    assert live_smoke.closed and not live_smoke.root.exists()
+
+
+@pytest.mark.parametrize("label", ["create", "verify"])
+@pytest.mark.parametrize(("overrides", "message"), [
+    ({"finish_reason": "error"}, "turn ended with 'error'"),
+    ({"finish_reason": "error", "events": [{
+        "type": "turn/end", "data": {"turn": 1, "reason": {
+            "kind": "error", "error": {"code": "AUTH", "status": 401},
+        }},
+    }]}, "turn ended with.*AUTH.*401"),
+    ({"events": []}, "turn made no model-requested tool call"),
+    ({"final_response": "PYTHON_SDK_LIVE_OK extra"}, "turn returned"),
+])
+def test_live_smoke_rejects_invalid_turn_before_continuing(
+    live_smoke: SimpleNamespace, label: str, overrides: dict[str, object], message: str,
+) -> None:
+    setattr(live_smoke, f"{label}_result", live_result(**overrides))
+    with pytest.raises(AssertionError, match=f"{label} {message}"):
+        SMOKE["smoke_sdk_live"]()
+    assert len(live_smoke.prompts) == (1 if label == "create" else 2)
+    assert not live_smoke.checked_logs
+    assert live_smoke.closed
+    if label == "create":
+        assert not live_smoke.challenges
+
+
+@pytest.mark.parametrize("content", [None, b"wrong", b"PYTHON_SDK_LIVE_OK\n"])
+def test_live_smoke_rejects_bad_create_before_host_overwrite(
+    live_smoke: SimpleNamespace, content: bytes | None,
+) -> None:
+    live_smoke.create_bytes = content
+    with pytest.raises(AssertionError, match="create turn (did not create|wrote unexpected bytes)"):
+        SMOKE["smoke_sdk_live"]()
+    assert len(live_smoke.prompts) == 1
+    assert not live_smoke.challenges and not live_smoke.checked_logs
+    assert live_smoke.closed
+
+
+@pytest.mark.parametrize(("mode", "message"), [
+    ("missing", "did not create receipt"),
+    ("stale", "wrote unexpected bytes to receipt"),
+    ("wrong", "wrote unexpected bytes to receipt"),
+    ("newline", "wrote unexpected bytes to receipt"),
+    ("changed-source", "changed source file"),
+])
+def test_live_smoke_rejects_unrelated_tool_without_exact_receipt(
+    live_smoke: SimpleNamespace, mode: str, message: str,
+) -> None:
+    live_smoke.receipt_mode = mode
+    with pytest.raises(AssertionError, match=f"verify turn {message}"):
+        SMOKE["smoke_sdk_live"]()
+    assert len(live_smoke.prompts) == 2
+    assert not live_smoke.checked_logs
+    assert live_smoke.closed
 
 
 @pytest.mark.parametrize(
@@ -21,60 +171,98 @@ SMOKE = runpy.run_path(ROOT / "scripts" / "smoke-python-runtime.py")
 def test_child_prompt_precedes_runtime_context(prompt_name: str, expected: str) -> None:
     chunks = SMOKE["completion_chunks"]({
         "messages": [
-            {"role": "user", "content": SMOKE[prompt_name]},
-            {"role": "user", "content": "Current runtime context"},
+            {"role": "user", "content": [
+                {"type": "text", "text": SMOKE[prompt_name]},
+                {"type": "text", "text": "Current runtime context"},
+            ]},
         ],
     })
 
     assert any(
-        choice.get("delta", {}).get("content") == expected
+        chunk.get("delta", {}).get("text") == expected
         for chunk in chunks
-        for choice in chunk.get("choices", [])
     )
 
 
 def test_mcp_smoke_requests_the_discovered_tool() -> None:
     chunks = SMOKE["completion_chunks"]({
-        "messages": [{"role": "user", "content": SMOKE["MCP_PROMPT"]}],
-        "tools": [{"type": "function", "function": {"name": "mcp__fixture__add"}}],
+        "messages": [{"role": "user", "content": [{"type": "text", "text": SMOKE["MCP_PROMPT"]}]}],
+        "tools": [{"name": "mcp__fixture__add", "input_schema": {"type": "object"}}],
     })
 
     calls = [
-        call
+        chunk["content_block"]
         for chunk in chunks
-        for choice in chunk.get("choices", [])
-        for call in choice.get("delta", {}).get("tool_calls", [])
+        if chunk.get("type") == "content_block_start"
     ]
-    assert calls[0]["function"] == {
-        "name": "mcp__fixture__add",
-        "arguments": '{"a": 19, "b": 23}',
-    }
+    assert calls == [{"type": "tool_use", "id": "mcp-add", "name": "mcp__fixture__add", "input": {}}]
+    arguments = next(chunk["delta"]["partial_json"] for chunk in chunks if chunk.get("type") == "content_block_delta")
+    assert json.loads(arguments) == {"a": 19, "b": 23}
 
 
 def test_mcp_smoke_accepts_the_external_server_result() -> None:
     chunks = SMOKE["completion_chunks"]({
         "messages": [
-            {"role": "user", "content": SMOKE["MCP_PROMPT"]},
+            {"role": "user", "content": [{"type": "text", "text": SMOKE["MCP_PROMPT"]}]},
             {
                 "role": "assistant",
-                "tool_calls": [{
-                    "id": "mcp-add",
-                    "type": "function",
-                    "function": {"name": "mcp__fixture__add", "arguments": '{}'},
+                "content": [{
+                    "type": "tool_use", "id": "mcp-add", "name": "mcp__fixture__add", "input": {},
                 }],
             },
-            {"role": "tool", "tool_call_id": "mcp-add", "content": "42"},
+            {"role": "user", "content": [
+                {"type": "tool_result", "tool_use_id": "mcp-add", "content": [{"type": "text", "text": "42"}]},
+            ]},
         ],
     })
 
     assert any(
-        choice.get("delta", {}).get("content") == SMOKE["MCP_TEXT"]
+        chunk.get("delta", {}).get("text") == SMOKE["MCP_TEXT"]
         for chunk in chunks
-        for choice in chunk.get("choices", [])
     )
 
 
-def test_snapshot_comparison_normalizes_only_session_generation_provenance() -> None:
+def test_mock_model_serves_native_messages_events() -> None:
+    with SMOKE["MockModel"]() as model:
+        body = {"model": "smoke-model", "stream": True, "messages": [{
+            "role": "user", "content": [{"type": "text", "text": "hello"}],
+        }]}
+        request = urllib.request.Request(
+            model.url + "/v1/messages", data=json.dumps(body).encode(),
+            headers={"content-type": "application/json"},
+        )
+        with urllib.request.urlopen(request) as response:
+            stream = response.read().decode()
+        frames = [frame.splitlines() for frame in stream.strip().split("\n\n")]
+        events = [json.loads(frame[1].removeprefix("data: ")) for frame in frames]
+        assert all(frame[0] == f"event: {event['type']}" for frame, event in zip(frames, events))
+        assert events[0]["type"] == "message_start"
+        assert events[-1] == {"type": "message_stop"}
+        assert next(event["delta"]["text"] for event in events if event["type"] == "content_block_delta") == SMOKE["EXPECTED_TEXT"]
+
+
+def test_advanced_snapshot_normalizes_catalog_child_creation_time() -> None:
+    value = {
+        "type": "subagent/catalog",
+        "data": {
+            "childCreatedAt": 1788246207176,
+        },
+    }
+
+    assert SMOKE["normalize_snapshot_value"](value, []) == {
+        "type": "subagent/catalog",
+        "data": {
+            "childCreatedAt": 0,
+        },
+    }
+
+    assert SMOKE["normalize_snapshot_value"](
+        {"type": "fixture/event", "data": {"childCreatedAt": 1788246207176}},
+        [],
+    ) == {"type": "fixture/event", "data": {"childCreatedAt": 1788246207176}}
+
+
+def test_snapshot_comparison_preserves_opaque_generation_qualifiers() -> None:
     normalize = SMOKE["normalize_session_format_comparison"]
     expected = {
         "header": {"type": "session", "version": 0, "otherVersion": 7},
@@ -103,8 +291,24 @@ def test_snapshot_comparison_normalizes_only_session_generation_provenance() -> 
         },
     }
 
-    assert normalize(expected) == normalize(actual)
+    assert normalize(expected) != normalize(actual)
+    assert normalize(expected)["header"] == normalize(actual)["header"]
     assert normalize(expected)["header"]["otherVersion"] == 7
+    assert normalize(actual)["accepted"] == actual["accepted"]
+    assert normalize(actual)["source"] == actual["source"]
+
+
+def test_snapshot_value_scrubs_system_nodes_without_erasing_header_fields() -> None:
+    normalize = SMOKE["normalize_snapshot_value"]
+    system = {
+        "type": "system/message",
+        "data": {"message": {"role": "system", "content": [{"type": "text", "text": "prompt"}]}},
+    }
+    header = {"type": "request/header", "data": {"header": {"system": "unexpected"}}}
+    assert normalize(system, [])["data"]["message"]["content"] == [{"type": "text", "text": "{{system}}"}]
+    assert normalize(header, []) == header
+    empty = {"type": "system/message", "data": {"message": {"role": "system", "content": []}}}
+    assert normalize(empty, []) == empty
 
 
 def test_snapshot_value_normalizes_embedded_assistant_stream_timing() -> None:
@@ -254,6 +458,74 @@ def test_snapshot_generation_names_select_highest_role_without_double_counting(
         0: "session.v1.jsonl",
         1: "session.1.jsonl",
     }
+
+
+def test_snapshot_comparison_accepts_v3_output_against_v2_without_rewriting(tmp_path: Path) -> None:
+    predecessor = '{"type":"session","version":2}\n'
+    successor = '{"type":"session","version":3}\n'
+    old_path = tmp_path / "session.v2.jsonl"
+    old_path.write_text(predecessor, encoding="utf-8")
+    files = {"session.v3.jsonl": successor}
+
+    SMOKE["compare_snapshot_files"](files, False, tmp_path, ("session.v2.jsonl",))
+    assert old_path.read_text(encoding="utf-8") == predecessor
+    assert not (tmp_path / "session.v3.jsonl").exists()
+
+    SMOKE["compare_snapshot_files"](files, True, tmp_path, ("session.v2.jsonl",))
+    assert old_path.read_text(encoding="utf-8") == predecessor
+    assert (tmp_path / "session.v3.jsonl").read_text(encoding="utf-8") == successor
+    assert SMOKE["selected_snapshot_session_files"](tmp_path) == {0: tmp_path / "session.v3.jsonl"}
+
+
+@pytest.mark.parametrize("filenames", [
+    ("session.1.v2.jsonl", "session.v2.jsonl"),
+    ("session.v2.jsonl",),
+    ("session.v2.jsonl", "session.2.v2.jsonl"),
+])
+def test_snapshot_builder_checks_role_order_and_count_across_generations(
+    tmp_path: Path, filenames: tuple[str, ...],
+) -> None:
+    files = {"session.v3.jsonl": "", "session.1.v3.jsonl": ""}
+    with pytest.raises(AssertionError, match="snapshot builder produced"):
+        SMOKE["compare_snapshot_files"](files, False, tmp_path, filenames)
+
+
+def test_snapshot_generation_comparison_rejects_changed_payload(tmp_path: Path) -> None:
+    (tmp_path / "session.v2.jsonl").write_text(
+        '{"type":"session","version":2,"id":"expected"}\n', encoding="utf-8",
+    )
+    with pytest.raises(AssertionError, match="executable snapshot mismatch"):
+        SMOKE["compare_snapshot_files"](
+            {"session.v3.jsonl": '{"type":"session","version":3,"id":"changed"}\n'},
+            False, tmp_path, ("session.v2.jsonl",),
+        )
+
+
+@pytest.mark.parametrize("version", [2, 4])
+@pytest.mark.parametrize("update", [False, True])
+def test_snapshot_comparison_rejects_noncurrent_writer(
+    tmp_path: Path, version: int, update: bool,
+) -> None:
+    golden = '{"type":"session","version":2}\n'
+    (tmp_path / "session.v2.jsonl").write_text(golden, encoding="utf-8")
+    content = json.dumps({"type": "session", "version": version}) + "\n"
+    with pytest.raises(AssertionError, match="expected current Session format v3"):
+        SMOKE["compare_snapshot_files"](
+            {f"session.v{version}.jsonl": content}, update, tmp_path, ("session.v2.jsonl",),
+        )
+    assert (tmp_path / "session.v2.jsonl").read_text(encoding="utf-8") == golden
+    assert not (tmp_path / "session.v4.jsonl").exists()
+
+
+@pytest.mark.parametrize("version", [2, 3, 4])
+def test_persisted_session_requires_current_writer(version: int) -> None:
+    content = json.dumps({"type": "session", "version": version}) + "\n"
+    path = Path(f"session.v{version}.jsonl")
+    if version == 3:
+        assert SMOKE["assert_persisted_session_version"](path, content) == version
+    else:
+        with pytest.raises(AssertionError, match="expected current Session format v3"):
+            SMOKE["assert_persisted_session_version"](path, content)
 
 
 def test_snapshot_generation_filename_must_match_header(tmp_path: Path) -> None:

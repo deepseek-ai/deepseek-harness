@@ -1,39 +1,25 @@
-.sessionLogButton {
+/* The right Sidebar's 28px round header icon button: a 28px circle around a
+   15px glyph, level with the header's corner controls. */
+.moreButton {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  height: 26px;
-  padding: 5px 10px;
-  gap: 5px;
-  border: 0.5px solid var(--dsw-alias-border-l4);
-  border-radius: 13px;
-  color: var(--dsw-alias-label-primary);
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--dsw-alias-label-secondary);
   background: transparent;
-  font-family: var(--dsw-font-family);
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 16px;
+  border: none;
+  border-radius: 28px;
   cursor: pointer;
 }
 
-.sessionLogButton:hover:not(:disabled) {
+.moreButton svg {
+  width: 15px;
+  height: 15px;
+}
+
+.moreButton:hover {
   background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.sessionLogButton:disabled {
-  color: var(--dsw-alias-label-dimmed);
-  cursor: wait;
-}
-
-.sessionLogButton span,
-.sessionLogButton svg {
-  flex: none;
-}
-
-.sessionLogButton svg {
-  color: var(--dsw-alias-label-secondary);
-}
-
-.sessionLogButton span {
-  white-space: nowrap;
 }

@@ -6,10 +6,9 @@
  * A route key is not required to name an installed pi-ai provider. When it does,
  * that provider's endpoint, protocol, display name, and model catalog are the
  * profile's defaults and the profile overrides them field by field; when it does
- * not, the profile is the whole provider declaration. Resolution therefore ends
- * in a built pi-ai `Provider` per route: everything a request needs is decided
- * once, while the configuration key that made a route unserviceable can still be
- * named in the failure.
+ * not, the profile is the whole provider declaration. Stored reads retain
+ * catalog diagnostics beside serviceable models; writes validate every changed
+ * provider before persistence. Self-contained profile constraints apply to both.
  *
  * @module dsh-llm-pi-ai/config
  */
@@ -21,11 +20,13 @@ import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { resolveRetryPolicy, RetryPolicySchema } from '@deepseek-ai/dsh-llm'
 import type { ResolvedRetryPolicy, RetryPolicyConfig } from '@deepseek-ai/dsh-llm'
+import { deepEqualJson } from '@deepseek-ai/dsh-util-values'
 import {
   CACHE_CONTROL_FORMATS,
   CHAT_TEMPLATE_VARS,
   MAX_TOKENS_FIELDS,
   MODALITIES,
+  PiAiCatalogError,
   resolveRouteModels,
   SUPPORTED_THINKING_FORMATS,
   THINKING_LEVELS,
@@ -37,6 +38,7 @@ import type {
   PiAiModelOverride,
   PiAiModelProfile,
   PiAiReasoningEfforts,
+  RouteCatalog,
 } from './catalog.ts'
 import { buildProvider, supportedProtocols } from './provider.ts'
 
@@ -199,12 +201,14 @@ export interface ResolvedPiAiProviderProfile
   /** Immutable retry policy captured with this provider route. */
   retryPolicy: ResolvedRetryPolicy
   /**
-   * The pi-ai provider this route registers, built from the resolved models.
-   * Construction happens here so an unserviceable protocol or an underspecified
-   * model fails with the rest of resolution, leaving the last good route set
-   * serving requests.
+   * The pi-ai provider containing this route's serviceable models. Absent when
+   * a stored route cannot be constructed; its configuration remains editable.
    */
-  piProvider: Provider
+  piProvider?: Provider
+  /** First model diagnostic, or the route failure when no model diagnostic is available. */
+  catalogError?: string
+  /** Per-model failures reported before attempting a request. */
+  modelErrors: ReadonlyMap<string, string>
   /**
    * Per-request output caps this profile explicitly configured, by model id.
    * The seam materializes one only into a request that names no cap of its
@@ -346,19 +350,17 @@ export const Config: z<Config> = z.object({
 })
 
 /**
- * Reject a section this adapter could not serve. Registered as the settings
- * namespace's validator, so an unserviceable profile is refused where it is
- * *written* — `settings.mutate` answers `settings-rejected` with the offending
- * route and model named — instead of being stored and then quietly disabling
- * every route in the namespace. It stays a validator rather than a schema
- * transform because the schema is also the shape a configuration surface
- * renders and the value an absent section resolves to; wrapping it would break
- * both.
+ * Reject new or changed provider profiles that cannot be served. Unchanged
+ * stored profiles may need repair after a catalog upgrade and do not block
+ * edits to another provider. Removed profiles require no catalog validation.
  * @param config - the resolved section to check.
+ * @param previous - current resolved section; omission checks every provider.
  * @throws Error naming the route and configuration entry that cannot be served.
  */
-export function assertServiceable(config: Config): void {
-  resolveProfiles(config.providers)
+export function assertServiceable(config: Config, previous?: Config): void {
+  const changed = Object.fromEntries(Object.entries(config.providers ?? {}).filter(([provider, profile]) =>
+    !deepEqualJson(profile, previous?.providers?.[provider])))
+  resolveProfiles(changed)
 }
 
 /** Reject removed pre-release profile fields and name their replacements. */
@@ -394,15 +396,16 @@ function assertValidHeaders(provider: string, headers: Readonly<Record<string, s
 }
 
 /**
- * Validate profiles and return a detached route-keyed map suitable for
- * per-request reads. This is the one explicit resolve step, so an omitted dict
- * resolves to the empty (dormant) route set here rather than through a hidden
- * fallback, and each route's models and pi-ai provider are materialized once.
+ * Resolve scalar defaults and materialize each route's serviceable models.
+ * Deferred catalog validation retains diagnostics without deleting configured
+ * routes. An omitted dict resolves to the empty, dormant route set.
  * @param providers - configured provider profiles keyed by route.
+ * @param validation - writes require a complete catalog; stored reads retain catalog diagnostics.
  * @returns validated profiles in configuration order.
  */
 export function resolveProfiles(
   providers: Readonly<Record<string, PiAiProviderProfile>> | undefined,
+  validation: 'strict' | 'deferred' = 'strict',
 ): Map<string, ResolvedPiAiProviderProfile> {
   if (Array.isArray(providers)) {
     throw new Error('llm-pi-ai: providers is now a dict keyed by provider route, not an array of profiles')
@@ -452,17 +455,34 @@ export function resolveProfiles(
     // always shown route keys, and a catalog route must not silently rename
     // itself on every configuration surface just because it gained a profile.
     const displayName = source.displayName ?? provider
-    const catalog = resolveRouteModels({
-      provider,
-      ...source.api === undefined ? {} : { api: source.api },
-      ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
-      ...source.models === undefined ? {} : { models: source.models },
-      ...source.modelOverrides === undefined ? {} : { modelOverrides: source.modelOverrides },
-      ...source.compat === undefined ? {} : { compat: source.compat },
-      defaultInput,
-      defaultContextWindow: source.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
-      defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
-    })
+    let catalog: RouteCatalog | undefined
+    let piProvider: Provider | undefined
+    let catalogError: string | undefined
+    try {
+      catalog = resolveRouteModels({
+        provider,
+        ...source.api === undefined ? {} : { api: source.api },
+        ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
+        ...source.models === undefined ? {} : { models: source.models },
+        ...source.modelOverrides === undefined ? {} : { modelOverrides: source.modelOverrides },
+        ...source.compat === undefined ? {} : { compat: source.compat },
+        defaultInput,
+        defaultContextWindow: source.defaultContextWindow ?? DEFAULT_CONTEXT_WINDOW,
+        defaultMaxTokens: source.defaultMaxTokens ?? DEFAULT_MAX_TOKENS,
+      }, validation)
+      catalogError = catalog.modelErrors.values().next().value
+      piProvider = buildProvider({
+        provider,
+        displayName,
+        ...source.api === undefined ? {} : { api: source.api },
+        ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
+        models: catalog.models,
+        namesCredential: source.apiKeyEnv !== undefined,
+      })
+    } catch (error) {
+      if (validation === 'strict' || !(error instanceof PiAiCatalogError)) throw error
+      catalogError ??= error.message
+    }
     const { apiKeyEnv, retryPolicy, models: _models, displayName: _displayName, ...rest } = source
     resolved.set(provider, {
       ...rest,
@@ -476,15 +496,10 @@ export function resolveProfiles(
       retryPolicy: resolveRetryPolicy(retryPolicy, `llm-pi-ai: provider "${provider}" retryPolicy`),
       ...rest.headers === undefined ? {} : { headers: { ...rest.headers } },
       ...rest.thinkingBudgets === undefined ? {} : { thinkingBudgets: { ...rest.thinkingBudgets } },
-      configuredMaxTokens: catalog.configuredMaxTokens,
-      piProvider: buildProvider({
-        provider,
-        displayName,
-        ...source.api === undefined ? {} : { api: source.api },
-        ...source.baseURL === undefined ? {} : { baseURL: source.baseURL },
-        models: catalog.models,
-        namesCredential: apiKeyEnv !== undefined,
-      }),
+      configuredMaxTokens: catalog?.configuredMaxTokens ?? new Map(),
+      modelErrors: catalog?.modelErrors ?? new Map(),
+      ...piProvider === undefined ? {} : { piProvider },
+      ...catalogError === undefined ? {} : { catalogError },
     })
   }
   return resolved

@@ -21,11 +21,7 @@ describe('ui-user-questions node plugin', () => {
 
     await ctx.plugin({ apply }).await()
 
-    // Selecting the Web question FEATURE must not hand every agent the tool.
-    // `ctx.tools.register` on an unscoped host context files into the global
-    // layer, which merges into every agent's view regardless of the preset
-    // that composed it — so a two-tool benchmark preset would really present
-    // three. The `tool-ask-user` row belongs to the presets that want it.
+    // Host UI registration must leave each preset's model-facing tool list intact.
     expect(ctx.tools.get('ask_user_question')).toBeUndefined()
   })
 })

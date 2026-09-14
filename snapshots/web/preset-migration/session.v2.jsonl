@@ -1,0 +1,8 @@
+{"type":"session","version":2,"id":"{{session:1}}","createdAt":1,"cwd":"{{cwd}}","isSeeded":false,"delegationDepth":0,"agentPreset":"code"}
+{"type":"agent-preset/selected","data":{"agentPreset":"code"}}
+{"type":"agent-preset/selected","data":{"agentPreset":"standard"}}
+{"type":"agent-preset/selected","data":{"agentPreset":"code"}}
+{"type":"session/end-seed","data":{}}
+{"type":"turn/start","data":{"turn":1}}
+{"type":"feedback/record","data":{"text":"Keep code as literal feedback."}}
+{"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}

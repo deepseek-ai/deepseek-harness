@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-output-retention` 限制工具返回给模型的上下文量：调用方把项或文本分片送入 retainer，然后取回保留的内容与精确的省略元数据。`ItemRetainer` 以头部预算限制有序逻辑单元列表（路径、匹配项、来源）；`TextRetainer` 以 head、tail 或 head+tail 窗口限制面向字节的文本流，并在每个切割处保持 UTF-8 边界有效。标准化的省略子句与通知格式化器让工具获得一致的「结果已达上限」页脚，而恢复指引由工具自己提供。该库只回答「保留了什么、省略了什么」这个机制问题——分组、行号、spill 文件与提供方错误状态都留在工具侧。它是轻依赖库，由工具包直接导入；`cordis.yml` 无法加载它。
+使用 `dsh-output-retention` 限制工具返回给模型的项或文本量，并报告省略了什么。`ItemRetainer` 保留有序的头部窗口，并可报告精确的省略项数；`TextRetainer` 保留 head、tail 或 head-and-tail 字节窗口，且不会返回因切割而无效的 UTF-8。`formatRetentionNotice` 添加一致的省略子句，各工具则提供自己的恢复指引。分组、行号、spill 文件与提供方错误仍归工具负责；消费方直接导入本库，而不通过 `cordis.yml` 加载。
 
 ## 目录
 
@@ -105,7 +105,7 @@ const footer = formatRetentionNotice(
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `ItemRetainer`、`TextRetainer`、`describeOmitted` 与 `formatRetentionNotice` |
-| — | 不发布运行时不变式伴生入口；保留运算由单元测试覆盖。 |
+| — | 不发布运行时不变式伴生入口；这个纯工具不拥有事件流或可变运行时数据；其值代数由单元测试保证。 |
 
 ### 两个 retainer，两种资源模型
 

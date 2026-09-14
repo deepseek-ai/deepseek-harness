@@ -38,16 +38,29 @@ function bench() {
 afterEach(cleanup)
 
 describe('Session export Header action', () => {
-  it('renders the 111×32 text capsule and downloads through the shared controller', async () => {
+  it('opens the more-actions menu and downloads through the shared controller', async () => {
     const b = bench()
-    const button = b.view.getByRole('button', { name: 'Session log' })
+    const button = b.view.getByRole('button', { name: 'More actions' })
     expect(button.querySelector('svg')).not.toBeNull()
+    expect(button.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(button)
+    expect(button.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(b.view.getByRole('menuitem', { name: 'Download session log' }))
     await waitFor(() => { expect(b.request).toHaveBeenCalledWith(SID) })
+    expect(b.view.queryByRole('menuitem', { name: 'Download session log' })).toBeNull()
     expect(await b.view.findByRole('dialog', { name: 'Session download started' })).toBeTruthy()
   })
 
-  it('disables the capsule while either entry path downloads this Session', async () => {
+  it('closes the menu on Escape without downloading', () => {
+    const b = bench()
+    fireEvent.click(b.view.getByRole('button', { name: 'More actions' }))
+    expect(b.view.getByRole('menuitem', { name: 'Download session log' })).toBeTruthy()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(b.view.queryByRole('menuitem', { name: 'Download session log' })).toBeNull()
+    expect(b.request).not.toHaveBeenCalled()
+  })
+
+  it('disables the download row while either entry path downloads this Session', async () => {
     const b = bench()
     let release!: (response: Response) => void
     const pending = new Promise<Response>((resolve) => { release = resolve })
@@ -62,11 +75,14 @@ describe('Session export Header action', () => {
     } as unknown as SessionLogDownloadDialogProps)} />)
 
     const download = controller.download(SID)
-    const button = b.view.getByRole('button', { name: 'Session log' })
+    const button = b.view.getByRole('button', { name: 'More actions' })
     await waitFor(() => { expect(button.getAttribute('aria-busy')).toBe('true') })
-    expect((button as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(button)
+    const item = b.view.getByRole('menuitem', { name: 'Download session log' })
+    expect((item as HTMLButtonElement).disabled).toBe(true)
     release(new Response('zip'))
     await download
     await waitFor(() => { expect(button.getAttribute('aria-busy')).toBe('false') })
+    expect((item as HTMLButtonElement).disabled).toBe(false)
   })
 })

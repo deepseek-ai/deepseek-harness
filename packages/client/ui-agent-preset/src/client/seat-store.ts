@@ -6,8 +6,8 @@
  * whether the workspace connect created it or reused an existing blank one,
  * which is why staging cannot simply ride along on `sessions.create`.
  *
- * The stage is forgotten once applied: the next new session starts from the
- * deployment default again, matching the workspace picker beside it.
+ * The stage is forgotten once applied. The next new session starts from the
+ * Host-effective default again.
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
@@ -21,6 +21,8 @@ import type { AgentPresetOption } from './settings-store.ts'
 
 /** Hero-chip snapshot. */
 export interface AgentPresetSeatState {
+  /** Whether the new-session surface exposes preset selection. */
+  showPicker: boolean
   /** Presets the deployment supplies; empty means the chip renders nothing. */
   options: readonly AgentPresetOption[]
   /** The staged choice, empty until the roster loads. */
@@ -37,7 +39,7 @@ export interface AgentPresetSeatState {
 }
 
 const INITIAL: AgentPresetSeatState = {
-  options: [], current: '', error: null, busy: false, introduce: false,
+  showPicker: false, options: [], current: '', error: null, busy: false, introduce: false,
 }
 
 /** Stages the next session's preset and applies it when one appears. */
@@ -46,13 +48,16 @@ export class AgentPresetSeatController {
   readonly store: SnapshotStore<AgentPresetSeatState> = createSnapshotStore(INITIAL)
 
   /**
-   * The deployment default, so a consumed stage can fall back to it without
+   * The Host-effective default, so a consumed stage can fall back to it without
    * re-reading the roster.
    */
   private fallback = ''
 
   /** Set while a pick is waiting for a session; cleared once applied. */
   private staged: string | undefined
+
+  /** Only the newest roster read may publish after overlapping refreshes. */
+  private loadGeneration = 0
 
   constructor(
     private readonly ctx: ClientContext,
@@ -68,28 +73,33 @@ export class AgentPresetSeatController {
   }
 
   /**
-   * Read the roster and open the chip on the deployment default.
+   * Read the roster and open the chip on the Host-effective default.
   * @returns once the snapshot reflects the host.
   */
   async load(): Promise<void> {
+    const generation = ++this.loadGeneration
     const roster = await readRoster(this.ctx)
+    if (generation !== this.loadGeneration) return
     if (!roster.ok) {
       this.set({ error: roster.error })
       return
     }
-    const { presets } = roster.value
+    const { presets, modeSelectionEnabled } = roster.value
+    if (!modeSelectionEnabled) this.staged = undefined
     this.fallback = presets.find(preset => preset.isDefault)?.id ?? presets[0]?.id ?? ''
     const session = this.currentSession()
     this.set({
+      showPicker: modeSelectionEnabled,
       options: presetOptions(presets),
       // Staged pick first, then the composition the current session
-      // already carries, then the deployment default. The middle term is
+      // already carries, then the Host-effective default. The middle term is
       // what keeps a late-landing load from regressing the display after
       // an applied stage was consumed — the chip mounts (and loads) only
       // once the flow's session is current, so the reply can arrive after
       // apply() already composed it.
       current: this.staged ?? (session === undefined ? this.fallback : presetOf(session) ?? ''),
       error: null,
+      ...modeSelectionEnabled ? {} : { introduce: false },
     })
   }
 
@@ -126,6 +136,33 @@ export class AgentPresetSeatController {
   stage(id: string, introduce = false): void {
     this.staged = id
     this.set({ current: id, error: null, introduce })
+  }
+
+  /**
+   * Capture the exact blank Session a Settings action may bring along.
+   * @returns its id, or undefined outside a blank Session.
+   */
+  blankSessionId(): SessionSummary['id'] | undefined {
+    const session = this.currentSession()
+    return session?.blank === true ? session.id : undefined
+  }
+
+  /**
+   * Apply a Settings choice only if its captured Session is still current and
+   * blank. The selection uses the existing stage/apply path.
+   * @param expectedSessionId - blank Session captured before the Settings write.
+   * @param id - the effective default that the write persisted.
+   * @returns the Host refusal text, or undefined when applied or no longer relevant.
+   */
+  async syncBlankSession(
+    expectedSessionId: SessionSummary['id'],
+    id: string,
+  ): Promise<string | undefined> {
+    const session = this.currentSession()
+    if (session === undefined || !session.blank || session.id !== expectedSessionId) return undefined
+    this.stage(id)
+    await this.apply()
+    return this.store.getSnapshot().error ?? undefined
   }
 
   /** Acknowledge the introduction cue once the chip has played it. */
@@ -175,7 +212,7 @@ export class AgentPresetSeatController {
       })
       return
     }
-    // Consumed: the next new session opens on the deployment default again.
+    // Consumed: the next new session opens on the Host-effective default again.
     this.set({ busy: false, current: result.value })
   }
 }

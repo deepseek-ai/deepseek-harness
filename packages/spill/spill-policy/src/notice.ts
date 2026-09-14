@@ -31,7 +31,7 @@ function isOmission(text: string): boolean {
 
 /**
  * Recognize a final spill-policy notice in persisted text, including notice-only output.
- * This identifies the text convention, not authenticated provenance of tool output.
+ * This identifies the text convention, not authenticated tool-output origin.
  * @param text - complete recorded text result.
  * @returns whether a complete notice occupies the end of the result.
  */

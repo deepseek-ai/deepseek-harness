@@ -12,7 +12,6 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { DSH_HOME_ENV } from '@deepseek-ai/dsh-home-paths'
-import type { DshConfigTreeDeclaration } from '@deepseek-ai/dsh-package-manifest'
 import type { ConfigTree, ImageTree, PackResult } from './pack.ts'
 
 /**
@@ -21,7 +20,7 @@ import type { ConfigTree, ImageTree, PackResult } from './pack.ts'
  * package family contributes its unchanged JavaScript entry from `native/`;
  * examples and python never occur on a roster's dependency chain.
  */
-const WORKSPACE_SCAN_ROOTS = ['vendor', 'packages', 'native/landlock-run/packages', 'apps']
+const WORKSPACE_SCAN_ROOTS = ['vendor', 'packages', 'native/system/packages', 'apps']
 
 /** Composition entry point package: the `dsh` CLI, run from source. */
 const CLI_PACKAGE = 'apps/cli'
@@ -31,6 +30,16 @@ const CLI_ENTRY = `${CLI_PACKAGE}/src/bin.ts`
 
 /** Repository-owned deterministic filesystem content offered by the preview. */
 const PREVIEW_EXAMPLE_ROOT = 'packages/experimental/webworker-runtime/tests/fixtures/vfs-example'
+
+/** Config directory metadata owned by the CLI image packer, not the public plugin manifest. */
+interface ConfigTreeDeclaration {
+  /** Non-empty destination path in the image; mount values must be unique. */
+  mount: string
+  /** Non-empty source directory path relative to the declaring package root. */
+  path: string
+  /** Include the directory's YAML plugin rows in the package roster; absent means false. */
+  scanRoster?: boolean
+}
 
 /** One built-in Preview source and the trees packed into its overlay. */
 export interface PreviewFixture {
@@ -119,7 +128,7 @@ export function configTrees(repoRoot: string): ConfigTree[] {
   }
   const mounts = new Set<string>()
   return declared.map((entry, index) => {
-    const tree = entry as Partial<DshConfigTreeDeclaration> | null
+    const tree = entry as Partial<ConfigTreeDeclaration> | null
     const at = `${CLI_PACKAGE} dsh.configTrees[${String(index)}]`
     if (tree === null || typeof tree !== 'object'
       || typeof tree.mount !== 'string' || tree.mount === ''

@@ -33,7 +33,7 @@ class StubExecutor extends ShellExecutor {
     }
   }
 
-  start(): ShellProcess {
+  async start(): Promise<ShellProcess> {
     const proc: ShellProcess = {
       status: 'running',
       exitCode: null,
@@ -61,7 +61,7 @@ describe('ShellExecutor service seam', () => {
     expect(result.exitCode).toBe(0)
     expect(result.stdout.text).toBe('ok')
 
-    const proc = ctx.shell.start(spec)
+    const proc = await ctx.shell.start(spec)
     expect(proc.status).toBe('running')
     expect(proc.readOutput()).toEqual({ delta: '', lossy: false })
     expect(proc.kill()).toBe(true)

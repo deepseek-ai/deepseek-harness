@@ -1,0 +1,12 @@
+- tabpanel "Timing":
+  - term: Started
+  - definition:
+    - button "2026-01-01 {{clock}}"
+  - term: Total duration
+  - definition: {{duration}}
+  - term: TTFT
+  - definition: {{duration}}
+  - term: Generation
+  - definition: {{duration}}
+  - term: Throughput
+  - definition: {{throughput}} tok/s

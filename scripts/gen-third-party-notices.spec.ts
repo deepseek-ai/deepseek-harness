@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_AGENT_SDK_PACKAGE,
+  assertRuntimeLicenses,
   claudeDistributionFromManifest,
   collectPythonDependencies,
   isOwnerAuthorizedRuntime,
@@ -24,8 +25,11 @@ describe('THIRD_PARTY_NOTICES.md', () => {
   // already runs in the test lane, so the check costs no extra CI process.
   // Pre-commit regenerates the file whenever a manifest is staged, so reaching
   // this assertion means the notices were committed without that hook.
-  it('matches what the generator produces from the current manifests', () => {
-    const generated = render()
+  // This case resolves all browser build graphs as well as installed license metadata.
+  it('matches what the generator produces from the current manifests', {
+    timeout: 120_000,
+  }, async () => {
+    const generated = await render()
     expect(generated).toContain('It depends on the third-party software listed below.')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
   })
@@ -42,6 +46,37 @@ function workspace(entries: Record<string, Manifest>): { manifests: Map<string, 
 }
 
 describe('tierExternalDeps', () => {
+  it('keeps license rejection active when a browser library is declared for development', () => {
+    const { manifests, names } = workspace({
+      'packages/client/ui/package.json': { devDependencies: { 'browser-lib': '^1', 'test-tool': '^1' } },
+    })
+    const tiers = tierExternalDeps(manifests, names, new Set(['browser-lib']))
+    const dependencies = [{ name: 'browser-lib', license: 'GPL-3.0-only' }, { name: 'test-tool', license: 'GPL-3.0-only' }]
+      .filter(dep => tiers.get(dep.name))
+    expect(dependencies.map(dep => dep.name)).toEqual(['browser-lib'])
+    expect(() => { assertRuntimeLicenses(dependencies) }).toThrow('browser-lib (GPL-3.0-only)')
+    expect(() => { assertRuntimeLicenses([{ name: 'browser-lib', license: 'MIT' }]) }).not.toThrow()
+    expect(() => { assertRuntimeLicenses([{ name: CLAUDE_AGENT_SDK_PACKAGE, license: 'SEE LICENSE IN README.md' }]) })
+      .not.toThrow()
+  })
+
+  it('keeps browser-bundled development dependencies in runtime disclosures', () => {
+    const { manifests, names } = workspace({
+      'packages/client/ui/package.json': {
+        name: '@fixture/ui', devDependencies: { react: '^18', 'browser-lib': '^1', 'type-only': '^1' },
+      },
+    })
+    expect(tierExternalDeps(manifests, names, new Set(['react', 'browser-lib']))).toEqual(new Map([
+      ['tsx', true], ['react', true], ['browser-lib', true], ['type-only', false],
+    ]))
+  })
+
+  it('rejects a browser library missing from the disclosed declarations', () => {
+    const { manifests, names } = workspace({})
+    expect(() => tierExternalDeps(manifests, names, new Set(['missing-lib'])))
+      .toThrow('browser package missing-lib has no workspace dependency declaration')
+  })
+
   it('tiers by declaring area, not by the declaring section name', () => {
     const { manifests, names } = workspace({
       // Root tooling and test infrastructure never ship, whichever section declares them.
@@ -351,12 +386,12 @@ describe('official Claude distribution authorization', () => {
 
 describe('manifestPatterns', () => {
   it('derives globs from the declared members, so a new member area is read', () => {
-    expect(manifestPatterns(['packages/*/*', 'tools/*', 'native/landlock-run', 'native/landlock-run/packages/*'])).toEqual([
+    expect(manifestPatterns(['packages/*/*', 'tools/*', 'native/system', 'native/system/packages/*'])).toEqual([
       'package.json',
       'packages/*/*/package.json',
       'tools/*/package.json',
-      'native/landlock-run/package.json',
-      'native/landlock-run/packages/*/package.json',
+      'native/system/package.json',
+      'native/system/packages/*/package.json',
     ])
   })
 })

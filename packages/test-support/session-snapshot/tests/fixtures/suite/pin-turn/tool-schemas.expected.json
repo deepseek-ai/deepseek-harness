@@ -16,6 +16,13 @@
         "parameters": {
           "type": "object"
         }
+      },
+      {
+        "name": "t2",
+        "description": "D2",
+        "parameters": {
+          "type": "object"
+        }
       }
     ]
   ]

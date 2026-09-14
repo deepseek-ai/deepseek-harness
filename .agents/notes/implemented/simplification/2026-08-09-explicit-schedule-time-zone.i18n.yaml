@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-09-explicit-schedule-time-zone.md
-2026-08-09-explicit-schedule-time-zone.md: fd8a09df4c6f8b0003e6e01f48510ecb28d7e568
-2026-08-09-explicit-schedule-time-zone.zh.md: 3a840edda83edf70e65d6acf6a8874d1d47b09b5
+2026-08-09-explicit-schedule-time-zone.md: 2f23394e65d37f9eb714c2e55b0556cdf0bc967e
+2026-08-09-explicit-schedule-time-zone.zh.md: aafa5d56853339e51b9a4265a32fca1a24e7b1dd

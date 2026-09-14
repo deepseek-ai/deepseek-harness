@@ -47,6 +47,15 @@ const NS = 'llm-pi-ai'
  */
 const ROUTE_PATTERN = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const protocol = new URL(value).protocol
+    return protocol === 'http:' || protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 /** Props of {@link CustomProviderCard}. */
 export interface CustomProviderCardProps {
   /** Route ids already declared, so the card refuses to shadow one. */
@@ -98,6 +107,8 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
 
   const routeInvalid = route.length > 0 && !ROUTE_PATTERN.test(route)
   const routeTaken = taken.includes(route)
+  const normalizedBaseURL = baseURL.trim()
+  const baseUrlInvalid = baseURL.length > 0 && !isHttpUrl(normalizedBaseURL)
   // Rows are checked by the same per-row validator the editor cards use, so a
   // bad row is named by its position here too. Capacities have route-level
   // fallbacks; what a route cannot default is at least one model.
@@ -108,7 +119,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   // legitimately authenticate through the provider's own ambient discovery.
   const keyValue = keyDraft.trim()
   const ready = route.length > 0 && !routeInvalid && !routeTaken
-    && baseURL.length > 0 && models.length > 0 && modelFailure === undefined
+    && normalizedBaseURL.length > 0 && !baseUrlInvalid && models.length > 0 && modelFailure === undefined
     && keyFailure === undefined
   // The one blocked gate worth a line under the form. A satisfied card says
   // nothing at all rather than printing an empty paragraph.
@@ -120,9 +131,9 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
     // Same for the route id, and it must be tested rather than assumed: the
     // fallback arm below reads "no models yet", so an unmet route gate would
     // fall through to it and contradict the filled-in list right above.
-    || route.length === 0 || routeInvalid || routeTaken
+    || route.length === 0 || routeInvalid || routeTaken || baseUrlInvalid
     ? undefined
-    : baseURL.length === 0
+    : normalizedBaseURL.length === 0
       ? t('customNeedsBaseUrl')
       : modelFailure !== undefined
         ? `${t('model')} ${String(modelFailure.index + 1)}: ${t(modelFailure.key)}`
@@ -141,7 +152,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         // chain, ADC) instead of resolving a reference nothing ever sets.
         ...storesKey ? { apiKeyEnv: keyRef } : {},
         api: protocol,
-        baseURL,
+        baseURL: normalizedBaseURL,
         models: models.map(model => ({ ...model })),
       }
       // `taken` is a snapshot too, so the id check alone cannot see a route
@@ -227,10 +238,12 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
           value={baseURL}
           placeholder={t('customBaseUrlPlaceholder')}
           aria-label={t('baseUrl')}
+          aria-invalid={baseUrlInvalid}
           disabled={profileDisabled}
           onChange={(event) => { setBaseURL(event.target.value) }}
         />
       </div>
+      {baseUrlInvalid ? <p className={styles['error']}>{t('customBaseUrlInvalid')}</p> : null}
       <div className={styles['field']}>
         <span className={styles['fieldLabel']}>{t('customApi')}</span>
         <select
@@ -267,11 +280,13 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         onChange={setModels}
         probe={{
           settingsNs: NS,
-          baseURL,
+          baseURL: normalizedBaseURL,
           api: protocol,
           ...keyValue.length === 0 ? {} : { apiKey: keyValue },
         }}
-        probeBlocked={keyFailure === 'keyBlank' ? 'keyBlankNew' : keyFailure}
+        probeBlocked={baseUrlInvalid
+          ? 'customBaseUrlInvalid'
+          : keyFailure === 'keyBlank' ? 'keyBlankNew' : keyFailure}
         operations={operations}
         t={t}
         disabled={profileDisabled}

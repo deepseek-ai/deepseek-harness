@@ -8,7 +8,7 @@
     "sessions": {
       "preview-showcase": {
         "identity": {
-          "formatVersion": 2,
+          "formatVersion": 3,
           "createdAt": 1787472000000,
           "cwd": "/dsh/workspace",
           "isSeeded": false,

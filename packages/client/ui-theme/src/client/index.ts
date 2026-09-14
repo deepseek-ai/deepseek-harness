@@ -96,7 +96,7 @@ export interface ThemeSnapshot {
 
 /** One theme token exposed to pre-definition Cordis inspection. */
 export interface ThemeTokenInspection {
-  /** Token name accepted by {@link ThemeService.overrideTokens}. */
+  /** Token name accepted by {@link ThemeRuntime.overrideTokens}. */
   name: string
   /** Intended visual role. */
   description: string

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-// Local submission echo over the BUILT client graph (keyless fixture Connection RPC
+// Local submission echo over the BUILT client graph (keyless RemoteMock
 // transport): a text-plus-image send paints its echo bubble synchronously on
 // the submit keystroke — before serialization, transport, or the fixture's
 // durable admission — with the composer already cleared and editable, and the

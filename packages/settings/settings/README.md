@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-settings` lets plugins expose configuration that users can change at runtime: a plugin registers a namespace with a schema, and the resolved value honors schema defaults, the deployment's own composition `base`, and the user-edited document section — with user overrides winning. Consumers read a snapshot of the resolved value and are notified of every committed change; configuration surfaces get one descriptor per namespace — schema, current value, which layer each field came from, effect timing — without touching storage directly. Writes change only the user overrides, run one at a time per namespace, and can carry an expected revision so a stale writer is refused instead of silently overwriting a newer one. A provider must be mounted to store the document; without one, nothing changes and configuration stays exactly as composed.
+Use this package when users must change a plugin's configuration at runtime without restarting or rereading `cordis.yml`. Each namespace combines schema defaults, deployment configuration, and user overrides; readers receive a deep-frozen resolved snapshot and can observe committed changes. Writes affect only user overrides, are serialized per namespace, and may reject stale revisions instead of overwriting newer changes. Durable runtime edits require configured settings storage; without it, the plugin continues with its composed configuration.
 
 ## Table of Contents
 

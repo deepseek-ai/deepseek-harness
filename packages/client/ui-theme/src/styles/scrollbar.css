@@ -10,13 +10,14 @@
  *
  * Surfaces pick their elevation by rebinding --dsh-scrollbar-thumb{,-hover}:
  * the l1 pair here is the base-surface default, and an elevated surface
- * (menu, popover, dialog) rebinds to the l2 pair on its own container. Both
- * rendering paths below read the indirection, so one rebind reaches whichever
- * path the engine took. */
+ * (menu, popover, dialog) rebinds to the l2 pair on its own container. A
+ * scroll container may also rebind the three geometry variables below. */
 
 body {
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l1);
+  --dsh-scrollbar-thumb-border: 0px;
+  --dsh-scrollbar-track-margin: 0px;
   /* The WebKit bar's layout width, mirrored by the ::-webkit-scrollbar rule
      below. A surface that must align itself beside a space-consuming bar
      (ConversationRoot's overlay composer seat) reads this instead of
@@ -64,23 +65,27 @@ body {
    selector matching already does. Not inherited either, hence the unscoped
    selectors. */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: var(--dsh-scrollbar-width);
+  height: var(--dsh-scrollbar-width);
 }
 
 /* Track stays transparent so the thumb reads against whatever surface scrolls
    under it; only the thumb carries a token colour. */
 ::-webkit-scrollbar-track {
+  margin-block: var(--dsh-scrollbar-track-margin);
   background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  border-radius: 4px;
+  border: var(--dsh-scrollbar-thumb-border) solid transparent;
+  border-radius: 999px;
+  corner-shape: round;
   background: var(--dsh-scrollbar-thumb);
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--dsh-scrollbar-thumb-hover);
+  background-color: var(--dsh-scrollbar-thumb-hover);
 }
 
 /* Both scrollbars meeting in a corner: no separate token, so the corner

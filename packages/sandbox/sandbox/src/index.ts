@@ -169,10 +169,13 @@ export abstract class SandboxProvider extends Service {
    *   `['bash', '-c', command]`.
    * @param policy - the file-effect policy this execution runs under,
    *   carried per call (see {@link SandboxPolicy}).
+   * @param signal - cancellation while the provider resolves the policy and runner.
    * @returns the argv to spawn instead, plus the enforcement completeness
    *   the selected backend achieves for it.
    */
-  abstract confine(argv: readonly string[], policy: SandboxPolicy): ConfinedArgv
+  abstract confine(argv: readonly string[], policy: SandboxPolicy, signal?: AbortSignal): Promise<ConfinedArgv>
 }
 
 export default SandboxProvider
+
+export { classifyRunnerFailure, isRunnerSpawnFailure, matchesSignature } from './diagnostics.ts'

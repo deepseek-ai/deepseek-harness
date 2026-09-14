@@ -8,16 +8,16 @@ import * as yaml from 'js-yaml'
 import { entryListSchema } from '@deepseek-ai/cordis-plugin-include'
 
 describe('Agent Teams profile bundle', () => {
-  it('declares a private parseable layer with Team-owned controls', () => {
+  it('declares a public parseable layer with Team-owned controls', () => {
     const root = fileURLToPath(new URL('..', import.meta.url))
     const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8')) as {
       private?: boolean
-      publishConfig?: unknown
+      publishConfig?: { access?: string }
       dependencies?: Record<string, string>
       dsh?: { bundle?: { patch?: string } }
     }
-    expect(manifest.private).toBe(true)
-    expect(manifest.publishConfig).toBeUndefined()
+    expect(manifest.private).toBeUndefined()
+    expect(manifest.publishConfig?.access).toBe('public')
     expect(manifest.dsh?.bundle?.patch).toBe('./cordis.patch.yml')
     expect(manifest.dependencies).toMatchObject({
       '@deepseek-ai/dsh-experimental-agent-team': 'workspace:^',
@@ -37,8 +37,8 @@ describe('Agent Teams profile bundle', () => {
     }[]
     expect(patches.find(patch => patch.id === 'tool-subagent-control')).toMatchObject({ disabled: true })
     expect(patches.find(patch => patch.id === 'tool-subagent-list-agents')).toMatchObject({ disabled: true })
-    expect(patches.find(patch => patch.id === 'tool-subagent')?.config).toMatchObject({ backgroundMode: 'one-shot' })
-    expect(patches.find(patch => patch.id === 'tool-subagent-fork')?.config).toMatchObject({ backgroundMode: 'one-shot' })
+    expect(patches.find(patch => patch.id === 'tool-subagent')).toMatchObject({ disabled: true })
+    expect(patches.find(patch => patch.id === 'tool-subagent-fork')).toMatchObject({ disabled: true })
     const inserted = patches.flatMap(patch => patch.insert ?? [])
     expect(inserted.find(entry => entry.id === 'agent-team')).toMatchObject({
       name: '@deepseek-ai/dsh-experimental-agent-team',

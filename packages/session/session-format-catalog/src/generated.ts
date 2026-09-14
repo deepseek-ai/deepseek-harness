@@ -7,24 +7,25 @@ import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import { createSessionFormatCatalog } from '@deepseek-ai/dsh-session-format'
 import { validateInstalledCurrentSessionArtifact, validateInstalledCurrentSessionHeader } from './current.ts'
 import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, sessionFormatV0ToV1 } from '@deepseek-ai/dsh-session-format-v0-to-v1'
-import { assertReleasedV2Header, releasedV2SessionFormatCodec, restoreReleasedV2Artifact, sessionFormatV1ToV2 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
+import { releasedV2SessionFormatCodec, sessionFormatV1ToV2 } from '@deepseek-ai/dsh-session-format-v1-to-v2'
+import { assertReleasedV3Header, releasedV3SessionFormatCodec, restoreReleasedV3Artifact, sessionFormatV2ToV3 } from '@deepseek-ai/dsh-session-format-v2-to-v3'
 
 /** Physical codec dispatch and complete adjacent chain, independent of mounted plugins. */
 export const sessionFormatCatalog = createSessionFormatCatalog({
-  currentVersion: 2,
-  codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec],
-  currentEncoder: releasedV2SessionFormatCodec,
-  migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2],
+  currentVersion: 3,
+  codecs: [releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec, releasedV3SessionFormatCodec],
+  currentEncoder: releasedV3SessionFormatCodec,
+  migrations: [sessionFormatV0ToV1, sessionFormatV1ToV2, sessionFormatV2ToV3],
   restoreCurrent(artifact) {
-    const restored = restoreReleasedV2Artifact(artifact, KNOWN_SESSION_EVENT_TYPES)
+    const restored = restoreReleasedV3Artifact(artifact, KNOWN_SESSION_EVENT_TYPES)
     validateInstalledCurrentSessionArtifact(restored)
     return restored
   },
   restoreTransformedCurrent(artifact) {
-    return restoreReleasedV2Artifact(artifact, KNOWN_SESSION_EVENT_TYPES)
+    return restoreReleasedV3Artifact(artifact, KNOWN_SESSION_EVENT_TYPES)
   },
   restoreCurrentHeader(header) {
-    assertReleasedV2Header(header)
+    assertReleasedV3Header(header)
     validateInstalledCurrentSessionHeader(header)
     return header
   },

@@ -11,6 +11,13 @@ import {
 } from '@deepseek-ai/dsh-session'
 import type { SessionLogOffset as SessionLogOffsetType } from '@deepseek-ai/dsh-session'
 import { sessionFormatCatalog } from '@deepseek-ai/dsh-session-format-catalog'
+import { SessionFormatEventCollector, type SessionFormatArtifactDecoder, type SessionFormatCodec } from '@deepseek-ai/dsh-session-format'
+import { releasedV0SessionFormatCodec, releasedV1SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v0-to-v1'
+import { releasedV2SessionFormatCodec } from '@deepseek-ai/dsh-session-format-v1-to-v2'
+
+const historicalCodecs: readonly SessionFormatCodec[] = [
+  releasedV0SessionFormatCodec, releasedV1SessionFormatCodec, releasedV2SessionFormatCodec,
+]
 
 /** Physical persistence artifacts validated by the WebWorker runtime fixture spec. */
 const WEBWORKER_PHYSICAL_SESSION_FIXTURE_ROOT =
@@ -56,51 +63,6 @@ function validationHeader(value: unknown): unknown {
     header.cwd = header.cwd.replace('{{cwd}}', '/dsh-snapshot-cwd')
   }
   return header
-}
-
-function validationRow(source: Readonly<Record<string, unknown>>): Record<string, unknown> {
-  if (source.type !== 'request/header') return { ...source }
-  const data = source.data
-  if (data === null || typeof data !== 'object' || Array.isArray(data)) return { ...source }
-  const header = (data as Record<string, unknown>).header
-  if (header === null || typeof header !== 'object' || Array.isArray(header)) return { ...source }
-  if ((header as Record<string, unknown>).tools !== '{{tools}}') return { ...source }
-  return {
-    ...source,
-    data: {
-      ...data,
-      header: { ...header, tools: [] },
-    },
-  }
-}
-
-function restoreRequestHeaderTokens(
-  events: readonly SessionEvent[],
-  rows: readonly Readonly<Record<string, unknown>>[],
-): SessionEvent[] {
-  const sources = rows.filter(row => row.type === 'request/header')
-  let sourceIndex = 0
-  return events.map((event) => {
-    if (event.type !== 'request/header') return event
-    const source = sources[sourceIndex]
-    sourceIndex += 1
-    const sourceData = source?.data
-    const sourceHeader = sourceData !== null && typeof sourceData === 'object' && !Array.isArray(sourceData)
-      ? (sourceData as Record<string, unknown>).header
-      : undefined
-    if (sourceHeader === null || typeof sourceHeader !== 'object' || Array.isArray(sourceHeader)
-      || (sourceHeader as Record<string, unknown>).tools !== '{{tools}}') return event
-    return {
-      ...event,
-      data: {
-        ...event.data,
-        header: {
-          ...(event.data as unknown as { header: Record<string, unknown> }).header,
-          tools: '{{tools}}',
-        },
-      },
-    } as SessionEvent
-  })
 }
 
 function renderFixture(headerLine: string, events: readonly SessionEvent[]): string {
@@ -166,7 +128,7 @@ function parseFixtureRows(content: string, headerValue: unknown): SessionEvent[]
   // Versionless protocol fixtures and current projected snapshots use scalar
   // event rows. Current snapshots may contain owner-restored scrub tokens such
   // as `{{tools}}`; semantic replay restores those sidecars, while this layout
-  // gate owns only envelopes, provenance ranges, and one-event-per-row form.
+  // gate owns only envelopes, source-event ranges, and one-event-per-row form.
   const projectedCurrent = headerValue !== null
     && typeof headerValue === 'object'
     && !Array.isArray(headerValue)
@@ -191,29 +153,28 @@ function parseFixtureRows(content: string, headerValue: unknown): SessionEvent[]
       }
     })
   }
-  let restore: ReturnType<typeof sessionFormatCatalog.createRestore>
+  const collector = new SessionFormatEventCollector()
+  let decoder: SessionFormatArtifactDecoder
   try {
-    restore = sessionFormatCatalog.createRestore(validationHeader(headerValue), {
-      recovery: 'strict',
-      validation: 'current',
-    })
+    const version = (headerValue as Record<string, unknown>).version
+    const codec = historicalCodecs.find(candidate => candidate.version === version)
+    if (codec === undefined) throw new Error(`unsupported session fixture version ${String(version)}`)
+    decoder = codec.createDecoder(validationHeader(headerValue), 'strict')
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     throw new Error(`session snapshot line 1: ${detail}`, { cause: error })
   }
   for (const [index, row] of rows.entries()) {
     try {
-      restore.decodeRow(validationRow(row))
+      decoder.decodeRow(row, collector)
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error)
       throw new Error(`session snapshot line ${rowLines[index] ?? 1}: ${detail}`, { cause: error })
     }
   }
   try {
-    return restoreRequestHeaderTokens(
-      [...restore.finish().events] as unknown as SessionEvent[],
-      rows,
-    )
+    decoder.finish(collector)
+    return [...collector.values] as unknown as SessionEvent[]
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
     const line = fixtureDiagnosticLine(error, rowLines, eventLines)
@@ -246,8 +207,9 @@ function withoutEnvelope(events: readonly SessionEvent[]): Array<Omit<SessionEve
 
 /**
  * Canonicalize one JSONL document when its first record is a session header.
- * The header line remains byte-identical; body records decode to logical events,
- * re-encode one event per row, and omit storage sequence/time envelopes.
+ * Historical generations receive strict source-codec validation and remain byte-identical;
+ * conversion to the current format is not required. Current body records re-encode
+ * one event per row and omit storage sequence/time envelopes; their header is preserved.
  * Non-session JSONL returns undefined.
  *
  * @param content - JSONL source text.

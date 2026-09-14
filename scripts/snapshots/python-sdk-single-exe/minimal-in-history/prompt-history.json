@@ -1,0 +1,31 @@
+{
+  "requestSystemPrompts": [
+    [
+      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1."
+    ],
+    [
+      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1.",
+      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 2."
+    ],
+    [
+      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1.",
+      "You are a helpful software engineer assistant.\n\nPython SDK prompt version 2."
+    ]
+  ],
+  "systemMessageOperations": [
+    "append",
+    "append"
+  ],
+  "subscribedSystemPrompts": [
+    "You are a helpful software engineer assistant.\n\nPython SDK prompt version 1.",
+    "You are a helpful software engineer assistant.\n\nPython SDK prompt version 2."
+  ],
+  "requestContexts": [
+    {
+      "provider": "deepseek-official",
+      "model": "smoke-model",
+      "contextWindow": 1000000,
+      "systemPromptUpdate": "in-history"
+    }
+  ]
+}

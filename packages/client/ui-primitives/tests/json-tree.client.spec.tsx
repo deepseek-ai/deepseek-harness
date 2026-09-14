@@ -12,10 +12,12 @@ function JsonTree(props: Omit<ComponentProps<typeof LocalizedJsonTree>, 'label' 
   return <LocalizedJsonTree label="JSON" {...props} labels={jsonTreeLabels} />
 }
 
-let writeText: ReturnType<typeof vi.fn>
+let writeText: ReturnType<typeof vi.fn<Clipboard['writeText']>>
+let originalClipboard: PropertyDescriptor | undefined
 
 beforeEach(() => {
-  writeText = vi.fn().mockResolvedValue(undefined)
+  originalClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+  writeText = vi.fn<Clipboard['writeText']>().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText },
@@ -25,9 +27,162 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  if (originalClipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+  else Object.defineProperty(navigator, 'clipboard', originalClipboard)
 })
 
+function stubStringLayout(scrollHeight = 200): void {
+  vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(scrollHeight)
+  const computedStyle = window.getComputedStyle.bind(window)
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((element) => {
+    const style = computedStyle(element)
+    style.lineHeight = '16px'
+    if (style.paddingBottom === '') style.paddingBottom = '0px'
+    return style
+  })
+}
+
 describe('JsonTree', () => {
+  it('ignores clipboard settlement after the row changes or the tree unmounts', async () => {
+    vi.useFakeTimers()
+    const pending: (() => void)[] = []
+    writeText.mockImplementation(() => new Promise<void>((resolve) => { pending.push(resolve) }))
+    const view = render(<JsonTree data={{ first: 1, second: 2 }} />)
+    const rows = screen.getAllByRole('treeitem')
+    fireEvent.mouseOver(rows[0] as HTMLElement)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy value' }))
+    fireEvent.mouseOver(rows[1] as HTMLElement)
+    await act(async () => { pending[0]!() })
+    expect(screen.queryByRole('button', { name: 'Copied' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy value' }))
+    view.unmount()
+    const timerCount = vi.getTimerCount()
+    await act(async () => { pending[1]!() })
+    expect(vi.getTimerCount()).toBe(timerCount)
+  })
+
+  it('updates copy actions without rereading JSON properties on hover', () => {
+    const readValue = vi.fn(() => 'payload '.repeat(100))
+    const data = Object.fromEntries(Array.from({ length: 500 }, (_, index) => [
+      `field${index}`,
+      { get value() { return readValue() } },
+    ]))
+    render(<JsonTree data={data} />)
+    const rows = within(screen.getByRole('tree')).getAllByRole('treeitem')
+    readValue.mockClear()
+
+    fireEvent.mouseOver(rows[0] as HTMLElement)
+    expect(within(rows[0] as HTMLElement).getByRole('button', { name: 'Copy pretty JSON' })).toBeTruthy()
+    fireEvent.mouseOver(rows[1] as HTMLElement)
+    expect(within(rows[0] as HTMLElement).queryByRole('button', { name: 'Copy pretty JSON' })).toBeNull()
+    expect(within(rows[1] as HTMLElement).getByRole('button', { name: 'Copy pretty JSON' })).toBeTruthy()
+    expect(readValue).not.toHaveBeenCalled()
+  })
+
+  it('expands raw strings without ResizeObserver and keeps the visible viewport limit', () => {
+    stubStringLayout()
+    vi.stubGlobal('ResizeObserver', undefined)
+    let rawTop = 150
+    const view = render(
+      <div style={{ overflowY: 'auto', paddingBottom: '10px' }}>
+        <JsonTree data={{ first: 'raw\ntext', last: 'last\ntext' }} />
+      </div>,
+    )
+    const clip = view.container.firstElementChild as HTMLElement
+    vi.spyOn(clip, 'clientTop', 'get').mockReturnValue(2)
+    vi.spyOn(clip, 'clientHeight', 'get').mockReturnValue(140)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      return new DOMRect(0, this === clip ? 100 : rawTop, 200, 140)
+    })
+    const rows = within(screen.getByRole('tree')).getAllByRole('treeitem')
+    fireEvent.click(within(rows[0] as HTMLElement).getByRole('button', { name: 'Expand JSON node' }))
+    const raw = rows[0]?.querySelector('pre') as HTMLPreElement
+    expect(raw.textContent).toBe('raw\ntext')
+    expect(raw.style.maxHeight).toBe('78px')
+    expect(raw.nextElementSibling?.textContent).toBe(',')
+
+    rawTop = 80
+    fireEvent.scroll(clip)
+    expect(raw.style.maxHeight).toBe('126px')
+    rawTop = 300
+    fireEvent.resize(window)
+    expect(raw.style.maxHeight).toBe('16px')
+    fireEvent.click(within(rows[0] as HTMLElement).getByRole('button', { name: 'Collapse JSON node' }))
+    expect(raw.isConnected).toBe(false)
+    rawTop = 100
+    fireEvent.scroll(clip)
+    expect(raw.style.maxHeight).toBe('16px')
+
+    fireEvent.click(within(rows[1] as HTMLElement).getByRole('button', { name: 'Expand JSON node' }))
+    expect(rows[1]?.querySelector('pre')?.nextElementSibling?.textContent).not.toBe(',')
+  })
+
+  it('shows the string expander only beyond the configured collapsed line count', () => {
+    stubStringLayout(48)
+    let resize: (() => void) | undefined
+    const disconnect = vi.fn()
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: () => void) { resize = callback }
+      observe() {}
+      disconnect = disconnect
+    })
+    const data = { text: 'three lines of text' }
+    const view = render(<JsonTree data={data} />)
+    expect(screen.queryByRole('button', { name: 'Expand JSON node' })).toBeNull()
+    view.rerender(<JsonTree data={data} collapsedStringLines={2} />)
+    expect(screen.getByRole('button', { name: 'Expand JSON node' })).toBeTruthy()
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(16)
+    act(() => { resize?.() })
+    expect(screen.queryByRole('button', { name: 'Expand JSON node' })).toBeNull()
+    view.unmount()
+    expect(disconnect).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps raw strings intact and samples the wrapping preference on every expansion', async () => {
+    stubStringLayout()
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    })
+    let wrapped = false
+    const stringWrapping = {
+      label: 'Wrap lines',
+      getDefault: () => wrapped,
+      setDefault: (value: boolean) => { wrapped = value },
+    }
+    const original = `  leading spaces\n\t"quoted" \\${'long'.repeat(100)}\nlast line\n`
+    render(<JsonTree data={{ first: original, second: original }} stringWrapping={stringWrapping} />)
+    const [first, second] = within(screen.getByRole('tree')).getAllByRole('treeitem')
+    const a = within(first as HTMLElement)
+    const b = within(second as HTMLElement)
+    fireEvent.click(a.getByRole('button', { name: 'Expand JSON node' }))
+    fireEvent.click(b.getByRole('button', { name: 'Expand JSON node' }))
+    expect(a.getByRole('button', { name: 'Wrap lines' }).getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(a.getByRole('button', { name: 'Wrap lines' }))
+    expect(wrapped).toBe(true)
+    expect(a.getByRole('button', { name: 'Wrap lines' }).getAttribute('aria-pressed')).toBe('true')
+    expect(b.getByRole('button', { name: 'Wrap lines' }).getAttribute('aria-pressed')).toBe('false')
+
+    fireEvent.click(b.getByRole('button', { name: 'Collapse JSON node' }))
+    fireEvent.click(b.getByRole('button', { name: 'Expand JSON node' }))
+    expect(b.getByRole('button', { name: 'Wrap lines' }).getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(b.getByRole('button', { name: 'Wrap lines' }))
+    expect(wrapped).toBe(false)
+    expect(a.getByRole('button', { name: 'Wrap lines' }).getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(a.getByRole('button', { name: 'Collapse JSON node' }))
+    fireEvent.click(a.getByRole('button', { name: 'Expand JSON node' }))
+    const toggle = a.getByRole('button', { name: 'Wrap lines' })
+    expect(toggle.getAttribute('aria-pressed')).toBe('false')
+    const contents = document.getElementById(toggle.getAttribute('aria-controls') as string)
+    expect(contents?.textContent).toBe(original)
+    fireEvent.click(a.getByRole('button', { name: 'Copy value' }))
+    await waitFor(() => { expect(writeText).toHaveBeenCalledWith(original) })
+  })
+
   it('keeps the top level open and renders expandable value previews', () => {
     render(
       <JsonTree
@@ -270,48 +425,21 @@ describe('JsonTree', () => {
     view.unmount()
   })
 
-  it('keeps copy placement synchronized and clears stale targets', () => {
+  it('keeps the copy action on its hovered row and clears stale targets', () => {
     const view = render(<JsonTree data={{ first: { a: 1 }, second: 2 }} />)
     const root = view.container.firstElementChild as HTMLElement
     const tree = screen.getByRole('tree')
     const firstRow = within(tree).getAllByRole('treeitem')[0] as HTMLElement
     const secondRow = within(tree).getAllByRole('treeitem')[1] as HTMLElement
 
-    Object.defineProperty(root, 'clientHeight', { configurable: true, value: 100 })
-    Object.defineProperty(root, 'clientWidth', { configurable: true, value: 300 })
-    vi.spyOn(root, 'getBoundingClientRect').mockReturnValue({
-      bottom: 100,
-      height: 100,
-      left: 10,
-      right: 310,
-      top: 0,
-      width: 300,
-      x: 10,
-      y: 0,
-      toJSON: () => ({}),
-    })
-    vi.spyOn(firstRow, 'getBoundingClientRect').mockReturnValue({
-      bottom: 91,
-      height: 16,
-      left: 10,
-      right: 200,
-      top: 75,
-      width: 190,
-      x: 10,
-      y: 75,
-      toJSON: () => ({}),
-    })
-
     fireEvent.mouseOver(firstRow)
     const copyButton = screen.getByRole('button', { name: 'Copy pretty JSON' })
-    expect((copyButton.closest('span')?.parentElement as HTMLElement).style.left).toBe('284px')
+    expect(firstRow.contains(copyButton)).toBe(true)
     fireEvent.mouseOver(copyButton)
     expect(screen.getByRole('button', { name: 'Copy pretty JSON' })).toBeDefined()
     fireEvent.mouseOver(firstRow)
 
     fireEvent.scroll(root)
-    fireEvent.scroll(window)
-    fireEvent.resize(window)
 
     fireEvent.contextMenu(copyButton)
     fireEvent.mouseOver(secondRow)

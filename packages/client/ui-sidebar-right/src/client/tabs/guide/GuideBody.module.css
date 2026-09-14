@@ -1,0 +1,119 @@
+/* The guide body's own sheet: its domain owns these rules, so the shell's
+   stylesheet does not carry them. Tokens only. */
+
+/* The capsules form one centred column at the column's own 14px gap, lifted
+   above the body's middle by the spacer below. The minimum height centres a
+   short guide while allowing a tall guide to grow into the pane's scroller. */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 0 24px;
+}
+
+/* The lift, as a share of the pane's height (a column flex basis resolves
+   against it): the centred column rises 5% of the pane, and a short pane
+   gives it up before the capsules clip. */
+.guide::after {
+  content: '';
+  flex: 0 1 10%;
+}
+
+/* The guide tab's own compass above the capsules, at 56px on watermark ink —
+   not a control. The ink is pinned to the pure-gray static ramp per theme
+   because the label aliases all ride the bluish ramp, whose cast shows at
+   this size. Its margin over the column's gap holds the first capsule 30px
+   below it; the capsules keep the bare gap between them. */
+.hero {
+  display: flex;
+  margin-bottom: 16px;
+  color: var(--dsw-static-neutral-200);
+}
+
+:global(body[data-ds-dark-theme]) .hero {
+  color: var(--dsw-static-neutral-700);
+}
+
+/* A filled pill, 380px wide by default, its icon and text anchored at the
+   left inset; `max-width: 100%` shrinks it inside the column's own 24px
+   insets, so a narrow pane still keeps that gutter. The 56px minimum is the
+   title-only height; a capsule with a description grows on its vertical
+   padding. Long text ellipsizes inside rather than widening it. */
+.entry {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  box-sizing: border-box;
+  width: 380px;
+  max-width: 100%;
+  min-height: 56px;
+  padding: 14px 20px;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 24px;
+  cursor: pointer;
+}
+
+.entry:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* A fixed 26px box — the described glyph's size — so an entry's glyph sits
+   centred and every capsule's words start at the same left edge while glyph
+   sizes differ. */
+.entryIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: var(--dsw-alias-label-secondary);
+}
+
+/* The capsule's placeholder cube on ink one step quieter than a registered
+   glyph's, marking the unclaimed slot. */
+.placeholderInk {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The capsule's words in one column beside the glyph: the title, and the
+   description while the guide shows one. */
+.entryText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.entryTitle {
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* One line under the title on the quieter ink; it ellipsizes like the title. */
+.entryDescription {
+  overflow: hidden;
+  color: var(--dsw-alias-label-caption);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The chip title's compass, beside the label the strip lays out; the glyph
+   draws on currentColor, so this ink is the chip rendering's own. */
+.titleIcon {
+  flex: none;
+  color: var(--dsw-alias-label-tertiary);
+}

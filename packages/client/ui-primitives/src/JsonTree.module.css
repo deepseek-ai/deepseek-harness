@@ -29,17 +29,17 @@
 
 .container {
   box-sizing: border-box;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   margin: 0;
-  padding: 6px 8px 8px;
+  padding: 6px 8px 8px 8px;
   white-space: pre;
 }
 
 .expandedTopLevel {
   box-sizing: border-box;
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
+  min-width: 0;
   padding: 6px 8px 8px 14px;
 }
 
@@ -66,11 +66,13 @@
 .row {
   position: relative;
   box-sizing: border-box;
-  min-width: 100%;
+  min-width: 0;
   min-height: 16px;
   margin: 0;
   padding: 0 0 0 10px;
   list-style: none;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .row:not(.topLevelBracket):hover:not(:has(.row:hover))::after,
@@ -81,13 +83,13 @@
   top: 0;
   right: 0;
   left: 0;
-  height: 16px;
+  height: var(--json-tree-row-height, 16px);
   background: var(--json-tree-hover);
   content: '';
   pointer-events: none;
 }
 
-.row > span:not(.expander) {
+.row > span:not(.expander, .copySlot) {
   position: relative;
   z-index: 1;
 }
@@ -104,6 +106,100 @@
 
 .stringValue {
   color: var(--json-tree-string);
+}
+
+.stringField {
+  position: relative;
+  z-index: 1;
+  display: flow-root;
+}
+
+.stringText {
+  display: block;
+  max-height: calc(var(--json-tree-collapsed-lines) * 16px);
+  padding-left: 12px;
+  overflow: hidden;
+  text-indent: -12px;
+  word-break: break-all;
+}
+
+.stringRaw {
+  margin: 4px 0 0 12px;
+  overflow: auto;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  overflow-wrap: normal;
+  white-space: pre;
+  word-break: normal;
+}
+
+.stringActions {
+  position: absolute;
+  top: 1px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  width: fit-content;
+  height: 16px;
+}
+
+.stringRaw[data-wrap='true'] {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.stringActions > .copySlot {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.stringToggleSlot {
+  display: flex;
+  float: right;
+  align-items: flex-end;
+  height: calc(var(--json-tree-collapsed-lines) * 16px);
+  margin-left: 2px;
+  shape-outside: inset(calc((var(--json-tree-collapsed-lines) - 1) * 16px) 0 0);
+  pointer-events: none;
+}
+
+.stringToggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--dsw-alias-label-secondary);
+  background: transparent;
+  font: inherit;
+  text-indent: 0;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.stringToggle:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
+.stringToggle:focus-visible {
+  outline: 1px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 1px;
+}
+
+.row:has(> .stringField) {
+  --json-tree-row-height: 100%;
+}
+
+.summary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .numberValue {
@@ -134,13 +230,38 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
-.copyAnchor {
-  position: fixed;
-  z-index: 3;
+.copySlot {
   display: inline-flex;
+  width: 20px;
+  height: 16px;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.copyButton {
+.row > .copySlot {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+}
+
+.row:has(> .stringField) > .copySlot {
+  top: auto;
+  bottom: 0;
+}
+
+.row:has(> .copySlot) > .stringField .stringToggleSlot {
+  padding-right: 24px;
+}
+
+.row:hover:not(:has(.row:hover)) > .copySlot,
+.row[data-json-copy-active] > .copySlot,
+.copySlot:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.actionButton {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -152,22 +273,24 @@
   border: 0;
   border-radius: 3px;
   color: var(--dsw-alias-label-secondary);
-  background: var(--dsw-alias-bg-layer-1);
-  box-shadow: -5px 0 5px var(--dsw-alias-bg-layer-1);
+  background: transparent;
   cursor: pointer;
 }
 
-.copyButton:hover {
+.actionButton:hover {
   color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-interactive-bg-hover);
 }
 
-.copyButton:focus-visible {
+.actionButton[aria-pressed='true'] {
+  color: var(--dsw-alias-state-business-primary);
+}
+
+.actionButton:focus-visible {
   outline: 1px solid var(--dsw-alias-state-business-primary);
   outline-offset: -1px;
 }
 
-.copyButton[data-state='failed'] {
+.actionButton[data-state='failed'] {
   color: var(--dsw-alias-state-error-primary);
 }
 

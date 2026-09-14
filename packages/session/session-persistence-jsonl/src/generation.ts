@@ -7,6 +7,7 @@
  * @module @deepseek-ai/dsh-session-persistence-jsonl/generation
  */
 
+import { currentSessionMessageProjections } from '@deepseek-ai/dsh-session-format-catalog/message-projections'
 import { createHash, randomBytes } from 'node:crypto'
 import {
   link as fsLink,
@@ -536,6 +537,7 @@ async function verifyCurrentGeneration(
     generation.meta,
     generation.inheritedEventCount,
     'detached',
+    currentSessionMessageProjections,
   )
   assertCurrentAssistantStreams(generation.events)
   return {

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-fs-observation-policy` 在 `ctx.fs` 文件系统约定（[`dsh-fs`](../fs/README.zh.md)）之上添加编辑前读取策略：它记录调用会话观察过哪些文件，并用该记录防护每一次写入与编辑——未见文件只能被创建，已观察文件只能在最后看到的版本上被替换，编辑则要求先读取。它只通过 `fs/*` 事件参与，因此不注册任何服务，也没有公开方法；移除它只会让工具回到裸提供方的无条件变更行为，而不会破坏工具。把它与后端（`fs-local`、`fs-sandbox`）和工具（`tool-fs`）一起加载，会让模型在读取文件之前无法成功编辑文件，并收到清晰的恢复提示。需要 agent（智能体）先读后改的部署请选择它。
+`dsh-fs-observation-policy` 要求 agent（智能体）先读取文件，文件系统工具才可覆盖或编辑它。如果文件自读取后发生变化，它也会拒绝变更，并清楚提示重新读取后重试。读取缺失路径会授权带防护的创建，同时仍防止覆盖并发创建的文件。需要编辑前读取安全性的部署请选择它；由于观察记录不持久化，恢复的会话必须重新读取目标。
 
 ## 目录
 
@@ -29,7 +29,7 @@ kind: "package-reference"
 
 ### 最小组合
 
-先加载后端，再加载本插件，最后加载工具。策略监听器应当是 `fs/*` 意图槽位上第一个注册的决策器。
+先加载后端，再加载本插件，最后加载工具。策略监听器应当是 `fs/*` 意图 slot 上第一个注册的决策器。
 
 ```yaml
 - name: '@deepseek-ai/dsh-fs-local'
@@ -73,13 +73,13 @@ kind: "package-reference"
 
 `fs/write-intent` 把未见或确认缺失解析为 `{ kind: 'createIfAbsent' }`，把已观测存在解析为 `{ kind: 'replaceIfVersion', version: vObserved }`。`fs/edit-intent` 以 `FS_NOT_OBSERVED` 拒绝未见目标，以 `FS_NOT_FOUND` 拒绝确认缺失的目标，否则提供观察到的版本作为比较并交换的基础。`fs/observed` 为该所有者与目标记录 `{ kind: 'present', version }` 或 `{ kind: 'absent' }`——同步、只有副作用的 `WeakMap.set`，因为成功的变更已经提交。
 
-### 单槽、先到者胜
+### 单 slot、先到者胜
 
-每个意图槽位只容纳一个决策器：本插件会完整决策，绝不调用 `next()`。槽位按注册顺序先到者胜——由本插件拥有槽位只是默认部署约定，不是事件强制的不变式。分层权限、审计或沙箱拦截属于 `tools/execute` waterfall（瀑布式事件）。
+每个意图 slot 只容纳一个决策器：本插件会完整决策，绝不调用 `next()`。slot 按注册顺序先到者胜——由本插件拥有 slot 只是默认部署约定，不是事件强制的不变式。分层权限、审计或沙箱拦截属于 `tools/execute` waterfall（瀑布式事件）。
 
 ### 生命周期
 
-已观察状态在插件 dispose（资源释放）时丢弃（HMR 安全），且绝不跨会话持久化——恢复的会话从无观察状态开始。
+已观察状态在插件 dispose（资源释放）时丢弃，以确保 HMR（热模块替换）安全，且绝不跨会话持久化——恢复的会话从无观察状态开始。
 
 </details>
 
@@ -95,7 +95,7 @@ kind: "package-reference"
 - [tool-fs](../tool-fs/README.zh.md)——分派 `fs/*` 事件的面向模型工具。
 - [fs-local](../fs-local/README.zh.md)——本策略所防护的宿主文件系统后端。
 - [fs-sandbox](../fs-sandbox/README.zh.md)——与本策略组合的沙箱强制后端。
-- [Fsspec 风格 seam 拆分笔记](../../../.agents/notes/implemented/simplification/2026-06-26-fsspec-style-fs-seam.zh.md)——策略为何是事件插件而非提供方方法。
+- [Fsspec 风格 seam 拆分 Agent Note](../../../.agents/notes/implemented/simplification/2026-06-26-fsspec-style-fs-seam.zh.md)——策略为何是事件插件而非提供方方法。
 
 -----
 
@@ -124,9 +124,9 @@ kind: "package-reference"
 这些限制说明本策略何时不合适，或何时需要特别的运维注意。它们是当前包约束，不是通用文件系统对比或任务积压。
 
 - **已观察状态无法在会话恢复后保留**：该记录的持久化工作延期处理，因此恢复的会话必须重新读取文件，才能执行防护写入与编辑。
-- **没有 agent（智能体）会话的参与者绝无法满足策略**：它们的编辑会抛出 `FS_NOT_OBSERVED`，写入总会解析为 `createIfAbsent`，因此非 agent 调用方无法通过门禁覆盖现有文件。
+- **没有 agent 会话的参与者绝无法满足策略**：它们的编辑会抛出 `FS_NOT_OBSERVED`，写入总会解析为 `createIfAbsent`，因此非 agent 调用方无法通过门禁覆盖现有文件。
 - **直接 `ctx.fs` 读取不会发出 `fs/observed`**：在 `read` 工具之外读取的文件仍未观察；后续防护编辑会以 `FS_NOT_OBSERVED` 拒绝，直到工具读取该文件。
-- **授权依据是版本新鲜度，而非视图完整性**：任何窗口读取都会授权对未变文件执行全文件覆盖，这有意弱于完整视图规则（见[seam 拆分笔记](../../../.agents/notes/implemented/simplification/2026-06-26-fsspec-style-fs-seam.zh.md)）。
+- **授权依据是版本新鲜度，而非视图完整性**：任何窗口读取都会授权对未变文件执行全文件覆盖，这有意弱于完整视图规则（见[seam 拆分 Agent Note](../../../.agents/notes/implemented/simplification/2026-06-26-fsspec-style-fs-seam.zh.md)）。
 
 <a id="dev-note"></a>
 ### 开发备注

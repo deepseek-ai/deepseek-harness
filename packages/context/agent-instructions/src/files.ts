@@ -14,8 +14,8 @@ import { resolveConfig, resolveDiscoveryConfig, type ResolvedConfig } from './co
 import { trimmedInstructionDigest } from './digest.ts'
 import {
   decodeScopeKey,
-  renderWorkspaceInstructionSet,
-  type RenderedWorkspaceContext,
+  renderAgentInstructionSet,
+  type RenderedAgentInstructions,
   USER_GLOBAL_DIRECTORY,
   USER_GLOBAL_FILE,
 } from './render.ts'
@@ -64,7 +64,7 @@ interface LoadOptions extends DiscoverOptions {
 
 /** Rendered baseline plus the successfully read and byte-budget-retained files. */
 export interface RenderedInstructionSet {
-  rendered: RenderedWorkspaceContext
+  rendered: RenderedAgentInstructions
   /** Successfully read candidates before content deduplication and byte budgeting. */
   observed: LoadedInstructionFile[]
   /** Candidates retained by content deduplication and byte budgeting. */
@@ -93,6 +93,10 @@ function signalOptions(signal?: AbortSignal): { signal: AbortSignal } | undefine
 
 function isMissingPathError(error: unknown): boolean {
   return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+}
+
+function isMissingProviderPathError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'FS_NOT_FOUND'
 }
 
 async function nodeStatFile(path: string, signal?: AbortSignal): Promise<StatFileProbe> {
@@ -147,11 +151,10 @@ async function existsAsMarker(path: string, fileSystem?: FileSystem, signal?: Ab
     try {
       const target = await fileSystem.resolve(path, signalOptions(signal))
       return await fileSystem.stat(target, signal) !== undefined
-    } catch {
+    } catch (error: unknown) {
       signal?.throwIfAborted()
-      // TODO(root-marker-unavailable): preserve provider failure separately from
-      // absence and stop discovery; continuing upward can cross into an ancestor project.
-      return false
+      if (isMissingProviderPathError(error)) return false
+      throw error
     }
   }
   try {
@@ -159,9 +162,10 @@ async function existsAsMarker(path: string, fileSystem?: FileSystem, signal?: Ab
     await stat(path)
     signal?.throwIfAborted()
     return true
-  } catch {
+  } catch (error: unknown) {
     signal?.throwIfAborted()
-    return false
+    if (isMissingPathError(error)) return false
+    throw error
   }
 }
 
@@ -172,6 +176,7 @@ async function existsAsMarker(path: string, fileSystem?: FileSystem, signal?: Ab
  * @param fileSystem - optional provider used instead of host filesystem probes.
  * @param signal - cancellation for provider and host probes.
  * @returns the discovered project root, or `cwd` when no marker exists.
+ * @throws the original marker metadata error or cancellation reason when a probe is unavailable.
  */
 export async function findProjectRoot(
   cwd: string,
@@ -314,6 +319,8 @@ async function discoverInstructionFiles(
  * duplicates are collapsed later, once content is read.
  * @param options - cwd, home, root marker, and candidate configuration.
  * @returns path-deduplicated instruction candidates in model precedence order.
+ * @throws the original root-marker metadata error or cancellation reason when
+ * discovery cannot identify the project root.
  */
 export async function discoverBaselineInstructionFiles(options: DiscoverOptions): Promise<InstructionFile[]> {
   return (await discoverInstructionFiles(options)).map(({ absolutePath, displayPath }) => ({ absolutePath, displayPath }))
@@ -388,11 +395,13 @@ export function dedupInstructionFilesByDirectory(files: LoadedInstructionFile[])
  * @param options - discovery, source-size, byte-budget, and cancellation configuration.
  * @param fileSystem - optional provider used instead of host filesystem reads.
  * @returns rendered baseline context, or undefined when nothing can be loaded.
+ * @throws the original root-marker metadata error or cancellation reason when
+ * discovery cannot identify the project root.
  */
 export async function loadBaselineInstructions(
   options: LoadOptions,
   fileSystem?: FileSystem,
-): Promise<RenderedWorkspaceContext | undefined> {
+): Promise<RenderedAgentInstructions | undefined> {
   return (await loadBaselineInstructionSet(options, fileSystem))?.rendered
 }
 
@@ -425,7 +434,7 @@ export async function loadBaselineInstructionSet(
   const deduped = dedupInstructionFilesByDirectory(loaded)
   if (deduped.length === 0) {
     if (options.replacePreviousBaseline !== true) return undefined
-    const { rendered, included } = renderWorkspaceInstructionSet([], {
+    const { rendered, included } = renderAgentInstructionSet([], {
       maxBytes: config.maxBytes,
       replacePreviousBaseline: true,
     })
@@ -435,7 +444,7 @@ export async function loadBaselineInstructionSet(
       included,
     }
   }
-  const { rendered, included } = renderWorkspaceInstructionSet(deduped, {
+  const { rendered, included } = renderAgentInstructionSet(deduped, {
     maxBytes: config.maxBytes,
     ...options.replacePreviousBaseline === undefined
       ? {}

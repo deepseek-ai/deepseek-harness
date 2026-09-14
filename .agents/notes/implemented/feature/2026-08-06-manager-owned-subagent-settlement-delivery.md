@@ -16,9 +16,13 @@ The signal already existed. `subagent/end` has carried `stopReason` and `lastAss
 
 The continuation manager delivers the account itself, from inside the disposal transaction that ends the Activation.
 
-When a resident Activation settles, `notifySettlement()` resolves the child's durable direct parent and sends it one user-role message: the epoch's outcome as a sentence the parent can act on, then the child's final assistant content, or a statement that it produced none. Delivery is unconditional for every child whose id a caller actually received. It does not consult whether the child reported, and it keeps no bookkeeping that could make the promise conditional — that unconditionality is what lets `tool-subagent` promise a runtime notice containing the outcome and any final assistant message. A materialization rolled back before its first accepted message stays silent, because the caller was told that child was not established.
+When a resident Activation settles, `notifySettlement()` resolves the child's durable direct parent and sends it one user-role message: the epoch's outcome as a sentence the parent can act on, then the text from the child's final assistant output, or a statement that it produced no closing text. Delivery is unconditional for every child whose id a caller actually received. It does not consult whether the child reported, and it keeps no bookkeeping that could make the promise conditional — that unconditionality is what lets `tool-subagent` promise a runtime notice containing `its outcome and any final assistant message`. A materialization rolled back before its first accepted message stays silent, because the caller was told that child was not established.
 
-### Provenance
+### Closing text
+
+[`createSettlementMessage()`](../../../../packages/subagent/subagent/src/continuation-messages.ts) projects the selected assistant output to nonempty text blocks before creating the user-role notice. It preserves text bytes and block order, excludes every nontext block, and uses `It left no closing message.` when no nonempty text remains. Text-only notices work across parent providers without depending on their support for particular content types. Reasoning and tool calls, for example, cannot appear in a DeepSeek Messages user message; images are accepted by Messages but not by every parent model. The conversion belongs to notice construction; `AssistantOutputFold`, `SubagentResult.output`, and `subagent/end.lastAssistantMessage` retain complete child output for SDK and UI consumers.
+
+### Runtime source
 
 The notice carries `{ kind: 'subagent-settled', form: 'notice', summary, senderSessionId }`. It is deliberately not the `agent-message` kind used by `send_message`. An Agent message is content the child chose; this is the runtime stating what became of the child. Merging them would credit the child with words it never wrote, and would make a durable log unable to distinguish "the child said it was done" from "the harness observed that it stopped". The `notice` form also gives a UI the collapsed one-line presentation this message wants, where `relay` presents Agent correspondence.
 
@@ -62,7 +66,7 @@ Both matter past the notice: `subagent/end` carries `stopReason` to the jsonrpc 
 
 Three assembled ACP scenarios cover the notice: a child that sends no message, a child that sends a message first, and a child driven through several Agent-message turns. All three need an explicit fence. The notice arrives once the child's teardown finishes, which races whatever the parent is already doing, so each scenario holds the child behind the parent's spawn turn and then waits for the parent turn the notice opens (`waitForTurnStart` at that turn, then `waitForTurnEnd`) before the script continues. Waiting for a turn the run is not fenced to produce is not coverage: it is a timeout when the notice lands in the turn already running instead.
 
-`subagent-continuable` is the one that pins a failure. Its child's last turn dies on the forced durability checkpoint without entering a step, so that transcript is where the stop-reason rule above is visible end to end: the notice says the child *failed*, carries the earlier `SECOND_OK` as its last content rather than as a result, and the parent's own acknowledgement turn reaches the ACP client.
+`subagent-continuable` pins a completed SDK settlement with `SECOND_OK` and no child reasoning in the parent's notice; its child finishes in turn 1, so the configured turn-3 checkpoint failure is not exercised.
 
 A keyless headless Loader snapshot covers the user-visible path end to end. Its replay parent omits `run_in_background` to exercise the continuable background default, never calls `list_agents`, `send_message`, or Task tools, consumes the manager-authored `subagent-settled` notice, and produces its final answer. The child sends no Agent message, so the transcript depends only on the runtime notice. A test-only Loader fence holds the parent's post-spawn request until the real manager notice enters its inbox, removing platform scheduling from the transcript without synthesizing the notice.
 
@@ -83,6 +87,10 @@ The refusal and interruption wordings are pinned verbatim in unit tests rather t
 **Change `subagent/end` to carry the parent, and let a plugin deliver.** That widens a published payload for one in-package consumer, keeps every ordering hazard, and makes the return channel an optional plugin again. Extending the package-private `ActivationObserver` with `terminal(failure)` keeps one computation of the terminal facts and no public surface change.
 
 **Always use `followup`.** Simpler and uniform, but a fan-out of children settling together would cost one parent turn each. The step-boundary batch already exists; using it is free.
+
+**Filter the canonical child output.** Removing nontext blocks in `AssistantOutputFold` would discard assistant content needed by SDK and UI consumers. Only the parent notice requires a text projection.
+
+**Relax the Messages serializer.** Accepting or silently discarding invalid user-role blocks would conceal the producer's role conversion error. Notice construction supplies content that every parent provider can represent while protocol validation remains strict.
 
 ## Consequences
 

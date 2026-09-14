@@ -1,0 +1,58 @@
+{
+  "tools": [
+    {
+      "name": "browser_take_screenshot",
+      "description": "Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "element": {
+            "description": "Human-readable element description used to obtain permission to interact with the element",
+            "type": "string"
+          },
+          "target": {
+            "description": "Exact target element reference from the page snapshot, or a unique element selector",
+            "type": "string"
+          },
+          "type": {
+            "description": "Image format for the screenshot. If unset, inferred from the filename extension, otherwise png.",
+            "type": "string",
+            "enum": [
+              "png",
+              "jpeg",
+              "webp"
+            ]
+          },
+          "filename": {
+            "description": "File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg|webp}` if not specified. Prefer relative file names to stay within the output directory.",
+            "type": "string"
+          },
+          "fullPage": {
+            "description": "When true, takes a screenshot of the full scrollable page, instead of the currently visible viewport. Cannot be used with element screenshots.",
+            "type": "boolean"
+          },
+          "scale": {
+            "default": "css",
+            "description": "Image resolution scale. \"css\" produces a screenshot sized in CSS pixels (smaller, consistent across devices). \"device\" produces a high-resolution screenshot using device pixels (larger, accounts for the device pixel ratio). Default is css.",
+            "type": "string",
+            "enum": [
+              "css",
+              "device"
+            ]
+          }
+        },
+        "required": [
+          "scale"
+        ],
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false
+      },
+      "annotations": {
+        "title": "Take a screenshot",
+        "readOnlyHint": true,
+        "destructiveHint": false,
+        "openWorldHint": true
+      }
+    }
+  ]
+}

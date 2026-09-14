@@ -1,5 +1,6 @@
 /** Shared event metadata and semantic-document projection. */
 
+import { currentSessionMessageProjections } from '@deepseek-ai/dsh-session-format-catalog/message-projections'
 import { foldSurface } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, SessionId, SessionSeq } from '@deepseek-ai/dsh-session'
 import type { SessionEventRecord, SessionEventSearchDocument, SessionEventSurface } from './types.ts'
@@ -56,7 +57,7 @@ export function buildSessionEventSearchDocuments(
 function classifySurface(events: readonly SessionEvent[]): Map<SessionSeq, SessionEventSurface> {
   let folded: ReturnType<typeof foldSurface>
   try {
-    folded = foldSurface(events)
+    folded = foldSurface(events, currentSessionMessageProjections)
   } catch (error: unknown) {
     throw new SessionQueryError(
       /* v8 ignore next -- foldSurface throws Error instances */

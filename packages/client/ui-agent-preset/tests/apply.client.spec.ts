@@ -32,6 +32,7 @@ const ROSTER_ONE = {
   value: {
     presets: [{ id: 'standard', trust: 'system', isDefault: true }],
     authorable: true,
+    modeSelectionEnabled: true,
   },
 }
 
@@ -44,6 +45,7 @@ const ROSTER_AUTHORED = {
       { id: 'mine', trust: 'user', isDefault: false },
     ],
     authorable: true,
+    modeSelectionEnabled: true,
   },
 }
 
@@ -56,20 +58,35 @@ const ROSTER_MOVED = {
       { id: 'minimal', trust: 'system', isDefault: true },
     ],
     authorable: true,
+    modeSelectionEnabled: true,
   },
 }
 
-async function bench() {
+/** The deployment after reconnect, with mode selection disabled. */
+const ROSTER_HIDDEN = {
+  ok: true as const,
+  value: {
+    presets: [{ id: 'standard', trust: 'system', isDefault: true }],
+    authorable: true,
+    modeSelectionEnabled: false,
+  },
+}
+
+async function bench(options: {
+  failSettingsUpdate?: boolean
+} = {}) {
   const ctx = new Context()
   // The host's answer, mutable so a spec can move the default the way the
   // settings surface does and watch who re-reads it.
-  let ROSTER: typeof ROSTER_ONE | typeof ROSTER_MOVED | typeof ROSTER_AUTHORED = ROSTER_ONE
+  let ROSTER: typeof ROSTER_ONE | typeof ROSTER_MOVED | typeof ROSTER_AUTHORED | typeof ROSTER_HIDDEN = ROSTER_ONE
   const moveDefault = (): void => { ROSTER = ROSTER_MOVED }
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('zh')
   ctx.provide('locale', locale)
   const calls: string[] = []
+  let savedDefault = 'standard'
+  let selectionEnabled = true
   // The row reads `describe` to learn whether this browser may write at all,
   // and its default write is the one op this spec records.
   const settings = {
@@ -78,8 +95,23 @@ async function bench() {
       ok: true as const,
       value: { writable: true, hasDocument: true, namespaces: [] },
     }),
-    update: (_ns: string, patch: unknown) => {
+    update: (_ns: string, patch: { default?: unknown; modeSelectionEnabled?: unknown }) => {
       calls.push(`settings:${JSON.stringify(patch)}`)
+      if (options.failSettingsUpdate === true) {
+        return Promise.resolve({
+          ok: false as const,
+          error: new RemoteError('gateway/internal', 'settings write disconnected', {}),
+        })
+      }
+      if (typeof patch.default === 'string') {
+        savedDefault = patch.default
+      }
+      if (typeof patch.modeSelectionEnabled === 'boolean') {
+        selectionEnabled = patch.modeSelectionEnabled
+      }
+      ROSTER = !selectionEnabled
+        ? ROSTER_HIDDEN
+        : savedDefault === 'minimal' ? ROSTER_MOVED : ROSTER_ONE
       return Promise.resolve({ ok: true as const, value: {} })
     },
     openAgentPresetDirectory: (agentPreset: string) => {
@@ -215,6 +247,7 @@ describe('ui-agent-preset apply', () => {
 
     const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
 
+    await section.load()
     await section.makeDefault('standard')
     expect(section.hooks.agentPresetSection.getSnapshot().rows)
       .toEqual([{ id: 'standard', trust: 'system', isDefault: true }])
@@ -269,6 +302,10 @@ describe('ui-agent-preset apply', () => {
   it('re-reads both surfaces when the connection comes back', async () => {
     const { ctx, slots, calls } = await bench()
     declareRoot(slots)
+    const conversation = declareConversation(slots)
+    ctx.provide('conversation', {} as never)
+    ctx.provide('sessions', sessionsDouble({ byId: {} }) as never)
+    ctx.provide('uiWorkspace', uiWorkspaceDouble() as never)
     await ctx.plugin({ inject: [...inject], apply }).await()
     const section = (slots.entries('settings.section')[0]!.inject as unknown as () => AgentPresetSectionInjected)()
     await section.load()
@@ -277,7 +314,8 @@ describe('ui-agent-preset apply', () => {
     ctx.emit('connection/reset')
 
     // A reconnect can land on a host whose roster changed under the browser.
-    await vi.waitFor(() => { expect(calls.length).toBe(before + 2) })
+    await vi.waitFor(() => { expect(calls.length).toBe(before + 3) })
+    conversation()
   })
 
   it('leaves the section alone until it has been opened once', async () => {
@@ -346,6 +384,73 @@ describe('ui-agent-preset apply', () => {
       expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('minimal')
     })
     conversation()
+  })
+
+  it('aligns Settings defaults with the current blank Session, never a running one', async () => {
+    const { ctx, slots, calls } = await bench()
+    declareRoot(slots)
+    const conversation = declareConversation(slots)
+    ctx.provide('conversation', {} as never)
+    const sessionState = {
+      current: 's1',
+      byId: {
+        s1: { id: 's1', blank: true, projectionValues: { agentPreset: 'standard' } },
+      },
+    }
+    const sessions = sessionsDouble(sessionState)
+    ctx.provide('sessions', sessions as never)
+    ctx.provide('uiWorkspace', uiWorkspaceDouble() as never)
+    await ctx.plugin({ inject: [...inject, 'conversation', 'sessions', 'uiWorkspace'], apply }).await()
+    const section = (slots.entries('settings.section')[0]!
+      .inject as unknown as () => AgentPresetSectionInjected)()
+    const seat = (slots.entries('conversation.hero.agentPreset')[0]!
+      .inject as unknown as () => AgentPresetSeatInjected)()
+    await Promise.all([section.load(), seat.load()])
+
+    await section.makeDefault('minimal')
+    expect(calls.filter(call => call.startsWith('select:'))).toEqual(['select:minimal'])
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('minimal')
+    sessionState.byId.s1.projectionValues.agentPreset = 'minimal'
+
+    await section.setPickerVisible(false)
+    expect(calls.filter(call => call.startsWith('select:'))).toEqual([
+      'select:minimal', 'select:standard',
+    ])
+    expect(section.hooks.agentPresetSection.getSnapshot().showPicker).toBe(false)
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('standard')
+    sessionState.byId.s1.projectionValues.agentPreset = 'standard'
+
+    await section.setPickerVisible(true)
+    expect(calls.filter(call => call.startsWith('select:'))).toEqual([
+      'select:minimal', 'select:standard', 'select:minimal',
+    ])
+    expect(section.hooks.agentPresetSection.getSnapshot().showPicker).toBe(true)
+    expect(seat.hooks.agentPresetSeat.getSnapshot().current).toBe('minimal')
+    sessionState.byId.s1.projectionValues.agentPreset = 'minimal'
+
+    sessionState.byId.s1.blank = false
+    await section.makeDefault('standard')
+    expect(calls.filter(call => call.startsWith('select:'))).toEqual([
+      'select:minimal', 'select:standard', 'select:minimal',
+    ])
+    conversation()
+  })
+
+  it('reloads Host truth after a picker-policy save failure', async () => {
+    const { ctx, slots, calls } = await bench({ failSettingsUpdate: true })
+    declareRoot(slots)
+    await ctx.plugin({ inject: [...inject], apply }).await()
+    const section = (slots.entries('settings.section')[0]!
+      .inject as unknown as () => AgentPresetSectionInjected)()
+    await section.load()
+    expect(section.hooks.agentPresetSection.getSnapshot().showPicker).toBe(true)
+
+    await section.setPickerVisible(false)
+
+    expect(calls.filter(call => call === 'list')).toHaveLength(2)
+    expect(section.hooks.agentPresetSection.getSnapshot()).toMatchObject({
+      showPicker: true, policySaving: false, error: 'settings write disconnected',
+    })
   })
 
   it('offers a just-authored preset on the new-session chip', async () => {
@@ -495,6 +600,11 @@ describe('ui-agent-preset apply', () => {
     const seat = (slots.entries('conversation.hero.agentPreset')[0]!
       .inject as unknown as () => AgentPresetSeatInjected)()
 
+    await section.load()
+    await section.setPickerVisible(false)
+    section.startCreatorDraft?.()
+    expect(uiWorkspace.starts).toHaveLength(0)
+    await section.setPickerVisible(true)
     section.startCreatorDraft?.()
 
     // The pick is staged on the chip's own controller — the session the
@@ -536,6 +646,7 @@ describe('ui-agent-preset apply', () => {
     const seat = (slots.entries('conversation.hero.agentPreset')[0]!
       .inject as unknown as () => AgentPresetSeatInjected)()
 
+    await section.load()
     section.startCreatorDraft?.()
     state.current = 's1'
     state.byId['s1'] = { id: 's1', blank: true }
@@ -568,6 +679,25 @@ describe('ui-agent-preset apply', () => {
 })
 
 describe('AgentPresetSeatController reconciliation', () => {
+  it('does not retarget a different blank Session after a Settings write', async () => {
+    const select = vi.fn(() => Promise.resolve({ ok: true as const, value: 'minimal' }))
+    let current = {
+      id: SessionId('first'), blank: true, projectionValues: { agentPreset: 'standard' },
+    }
+    const controller = new AgentPresetSeatController({
+      remote: { agentPresets: { select } },
+    } as never, () => current)
+    const captured = controller.blankSessionId()
+    if (captured === undefined) throw new Error('expected a blank Session')
+    current = {
+      id: SessionId('second'), blank: true, projectionValues: { agentPreset: 'standard' },
+    }
+
+    await controller.syncBlankSession(captured, 'minimal')
+
+    expect(select).not.toHaveBeenCalled()
+  })
+
   it('uses the deployment default without a Session and clears it for an uncomposed Session', async () => {
     const state: { current?: { id: SessionId; blank: boolean } } = {}
     const controller = new AgentPresetSeatController({

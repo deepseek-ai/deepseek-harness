@@ -18,11 +18,11 @@ harness 此前无法消费 MCP（Model Context Protocol）生态中的工具。M
 
 ### SDK
 
-使用官方 [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk)（`Client`、`StdioClientTransport`、`StreamableHTTPClientTransport`）。harness 不自行实现 JSON-RPC，与 ACP 委托给 `@agentclientprotocol/sdk` 的做法一致。
+使用官方 [`@modelcontextprotocol/client`](https://github.com/modelcontextprotocol/typescript-sdk)（`Client`、`StdioClientTransport`、`StreamableHTTPClientTransport`）。[协议采用记录](2026-09-12-mcp-sdk-protocol-negotiation.zh.md) 负责协商与 SDK 校验。Harness 不实现 JSON-RPC 帧处理。
 
 ### 范围
 
-仅 MCP Client（不含 server 端——ACP 已承担「将 harness 暴露为 agent」的角色）。仅桥接 **Tools**——Resources 和 Prompts 延后处理（它们需要 harness 侧尚不存在的消费机制，且设计空间较大）。
+仅 MCP Client，不提供服务器端。工具通过本包注册；[资源与服务器指令](2026-09-12-mcp-resources-and-instructions.zh.md) 分别通过共享资源工具和已记录的字面系统提示词提供。MCP 提示词模板不受支持。
 
 ### 插件形态
 
@@ -96,11 +96,13 @@ type Config = StdioConfig | StreamableHttpConfig
 
 这种按服务器限定的形式是多服务器 agent 客户端事实上的标准——所有被调研的终端用户产品都按服务器限定 MCP 工具名（[Claude Code](https://code.claude.com/docs/en/agent-sdk/mcp#tool-naming-convention) `mcp__github__list_issues`、[Codex](https://openai.com/index/unrolling-the-codex-agent-loop/) `mcp__weather__get-forecast`、[Gemini CLI](https://geminicli.com/docs/tools/mcp-server/#3-tool-naming-and-namespaces)、[VS Code](https://github.com/microsoft/vscode/blob/ab9ec62c6a61e429a9abd612ff220c3f4834c9ea/src/vs/workbench/contrib/mcp/common/mcpServer.ts#L217-L260)、[Cline](https://github.com/cline/cline/blob/52fdbb1d72f7324a28142a7ba7678d4b53c902f4/sdk/packages/core/src/extensions/mcp/name-transform.ts#L20-L35)、[Roo Code](https://github.com/RooCodeInc/Roo-Code/blob/b867ec9145750d0ae1ff7f02d35406e9bf2a0b16/src/utils/mcp-name.ts#L117-L140)、[Goose](https://github.com/block/goose/blob/b3a012cbdde854b0fe14f95b1c48543bf6517c0a/crates/goose/src/agents/extension_manager.rs#L1391-L1441)、[OpenCode](https://github.com/anomalyco/opencode/blob/d199b1bff90282a4f9cd6251b5fc7b16875a52f6/packages/opencode/src/mcp/catalog.ts#L117-L120)）；`mcp__<server>__<tool>` 的拼写方式与 Claude Code 和 Codex 一致。`mcp__` 前缀将 MCP 注册与原生工具的命名空间隔离，并为权限/遥测规则提供稳定的匹配模式（`mcp__*`、`mcp__github__*`）。
 
-1. 连接时：遍历 `client.listTools()` 的分页结果，推导每个工具的 `publicName`，然后通过 `ctx.tools.register()` 将其注册为原始 `ToolDefinition`。MCP 的 JSON Schema 和描述原样透传（不做 `defineTool` DSL 转换）；仅替换模型可见的 `name`。
-2. 监听 `notifications/tools/list_changed` → 重新执行同步（dispose 上一代、注册新一代）。确定性命名意味着未变化的工具在重新同步后保持原名。
+1. 连接时：通过 `listTools(undefined, { cacheMode: 'refresh' })` 获取 SDK 聚合的列表，推导每个工具的 `publicName`，然后通过 `ctx.tools.register()` 将其注册为原始 `ToolDefinition`。MCP 的 JSON Schema 和描述原样透传（不做 `defineTool` DSL 转换）；仅替换模型可见的 `name`。
+2. 来自旧版通知或现代订阅的 SDK `listChanged.tools.onChanged` 回调触发同一同步（dispose 上一代、注册新一代）。确定性命名意味着未变化的工具在重新同步后保持原名。
 3. 执行器闭包持有 `rawName`；公开名称永远不发送给服务器，也永远不被解析以还原原始名称。
 4. 无 `presentCall`/`presentResult`——UI 消费方使用提供方无关的通用卡片兜底。
 5. 工具在系统提示词中是透明的——除名称本身外不附加「[via MCP]」标注。
+
+[协议采用记录](2026-09-12-mcp-sdk-protocol-negotiation.zh.md) 负责说明 SDK 分页及其页数上限。发现失败时，同步会保留上一代工具。
 
 ### 公开名称规范化
 
@@ -126,7 +128,7 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 - 服务器列出重复的工具名属于无效工具列表：同步抛出异常，上一代注册保持不变。
 - 替换期间的注册表冲突只可能意味着外部工具占据了该服务器的 `mcp__<serverName>__` 命名空间：部分代注册被回滚（该服务器零工具），并以醒目日志记录错误。
 
-工具永远不会被静默跳过；哪些工具可用永远不取决于插件加载顺序。
+SDK 接受符合协议的工具，并执行现代 HTTP header 声明检查。注册顺序不决定已接受名称的归属。
 
 ### 命名不变式
 
@@ -140,9 +142,9 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 
 为来自同一个 MCP 服务器的所有工具提供统一的 `execute` 处理器：
 
-1. 解析 `rawName`（执行器闭包持有它），以配置的超时时间调用 `client.callTool({ name: rawName, arguments }, { signal: exec.signal })`——公开名称永远不发送给服务器。
+1. 调用 SDK 的 `callTool`，传入闭包持有的 `rawName`、模型参数、`exec.signal`、配置的超时时间与完整的已发现 `toolDefinition`——公开名称永远不发送给服务器。
 2. 把规范成功值保留为 `{ content: JsonValue[], structuredContent? }`；完整 MCP JSON 块仍是程序化调用／PTC mode 值。`isError: true` 会在持久化任何图片前抛出，使失败路径归注册表所有。
-3. 另行准备有序 Native 投影。连续文本块以 `'\n'` 连接；资源链接以文本保留名称和 URI；音频、嵌入资源、格式错误的块和未知类型成为明确诊断。只要存在图片，桥接层就严格解码完整批次，解析调用 agent 的最新确切路由，要求附件存储以及模型明确支持图片输入，再把全成员校验和有序持久化委托给 `AttachmentStore.saveImages()`。任何解码、能力或存储拒绝都会把全部图片渲染为诊断文本，且不返回部分引用。
+3. 另行准备有序 Native 投影。连续文本块以 `'\n'` 连接；资源链接以文本保留名称和 URI；音频和嵌入资源成为明确诊断。SDK 拒绝格式错误的协议结果。只要存在图片，桥接层就严格解码完整批次，解析调用 agent 的最新确切路由，要求附件存储以及模型明确支持图片输入，再把全成员校验和有序持久化委托给 `AttachmentStore.saveImages()`。任何解码、能力或存储拒绝都会把全部图片渲染为诊断文本，且不返回部分引用。
 4. 保持 `output.render` 同步且纯净。执行器把更丰富的投影暂存在按同步世代创建、以确切执行为键的 `WeakMap` 中；只有注册表的 post-execute 结果仍保留原规范值和兜底内容时，`finalizeContent` 才安装该投影。策略阻止、值替换或内容替换仍具有权威性，重新同步也无法让旧世代消费新执行状态。
 5. PTC mode 接收未改动的规范值。其通用分发桥接层会把包含图片的成功最终内容序列经外层 `run_code` 结果延后，因此 MCP 无需私有父 token 特例。
 6. 取消：`exec.signal`（来自 agent loop 的取消）透传给 MCP SDK 的 `callTool`、确切模型查询和存储前门禁。
@@ -171,7 +173,7 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 
 ### 桥接 Resources 和 Prompts
 
-延后。Resources 需要 harness 侧的机制来决定何时注入内容（系统提示词？按需？模型触发？）。Prompts 需要 harness 尚不具备的「提示词模板」概念。两者都需要独立设计；Tools 是高价值、低风险的起点。
+资源的消费机制由[按需资源决策](2026-09-12-mcp-resources-and-instructions.zh.md)负责。MCP 提示词模板仍未实现：它需要独立的用户选择和调用机制。
 
 ### 原始模型可见工具名加可选 `toolPrefix`
 
@@ -214,7 +216,7 @@ MCP 仅保证工具名在[单个服务器内](https://modelcontextprotocol.io/sp
 - 每个 MCP 服务器只需 `cordis.yml` 中的一条配置即完成集成：`serverName: filesystem` 加一条 stdio 命令（或一个 Streamable HTTP URL），就能将 `mcp__filesystem__read_file` 放入模型的工具列表，可调用，协议上使用原始的 `read_file`。
 - 公开名称是会话历史和权限／配置 API 的一部分；测试固定了命名算法，发布后变更即为破坏性变更。
 - `mcp__<serverName>__` 限定符在每个名称上消耗 token。已接受：描述和 JSON Schema 在工具定义 token 中占主导，而限定符换来了稳定标识、冲突隔离和 MCP 全局策略匹配模式（`mcp__*`、`mcp__github__*`）。
-- **MCP SDK 稳定性**：`@modelcontextprotocol/sdk` 仍在演进中；破坏性变更需要更新桥接。版本已固定，且该 SDK 被广泛采用（Claude Desktop、Cursor、VS Code），因此破坏性变更不太可能悄然发生。
+- **MCP SDK 稳定性**：`@modelcontextprotocol/client` 仍在演进中；破坏性变更需要更新桥接。版本已固定，且该 SDK 被广泛采用（Claude Desktop、Cursor、VS Code），因此破坏性变更不太可能悄然发生。
 - **工具 schema 质量**：MCP 服务器可能暴露描述不佳的工具（模糊的描述、不完整的 JSON Schema）。harness 原样透传——垃圾进垃圾出；这是服务器作者的责任，不是桥接的。
 - **Stdio 进程管理**：行为异常的 MCP 服务器如果忽略信号，可能卡住 dispose。Cordis fiber 的 dispose 具有有界的完全停稳过程；卡住的传输层最终会在框架层面超时。
 - 崩溃恢复在[重连预算](../../archived/feature/2026-08-06-mcp-client-auto-reconnect.md)内自动进行；耗尽后或配置 `reconnect.enabled: false` 时回退为手动重新加载。

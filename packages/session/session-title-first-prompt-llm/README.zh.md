@@ -1,5 +1,5 @@
 ---
-description: "面向用户与维护者的首消息 LLM 会话标题提供方说明，用于选择标题策略或排查自动标题生成。"
+description: "面向用户与维护者的首消息 LLM（大语言模型）会话标题提供方说明，用于选择标题策略或排查自动标题生成。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-session-title-first-prompt-llm` 作为可选的 `ctx.sessionTitle` 提供方，通过 `ctx.llm` 总结第一条符合条件的用户消息。它注册 `first-prompt` 节奏，只在全新非 fork 会话首次创建回退时自动运行，并把结果归因于该消息的确切 seq。自动失败会保留回退，之后只能通过 `ctx.sessionTitle.refresh()` 重试。它使用 `dsh-session-title-llm` 的完整必填共享 LLM 配置，因此路由、提示词、预算与取消行为不会漂移。自动行为与配置在前；实现是对共享策略的薄注册。
+`dsh-session-title-first-prompt-llm` 作为可选的 `ctx.sessionTitle` 提供方，通过 `ctx.llm` 总结第一条符合条件的用户消息。它注册 `first-prompt` 节奏，只在全新非 fork 会话首次创建回退时自动运行，并把结果归因于该消息的确切 seq。自动失败会保留回退，之后只能通过 `ctx.sessionTitle.refresh()` 重试。它使用 `dsh-session-title-llm` 的完整必填共享 LLM 配置，因此路由、提示词、预算与取消行为不会漂移。自动行为与配置优先；实现仅在共享策略之上进行轻量注册。
 
 ## 目录
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ### 失败与恢复
 
-失败的生成——主请求之前缺少路由、输入超过 `maxInputBytes`、超时、取消或无效模型输出——会发出警告并保留当前标题；只有显式 `refresh()` 会重试。自动工作不会为主 agent 请求增加 token 或延迟。
+失败的生成——主请求之前缺少路由、输入超过 `maxInputBytes`、超时、取消或无效模型输出——会发出警告并保留当前标题；只有显式 `refresh()` 会重试。自动工作不会为主 agent（智能体）请求增加 token 或延迟。
 
 -----
 
@@ -116,4 +116,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。这个薄 provider 把 request/result 校验委托给共享 title service 与 LLM helper，不保留独立可变状态。
+**运行时不变式：** 不发布伴生入口。这个轻量提供方将请求与结果校验委托给共享标题服务和 LLM 辅助模块，不保留独立的可变状态。

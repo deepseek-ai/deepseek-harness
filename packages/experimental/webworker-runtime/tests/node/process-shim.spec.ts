@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { installProcessGlobal } from '../../src/node/globals/process.ts'
 import { setActiveModuleLoader, WorkerModuleLoader } from '../../src/module-system/module-loader.ts'
 import { MemoryVfs } from '../../src/storage/memory.ts'
+import { spawnSync } from '../../src/node/builtin_modules/implemented/child_process.ts'
 
 const realProcess = globalThis.process
 
@@ -23,6 +24,12 @@ describe('process shim', () => {
     // "0.0.0" keeps the vendored Loader off Node internals so the worker owns
     // the module seam.
     expect(shim.versions.node).toBe('0.0.0')
+  })
+
+  it('exposes an executable identity without enabling Node programs', () => {
+    const shim = installProcessGlobal({ cwd: '/dsh', env: {} })
+    expect(shim.execPath).toBe('/dsh/bin/node')
+    expect(spawnSync(shim.execPath, ['--eval', 'throw new Error("must not execute")']).error?.code).toBe('ENOENT')
   })
 
   it('answers getBuiltinModule from the module proxies and undefined otherwise', () => {

@@ -499,7 +499,6 @@ export class ContinuableActivationRegistry {
     } finally {
       this.wake(activation)
     }
-    activation.announced = true
     return message.id
   }
 
@@ -577,8 +576,7 @@ export class ContinuableActivationRegistry {
   ): Promise<Activation> {
     const { childId, provider, parent, create } = inputs
     inputs.signal.throwIfAborted()
-    const setup = (childCtx: Context): void => {
-      const child = childCtx.agent as Agent
+    const setup = (childCtx: Context, child: Agent): void => {
       // Only fresh creation appends the descriptor and delegated policy after
       // the inherited marker; a cold resume replays those persisted events.
       if (create !== undefined) {
@@ -591,12 +589,14 @@ export class ContinuableActivationRegistry {
     const handle: AgentHandle = create === undefined
       ? await this.ownerCtx.agents.resume({
         resumeSessionId: childId,
+        parentAgent: parent,
         agentOptions: inputs.agentOptions,
         signal: inputs.signal,
         setup,
       })
       : await this.ownerCtx.agents.create({
         sessionId: childId,
+        parentAgent: parent,
         meta: create.meta,
         ...(create.seed === undefined ? {} : { seed: create.seed }),
         inheritedEventCount: create.inheritedEventCount,

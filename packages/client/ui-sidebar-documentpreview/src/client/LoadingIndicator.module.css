@@ -1,0 +1,25 @@
+.loading {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.icon {
+  display: flex;
+  flex: none;
+  animation: turn 0.8s linear infinite;
+}
+
+@keyframes turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon {
+    animation: none;
+  }
+}

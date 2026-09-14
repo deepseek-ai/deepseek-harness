@@ -1,0 +1,10 @@
+version: 1
+scenario: mcp-empty
+profile: headless
+composition: mcp-empty
+recording: live
+header:
+  class: mcp-empty
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn

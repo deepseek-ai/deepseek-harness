@@ -13,7 +13,7 @@ import {
   resolveTargetPolicy,
 } from '@deepseek-ai/dsh-compaction-basic/src/config.ts'
 import type { CompactionResult } from '@deepseek-ai/dsh-compaction'
-import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, CONTEXT_WINDOW_EXCEEDED_CODE, createSystemMessage, createToolResultMessage, LlmAdapter , createMessage } from '@deepseek-ai/dsh-llm'
 import type {
   ContentBlock,
   GenerateOptions,
@@ -107,11 +107,23 @@ function promptInput(text: string): SummarizationInput {
   })] }
 }
 
-/** Closed two-message turns followed by one open turn for durable compaction events. */
-function conversation(turns = 4, text = 'fixture '.repeat(40).trim()): Session {
+const SYSTEM_PROMPT_PLUGIN = '@deepseek-ai/dsh-system-prompt'
+
+/**
+ * Closed two-message turns followed by one open turn for durable compaction events.
+ * A `system` text puts a `system/message` at surface node 0 before turn 1's user message.
+ */
+function conversation(turns = 4, text = 'fixture '.repeat(40).trim(), system?: string): Session {
   const session = Session.create(SessionId(`conversation-${turns}`))
   for (let turn = 1; turn <= turns; turn += 1) {
     session.append('turn/start', { turn })
+    if (turn === 1 && system !== undefined) {
+      session.append('system/message', {
+        turn,
+        step: 1,
+        message: createSystemMessage(system, SYSTEM_PROMPT_PLUGIN),
+      }, { surfaceOp: 'append' })
+    }
     session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: `${text} user ${turn}` }],
       source: { kind: 'user' },
@@ -621,10 +633,44 @@ describe('pressure measurement and retention', () => {
     expect(await compactIfNeeded(compact, conversation(2))).toBeNull()
 
     const session = conversation(4)
+    const head = session.surface.nodes[0]!
     const result = await compactIfNeeded(compact, session)
     expect(result).not.toBeNull()
+    expect(result?.shadowedSeqs[0]).toBe(head)
     expect(result?.shadowedSeqs.length).toBeGreaterThan(2)
     expect(session.surface.nodes.length).toBeLessThan(8)
+  })
+
+  it('starts the range after a system head and keeps that node at surface position 0', async () => {
+    const ctx = createContext()
+    const compact = service(compactConfig, ctx)
+    const session = conversation(4, undefined, 'SYSTEM HEAD')
+    const [head, firstUser] = session.surface.nodes
+    expect(session.eventAt(head!)?.type).toBe('system/message')
+
+    const range = selectCompactableRange(session, ctx.tokenMeter.measure(session), compactConfig.retainTokens!)
+    expect(range?.start).toBe(firstUser)
+
+    const result = await compactIfNeeded(compact, session)
+    expect(result).not.toBeNull()
+    expect(result?.shadowedSeqs).not.toContain(head)
+    expect(result?.shadowedSeqs[0]).toBe(firstUser)
+    expect(session.surface.nodes[0]).toBe(head)
+    expect(session.deriveMessages()[0]).toMatchObject({
+      role: 'system',
+      content: [{ type: 'text', text: 'SYSTEM HEAD' }],
+    })
+    expect(compact.calls[0]!.input.messages[0]).toEqual(session.deriveMessages()[0])
+    expect(compact.calls[0]!.input.messages.filter(message => message.role === 'system')).toHaveLength(1)
+  })
+
+  it('declines when only the system head precedes the retained tail', () => {
+    const ctx = createContext()
+    const session = conversation(1, undefined, 'SYSTEM HEAD')
+    const priced = ctx.tokenMeter.measure(session)
+    const [, user, assistant] = priced.nodes
+    expect(priced.nodes).toHaveLength(3)
+    expect(selectCompactableRange(session, priced, user!.tokens + assistant!.tokens)).toBeNull()
   })
 
   it('counts the durable routed request envelope without putting it on the surface', async () => {
@@ -639,7 +685,7 @@ describe('pressure measurement and retention', () => {
     session.append('request/header', {
       header: {
         config: { provider: MODEL, model: MODEL },
-        system: 's'.repeat(2_000),
+        tools: [{ name: 'bulk', description: 's'.repeat(2_000), parameters: { type: 'object' } }],
       },
       reason: 'resume',
     })
@@ -669,17 +715,18 @@ describe('pressure measurement and retention', () => {
 
   it('declines when envelope pressure is high but the surface has no compactable range', async () => {
     const compact = service(compactConfig)
+    const bulkTools = [{ name: 'bulk', description: 'x'.repeat(100_000), parameters: { type: 'object' } }]
     const empty = Session.create(SessionId('empty'))
     empty.append('turn/start', { turn: 1 })
     empty.append('request/header', {
-      header: { config: { provider: MODEL, model: MODEL }, system: 'x'.repeat(100_000) },
+      header: { config: { provider: MODEL, model: MODEL }, tools: bulkTools },
       reason: 'initial',
     })
     expect(await compactIfNeeded(compact, empty)).toBeNull()
 
     const retained = conversation(1)
     retained.append('request/header', {
-      header: { config: { provider: MODEL, model: MODEL }, system: 'x'.repeat(100_000) },
+      header: { config: { provider: MODEL, model: MODEL }, tools: bulkTools },
       reason: 'resume',
     })
     expect(await compactIfNeeded(compact, retained)).toBeNull()
@@ -891,21 +938,49 @@ describe('compaction region transaction', () => {
     expect(replay.deriveMessages()).toEqual(session.deriveMessages())
   })
 
-  it('replays the latest routed header so the summarizer reuses the cache', async () => {
+  it('replays the system head and latest routed tools so the summarizer reuses the cache', async () => {
     const compact = service()
-    const session = conversation(3)
+    const session = conversation(3, undefined, 'CONVERSATION SYSTEM')
     const tools = [{ name: 'do_thing', description: 'd', parameters: { type: 'object' } }]
     session.append('request/header', {
-      header: { config: { provider: MODEL, model: MODEL }, system: 'CONVERSATION SYSTEM', tools },
+      header: { config: { provider: MODEL, model: MODEL }, tools },
       reason: 'resume',
     })
     const nodes = session.surface.nodes
-    await compact.compactRegion(nodes[0]!, nodes[1]!, agent(session, MODEL), SIGNAL)
+    const prefix = session.deriveMessages().slice(0, 3)
+    await compact.compactRegion(nodes[1]!, nodes[2]!, agent(session, MODEL), SIGNAL)
 
     const { input } = compact.calls[0]!
-    expect(input.system).toBe('CONVERSATION SYSTEM')
-    expect(input.tools).toEqual(tools)
-    expect(summarizedText(input)).toContain('fixture user 1')
+    expect(input).toEqual({ messages: prefix, tools })
+  })
+
+  it('omits the summarizer system prompt for an empty system head or a system-less surface', async () => {
+    const compact = service()
+    const emptyHead = conversation(3, undefined, '')
+    const emptyNodes = emptyHead.surface.nodes
+    expect(emptyHead.eventAt(emptyNodes[0]!)?.type).toBe('system/message')
+    await compact.compactRegion(emptyNodes[1]!, emptyNodes[2]!, agent(emptyHead, MODEL), SIGNAL)
+    expect(compact.calls[0]!.input.messages[0]).toMatchObject({ role: 'user' })
+    expect(compact.calls[0]!.input.messages.some(message => message.role === 'system')).toBe(false)
+    expect(emptyHead.surface.nodes[0]).toBe(emptyNodes[0])
+
+    const headless = conversation(3)
+    const nodes = headless.surface.nodes
+    await compact.compactRegion(nodes[0]!, nodes[1]!, agent(headless, MODEL), SIGNAL)
+    expect(compact.calls[1]!.input.messages.some(message => message.role === 'system')).toBe(false)
+    expect(compact.calls[1]!.input.messages[0]).toMatchObject({ role: 'user' })
+  })
+
+  it('surfaces the session rejection of a range that covers the system head', async () => {
+    const compact = service()
+    const session = conversation(3, undefined, 'PROTECTED SYSTEM')
+    const nodes = [...session.surface.nodes]
+    await expect(compact.compactRegion(nodes[0]!, nodes[3]!, agent(session, MODEL), SIGNAL))
+      .rejects.toThrow(/node 0 holds the system prompt/)
+
+    expect(session.surface.nodes).toEqual(nodes)
+    const end = session.snapshotEvents().findLast(event => event.type === 'compaction/end')
+    expect(end?.type === 'compaction/end' && end.data.error).toBeDefined()
   })
 
   it.each([
@@ -1184,6 +1259,27 @@ async function summarizerHarness(
 }
 
 describe('default one-shot summarizer', () => {
+  it.each([undefined, '', 'SYSTEM HEAD\n精确前缀\n'])('preserves the routed prefix through region summarization with system %j', async (system) => {
+    const { adapter, compact } = await summarizerHarness([{ type: 'text', text: 'summary' }])
+    const session = conversation(3, undefined, system)
+    const tools = [{ name: 'do_thing', description: 'd', parameters: { type: 'object' } }]
+    session.append('request/header', {
+      header: { config: { provider: MODEL, model: MODEL }, tools },
+      reason: 'resume',
+    })
+    const nodes = [...session.surface.nodes]
+    const start = system === undefined ? 0 : 1
+    const prefix = session.deriveMessages().slice(0, system ? 3 : 2)
+    const result = await compact.compactRegion(nodes[start]!, nodes[start + 1]!, agent(session, MODEL), SIGNAL)
+
+    expect(adapter.lastOptions).not.toHaveProperty('system')
+    expect(adapter.lastOptions?.tools).toEqual(tools)
+    expect(adapter.lastOptions?.messages.slice(0, -1)).toEqual(prefix)
+    expect(adapter.lastOptions?.messages.at(-1)).toMatchObject({ role: 'user' })
+    expect(result.shadowedSeqs).toEqual(nodes.slice(start, start + 2))
+    if (system !== undefined) expect(session.surface.nodes[0]).toBe(nodes[0])
+  })
+
   it('requires complete raw output when a subclass marks one local LLM stream call', () => {
     expectTypeOf<{
       summary: ContentBlock[]
@@ -1252,16 +1348,16 @@ describe('default one-shot summarizer', () => {
       ],
       source: { kind: 'plugin', plugin: 'test' },
     })
+    const system = createSystemMessage('REPLAYED SYSTEM', SYSTEM_PROMPT_PLUGIN)
     await compact.runSummarize({
-      system: 'REPLAYED SYSTEM',
       tools,
-      messages: [prefix],
+      messages: [system, prefix],
     }, agent(conversation(1), MODEL))
 
-    expect(adapter.lastOptions?.system).toBe('REPLAYED SYSTEM')
+    expect(adapter.lastOptions).not.toHaveProperty('system')
     expect(adapter.lastOptions?.tools).toEqual(tools)
     const messages = adapter.lastOptions?.messages ?? []
-    expect(messages[0]).toEqual(prefix)
+    expect(messages.slice(0, -1)).toEqual([system, prefix])
     const last = messages.at(-1)?.content[0]
     const lastText = last?.type === 'text' ? last.text : ''
     expect(lastText).toContain('Write concise English engineering prose.')
@@ -1293,9 +1389,9 @@ describe('default one-shot summarizer', () => {
       source: { kind: 'plugin', plugin: 'test' },
     })
 
+    const system = createSystemMessage('WARM SYSTEM', SYSTEM_PROMPT_PLUGIN)
     const output = await compact.runSummarize({
-      system: 'WARM SYSTEM',
-      messages: [prefix],
+      messages: [system, prefix],
     }, agent(conversation(1), 'fallback'))
 
     expect(output).toMatchObject({
@@ -1307,9 +1403,9 @@ describe('default one-shot summarizer', () => {
       provider: 'policy-summary',
       model: 'policy-summary',
       maxTokens: 222,
-      system: 'WARM SYSTEM',
     })
-    expect(policyAdapter.lastOptions?.messages[0]).toEqual(prefix)
+    expect(policyAdapter.lastOptions).not.toHaveProperty('system')
+    expect(policyAdapter.lastOptions?.messages.slice(0, -1)).toEqual([system, prefix])
   })
 
   it('resolves the latest routed provider/model before the AgentOptions pair', async () => {

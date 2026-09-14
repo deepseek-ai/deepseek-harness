@@ -1,0 +1,18 @@
+- id: llm-deepseek
+  disabled: true
+
+- insert:
+    - id: llm-replay
+      name: '@deepseek-ai/dsh-llm-replay'
+      config:
+        providers:
+          - id: deepseek-messages
+            name: DeepSeek
+            models:
+              - id: deepseek-v4-flash
+                systemPromptUpdate: in-history
+                defaultMaxTokens: 256000
+                reasoningEfforts: [off, low, high, max]
+                defaultReasoningEffort: high
+    - id: prompt-update
+      name: '../../../packages/test-support/session-snapshot/tests/fixtures/in-history-prompt-update.ts'

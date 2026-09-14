@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-session-title-llm` runs model-backed title generation through one shared policy: it resolves the auxiliary route, frames the exact selected human messages as JSON, enforces input and output budgets, composes timeout and caller cancellation, and validates the model's output before a title is accepted. It is a library, not a Cordis plugin — the shipped provider plugins call `registerSessionTitleLlmProvider()` with their cadence and message selector, and the helper validates shared config and delegates every revision to one generation path, so registration, route, prompt, cancellation, and validation behavior cannot drift between them. Deployments configure it through the provider plugins, which require every limit. The route, failure, and configuration contracts come first; the request internals live in a collapsible developer section below.
+`dsh-session-title-llm` generates concise session titles from selected human messages with a consistent model request policy. Callers choose which messages contribute to each revision and may either supply a provider and model route together or use the route recorded for the current session. Required limits cap the framed input, generated output, and end-to-end duration, while caller cancellation remains effective throughout streaming. Invalid, empty, late, tool-call, or otherwise non-text results are rejected before they can replace a title.
 
 ## Table of Contents
 

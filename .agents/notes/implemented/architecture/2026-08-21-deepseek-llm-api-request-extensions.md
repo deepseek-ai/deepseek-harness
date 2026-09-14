@@ -30,7 +30,7 @@ The `events` array contains complete canonical `SessionEvent` objects directly. 
 
 `@deepseek-ai/dsh-plugin-package-inventory-deepseek` owns the default-on `dsh_plugin_packages` field from the `llm` package family. It reads active non-group entries from the host Loader tree and, for a live requesting Agent, its standing preset tree. Node package resolution locates the owning manifest without requiring a `./package.json` export. Ordinary entries resolve from their owning tree, while a standing preset root mirrors its Loader's intentional harness-base override and nested includes retain their own bases. An anonymous nearest manifest marks a loose module; a named manifest must carry a version. Exact name/version pairs are deduplicated with deterministic ordering; simultaneously active versions remain separate.
 
-Disabled, pending, failed, unloading, disposed, structural, loose non-package, ordinary dependency, programmatic child-fiber, and in-memory dynamic-plugin entries are outside this package inventory. This definition reports package-backed composition facts the runtime can prove instead of inventing provenance for arbitrary callbacks.
+Disabled, pending, failed, unloading, disposed, structural, loose non-package, ordinary dependency, programmatic child-fiber, and in-memory dynamic-plugin entries are outside this package inventory. This definition reports package-backed composition facts the runtime can prove instead of inventing package identity for arbitrary callbacks.
 
 ## Deferred inventory caching
 
@@ -73,11 +73,11 @@ The receiver would also need to traverse the tagged tree, resolve paths into the
 
 ### Why not omit assistant chunks or overlapping event data?
 
-About 98% of the measured v1 real-session events were `assistant/chunk`. Omitting them after reference encoding reduced the complete identity JSON by another 84.79% for late enable and 6.49% for steady state, but prevented lossless reconstruction and left message provenance dangling. V2 embeds compact streams in attempt settlements; `dsh_session_log` still sends every current canonical event whole and does not omit those embedded records. Fuzzy or normalized substitutions have the same reconstruction defect.
+About 98% of the measured v1 real-session events were `assistant/chunk`. Omitting them after reference encoding reduced the complete identity JSON by another 84.79% for late enable and 6.49% for steady state, but prevented lossless reconstruction and left message source-event references dangling. V2 embeds compact streams in attempt settlements; `dsh_session_log` still sends every current canonical event whole and does not omit those embedded records. Fuzzy or normalized substitutions have the same reconstruction defect.
 
 **Keep the upload cursor only in memory.** Rejected because a normal process restart would resend the entire Session. A canonical acceptance event makes restart recovery best-effort durable without another storage backend; the remaining crash window produces allowed duplicates.
 
-**Inventory every live Cordis fiber.** Rejected because programmatic and in-memory fibers have no authoritative npm package provenance. Loader-backed host and preset entries provide exact resolvable package identity.
+**Inventory every live Cordis fiber.** Rejected because programmatic and in-memory fibers have no authoritative npm package identity. Loader-backed host and preset entries provide exact resolvable package identity.
 
 **Cache one process-global list or expire it on a TTL.** Rejected because one immutable list is incorrect for Loader lifecycle and per-Session presets, while a TTL permits stale metadata between expiry boundaries. The deferred epoch design invalidates on the authoritative active-state transition instead.
 

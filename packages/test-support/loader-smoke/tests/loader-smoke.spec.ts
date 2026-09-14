@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -41,6 +42,25 @@ describe('runLoaderSmoke', () => {
     expect(canonicalTempPath(output.agentsHome)).toBe(canonicalTempPath(join(output.cwd, '.agents')))
     expect(result.stderr).toContain('fixture stderr')
     expect(existsSync(output.cwd)).toBe(false)
+  }, LOADER_SMOKE_TEST_TIMEOUT_MS)
+
+  it('reuses a caller-provided cwd and leaves it in place', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'loader-smoke-shared-'))
+    try {
+      const result = await runLoaderSmoke({
+        label: 'shared cwd fixture',
+        cwd,
+        binScript: fixture('success'),
+        configPath,
+        tsconfigPath,
+        mode: 'src',
+      })
+      const output = JSON.parse(result.stdout) as { cwd: string }
+      expect(canonicalTempPath(output.cwd)).toBe(canonicalTempPath(cwd))
+      expect(existsSync(cwd)).toBe(true)
+    } finally {
+      await rm(cwd, { recursive: true, force: true })
+    }
   }, LOADER_SMOKE_TEST_TIMEOUT_MS)
 
   it('passes an arbitrary bin argv and inspects world state before cleanup', async () => {

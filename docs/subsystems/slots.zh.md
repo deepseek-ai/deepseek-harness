@@ -82,6 +82,7 @@ Slot 声明固定两个相互独立的维度。
 |---|---|---|
 | 所有 scope | `useSessions`、`useSessionPendingInteraction` | `ui-session` |
 | 所有 scope | `useWorkspaces` | `ui-workspace` |
+| 所有作用域 | `usePanelInfo` | `ui-layout` |
 | `session` | `sessionId`、`useSession`、`useProjection` | `ui-session` |
 | `session-maybe` | 结果可选的 `sessionId`、`useSession`、`useProjection` | `ui-session` |
 | `session` | `useConversation`、`useInput`、`inputActions` | `ui-conversation` |
@@ -112,6 +113,7 @@ root
 ├─ sidebar
 │  ├─ sidebar.brand.mark
 │  ├─ sidebar.brand.name
+│  ├─ sidebar.panellist
 │  ├─ sidebar.footer.action
 │  ├─ sidebar.workspaces
 │  │  └─ sidebar.workspaces.directoryFlow
@@ -127,39 +129,46 @@ root
 │        ├─ settings.models.footer
 │        └─ settings.plugins.tab
 │           └─ settings.plugin.item
-├─ conversation
-│  ├─ conversation.session
-│  │  └─ conversation.view
-│  │     ├─ conversation.chat.node
-│  │     │  ├─ conversation.chat.assistant-actions
-│  │     │  ├─ conversation.chat.commandview
-│  │     │  ├─ conversation.chat.turnTail
-│  │     │  └─ tool.call.toolview
-│  │     │     ├─ tool.call.images
-│  │     │     └─ tool.view.cordis
-│  │     ├─ conversation.message.images
-│  │     └─ conversation.trajectory.images
-│  ├─ conversation.session.header
-│  │  ├─ conversation.session.header.lineage
-│  │  ├─ conversation.session.header.actions
-│  │  └─ conversation.session.header.utilities
-│  ├─ conversation.composer
-│  │  └─ conversation.approval.detail
-│  ├─ conversation.composer.bar
-│  │  ├─ conversation.input.attachments
-│  │  ├─ conversation.input.plan
-│  │  └─ conversation.input.model
-│  ├─ conversation.input.overlay
-│  ├─ conversation.input.dock
-│  ├─ conversation.composer.dock
-│  ├─ conversation.input.left
-│  ├─ conversation.input.right
-│  ├─ conversation.hero.brand.mark
-│  ├─ conversation.hero.workspace
-│  │  └─ conversation.hero.workspace.directoryFlow
-│  └─ conversation.hero.agentPreset
-├─ details
-│  └─ conversation.details.tool
+├─ main
+│  └─ main.conversation
+│     ├─ conversation.session
+│     │  └─ conversation.view
+│     │     ├─ conversation.chat.node
+│     │     │  ├─ conversation.chat.assistant-actions
+│     │     │  ├─ conversation.chat.commandview
+│     │     │  ├─ conversation.chat.turnTail
+│     │     │  └─ tool.call.toolview
+│     │     │     ├─ tool.call.images
+│     │     │     └─ tool.view.cordis
+│     │     ├─ conversation.message.images
+│     │     └─ conversation.trajectory.images
+│     ├─ conversation.session.header
+│     │  ├─ conversation.session.header.lineage
+│     │  ├─ conversation.session.header.actions
+│     │  ├─ conversation.session.header.utilities
+│     │  └─ conversation.session.header.corner
+│     ├─ conversation.composer
+│     │  └─ conversation.approval.detail
+│     ├─ conversation.composer.bar
+│     │  ├─ conversation.input.attachments
+│     │  ├─ conversation.input.permission
+│     │  ├─ conversation.input.plan
+│     │  └─ conversation.input.model
+│     ├─ conversation.input.overlay
+│     ├─ conversation.input.dock
+│     ├─ conversation.composer.dock
+│     ├─ conversation.input.left
+│     ├─ conversation.input.right
+│     ├─ conversation.hero.brand.mark
+│     ├─ conversation.hero.workspace
+│     │  └─ conversation.hero.workspace.directoryFlow
+│     └─ conversation.hero.agentPreset
+├─ rightbar
+│  └─ rightbar.session
+│     ├─ sidebar.right.pane.tab
+│     │  └─ sidebar.right.tab.guide
+│     ├─ sidebar.right.pane.tab.title
+│     └─ sidebar.right.tab.menu.item
 └─ shell.overlay
 ```
 

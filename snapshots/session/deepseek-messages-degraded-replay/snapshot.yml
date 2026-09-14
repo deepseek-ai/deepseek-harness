@@ -1,0 +1,7 @@
+version: 1
+scenario: deepseek-messages-degraded-replay
+profile: headless
+composition: default
+recording: authored
+header:
+  class: deepseek-messages

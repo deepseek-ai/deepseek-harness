@@ -1,0 +1,6 @@
+# This scenario owns the `ralph` composition. The harness layers the shared
+# headless patch (`text-turn/cordis.yml`) underneath, so this file carries only
+# what makes the composition different: the shipped base layer carries
+# `tool-ralph` disabled, and this is the one scenario that exercises the tool.
+- id: tool-ralph
+  disabled: false

@@ -1,27 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import {
-  contextForm, contextProvenance, displayFailure, emptyAssistantBlock, isTokenDelta,
+  contextForm, contextProducer, displayFailure, emptyAssistantBlock, isTokenDelta,
   toAssistantBlock, toAssistantBlocks,
 } from '../src/client/trajectory-event-projection.ts'
 
 describe('Trajectory event projection', () => {
   it('projects known, unknown, and unreadable context sources', () => {
-    expect(contextProvenance({ kind: 'session-reference', references: [{ label: 'A' }, { label: 'A' }] }))
+    expect(contextProducer({ kind: 'session-reference', references: [{ label: 'A' }, { label: 'A' }] }))
       .toEqual({ role: 'recall', label: 'A' })
-    expect(contextProvenance({ kind: 'session-reference', references: [] }))
+    expect(contextProducer({ kind: 'session-reference', references: [] }))
       .toEqual({ role: 'recall', label: 'session-reference' })
-    expect(contextProvenance({ kind: 'agent-instructions', changes: [{ path: 'AGENTS.md' }, null] }))
+    expect(contextProducer({ kind: 'agent-instructions', changes: [{ path: 'AGENTS.md' }, null] }))
       .toEqual({ role: 'inject', label: 'AGENTS.md' })
-    expect(contextProvenance({ kind: 'agent-instructions', changes: 'bad' }).label)
+    expect(contextProducer({ kind: 'agent-instructions', changes: 'bad' }).label)
       .toBe('agent-instructions')
-    expect(contextProvenance({ kind: 'plugin', plugin: 'p' }).label).toBe('p')
-    expect(contextProvenance({ kind: 'plugin', plugin: 1 }).label).toBe('plugin')
-    expect(contextProvenance({ kind: 'skill-invocation', name: 's' }).label).toBe('s')
-    expect(contextProvenance({ kind: 'future' }).label).toBe('future')
-    expect(contextProvenance(null)).toEqual({ role: 'inject', label: null })
-    expect(contextProvenance([])).toEqual({ role: 'inject', label: null })
-    expect(contextProvenance({ kind: '' })).toEqual({ role: 'inject', label: null })
+    expect(contextProducer({ kind: 'plugin', plugin: 'p' }).label).toBe('p')
+    expect(contextProducer({ kind: 'plugin', plugin: 1 }).label).toBe('plugin')
+    expect(contextProducer({ kind: 'skill-invocation', name: 's' }).label).toBe('s')
+    expect(contextProducer({ kind: 'future' }).label).toBe('future')
+    expect(contextProducer(null)).toEqual({ role: 'inject', label: null })
+    expect(contextProducer([])).toEqual({ role: 'inject', label: null })
+    expect(contextProducer({ kind: '' })).toEqual({ role: 'inject', label: null })
   })
 
   it('accepts only forms supported by the target', () => {

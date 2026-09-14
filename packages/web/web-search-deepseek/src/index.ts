@@ -1,7 +1,7 @@
 /**
  * Register a DeepSeek-backed provider in `ctx.web`. It calls the Anthropic-compatible Messages API
  * with native `web_search_20250305`. The provider reuses `DEEPSEEK_API_KEY` but not
- * `DEEPSEEK_BASE_URL`, because search and chat-completions use different bases.
+ * `DEEPSEEK_BASE_URL`; auxiliary search has its own endpoint configuration.
  * @module @deepseek-ai/dsh-web-search-deepseek
  */
 
@@ -74,10 +74,8 @@ export const Config: z<Config> = z.object({
 })
 
 /**
- * Environment variable naming this provider's endpoint. Deliberately distinct
- * from `$DEEPSEEK_BASE_URL`, which belongs to the chat-completions adapter:
- * search speaks the Anthropic-compatible Messages API, so one variable cannot
- * serve both.
+ * Auxiliary-search endpoint, independent of the conversation adapter's
+ * `$DEEPSEEK_BASE_URL` and selected protocol.
  */
 const SEARCH_BASE_URL_ENV = 'DEEPSEEK_SEARCH_BASE_URL'
 

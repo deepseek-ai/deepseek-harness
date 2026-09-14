@@ -1,0 +1,7312 @@
+{
+  "package": "@deepseek-ai/dsh",
+  "version": "0.1.5-rc.1",
+  "requested": "@deepseek-ai/dsh@latest",
+  "resolution": {
+    "capturedAt": "2026-09-12T08:56:20.434Z",
+    "npm": "11.17.0",
+    "node": "24.19.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "registry": "https://registry.npmjs.org/",
+    "installStrategy": "hoisted"
+  },
+  "dependencies": [
+    {
+      "name": "@agentclientprotocol/sdk",
+      "version": "1.4.0",
+      "installations": [
+        {
+          "location": "node_modules/@agentclientprotocol/sdk",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@anthropic-ai/sdk",
+      "version": "0.123.0",
+      "installations": [
+        {
+          "location": "node_modules/@anthropic-ai/sdk",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-crypto/sha256-browser",
+      "version": "5.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-crypto/sha256-browser",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-crypto/sha256-js",
+      "version": "5.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-crypto/sha256-js",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-crypto/supports-web-crypto",
+      "version": "5.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-crypto/supports-web-crypto",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-crypto/util",
+      "version": "5.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-crypto/util",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/client-bedrock-runtime",
+      "version": "3.1048.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/client-bedrock-runtime",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/core",
+      "version": "3.978.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/core",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-env",
+      "version": "3.972.71",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-env",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-http",
+      "version": "3.972.73",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-http",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-ini",
+      "version": "3.973.16",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-ini",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-login",
+      "version": "3.972.78",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-login",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-node",
+      "version": "3.972.83",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-node",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-process",
+      "version": "3.972.71",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-process",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-sso",
+      "version": "3.973.15",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-sso",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/credential-provider-web-identity",
+      "version": "3.972.77",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-web-identity",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/eventstream-handler-node",
+      "version": "3.972.34",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/eventstream-handler-node",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/middleware-eventstream",
+      "version": "3.972.29",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/middleware-eventstream",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/middleware-websocket",
+      "version": "3.972.53",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/middleware-websocket",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/nested-clients",
+      "version": "3.997.45",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/nested-clients",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/signature-v4-multi-region",
+      "version": "3.996.46",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/signature-v4-multi-region",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/token-providers",
+      "version": "3.1048.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/token-providers",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/token-providers",
+      "version": "3.1129.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-sso/node_modules/@aws-sdk/token-providers",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/types",
+      "version": "3.974.5",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/util-locate-window",
+      "version": "3.965.10",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/util-locate-window",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws-sdk/xml-builder",
+      "version": "3.972.40",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/xml-builder",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@aws/lambda-invoke-store",
+      "version": "0.3.0",
+      "installations": [
+        {
+          "location": "node_modules/@aws/lambda-invoke-store",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@babel/code-frame",
+      "version": "7.29.7",
+      "installations": [
+        {
+          "location": "node_modules/@babel/code-frame",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@babel/helper-validator-identifier",
+      "version": "7.29.7",
+      "installations": [
+        {
+          "location": "node_modules/@babel/helper-validator-identifier",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@babel/runtime",
+      "version": "7.29.7",
+      "installations": [
+        {
+          "location": "node_modules/@babel/runtime",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cordis",
+      "version": "4.0.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cordis",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cordis-plugin-group",
+      "version": "1.0.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cordis-plugin-group",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cordis-plugin-hmr",
+      "version": "1.0.17",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cordis-plugin-hmr",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cordis-plugin-include",
+      "version": "1.0.7",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cordis-plugin-include",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cordis-plugin-loader",
+      "version": "1.0.3",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cordis-plugin-loader",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cordis-plugin-timer",
+      "version": "1.1.4",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cordis-plugin-timer",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/cosmokit",
+      "version": "1.8.3",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/cosmokit",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-acp",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-acp",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-acp-app",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-acp-app",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-agent",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent-default-model",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-agent-default-model",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent-instructions",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-agent-instructions",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent-loop",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-agent-loop",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent-presets",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-agent-presets",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-agent-tool-presentation",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-agent-tool-presentation",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-anonymous-user-id",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-anonymous-user-id",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-gateway",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-api-gateway",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-remotes",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-api-remotes",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-session-controller",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-api-session-controller",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-settings-controller",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-api-settings-controller",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-workspace-controller",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-api-workspace-controller",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-api-workspace-files",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-api-workspace-files",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-app-boot",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-app-boot",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-atomic-write",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-atomic-write",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-attachment",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-attachment",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-attachment-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-attachment-local",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-authorization",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-authorization",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-base",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-base",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-bash-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-bash-local",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-bash-sandbox",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-bash-sandbox",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-brand",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-brand",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-chunked-list",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-chunked-list",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-connection",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-connection",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-file-upload",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-file-upload",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-hmr",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-hmr",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-locale",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-locale",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-modules",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-modules",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-resources",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-resources",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-agent-preset",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-agent-preset",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-approval",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-approval",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-attachment",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-attachment",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-brand-official",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-brand-official",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-chat",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-chat",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-commands",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-commands",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-conversation",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-conversation",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-cordis",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-cordis",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-deliverables",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-deliverables",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-directory-picker-browse",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-directory-picker-browse",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-directory-picker-native",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-directory-picker-native",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-goal",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-goal",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-input-trigger",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-input-trigger",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-jobs",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-jobs",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-layout",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-layout",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-message-feedback",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-message-feedback",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-model-selection",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-model-selection",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-open-in-app",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-open-in-app",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-permission-presets",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-permission-presets",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-plan",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-plan",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-reference",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-reference",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-renderer",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-renderer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-schedule",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-schedule",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-session",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-session",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-settings",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-general",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-settings-general",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-models",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-settings-models",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-settings-plugin-inventory",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-settings-plugins",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-settings-plugins",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-sidebar",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-files",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-sidebar-files",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-sidebar-right",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-sidebar-right",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-skill",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-skill",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-subagent",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-subagent",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-theme",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-theme",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-tool",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-tool",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-trajectory",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-trajectory",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-user-questions",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-user-questions",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-workflow-run",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-workflow-run",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-client-ui-workspace",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-client-ui-workspace",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-cmdline",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-cmdline",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-code-runtime",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-code-runtime",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-code-runtime-worker-thread",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-code-runtime-worker-thread",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-command-compact",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-command-compact",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-command-feedback",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-command-feedback",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-command-goal",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-command-goal",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-commands",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-commands",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-compaction",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-compaction",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-compaction-basic",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-compaction-basic",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-compaction-tool-result-pruner",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-compaction-tool-result-pruner",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-cordis-client-runner",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-cordis-client-runner",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-cordis-host-runner",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-cordis-host-runner",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-credentials",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-credentials",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-credentials-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-credentials-local",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-deepseek-llm-api-extensions",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-deepseek-llm-api-extensions",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-deque",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-deque",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-file-reference",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-file-reference",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-file-reference-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-file-reference-local",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-fs",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-fs",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-fs-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-fs-local",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-fs-observation-policy",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-fs-observation-policy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-fs-sandbox",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-fs-sandbox",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-goal",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-goal",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-goal-round-driver",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-goal-round-driver",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-headless",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-headless",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-home-paths",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-home-paths",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-hook-protocol",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-hook-protocol",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-hooks-claude-code",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-hooks-claude-code",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-hooks-codex",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-hooks-codex",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-directory-picker",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-directory-picker",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-directory-picker-auto",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-directory-picker-auto",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-directory-picker-browse",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-directory-picker-browse",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-directory-picker-native",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-directory-picker-native",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-frontend-static",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-frontend-static",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-open-in-app",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-open-in-app",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-plugin-inventory",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-plugin-inventory",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-host-webserver",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-host-webserver",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-http-proxy",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-http-proxy",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-invariants",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-invariants",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-jobs",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-jobs",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-jobs-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-jobs-local",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-launch-environment",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-launch-environment",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-llm",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm-deepseek",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-llm-deepseek",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm-pi-ai",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-llm-pi-ai",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-llm-retry",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-llm-retry",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-mcp-client",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-mcp-client",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-message-feedback",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-message-feedback",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-native-command",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-native-command",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-output-retention",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-output-retention",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-package-manifest",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-package-manifest",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-permission-presets",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-permission-presets",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-persona",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-persona",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-plan-mode",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-plan-mode",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-plugin-package-inventory-deepseek",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-plugin-package-inventory-deepseek",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-pwsh-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-pwsh-local",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-pwsh-sandbox",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-pwsh-sandbox",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-repeat-tool-reminder",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-repeat-tool-reminder",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sandbox",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sandbox",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sandbox-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sandbox-local",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sandbox-policy",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sandbox-policy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sandbox-windows-acl",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sandbox-windows-acl",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-schedule",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-schedule",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-scope",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-scope",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sdk-app",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sdk-app",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sdk-jsonrpc-server",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sdk-jsonrpc-server",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sdk-minimal",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sdk-minimal",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-sdk-protocol",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-sdk-protocol",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-checkpoint-policy",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-checkpoint-policy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-format",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-format",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-format-catalog",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-format-catalog",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-format-v0-to-v1",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-format-v0-to-v1",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-format-v1-to-v2",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-format-v1-to-v2",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-format-v2-to-v3",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-format-v2-to-v3",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-log-deepseek",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-log-deepseek",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-log-export",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-log-export",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-persistence",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-persistence",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-persistence-jsonl",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-persistence-jsonl",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-projection",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-projection",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-projection-cache",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-projection-cache",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-query",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-query",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-query-sqlite",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-query-sqlite",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-reference",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-reference",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-stats",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-stats",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-telemetry",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-telemetry",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-telemetry-otel",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-telemetry-otel",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-title",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-title",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-title-first-prompt-llm",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-title-first-prompt-llm",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-title-llm",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-title-llm",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-session-turn-outline",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-session-turn-outline",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-settings",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-settings",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-settings-file",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-settings-file",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-shell",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-shell",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-shell-env",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-shell-env",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-skill",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-skill",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-skill-badge",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-skill-badge",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-skill-filesystem",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-skill-filesystem",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-spill",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-spill",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-spill-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-spill-local",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-spill-policy",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-spill-policy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-storage",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-storage",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-storage-domain",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-storage-domain",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-storage-json",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-storage-json",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-subagent",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-subagent",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-subagent-fork-in-process",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-subagent-fork-in-process",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-subagent-in-process-driver",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-subagent-in-process-driver",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-subagent-spawn-in-process",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-subagent-spawn-in-process",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-subprocess",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-subprocess",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-subprocess-local",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-subprocess-local",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-system-prompt",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-system-prompt",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-terminal",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-terminal",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-terminal-bash",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-terminal-bash",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-time-context",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-time-context",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-timeout",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-timeout",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tmux-context",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tmux-context",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-token-meter",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-token-meter",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-ask-user",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-ask-user",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-bash",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-bash",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-bash-persistent",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-bash-persistent",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-call-timeout-policy",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-call-timeout-policy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-cordis",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-cordis",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-fs",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-fs",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-fs-search",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-fs-search",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-goal",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-goal",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-jobs",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-jobs",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-present",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-present",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-pwsh",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-pwsh",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-pwsh-persistent",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-pwsh-persistent",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-ralph",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-ralph",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-skill",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-skill",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-str-replace-editor",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-str-replace-editor",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-subagent",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-subagent",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-subagent-control",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-subagent-control",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-todo",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-todo",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-web",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-web",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tool-workflow",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tool-workflow",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-tools",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-tools",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-typert-loader",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-typert-loader",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-typert-protocol",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-typert-protocol",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-typert-registry",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-typert-registry",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-user-approval",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-user-approval",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-user-questions",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-user-questions",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-util-crypto",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-util-crypto",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-util-time",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-util-time",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-util-values",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-util-values",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-util-workspace-path",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-util-workspace-path",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-web",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-web",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-web-app",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-web-app",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-web-fetch-http",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-web-fetch-http",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-web-frontend",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-web-frontend",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-web-search-deepseek",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-web-search-deepseek",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-webhook",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-webhook",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-webhook-github",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-webhook-github",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-win32-process",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-win32-process",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-workflow",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-workflow",
+          "direct": false,
+          "optional": false,
+          "peer": true
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-workflow-worker-thread",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-workflow-worker-thread",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/dsh-workspace",
+      "version": "0.1.5-rc.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-workspace",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/node-addon-system",
+      "version": "0.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/node-addon-system",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/node-addon-system-darwin-arm64",
+      "version": "0.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/node-addon-system-darwin-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/node-addon-system-darwin-x64",
+      "version": "0.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/node-addon-system-darwin-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/node-addon-system-linux-arm64",
+      "version": "0.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/node-addon-system-linux-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/node-addon-system-linux-x64",
+      "version": "0.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/node-addon-system-linux-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@deepseek-ai/schemastery",
+      "version": "3.18.2",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/schemastery",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@earendil-works/pi-ai",
+      "version": "0.85.1",
+      "installations": [
+        {
+          "location": "node_modules/@earendil-works/pi-ai",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@earendil-works/pi-telemetry",
+      "version": "0.85.1",
+      "installations": [
+        {
+          "location": "node_modules/@earendil-works/pi-telemetry",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@emnapi/runtime",
+      "version": "1.11.3",
+      "installations": [
+        {
+          "location": "node_modules/@emnapi/runtime",
+          "direct": false,
+          "optional": true,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@google/genai",
+      "version": "1.52.0",
+      "installations": [
+        {
+          "location": "node_modules/@google/genai",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@hono/node-server",
+      "version": "2.1.1",
+      "installations": [
+        {
+          "location": "node_modules/@hono/node-server",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@img/colour",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/@img/colour",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-darwin-arm64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-darwin-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-darwin-x64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-darwin-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-freebsd-wasm32",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-freebsd-wasm32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "freebsd"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-darwin-arm64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-darwin-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-darwin-x64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-darwin-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linux-arm",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linux-arm",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linux-arm64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linux-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linux-ppc64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linux-ppc64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "ppc64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linux-riscv64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linux-riscv64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "riscv64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linux-s390x",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linux-s390x",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "s390x"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linux-x64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linux-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linuxmusl-arm64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linuxmusl-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ],
+          "libc": [
+            "musl"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-libvips-linuxmusl-x64",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-libvips-linuxmusl-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ],
+          "libc": [
+            "musl"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-arm",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linux-arm",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-arm64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linux-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-ppc64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linux-ppc64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "ppc64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-riscv64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linux-riscv64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "riscv64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-s390x",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linux-s390x",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "s390x"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linux-x64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linux-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linuxmusl-arm64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linuxmusl-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ],
+          "libc": [
+            "musl"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-linuxmusl-x64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-linuxmusl-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ],
+          "libc": [
+            "musl"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-wasm32",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-wasm32",
+          "direct": false,
+          "optional": true,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-webcontainers-wasm32",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-webcontainers-wasm32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "cpu": [
+            "wasm32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-win32-arm64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-win32-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-win32-ia32",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-win32-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@img/sharp-win32-x64",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/@img/sharp-win32-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@joplin/turndown-plugin-gfm",
+      "version": "1.0.68",
+      "installations": [
+        {
+          "location": "node_modules/@joplin/turndown-plugin-gfm",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-android-arm64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-android-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "android"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-android-x64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-android-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "android"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-darwin-arm64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-darwin-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-darwin-x64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-darwin-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-freebsd-arm64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-freebsd-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "freebsd"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-freebsd-ia32",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-freebsd-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "freebsd"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-freebsd-x64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-freebsd-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "freebsd"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-arm",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-linux-arm",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-arm64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-linux-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-ia32",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-linux-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-loong64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-linux-loong64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "loong64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-riscv64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-linux-riscv64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "riscv64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-linux-x64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-linux-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-openbsd-ia32",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-openbsd-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "openbsd"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-openbsd-x64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-openbsd-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "openbsd"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-win32-arm64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-win32-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-win32-ia32",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-win32-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@koromix/koffi-win32-x64",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/@koromix/koffi-win32-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@mixmark-io/domino",
+      "version": "2.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@mixmark-io/domino",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@modelcontextprotocol/sdk",
+      "version": "1.30.0",
+      "installations": [
+        {
+          "location": "node_modules/@modelcontextprotocol/sdk",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@octokit/openapi-types",
+      "version": "29.0.1",
+      "installations": [
+        {
+          "location": "node_modules/@octokit/openapi-types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@octokit/openapi-webhooks-types",
+      "version": "12.1.0",
+      "installations": [
+        {
+          "location": "node_modules/@octokit/openapi-webhooks-types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@octokit/request-error",
+      "version": "7.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@octokit/request-error",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@octokit/types",
+      "version": "18.0.0",
+      "installations": [
+        {
+          "location": "node_modules/@octokit/types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@octokit/webhooks",
+      "version": "14.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@octokit/webhooks",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@octokit/webhooks-methods",
+      "version": "6.0.0",
+      "installations": [
+        {
+          "location": "node_modules/@octokit/webhooks-methods",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/api",
+      "version": "1.9.1",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/api",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/api-logs",
+      "version": "0.220.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/api-logs",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/core",
+      "version": "2.11.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/resources/node_modules/@opentelemetry/core",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/core",
+      "version": "2.9.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/core",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/exporter-logs-otlp-http",
+      "version": "0.220.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/exporter-logs-otlp-http",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/otlp-exporter-base",
+      "version": "0.220.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/otlp-exporter-base",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/otlp-transformer",
+      "version": "0.220.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/otlp-transformer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/resources",
+      "version": "2.11.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/resources",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/resources",
+      "version": "2.9.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/otlp-transformer/node_modules/@opentelemetry/resources",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/@opentelemetry/sdk-logs/node_modules/@opentelemetry/resources",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/@opentelemetry/sdk-metrics/node_modules/@opentelemetry/resources",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/@opentelemetry/sdk-trace/node_modules/@opentelemetry/resources",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/sdk-logs",
+      "version": "0.220.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/sdk-logs",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/sdk-metrics",
+      "version": "2.9.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/sdk-metrics",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/sdk-trace",
+      "version": "2.9.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/sdk-trace",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@opentelemetry/semantic-conventions",
+      "version": "1.43.0",
+      "installations": [
+        {
+          "location": "node_modules/@opentelemetry/semantic-conventions",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/aspromise",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/aspromise",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/base64",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/base64",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/codegen",
+      "version": "2.0.5",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/codegen",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/eventemitter",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/eventemitter",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/fetch",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/fetch",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/float",
+      "version": "1.0.2",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/float",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/path",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/path",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/pool",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/pool",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@protobufjs/utf8",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/@protobufjs/utf8",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/core",
+      "version": "3.34.1",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/core",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/credential-provider-imds",
+      "version": "4.5.2",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/credential-provider-imds",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/fetch-http-handler",
+      "version": "5.8.0",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/fetch-http-handler",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/is-array-buffer",
+      "version": "2.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/is-array-buffer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/node-http-handler",
+      "version": "4.12.1",
+      "installations": [
+        {
+          "location": "node_modules/@aws-sdk/credential-provider-http/node_modules/@smithy/node-http-handler",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/@aws-sdk/nested-clients/node_modules/@smithy/node-http-handler",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/node-http-handler",
+      "version": "4.7.3",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/node-http-handler",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/signature-v4",
+      "version": "5.7.3",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/signature-v4",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/types",
+      "version": "4.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/util-buffer-from",
+      "version": "2.2.0",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/util-buffer-from",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@smithy/util-utf8",
+      "version": "2.3.0",
+      "installations": [
+        {
+          "location": "node_modules/@smithy/util-utf8",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@stablelib/base64",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/@stablelib/base64",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@standard-schema/spec",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/@standard-schema/spec",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@types/node",
+      "version": "22.20.2",
+      "installations": [
+        {
+          "location": "node_modules/@types/node",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@types/retry",
+      "version": "0.12.0",
+      "installations": [
+        {
+          "location": "node_modules/@types/retry",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-darwin-arm64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-darwin-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-darwin-x64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-darwin-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-arm",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-arm",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-arm64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-ia32",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-ppc64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-ppc64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "ppc64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-riscv64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-riscv64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "riscv64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-s390x",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-s390x",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "s390x"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-linux-x64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-linux-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-win32-arm64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-win32-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-win32-ia32",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-win32-ia32",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@vscode/ripgrep-win32-x64",
+      "version": "1.18.0",
+      "installations": [
+        {
+          "location": "node_modules/@vscode/ripgrep-win32-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "@xterm/headless",
+      "version": "6.0.0",
+      "installations": [
+        {
+          "location": "node_modules/@xterm/headless",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "accepts",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/accepts",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "agent-base",
+      "version": "7.1.4",
+      "installations": [
+        {
+          "location": "node_modules/agent-base",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ajv",
+      "version": "8.20.0",
+      "installations": [
+        {
+          "location": "node_modules/ajv",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ajv-formats",
+      "version": "3.0.1",
+      "installations": [
+        {
+          "location": "node_modules/ajv-formats",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "argparse",
+      "version": "2.0.1",
+      "installations": [
+        {
+          "location": "node_modules/argparse",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "base64-js",
+      "version": "1.5.1",
+      "installations": [
+        {
+          "location": "node_modules/base64-js",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "bignumber.js",
+      "version": "9.3.1",
+      "installations": [
+        {
+          "location": "node_modules/bignumber.js",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "body-parser",
+      "version": "2.3.0",
+      "installations": [
+        {
+          "location": "node_modules/body-parser",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "bowser",
+      "version": "2.14.1",
+      "installations": [
+        {
+          "location": "node_modules/bowser",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "buffer-equal-constant-time",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/buffer-equal-constant-time",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "bundle-name",
+      "version": "4.1.0",
+      "installations": [
+        {
+          "location": "node_modules/bundle-name",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "bytes",
+      "version": "3.1.2",
+      "installations": [
+        {
+          "location": "node_modules/bytes",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "call-bind-apply-helpers",
+      "version": "1.0.2",
+      "installations": [
+        {
+          "location": "node_modules/call-bind-apply-helpers",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "call-bound",
+      "version": "1.0.4",
+      "installations": [
+        {
+          "location": "node_modules/call-bound",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "chokidar",
+      "version": "4.0.3",
+      "installations": [
+        {
+          "location": "node_modules/chokidar",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "chokidar",
+      "version": "5.0.0",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-skill-filesystem/node_modules/chokidar",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "commander",
+      "version": "15.0.0",
+      "installations": [
+        {
+          "location": "node_modules/commander",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "compressible",
+      "version": "2.0.18",
+      "installations": [
+        {
+          "location": "node_modules/compressible",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "compression",
+      "version": "1.8.2",
+      "installations": [
+        {
+          "location": "node_modules/compression",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "content-disposition",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/content-disposition",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "content-type",
+      "version": "1.0.5",
+      "installations": [
+        {
+          "location": "node_modules/content-type",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "content-type",
+      "version": "2.1.0",
+      "installations": [
+        {
+          "location": "node_modules/body-parser/node_modules/content-type",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/negotiator/node_modules/content-type",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/type-is/node_modules/content-type",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "cookie",
+      "version": "0.7.2",
+      "installations": [
+        {
+          "location": "node_modules/cookie",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "cookie-signature",
+      "version": "1.2.2",
+      "installations": [
+        {
+          "location": "node_modules/cookie-signature",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "cors",
+      "version": "2.8.6",
+      "installations": [
+        {
+          "location": "node_modules/cors",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "cross-spawn",
+      "version": "7.0.6",
+      "installations": [
+        {
+          "location": "node_modules/cross-spawn",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "data-uri-to-buffer",
+      "version": "4.0.1",
+      "installations": [
+        {
+          "location": "node_modules/data-uri-to-buffer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "debug",
+      "version": "2.6.9",
+      "installations": [
+        {
+          "location": "node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "debug",
+      "version": "4.4.3",
+      "installations": [
+        {
+          "location": "node_modules/body-parser/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/express-rate-limit/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/express/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/finalhandler/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/http-proxy-agent/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/https-proxy-agent/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/router/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/send/node_modules/debug",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "default-browser",
+      "version": "5.5.1",
+      "installations": [
+        {
+          "location": "node_modules/default-browser",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "default-browser-id",
+      "version": "5.0.1",
+      "installations": [
+        {
+          "location": "node_modules/default-browser-id",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "define-lazy-prop",
+      "version": "3.0.0",
+      "installations": [
+        {
+          "location": "node_modules/define-lazy-prop",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "depd",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/depd",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "destroy",
+      "version": "1.2.0",
+      "installations": [
+        {
+          "location": "node_modules/destroy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "detect-libc",
+      "version": "2.1.2",
+      "installations": [
+        {
+          "location": "node_modules/detect-libc",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "diff",
+      "version": "9.0.0",
+      "installations": [
+        {
+          "location": "node_modules/diff",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "dunder-proto",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/dunder-proto",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ecdsa-sig-formatter",
+      "version": "1.0.11",
+      "installations": [
+        {
+          "location": "node_modules/ecdsa-sig-formatter",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ee-first",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/ee-first",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "encodeurl",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/encodeurl",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "es-define-property",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/es-define-property",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "es-errors",
+      "version": "1.3.0",
+      "installations": [
+        {
+          "location": "node_modules/es-errors",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "es-object-atoms",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/es-object-atoms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "escape-html",
+      "version": "1.0.3",
+      "installations": [
+        {
+          "location": "node_modules/escape-html",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "etag",
+      "version": "1.8.1",
+      "installations": [
+        {
+          "location": "node_modules/etag",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "eventsource",
+      "version": "3.0.7",
+      "installations": [
+        {
+          "location": "node_modules/eventsource",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "eventsource-parser",
+      "version": "3.1.1",
+      "installations": [
+        {
+          "location": "node_modules/eventsource-parser",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "express",
+      "version": "5.2.1",
+      "installations": [
+        {
+          "location": "node_modules/express",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "express-rate-limit",
+      "version": "8.7.0",
+      "installations": [
+        {
+          "location": "node_modules/express-rate-limit",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "extend",
+      "version": "3.0.2",
+      "installations": [
+        {
+          "location": "node_modules/extend",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "fast-deep-equal",
+      "version": "3.1.3",
+      "installations": [
+        {
+          "location": "node_modules/fast-deep-equal",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "fast-sha256",
+      "version": "1.3.0",
+      "installations": [
+        {
+          "location": "node_modules/fast-sha256",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "fast-uri",
+      "version": "3.1.7",
+      "installations": [
+        {
+          "location": "node_modules/fast-uri",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "fetch-blob",
+      "version": "3.2.0",
+      "installations": [
+        {
+          "location": "node_modules/fetch-blob",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "fflate",
+      "version": "0.8.3",
+      "installations": [
+        {
+          "location": "node_modules/fflate",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "finalhandler",
+      "version": "2.1.1",
+      "installations": [
+        {
+          "location": "node_modules/finalhandler",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "formdata-polyfill",
+      "version": "4.0.10",
+      "installations": [
+        {
+          "location": "node_modules/formdata-polyfill",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "forwarded",
+      "version": "0.2.0",
+      "installations": [
+        {
+          "location": "node_modules/forwarded",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "fresh",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/fresh",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "function-bind",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/function-bind",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "gaxios",
+      "version": "7.3.1",
+      "installations": [
+        {
+          "location": "node_modules/gaxios",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "gcp-metadata",
+      "version": "8.1.2",
+      "installations": [
+        {
+          "location": "node_modules/gcp-metadata",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "get-intrinsic",
+      "version": "1.3.0",
+      "installations": [
+        {
+          "location": "node_modules/get-intrinsic",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "get-proto",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/get-proto",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "google-auth-library",
+      "version": "10.9.1",
+      "installations": [
+        {
+          "location": "node_modules/google-auth-library",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "google-logging-utils",
+      "version": "1.1.3",
+      "installations": [
+        {
+          "location": "node_modules/google-logging-utils",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "gopd",
+      "version": "1.2.0",
+      "installations": [
+        {
+          "location": "node_modules/gopd",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "has-symbols",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/has-symbols",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "hasown",
+      "version": "2.0.4",
+      "installations": [
+        {
+          "location": "node_modules/hasown",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "hono",
+      "version": "4.13.7",
+      "installations": [
+        {
+          "location": "node_modules/hono",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "http-errors",
+      "version": "2.0.1",
+      "installations": [
+        {
+          "location": "node_modules/http-errors",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "http-proxy-agent",
+      "version": "7.0.2",
+      "installations": [
+        {
+          "location": "node_modules/http-proxy-agent",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "https-proxy-agent",
+      "version": "7.0.6",
+      "installations": [
+        {
+          "location": "node_modules/https-proxy-agent",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "iconv-lite",
+      "version": "0.7.3",
+      "installations": [
+        {
+          "location": "node_modules/iconv-lite",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "inherits",
+      "version": "2.0.4",
+      "installations": [
+        {
+          "location": "node_modules/inherits",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ip-address",
+      "version": "10.7.0",
+      "installations": [
+        {
+          "location": "node_modules/ip-address",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ipaddr.js",
+      "version": "1.9.1",
+      "installations": [
+        {
+          "location": "node_modules/proxy-addr/node_modules/ipaddr.js",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ipaddr.js",
+      "version": "2.5.0",
+      "installations": [
+        {
+          "location": "node_modules/ipaddr.js",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "is-docker",
+      "version": "3.0.0",
+      "installations": [
+        {
+          "location": "node_modules/is-docker",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "is-in-ssh",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/is-in-ssh",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "is-inside-container",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/is-inside-container",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "is-promise",
+      "version": "4.0.0",
+      "installations": [
+        {
+          "location": "node_modules/is-promise",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "is-wsl",
+      "version": "3.1.1",
+      "installations": [
+        {
+          "location": "node_modules/is-wsl",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "isexe",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/isexe",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "jose",
+      "version": "6.2.12",
+      "installations": [
+        {
+          "location": "node_modules/jose",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "js-tokens",
+      "version": "4.0.0",
+      "installations": [
+        {
+          "location": "node_modules/js-tokens",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "js-yaml",
+      "version": "4.3.2",
+      "installations": [
+        {
+          "location": "node_modules/js-yaml",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "json-bigint",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/json-bigint",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "json-schema-to-ts",
+      "version": "3.1.1",
+      "installations": [
+        {
+          "location": "node_modules/json-schema-to-ts",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "json-schema-traverse",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/json-schema-traverse",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "json-schema-typed",
+      "version": "8.0.2",
+      "installations": [
+        {
+          "location": "node_modules/json-schema-typed",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "jwa",
+      "version": "2.0.1",
+      "installations": [
+        {
+          "location": "node_modules/jwa",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "jws",
+      "version": "4.0.1",
+      "installations": [
+        {
+          "location": "node_modules/jws",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "koffi",
+      "version": "3.2.1",
+      "installations": [
+        {
+          "location": "node_modules/koffi",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "long",
+      "version": "5.3.2",
+      "installations": [
+        {
+          "location": "node_modules/long",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "math-intrinsics",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/math-intrinsics",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "media-typer",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/media-typer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "merge-descriptors",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/merge-descriptors",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "mime-db",
+      "version": "1.54.0",
+      "installations": [
+        {
+          "location": "node_modules/mime-db",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "mime-types",
+      "version": "3.0.2",
+      "installations": [
+        {
+          "location": "node_modules/mime-types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ms",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ms",
+      "version": "2.1.3",
+      "installations": [
+        {
+          "location": "node_modules/body-parser/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/express-rate-limit/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/express/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/finalhandler/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/http-proxy-agent/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/https-proxy-agent/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/router/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        },
+        {
+          "location": "node_modules/send/node_modules/ms",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "negotiator",
+      "version": "0.6.4",
+      "installations": [
+        {
+          "location": "node_modules/compression/node_modules/negotiator",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "negotiator",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/negotiator",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "node-addon-api",
+      "version": "7.1.1",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-api",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "node-addon-native-custom-loader",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-native-custom-loader",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin",
+          "direct": true,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-darwin-arm64",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-darwin-arm64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-darwin-x64",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-darwin-x64",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "darwin"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-linux-arm64-gnu",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-linux-arm64-gnu",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "arm64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-linux-x64-gnu",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-linux-x64-gnu",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "linux"
+          ],
+          "cpu": [
+            "x64"
+          ],
+          "libc": [
+            "glibc"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-win32-arm64-msvc",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-win32-arm64-msvc",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "arm64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-win32-ia32-msvc",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-win32-ia32-msvc",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "ia32"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-addon-require-builtin-win32-x64-msvc",
+      "version": "0.1.5",
+      "installations": [
+        {
+          "location": "node_modules/node-addon-require-builtin-win32-x64-msvc",
+          "direct": false,
+          "optional": true,
+          "peer": false,
+          "os": [
+            "win32"
+          ],
+          "cpu": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "node-domexception",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/node-domexception",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "node-fetch",
+      "version": "3.3.2",
+      "installations": [
+        {
+          "location": "node_modules/node-fetch",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "node-pty",
+      "version": "1.2.0-beta.15",
+      "installations": [
+        {
+          "location": "node_modules/node-pty",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "object-assign",
+      "version": "4.1.1",
+      "installations": [
+        {
+          "location": "node_modules/object-assign",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "object-inspect",
+      "version": "1.13.4",
+      "installations": [
+        {
+          "location": "node_modules/object-inspect",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "on-finished",
+      "version": "2.4.1",
+      "installations": [
+        {
+          "location": "node_modules/on-finished",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "on-headers",
+      "version": "1.1.0",
+      "installations": [
+        {
+          "location": "node_modules/on-headers",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "once",
+      "version": "1.4.0",
+      "installations": [
+        {
+          "location": "node_modules/once",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "open",
+      "version": "11.0.3",
+      "installations": [
+        {
+          "location": "node_modules/open",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "openai",
+      "version": "6.40.0",
+      "installations": [
+        {
+          "location": "node_modules/openai",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "p-retry",
+      "version": "4.6.2",
+      "installations": [
+        {
+          "location": "node_modules/p-retry",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "parseurl",
+      "version": "1.3.3",
+      "installations": [
+        {
+          "location": "node_modules/parseurl",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "partial-json",
+      "version": "0.1.7",
+      "installations": [
+        {
+          "location": "node_modules/partial-json",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "path-key",
+      "version": "3.1.1",
+      "installations": [
+        {
+          "location": "node_modules/path-key",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "path-to-regexp",
+      "version": "8.4.2",
+      "installations": [
+        {
+          "location": "node_modules/path-to-regexp",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "picocolors",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/picocolors",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "picomatch",
+      "version": "4.0.7",
+      "installations": [
+        {
+          "location": "node_modules/picomatch",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "pkce-challenge",
+      "version": "5.0.1",
+      "installations": [
+        {
+          "location": "node_modules/pkce-challenge",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "powershell-utils",
+      "version": "0.1.0",
+      "installations": [
+        {
+          "location": "node_modules/wsl-utils/node_modules/powershell-utils",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "powershell-utils",
+      "version": "0.2.1",
+      "installations": [
+        {
+          "location": "node_modules/powershell-utils",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "protobufjs",
+      "version": "7.6.6",
+      "installations": [
+        {
+          "location": "node_modules/protobufjs",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "proxy-addr",
+      "version": "2.0.7",
+      "installations": [
+        {
+          "location": "node_modules/proxy-addr",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "qs",
+      "version": "6.16.0",
+      "installations": [
+        {
+          "location": "node_modules/qs",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "range-parser",
+      "version": "1.3.0",
+      "installations": [
+        {
+          "location": "node_modules/range-parser",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "raw-body",
+      "version": "3.0.2",
+      "installations": [
+        {
+          "location": "node_modules/raw-body",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "readdirp",
+      "version": "4.1.2",
+      "installations": [
+        {
+          "location": "node_modules/readdirp",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "readdirp",
+      "version": "5.1.1",
+      "installations": [
+        {
+          "location": "node_modules/@deepseek-ai/dsh-skill-filesystem/node_modules/readdirp",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "require-from-string",
+      "version": "2.0.2",
+      "installations": [
+        {
+          "location": "node_modules/require-from-string",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "resolve.exports",
+      "version": "2.0.3",
+      "installations": [
+        {
+          "location": "node_modules/resolve.exports",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "retry",
+      "version": "0.13.1",
+      "installations": [
+        {
+          "location": "node_modules/retry",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "router",
+      "version": "2.2.0",
+      "installations": [
+        {
+          "location": "node_modules/router",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "run-applescript",
+      "version": "7.1.0",
+      "installations": [
+        {
+          "location": "node_modules/run-applescript",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "safe-buffer",
+      "version": "5.2.1",
+      "installations": [
+        {
+          "location": "node_modules/safe-buffer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "safer-buffer",
+      "version": "2.1.2",
+      "installations": [
+        {
+          "location": "node_modules/safer-buffer",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "semver",
+      "version": "7.8.5",
+      "installations": [
+        {
+          "location": "node_modules/semver",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "send",
+      "version": "1.2.1",
+      "installations": [
+        {
+          "location": "node_modules/send",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "serve-static",
+      "version": "2.2.1",
+      "installations": [
+        {
+          "location": "node_modules/serve-static",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "setprototypeof",
+      "version": "1.2.0",
+      "installations": [
+        {
+          "location": "node_modules/setprototypeof",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "sharp",
+      "version": "0.35.4",
+      "installations": [
+        {
+          "location": "node_modules/sharp",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "shebang-command",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/shebang-command",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "shebang-regex",
+      "version": "3.0.0",
+      "installations": [
+        {
+          "location": "node_modules/shebang-regex",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "side-channel",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/side-channel",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "side-channel-list",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/side-channel-list",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "side-channel-map",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/side-channel-map",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "side-channel-weakmap",
+      "version": "1.0.2",
+      "installations": [
+        {
+          "location": "node_modules/side-channel-weakmap",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "standardwebhooks",
+      "version": "1.1.1",
+      "installations": [
+        {
+          "location": "node_modules/standardwebhooks",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "statuses",
+      "version": "2.0.2",
+      "installations": [
+        {
+          "location": "node_modules/statuses",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "toidentifier",
+      "version": "1.0.1",
+      "installations": [
+        {
+          "location": "node_modules/toidentifier",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ts-algebra",
+      "version": "2.0.0",
+      "installations": [
+        {
+          "location": "node_modules/ts-algebra",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "tslib",
+      "version": "2.8.1",
+      "installations": [
+        {
+          "location": "node_modules/tslib",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "turndown",
+      "version": "7.2.4",
+      "installations": [
+        {
+          "location": "node_modules/turndown",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "type-is",
+      "version": "2.1.0",
+      "installations": [
+        {
+          "location": "node_modules/type-is",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "typebox",
+      "version": "1.3.7",
+      "installations": [
+        {
+          "location": "node_modules/typebox",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "undici",
+      "version": "8.10.2",
+      "installations": [
+        {
+          "location": "node_modules/undici",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "undici-types",
+      "version": "6.21.0",
+      "installations": [
+        {
+          "location": "node_modules/undici-types",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "unpipe",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/unpipe",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "vary",
+      "version": "1.1.2",
+      "installations": [
+        {
+          "location": "node_modules/vary",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "web-streams-polyfill",
+      "version": "3.3.3",
+      "installations": [
+        {
+          "location": "node_modules/web-streams-polyfill",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "which",
+      "version": "2.0.2",
+      "installations": [
+        {
+          "location": "node_modules/which",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "wrappy",
+      "version": "1.0.2",
+      "installations": [
+        {
+          "location": "node_modules/wrappy",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "ws",
+      "version": "8.21.3",
+      "installations": [
+        {
+          "location": "node_modules/ws",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "wsl-utils",
+      "version": "1.0.0",
+      "installations": [
+        {
+          "location": "node_modules/wsl-utils",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "yaml",
+      "version": "2.9.1",
+      "installations": [
+        {
+          "location": "node_modules/yaml",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "zod",
+      "version": "4.6.2",
+      "installations": [
+        {
+          "location": "node_modules/zod",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    },
+    {
+      "name": "zod-to-json-schema",
+      "version": "3.25.2",
+      "installations": [
+        {
+          "location": "node_modules/zod-to-json-schema",
+          "direct": false,
+          "optional": false,
+          "peer": false
+        }
+      ]
+    }
+  ]
+}

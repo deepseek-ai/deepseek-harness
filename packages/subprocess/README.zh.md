@@ -26,7 +26,7 @@ harness 运行的每个子进程与终端会话——bash 命令、语言服务�
 |---|---|---|
 | [`subprocess`](subprocess/README.zh.md) | 定义子进程服务：可执行文件查找、受管进程 spawn 与真实终端会话 | `ctx.subprocess` |
 | [`subprocess-local`](subprocess-local/README.zh.md) | 在支持的平台上以原生受管范围运行宿主进程与终端，其他平台使用明确披露的较弱 fallback | 注册到 `ctx.subprocess` |
-| [`win32-process`](win32-process/README.zh.md) | 归属 sandbox 与普通进程创建、stdio、Job 分配、轮询、等待与句柄清理所用的共享 Win32 绑定 | 库，不使用 ctx key |
+| [`win32-process`](win32-process/README.zh.md) | 负责维护 sandbox 与普通进程创建、stdio、Job 分配、轮询、等待与句柄清理所用的共享 Win32 绑定 | 库，不使用 ctx key |
 
 即使消费方重载，进程生命周期仍由服务负责管理；消费方负责定义进程的含义（一条 bash 命令、一个语言服务器），以及决定塑造该进程的每一项默认值。
 

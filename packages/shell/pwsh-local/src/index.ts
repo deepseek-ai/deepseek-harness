@@ -255,13 +255,42 @@ export class PwshLocalExecutor extends ShellExecutor {
   }
 
   async run(spec: ShellExecSpec): Promise<ShellRunResult> {
-    return this.runArgv(spec, this.argv(spec))
+    return (await this.runArgv(spec, this.argv(spec))).result
   }
 
-  /** Foreground run of an exact argv (the confining subclass re-wraps it). */
-  protected async runArgv(spec: ShellExecSpec, argv: readonly string[]): Promise<ShellRunResult> {
-    // One deadline combines timeout and upstream cancellation; disposal clears its timer.
+  /**
+   * Run argv preparation and execution under one foreground deadline.
+   * @param spec - resolved execution settings and caller-owned command metadata.
+   * @param argvOrPrepare - exact argv, or preparation cancelled by the same deadline as execution.
+   * @returns the foreground result and whether argv reached the subprocess provider.
+   */
+  protected async runArgv(
+    spec: ShellExecSpec,
+    argvOrPrepare: readonly string[] | ((signal: AbortSignal) => Promise<readonly string[]>),
+  ): Promise<{ result: ShellRunResult; spawnRequested: boolean }> {
     using d = deadline(spec.signal, spec.timeoutMs, 'BASH_TIMEOUT')
+    let argv: readonly string[]
+    if (typeof argvOrPrepare === 'function') {
+      const cancelled = Promise.withResolvers<never>()
+      const abort = (): void => { cancelled.reject(d.signal.reason) }
+      d.signal.addEventListener('abort', abort, { once: true })
+      try {
+        argv = await Promise.race([
+          Promise.resolve().then(() => { d.signal.throwIfAborted(); return argvOrPrepare(d.signal) }),
+          cancelled.promise,
+        ])
+        d.signal.throwIfAborted()
+      } catch (error) {
+        if (timeoutOf(d.signal, 'BASH_TIMEOUT') === undefined) throw error
+        return {
+          spawnRequested: false,
+          result: {
+            exitCode: null, signal: null, timedOut: true, aborted: false, timeoutMs: spec.timeoutMs,
+            stdout: { text: '', truncated: false }, stderr: { text: '', truncated: false },
+          },
+        }
+      } finally { d.signal.removeEventListener('abort', abort) }
+    } else { argv = argvOrPrepare }
     const handle = this.ctx.subprocess.spawn(this.spawnSpec(spec, spec.stdoutMaxBytes, d.signal, argv))
     const outcome = await handle.done
     const collected = PwshLocalExecutor.collected(handle)
@@ -269,22 +298,26 @@ export class PwshLocalExecutor extends ShellExecutor {
     const timedOut = timeoutOf(d.signal, 'BASH_TIMEOUT') !== undefined
     const aborted = d.signal.aborted && !timedOut
     return {
-      ...outcome,
-      timedOut,
-      aborted,
-      timeoutMs: spec.timeoutMs,
-      stdout: finalOutput(collected.stdout),
-      stderr: finalOutput(collected.stderr),
+      spawnRequested: true,
+      result: {
+        ...outcome,
+        timedOut,
+        aborted,
+        timeoutMs: spec.timeoutMs,
+        stdout: finalOutput(collected.stdout),
+        stderr: finalOutput(collected.stderr),
+      },
     }
   }
 
-  start(spec: ShellExecSpec): ShellProcess {
-    return this.startArgv(spec, this.argv(spec))
+  async start(spec: ShellExecSpec): Promise<ShellProcess> {
+    return Promise.resolve(this.startArgv(spec, this.argv(spec)))
   }
 
   /** Background start of an exact argv (the confining subclass re-wraps it). */
   protected startArgv(spec: ShellExecSpec, argv: readonly string[]): ShellProcess {
     // Background runs ignore timeoutMs; callers stop them through kill() or spec.signal.
+    spec.signal?.throwIfAborted()
     const running = this.ctx.subprocess.spawn(this.spawnSpec(spec, this.config.maxOutputBytes, spec.signal, argv))
     const collected = PwshLocalExecutor.collected(running)
 

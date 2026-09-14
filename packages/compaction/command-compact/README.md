@@ -42,8 +42,8 @@ The command turns each expected failure into a stable message you can show direc
 | Situation | Message you see |
 |---|---|
 | Compaction already running, or the agent is mid-turn | `Compaction is unavailable because this process has an active compaction, or the agent is not idle.` |
-| The history changed while condensing | `The history selected for compaction changed before it could be replaced. The conversation is unchanged; the attempt is recorded in the session log.` |
-| No useful summary could be produced | `Compaction could not produce a useful summary. The conversation is unchanged; the attempt is recorded in the session log.` |
+| The history changed while condensing | `The history selected for compaction changed before it could be replaced. The attempt is recorded in the session log.` |
+| No useful summary could be produced | `Compaction could not produce a useful summary. The attempt is recorded in the session log.` |
 | Condensation did not finish cleanly | `Compaction did not finish cleanly; some session history may have changed. Inspect the current session state before retrying.` |
 | The conversation could not be saved | `Compaction finished, but the session could not be saved.` |
 

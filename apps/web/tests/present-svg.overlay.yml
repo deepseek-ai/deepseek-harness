@@ -1,0 +1,4 @@
+# This transcript includes the no-desktop state on every test platform.
+- id: session-controller
+  config:
+    nativeOpen: false

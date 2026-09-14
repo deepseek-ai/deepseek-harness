@@ -3,7 +3,9 @@
  * with the `native` capability, opening one native OS chooser on the host
  * display per pick (macOS `osascript`, Linux Zenity with a KDialog fallback;
  * Windows opens the modern `IFileOpenDialog` in a spawned child process — a
- * koffi-driven COM conversation on the child's main thread). Only viable when
+ * koffi-driven COM conversation on the child's main thread, preceded by a
+ * synthesized Alt press so the dialog activates as foreground even when a
+ * background host spawned the child). Only viable when
  * the operator sits at the host's screen; remote deployments compose the
  * browse backend instead.
  * @module @deepseek-ai/dsh-host-directory-picker-native

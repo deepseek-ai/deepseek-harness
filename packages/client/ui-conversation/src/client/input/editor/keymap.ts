@@ -11,6 +11,8 @@
  * keydown AFTER compositionend, so a root-element composition watch holds the
  * guard for 10ms more (the old textarea's proven window); keyCode
  * 229 is the legacy signal engines emit without isComposing.
+ * The root's composition attribute suppresses placeholders until both the
+ * native composition and the editor's final text reconciliation finish.
  */
 import type { LexicalEditor } from 'lexical'
 import {
@@ -57,12 +59,20 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
   // root element and re-arms on root swaps.
   let composing = false
   let composingUntil = 0
+  let rootElement: HTMLElement | null = null
+  const syncComposition = (): void => {
+    rootElement?.toggleAttribute('data-composer-composing', composing || editor.isComposing())
+  }
   const onCompositionStart = (): void => {
     composing = true
+    syncComposition()
   }
   const onCompositionEnd = (): void => {
     composing = false
     composingUntil = Date.now() + 10
+    // The native event can precede the committed draft, including an empty
+    // cancellation. The callback also runs when no document text changed.
+    editor.update(() => {}, { onUpdate: syncComposition })
   }
   const recentlyComposing = (): boolean => composing || Date.now() < composingUntil
 
@@ -79,9 +89,15 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     editor.registerRootListener((root, prevRoot) => {
       prevRoot?.removeEventListener('compositionstart', onCompositionStart)
       prevRoot?.removeEventListener('compositionend', onCompositionEnd)
+      prevRoot?.removeAttribute('data-composer-composing')
+      composing = false
+      composingUntil = 0
+      rootElement = root
       root?.addEventListener('compositionstart', onCompositionStart)
       root?.addEventListener('compositionend', onCompositionEnd)
+      syncComposition()
     }),
+    editor.registerUpdateListener(syncComposition),
     editor.registerCommand(KEY_ARROW_UP_COMMAND, arrow('up'), COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_ARROW_DOWN_COMMAND, arrow('down'), COMMAND_PRIORITY_CRITICAL),
     // Tab acts only when the trigger menu has a highlighted completion;

@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-harness 中存在两种有用但不同的上下文概念。Cordis `Context` 负责选择服务、注册归属和生命周期；`agent.ctx` 是一个存活 Agent 所拥有的扁平注册作用域。Agent 与会话身份描述的则是异步操作主体。若把根 `ctx.agent` 改成「当前正在运行的 Agent」，就会混淆这两种含义，并在单进程并发驱动多个 Agent 时失效。
+harness 中存在两种有用但不同的上下文概念。Cordis `Context` 负责选择服务、注册归属和生命周期；`agent.ctx` 是一个存活 Agent 所拥有的扁平注册作用域。Agent 与会话身份描述的则是异步操作主体。若提供表示「当前正在运行的 Agent」的动态 `ctx.agent`，就会混淆这两种含义，并在单进程并发驱动多个 Agent 时失效。
 
 进程内深层基础设施有时需要在显式传递的循环、工具及请求参数之下获取可信的发起 Agent，例如宿主感知传输层、追踪辅助函数、日志器或网关客户端。要求每个私有辅助函数都转发 `agent` 会造成重复，而进程级可变槽会在跨 `await` 时发生并发错误。模型可见参数也不适用，因为模型不得选择可信的会话或路由请求头。该载体归 Agent 服务所有，而非模型可见的可选上下文。
 
@@ -18,9 +18,9 @@ harness 中存在两种有用但不同的上下文概念。Cordis `Context` 负�
 
 `AgentLoop` 已经注入 `ctx.agents`，并用 `agents.withInitiator(agent, ...)` 包裹每个具体驱动的完整 `runLoop` 生命周期。循环、轮次、步骤和工具调用的包内私有入口从 `ctx.agents` 恢复同一个 Agent，一次推导 `agent.session`，再由操作内辅助函数捕获该值，避免在浅层接口中转发具体驱动或 `Session`。若 `Session` 本身就是底层辅助函数的实际接口，该函数会保留狭窄的 `Session` 参数，而不会只为隐式查找而接收更宽泛的 `Context`。
 
-因此，并发驱动使用彼此独立的存储。子驱动的异步延续携带子 Agent；`withInitiator()` 返回后，调用方立即恢复之前的存储，而活动运行计数仍持续跟踪返回的 Promise，直到其结束。创建、持久化加载和尚未发布的 `setup(agentCtx)` 位于子驱动边界之外：由父 Agent 发起的创建使用父身份，而 `agentCtx.agent` 显式标识子 Agent。
+因此，并发驱动使用彼此独立的存储。子驱动的异步延续携带子 Agent；`withInitiator()` 返回后，调用方立即恢复之前的存储，而活动运行计数仍持续跟踪返回的 Promise，直到其结束。创建、持久化加载和尚未发布的 `setup(agentCtx, childAgent)` 位于子驱动边界之外：由父 Agent 发起的创建使用父身份，而显式的 `childAgent` 参数标识子 Agent。
 
-隐式身份不会取代显式约定。`ToolExecution.agent`、`AssembleContext.agent`、`GenerateOptions.sessionId`、任务归属、父子请求、`ctx.agent`、`agentCtx.agent`、审批与 hook 主体、`cwd` 选择、取消、worker 和进程消息、持久化记录及协议身份都保持显式传递。远程边界会把所需身份写入类型化请求，因为 ALS 只在进程内有效。
+隐式身份不会取代显式约定。`ToolExecution.agent`、`AssembleContext.agent`、`AgentSetup` 的 Agent 参数、`GenerateOptions.sessionId`、任务归属、父子请求、审批与 hook 主体、`cwd` 选择、取消、worker 和进程消息、持久化记录及协议身份都保持显式传递。远程边界会把所需身份写入类型化请求，因为 ALS 只在进程内有效。
 
 `AgentRegistry` 管理一个有序的发起方生命周期。teardown 会先拒绝新边界；移除 `ctx.agents` 后，AgentLoop 等注入方开始排空，注册表随后等待活动的返回 Promise 边界，最后调用 `AsyncLocalStorage.disable()`。如果某个边界继承的异步调用链启动所属 Cordis fiber 的卸载，私有运行标记谱系会从排空范围中释放该嵌套边界链，从而避免 teardown 等待自身完成，同时继续排空无关边界。在普通排空期间，进行中代码可通过保留的服务引用继续调用 `currentInitiator()` 和 `requireInitiator()`；dispose（资源释放）后，发起方方法会抛出 `agent initiator scope is disposed`。根 Context dispose 可能并发启动同级 fiber 的 teardown，因此除 Cordis 依赖顺序外仍必须统计活动边界。
 
@@ -28,7 +28,7 @@ harness 中存在两种有用但不同的上下文概念。Cordis `Context` 负�
 
 宿主感知的传输层可以从 `ctx.agents.requireInitiator().session.id` 推导由部署方拥有的 `X-Harness-Session-Id` 等请求头；模型可见 schema 和参数中不包含该请求头。本决策不让现有生产 MCP 或 Web 传输层采用此请求头。测试替身传输层用于证明可信边界，而不会把宿主路由策略分配给现有的提供方无关 seam。
 
-本决策扩展 [Agent 注册作用域约定](2026-07-08-agent-scope-contexts.zh.md)及其[运行时设计](2026-07-12-agent-scope-runtime-design.zh.md)，不会改变其中 `agent.ctx` 的静态含义。
+本决策扩展 [Agent 注册作用域约定](2026-07-08-agent-scope-contexts.zh.md)及其[运行时设计](2026-07-12-agent-scope-runtime-design.zh.md)，不会改变其中 `agent.ctx` 的静态含义。[显式运行时身份决策](2026-08-31-explicit-agent-runtime-identity.zh.md)把发起方作用域限制在私有异步调用链内，同时让生命周期、归属、事件和协议接口直接携带各自的主体。
 
 ## 验证
 
@@ -40,7 +40,7 @@ Agent 服务测试锁定可选与必需读取、同步值及跨 realm Promise �
 
 **在每个函数中传递 Agent。** 公开、worker、进程、持久化和协议边界继续显式传递，但要求每个进程内私有辅助函数都携带 Agent 只会造成重复转发，不会提高可信度。ALS 仅限于这些显式边界内部的异步调用链。
 
-**让 `ctx.agent` 变成动态值。** `ctx.agent` 已经表示与 Agent 作用域 Cordis 上下文静态关联的 Agent。改变根上下文的含义会混合注册作用域与执行作用域，并让并发行为变得意外。
+**暴露动态的 `ctx.agent`。** Context 携带注册所有权，而非领域主体。为正在执行的 Agent 新增 accessor 会混合注册作用域与执行作用域，并让并发行为变得意外。
 
 **新增独立的 `ctx.agentExecution` 服务。** 该载体没有独立后端、配置或身份类型：它存储的是 `ctx.agents` 已经管理的同一个 `Agent`，而 AgentLoop 本就依赖该服务。第二个必需提供方会增加包、组合、生命周期、生成目录及测试 harness 接线，却没有拆出真实能力。
 

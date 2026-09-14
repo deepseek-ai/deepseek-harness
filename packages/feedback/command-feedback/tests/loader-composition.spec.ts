@@ -26,7 +26,7 @@ afterEach(async () => {
 })
 
 /** Register one idle agent over a store-owned session, as an app's spine does. */
-function agent(ctx: Context): Agent {
+async function agent(ctx: Context): Promise<Agent> {
   const scope = ctx.plugin(() => {})
   const id = SessionId('feedback-loader-agent')
   const session = ctx.sessions.create(id)
@@ -46,7 +46,7 @@ function agent(ctx: Context): Agent {
     runMaintenance: task => task(new AbortController().signal),
     whenIdle: () => Promise.resolve(),
   }
-  ctx.agents.register(value)
+  await ctx.agents.register(value)
   return value
 }
 
@@ -83,7 +83,7 @@ describe('/feedback real Loader composition through cordis.yml', () => {
     await context.loader.create({ name: 'cordis:include', config: { path: pathToFileURL(configPath).href } })
     await context.loader.await()
 
-    const owner = agent(context)
+    const owner = await agent(context)
     const signal = new AbortController().signal
 
     // Discoverable through the composed registry, as a UI adapter finds it.

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-07-29-projected-token-usage-and-request-context.md
-2026-07-29-projected-token-usage-and-request-context.md: d62f7dccd544a342da64fc35c24d32d53bf56231
-2026-07-29-projected-token-usage-and-request-context.zh.md: 6d2bb624ac11dbcdac30695913d3c16513bfdf9e
+2026-07-29-projected-token-usage-and-request-context.md: 10056ac8ef85562035d4fc4591e90aec603a7dd8
+2026-07-29-projected-token-usage-and-request-context.zh.md: 0e4cd68791f0ee65dd700b64493be3c33b78a920

@@ -1,11 +1,11 @@
 ---
 name: record-browser-gif
-description: Record browser or Web UI interaction demos as optimized GIFs using the available built-in browser, state-based frame capture, and deterministic encoding, then attach the GIF to a pull request with `gh --attach`, falling back to a dedicated assets branch where attach cannot apply. Use when asked to make, record, or generate a GIF that demonstrates a browser workflow, and for every pull request that changes product-user-visible GUI behavior, which MUST include a GIF recorded from the pull request's real server and model flow.
+description: Record browser or Web UI interaction demos as optimized GIFs using the available browser-control workflow, optional Playwright Videos for higher capture frame rates, and deterministic encoding, then attach the GIF to a pull request with `gh --attach`, falling back to a dedicated assets branch where attach cannot apply. Use when asked to make, record, or generate a GIF that demonstrates a browser workflow, and for every pull request that changes product-user-visible GUI behavior, which MUST include a GIF recorded from the pull request's real server and model flow.
 ---
 
 # Record Browser GIF
 
-Produce a short, truthful UI demonstration as a local GIF, and — only when the task includes attaching it to a pull request — publish it through the attach workflow at the end of this skill. Use the browser-control skill for interaction and the bundled encoder for repeatable timing, dimensions, and size.
+Produce a short, truthful UI demonstration as a local GIF, and — only when the task includes attaching it to a pull request — publish it through the attach workflow at the end of this skill. The available browser-control workflow remains preferred. Use [Playwright Videos](https://playwright.dev/docs/videos) when that workflow supports continuous capture at higher frame rates; use the bundled encoder for trimming, playback speed, final hold, dimensions, and size.
 
 The [evidence-chain decision](../../notes/implemented/process/2026-08-08-browser-gif-evidence-chain.md) owns why one storyboard comes from one isolated run and why publication revalidates both the artifact and the demonstrated pull-request head.
 
@@ -17,7 +17,7 @@ The recording itself is part of the evidence: use a real server booted from that
 
 ## Keep recording separate from publication
 
-- Recording produces frame images and one local `.gif` artifact only; it never mutates remote state.
+- Recording produces local video or screenshots and one `.gif` artifact only; it never mutates remote state.
 - Publication — attaching the GIF to a pull request body with `gh --attach`, or pushing it to an assets branch and embedding its URL where attach cannot apply — is the separate final step, performed only when the task includes attaching the GIF to a pull request. It never touches the pull request's own branch.
 - Preserve the requested recording conditions. A real-server or real-API demo must not use fixture queries, mock transports, synthetic event injection, or test-only hooks. If credentials or the server are unavailable, report that limitation instead of substituting a fixture.
 - Never read or expose credential values. Use the application's normal configuration path and a benign demonstration prompt.
@@ -33,48 +33,85 @@ A GIF for a specific pull request demonstrates that pull request's tree, so stag
 
 ## Record the flow
 
-1. Invoke the available browser-control skill and follow its setup, interaction, and cleanup instructions. Use the user's existing Chrome state only when requested or required; state that exception in the provenance and do not claim fresh client state. If browser control is unavailable, use the repository-declared Playwright dependency in an isolated headless browser; do not install another driver or launch the user's browser. State that fallback in the provenance.
-2. Before recording, identify the exact origin, whether the app is built or in development, the transport, and any fixture or mock mode. Record only claims that the observed setup supports.
-3. When a production default opens a native operating-system surface that headless automation cannot drive, select an official browser-operable production backend through the application's normal configuration. State the override in the provenance; a fixture, mock transport, or test-only hook is not an acceptable substitute.
-4. Choose three to six states that tell one story, such as typed, running, settled, and detail. Prefer semantic state changes over continuous capture; omit loading churn that does not help the viewer.
-5. Keep one viewport and crop for every frame, and name frames lexically: `00-initial.png`, `01-typed.png`, and so on.
-6. Store frames under the repository's gitignored `.playwright-mcp/` directory — browser-tool screenshots can only be written under the tool's allowed roots, and relative filenames resolve against the repository root. Create the frame subdirectory first (`mkdir -p .playwright-mcp/gif-frames-<label>`); writing into a missing directory fails with ENOENT at capture time.
-7. Before each screenshot, wait for a concrete UI condition such as a unique label, enabled control, changed document title, or completed response. Require the locator to resolve exactly one element; for Playwright accessible-name locators, use `exact: true` when equality is intended because descendant text or a prompt echo can otherwise create a false match. Do not use a fixed delay as proof that the application reached the state.
-8. Make completion predicates match an exact-text element — for example, an element whose trimmed text equals the expected reply — never a substring check such as `body.textContent.includes(...)`, which the echo of the user's own prompt also satisfies.
-9. When the claim involves a tool call, rejection, or recovery, include a detail or trajectory frame that shows the tool identity, status or stable error code, and the downstream result. A chat-only outcome does not prove why the tool path behaved that way.
-10. Capture a transient state (spinner, running row) by driving a slow foreground operation — for example, a `sleep 15` bash command — and polling a concrete DOM marker (a `data-*` attribute) inside one browser-script call that also takes the screenshot. State polled across separate tool calls is lost, because the turn settles between calls.
-11. Engineer the prompt so the state you need actually occurs: instruct the model to wait in the foreground when it would otherwise background a slow command, and give it a settle sentinel such as "reply with the single word done" to anchor the completion predicate.
-12. Capture no secrets, personal data, unrelated tabs, or transient notifications. Stop any unnecessarily long real-API run after the demonstrated state is visible.
+Follow the available browser-control workflow's setup, interaction, and cleanup instructions. When it exposes `recordVideo`, enable video on the same controlled context to capture more intermediate frames. Otherwise use [screenshot capture](#screenshot-capture) within that workflow; video availability does not determine which browser-control workflow to use. Existing user browser state remains an explicit isolation exception.
 
-Use the browser's own screenshot API. When it returns image bytes, save those bytes directly; the encoder detects image content independently of the filename extension.
+Only when browser control is unavailable, use the repository-declared Playwright dependency in an isolated headless browser and state that fallback in the capture notes. In this repository it resolves from `apps/web/package.json`; do not install another driver or open the user's browser.
+
+Before recording, identify the origin, built or development server, transport, and any mode overrides. When a production default opens a native surface that automation cannot drive, select an official browser-operable production backend through normal application configuration and disclose the override.
+
+Store the script, raw video, timing notes, QA frames, and GIF under the repository's gitignored `.playwright-mcp/` directory. Create the run directory first.
+
+### Capture video
+
+Match `viewport` and `recordVideo.size` explicitly: Playwright otherwise scales the video down to fit 800×800, which can make UI text unreadable.
+
+Configure video through the chosen browser-control workflow. The standalone Playwright fallback uses:
+
+```js
+const { chromium } = createRequire(join(repo, 'apps/web/package.json'))('playwright')
+const browser = await chromium.launch()
+const size = { width: 1440, height: 900 }
+const context = await browser.newContext({
+  viewport: size,
+  recordVideo: { dir: join(runDir, 'videos'), size },
+})
+try {
+  const page = await context.newPage()
+  const video = page.video()
+  // Navigate and exercise the real application here.
+  await context.close()
+  await video.saveAs(join(runDir, 'demo.webm'))
+} finally {
+  await context.close()
+  await browser.close()
+}
+```
+
+Import `createRequire` from `node:module` and `join` from `node:path`; set `repo` and a fresh `runDir` to absolute paths in the recording script. Retain the page's video handle before closing it. Await `context.close()` before `video.saveAs()` or encoding; closing only the browser does not guarantee the video's flush. Each page has its own video: choose the demonstrated page explicitly and do not concatenate unrelated pages or runs. Failed runs are diagnostic only.
+
+Choose a short story with three to six meaningful states. Wait for unique semantic locators before acting; use `exact: true` for accessible-name equality and exact-text completion predicates that cannot match a prompt echo. Fixed waits may provide a reading hold after the state is verified, but never establish readiness. When capturing video, preserve animations and scrolling.
+
+When demonstrating a tool call, rejection, or recovery, open its detail or trajectory so the video shows the tool identity, status or stable error code, and downstream result. If a transient running state matters, prompt for a slow foreground operation and observe its concrete DOM marker; continuous video captures its intermediate frames. Give the model a short final sentinel to anchor completion. Stop an unnecessarily long real-API run after the demonstrated state is visible.
+
+Capture no secrets, personal data, unrelated tabs, or notifications. Browser video contains page content, not browser chrome; avoid rendering credential-bearing URLs in the application. Review the whole selected interval, including intermediate states. Keep one viewport throughout.
 
 ## Encode the GIF
 
-Require `python3`, `ffmpeg`, and `ffprobe`. If either media binary is missing, report the dependency instead of installing software without authorization.
-
-Export `GIF_SKILL_DIR` as this skill's absolute directory on its own line before the python command — an inline `GIF_SKILL_DIR=... python3 "$GIF_SKILL_DIR/..."` assignment fails, because the argument expands before the assignment takes effect:
+Require `python3`, `ffmpeg`, and `ffprobe`. If a media binary is missing, report the dependency instead of installing software without authorization. Export `GIF_SKILL_DIR` on its own line before using it; an inline assignment cannot affect argument expansion in the same command.
 
 ```sh
 export GIF_SKILL_DIR=/absolute/path/to/this/skill
 python3 "$GIF_SKILL_DIR/scripts/encode_gif.py" \
-  /absolute/path/to/frames \
+  /absolute/path/to/demo.webm \
   /absolute/path/to/demo.gif \
-  --durations 1.5,1.5,1.5,3.5 \
-  --fps 10 \
-  --max-width 1200 \
-  --colors 128
+  --start 2 --end 32 --speed 2 --final-hold 3 \
+  --fps 10 --max-width 1200 --colors 128
 ```
 
-One duration applies to every frame; otherwise provide one comma-separated positive duration per frame, holding the final settled state longest. The encoder rejects fewer than two frames, mismatched dimensions or durations, invalid limits, accidental overwrite, unexpected duration, and output above `--max-bytes`.
+`--start` and `--end` select one continuous source interval in seconds. Defaults retain the full video at 1× speed and add a two-second final hold. `--speed` changes playback speed; disclose it and the selected interval beside the GIF so the demo cannot imply measured response latency. Use observed video times, not guessed wall-clock offsets, and preserve the complete cause and outcome of the demonstrated behavior. The final hold repeats the last selected frame. `--fps` sets the encoded GIF frame rate; increasing it cannot recover motion that the source recording did not capture. Keep the original WebM for QA; do not splice separate runs or synthesize missing states.
 
-For a large artifact, reduce `--max-width` first, then `--colors` or `--fps`; retain readable text and the final state long enough to inspect. Use `--force` only after resolving the exact output path.
+The encoder probes WebM container duration, applies trim and speed before palette conversion, and checks encoded duration, animation, width, and byte size. It refuses an empty or out-of-range interval, a selection shorter than two output frames, mode-inappropriate flags, and accidental overwrite. Reduce `--max-width`, then `--colors` or `--fps` for a large artifact; preserve readable text. Use `--force` only after resolving the exact output path.
+
+### Screenshot capture
+
+When continuous video is unavailable or the user requests a storyboard, follow the available browser-control workflow. Capture three to six verified states from one isolated run with the browser's screenshot API. Save returned image bytes directly under one run directory as `00-initial.png`, `01-typed.png`, and so on; use identical dimensions and crop. For a transient state, poll its DOM marker and capture within the same browser-script call.
+
+```sh
+python3 "$GIF_SKILL_DIR/scripts/encode_gif.py" \
+  /absolute/path/to/frames /absolute/path/to/demo.gif \
+  --durations 1.5,1.5,1.5,3.5 --fps 10 --max-width 1200 --colors 128
+```
+
+One duration applies to every screenshot; otherwise supply one positive duration per frame and hold the settled state longest. Directory input rejects fewer than two frames and mismatched dimensions or duration counts. Video timing flags apply only to video files; `--durations` and `--pattern` apply only to screenshot directories.
 
 ## Verify the artifact
 
-1. Read the encoder's JSON summary and confirm the output path, source and encoded frame counts, dimensions, duration, and byte size.
+1. Read the encoder's JSON summary and confirm the output path, source interval and speed (or screenshot count), encoded frame count, dimensions, duration, and byte size.
 2. Visually read the encoded GIF itself, not only the source frames. Confirm that the transition is legible, the last state is held long enough, and no sensitive content appears. If the viewer renders only the first frame, decode representative frames from the encoded GIF with `ffmpeg` and inspect those; the pre-encode screenshots do not prove the encoded order, palette, or final hold.
-3. Run `git status --short` and confirm frames and the artifact landed only under ignored paths.
+3. Run `git status --short` and confirm raw video, QA frames, and the artifact landed only under ignored paths.
 4. Return the absolute GIF path, render it when the client supports local media, and state whether the recording used a real API, fixture, or another transport. When the task does not include attaching the GIF to a pull request, stop here.
+
+Encoder maintenance: run `python3 -m unittest discover -s "$GIF_SKILL_DIR/scripts" -p 'test_*.py' -v` with the media prerequisites installed. These local media tests do not run in repository CI.
 
 ## Publish the GIF
 
@@ -92,14 +129,16 @@ Write the GIF into the body file as an ordinary local-path reference, using the 
 ![<alt text>](<path/to/demo.gif>)
 ```
 
-Immediately before attaching, re-read the pull request's live head — for a new pull request, the pushed branch tip — and compare it with the commit recorded next to the GIF. Stop and re-record when it moved. Then attach:
+The demonstrated pull request is normally the publication target. A tooling pull request may instead embed a clearly labeled example from another pull request; name that source PR and compare its live head in every check below. Never attribute the example to the tooling branch.
+
+Immediately before attaching, re-read the demonstrated pull request's live head — for a new demonstrated pull request, the pushed branch tip — and compare it with the commit recorded next to the GIF. Stop and re-record when it moved. Then attach:
 
 ```sh
 gh pr create --body-file <body.md> --attach <path/to/demo.gif>     # new pull request
 gh pr edit <pr> --body-file <body.md> --attach <path/to/demo.gif>  # existing pull request
 ```
 
-`--attach` is repeatable but refuses the same file twice. A GIF the body does not reference is appended at the end, where alt text set on the flag (`--attach '<path>#<alt text>'`) applies; a rewritten reference keeps the body's alt text. After attaching, re-read the live head and require it to remain at that recorded commit. Re-read the live body and confirm the reference now points at the uploaded URL, render the body through GitHub's Markdown API and confirm the expected `<img>`, and fetch the uploaded URL once to confirm `200` and `image/gif`.
+`--attach` is repeatable but refuses the same file twice. A GIF the body does not reference is appended at the end, where alt text set on the flag (`--attach '<path>#<alt text>'`) applies; a rewritten reference keeps the body's alt text. After attaching, re-read the demonstrated live head and require it to remain at that recorded commit. Re-read the live body and confirm the reference now points at the uploaded URL, render the body through GitHub's Markdown API and confirm the expected `<img>`, and fetch the uploaded URL once to confirm `200` and `image/gif`.
 
 ### Fall back to an assets branch
 
@@ -122,7 +161,7 @@ For a new series, make a fresh shallow scratch clone (`git clone --depth 1 <repo
 
 After pushing, use authenticated GitHub API or raw requests to confirm the remote path, byte size, checksum, `200` response, and `image/gif` content type. An anonymous `404` does not disprove a private-repository asset; authenticate the verification instead. This proves the repository-member review path, not public availability.
 
-Immediately before editing the pull-request body, re-read its live head and compare it with the commit recorded next to the GIF. Stop and re-record when it moved. After the edit, re-read the live head and require it to remain at that recorded commit. Separately, render the body through GitHub's Markdown API and confirm that the expected `<img>` is present.
+Immediately before editing the pull-request body, re-read the demonstrated pull request's live head and compare it with the commit recorded next to the GIF. Stop and re-record when it moved. After the edit, re-read the demonstrated live head and require it to remain at that recorded commit. Separately, render the body through GitHub's Markdown API and confirm that the expected `<img>` is present.
 
 Embed the GIF in the pull request body with the raw blob URL; the `?raw=true` suffix is required, because the plain blob URL renders GitHub's file page instead of the image:
 

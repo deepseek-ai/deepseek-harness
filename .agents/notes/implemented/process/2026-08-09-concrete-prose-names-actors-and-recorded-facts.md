@@ -24,6 +24,8 @@ Before using `contract`, `boundary`, or `shape`, writers check whether the sente
 
 This decision complements the [documentation tiers and budgets](2026-07-04-doc-tiers-and-budgets.md) decision, which continues to own placement, document form, and word budgets.
 
+The [blocked ambiguous origin label](2026-08-26-ban-ambiguous-origin-label.md) decision partially supersedes the sentence-level policy for one term after that term spread across unrelated contracts.
+
 ## Alternatives considered
 
 **Ban a fixed list of words.** Rejected because a word may be an exact identifier or the clearest term in another contract. For example, caller/callee invariants are real contracts, and process or wire boundaries identify real divisions. Sentence-level review catches ambiguity without rejecting valid names.

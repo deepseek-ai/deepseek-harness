@@ -19,7 +19,7 @@ Status: implemented
 - jscpd 检测包的生产 TypeScript 代码与仓库脚本中的跨文件克隆；窄范围的源码区间例外用于记录有意为之的并行实现。
 - `packages/*/*/src` 下按文件 100% 覆盖率（v8）；不可达的防御性守卫使用 `/* v8 ignore */ ` 并注明理由，而非删除。
 - publint（包的正确性）、workspace 约束（workspace 规则：private、cordis peer+dev、统一版本、ESM），以及对构建出的包声明文件进行 NodeNext 消费方类型检查。[移除未使用代码门禁的决策](2026-08-19-remove-knip.zh.md)说明了静态死代码扫描为何不属于这套门禁。
-- lefthook pre-commit 执行不加载项目的 Oxlint 验证，并应用带[一次有界重试](../../archived/process/2026-08-09-oxlint-only-fix-workflow.md)的安全修复，拒绝已暂存的空白问题并检查 vendor manifest（元数据清单）；pre-push 运行增量类型检查。CI 在 Node 22.19/24/26 上运行完整矩阵，并对 Headless、TUI、ACP（Agent Client Protocol）、JSON-RPC、工作流和代码运行时入口路径执行已构建应用的冒烟测试。
+- lefthook pre-commit 执行不加载项目的 Oxlint 验证，并应用带[一次有界重试](../../archived/process/2026-08-09-oxlint-only-fix-workflow.md)的安全修复，拒绝已暂存的空白问题并检查 vendor manifest（元数据清单）；pre-push 运行增量类型检查。CI 在 Node 22.19/24/26 上运行完整矩阵，并对 Headless、TUI、ACP（Agent Client Protocol）、JSON-RPC、工作流和 PTC 运行时入口路径执行已构建应用的冒烟测试。
 
 ## 后果
 

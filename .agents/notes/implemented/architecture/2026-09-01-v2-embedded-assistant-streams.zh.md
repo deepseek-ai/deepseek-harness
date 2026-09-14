@@ -14,6 +14,8 @@ Token 粒度的 `assistant/chunk` 事件会保留精确的 stream 顺序、时�
 
 ## 决策
 
+[V3 规范信封决策](2026-09-06-v3-canonical-session-envelopes.zh.md)负责当前替换键与请求头接纳规则。它保留本文的嵌入式 stream、尝试结算与冻结的 v1-to-v2 转换。
+
 Session format v2 没有顶层 `assistant/chunk` 事件。每个模型 attempt 提交一个包含 `stream: AssistantStreamRecord[]` 的持久 settlement：
 
 - `assistant/message` 是成功响应或具有可见组装内容的已取消响应所对应的 surface settlement。它在组装 message 旁嵌入精确的紧凑带时间 stream、可选 usage 与可选 `interrupted: true` marker。
@@ -21,7 +23,7 @@ Session format v2 没有顶层 `assistant/chunk` 事件。每个模型 attempt �
 
 `AssistantStreamAccumulator` 对每个 chunk 只快照一次。同一 block 的连续 text、reasoning 或 tool argument delta 会变成一个紧凑 run，包含首个时间戳、精确时间戳间隔和每个原始 delta 对应的一个数组成员。其他 chunk 保留为带时间戳的 raw record。`expandAssistantStream()` 会严格校验并重建精确的带时间序列；压缩绝不会合并 delta 边界。
 
-Migration publication verifier 与冻结的 v2 fixture validator 要求嵌入式 stream 能复现非空 `assistant/message` 的 content、usage 与 replay state。对于没有源 chunk 的已迁移旧 message，空 stream 仍然有效。普通 Session restore 只校验 runtime 直接依赖的 settlement 字段，不展开全部历史 stream；需要展开 compact stream 的 consumer 会在读取时校验 record。`assistant/message` 不能携带已停用的 chunk `sourceEventSeqs`；普通 user 与 tool surface provenance 保持可用。
+Migration publication verifier 与冻结的 v2 fixture validator 要求嵌入式 stream 能复现非空 `assistant/message` 的 content、usage 与 replay state。对于没有源 chunk 的已迁移旧 message，空 stream 仍然有效。普通 Session restore 只校验 runtime 直接依赖的 settlement 字段，不展开全部历史 stream；需要展开 compact stream 的 consumer 会在读取时校验 record。`assistant/message` 不能携带已停用的 chunk `sourceEventSeqs`；普通 user 与 tool source-event reference 保持可用。
 
 ### 实时呈现与持久回放
 
@@ -33,9 +35,9 @@ Client event source 原样传递持久 settlement。Chat 与 Trajectory 的 Assi
 
 ### 已发布 v1 到 v2 迁移
 
-相邻迁移会校验完整的冻结 v1 产物，按 turn、step、terminal boundary 与精确 message provenance 对 chunk 分组，再为每个 attempt 替换一个 settlement。成功分组的 chunk 移入其 message。未被认领的分组会在最后一个被消费 chunk 的位置变成 `assistant/attempt`。无关的交错事件保持相对顺序，存活事件获得密集 v2 序号。该迁移边通过 `dsh-llm` 运行时的 `AssistantStreamAccumulator` 压缩嵌入 stream，而不持有冻结副本，因为该包拥有 v2 stream 编码。隔离的 publication verifier 通过 `expandAssistantStream()` 与 `BlockAssembler` 展开并重组写入后的 stream，并在发布前检查每个迁移后的 `assistant/message` 是否与其一致。日后若某个格式改变 stream 编码，必须把这些 helper 的冻结副本纳入本迁移边。
+相邻迁移会校验完整的冻结 v1 产物，按 turn、step、terminal boundary 与精确 message chunk reference 对 chunk 分组，再为每个 attempt 替换一个 settlement。成功分组的 chunk 移入其 message。未被认领的分组会在最后一个被消费 chunk 的位置变成 `assistant/attempt`。无关的交错事件保持相对顺序，存活事件获得密集 v2 序号。该迁移边通过 `dsh-llm` 运行时的 `AssistantStreamAccumulator` 压缩嵌入 stream，而不持有冻结副本，因为该包拥有 v2 stream 编码。隔离的 publication verifier 通过 `expandAssistantStream()` 与 `BlockAssembler` 展开并重组写入后的 stream，并在发布前检查每个迁移后的 `assistant/message` 是否与其一致。日后若某个格式改变 stream 编码，必须把这些 helper 的冻结副本纳入本迁移边。
 
-该迁移边会重映射有限的已声明引用清单：信封 provenance、surface replacement 端点、command source event、compaction range 与 shadowed list，以及 title message list。经过校验的 `session/title-llm-request` 模型可见文本会在源序号命名空间中保持逐字节不变，而它的 `messageSeqs` 字段会迁移到 v2 命名空间；因此目标校验不会根据重映射后的序号重建该文本。指向被消费 chunk 的引用会使迁移失败；它绝不会被重定向到含义不同的 settlement。该迁移边也会拒绝切开 attempt 的继承切点。
+该迁移边会重映射有限的已声明引用清单：信封 source-event reference、surface replacement 端点、command source event、compaction range 与 shadowed list，以及 title message list。经过校验的 `session/title-llm-request` 模型可见文本会在源序号命名空间中保持逐字节不变，而它的 `messageSeqs` 字段会迁移到 v2 命名空间；因此目标校验不会根据重映射后的序号重建该文本。指向被消费 chunk 的引用会使迁移失败；它绝不会被重定向到含义不同的 settlement。该迁移边也会拒绝切开 attempt 的继承切点。
 
 v2 物理 header 要求 `isSeeded`，且不存储数值切点。带 seed 的产物用 `session/end-seed { inherited: true }` 标记其精确切点；解码从最后一个 tagged marker 推导切点。v2 编解码器为每个持久事件写一条物理行，只对 `sourceEventSeqs` 做范围编码，并在不冻结普通事件词汇或 payload 新增项的前提下校验物理 envelope。v1-to-v2 target validator 会另行冻结 released-v2 清单，current restoration 则使用 installed Session 词汇。冻结的 v0 与 v1 编解码器继续为不可变历史 generation 解码 packed row。
 
@@ -47,7 +49,7 @@ Generation 选择与发布遵循[已发布 Session 迁移决策](2026-08-31-rele
 
 ## 验证
 
-紧凑 stream 测试固定 text、reasoning、tool argument、raw chunk、时间戳间隔、格式错误 record 与分离 snapshot 的精确累积和展开。v1 到 v2 测试覆盖成功与失败 attempt、交错、密集序号与引用重映射、源序号 title framing、seed 切点插入与切分拒绝、严格源与目标校验、每行一个事件的 v2 编码、与 backend 兼容的 provenance range、原始与 Zstandard 发布，以及无写入的当前读取。
+紧凑 stream 测试固定 text、reasoning、tool argument、raw chunk、时间戳间隔、格式错误 record 与分离 snapshot 的精确累积和展开。v1 到 v2 测试覆盖成功与失败 attempt、交错、密集序号与引用重映射、源序号 title framing、seed 切点插入与切分拒绝、严格源与目标校验、每行一个事件的 v2 编码、与 backend 兼容的 source-event range、原始与 Zstandard 发布，以及无写入的当前读取。
 
 合并前的 performance acceptance 在三轮、100 组 warmup pair 与 600 组 measured pair 下，针对同一批已经解析的物理 row，把静态 catalog routing 与直接 released-v2 restoration 比较；它不比较 v1 与 v2，也不计入 backend I/O。每个 pooled median 与 p95 regression 都保持在 5% 预算以内，最差 p95 regression 为 3.150%。
 

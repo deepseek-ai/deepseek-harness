@@ -19,7 +19,7 @@ import {
 import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/steering', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.v2.jsonl')
+const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 // Two goldens pin the transient Host projection and its durable handoff: the
 // mid-turn state renders accepted steering from the Session control queue while the
 // question blocks admission, then the settled state renders the same message
@@ -186,7 +186,7 @@ describe('web e2e: mid-turn steering lands durably and visibly', () => {
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
-      'session.v2.jsonl', 'mid-steer.expected.md', 'settled.expected.md', 'settled-expanded.expected.md',
+      'session.v3.jsonl', 'mid-steer.expected.md', 'settled.expected.md', 'settled-expanded.expected.md',
     ])
   })
 })
@@ -312,6 +312,8 @@ describe('web e2e: composer shortcut follows the swapped busy behavior', () => {
 })
 
 describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
+  const releaseReplay = Promise.withResolvers<undefined>()
+  let disposeReplayBarrier: (() => void) | undefined
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -327,6 +329,10 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
       replayOverride: STEER_ALL_OVERRIDE,
       paceMs: REPLAY_PACE_MS,
     })
+    disposeReplayBarrier = scaffold.ctx.on('llm/stream', async function* (_options, next) {
+      await releaseReplay.promise
+      yield* next()
+    }, { prepend: true })
     scaffold.ctx.on('session/event', (_session, event) => { sessionEvents.push(event) })
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -338,6 +344,8 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
   }, 120_000)
 
   afterAll(async () => {
+    releaseReplay.resolve(undefined)
+    disposeReplayBarrier?.()
     await browser?.close()
     await scaffold?.close()
   })
@@ -348,8 +356,8 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     await input.waitFor({ timeout: 10_000 })
     const settled = scaffold.whenTurnSettled(30_000)
 
-    // Call 0 streams a question-tool call; the fills must land inside the
-    // first replay window, before the question composer replaces the textarea.
+    // Hold the question-tool stream until both rows have been steered, so
+    // question-composer takeover cannot race queue publication or the shortcut.
     await page.locator('[data-composer-input][contenteditable="true"]').first().waitFor({ timeout: 10_000 })
     await input.fill(PROMPT)
     await input.press('Enter')
@@ -369,6 +377,14 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
     await dock.getByText(STEER_TWO, { exact: true }).waitFor({ timeout: 10_000 })
     expect(await page.locator('[data-pending-steering]').count()).toBe(0)
 
+    // Submission echoes carry the same text before the Host queue publishes.
+    await expect.poll(
+      () => dock.getByRole('button', { name: 'Steer queued message', disabled: false }).count(),
+      { timeout: 10_000 },
+    ).toBe(2)
+    await page.getByRole('textbox', { name: 'Cmd/Ctrl+Enter steers all queued messages', exact: true })
+      .waitFor({ timeout: 10_000 })
+
     // Empty draft + Cmd+Enter: both queued rows steer in FIFO order, the dock
     // empties, and the pending steering renders at the conversation tail.
     await input.press('Meta+Enter')
@@ -376,6 +392,7 @@ describe('web e2e: empty-draft Cmd+Enter steers the whole queue', () => {
       () => page.locator('[data-pending-steering]').filter({ hasText: /BANANA|ORANGE/ }).count(),
       { timeout: 10_000 },
     ).toBe(2)
+    releaseReplay.resolve(undefined)
     expect(await page.locator('[data-queue-dock]').count()).toBe(0)
     // The reasoning row streams independently of the steering handoff. Wait
     // for the block to settle so the mid snapshot does not race its transient

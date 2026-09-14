@@ -1,0 +1,12 @@
+version: 1
+scenario: provider-cwd
+profile: headless
+composition: provider-cwd
+recording: authored
+header:
+  class: provider-cwd
+  pin: true
+platform: posix
+permission: read-only
+environment:
+  DSH_SNAPSHOT_PROVIDER_CWD: /recorded-provider/workspace

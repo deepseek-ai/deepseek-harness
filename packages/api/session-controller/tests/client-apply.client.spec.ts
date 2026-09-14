@@ -1,168 +1,98 @@
-import { Context } from '@deepseek-ai/cordis'
-import type { Fiber } from '@deepseek-ai/cordis'
-import type {
-  ConnectionGeneration,
-  ConnectionHandle,
-} from '@deepseek-ai/dsh-client-connection/client'
-import {
-  RemoteStreamCarrierError,
-  RemoteStream,
-  type RemoteStreamOptions,
-} from '@deepseek-ai/dsh-api-gateway/client'
+/**
+ * Session Controller Client apply inside the assembled client: Remote events
+ * arriving as emit frames on the `$events` stream, the control stream over
+ * the real Connection, and Agent Context identity through the Typert registry.
+ */
+import type { Context } from '@deepseek-ai/cordis'
+import { RemoteStreamCarrierError } from '@deepseek-ai/dsh-api-gateway/client'
+import { ok, type RemoteMock } from '@deepseek-ai/dsh-remote-mock'
+import { createClientTest, type TestClient, webApp } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/index.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import * as SessionClient from '../src/client/index.ts'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import { afterEach, describe, expect, vi, type MockInstance } from 'vitest'
 import { ClientSessions } from '../src/client/sessions/service.ts'
-import { FakeApiClient, fakeRemote } from './fake-api.client.ts'
+import type { SessionListValue } from '../src/types.ts'
 
-const GENERATION: ConnectionGeneration = { id: 1, host: { home: '/home/fixture' } }
+const SELF = '@deepseek-ai/dsh-api-session-controller'
+const ROSTER = webApp.closure([SELF])
+const it = createClientTest({ roster: ROSTER })
+const EVENTS = '$events'
+const CONTROL = 'session/control'
+const BASELINE = { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } }
+/** The first client boot pays the cold module transform of the cone. */
+const COLD_BOOT_TIMEOUT_MS = 60_000
 
 const sid = (value: string): SessionId => value as SessionId
 
-type RemoteListener = (...args: never[]) => void
-
-interface Bench {
-  readonly ctx: Context
-  readonly api: FakeApiClient
-  readonly fiber: Fiber
-  readonly sessions: ClientSessions
-  dispatch(event: string, ...args: unknown[]): void
-  publishGeneration(generation: ConnectionGeneration | undefined): void
-}
-
-const contexts = new Set<Context>()
-
-afterEach(async () => {
+afterEach(() => {
   vi.restoreAllMocks()
-  await Promise.all([...contexts].map(async (ctx) => { await ctx.fiber.dispose() }))
-  contexts.clear()
 })
 
-async function mount(initialGeneration?: ConnectionGeneration): Promise<Bench> {
-  const ctx = new Context()
-  contexts.add(ctx)
-  await ctx.plugin(TypertRegistry)
-  const api = new FakeApiClient()
-  const remote = fakeRemote(api)
-  const listeners = new Map<string, Set<RemoteListener>>()
-  const generationListeners = new Set<() => void>()
-  let generation = initialGeneration
-  const connection: ConnectionHandle = {
-    isLoopback: true,
-    generation: {
-      getSnapshot: () => generation,
-      subscribe: (listener) => {
-        generationListeners.add(listener)
-        return () => { generationListeners.delete(listener) }
-      },
-    },
-    state: { getSnapshot: () => 'connected' as const, subscribe: () => () => {} },
-    rpc: {
-      call: () => Promise.reject(new Error('unexpected generic RPC call')),
-    },
-    reconnect: () => {},
-    registerGenerationSource: () => () => {},
-    start: () => ({ stop: () => {} }),
-  }
-  ctx.reflect.provide('connection', connection)
-  ctx.reflect.provide('fileUpload', {
-    available: true,
-    post: () => Promise.reject(new Error('unexpected file upload')),
-  })
-  ctx.reflect.provide('remote', {
-    ...remote,
-    $stream: <Item>(options: RemoteStreamOptions<Item>) => (
-      new RemoteStream(connection, options)
-    ),
-    get $host() {
-      return { home: generation?.host.home, isLoopback: connection.isLoopback }
-    },
-    $on: (event: string, listener: RemoteListener) => {
-      const eventListeners = listeners.get(event) ?? new Set<RemoteListener>()
-      eventListeners.add(listener)
-      listeners.set(event, eventListeners)
-      return () => { eventListeners.delete(listener) }
-    },
-  })
-  ctx.reflect.provide('remote.commands', remote.commands)
-  ctx.reflect.provide('remote.session', remote.session)
-  ctx.reflect.provide('remote.subagents', remote.subagents)
-  const fiber = ctx.plugin(SessionClient)
-  await fiber
-  const sessions = ctx.sessions as ClientSessions
-  return {
-    ctx,
-    api,
-    fiber,
-    sessions,
-    dispatch: (event, ...args) => {
-      for (const listener of listeners.get(event) ?? []) listener(...args as never[])
-    },
-    publishGeneration: (next) => {
-      generation = next
-      for (const listener of [...generationListeners]) listener()
-    },
-  }
+async function bench(start: () => Promise<TestClient>) {
+  const client = await start()
+  return { client, sessions: client.ctx.sessions as ClientSessions }
 }
 
-async function flush(): Promise<void> {
-  for (let index = 0; index < 12; index++) await Promise.resolve()
+/** Deliver one Remote event the way the Host forwards it: an emit frame on the `$events` stream, consumed by the client. */
+async function emit(mock: RemoteMock, event: string, ...args: unknown[]): Promise<void> {
+  mock.streams.push(EVENTS, { type: 'emit', event, args })
+  await mock.streams.drained(EVENTS)
+}
+
+function baselines(accept: MockInstance): number {
+  return accept.mock.calls.filter(([frame]) => (frame as { type: string }).type === 'baseline').length
 }
 
 describe('Session Controller Client apply', () => {
-  it('routes Session Remote Events and connection generations into the object layer', async () => {
+  it('routes Remote events from the $events stream into the object layer and runs handleConnected once per generation', async ({ mock, start }) => {
     const connected = vi.spyOn(ClientSessions.prototype, 'handleConnected')
     const error = vi.spyOn(ClientSessions.prototype, 'handleSessionError')
-    const bench = await mount()
-    expect(connected).not.toHaveBeenCalled()
+    const { client, sessions } = await bench(start)
+    // The first generation's `connection/reset` already ran it; apply itself saw no Host yet.
+    await vi.waitFor(() => { expect(connected).toHaveBeenCalledOnce() })
 
-    bench.dispatch('api-session/added', {
-      sessionId: sid('session-1'),
-      updatedAt: 1,
-      running: false,
-      blank: true,
-    })
-    await flush()
-    expect(bench.sessions.list.getSnapshot().byId[sid('session-1')]).toMatchObject({
-      running: false,
-      updatedAt: 1,
+    await emit(mock, 'api-session/added', { sessionId: sid('session-1'), updatedAt: 1, running: false, blank: true })
+    await vi.waitFor(() => {
+      expect(sessions.list.getSnapshot().byId[sid('session-1')]).toMatchObject({ running: false, updatedAt: 1 })
     })
 
-    bench.dispatch('api-session/status', sid('session-1'), true)
-    bench.dispatch('api-session/activity', sid('session-1'), 9)
-    bench.dispatch('api-session/error', sid('session-1'), 'agent failed')
-    await flush()
-    expect(bench.sessions.list.getSnapshot().byId[sid('session-1')]).toMatchObject({
-      running: true,
-      updatedAt: 9,
+    await emit(mock, 'api-session/status', sid('session-1'), true)
+    await emit(mock, 'api-session/activity', sid('session-1'), 9)
+    await emit(mock, 'api-session/error', sid('session-1'), 'agent failed')
+    await vi.waitFor(() => {
+      expect(sessions.list.getSnapshot().byId[sid('session-1')]).toMatchObject({ running: true, updatedAt: 9 })
     })
     expect(error).toHaveBeenCalledWith(sid('session-1'), 'agent failed')
 
-    bench.dispatch('api-session/removed', sid('session-1'))
-    await flush()
-    expect(bench.sessions.list.getSnapshot().byId[sid('session-1')]).toBeUndefined()
+    await emit(mock, 'api-session/removed', sid('session-1'))
+    await vi.waitFor(() => { expect(sessions.list.getSnapshot().byId[sid('session-1')]).toBeUndefined() })
 
-    bench.ctx.emit('connection/reset')
-    expect(connected).toHaveBeenCalledOnce()
+    client.connection.reconnect()
+    await mock.streams.opened(EVENTS, 2)
+    await vi.waitFor(() => { expect(connected).toHaveBeenCalledTimes(2) })
+  }, COLD_BOOT_TIMEOUT_MS)
+
+  it('runs handleConnected at apply when the Host is already connected, as a reload of the row does', async ({ start }) => {
+    const connected = vi.spyOn(ClientSessions.prototype, 'handleConnected')
+    const { client } = await bench(start)
+    await vi.waitFor(() => { expect(connected).toHaveBeenCalledOnce() })
+    await client.reload(SELF)
+    expect(connected).toHaveBeenCalledTimes(2)
   })
 
-  it('accepts the control baseline, retries a carrier generation, and reports terminal protocol failure', async () => {
+  it('accepts the control baseline, retries a carrier loss once, and reports a second opening snapshot as a protocol failure', async ({ mock, start }) => {
     const accept = vi.spyOn(ClientSessions.prototype, 'handleControlFrame')
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const bench = await mount(GENERATION)
-    await flush()
+    await start()
+    await vi.waitFor(() => { expect(baselines(accept)).toBe(1) })
+    expect(accept).toHaveBeenCalledWith(BASELINE)
 
-    expect(accept).toHaveBeenCalledWith({
-      type: 'baseline',
-      value: { queues: {}, jobs: {}, projections: {} },
-    })
+    // One immediate retry while the Host is available reopens the stream, whose script pushes the baseline again.
+    mock.streams.fail(CONTROL, new RemoteStreamCarrierError('generation lost'))
+    await vi.waitFor(() => { expect(baselines(accept)).toBe(2) })
+    expect(mock.log.streams(CONTROL)).toHaveLength(2)
 
-    bench.api.failStreams(new RemoteStreamCarrierError('generation lost'))
-    await flush()
-    expect(accept.mock.calls.filter(([frame]) => frame.type === 'baseline')).toHaveLength(2)
-
-    bench.api.pushControl({ type: 'baseline', value: bench.api.controlBaseline } as never)
+    mock.streams.push(CONTROL, BASELINE)
     await vi.waitFor(() => {
       expect(logged).toHaveBeenCalledWith(
         '[session-controller] control stream failed:',
@@ -171,51 +101,61 @@ describe('Session Controller Client apply', () => {
     })
   })
 
-  it('materializes Host-addressed Agent scopes before the Session list arrives', async () => {
-    const bench = await mount()
-    const adapter = bench.ctx.typert.contexts.getClient('agent')
+  it('materializes Host-addressed Agent scopes before the Session list arrives', async ({ mock, start }) => {
+    const list = Promise.withResolvers<RemoteResult<SessionListValue>>()
+    mock.remote.session.list.mockReturnValueOnce(list.promise)
+    const { client, sessions } = await bench(start)
+    const adapter = client.ctx.typert.contexts.getClient('agent')
     const first = adapter?.resolve(sid('agent-early'))
 
     expect(first).toBeDefined()
-    expect(bench.sessions.scopeOf(first as Context)).toBe(sid('agent-early'))
+    expect(sessions.scopeOf(first as Context)).toBe(sid('agent-early'))
     expect(adapter?.resolve(sid('agent-early'))).toBe(first)
+    list.resolve(ok({ items: [] }))
+    await vi.waitFor(() => { expect(sessions.list.getSnapshot().phase).toBe('ready') })
   })
 
-  it('projects Agent Context identity in both directions and withdraws the adapter on disposal', async () => {
-    const bench = await mount(GENERATION)
-    await flush()
-    expect(bench.sessions.list.getSnapshot().phase).toBe('ready')
+  it('projects Agent Context identity in both directions and withdraws the adapter when the row unloads', async ({ mock, start }) => {
+    const { client, sessions } = await bench(start)
+    await vi.waitFor(() => { expect(sessions.list.getSnapshot().phase).toBe('ready') })
 
-    bench.dispatch('api-session/added', {
-      sessionId: sid('agent-1'),
-      updatedAt: 1,
-      running: false,
-      blank: true,
-    })
-    await flush()
-    const scoped = bench.sessions.scope(sid('agent-1'))
-    const adapter = bench.ctx.typert.contexts.getClient('agent')
-    expect(scoped).toBeDefined()
-    expect(adapter?.identity(bench.ctx)).toBeUndefined()
-    expect(adapter?.identity(scoped!)).toBe(sid('agent-1'))
+    await emit(mock, 'api-session/added', { sessionId: sid('agent-1'), updatedAt: 1, running: false, blank: true })
+    await vi.waitFor(() => { expect(sessions.scope(sid('agent-1'))).toBeDefined() })
+    const scoped = sessions.scope(sid('agent-1')) as Context
+    const adapter = client.ctx.typert.contexts.getClient('agent')
+    expect(adapter?.identity(client.ctx)).toBeUndefined()
+    expect(adapter?.identity(scoped)).toBe(sid('agent-1'))
     expect(adapter?.resolve(sid('agent-1'))).toBe(scoped)
 
-    await bench.fiber.dispose()
-    expect(bench.ctx.typert.contexts.getClient('agent')).toBeUndefined()
+    await client.unload(SELF)
+    expect(client.ctx.typert.contexts.getClient('agent')).toBeUndefined()
   })
 
-  it('waits for a Host generation before retrying the control stream', async () => {
+  it('waits for a Host generation before retrying the control stream', async ({ mock, start }) => {
     const accept = vi.spyOn(ClientSessions.prototype, 'handleControlFrame')
-    const bench = await mount()
-    await flush()
-    expect(accept.mock.calls.filter(([frame]) => frame.type === 'baseline')).toHaveLength(1)
+    const hostBack = Promise.withResolvers<undefined>()
+    let opens = 0
+    // The second $events generation stays unready until the test lets the Host answer.
+    mock.stream(EVENTS, (_args, stream) => {
+      opens += 1
+      const ready = { type: 'ready', clientId: `mock-client-${String(opens)}`, host: { home: '/home/mock' } }
+      if (opens === 1) stream.push(ready)
+      else void hostBack.promise.then(() => { stream.push(ready) })
+    })
+    const client = await start()
+    await vi.waitFor(() => { expect(baselines(accept)).toBe(1) })
 
-    bench.api.failStreams(new RemoteStreamCarrierError('offline'))
-    await flush()
-    expect(accept.mock.calls.filter(([frame]) => frame.type === 'baseline')).toHaveLength(1)
+    client.connection.reconnect()
+    await mock.streams.opened(EVENTS, 2)
+    expect(client.connection.generation.getSnapshot()).toBeUndefined()
 
-    bench.publishGeneration(GENERATION)
-    await flush()
-    expect(accept.mock.calls.filter(([frame]) => frame.type === 'baseline')).toHaveLength(2)
+    mock.streams.fail(CONTROL, new RemoteStreamCarrierError('offline'))
+    await client.flush()
+    expect(baselines(accept)).toBe(1)
+    expect(mock.log.streams(CONTROL)).toHaveLength(1)
+
+    hostBack.resolve(undefined)
+    await vi.waitFor(() => { expect(baselines(accept)).toBe(2) })
+    expect(client.connection.generation.getSnapshot()).toMatchObject({ id: 2 })
   })
 })

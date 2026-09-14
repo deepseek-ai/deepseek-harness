@@ -1,13 +1,24 @@
-/* Editor-internal decoration styles: nodes Lexical mounts inside the
-   contenteditable (chip hosts get their look from ReferenceChip.module.css;
-   this sheet covers text-level decorations). */
-
-/* Plain-text reference: chip family colors over the draft's own glyphs.
-   clone keeps rounded ends on soft-wrap fragments. Color only, no icon —
-   a token still carrying its trigger character is editable text; the domain
-   icon belongs to the settled chip alone. */
-.textRef {
+/* Shared inline reference treatment; hover does not change text metrics. */
+.reference {
+  padding: 0 4px;
+  border-radius: 6px;
+  line-height: inherit;
+  vertical-align: baseline;
   color: var(--dsw-alias-state-business-primary);
+  background: transparent;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+}
+
+.reference:hover {
+  background: var(--dsw-alias-state-business-tertiary);
+}
+
+.openable {
+  cursor: pointer;
+}
+
+.textRef {
+  display: inline-block;
+  max-width: 100%;
 }

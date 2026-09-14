@@ -1,10 +1,25 @@
 /* Agent-preset chip on the new-session screen, beside the workspace picker.
    Geometry mirrors HeroShell's .workspace so the two read as one row. */
 
+/* Overflow-driven degradation (mirrors HeroShell's .workspace), no
+   breakpoint: the label shrinks with an ellipsis down to nothing, so the
+   preset icon and chevron always sit snug against whatever text remains —
+   full text, ellipsized text, or none. */
+/* The Menu anchor wrapper between the row and this chip: its flex
+   auto-minimum would hold the full label width and the row could never
+   compress the chip. The explicit floor is the icon-only end state — 8px
+   paddings + 16px icon + two 4px gaps + 14px chevron — so the glyphs never
+   crush once the label has ellipsized away to nothing. */
+.menuAnchor {
+  min-width: 54px;
+  max-width: 100%;
+}
+
 .seat {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   max-width: min(100%, 240px);
   min-height: 28px;
   padding: 0 8px;
@@ -16,8 +31,6 @@
   line-height: 20px;
   font-weight: 500;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   cursor: pointer;
 }
 
@@ -34,6 +47,13 @@
 .seatIcon {
   flex: none;
   color: var(--dsw-alias-label-primary);
+}
+
+.seatLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Introduce cue: the icon eases in on an overshoot-free expo curve (duration

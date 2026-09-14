@@ -1,5 +1,5 @@
 ---
-description: "纯函数式相邻 Session 格式规划、无损 JSON 值检查、仅标头迁移与物理编解码分派。"
+description: "纯函数式相邻会话格式规划、无损 JSON 值检查、仅标头迁移与物理编解码分派。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-`dsh-session-format` 让持久化代码可以直接还原当前 Session，或在只消费一次物理行的同时组合唯一的相邻迁移序列。一次还原会让调用方拥有的已解析值流经有状态 Stage，不复制或冻结中间 artifact。物理分帧、压缩、不可变 generation 命名、排他发布和 Cordis 生命周期行为不属于本库。
+`dsh-session-format` 让持久化代码可以直接还原当前会话，或在只消费一次物理行的同时组合唯一的相邻迁移序列。一次还原会让调用方拥有的已解析值流经有状态 Stage，不复制或冻结中间产物。物理分帧、压缩、不可变 generation 命名、排他发布和 Cordis 生命周期行为不属于本库。
 
 ## 目录
 
@@ -27,7 +27,7 @@ kind: "package-library"
 
 ### 何时使用
 
-当持久化或格式目录代码需要分类物理 Session header、还原当前逻辑值或组合已发布相邻迁移时，使用本库。它不是 Cordis 插件，也没有 profile 挂载行。它不发布运行时不变式伴生入口，因为每个已完成操作都会校验结果；decoder 与 transformer 状态只属于一次尚未完成的流式还原，绝不在多次还原间共享。
+当持久化或格式目录代码需要分类物理会话 header、还原当前逻辑值或组合已发布相邻迁移时，使用本库。它不是 Cordis 插件，也没有 profile 挂载行。它不发布运行时不变式伴生入口，因为每个已完成操作都会校验结果；decoder 与 transformer 状态只属于一次尚未完成的流式还原，绝不在多次还原间共享。
 
 ### 入口
 
@@ -41,9 +41,9 @@ const headerRecord = catalog.encodeCurrentHeader(current.header, current.inherit
 const eventRecords = current.events.map(catalog.encodeCurrentEvent)
 ```
 
-`createSessionFormatCatalog()` 接收每个受支持版本的一个冻结 codec、当前格式的逐记录 encoder、每组相邻版本的一个迁移，以及当前 artifact 与 header 还原器。`readHeader()` 在不读取事件的情况下返回 `current`、`migration-required`、`unsupported` 或 `malformed` 描述符。正文读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()` 获得当前 artifact。写入方逐条编码其 header 与事件。
+`createSessionFormatCatalog()` 接收每个受支持版本的一个冻结 codec、当前格式的逐记录 encoder、每组相邻版本的一个迁移，以及当前产物与 header 还原器。`readHeader()` 在不读取事件的情况下返回 `current`、`migration-required`、`unsupported` 或 `malformed` 描述符。正文读取方创建一次 restore，把每个已解析物理行传给 `decodeRow()`，再调用一次 `finish()` 获得当前产物。写入方逐条编码其 header 与事件。
 
-`recovery` 选项决定严格拒绝故障行，还是执行可恢复后缀处理。`validation: 'current'` 会执行已安装 current 格式的全部校验。`validation: 'transformed'` 会在历史迁移后执行已发布 current 格式校验；已经是 current 的输入则只接受其 codec 的物理校验。
+`recovery` 选项决定严格拒绝故障行，还是执行可恢复后缀处理。`validation: 'current'` 会执行所有已安装的 current 格式校验。`validation: 'transformed'` 会在历史迁移后执行已发布的 current 格式校验；已经是 current 的输入则只接受其 codec 的物理校验。
 
 可恢复解码器返回已接受的逻辑前缀。编解码器可以丢弃一个格式错误或序号不连续的行及其未提交后缀，但后续成功解码的 `turn/end` 会使原始问题成为致命错误。
 
@@ -55,14 +55,14 @@ const eventRecords = current.events.map(catalog.encodeCurrentEvent)
 <details>
 <summary>实现细节——点击展开</summary>
 
-迁移链在构造时校验唯一且无缺口的顺序。Catalog 把一个行 decoder 与有状态的相邻事件 transformer 组合起来，只保留其有界状态与最终当前事件，并在 `finish()` 时执行目标校验；只有调用方决定是否发布该结果以及如何发布。
+迁移链在构造时校验唯一且无缺口的顺序。源切点可以在 EOF 前保持未知；依赖头部切点的 Stage 拒绝缺失值，而基于标记的 Stage 从已发出的事件推导切点。每个 Stage 在完成时返回精确的目标切点，且必须与预声明切点一致。Catalog 把一个行 decoder 与有状态的相邻事件 transformer 组合起来，只保留其有界状态与最终当前事件，并在 `finish()` 时执行目标校验；只有调用方决定是否发布该结果以及如何发布。
 
 | 文件 | 职责 |
 |---|---|
 | [`src/chain.ts`](src/chain.ts) | 相邻计划构造与当前格式绕过 |
 | [`src/catalog.ts`](src/catalog.ts) | 物理版本分派与标头分类 |
 | [`src/json.ts`](src/json.ts) | 分离的无损 JSON 快照与通用坐标校验 |
-| [`src/filename.ts`](src/filename.ts) | 持久化、导出与 fixture 共用的规范 `session[.vN].jsonl` 文件名 |
+| [`src/filename.ts`](src/filename.ts) | 持久化、导出与 fixture（测试前置数据）共用的规范 `session[.vN].jsonl` 文件名 |
 
 </details>
 
@@ -80,7 +80,7 @@ const eventRecords = current.events.map(catalog.encodeCurrentEvent)
 <a id="model-experience"></a>
 ## 模型体验
 
-### Session 还原
+### 会话还原
 
 #### 模型看到什么
 

@@ -54,7 +54,7 @@ describe('dsh run with Agent Teams enabled', () => {
       ].join('\n'))
       const launch = resolveExampleLaunch({
         srcBin: dshBinScript,
-        configArgs: ['--profile', 'headless', '请明确使用 Agent Teams，把调研和实现拆给两个 teammate，等待完成后汇总。'],
+        configArgs: ['--profile', 'headless', '请先运行 workflow 检查，再使用 Agent Teams 把调研和实现拆给两个 teammate，等待完成后汇总。'],
         tsconfigPath,
         env: {
           DSH_HOME: home,
@@ -85,9 +85,17 @@ describe('dsh run with Agent Teams enabled', () => {
 
       const files = (await readdir(sessions, { recursive: true }))
         .filter(file => file.endsWith('.jsonl'))
-      expect(files).toHaveLength(3)
+      expect(files).toHaveLength(4)
       const logs = await Promise.all(files.map(file => readFile(join(sessions, file), 'utf8')))
       const parsed = logs.map(records)
+      const workflowChild = parsed.find(log => log.some(record => record.type === 'subagent/descriptor'
+        && (record.data as { mode: string }).mode === 'one-shot'))
+      expect(workflowChild).toBeDefined()
+      expect(workflowChild!.find(record => record.type === 'subagent/descriptor')?.data)
+        .toMatchObject({ mode: 'one-shot', provider: 'spawn' })
+      expect(workflowChild!.filter(record => record.type === 'user/message'
+        && (record.data as { source: { kind: string } }).source.kind === 'user').map(record => record.data))
+        .toEqual([expect.objectContaining({ content: [{ type: 'text', text: 'TEAM_WORKFLOW_CHILD' }] })])
       const root = parsed.find((log) => {
         const header = log[0]
         return header?.type === 'session' && typeof header.parentSession !== 'string'
@@ -107,6 +115,9 @@ describe('dsh run with Agent Teams enabled', () => {
       expect(toolNames).toContain('wait_agent')
       expect(toolNames).toContain('team_task_list')
       expect(toolNames).toContain('list_agents')
+      expect(toolNames).toContain('workflow')
+      expect(root!.find(record => record.type === 'tool-workflow/run-end')?.data)
+        .toMatchObject({ stopReason: 'completed' })
     } finally {
       await rm(cwd, { recursive: true, force: true })
     }

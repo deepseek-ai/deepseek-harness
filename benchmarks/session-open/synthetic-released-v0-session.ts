@@ -67,13 +67,13 @@ class ReleasedV0FixtureBuilder {
 
   private appendTurn(turn: number, reasoningDeltaCount: number, textDeltaCount: number): void {
     this.appendEvent('turn/start', { turn })
+    this.appendEvent('step/start', { turn, step: 1 })
     this.appendEvent('user/message', {
       id: `user-${String(turn)}`,
       role: 'user',
       content: [{ type: 'text', text: `prompt ${String(turn)}` }],
       source: { kind: 'user' },
     }, { surfaceOp: 'append' })
-    this.appendEvent('step/start', { turn, step: 1 })
     const firstChunkSeq = this.appendChunk(turn, { type: 'block-start', index: 0, blockType: 'reasoning' })
     const reasoningDeltas = Array.from(
       { length: reasoningDeltaCount },

@@ -64,7 +64,7 @@ function requestFromState(
         resultSeq: summary.seq,
         summary: summary.data.summary,
         ...(summary.data.rawOutput === undefined ? {} : { rawOutput: summary.data.rawOutput }),
-        provenance: { provider: summary.data.provider, model: summary.data.model },
+        providerMetadata: { provider: summary.data.provider, model: summary.data.model },
         requestConfig: {
           provider: summary.data.provider,
           model: summary.data.model,

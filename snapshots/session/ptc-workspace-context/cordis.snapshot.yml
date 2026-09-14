@@ -1,5 +1,9 @@
 # Keyless replay counterpart of ptc-workspace-context.cordis.yml. It adds
 # PTC mode to the default filesystem suite and swaps in replay.
+- insert:
+    - id: literal-sdk
+      name: '../../../packages/core/tools/tests/fixtures/literal-sdk.ts'
+
 - id: llm-deepseek
   name: '@deepseek-ai/dsh-llm-deepseek'
   disabled: true

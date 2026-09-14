@@ -18,6 +18,8 @@ Status: implemented
 
 **路径链接读得出是链接。** 静止状态下就带下划线，而不只在悬停时。这是本次改动中更小的那一半，却是修复中更大的那一半。
 
+**对 web 客户端已被[右侧 Sidebar](2026-09-04-right-sidebar-docking-infrastructure.zh.md)取代：** `openFile` 现在在右侧 Sidebar 里打开一个文本预览 tab，经已认证的 Remote 载体读取文件文本——不再提供任何文档，下文的同源问题因此不再出现——**Show in folder** 动作已删除；`session/openWorkspacePath` 留在 Host 上，已无 web 调用方。以下是七月交付时的决定原文。
+
 **打开仍然是 Host 的职责，并且优先选用默认浏览器。** `session/openWorkspacePath` 把路径交给操作系统，得到的是真实浏览器里的一份 `file://` 文档：页面能力完整，且够不到 `/api`——因为 `file://` 文档与它并不同源。在所报告的那份产物上实测：`localStorage` 可用、主题切换生效、tabs 可切换，而对 API 的 `fetch` 失败。对浏览器能渲染的文档——`.html`、`.htm`、`.xhtml`、`.svg`——平台能够确定默认浏览器时，打开器解析的是默认**浏览器**而非该类型的默认应用，因为把 `.html` 绑给编辑器的开发者，否则点开一个产出的页面得到的会是源码。macOS 读取 LaunchServices 的 `https` 处理程序，桌面 Linux 读取 `$BROWSER`；无法确定浏览器时，两者都会回退到默认应用。Windows 使用其注册的文件关联，WSL 则先转换路径，再使用同一 Windows 交接。存在隐藏文件时，**在文件夹中显示**会把 `.` 经由同一 owner `openFile` 传递；它只在 loopback 页面的当前 `host.describe.canOpenPath` 允许原生打开时出现。其他部署会省略它；桌面探测误报时可配置 `nativeOpen: false`。
 
 **以 HTTP 提供工作区文件不在范围内，非本机客户端亦然。** 由 harness 自己提供文件——与 `/api` 同源、置于 `CSP: sandbox` 之后、或交给一个以自身端口给所服务文档独立源的第二监听器——随产品范围一并否决：不为「浏览器不在 Host 机器上」的场景提供预览，因此 Host 打开器完整回答受支持的场景，而那套 HTTP 机制只会回答不受支持的那个。
@@ -33,4 +35,4 @@ Status: implemented
 
 ## 后果
 
-现有的每一处文件交互都同时改变了：write、edit、read 与通用单文件卡片都汇到 `openFile`，因此链接修复与浏览器优先策略无需逐行改动。组装层 Web 测试覆盖单行 CSS 溢出和单次点击的 Host 交接，且不会启动原生应用。产出的 `file://` 文档无法 `fetch` 同级文件（但 `<script src>`、`<img>` 和 CSS `@import` 可用），这是 HTTP 提供曾有、而此处没有的能力。远程客户端保留 chip，但省略文件夹操作；每个 chip 的 `title` 仍保留完整路径。Markdown 仍由平台的 `.md` 应用打开；产品内渲染属于另一项工作。
+现有的每一处文件交互都同时改变了：write、edit、read 与通用单文件卡片都汇到 `openFile`，因此链接修复与浏览器优先策略无需逐行改动。组装层 Web 测试覆盖单行 CSS 溢出和单次点击的 Host 交接，且不会启动原生应用。产出的 `file://` 文档无法 `fetch` 同级文件（但 `<script src>`、`<img>` 和 CSS `@import` 可用），这是 HTTP 提供曾有、而此处没有的能力。每个客户端都保留 chip，且都不提供文件夹操作；每个 chip 的 `title` 仍保留完整路径。Markdown 仍由平台的 `.md` 应用打开；产品内渲染属于另一项工作。

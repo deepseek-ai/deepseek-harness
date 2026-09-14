@@ -1,0 +1,78 @@
+[
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "tool-call"
+      },
+      {
+        "type": "tool-call-delta",
+        "index": 0,
+        "id": "call_node_policy",
+        "name": "run_code",
+        "argumentsDelta": "{\"code\":\"const fs = await import('node:fs/promises'); let denied = false; try { await fs.writeFile('ptc-denied.txt', 'forbidden') } catch (error) { denied = ['EPERM', 'EACCES', 'EROFS'].includes(error.code) }; const shell = await tools.bash({ command: 'pwd', description: 'Report the current workspace directory' }); return { denied, emptyEnvironment: Object.keys(process.env).length === 0, sameWorkspace: process.cwd() === shell.stdout.text.trim() };\",\"description\":\"Verify Node file policy and execution context\"}"
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "tool-call",
+          "id": "call_node_policy",
+          "name": "run_code",
+          "arguments": "{\"code\":\"const fs = await import('node:fs/promises'); let denied = false; try { await fs.writeFile('ptc-denied.txt', 'forbidden') } catch (error) { denied = ['EPERM', 'EACCES', 'EROFS'].includes(error.code) }; const shell = await tools.bash({ command: 'pwd', description: 'Report the current workspace directory' }); return { denied, emptyEnvironment: Object.keys(process.env).length === 0, sameWorkspace: process.cwd() === shell.stdout.text.trim() };\",\"description\":\"Verify Node file policy and execution context\"}"
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 5
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "tool-calls"
+        }
+      }
+    ]
+  },
+  {
+    "kind": "chunks",
+    "chunks": [
+      {
+        "type": "block-start",
+        "index": 0,
+        "blockType": "text"
+      },
+      {
+        "type": "text-delta",
+        "index": 0,
+        "text": "Node policy and execution context verified."
+      },
+      {
+        "type": "block-end",
+        "index": 0,
+        "block": {
+          "type": "text",
+          "text": "Node policy and execution context verified."
+        }
+      },
+      {
+        "type": "usage",
+        "usage": {
+          "inputTokens": 10,
+          "outputTokens": 2
+        }
+      },
+      {
+        "type": "finish",
+        "reason": {
+          "kind": "stop"
+        }
+      }
+    ]
+  }
+]

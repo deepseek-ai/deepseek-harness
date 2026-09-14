@@ -39,27 +39,12 @@ export abstract class EntryTree {
       .filter(isNonNullable)
   }
 
-  /**
-   * Wait until this tree has no active import or lifecycle tasks.
-   * @throws a settled fiber failure, or an aggregate when several fibers failed.
-   */
+  /** Wait until this tree has no pending import or lifecycle tasks. */
   async await() {
     while (true) {
       const tasks = this.getTasks()
-      if (tasks.length) {
-        await Promise.allSettled(tasks)
-        continue
-      }
-      const outcomes = await Promise.allSettled(
-        [...this.entries()].map(entry => entry._await()),
-      )
-      const failures = outcomes
-        .filter((outcome): outcome is PromiseRejectedResult => outcome.status === 'rejected')
-        .map(outcome => outcome.reason)
-      if (failures.length === 1) throw failures[0]
-      if (failures.length > 1) throw new AggregateError(failures, 'loader fibers failed')
-      this.ctx.reflect.notify(['loader'])
-      if (!this.getTasks().length) return
+      if (!tasks.length) return
+      await Promise.allSettled(tasks)
     }
   }
 
@@ -96,17 +81,15 @@ export abstract class EntryTree {
   /** Create an entry in the root group or a nested group. */
   async create(options: Omit<EntryOptions, 'id'>, parent: string | null = null, position = Infinity) {
     const group = this.resolveGroup(parent)
-    const id = await group.create(options)
-    const entry = this.resolve(id)
-    group.data.splice(position, 0, entry.options)
+    group.data.splice(position, 0, options as EntryOptions)
     group.tree.write()
-    return id
+    return group.create(options)
   }
 
   /** Stop and remove an entry from its parent group. */
-  async remove(id: string) {
+  remove(id: string) {
     const entry = this.resolve(id)
-    await entry.parent.remove(id)
+    entry.parent.remove(id)
     entry.parent.tree.write()
   }
 
@@ -114,31 +97,15 @@ export abstract class EntryTree {
   async update(id: string, options: Omit<EntryOptions, 'id' | 'name'>, parent?: string | null, position?: number) {
     const entry = this.resolve(id)
     const source = entry.parent
-    const sourceIndex = source.data.indexOf(entry.options)
-    let target = source
     if (parent !== undefined) {
-      target = this.resolveGroup(parent)
+      const target = this.resolveGroup(parent)
       source.unlink(entry.options)
       target.data.splice(position ?? Infinity, 0, entry.options)
+      target.tree.write()
       entry.parent = target
     }
-    try {
-      await entry.update(options, false, true)
-    } catch (error) {
-      if (parent !== undefined) {
-        target.unlink(entry.options)
-        source.data.splice(sourceIndex < 0 ? source.data.length : sourceIndex, 0, entry.options)
-        entry.parent = source
-        try {
-          await entry.update({}, false, true)
-        } catch (rollbackError) {
-          throw new AggregateError([error, rollbackError], `failed to roll back loader entry move ${id}`)
-        }
-      }
-      throw error
-    }
     source.tree.write()
-    if (target !== source) target.tree.write()
+    return entry.update(options, false, true)
   }
 
   /** Import a plugin module from a specifier or `cordis:` builtin. */

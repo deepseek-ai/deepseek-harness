@@ -1,3 +1,4 @@
+import * as nativeCommand from '@deepseek-ai/dsh-native-command'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
 import SessionStore from '@deepseek-ai/dsh-session'
@@ -137,4 +138,35 @@ describe('session/openWorkspacePath', () => {
       code: 'gateway/internal', message: 'path open failed: desktop unavailable',
     })
   })
+})
+
+
+it('reports Host file-manager metadata and dispatches reveal separately from default-app open', async () => {
+  const ctx = await context()
+  const revealPath = vi.fn(async (_path: string, _signal: AbortSignal) => {})
+  const openPath = vi.fn(async (_path: string, _signal: AbortSignal) => {})
+  const controller = createSessionTestController(ctx, {
+    defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/default', openPath, revealPath,
+  })
+  try {
+    expect(controller.workspaceDesktop()).toMatchObject({ available: true, name: expect.any(String) as string })
+    const signal = new AbortController().signal
+    await controller.openWorkspacePath({ path: '/workspace/report.txt', action: 'reveal' }, signal)
+    expect(revealPath).toHaveBeenCalledWith('/workspace/report.txt', signal)
+    expect(openPath).not.toHaveBeenCalled()
+  } finally { await ctx.fiber.dispose() }
+})
+
+it('uses the native reveal adapter without a test override and respects unsupported desktop metadata', async () => {
+  const ctx = await context()
+  const reveal = vi.spyOn(nativeCommand, 'revealNativePath').mockResolvedValue(undefined)
+  const manager = vi.spyOn(nativeCommand, 'nativeFileManager').mockReturnValue(null)
+  try {
+    const controller = createSessionTestController(ctx, {
+      defaultModelSelection: () => ({ provider: 'p', model: 'm' }), cwd: '/default', nativeOpen: true,
+    })
+    expect(controller.workspaceDesktop()).toMatchObject({ available: false, fileManager: null })
+    await controller.openWorkspacePath({ path: '/report.txt', action: 'reveal' }, new AbortController().signal)
+    expect(reveal).toHaveBeenCalledOnce()
+  } finally { manager.mockRestore(); reveal.mockRestore(); await ctx.fiber.dispose() }
 })

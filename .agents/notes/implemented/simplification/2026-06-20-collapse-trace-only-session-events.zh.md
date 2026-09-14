@@ -27,7 +27,7 @@ Status: implemented
 
 ## 验证
 
-`SessionEventMap` 不再包含独立的 `usage` 或 `error`；agent loop（智能体循环）不再追加独立的 usage 事件，并通过 `turn/end { kind: 'error', step, message, code? }` 持久记录失败；ACP 快照和持久化测试断言不存在仅用于追踪的行；冻结的 v0 codec 与恒等迁移会把该已发布表示保留到当前 v1；文档说明了 token 用量和运行错误的观测位置。
+`SessionEventMap` 不再包含独立的 `usage` 或 `error`；agent loop（智能体循环）不再追加独立的 usage 事件，并通过 `turn/end { kind: 'error', step, message, code? }` 持久记录失败；ACP 快照和持久化测试断言不存在仅用于追踪的行；冻结的 v0 codec 与恒等迁移会把该已发布表示保留到已发布 v1；文档说明了 token 用量和运行错误的观测位置。
 
 ## 后果
 

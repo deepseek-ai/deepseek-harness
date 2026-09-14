@@ -2,7 +2,7 @@
 
 [English](feedback.md) | 中文
 
-[`@deepseek-ai/dsh-message-feedback`](../../packages/feedback/message-feedback)拥有针对单条 assistant 消息的可编辑反馈。权威 Session 日志保存 `feedback/message-put` 和 `feedback/message-delete`；不可变的 Session 级备注仍使用 `feedback/record`。三者都是仅写日志的事件，绝不进入模型上下文。
+[`@deepseek-ai/dsh-message-feedback`](../../packages/feedback/message-feedback)拥有针对单条 assistant 消息的可编辑反馈。权威 Session 日志保存 `feedback/message-put` 和 `feedback/message-delete`；不可变的 Session 级备注仍使用 `feedback/record`，由 [`@deepseek-ai/dsh-command-feedback`](../../packages/feedback/command-feedback) 连同两种反馈共用的 `FeedbackCategory` 分类表一起拥有。三者都是仅写日志的事件，绝不进入模型上下文。
 
 来源：[`packages/feedback/message-feedback/src/types.ts`](../../packages/feedback/message-feedback/src/types.ts)
 
@@ -27,6 +27,8 @@ interface MessageFeedbackItem {
   readonly rating: MessageFeedbackRating
   /** Optional explanation, preserved verbatim after validation. */
   readonly note?: string
+  /** Category the human filed the judgment under. */
+  readonly category?: FeedbackCategory
   /** Equality-only token replaced by every material create or update. */
   readonly version: MessageFeedbackVersion
   /** Host-assigned creation time in Unix epoch milliseconds. */
@@ -83,6 +85,8 @@ interface MessageFeedbackPutRequest {
   readonly rating: MessageFeedbackRating
   /** Optional non-blank explanation. */
   readonly note?: string
+  /** Optional category; absent keeps the item uncategorized. */
+  readonly category?: FeedbackCategory
   /** Observed item version, or `null` to require that no item exists. */
   readonly ifVersion: MessageFeedbackVersion | null
 }
@@ -203,11 +207,76 @@ type MessageFeedbackDeleteResult =
   | MessageFeedbackRejected<MessageFeedbackSessionNotFound | MessageFeedbackVersionConflict>
 ```
 
+## Session 反馈类型
+
+来源：[`packages/feedback/command-feedback/src/types.ts`](../../packages/feedback/command-feedback/src/types.ts)
+
+```ts type-equiv
+/** One of the fixed feedback categories; the ids are durable log vocabulary. */
+type FeedbackCategory =
+  | 'task-result'
+  | 'instruction-following'
+  | 'product-interaction'
+  | 'service-stability'
+  | 'resource-cost'
+  | 'security-privacy-permission'
+  | 'other'
+```
+
+```ts type-equiv
+/**
+ * One recorded human remark about a Session. Both members are optional: a
+ * submission with neither still records that the human asked for the
+ * Session to be reviewed, which is what authorizes log delivery.
+ */
+interface FeedbackRecord {
+  /** Free-text remark with surrounding whitespace removed; never empty when present. */
+  readonly text?: string
+  /** Category the human filed the remark under. */
+  readonly category?: FeedbackCategory
+}
+```
+
+```ts type-equiv
+/** Record one Session-level remark through the Host Remote. */
+interface SessionFeedbackRecordRequest {
+  /** Live Session the remark describes. */
+  readonly sessionId: SessionId
+  /** Free-text remark; blank text is recorded as absent. */
+  readonly text?: string
+  /** Category the human filed the remark under. */
+  readonly category?: FeedbackCategory
+}
+```
+
+```ts type-equiv
+/** Stable postcondition of a recorded remark. */
+interface SessionFeedbackRecordValue {
+  /** The remark is appended to the Session log; flushing follows the Session's own schedule. */
+  readonly recorded: true
+}
+```
+
+```ts type-equiv
+/** No live Session carries the requested id. */
+interface SessionFeedbackSessionNotFound {
+  readonly code: 'session-not-found'
+  readonly sessionId: SessionId
+}
+```
+
+```ts type-equiv
+/** Result returned by the `sessionFeedback.record` operation. */
+type SessionFeedbackRecordResult =
+  | { readonly ok: true; readonly value: SessionFeedbackRecordValue }
+  | { readonly ok: false; readonly error: SessionFeedbackSessionNotFound }
+```
+
 ## 数据与并发
 
-当前条目由 payload 中 `sessionId` 与所属 Session 匹配的权威反馈事件归约得到。每个条目携带好评或差评、可选备注、Host 分配的 `createdAt`/`updatedAt` 时间戳及自己的 opaque version。version 只能用于相等比较，且只与目标消息比较；调用方不能排序或自行合成它。
+当前条目由 payload 中 `sessionId` 与所属 Session 匹配的权威反馈事件归约得到。每个条目携带好评或差评、可选备注、可选分类、Host 分配的 `createdAt`/`updatedAt` 时间戳及自己的 opaque version。version 只能用于相等比较，且只与目标消息比较；调用方不能排序或自行合成它。
 
-`put` 采用严格乐观并发：已有条目的每次请求都必须匹配当前 `ifVersion`，即使请求不会改变目标值。冲突会返回权威当前条目（不存在时为 `null`），因此调用方无需额外读取，即可协调丢失响应或并发编辑。删除已经不存在的条目同样成功。按 Session 划分的队列串行执行读取与变更；cold 变更在读取、比较、追加和 flush 期间持有持久化写句柄。匹配版本的无变更操作不追加事件。
+`put` 采用严格乐观并发：已有条目的每次请求都必须匹配当前 `ifVersion`，即使请求不会改变目标值（重复已存评分、备注与分类的 put）。冲突会返回权威当前条目（不存在时为 `null`），因此调用方无需额外读取，即可协调丢失响应或并发编辑。删除已经不存在的条目同样成功。按 Session 划分的队列串行执行读取与变更；cold 变更在读取、比较、追加和 flush 期间持有持久化写句柄。匹配版本的无变更操作不追加事件。
 
 ## 目标与生命周期权威
 
@@ -217,7 +286,7 @@ fork 种子可以包含父 Session 的反馈事件，但 payload 保留父级 `s
 
 ## 持久化与 Remote 约定
 
-成功的消息反馈变更会等待权威持久化完成：live 操作通过所属 Session 追加，并要求有 `ctx.sessions.flush` 监听器参与；cold 操作通过写句柄追加并 flush。持久化故障会原样传播，不会报告成功。`maxNoteBytes` 为必填项，按 UTF-8 字节限制备注文本；Web Host 组合将其设为 `8192`。该包通过 `TypertRemoteService` 与 `@Remote` 发布 Host `messageFeedback.list`、`messageFeedback.put` 和 `messageFeedback.delete` 一元 Remote 约定；下方生成的 Cordis API 是方法级权威。
+成功的消息反馈变更会等待权威持久化完成：live 操作通过所属 Session 追加，并要求有 `ctx.sessions.flush` 监听器参与；cold 操作通过写句柄追加并 flush。持久化故障会原样传播，不会报告成功。`maxNoteBytes` 为必填项，按 UTF-8 字节限制备注文本；Web Host 组合将其设为 `8192`。该包通过 `TypertRemoteService` 与 `@Remote` 发布 Host `messageFeedback.list`、`messageFeedback.put` 和 `messageFeedback.delete` 一元 Remote 约定；`command-feedback` 以同样方式发布面向 live Session 的 Session 级备注 `sessionFeedback.record`。下方生成的 Cordis API 是方法级权威。
 
 插件释放会关闭操作接纳，并排空已进入各 Session 队列的工作。
 
@@ -225,11 +294,13 @@ fork 种子可以包含父 Session 的反馈事件，但 payload 保留父级 `s
 
 ## Web 界面
 
-[`@deepseek-ai/dsh-client-ui-message-feedback`](../../packages/client/ui-message-feedback) 是浏览器侧消费方。`@deepseek-ai/dsh-api-remotes` 挂载生成的 `messageFeedback` 贡献，因此该插件调用 `ctx.remote.messageFeedback`，不接触传输层。
+[`@deepseek-ai/dsh-client-ui-message-feedback`](../../packages/client/ui-message-feedback) 是浏览器侧消费方。`@deepseek-ai/dsh-api-remotes` 挂载生成的 `messageFeedback` 与 `sessionFeedback` 贡献，因此该插件调用 `ctx.remote.messageFeedback` 与 `ctx.remote.sessionFeedback`，不接触传输层。
 
 控件是 `conversation.chat.assistant-actions` list slot 的 `feedback` 条目（order 10），该 slot 由 `ui-conversation` 声明，并渲染在已定稿助手消息的 IconActions 行内。`AssistantMessageNode` 携带来自 `assistant/message` 事件的可选 `messageId`。被中断冻结的部分输出没有该字段，渲染点在字段缺失时跳过该 slot。该操作栏每个 Turn 渲染一次，位于收尾的助手消息上：Host 接受每条 append-origin 步骤消息作为目标，但多步骤 Turn 中较早的步骤渲染的是工具行而非可评分正文，因此 UI 暴露的范围比 Host 约定允许的更窄。
 
-每个 Session 一个 `MessageFeedbackController`，支撑该 Session 内所有消息的控件：一次 `list` 读取即填充整段对话，且延迟到首次 hover 或 focus 才发起，而非挂载时触发。每次变更把该 controller 最后观察到的版本作为 `ifVersion` 发送；`version-conflict` 响应携带权威条目，controller 据此对账而不重新拉取。变更按 Session 串行，排队操作与已提交版本比较。`connection/reset` 只刷新已读取过的 Session。
+每个 Session 一个 `MessageFeedbackController`，支撑该 Session 内所有消息的控件：一次 `list` 读取即填充整段对话，且延迟到首次 hover 或 focus 才发起，而非挂载时触发。每次变更把该 controller 最后观察到的版本作为 `ifVersion` 发送；`version-conflict` 响应携带权威条目，controller 据此对账而不重新拉取。变更按 Session 串行，排队操作与已提交版本比较。注入的 `retract` 操作会在该队列内重新检查已提交评分，并在并发变更后变为无操作，因此陈旧 UI 无法绕过弹窗记录裸评分。`connection/reset` 只刷新已读取过的 Session。
+
+任一未记录的评分都会打开该 Session 的反馈弹窗，即 `conversation.input.overlay` 的 `feedback-dialog` 条目：共用的 Modal 卡片，里面是七个分类标签和一个详情框。提交会 put 所选评分，带上所选分类与去除首尾空白的描述，两者也可都不带；成功会关闭弹窗并显示确认 toast，失败则保留弹窗与草稿并显示警告 toast。不带文本的 `/feedback`（`ui-commands` 以 `action` 路由的一个装饰）为 Session 打开同一个弹窗，随后通过 `sessionFeedback.record` 记录；`/feedback <text>` 仍走宿主命令路径。再次点击已记录的评分会直接撤回，不打开弹窗。
 
 ## 边界与限制
 
@@ -240,7 +311,8 @@ fork 种子可以包含父 Session 的反馈事件，但 payload 保留父级 `s
 - Host 约定不记录已认证的 actor 或审计身份，因此假设调用方边界可信。
 - Web 控件只出现在对话视图。trajectory 与 waterfall 视图不渲染反馈条目，尽管它们的助手节点携带相同的 `messageId`。
 - Web 控制器不消费反馈日志事件，因此另一个标签页的评分要等到重连或下一次冲突响应才可见，不会立即出现。
-- 备注编辑器不预先校验 `maxNoteBytes`；超长备注在保存时以 `note-too-large` 失败，而不是在输入过程中。
+- 弹窗不预先校验 `maxNoteBytes`；针对消息的超长描述在提交时以 `note-too-large` 失败，而不是在输入过程中。Session 级备注没有大小上限，`/feedback` 命令从来也没有。
+- `sessionFeedback.record` 只服务 live Session，否则回答 `session-not-found`；弹窗打开期间 Session 退役时，弹窗会报告该失败。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -281,6 +353,24 @@ Session-log service; cold operations never construct a Session or Agent.
 ```
 
 Source: [`packages/feedback/message-feedback/src/index.ts`](../../packages/feedback/message-feedback/src/index.ts)
+
+<a id="ctxsessionfeedback--sessionfeedbackservice"></a>
+
+### `ctx.sessionFeedback` — `SessionFeedbackService`
+
+Host Remote through which a product surface records a Session-level remark.
+
+```ts cordis-catalog
+/**
+ * Record one remark on a live Session.
+ * @param request - target Session plus the optional text and category.
+ * @returns the recorded postcondition, or `session-not-found` when no live
+ * Session carries the id.
+ */
+@Remote('record') record(request: SessionFeedbackRecordRequest): Promise<SessionFeedbackRecordResult>
+```
+
+Source: [`packages/feedback/command-feedback/src/index.ts`](../../packages/feedback/command-feedback/src/index.ts)
 
 <a id="feedback-events"></a>
 

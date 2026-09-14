@@ -58,16 +58,33 @@ JSONL record
   → released physical row decoder
   → v0-to-v1 stage
   → v1-to-v2 stage
+  → v2-to-v3 stage
   → current event collector
 ```
 
 Chain 中不存在 `flatMap`、spread expansion、中间 event array 或 scheduler。只有在每个 migration stage 都已获得直接消费 compact run 的机会后，最终 event collector 才会展开它。
 
+### 相邻版本所有权
+
+[V2 到 V3 投递保护](../../../../packages/session/session-format-v2-to-v3/README.zh.md#delivery-guards)防止源代中被忽略的标记仅因头部变化就成为有效上传水位。Python 发布冒烟测试独立于跨代 golden 比较，按源代码中的 `SESSION_FORMAT_VERSION` 检查生成日志，因此文件名与 header 自洽不能掩盖过期 writer。
+
+[V2 到 V3 README](../../../../packages/session/session-format-v2-to-v3/README.zh.md#v2-to-v3-specification)是该迁移边转换、保留与拒绝规则的单一规范真源；单列的[原生准入章节](../../../../packages/session/session-format-v2-to-v3/README.zh.md#native-v3-admission)避免将仅当前版本支持的能力误认为历史转换。已发布 V2 codec 仍归 V1→V2 所有，并被复用而非复制。[系统提示词](2026-09-02-system-prompt-as-surface-node.zh.md)、[PTC](../feature/2026-06-15-ptc.zh.md)和[规范信封](2026-09-06-v3-canonical-session-envelopes.zh.md)记录保留各自独立依据，而非重复转换规范。[格式版本实操手册](../../../../docs/cookbook/adding-a-session-format-version.zh.md)负责包接线、当前消费方、快照后继代际与验证命令。
+
+历史内容准入归入边所有，而非原生 V3 扩展校验。在不了解字段的情况下保留未知块，不能证明迁移保留了其含义。因此，[源审计](../../../../packages/session/session-format-v2-to-v3/README.zh.md#source-audit)在明确归其所有的内容位置（包括未完成的流）使用同一历史种类集合。它检查已接纳的内容而不改写，并且不解释归其他所有者所有的不透明 JSON。收紧原生准入或修改冻结的前代校验器，会改变独立承诺，而非证明转换安全。
+
+预设更名覆盖创建头部和每条选择事件，因为最新选择决定恢复时的预设，而更早的选择决定历史 fork 的预设。只改写最后一条选择会丢失这种区别。已发布的 `code` 标识表示旧内置预设；迁移不依赖已安装的预设列表，因此相同字节在每台主机上产生相同结果。原生 V3 的自定义标识仍可使用，无需全局运行时别名。
+
+源继承数量在 EOF 前可能未知：V2 从种子标记推导它，而 V1→V2 可以改变事件数量。迁移链将这种缺失传递给下一个 Stage，而不伪造数量。[V2 到 V3 继承规则](../../../../packages/session/session-format-v2-to-v3/README.zh.md#sequence-references)支持此情况；需要 header 提供数量的旧 Stage 仍在数量缺失时拒绝。这使有种子的多跳恢复无需保留中间产物数组。
+
+[版本与发布状态参考](../../../../docs/session-format-status.zh.md)拥有已发布格式记录，并指明代码中的写入器真源。已发布格式保留其语义；迁移期间已提交代际的字节保持不变。后续结构性变更必须按[版本规则](2026-08-10-session-log-version-mechanism.zh.md)添加下一条相邻迁移边，而非修改已发布转换。普通事件新增遵循该规则的必需事件拒绝机制，而非自动分配版本。当前格式文件不会重新执行入边迁移；集成测试使用隔离、可丢弃的 home 和未变更的历史输入。
+
+[已提交语料清单](../../../../packages/test-support/llm-replay/tests/session-format-corpus-inventory.ts) 按源路径、代际与精确拒绝原因标识有意不支持的历史转换。保留这些产物不能迫使迁移改变时序，也不能允许统一跳过：每个清单中的产物仍必须抛出类型化迁移拒绝，未列入的产物必须还原。原生当前代际 fixture 不经过入边，因此不能被归为不支持。没有版本 header 的测试框架协议示例保持为独立的显式类别。语料测试在还原成功和拒绝后都检查源字节；它不通过改写历史证据来满足当前 reader。
+
 ### Physical codec 与 packed run
 
 每个 released codec 会用显式 `strict` 或 `recoverable` 策略创建 row decoder。Decoder 每次通过不同的 context 方法校验并 emit 一个 event 或 codec-owned `SessionFormatEventRun`。v0-to-v1 与 v1-to-v2 都实现 `transformEvent()` 和 `transformRun()`，因此 packed Assistant chunk 可以直接到达 folding edge，无需先变成数百万个普通事件。
 
-v0-to-v1 除了有限的 released-v0 归一化外，会保留逻辑 header、seq、引用、时间戳与 payload。它转换已移除的 `steering/message` 与 `compact/*` 事件名称，接受出现在对应 `step/end` 之后的已发布 `llm/retry`，按 turn／step／provider／policy chain 为缺失的 `llm/retry.retryId` 确定性补值，并为省略 id 的旧 compaction group 确定性补充同一个 `compactionId`。v1-to-v2 负责 attempt folding 与引用重写，并且只 emit 已结算的 current event。它会把旧的 goal 来源 user message 拆成 `goal/change` 与原本的模型可见 message。它还会为一种有限的已发布 restart 插入 interrupted `turn/end`：一个没有 open step 的 open turn 后出现非空 `next-turn` inbox splice，随后直接开始编号连续的下一轮。
+v0-to-v1 除了有限的 released-v0 归一化外，会保留逻辑 header、seq、引用、时间戳与 payload。它转换已移除的 `steering/message` 与 `compact/*` 事件名称，接受出现在对应 `step/end` 之后的已发布 `llm/retry`，按 turn／step／provider／policy chain 为缺失的 `llm/retry.retryId` 确定性补值，并为省略 id 的旧 compaction group 确定性补充同一个 `compactionId`。v1-to-v2 负责 attempt folding 与引用重写，并且只 emit 已结算的 v2 event。它会把旧的 goal 来源 user message 拆成 `goal/change` 与原本的模型可见 message。它还会为一种有限的已发布 restart 插入 interrupted `turn/end`：一个没有 open step 的 open turn 后出现非空 `next-turn` inbox splice，随后直接开始编号连续的下一轮。
 
 Catalog 为 production、Worker、fixture 与 replay 暴露同一个 `createRestore()`。Recovery policy 与最终 validation policy 在 restore 创建时一次确定。Historical production 使用 recoverable source parsing 与 transformed-current validation；这种策略会在迁移后校验已发布 current 结果，而已经是 current 的输入只接受 codec 校验。Worker 与 fixture verification 使用 strict parsing 与已安装 current 格式的完整 restoration。Migration stage 或 transformed-current validation 的拒绝会保持为 `SessionFormatUnsupportedMigrationError`；物理解码失败仍是 corruption。Test support 只保留 fixture 自身需要的 token 和 envelope materialization。
 
@@ -76,6 +93,8 @@ Catalog 为 production、Worker、fixture 与 replay 暴露同一个 `createRest
 JSONL provider 只扫描一次 frame boundary，复用一个 Zstandard decoder，增量解析完整 JSONL record，并把 row 直接送入 catalog restore。外层循环按有界 cadence yield；不存在逐 frame `await`、完整 plaintext 或 source-row array。
 
 Current encode 以单条 record 为单位。Provider 在主线程每个 slice 序列化约 1 MiB plaintext，通过一个会传播 source error 的 Zstandard context 流式压缩，以 4 MiB batch 写入同目录排他创建的临时文件，并在 publication 前 sync。进程级 scheduler 最多允许两个完整 verification Worker 并行，并把释放的 permit 直接交给最早的 waiter。
+
+发布的 `lib/worker.cjs` 将 JavaScript workspace 依赖一起打包，使每个新 verifier 无需解析并编译它们的运行时模块图。Worker 只通过普通 request/result 消息通信，与 host 不共享 service 或 class identity，因此可以这样处理。Host build 应用现有 TypeScript 与 Typert 转换；Client pass 跳过这个 Node-only package，不会用未经转换的源代码覆盖 worker。Native add-on 保持 external。Verification、scheduler admission、termination 与 durable publication 仍在 writable open 返回前完成。Built-worker 冒烟测试把 package manifest 与 worker 复制到隔离的临时 package，移除环境中的模块搜索路径，接受有效 generation，并拒绝错误的 event count。
 
 Preparation 会把 cancellation 传给 source read，并在现有的约 500 ms Decode yield 边界观察它。`publish()` 一旦开始，encode、Worker verification 与 publication 不接收 caller cancellation，并运行到终态；write open 会在之后再次检查 caller signal。已经发布的 generation 绝不会回滚。
 
@@ -104,6 +123,10 @@ POSIX publication 使用 hard-link creation 加目录 sync；Windows 使用 no-o
 | Production 与 fixture 使用不同 migration API | Catalog `createRestore()` 加显式 policy | 只保留一套 decoder/chain 实现 |
 
 ## 验证
+
+迁移规范要求分别提供转换、保留与拒绝的证据。直接迁移边和原生 V3 测试不能证明有种子的多跳发布：前代 assistant 流折叠会在 V3 插入系统事件前改变源坐标。因此，经过真实目录与 JSONL 提供方的测试需要原始及压缩的 V0/V1 输入、映射后的引用和继承切点、发布/重新打开等价性、前代字节不变，以及不产生中间代。覆盖率百分比本身不能证明这些跨阶段关系；组合断言必须比较结果历史与拒绝效果。
+
+内容准入证据必须覆盖规范列出的每个位置、嵌套结果、未完成的起始记录和已知种类的畸形块，并验证诊断使用源坐标。成功迁移必须保留已接纳的内容与不透明值。经真实持久化路径拒绝时，必须保持源不变且不发布后继代。原生 V3 测试必须独立证明两种目录校验策略均保留扩展准入；历史拒绝不能证明原生输入也被拒绝。
 
 ### Benchmark 输入与口径
 

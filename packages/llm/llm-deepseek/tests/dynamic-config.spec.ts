@@ -8,7 +8,7 @@ import AttachmentStore, { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
-  ImageRequestPolicy,
+  ImageRequestTarget,
   RequestImageAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
@@ -70,7 +70,7 @@ class StaticAttachmentStore extends AttachmentStore {
 
   override readImageRequest(
     ref: ImageAttachmentRef,
-    _policy: ImageRequestPolicy,
+    _target: ImageRequestTarget,
     _signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     return Promise.resolve({
@@ -124,7 +124,7 @@ async function boot(dir: string, config: object): Promise<Harness> {
   const settingsFiber = ctx.plugin(FileSettingsProvider, { path: join(dir, 'settings.yaml'), watch: false })
   await settingsFiber
   await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
-  await ctx.plugin(LlmDeepSeek, config)
+  await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', ...config })
   return { ctx, settingsFiber }
 }
 
@@ -191,7 +191,7 @@ describe('request-level dynamic configuration', () => {
     const dir = await home()
     const { ctx } = await boot(dir, { baseURL: 'http://127.0.0.1:1' })
 
-    await expect(ctx.llm.listModels('deepseek-official')).resolves.toHaveLength(3)
+    await expect(ctx.llm.listModels('deepseek-official')).resolves.toHaveLength(4)
     await ctx.settings.update(NS, {
       models: [{ id: 'settings-model', name: 'From Settings', inputModalities: ['text', 'image'] }],
     })
@@ -217,18 +217,33 @@ describe('request-level dynamic configuration', () => {
       source: { kind: 'plugin', plugin: 'test' },
     })]
 
-    await assemble(ctx, { model: 'deepseek-v4-flash-vision-exp', messages })
+    await assemble(ctx, { model: 'deepseek-flash', messages })
     await ctx.settings.update(NS, { maxRequestFilesBytes: 4, imageOffloadByteQuantum: 2 })
-    await assemble(ctx, { model: 'deepseek-v4-flash-vision-exp', messages })
+    // A request whose retained exact bytes exceed the tightened budget names the occurrences to offload.
+    const rejected = await assemble(ctx, { model: 'deepseek-flash', messages })
+    expect(rejected.finish).toMatchObject({
+      kind: 'error',
+      failure: { code: 'IMAGE_OFFLOAD_REQUIRED', offloadImages: 1 },
+    })
+    await assemble(ctx, {
+      model: 'deepseek-flash',
+      messages: [createUserMessage({
+        content: [
+          { type: 'image', attachment: IMAGE_REF, offloaded: true },
+          { type: 'image', attachment: IMAGE_REF },
+        ],
+        source: { kind: 'plugin', plugin: 'test' },
+      })],
+    })
 
     const first = (server.requests[0] as { messages: Array<{ content: unknown }> }).messages[0]?.content
     const second = (server.requests[1] as { messages: Array<{ content: unknown }> }).messages[0]?.content
+    expect(server.requests).toHaveLength(2)
     expect(JSON.stringify(first).match(/"type":"file"/g)).toHaveLength(2)
     expect(JSON.stringify(second)).toContain('[image omitted to fit request image limits')
     expect(JSON.stringify(second)).toContain(MODEL_IMAGE_PATH)
     expect(JSON.stringify(second).match(/"type":"file"/g)).toHaveLength(1)
   })
-
   it('re-registers the route in place when the captured retry policy changes, without an empty-registry window', async () => {
     const dir = await home()
     const { ctx } = await boot(dir, { baseURL: 'http://127.0.0.1:1' })
@@ -261,7 +276,7 @@ describe('request-level dynamic configuration', () => {
     // Schema-valid but resolver-invalid: duplicate catalog ids pass the array
     // schema and fail the explicit resolve step.
     await ctx.settings.update(NS, { models: [{ id: 'dup' }, { id: 'dup' }] })
-    await expect(ctx.llm.listModels('deepseek-official')).resolves.toHaveLength(3)
+    await expect(ctx.llm.listModels('deepseek-official')).resolves.toHaveLength(4)
     await ctx.settings.update(NS, { models: [{ id: 'recovered' }] })
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
       { provider: 'deepseek-official', id: 'recovered', name: 'recovered', inputModalities: ['text'] },

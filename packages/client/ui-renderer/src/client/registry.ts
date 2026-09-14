@@ -371,7 +371,7 @@ export class SlotRegistry extends Service {
    * Shadowing winners per cell for a key: the first live (non-abdicated)
    * entry of each cell in priority order — what outlets render; chain keys
    * pass through unchanged (election consumes every entry). The raw
-   * {@link SlotsService.entries} view stays the inspection surface. Fresh
+   * {@link SlotRegistry.entries} view stays the inspection surface. Fresh
    * array per call, not a uSES getSnapshot source.
    * @param key - SlotMap key.
    * @returns the winning entry per occupied cell.
@@ -395,7 +395,7 @@ export class SlotRegistry extends Service {
    * plugins mirroring contribution health. Fires synchronously per report,
    * after the registry mutated for abdicating crashes. Callers own the
    * disposer (wire it through ctx.effect for fiber-lifetime cleanup, as with
-   * {@link SlotsService.subscribe}).
+   * {@link SlotRegistry.subscribe}).
    * @param fn - called with the slot key, the crashed entry, the crash
    * cause, and `abdicated`: whether the crash retired the entry from its cell.
    * @returns unsubscribe.

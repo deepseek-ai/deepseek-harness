@@ -12,6 +12,7 @@ import { MemoryVfs } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/s
 import { setActiveVfs } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/storage/active.ts'
 import * as fs from '@deepseek-ai/dsh-experimental-webworker-runtime/src/node/builtin_modules/implemented/fs.ts'
 import * as fsp from '@deepseek-ai/dsh-experimental-webworker-runtime/src/node/builtin_modules/implemented/fs/promises.ts'
+import { promisify } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/node/builtin_modules/implemented/util.ts'
 import type { VfsBigIntStats, VfsMutationSink, VfsStats } from '@deepseek-ai/dsh-experimental-webworker-runtime/src/storage/types.ts'
 
 let flushes = 0
@@ -62,6 +63,22 @@ check('statSync isFile', fs.statSync('/dsh/config/cordis.yml').isFile(), true)
 check('statSync size', fs.statSync('/dsh/config/cordis.yml').size, 12)
 check('statSync dir', fs.statSync('/dsh/config').isDirectory(), true)
 check('realpathSync', fs.realpathSync('/dsh/config/../config/cordis.yml'), '/dsh/config/cordis.yml')
+
+test('native realpath supports the filesystem provider promise wrapper', async () => {
+  expect(fs.default.realpath).toBe(fs.realpath)
+  const resolveNative = promisify(fs.realpath.native)
+  expect(await resolveNative('/dsh/config/../config/cordis.yml')).toBe('/dsh/config/cordis.yml')
+  await expect(resolveNative('/dsh/missing-realpath')).rejects.toMatchObject({ code: 'ENOENT' })
+})
+
+test('callback realpath settles after the current call returns', async () => {
+  let returned = false
+  const completion = new Promise<unknown>((resolve) => {
+    fs.realpath('/dsh/config/cordis.yml', (error, path) => { resolve({ error, path, returned }) })
+  })
+  returned = true
+  expect(await completion).toEqual({ error: null, path: '/dsh/config/cordis.yml', returned: true })
+})
 
 fs.appendFileSync('/dsh/config/cordis.yml', '- id: llm\n')
 check('appendFileSync', fs.readFileSync('/dsh/config/cordis.yml', 'utf8'), '- id: timer\n- id: llm\n')
@@ -115,6 +132,13 @@ check('rmSync removes', fs.existsSync('/dsh/renamed.txt'), false)
 fs.writeFileSync('/dsh/log-handle.jsonl', 'header\n')
 const appendHandle = await fsp.open('/dsh/log-handle.jsonl', 'a')
 check('append handle sees the existing size', (await appendHandle.stat()).size, 7)
+const appendHandleStats = await appendHandle.stat({ bigint: true }) as VfsBigIntStats
+const appendPathStats = await fsp.stat('/dsh/log-handle.jsonl', { bigint: true }) as VfsBigIntStats
+check('bigint handle stat matches the path identity', [
+  typeof appendHandleStats.ino,
+  appendHandleStats.ino === appendPathStats.ino,
+  appendHandleStats.dev === appendPathStats.dev,
+], ['bigint', true, true])
 await appendHandle.writeFile('batch-1\n')
 await appendHandle.sync()
 check('handle.sync flushes the active VFS', flushes, 1)
@@ -205,6 +229,10 @@ fs.renameSync('/dsh/secrets.tmp', '/dsh/secrets.yaml')
 check('a wx write with mode 600 stats as 600 after rename', plainMode('/dsh/secrets.yaml'), 0o600)
 fs.writeFileSync('/dsh/secrets.yaml', 'k: w\n')
 check('a rewrite keeps the creation bits', plainMode('/dsh/secrets.yaml'), 0o600)
+const chmodHandle = await fsp.open('/dsh/secrets.yaml', 'r+')
+await chmodHandle.chmod(0o640)
+await chmodHandle.close()
+check('FileHandle.chmod updates the opened file', plainMode('/dsh/secrets.yaml'), 0o640)
 fs.chmodSync('/dsh/secrets.yaml', 0o640)
 check('chmod reads back exactly what was set', plainMode('/dsh/secrets.yaml'), 0o640)
 await fsp.chmod('/dsh/secrets.yaml', 0o600)

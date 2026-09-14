@@ -27,7 +27,7 @@ Two packages cover the capability; each child README owns the full contract, and
 | Package | Role | ctx key |
 |---|---|---|
 | [`settings/`](settings/README.md) | Settings service: register namespaces and read or change their values | `ctx.settings` |
-| [`settings-file/`](settings-file/README.md) | Stores settings in one local YAML/JSON file and hot-publishes external edits | registers `ctx.settings` |
+| [`settings-file/`](settings-file/README.md) | Stores settings in one local YAML/JSON file and publishes external edits live | registers `ctx.settings` |
 
 -----
 
@@ -36,7 +36,7 @@ Two packages cover the capability; each child README owns the full contract, and
 
 Start with the subsystem reference for the shared vocabulary, then the capability-seam split this family follows.
 
-- [Settings subsystem reference](../../docs/subsystems/settings.md) — namespaces, layered resolution, descriptors, change commits, and the generated cordis surface.
+- [Settings subsystem reference](../../docs/subsystems/settings.md) — namespaces, layered resolution, descriptors, change commits, and the generated Cordis surface.
 - [Capability seams](../../docs/capability-seams.md) — the Service Definition / Service Provider / Consumer split this family follows.
 
 <a id="dev-note"></a>

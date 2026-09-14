@@ -4,8 +4,8 @@
  * message (bubble regression), and wire session forms fold to their label
  * (queue-row readability).
  */
-import { describe, expect, it } from 'vitest'
-import { render } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render } from '@testing-library/react'
 import { projectUserText } from '../src/user-text.tsx'
 
 const project = (
@@ -102,8 +102,43 @@ describe('projectUserText', () => {
 
   it('falls back to the raw quoted label when the path has no basename', () => {
     const host = project('看 @"/" 下面')
-    const chip = host.querySelector('[data-ref-chip="file"]')!
+    const chip = host.querySelector('[data-ref-chip="folder"]')!
     expect(chip.textContent).toBe('"/"')
+  })
+
+  it('opens decoded files and loaded skills without activating session, folder, or command references', () => {
+    const openFile = vi.fn()
+    const openSkill = vi.fn()
+    const view = render(<div>{projectUserText(
+      '@src/a.ts @"notes a.md" /review @history @dir/ @"dir a/"', ['history'], ['review'], 'skill',
+      { openFile, openSkill },
+    )}</div>)
+    fireEvent.click(view.getByRole('button', { name: 'a.ts' }))
+    fireEvent.click(view.getByRole('button', { name: 'notes a.md' }))
+    fireEvent.click(view.getByRole('button', { name: '/review' }))
+    expect(openFile.mock.calls).toEqual([['src/a.ts'], ['notes a.md']])
+    expect(openSkill).toHaveBeenCalledWith('review')
+    expect(view.container.querySelectorAll('button')).toHaveLength(3)
+    const command = render(<div>{projectUserText('/help', [], ['help'], 'command', { openFile, openSkill })}</div>)
+    expect(command.container.querySelector('button')).toBeNull()
+  })
+
+  it('preserves text-selection gestures and keyboard activation', () => {
+    const openFile = vi.fn()
+    const view = render(<div>{projectUserText('@notes.md', [], [], 'skill', { openFile, openSkill: vi.fn() })}</div>)
+    const button = view.getByRole('button', { name: 'notes.md' })
+    const selection = document.getSelection()!
+    const range = document.createRange()
+    range.selectNodeContents(button)
+    selection.addRange(range)
+    fireEvent.click(button, { detail: 1 })
+    expect(openFile).not.toHaveBeenCalled()
+    fireEvent.click(button, { detail: 0 })
+    expect(openFile).toHaveBeenCalledWith('notes.md')
+    selection.removeAllRanges()
+    openFile.mockClear()
+    fireEvent.click(button, { detail: 2 })
+    expect(openFile).not.toHaveBeenCalled()
   })
 
   it('renders undecorated text as one inline run', () => {

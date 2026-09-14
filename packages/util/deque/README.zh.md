@@ -62,8 +62,8 @@ while (frames.size > 0) {
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 环形双端队列操作与后备存储生命周期 |
-| — | 不发布运行时不变量伴生入口；这个集合不拥有事件流或共享可变状态，其顺序与存储生命周期由单元测试覆盖。 |
-| [`tests/deque.spec.ts`](tests/deque.spec.ts) | FIFO、前插、环绕、扩容、压缩、清空和复用覆盖 |
+| — | 不发布运行时不变式伴生入口；这个集合不拥有事件流或共享可变状态，其顺序与存储生命周期由单元测试覆盖。 |
+| [`tests/deque.spec.ts`](tests/deque.spec.ts) | FIFO、前插、环绕、扩容、压缩（compaction）、清空和复用覆盖 |
 | [`benchmarks/drain.ts`](benchmarks/drain.ts) | 随队列规模增长的可复现 backlog 排空计时 |
 
 </details>
@@ -83,7 +83,7 @@ while (frames.size > 0) {
 
 无，因为这个进程内集合不注册任何面向模型的内容。
 
-#### KV 缓存影响
+#### KV Cache 影响
 
 这里的内容不会进入模型请求，因此不影响提供方缓存复用。
 

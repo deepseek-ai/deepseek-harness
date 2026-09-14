@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-09-blacksmith-failover-leg.md
+2026-09-09-blacksmith-failover-leg.md: d4be1ad25c6c5b66e295439d4609726c8918e137
+2026-09-09-blacksmith-failover-leg.zh.md: cd6e74aefba2cba9481fa1ae9510bb1ce020325d

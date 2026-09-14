@@ -181,6 +181,62 @@ describe('MessageFeedbackService public contract', () => {
     expect(Object.isFrozen(listed.value.items[0])).toBe(true)
   })
 
+  it('stores a category with the judgment, treats a category change as material, and validates stored categories', async () => {
+    const { ctx, persistence } = await harness()
+    const fixture = messageFixture('categories')
+    persistence.persist(fixture.session)
+    const messageId = fixture.assistantMessageIds[0]
+
+    const created = expectItem(await ctx.messageFeedback.put({
+      sessionId: fixture.session.id,
+      messageId,
+      rating: 'negative',
+      note: 'wrong file',
+      category: 'task-result',
+      ifVersion: null,
+    }))
+    expect(created).toMatchObject({ rating: 'negative', note: 'wrong file', category: 'task-result' })
+
+    // The same value is a no-op; a different category is a material edit;
+    // omitting the category drops it.
+    const same = expectItem(await ctx.messageFeedback.put({
+      sessionId: fixture.session.id, messageId, rating: 'negative', note: 'wrong file', category: 'task-result',
+      ifVersion: created.version,
+    }))
+    expect(same).toEqual(created)
+    const recategorized = expectItem(await ctx.messageFeedback.put({
+      sessionId: fixture.session.id, messageId, rating: 'negative', note: 'wrong file', category: 'other',
+      ifVersion: created.version,
+    }))
+    expect(recategorized.version).not.toBe(created.version)
+    expect(recategorized.category).toBe('other')
+    const dropped = expectItem(await ctx.messageFeedback.put({
+      sessionId: fixture.session.id, messageId, rating: 'negative', ifVersion: recategorized.version,
+    }))
+    expect(dropped).not.toHaveProperty('category')
+    expect(dropped).not.toHaveProperty('note')
+    const events = (persistence.durable.get(fixture.session.id)?.events ?? [])
+      .filter(event => event.type === 'feedback/message-put')
+      .map(event => event.data.item.category)
+    expect(events).toEqual(['task-result', 'other', undefined])
+
+    // A stored payload outside the fixed taxonomy is refused on read.
+    const corrupt = messageFixture('corrupt-category')
+    corrupt.session.append('feedback/message-put', {
+      sessionId: corrupt.session.id,
+      item: {
+        messageId: corrupt.assistantMessageIds[0],
+        rating: 'negative',
+        category: 'not-a-category' as never,
+        version: staleVersion(),
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    })
+    persistence.persist(corrupt.session)
+    await expect(ctx.messageFeedback.list({ sessionId: corrupt.session.id })).rejects.toThrow()
+  })
+
   it('reports non-blank and complete UTF-8 byte limits without touching persistence', async () => {
     const { ctx, persistence } = await harness(4)
     const fixture = messageFixture('note-limits')

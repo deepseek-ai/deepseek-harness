@@ -21,8 +21,8 @@ import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-e
 import type { PreparedDeepSeekLlmApiExtensions } from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
 import { DeepSeekAdapter, resolveAdapterOptions } from '@deepseek-ai/dsh-llm-deepseek'
-import { httpErrorCode } from '../src/adapter.ts'
-import { resolveRequestImagePolicy } from '../src/request-pricing.ts'
+import { httpErrorCode } from '../src/protocols/chat-completions/adapter.ts'
+import { resolveRequestImageTarget } from '../src/common/request-pricing.ts'
 import { assemble } from './assemble.ts'
 import { closeMockServers, mockServer, textEvents } from './mock-server.ts'
 import type { Behavior } from './mock-server.ts'
@@ -49,7 +49,7 @@ async function harness(baseURL: string, config: object = {}) {
   const ctx = new Context()
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-  await ctx.plugin(LlmDeepSeek, { baseURL, ...config })
+  await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL, ...config })
   return ctx
 }
 
@@ -66,7 +66,7 @@ function adapterOf(
 ): DeepSeekAdapter {
   const { apiKey, ...rest } = config
   return new DeepSeekAdapter({
-    options: () => resolveAdapterOptions(rest),
+    options: () => resolveAdapterOptions({ protocol: 'chat-completions', ...rest }),
     resolveApiKey: () => Promise.resolve(apiKey ?? 'k'),
     resolveUserId: () => TEST_USER_ID,
     resolveAttachments: () => attachments,
@@ -141,39 +141,46 @@ function successfulSseResponse(): Response {
   })
 }
 
-describe('request image policy', () => {
+describe('request image target', () => {
   it.each([
     [
       { id: 'default' },
-      { maxPixels: 640_000, maxBytes: 1024 * 1024 },
+      { width: 1302, height: 1302, maxBytes: 2 * 1024 * 1024 },
     ],
     [
       { id: 'low', imagePixelBudget: 'low' as const },
-      { maxPixels: 512 * 512, maxBytes: 1024 * 1024 },
+      { width: 512, height: 512, maxBytes: 2 * 1024 * 1024 },
     ],
     [
       { id: 'custom', imagePixelBudget: 320_000, imageMaxBytes: 512_000 },
-      { maxPixels: 320_000, maxBytes: 512_000 },
+      { width: 565, height: 565, maxBytes: 512_000 },
     ],
-  ])('resolves route-owned defaults and overrides for %s', (model, expected) => {
-    expect(resolveRequestImagePolicy(model)).toEqual(expected)
+  ])('resolves route-owned defaults and overrides for %s on a 4096x4096 source', (model, expected) => {
+    expect(resolveRequestImageTarget(model, { width: 4096, height: 4096 })).toEqual(expected)
+  })
+
+  it('caps every request image at the provider per-side limit', () => {
+    expect(resolveRequestImageTarget({ id: 'default' }, { width: 8192, height: 78 }))
+      .toEqual({ width: 4096, height: 39, maxBytes: 2 * 1024 * 1024 })
+    expect(resolveRequestImageTarget({ id: 'custom', imagePixelBudget: 640_000 }, { width: 10_000, height: 100 }))
+      .toEqual({ width: 4096, height: 41, maxBytes: 2 * 1024 * 1024 })
   })
 
   it('answers image request pricing from the current connection snapshot', () => {
     const adapter = adapterOf({
       models: [{ id: 'vision', inputModalities: ['text', 'image'] }],
     })
-    const priced = adapter.imageRequestPricing('deepseek-official', 'vision')?.priceImages([imageRef])
+    const priced = adapter.imageRequestPricing('deepseek-official', 'vision')?.priceImages([{ type: 'image', attachment: imageRef }])
     expect(priced).toHaveLength(1)
     expect(priced?.[0]!.visualTokens).toBeGreaterThan(0)
-    const textOnly = adapter.imageRequestPricing('deepseek-official', 'unlisted')?.priceImages([imageRef])
+    const textOnly = adapter.imageRequestPricing('deepseek-official', 'unlisted')?.priceImages([{ type: 'image', attachment: imageRef }])
     expect(textOnly?.[0]!.visualTokens).toBe(0)
   })
 
   it('prices descriptor text through the serializer\'s access resolution', () => {
     const attachments = {} as AttachmentStore
     const adapter = new DeepSeekAdapter({
-      options: () => resolveAdapterOptions({ models: [{ id: 'vision', inputModalities: ['text', 'image'] }] }),
+      options: () => resolveAdapterOptions({ protocol: 'chat-completions', models: [{ id: 'vision', inputModalities: ['text', 'image'] }] }),
       resolveApiKey: () => Promise.resolve('k'),
       resolveUserId: () => TEST_USER_ID,
       resolveAttachments: () => attachments,
@@ -182,7 +189,7 @@ describe('request image policy', () => {
         : undefined),
       prepareExtensions: noExtensions,
     })
-    const priced = adapter.imageRequestPricing('deepseek-official', 'vision')?.priceImages([imageRef])
+    const priced = adapter.imageRequestPricing('deepseek-official', 'vision')?.priceImages([{ type: 'image', attachment: imageRef }])
     expect(priced?.[0]?.text).toContain('/world/img.png')
   })
 })
@@ -196,7 +203,7 @@ describe('DeepSeekAdapter against a mock server', () => {
       accept: async () => { accept() },
     }))
     const adapter = new DeepSeekAdapter({
-      options: () => resolveAdapterOptions({ baseURL: server.url }),
+      options: () => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }),
       resolveApiKey: () => Promise.resolve('k'),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: prepareExtensions as never,
@@ -211,7 +218,7 @@ describe('DeepSeekAdapter against a mock server', () => {
   it('fails before fetch on extension preparation or base-field collision', async () => {
     const server = await mockServer([])
     const base = {
-      options: () => resolveAdapterOptions({ baseURL: server.url }),
+      options: () => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }),
       resolveApiKey: () => Promise.resolve('k'),
       resolveUserId: () => TEST_USER_ID,
     }
@@ -237,7 +244,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const started = Promise.withResolvers<undefined>()
     let signalSeen: AbortSignal | undefined
     const adapter = new DeepSeekAdapter({
-      options: () => resolveAdapterOptions({ baseURL: server.url }),
+      options: () => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }),
       resolveApiKey: () => Promise.resolve('k'),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: ((request: { signal: AbortSignal }) => {
@@ -302,7 +309,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     ])
     const accept = vi.fn()
     const adapter = new DeepSeekAdapter({
-      options: () => resolveAdapterOptions({ baseURL: server.url }),
+      options: () => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }),
       resolveApiKey: () => Promise.resolve('k'),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: () => Promise.resolve({ fields: { dsh_test: 1 }, accept: async () => { accept() } }) as never,
@@ -319,7 +326,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const failure = new Error('watermark append failed')
     const adapter = new DeepSeekAdapter({
-      options: () => resolveAdapterOptions({ baseURL: server.url }),
+      options: () => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }),
       resolveApiKey: () => Promise.resolve('k'),
       resolveUserId: () => TEST_USER_ID,
       prepareExtensions: () => Promise.resolve({
@@ -379,7 +386,7 @@ describe('DeepSeekAdapter against a mock server', () => {
 
     await drain(adapter.stream({
       provider: 'deepseek-official',
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [createUserMessage({
         content: [
           { type: 'text', text: 'describe ' },
@@ -390,7 +397,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     }))
 
     expect(server.requests[0]).toMatchObject({
-      model: 'deepseek-v4-flash-vision-exp',
+      model: 'deepseek-flash',
       messages: [{
         role: 'user',
         content: [
@@ -407,7 +414,7 @@ describe('DeepSeekAdapter against a mock server', () => {
       bytes: 3,
     }])
     expect(signalSeen[0]).toBeInstanceOf(AbortSignal)
-    expect(policies).toEqual([{ maxPixels: 640_000, maxBytes: 1024 * 1024 }])
+    expect(policies).toEqual([{ width: 1, height: 1, maxBytes: 2 * 1024 * 1024 }])
   })
 
   it('falls back to one all-base64 request when Files API resolution fails', async () => {
@@ -441,7 +448,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(files.ensureUploaded).toHaveBeenCalledTimes(1)
   })
 
-  it('reduces base64 fallback history from the configured high watermark to its half-size quantum', async () => {
+  it('fails a base64 fallback whose retained images exceed the inline bound with the count to offload', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const attachments = attachmentStoreOf(ref => Promise.resolve(requestImage(ref))).store
     const files = fileStoreOf(() => Promise.reject(new LlmError('Files unavailable', 'SERVER')))
@@ -452,20 +459,16 @@ describe('DeepSeekAdapter against a mock server', () => {
       models: [{ id: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] }],
     }, attachments, files.store)
 
-    await drain(adapter.stream({
+    await expect(drain(adapter.stream({
       provider: 'deepseek-official',
       model: 'deepseek-v4-flash-vision-exp',
       messages: [createUserMessage({
         content: Array.from({ length: 21 }, () => ({ type: 'image' as const, attachment: imageRef })),
         source: { kind: 'plugin', plugin: 'test' },
       })],
-    }))
-
-    const body = JSON.stringify(server.requests[0])
-    expect(body.match(/image omitted to fit request image limits/g)).toHaveLength(11)
-    expect(body.match(/"type":"image_url"/g)).toHaveLength(10)
+    }))).rejects.toMatchObject({ code: 'IMAGE_OFFLOAD_REQUIRED', message: expect.stringContaining('11 more') as string })
+    expect(server.requests).toHaveLength(0)
   })
-
   it('discards partially resolved file ids and falls back with every retained image inline', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const secondRef = { ...imageRef, attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`) }
@@ -592,7 +595,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(JSON.stringify(server.requests[0])).not.toContain('image_url')
   })
 
-  it('does not prepare an old image removed by request offload', async () => {
+  it('does not prepare a surface-offloaded image and sends its placeholder instead', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const old = { ...imageRef, attachmentId: AttachmentId(`sha256:${'c'.repeat(64)}`), bytes: 3 }
     const recent = { ...imageRef, attachmentId: AttachmentId(`sha256:${'d'.repeat(64)}`), bytes: 3 }
@@ -603,8 +606,6 @@ describe('DeepSeekAdapter against a mock server', () => {
     const adapter = adapterOf({
       baseURL: server.url,
       models: [{ id: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] }],
-      maxRequestFilesBytes: 4,
-      imageOffloadByteQuantum: 2,
     }, attachmentMocks.store)
 
     await drain(adapter.stream({
@@ -612,7 +613,7 @@ describe('DeepSeekAdapter against a mock server', () => {
       model: 'deepseek-v4-flash-vision-exp',
       messages: [createUserMessage({
         content: [
-          { type: 'image', attachment: old },
+          { type: 'image', attachment: old, offloaded: true },
           { type: 'image', attachment: recent },
         ],
         source: { kind: 'plugin', plugin: 'test' },
@@ -621,7 +622,7 @@ describe('DeepSeekAdapter against a mock server', () => {
 
     expect(attachmentMocks.readImageRequest).toHaveBeenCalledWith(
       recent,
-      { maxPixels: 640_000, maxBytes: 1024 * 1024 },
+      { width: 1, height: 1, maxBytes: 2 * 1024 * 1024 },
       expect.any(AbortSignal),
     )
     const body = server.requests[0] as { messages: unknown[] }
@@ -672,13 +673,13 @@ describe('DeepSeekAdapter against a mock server', () => {
     expect(attachmentMocks.readImageRequest).toHaveBeenNthCalledWith(
       1,
       imageRef,
-      { maxPixels: 512 * 512, maxBytes: 512_000 },
+      { width: 1, height: 1, maxBytes: 512_000 },
       expect.any(AbortSignal),
     )
     expect(attachmentMocks.readImageRequest).toHaveBeenNthCalledWith(
       2,
       imageRef,
-      { maxPixels: 320_000, maxBytes: 1024 * 1024 },
+      { width: 1, height: 1, maxBytes: 2 * 1024 * 1024 },
       expect.any(AbortSignal),
     )
   })
@@ -1059,7 +1060,7 @@ describe('DeepSeekAdapter against a mock server', () => {
       const resolveApiKey = vi.fn(() => Promise.resolve('k'))
       const resolveAttachments = vi.fn(() => ({}) as AttachmentStore)
       const adapter = new DeepSeekAdapter({
-        options: () => resolveAdapterOptions({ baseURL: server.url }),
+        options: () => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }),
         resolveApiKey,
         resolveUserId: () => TEST_USER_ID,
         resolveAttachments,
@@ -1085,6 +1086,7 @@ describe('DeepSeekAdapter against a mock server', () => {
     const resolveApiKey = vi.fn(() => Promise.resolve('k'))
     const adapter = new DeepSeekAdapter({
       options: () => resolveAdapterOptions({
+        protocol: 'chat-completions',
         baseURL: server.url,
         models: [{ id: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] }],
       }),
@@ -1640,6 +1642,16 @@ describe('DeepSeekAdapter against a mock server', () => {
 })
 
 describe('plugin registration and config', () => {
+  it('defaults to Messages and resolves the selected protocol endpoint without rewriting overrides', () => {
+    expect(resolveAdapterOptions({})).toMatchObject({ protocol: 'messages', baseURL: 'https://api.deepseek.com/anthropic' })
+    expect(resolveAdapterOptions({ protocol: 'chat-completions' })).toMatchObject({ protocol: 'chat-completions', baseURL: 'https://api.deepseek.com' })
+    expect(resolveAdapterOptions({ protocol: 'messages' })).toMatchObject({ protocol: 'messages', baseURL: 'https://api.deepseek.com/anthropic' })
+    for (const baseURL of ['https://gateway.example/custom/v1', 'https://gateway.example/v1/messages']) {
+      expect(resolveAdapterOptions({ protocol: 'messages', baseURL }).baseURL).toBe(baseURL)
+    }
+    expect(() => resolveAdapterOptions({ protocol: 'responses' } as unknown as LlmDeepSeek.Config)).toThrow(/protocol/)
+  })
+
   it('keeps wire helpers off the package root', () => {
     for (const helper of [
       'httpErrorCode',
@@ -1658,6 +1670,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     const fiber = await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: server.url,
     })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
@@ -1676,6 +1689,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       retryPolicy: {
         mode: 'always',
@@ -1694,9 +1708,10 @@ describe('plugin registration and config', () => {
   it('owns the deepseek provider and advertises the default models', async () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmDeepSeek, { baseURL: 'http://127.0.0.1:1' })
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: 'http://127.0.0.1:1' })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
+      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V41-Flash', inputModalities: ['text', 'image'] },
       {
         provider: 'deepseek-official',
         id: 'deepseek-v4-flash',
@@ -1713,11 +1728,13 @@ describe('plugin registration and config', () => {
       },
       { provider: 'deepseek-official', id: 'deepseek-v4-flash-vision-exp', name: 'DeepSeek-V4-Flash-Vision-Exp', inputModalities: ['text', 'image'] },
     ])
-    await expect(ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-v4-flash'))
+    await expect(ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-flash'))
       .resolves.toMatchObject({
         provider: 'deepseek-official',
-        id: 'deepseek-v4-flash',
-        name: 'DeepSeek-V4-Flash',
+        id: 'deepseek-flash',
+        name: 'DeepSeek-V41-Flash',
+        inputModalities: ['text', 'image'],
+        systemPromptUpdate: 'in-history',
         context: { contextWindow: 1_000_000 },
         defaultMaxTokens: 256_000,
         reasoning: {
@@ -1730,21 +1747,31 @@ describe('plugin registration and config', () => {
           defaultEffort: ReasoningEffortId('high'),
         },
       })
-    await expect(ctx.llm.resolveModelInfo('deepseek-official', 'deepseek-v4-flash-vision-exp'))
-      .resolves.toMatchObject({
-        provider: 'deepseek-official',
-        id: 'deepseek-v4-flash-vision-exp',
-        name: 'DeepSeek-V4-Flash-Vision-Exp',
-        inputModalities: ['text', 'image'],
-        context: { contextWindow: 1_000_000 },
-        defaultMaxTokens: 256_000,
-      })
+  })
+
+  it.each([
+    { model: 'deepseek-v4-flash', inputModalities: ['text'] },
+    { model: 'deepseek-v4-pro', inputModalities: ['text'] },
+    { model: 'deepseek-v4-flash-vision-exp', inputModalities: ['text', 'image'] },
+  ])('keeps $model available with its V4 capabilities', async ({ model, inputModalities }) => {
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: 'http://127.0.0.1:1' })
+    const info = await ctx.llm.resolveModelInfo('deepseek-official', model)
+    expect(info).toMatchObject({
+      id: model,
+      inputModalities,
+      context: { contextWindow: 1_000_000 },
+      defaultMaxTokens: 256_000,
+    })
+    expect(info?.systemPromptUpdate).toBeUndefined()
   })
 
   it.each(['off', 'low', 'max'] as const)('uses the configured %s reasoning default', async (effort) => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       reasoningEffort: effort,
     })
@@ -1766,6 +1793,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       thinking: 'disabled',
       reasoningEffort: 'off',
@@ -1789,6 +1817,7 @@ describe('plugin registration and config', () => {
       const ctx = new Context()
       await ctx.plugin(LlmRuntime)
       await expect(ctx.plugin(LlmDeepSeek, {
+        protocol: 'chat-completions',
         baseURL: 'http://127.0.0.1:1',
         thinking: 'disabled',
         reasoningEffort,
@@ -1824,6 +1853,7 @@ describe('plugin registration and config', () => {
     await ctx.plugin(LlmRuntime)
     LlmDeepSeek.apply(ctx, { baseURL: 'http://127.0.0.1:1' })
     await expect(ctx.llm.listModels('deepseek-official')).resolves.toEqual([
+      { provider: 'deepseek-official', id: 'deepseek-flash', name: 'DeepSeek-V41-Flash', inputModalities: ['text', 'image'] },
       {
         provider: 'deepseek-official',
         id: 'deepseek-v4-flash',
@@ -1862,6 +1892,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       models: [
         { id: 'private-fast', contextWindow: 32_000 },
@@ -1897,6 +1928,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       defaultContextWindow: 256_000,
       models: [
@@ -1917,6 +1949,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       models: [],
     })
@@ -1941,6 +1974,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       models: [...models],
     })).rejects.toThrow(message)
@@ -1967,6 +2001,7 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       models: [legacyModel],
     })).rejects.toThrow(/imageDetail is no longer supported/)
@@ -1976,6 +2011,22 @@ describe('plugin registration and config', () => {
   it.each([0, 1.5])('rejects a per-model output cap of %s', (maxTokens) => {
     expect(() => resolveAdapterOptions({ models: [{ id: 'bad-cap', maxTokens }] }))
       .toThrow(/maxTokens must be a positive integer/)
+  })
+
+  it('surfaces a catalog model\'s in-history system prompt update mode and rejects any other mode', async () => {
+    const adapter = adapterOf({ models: [
+      { id: 'capable', systemPromptUpdate: 'in-history' },
+      { id: 'plain' },
+    ] })
+    await expect(adapter.resolveModel('deepseek-official', 'capable'))
+      .resolves.toMatchObject({ systemPromptUpdate: 'in-history' })
+    await expect(adapter.resolveModel('deepseek-official', 'plain'))
+      .resolves.not.toHaveProperty('systemPromptUpdate')
+    await expect(adapter.resolveModel('deepseek-official', 'not-in-catalog'))
+      .resolves.not.toHaveProperty('systemPromptUpdate')
+    expect(() => resolveAdapterOptions({
+      models: [{ id: 'bogus', systemPromptUpdate: 'leading' as unknown as 'in-history' }],
+    })).toThrow(/systemPromptUpdate must be "in-history" when present/)
   })
 
   it('rejects image request limits on a text-only catalog model', () => {
@@ -2032,6 +2083,7 @@ describe('plugin registration and config', () => {
       const ctx = new Context()
       await ctx.plugin(LlmRuntime)
       await expect(ctx.plugin(LlmDeepSeek, {
+        protocol: 'chat-completions',
         baseURL: 'http://127.0.0.1:1',
         defaultContextWindow,
       })).rejects.toThrow(/defaultContextWindow/)
@@ -2048,6 +2100,7 @@ describe('plugin registration and config', () => {
       const ctx = new Context()
       await ctx.plugin(LlmRuntime)
       await expect(ctx.plugin(LlmDeepSeek, {
+        protocol: 'chat-completions',
         baseURL: 'http://127.0.0.1:1',
         maxTokens,
       })).rejects.toThrow(/maxTokens/)
@@ -2098,6 +2151,7 @@ describe('plugin registration and config', () => {
       const ctx = new Context()
       await ctx.plugin(LlmRuntime)
       await expect(ctx.plugin(LlmDeepSeek, {
+        protocol: 'chat-completions',
         baseURL: 'http://127.0.0.1:1',
         maxRequestFilesBytes,
       })).rejects.toThrow(/maxRequestFilesBytes/)
@@ -2114,6 +2168,7 @@ describe('plugin registration and config', () => {
       const ctx = new Context()
       await ctx.plugin(LlmRuntime)
       await expect(ctx.plugin(LlmDeepSeek, {
+        protocol: 'chat-completions',
         baseURL: 'http://127.0.0.1:1',
         maxInlineRequestImageBytes,
       })).rejects.toThrow(/maxInlineRequestImageBytes/)
@@ -2126,7 +2181,7 @@ describe('plugin registration and config', () => {
     vi.stubEnv('DEEPSEEK_BASE_URL', 'http://127.0.0.1:1')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmDeepSeek, {})
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions' })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
   })
 
@@ -2134,11 +2189,11 @@ describe('plugin registration and config', () => {
     vi.stubEnv('DEEPSEEK_API_KEY', '')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmDeepSeek, { baseURL: 'http://127.0.0.1:1' })
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: 'http://127.0.0.1:1' })
     // First-boot onboarding: the route registers so models stay discoverable;
     // only the request itself needs a key.
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
-    await expect(ctx.llm.listModels('deepseek-official')).resolves.toHaveLength(3)
+    await expect(ctx.llm.listModels('deepseek-official')).resolves.toHaveLength(4)
     const first = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(first.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
     // The guidance leads with the managed credential store.
@@ -2158,7 +2213,7 @@ describe('plugin registration and config', () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmDeepSeek, { baseURL: server.url })
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: server.url })
     await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(server.headers[0]?.authorization).toBe('Bearer ambient-key')
   })
@@ -2167,7 +2222,7 @@ describe('plugin registration and config', () => {
     vi.stubEnv('DEEPSEEK_API_KEY', '')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmDeepSeek, { baseURL: 'http://127.0.0.1:1' })
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: 'http://127.0.0.1:1' })
     const result = await assemble(ctx, { model: 'deepseek-v4-flash', messages: [] })
     expect(result.finish).toMatchObject({ kind: 'error', failure: { code: 'MISSING_CREDENTIAL' } })
   })
@@ -2187,7 +2242,7 @@ describe('plugin registration and config', () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'test-key')
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
-    await ctx.plugin(LlmDeepSeek, {})
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions' })
     await assemble(ctx,{ model: 'deepseek-v4-flash', messages: [] })
     expect(server.requests).toHaveLength(1)
   })
@@ -2211,13 +2266,13 @@ describe('plugin registration and config', () => {
     ])
     expect(resolveAdapterOptions({ baseURL: 'https://gateway.internal' }, shell).baseURL).toBe('https://gateway.internal')
   })
-  it('defaults to the public base URL without config or env', async () => {
+  it('uses the public Chat base URL when selected without an endpoint override', async () => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'k')
     vi.stubEnv('DEEPSEEK_BASE_URL', undefined)
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     // Registration succeeds; no call is made (would hit api.deepseek.com).
-    await ctx.plugin(LlmDeepSeek, {})
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions' })
     expect(ctx.llm.listProviders()).toEqual([{ id: 'deepseek-official', name: 'DeepSeek' }])
   })
 
@@ -2226,12 +2281,12 @@ describe('plugin registration and config', () => {
     expect(adapter).toBeInstanceOf(DeepSeekAdapter)
     // Direct embedding shares the plugin's one resolve step, so it advertises
     // the same default catalog instead of a divergent empty one.
-    await expect(adapter.listModels('deepseek-official')).resolves.toHaveLength(3)
+    await expect(adapter.listModels('deepseek-official')).resolves.toHaveLength(4)
   })
 
   it('resolves connection facts and the credential exactly once per stream call', async () => {
     const server = await mockServer([{ kind: 'sse', events: textEvents }])
-    const options = vi.fn(() => resolveAdapterOptions({ baseURL: server.url }))
+    const options = vi.fn(() => resolveAdapterOptions({ protocol: 'chat-completions', baseURL: server.url }))
     const resolveApiKey = vi.fn(() => Promise.resolve('per-request-key'))
     const resolveUserId = vi.fn(() => TEST_USER_ID)
     const adapter = new DeepSeekAdapter({ options, resolveApiKey, resolveUserId, prepareExtensions: noExtensions })
@@ -2253,10 +2308,12 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       streamIdleTimeoutMs: 0,
     })).rejects.toThrow(/streamIdleTimeoutMs/)
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       streamIdleTimeoutMs: MAX_TIMER_DELAY_MS + 1,
     })).rejects.toThrow(/streamIdleTimeoutMs/)
@@ -2271,10 +2328,12 @@ describe('plugin registration and config', () => {
     const ctx = new Context()
     await ctx.plugin(LlmRuntime)
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       filesApiTimeoutMs: 0,
     })).rejects.toThrow(/filesApiTimeoutMs/)
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       filesApiTimeoutMs: MAX_TIMER_DELAY_MS + 1,
     })).rejects.toThrow(/filesApiTimeoutMs/)
@@ -2287,6 +2346,7 @@ describe('plugin registration and config', () => {
     await ctx.plugin(LlmRuntime)
 
     await expect(ctx.plugin(LlmDeepSeek, {
+      protocol: 'chat-completions',
       baseURL: 'http://127.0.0.1:1',
       retryPolicy: { mode: 'normal', maxRetries: -1 },
     })).rejects.toThrow(/retryPolicy/)

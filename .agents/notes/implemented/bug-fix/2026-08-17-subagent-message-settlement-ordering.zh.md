@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-可继续 child 可以发送选中内容，之后还会产生一条由管理器编写且无条件投递的结算通知。如果这两条消息进入领取优先级不同的队列，较晚的结算通知可能先于较早的 child 消息到达 parent 模型。一个轮次的第一个 step 会先领取完整 `next-step` 批次，再领取一条 `next-turn` 消息，因此混用 FIFO 后续轮次发送与 next-step 结算会颠倒因果顺序。[Issue #2600](https://github.com/deepseek-harness/deepseek-harness/issues/2600)记录了该缺陷。
+可继续 child 可以发送选中内容，之后还会产生一条由管理器编写且无条件投递的结算通知。如果这两条消息进入领取优先级不同的队列，较晚的结算通知可能先于较早的 child 消息到达 parent 模型。一个轮次的第一个 step 会先领取完整 `next-step` 批次，再领取一条 `next-turn` 消息，因此混用 FIFO 后续轮次发送与 next-step 结算会颠倒因果顺序。Issue #2600记录了该缺陷。
 
 child 指令要求在发现会改变 parent 下一步动作时发送该发现。把这条消息推迟到后续轮次既违背其调度含义，也会把具有因果顺序的消息拆到领取优先级不同的队列。
 

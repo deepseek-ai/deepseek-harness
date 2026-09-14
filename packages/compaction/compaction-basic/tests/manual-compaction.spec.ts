@@ -1,3 +1,4 @@
+import { imageOffloadProjection } from '@deepseek-ai/dsh-compaction-image-offload/projection'
 import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
@@ -99,6 +100,7 @@ interface LoopHarness {
 async function loopHarness(): Promise<LoopHarness> {
   const ctx = new Context()
   await mountAgentLoopTestDependencies(ctx)
+  ctx.sessions.registerMessageProjection(imageOffloadProjection)
   await ctx.plugin(InvariantRegistry)
   await ctx.plugin(SessionInvariant)
   await ctx.plugin(AgentInvariant)
@@ -237,6 +239,28 @@ function compactEvents(session: Session): SessionEvent[] {
 }
 
 describe('compactNow through the real loop', () => {
+  it('passes logged image omissions to the summarizer without changing the original message', async () => {
+    const { ctx, agent, compact } = await loopHarness()
+    try {
+      agent.followup(createUserMessage({
+        content: [{ type: 'text', text: PROMPT }, {
+          type: 'image',
+          attachment: { attachmentId: `sha256:${'a'.repeat(64)}` as never, mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
+        }],
+        source: { kind: 'user' },
+      }))
+      await agent.whenIdle()
+      const source = agent.session.snapshotEvents().find(event => event.type === 'user/message')!
+      agent.session.append('image/offload', { targets: [{ seq: source.seq, imageIndexes: [0] }] })
+      expect(await compact.compactNow(agent, SIGNAL)).not.toBeNull()
+      const image = compact.calls[0]?.messages.flatMap(message => message.content).find(block => block.type === 'image')
+      expect(image).toMatchObject({ offloaded: true })
+      expect(JSON.stringify(source)).not.toContain('offloaded')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
   it('holds a prompt accepted during summarization until the standalone bracket is flushed', async () => {
     const harness = await loopHarness()
     const { agent, compact, adapter, log } = harness
@@ -275,7 +299,8 @@ describe('compactNow through the real loop', () => {
     const second = (adapter.requests[1] ?? []).map(message => message.content
       .map(block => block.type === 'text' ? block.text : '')
       .join(''))
-    expect(second[0]).toContain('checkpoint')
+    expect(adapter.requests[1]?.[0]?.role).toBe('system')
+    expect(second[1]).toContain('checkpoint')
     expect(second.at(-1)).toBe('after compaction')
     expect(second.some(text => text.includes(PROMPT))).toBe(false)
   })
@@ -310,7 +335,8 @@ describe('compactNow through the real loop', () => {
     }))
     await agent.whenIdle()
     const messages = derivedText(agent.session)
-    expect(messages[0]).toContain('checkpoint')
+    expect(agent.session.deriveMessages()[0]?.role).toBe('system')
+    expect(messages[1]).toContain('checkpoint')
     expect(messages.filter(text => text.includes('INJECTED CONTEXT'))).toHaveLength(1)
   })
 
@@ -332,7 +358,8 @@ describe('compactNow through the real loop', () => {
 
     expect(attempts).toEqual(['compaction/start', 'compaction/summary'])
     expect(result).not.toBeNull()
-    expect(derivedText(agent.session)[0]).toContain('checkpoint')
+    expect(agent.session.deriveMessages()[0]?.role).toBe('system')
+    expect(derivedText(agent.session)[1]).toContain('checkpoint')
     expect(agent.session.snapshotEvents().filter(event => event.type === 'user/message'
       && event.data.source.kind === 'plugin' && event.data.source.plugin === 'listener')).toHaveLength(0)
     const types = compactEvents(agent.session).map(event => event.type)
@@ -496,7 +523,7 @@ describe('compactNow transaction and failure classification', () => {
         content: [{ type: 'text', text: 'competing replacement' }],
         source: { kind: 'plugin', plugin: 'rival' },
       }), {
-        surfaceOp: { op: 'replace', start: head!, end: head! },
+        surfaceOp: { op: 'replace', startSeq: head!, endSeq: head! },
         sourceEventSeqs: [head!],
       })
     }
@@ -517,7 +544,7 @@ describe('compactNow transaction and failure classification', () => {
         content: [{ type: 'text', text: 'rewritten middle node' }],
         source: { kind: 'plugin', plugin: 'rival' },
       }), {
-        surfaceOp: { op: 'replace', start: middle!, end: middle! },
+        surfaceOp: { op: 'replace', startSeq: middle!, endSeq: middle! },
         sourceEventSeqs: [middle!],
       })
     }
@@ -548,7 +575,7 @@ describe('compactNow transaction and failure classification', () => {
           content: [{ type: 'text', text: 'late competing replacement' }],
           source: { kind: 'plugin', plugin: 'rival' },
         }), {
-          surfaceOp: { op: 'replace', start: head, end: head },
+          surfaceOp: { op: 'replace', startSeq: head, endSeq: head },
           sourceEventSeqs: [head],
         })
       })

@@ -19,7 +19,7 @@ import { connectFreshWorkspace, newEnglishPage, saveFailureShot } from './suppor
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/feedback-release', import.meta.url))
 // Both routes borrow the same settled turn; this manifest references its owner.
-const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/feedback-command/session.v2.jsonl', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/feedback-command/session.v3.jsonl', import.meta.url))
 const ACK_EXPECTED = join(SNAPSHOT_DIR, 'ack.expected.md')
 const ACK_EXPANDED_EXPECTED = join(SNAPSHOT_DIR, 'ack-expanded.expected.md')
 const RELEASE_EXPECTED = join(SNAPSHOT_DIR, 'feedback-release.expected.json')
@@ -82,6 +82,8 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
     await page.getByRole('menuitem', { name: /^Model\b/ }).click()
     await page.getByRole('menuitemradio', { name, exact: true }).click()
     await expect.poll(() => trigger.getAttribute('aria-label')).toContain(name)
+    // The durable projection can update the label before the selection reply closes the menu.
+    await expect.poll(() => trigger.getAttribute('aria-expanded'), { timeout: 10_000 }).toBe('false')
   }
 
   beforeAll(async () => {
@@ -110,7 +112,7 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
           { id: 'feedback-mock', name: 'Feedback mock', contextWindow: 128_000 },
         ] },
       ],
-      // The replayed session.v2.jsonl belongs to the feedback-command scenario;
+      // The replayed session.v3.jsonl belongs to the feedback-command scenario;
       // comparing (or refreshing) the persisted session here would rewrite
       // that shared source with this lane's feedback events. Persistence and
       // collector assertions belong to this lane.
@@ -216,17 +218,25 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
     const like = page.getByRole('button', { name: 'Good response' })
     await like.hover()
     await like.click()
+    const dialog = page.getByRole('dialog', { name: 'Submit feedback' })
+    await dialog.getByRole('button', { name: 'Instruction understanding and following', exact: true }).click()
+    await dialog.getByRole('textbox', { name: 'Feedback details' }).fill('Clear and complete.')
+    expect(captured()).toHaveLength(releasedCount)
+    await dialog.getByRole('button', { name: 'Submit', exact: true }).click()
+    await expect.poll(() => dialog.count()).toBe(0)
     const rated = page.getByRole('button', { name: 'Remove rating' })
     await expect.poll(() => rated.getAttribute('aria-pressed')).toBe('true')
     await expectFeedbackRelease('feedback/message-put', 1)
-    await page.getByRole('button', { name: 'Add a note' }).click()
-    await page.getByRole('textbox', { name: 'Feedback note' }).fill('Read both files before answering.')
+    // The second rating uses the same dialog; typing releases nothing.
+    await page.getByRole('button', { name: 'Bad response' }).click()
+    await dialog.getByRole('button', { name: 'Task result', exact: true }).click()
+    await dialog.getByRole('textbox', { name: 'Feedback details' }).fill('Read both files before answering.')
     expect(captured()).toHaveLength(releasedCount)
-    await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await page.getByText('Read both files before answering.', { exact: true }).waitFor()
+    await dialog.getByRole('button', { name: 'Submit', exact: true }).click()
+    await expect.poll(() => dialog.count()).toBe(0)
     await expectFeedbackRelease('feedback/message-put', 2)
     await rated.click()
-    await expect.poll(() => like.getAttribute('aria-pressed')).toBe('false')
+    await expect.poll(() => page.getByRole('button', { name: 'Bad response' }).getAttribute('aria-pressed')).toBe('false')
     await expectFeedbackRelease('feedback/message-delete', 1)
     const agent = scaffold.ctx.agents.get(sessionId)
     if (agent === undefined) throw new Error('feedback session has no active agent')
@@ -237,8 +247,8 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
       { data: { text: 'the second remark' } },
     ])
     expect(events.filter(event => event.type === 'feedback/message-put')).toMatchObject([
-      { data: { sessionId, item: { rating: 'positive' } } },
-      { data: { sessionId, item: { rating: 'positive', note: 'Read both files before answering.' } } },
+      { data: { sessionId, item: { rating: 'positive', note: 'Clear and complete.', category: 'instruction-following' } } },
+      { data: { sessionId, item: { rating: 'negative', note: 'Read both files before answering.', category: 'task-result' } } },
     ])
     expect(events.filter(event => event.type === 'feedback/message-delete')).toMatchObject([{ data: { sessionId } }])
     expect(events.filter(event => event.type === 'turn/end')).toHaveLength(1)
@@ -246,11 +256,13 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
     expect(captured()).toHaveLength(releasedCount)
     const wire = uploads.join('\n')
     for (const text of ['the diff view is unreadable', 'the second remark',
-      'Read both files before answering.']) expect(wire).toContain(text)
+      'Clear and complete.', 'Read both files before answering.']) expect(wire).toContain(text)
     const feedback = events.flatMap<Record<string, string | undefined>>((event) => {
       switch (event.type) {
         case 'feedback/record': return [{ type: event.type, text: event.data.text }]
-        case 'feedback/message-put': return [{ type: event.type, rating: event.data.item.rating, note: event.data.item.note }]
+        case 'feedback/message-put': return [{
+          type: event.type, rating: event.data.item.rating, note: event.data.item.note, category: event.data.item.category,
+        }]
         case 'feedback/message-delete': return [{ type: event.type }]
         default: return []
       }
@@ -267,7 +279,7 @@ describe.each(MODE === 'record' ? ['deepseek-official'] : ['deepseek-official', 
     await selectModel('DeepSeek-V4-Flash')
     expect(captured()).toHaveLength(releasedCount)
     await page.getByRole('button', { name: 'New session', exact: true }).last().click()
-    const input = page.locator('[data-composer-input][contenteditable="true"][data-placeholder="Describe what you want to build... / commands, @ files or sessions"]')
+    const input = page.locator('[data-composer-input][contenteditable="true"][data-placeholder="Describe what you want to build, / commands, @ files or sessions"]')
     await input.waitFor({ timeout: 15_000 })
     await input.fill('/feedback Feedback before any model request.')
     expect(captured()).toHaveLength(releasedCount)

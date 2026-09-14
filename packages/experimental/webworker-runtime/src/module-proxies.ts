@@ -1,7 +1,7 @@
 /**
  * The worker bundle's module proxy table: the ONLY platform fork of the host
- * tree. Every entry replaces a Node builtin or an external npm package;
- * workspace and vendored modules are always mounted as they ship.
+ * tree. Entries replace Node builtins, external npm packages, and the native
+ * flock subpath; other workspace and vendored modules are mounted as they ship.
  *
  * The build turns these into bundler aliases, and `node/builtins.ts` turns the
  * same modules into the loader's static table — one list, two consumers.
@@ -16,9 +16,9 @@
  */
 
 /**
- * Module proxy table — the ONLY platform fork of the worker host. Every entry
- * replaces a Node builtin or an external npm package; workspace and vendored
- * modules are always mounted as-is. Keys are exact module specifiers.
+ * Module proxy table — the ONLY platform fork of the worker host. Keys are
+ * exact module specifiers; the native system package's Landlock entry stays
+ * unmodified while its flock subpath is replaced.
  */
 export const MODULE_PROXIES: Record<string, string> = {
   // VFS-backed real implementations.
@@ -65,7 +65,7 @@ export const MODULE_PROXIES: Record<string, string> = {
   'node:worker_threads': './node/builtin_modules/mock/worker_threads.ts',
   'node:sqlite': './node/builtin_modules/mock/sqlite.ts',
   // External npm replacements, named after the package each stands in for.
-  'fs-ext': './node/external_packages/fs-ext.ts',
+  '@deepseek-ai/node-addon-system/flock': './node/external_packages/node-addon-system-flock.ts',
   'koffi': './node/external_packages/koffi.ts',
   'sharp': './node/external_packages/sharp.ts',
   'node-pty': './node/external_packages/node-pty.ts',

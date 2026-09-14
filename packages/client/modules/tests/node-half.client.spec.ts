@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import { Context, type Fiber } from '@deepseek-ai/cordis'
+import { Context, FiberState, type Fiber } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIndexInjections, type WebServer, type WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import * as modulesClient from '../src/client/index.ts'
@@ -24,10 +24,48 @@ const BOOTSTRAP_URL = comboUrl([MODULES_ID], 'boot')
 const APPLICATION_URL = comboUrl([UI_RENDERER_ID], 'app')
 
 let root: string | undefined
+const contexts: { ctx: Context; ready?: Promise<WebRoute> }[] = []
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(contexts.splice(0).map(async ({ ctx, ready }) => {
+    await ready
+    await ctx.fiber.dispose()
+  }))
   if (root !== undefined) rmSync(root, { recursive: true, force: true })
   root = undefined
+})
+
+it.each([false, true])('tracks the Web carrier lifetime when server-first is %s', async (serverFirst) => {
+  const ctx = new Context()
+  contexts.push({ ctx })
+  ctx.provide('loader', { entries: () => [] })
+  const routes = new Set<WebRoute>()
+  const mountServer = () => ctx.plugin((serverCtx) => {
+    serverCtx.provide('webServer', {
+      register: (route: WebRoute) => {
+        routes.add(route)
+        return () => { routes.delete(route) }
+      },
+    } as WebServer)
+  })
+  let server = serverFirst ? await mountServer() : undefined
+  const modules = await ctx.plugin(ClientModuleRegistry)
+  const service = ctx.get('clientModules')!
+  expect(service.graph().entries).toEqual([])
+  expect(service.fetchBundle(new Request('http://localhost/plugins/missing')).status).toBe(404)
+  if (!serverFirst) {
+    expect(routes.size).toBe(0)
+    server = await mountServer()
+  }
+  await expect.poll(() => routes.size).toBe(1)
+  await server!.dispose()
+  await expect.poll(() => routes.size).toBe(0)
+  expect(modules.state).toBe(FiberState.ACTIVE)
+  expect(service.fetchBundle(new Request('http://localhost/plugins/missing')).status).toBe(404)
+  await mountServer()
+  await expect.poll(() => routes.size).toBe(1)
+  await modules.dispose()
+  expect(routes.size).toBe(0)
 })
 
 /** Create a resolvable package whose client export points at the returned path. */
@@ -65,8 +103,10 @@ function constructWithRoute(
     entryBaseUrl?: string
     internal?: NonNullable<Context['loader']['internal']>
   } = {},
-): { context: Context; service: ClientModuleRegistry; route: WebRoute } {
+): { context: Context; service: ClientModuleRegistry; route: Promise<WebRoute> } {
   const ctx = new Context()
+  const owned: typeof contexts[number] = { ctx }
+  contexts.push(owned)
   ctx.baseUrl = options.contextBaseUrl ?? pathToFileURL(root!).href + '/'
   ctx.provide('loader', {
     internal: options.internal,
@@ -81,19 +121,19 @@ function constructWithRoute(
       }
     },
   })
-  let route: WebRoute | undefined
+  const route = Promise.withResolvers<WebRoute>()
   const webServer: Pick<WebServer, 'port' | 'register' | 'tapIndex'> = {
     port: 0,
     register: (candidate) => {
-      if (candidate.path === '/plugins') route = candidate
+      if (candidate.path === '/plugins') route.resolve(candidate)
       return () => {}
     },
     tapIndex: () => () => {},
   }
   ctx.provide('webServer', webServer as WebServer)
   const service = new ClientModuleRegistry(ctx)
-  if (route === undefined) throw new Error('client bundle route was not registered')
-  return { context: ctx, service, route }
+  owned.ready = route.promise
+  return { context: ctx, service, route: route.promise }
 }
 
 /** Construct the node-half service over the enabled fixture entries. */
@@ -102,7 +142,7 @@ function construct(packageNames: string[]): ClientModuleRegistry {
 }
 
 /** Invoke the registered plugin route and capture status, headers, and bytes. */
-async function routeRequest(route: WebRoute, url: string, method = 'GET'): Promise<{
+async function routeRequest(route: Promise<WebRoute>, url: string, method = 'GET'): Promise<{
   status: number
   headers: Record<string, string> | undefined
   body: Buffer
@@ -121,7 +161,7 @@ async function routeRequest(route: WebRoute, url: string, method = 'GET'): Promi
       return response
     },
   } as unknown as ServerResponse
-  await route.handler({ method, url } as IncomingMessage, response)
+  await (await route).handler({ method, url } as IncomingMessage, response)
   return { status, headers, body }
 }
 

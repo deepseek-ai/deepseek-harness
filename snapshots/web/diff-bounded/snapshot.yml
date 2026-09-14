@@ -1,0 +1,7 @@
+version: 1
+scenario: diff-bounded
+profile: web
+composition: default
+recording: authored
+header:
+  class: default

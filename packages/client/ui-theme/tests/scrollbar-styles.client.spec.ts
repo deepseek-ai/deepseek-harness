@@ -2,9 +2,9 @@
  * Scrollbar stylesheet contract, asserted against the CSS text on disk: every
  * --dsw-alias-scrollbar-* token design-platform.css defines has a consumer,
  * scrollbar.css binds the base-surface pair through the rebindable
- * indirection, the width variable mirrors the ::-webkit-scrollbar rule for
- * consumers that align beside the bar, and elevated surfaces rebind that
- * indirection in complete pairs. The expected token set is scanned out of
+ * indirection, the WebKit geometry reads the shared width, thumb-border, and
+ * track-margin variables, and elevated surfaces rebind the colour indirection
+ * in complete pairs. The expected token set is scanned out of
  * design-platform.css, so adding, renaming, or dropping a scrollbar token
  * moves these assertions with it.
  */
@@ -25,6 +25,11 @@ const DARK_ATTRIBUTE = '[data-ds-dark-theme]'
 const TOKEN_PREFIX = '--dsw-alias-scrollbar-'
 /** Prefix of the rebindable indirection scrollbar.css owns. */
 const INDIRECTION_PREFIX = '--dsh-scrollbar-'
+/** The elevation-aware colour variables surfaces rebind as one pair. */
+const COLOUR_INDIRECTIONS = new Set([
+  `${INDIRECTION_PREFIX}thumb`,
+  `${INDIRECTION_PREFIX}thumb-hover`,
+])
 /** The one non-token rebind value: a surface that draws no thumb at all. */
 const HIDDEN_THUMB = 'transparent'
 /** The elevation rebind, spelled per property: value-wholeness, not token shape. */
@@ -67,6 +72,14 @@ function tokensRendered(rules: CssRule[]): Set<string> {
 const platformRules = parseRules(platformCss)
 const scrollbarRules = parseRules(scrollbarCss)
 const sorted = (names: Iterable<string>): string[] => [...names].sort()
+
+/** Last value one selector declares for a property. */
+function declaration(rules: CssRule[], property: string, selectorPart: string): string | undefined {
+  return rules
+    .filter(rule => rule.selectors.includes(selectorPart))
+    .flatMap(rule => rule.declarations)
+    .findLast(([name]) => name === property)?.[1]
+}
 
 /**
  * Scrollbar tokens defined by the rules whose selectors carry (or do not
@@ -175,7 +188,7 @@ for (const file of packageStylesheets()) {
     let rebindsElevation = false
     const ruleSurfaces: string[] = []
     for (const [property, value] of rule.declarations) {
-      if (property.startsWith(INDIRECTION_PREFIX) && file !== fileURLToPath(new URL('scrollbar.css', STYLES))) {
+      if (COLOUR_INDIRECTIONS.has(property) && file !== fileURLToPath(new URL('scrollbar.css', STYLES))) {
         rebinds = true
         if (value !== HIDDEN_THUMB) rebindsElevation = true
       }
@@ -248,48 +261,39 @@ describe('scrollbar.css base-surface binding', () => {
   it('routes the standard property and the WebKit thumb through the same indirection', () => {
     // A rebind on an elevated container has to move the Firefox and the WebKit
     // rendering together, which only holds while both read the same variable.
-    const declaration = (property: string, selectorPart: string): string | undefined => scrollbarRules
-      .filter(rule => rule.selectors.includes(selectorPart))
-      .flatMap(rule => rule.declarations)
-      .findLast(([name]) => name === property)?.[1]
-    const thumbColor = declaration('scrollbar-color', 'body')
+    const thumbColor = declaration(scrollbarRules, 'scrollbar-color', 'body')
     expect(thumbColor).toBeDefined()
     const indirection = varReferences(thumbColor!)[0]
     expect(indirection).toBe(`${INDIRECTION_PREFIX}thumb`)
-    expect(varReferences(declaration('background', '::-webkit-scrollbar-thumb')!)).toEqual([indirection])
+    expect(varReferences(declaration(scrollbarRules, 'background', '::-webkit-scrollbar-thumb')!)).toEqual([indirection])
   })
 })
 
-describe('scrollbar.css width variable', () => {
+describe('scrollbar.css geometry variables', () => {
   const WIDTH_VARIABLE = `${INDIRECTION_PREFIX}width`
+  const THUMB_BORDER_VARIABLE = `${INDIRECTION_PREFIX}thumb-border`
+  const TRACK_MARGIN_VARIABLE = `${INDIRECTION_PREFIX}track-margin`
+  const GEOMETRY_VARIABLES = [WIDTH_VARIABLE, THUMB_BORDER_VARIABLE, TRACK_MARGIN_VARIABLE]
 
-  it('defines the width variable on body as a static length', () => {
-    // The overlay seat compensation reads a fixed number, not a second
-    // indirection: the mirror check below compares the WebKit rule against
-    // this value, so a var()-to-var() chain would compare one indirection to
-    // another instead of pinning the number.
-    const value = scrollbarRules
+  it('defines each geometry variable on body as a static length', () => {
+    const definitions = new Map(scrollbarRules
       .filter(rule => rule.selectors.includes('body'))
       .flatMap(rule => rule.declarations)
-      .findLast(([property]) => property === WIDTH_VARIABLE)?.[1]
-    expect(value, WIDTH_VARIABLE).toBeDefined()
-    expect(value, WIDTH_VARIABLE).toMatch(/^\d+(?:\.\d+)?px$/)
+      .filter(([property]) => GEOMETRY_VARIABLES.includes(property)))
+    for (const property of GEOMETRY_VARIABLES) {
+      expect(definitions.get(property), property).toMatch(/^\d+(?:\.\d+)?px$/)
+    }
   })
 
-  it('mirrors the ::-webkit-scrollbar width rule with the variable value', () => {
-    // The compensation stays aligned with the WebKit bar only while both read
-    // the same number. A change to one side without the other puts the overlay
-    // seat a band off from Chat on WebKit engines.
-    const variableValue = scrollbarRules
-      .filter(rule => rule.selectors.includes('body'))
-      .flatMap(rule => rule.declarations)
-      .findLast(([property]) => property === WIDTH_VARIABLE)?.[1]
+  it('routes WebKit scrollbar geometry through those variables', () => {
     const webkitWidth = scrollbarRules
       .filter(rule => rule.selectors.includes('::-webkit-scrollbar'))
       .flatMap(rule => rule.declarations)
       .findLast(([property]) => property === 'width')?.[1]
     expect(webkitWidth, '::-webkit-scrollbar width').toBeDefined()
-    expect(webkitWidth).toBe(variableValue)
+    expect(varReferences(webkitWidth!)).toEqual([WIDTH_VARIABLE])
+    expect(varReferences(declaration(scrollbarRules, 'border', '::-webkit-scrollbar-thumb')!)).toEqual([THUMB_BORDER_VARIABLE])
+    expect(varReferences(declaration(scrollbarRules, 'margin-block', '::-webkit-scrollbar-track')!)).toEqual([TRACK_MARGIN_VARIABLE])
   })
 
   it('every reader of the width variable outside ui-theme references a defined variable', () => {
@@ -422,10 +426,8 @@ describe('elevated surface rebinds', () => {
     // A surface rebinding only the resting colour keeps the l1 hover colour,
     // so the elevation is wrong only while the pointer is over the thumb.
     for (const { file, rule } of rebindRules) {
-      const properties = rule.declarations.map(([property]) => property).filter(property => property.startsWith(INDIRECTION_PREFIX))
-      expect(sorted(properties), `${file} ${rule.selectors.join(', ')}`).toEqual([
-        `${INDIRECTION_PREFIX}thumb-hover`, `${INDIRECTION_PREFIX}thumb`,
-      ].sort())
+      const properties = rule.declarations.map(([property]) => property).filter(property => COLOUR_INDIRECTIONS.has(property))
+      expect(sorted(properties), `${file} ${rule.selectors.join(', ')}`).toEqual(sorted(COLOUR_INDIRECTIONS))
     }
   })
 
@@ -459,7 +461,7 @@ describe('elevated surface rebinds', () => {
     // white)` and a crossed pair (the hover token bound to the resting
     // property); neither is what the contract says.
     for (const { file, rule } of rebindRules) {
-      const rebinds = rule.declarations.filter(([property]) => property.startsWith(INDIRECTION_PREFIX))
+      const rebinds = rule.declarations.filter(([property]) => COLOUR_INDIRECTIONS.has(property))
       const where = `${file} ${rule.selectors.join(', ')}`
       if (rebinds.every(([, value]) => value === HIDDEN_THUMB)) continue
       expect(rebinds.some(([, value]) => value === HIDDEN_THUMB), `${where}: mixes ${HIDDEN_THUMB} with an elevation`).toBe(false)

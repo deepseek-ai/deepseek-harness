@@ -57,6 +57,7 @@ export function TrajectoryCell({
   assistantMetrics: _assistantMetrics,
   result: _result,
   callId: _callId,
+  toolName: _toolName,
   isError: _isError,
   timeSeconds,
   startedAt: _startedAt,

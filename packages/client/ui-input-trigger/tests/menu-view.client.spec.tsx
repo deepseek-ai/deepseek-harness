@@ -114,6 +114,26 @@ describe('MenuView', () => {
     expect(status.children).toHaveLength(2)
   })
 
+  it('renders a localized label as the title with the name as its alias, an icon component, and the description', () => {
+    const Glyph = ({ size = 16 }: { size?: number | undefined }) => <svg data-glyph="plan" width={size} height={size} />
+    mount(openState({
+      groups: [{
+        source: 'command',
+        status: 'ready',
+        items: [
+          { name: 'plan', label: '计划', description: '进入或退出计划模式', icon: Glyph, section: '添加' },
+          { name: 'file', label: 'File', section: '添加' },
+        ],
+      }],
+    }))
+    const options = screen.getAllByRole('option')
+    expect(options.map(o => o.textContent)).toEqual(['计划plan进入或退出计划模式', 'File'])
+    expect(options[0]?.querySelector('[data-glyph="plan"]')?.getAttribute('width')).toBe('16')
+    // A label that is the name in another letter case renders no alias.
+    expect(options[1]?.querySelectorAll('span')).toHaveLength(1)
+    expect(screen.getAllByText('添加')).toHaveLength(1)
+  })
+
   it('keeps an opted-out source title hidden while its candidates are pending', () => {
     mount(openState({
       groups: [{ source: 'reference', showGroupTitle: false, status: 'pending', items: [] }],
@@ -218,7 +238,7 @@ describe('MenuView', () => {
   it('caps the list height at the design maximum when the composer sits low enough', () => {
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ bottom: 800 } as DOMRect)
     mount(openState())
-    expect(menuShell().style.maxHeight).toBe('320px')
+    expect(menuShell().style.maxHeight).toBe('400px')
   })
 
   it('clamps the list height to the space above the composer minus the safe margin', () => {
@@ -231,10 +251,25 @@ describe('MenuView', () => {
     const rect = vi.spyOn(Element.prototype, 'getBoundingClientRect')
     rect.mockReturnValue({ bottom: 800 } as DOMRect)
     mount(openState())
-    expect(menuShell().style.maxHeight).toBe('320px')
+    expect(menuShell().style.maxHeight).toBe('400px')
     rect.mockReturnValue({ bottom: 100 } as DOMRect)
     act(() => { window.dispatchEvent(new Event('resize')) })
     expect(menuShell().style.maxHeight).toBe('88px')
+  })
+
+  it('shows the bottom overflow hint until the list reaches its final row', () => {
+    mount(openState())
+    const listbox = screen.getByRole('listbox')
+    Object.defineProperties(listbox, {
+      clientHeight: { configurable: true, value: 320 },
+      scrollHeight: { configurable: true, value: 392 },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    })
+    fireEvent.scroll(listbox)
+    expect(menuShell().hasAttribute('data-overflow-below')).toBe(true)
+    listbox.scrollTop = 72
+    fireEvent.scroll(listbox)
+    expect(menuShell().hasAttribute('data-overflow-below')).toBe(false)
   })
 
   it('pointerdown outside the menu (no composer card ancestor) dismisses', () => {

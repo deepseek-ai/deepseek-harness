@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tool-lsp` 通过 LSP seam 为模型提供单一的只读 `lsp` 工具，用于精确代码导航：转到符号的定义、查找其引用、跳转到其实现，或阅读悬停文档。该工具拥有模型看到的一切——名称、schema、提示词指引、结果格式化与 UI 呈现——并且绝不依赖哪个语言服务器应答查询。位置是从 1 开始的 UTF-16 光标坐标，工具会将其转换为 seam 从零开始的约定。结果是有边界的位置列表或规范化悬停文本，带有明确的空结果与截断标记。与 `dsh-lsp-stdio` 之类的提供方及 `dsh-lsp` seam 组合，即可启用导航。
+`dsh-tool-lsp` 让模型通过单个只读 `lsp` 工具导航代码：打开符号定义、查找引用与实现，或阅读悬停文档。请求使用从 1 开始的 UTF-16 行列位置。导航结果数量有上限、按文件分组，并在省略位置或截断文本时显示标记；悬停结果经过规范化，且会区分信息缺失与错误。该包要求配置 LSP 提供方，并要求会话具有工作区根目录。当文本搜索有歧义，或修改需要精确的符号关系时选择它；普通导航应继续使用 `search` 与 `read`。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当文本匹配有歧义，或修改前需要精确的定义、实现或引用时，agent 使用 `lsp`；该工具的提示词指引会告诉它，普通导航应优先使用 `search`／`read`。
+当文本匹配有歧义，或修改前需要精确的定义、实现或引用时，agent（智能体）使用 `lsp`；该工具的提示词指引会告诉它，普通导航应优先使用 `search`／`read`。
 
 ### 工具
 
@@ -72,10 +72,10 @@ kind: "package-reference"
 
 | 文件 | 职责 |
 |---|---|
-| [`src/index.ts`](src/index.ts) | 插件入口：config schema、工具注册、系统提示词区段、执行 |
+| [`src/index.ts`](src/index.ts) | 插件入口：配置 schema、工具注册、系统提示词区段、执行 |
 | [`src/render.ts`](src/render.ts) | 纯格式化、坐标转换、URI 解析、结果上限、UI 呈现 |
 | [`src/session-cwd.ts`](src/session-cwd.ts) | 从会话 `header.cwd` 取得工作区根目录 |
-| — | 不发布运行时不变式伴生入口；无状态适配器。 |
+| — | 不发布运行时不变式伴生入口；该无状态适配器提供一个工具和一个提示词区段，而查询生命周期与结果关系仍由它所组合的工具 seam 和 LSP seam 负责。 |
 
 </details>
 
@@ -86,7 +86,7 @@ kind: "package-reference"
 
 当包级约定不够用时阅读以下页面。它们从面向模型的表层逐步进入 seam 与提供方。
 
-- [LSP 导航子系统](../../../docs/subsystems/lsp.zh.md)——操作、坐标、请求与结果，以及 `LspError` code。
+- [LSP 导航子系统](../../../docs/subsystems/lsp.zh.md)——操作、坐标、请求与结果，以及 `LspError` 错误码。
 - [dsh-lsp](../lsp/README.zh.md)——本工具查询的 seam。
 - [dsh-lsp-stdio](../lsp-stdio/README.zh.md)——应答这些查询的 stdio 提供方。
 - [lsp 组地图](../README.zh.md)——三个包的家族及其相关文档。
@@ -114,7 +114,7 @@ Use search/read for ordinary navigation. Use lsp when textual matches are ambigu
 
 #### KV Cache 影响
 
-只要插件 scope 与指引文本不变，前缀就保持稳定；激活或释放可能使从该区段起的复用失效。
+只要插件 scope 与指引文本不变，前缀就保持稳定；激活或 dispose（资源释放）可能使从该区段起的复用失效。
 
 ### 工具 schema
 

@@ -48,6 +48,7 @@ if (kind === 'ordinary') {
     cwd: process.cwd(),
     rows: 24,
     cols: 80,
+    terminalType: 'dumb',
     graceMs: 30_000,
   })
 }

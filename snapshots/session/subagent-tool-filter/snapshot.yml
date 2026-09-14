@@ -1,0 +1,12 @@
+version: 1
+scenario: subagent-tool-filter
+profile: headless
+composition: subagent-tool-filter
+recording: authored
+header:
+  class: subagent-tool-filter
+  pin: true
+  systemPromptSource: text-turn
+  toolSchemasSource: text-turn
+  childSystemPrompts: [1]
+  childToolSchemas: [1]

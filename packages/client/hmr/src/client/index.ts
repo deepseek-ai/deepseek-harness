@@ -75,6 +75,24 @@ export const name = 'client-hmr'
 /** Required services: the vendored Loader (entry governance) and the client module system (boot provide, service name `modules`). */
 export const inject = ['loader', 'modules']
 
+/**
+ * Registry-first teardown of an entry's running fiber so `entry.refresh()`
+ * rebuilds it (see the module comment): delete the runtime record before the
+ * fiber's disposer emits `internal/plugin` (or the Loader flags the entry
+ * disabled), drain the unload so effect disposers finish before a new apply
+ * re-registers, then clear `entry.fiber` so `refresh()` re-imports instead of
+ * no-oping. A fiberless entry is left untouched.
+ * @param entry - the Loader entry to tear down.
+ */
+export async function tearDownEntryFiber(entry: Entry): Promise<void> {
+  const oldFiber = entry.fiber
+  if (oldFiber === undefined) return
+  const runtime = oldFiber.runtime
+  if (runtime !== null) entry.ctx.registry.delete(runtime.callback)
+  while (oldFiber.inertia !== undefined) await oldFiber.inertia
+  delete entry.fiber
+}
+
 /** Find the loader entry whose module specifier is `id` (entry tree ids are random; the package name lives in `options.name`). */
 function findEntry(loader: Loader, id: string): Entry | undefined {
   for (const entry of loader.entries()) {
@@ -115,18 +133,7 @@ export function apply(ctx: Context): void {
     modLoader.invalidate(id, rev)
     await modLoader.prefetch(id)
 
-    const oldFiber = entry.fiber
-    if (oldFiber !== undefined) {
-      // Registry-first teardown (see module comment): the runtime record must
-      // be gone before the fiber's disposer emits internal/plugin, or the
-      // Loader flags the entry disabled.
-      const runtime = oldFiber.runtime
-      if (runtime !== null) entry.ctx.registry.delete(runtime.callback)
-      // Drain the unload: effect disposers (slots, subscriptions) must finish
-      // before the new bundle executes and the new apply re-registers.
-      while (oldFiber.inertia !== undefined) await oldFiber.inertia
-      delete entry.fiber
-    }
+    await tearDownEntryFiber(entry)
     // Old owned styles go before materialization re-injects them (the CSS
     // idempotency guard keys on stable tag ids).
     removeOwnedStyles(id)

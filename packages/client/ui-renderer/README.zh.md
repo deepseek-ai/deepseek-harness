@@ -1,5 +1,5 @@
 ---
-description: "浏览器 UI 渲染器：React slot 绑定、ctx.uiRenderer 与 dsh Web 客户端组装后应用的应用根。"
+description: "浏览器 UI 渲染器：React slot 绑定、ctx.uiRenderer 与 dsh Web 客户端组装后的应用根。"
 kind: "package-reference"
 ---
 
@@ -43,11 +43,11 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包实现一条边界：对象层（runtime，无 React）拥有业务状态；这里是 ctx 到 React 集成唯一发生的位置——slot 渲染器、`SessionProvider` 与 `useSyncExternalStore` 适配器。
+本包实现一条边界：对象层（运行时，无 React）拥有业务状态；这里是 ctx 到 React 集成唯一发生的位置——slot 渲染器、`SessionProvider` 与 `useSyncExternalStore` 适配器。
 
 ### 激活与挂载
 
-插件在 `slots`、`sessions` 与 `layout` 就绪后激活；它安装 `createSlotRenderer()` 并 reflect `uiRenderer` 服务。`mountApp` 会查找启动内核的 `[data-dsh-boot]` 元素：存在时经 `BootHandoff`（一个保留加载 DOM 的单帧透传）hydrate，否则创建全新 root 并同步 flush 渲染。
+插件在 `slots`、`sessions` 与 `layout` 就绪后激活；它安装 `createSlotRenderer()` 并 reflect `uiRenderer` 服务。`mountApp` 会查找启动内核的 `[data-dsh-boot]` 元素：存在时经 `BootHandoff`（一个保留加载 DOM 的单帧透传）hydrate，否则创建全新的根节点并同步提交渲染。
 
 ### Slot 绑定
 
@@ -55,7 +55,7 @@ kind: "package-reference"
 
 ### 身份
 
-React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静态模块表保持同一浏览器身份；本包则以动态客户端 bundle 到达。
+React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静态模块表保持同一浏览器身份；本包则以动态客户端 bundle 的形式加载。
 
 </details>
 
@@ -68,7 +68,7 @@ React、React DOM、Cordis、ui-slots 与 ui-primitives 通过 Web 外壳的静�
 
 - [ui-slots](../ui-slots/README.zh.md)——本渲染器绑定到 React 的 slot 注册表纯核心。
 - [web](../web/README.zh.md)——加载名册并调用 `mount` 的外壳。
-- [ui-session](../ui-session/README.zh.md)——提供本渲染器所绑定标准 Session source 与 hook 的适配器。
+- [ui-session](../ui-session/README.zh.md)——提供本渲染器所绑定标准会话 source 与钩子的适配器。
 - [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——加载链、对象层与分层红线。
 - [slot 系统标准](../../../.agents/notes/implemented/architecture/2026-07-22-slot-type-chain-implementation.zh.md)——权威组合模型。
 

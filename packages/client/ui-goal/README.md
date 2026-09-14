@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package renders the goal surface in the Web GUI: a strip in the composer-context stack that shows the current goal of the session and offers edit, pause, resume, and clear actions. It reads the live goal from the host-computed projection and routes every mutation through the goal service, surfacing rejections inline. It also projects each durable `/goal` command run as a `Command input` bubble in the chat, so a goal command entered by the user or the model appears in the transcript. Goal creation is outside this plugin. The shipped Web presets other than `minimal` mount `/goal` in their agent scope.
+The Web GUI goal surface shows both the durable goal state and its current process-local activation, and lets users edit, pause, resume, or clear the goal; rejected changes appear inline. It displays durable `/goal` runs as `Command input` bubbles so commands from users or the model remain visible after reload. Goal creation remains outside this package. Shipped Web presets other than `minimal` make `/goal` available to agents.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This package renders the goal surface in the Web GUI: a strip in the composer-co
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this plugin alongside `ui-conversation` and the goal domain package; the strip then appears as the second card in the composer-context stack (after Todo, before Queue) whenever the session has a goal. An active goal offers pause; a paused one offers resume; edit rewrites the objective; clear removes the goal and suppresses the strip until the projection catches up.
+Mount this plugin alongside `ui-conversation` and the goal domain package; the strip then appears as the second card in the composer-context stack (after Todo, before Queue) whenever the session has a goal. An armed active goal offers pause; an active-but-disarmed or paused goal offers resume; edit rewrites the objective; clear removes the goal and suppresses the strip until the projection catches up.
 
 ### The command-input bubble
 
@@ -43,7 +43,7 @@ A rejected mutation surfaces the Remote error inline on the strip; loading, abse
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The strip is projection-mode: the live goal arrives through `useProjection('goal')` (seeded by the history tail page and updated by `session/projection` frames), so the plugin owns no domain store, refresh chain, or event listener. The inject face carries only the four mutation verbs through `ctx.remote.goals`; each reads the CAS ref from the session's current projected value at call time, and the RPC's compare-and-set is the staleness guard. The strip single-flights mutations synchronously because a pending render cannot fence same-frame clicks. The command-input projection is a separate Conversation Definition that builds a `command-input` Chat Node before the generic command result Node; it never creates `user/message` or a model turn.
+The durable goal arrives through `useProjection('goal')` (seeded by the history tail page and updated by `session/projection` frames). The inject face carries a registrant-private activation hook source plus the four mutation verbs. That source starts only while the framework hook observes it, reads `ctx.remote.goals.get`, subscribes to `goal/activation-changed`, and refreshes on running-state or connection resets. Live-event epochs invalidate in-flight reads, so a stale HTTP result cannot overwrite a newer activation edge; running refreshes retain the last known activation until the read resolves. The strip owns no domain store or cross-plugin cache. Each mutation reads the CAS ref from the session's current projected value at call time, and the RPC's compare-and-set is the staleness guard. The strip single-flights mutations synchronously because a pending render cannot fence same-frame clicks. The command-input projection is a separate Conversation Definition that builds a `command-input` Chat Node before the generic command result Node; it never creates `user/message` or a model turn.
 
 </details>
 
@@ -76,7 +76,6 @@ None unless the queued goal context is admitted. An admitted context extends the
 
 These limits define the current goal surface. They are current package constraints, not a goal-domain comparison or a task backlog.
 
-- **Durable phase only** — the projection omits process-local activation, so the strip cannot distinguish an active-but-disarmed goal from an armed one; resume re-arms through the RPC side. There is no host-live activation channel.
 - **Preset-independent host state** — switching an active session to `minimal` leaves its host-owned goal intact. `/goal` and goal tools disappear, while this strip can still edit, pause, resume, or clear the goal.
 
 <a id="dev-note"></a>
@@ -89,4 +88,4 @@ None.
 
 </details>
 
-**Runtime invariant:** No companion is published. A single GoalBar dock registration whose disposal is proven by the HMR-safety spec — the plugin owns no store (state arrives on the goal projection), emits no cordis events, and holds no cross-plugin mutable state.
+**Runtime invariant:** No companion is published. There is a single GoalBar dock registration whose disposal is proven by the HMR-safety spec — durable state arrives on the goal projection, process-local activation arrives through the entry's private hook source, and that source subscribes only while the framework hook observes it.

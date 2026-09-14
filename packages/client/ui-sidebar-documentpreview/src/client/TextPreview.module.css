@@ -1,0 +1,318 @@
+/* The preview takes the pane's definite height outright, so the header stays
+   put while the body below owns the remaining height. A renderer may replace
+   the body's scrolling role with an inner scrollport. */
+.preview {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+/* One 38px row flush under the pane's strip: the path, then the type's
+   controls at its end. With the strip's 38px above, its rule lies where the
+   conversation header's does (ui-conversation ConversationRoot `.header`,
+   76px with the same rule), so the two lines meet at the column edge.
+
+   The same row, path, and controls are drawn by the files tab
+   (ui-sidebar-files FilesBody `.header`); TODO: once the artifact and slot
+   surfaces settle, one copy in ui-primitives could serve every pane header. */
+.header {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 6px 0 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* The path is never ellipsized. Its text sits at the left while it fits: the
+   auto margin takes the free space. Once it is wider than the box, the auto
+   margin is zero and `flex-end` holds the name at the right edge, so the
+   directories run off the left and the box clips them there, faded by the
+   mask while `data-textpreview-path-clipped` is set. The margin plus the row's
+   gap put the text 16px clear of the first control. */
+.path {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-right: 12px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.path[data-textpreview-path-clipped] {
+  mask-image: linear-gradient(to right, transparent, black 28px);
+}
+
+.pathText {
+  flex: none;
+  margin-right: auto;
+}
+
+.pathDirectory {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pathName {
+  color: var(--dsw-alias-label-primary);
+}
+
+/* Announced, not applied: the reader keeps the text they are looking at. */
+.changed {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  border-bottom: 0.5px solid var(--dsw-alias-border-l1);
+}
+
+.body {
+  /* Lines are positioned against the scroller, so a line's offset is its scroll target. */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  /* The notice and retry surfaces in this sheet are elevated, so the file body's
+     scroller rebinds the thumb indirection in a complete pair. */
+  --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
+  --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-family: var(--dsw-font-mono, ui-monospace, monospace);
+  line-height: 1.6;
+  white-space: pre;
+}
+
+/* Keep the scrollbar track 2px clear of the body's ends. WebKit-only: the
+   Firefox path has no track to inset. */
+.body::-webkit-scrollbar-track {
+  margin: 2px;
+}
+
+.body:has([data-code-preview]) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Plain text keeps the shared document inset while edge-to-edge renderers can
+   fill the scroller themselves. */
+.textDocument {
+  box-sizing: border-box;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 8px;
+}
+
+/* One page of lines; pages abut so the file reads as one. */
+.page {
+  margin: 0;
+  font: var(--dsw-font-markdown-code-block);
+  white-space: inherit;
+}
+
+/* The files tree row's 10px side inset, so a line's text sits where a row's does. */
+.line {
+  padding: 0 10px;
+}
+
+.lineTarget {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The failure with nothing read yet: the whole body, centred a little above
+   the middle (the spacer below). Fills the body's content box exactly (a
+   percentage height resolves against it), so the body does not scroll. The
+   body's monospace `pre` setting is undone here. */
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0 24px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-family: var(--dsw-font-family);
+  line-height: 1.6;
+  text-align: center;
+  white-space: normal;
+}
+
+/* The lift, as a share of the pane's height (a column flex basis resolves
+   against it): the centred column rises 6% of the pane, and a short pane
+   gives it up before the content clips. */
+.empty::after {
+  content: '';
+  flex: 0 1 12%;
+}
+
+/* The type's sheet keeps its shape but gives up its colour. */
+.emptyIcon {
+  flex: none;
+  opacity: 0.6;
+  filter: grayscale(1);
+}
+
+.emptyLine {
+  margin: 0;
+}
+
+/* A capsule holding the refresh glyph and the retry word. `flex: none` keeps
+   its height when the empty column runs out of room in a short panel. */
+.retry {
+  display: inline-flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+  height: 32px;
+  padding: 0 14px 0 12px;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-family: inherit;
+  background: transparent;
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 16px;
+  cursor: pointer;
+}
+
+.retry:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The type's 16px sheet before the chip's text; the chip's title row centres
+   it on the text's line and spaces it. */
+.titleIcon {
+  flex: none;
+}
+
+.statusLine {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.6;
+  white-space: normal;
+}
+
+/* The whole pane before any content exists, so the line centres like the
+   empty states below instead of sitting in the corner. */
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 12px 10px;
+}
+
+/* The first read, centred in the still-empty body; loaded content replaces it. */
+.bodyLoading {
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+}
+
+.action {
+  padding: 4px 10px;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  font-family: var(--dsw-font, inherit);
+  white-space: normal;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.action:hover {
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+/* The next page, asked for where the loaded text ends. */
+.more {
+  display: block;
+  margin: 8px 10px;
+  padding: 4px 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-family: var(--dsw-font, inherit);
+  white-space: normal;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 0.5px solid var(--dsw-alias-border-l2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.more:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-bg-layer-3);
+}
+
+.more:disabled {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+/* Controls in the header row, sized like the docking kit's own pane controls. */
+/* The same icon button as the Sidebar's strip controls above it: a 28px
+   circle around a 15px glyph. */
+.tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+}
+
+.tool svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tool:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+.viewerTool {
+  width: auto;
+  max-width: 160px;
+  padding: 0 6px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}

@@ -1,5 +1,5 @@
 ---
-description: "可选的按轮次 tmux 位置上下文，供启用或调优 agent 的 session、window 与 pane 感知的用户与维护者阅读。"
+description: "可选的按轮次 tmux 位置上下文，供启用或调优 agent（智能体）的会话、window 与 pane 感知的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-tmux-context` 告诉模型它的 agent（智能体）进程运行在哪里：在 tmux 状态发生变化的每一轮，它追加一条持久、带来源的读数，命名 tmux session、window 与 pane，以及该 window 的 pane 树布局。它在准备模型请求时每轮采样一次，且仅当进程确实位于所指名的 pane 内时——仅从 tmux 祖先进程继承了 `$TMUX`／`$TMUX_PANE` 的终端会被视为不在 tmux 中，不添加任何内容。位置未变化时不添加任何内容；查询失败是空操作，绝不导致轮次失败。本插件需主动启用，且不属于随附 Web／无头组合。
+`dsh-tmux-context` 让模型识别其 agent 进程所在的 tmux 会话、window、pane 和 pane 树布局。它仅在位置发生变化时，于每轮的第一个步骤追加一条持久、带来源的读数。若终端只继承了 tmux 环境变量，却并未在所指名的 pane 中运行，则不添加任何内容；查询失败同样不添加内容，也不会使该轮失败。本包需主动启用，且不包含在随附的 Web 或无头 profile 中。
 
 ## 目录
 
@@ -29,11 +29,11 @@ kind: "package-reference"
 
 ### 模型能得到什么
 
-在 tmux 状态发生变化的每一轮，模型会收到一条带来源标记的上下文消息，包含 session 名称、window 索引与名称、pane 索引与 id、活动标志，以及紧凑的 pane 树布局。读数只发生在每轮的第一个步骤；轮次中途移动或缩放的 pane 会在下一轮反映。像素尺寸有意省略，相邻 pane 的可见内容从不采集。
+在 tmux 状态发生变化的每一轮，模型会收到一条带来源标记的上下文消息，包含会话名称、window 索引与名称、pane 索引与 id、活动标志，以及紧凑的 pane 树布局。读数只发生在每轮的第一个步骤；轮次中途移动或缩放的 pane 会在下一轮反映。像素尺寸有意省略，相邻 pane 的可见内容从不采集。
 
 ### 配置
 
-最小挂载无需任何配置。正的 `refreshIntervalMs` 会额外抑制距最近一次注入不足该毫秒数的注入；省略或设为 `0` 时，只要 tmux 状态自上次注入以来发生变化就注入。
+最小挂载无需任何配置。`refreshIntervalMs` 为正值时，会额外抑制距最近一次注入不足该毫秒数的注入；省略或设为 `0` 时，只要 tmux 状态自上次注入以来发生变化就注入。
 
 ```yaml
 - name: '@deepseek-ai/dsh-tmux-context'
@@ -45,7 +45,7 @@ kind: "package-reference"
 |---|---|---|
 | `refreshIntervalMs` | `0`（每个变化轮次） | 同一会话中两次持久注入之间的最小毫秒数 |
 
-生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tmux-context)是每个受支持字段及其 JSDoc 的穷尽式真源。
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tmux-context)是所有受支持字段及其 JSDoc 的完整真源。
 
 ### 何时知道位置
 
@@ -70,7 +70,7 @@ kind: "package-reference"
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口：第一步监听器、shell 查询、变化抑制、调度 |
-| — | 不发布运行时不变式伴生入口；每次读取都是外部 tmux 状态的单轮快照，Session 没有可检查的跨事件关系；调度与格式由 pipeline 测试负责。 |
+| — | 不发布运行时不变式伴生入口；每次读取都是外部 tmux 状态的单轮快照，会话没有可检查的跨事件关系；调度与格式由流水线测试负责。 |
 
 ### 主要流程
 
@@ -83,11 +83,11 @@ kind: "package-reference"
 <a id="further-exploration"></a>
 ## 进一步探索
 
-包级约定不够用时阅读以下页面。它们从设计决策进入查询所经由的执行器与穷尽式配置。
+包级约定不够用时阅读以下页面。这些页面从设计决策讲到查询所经由的执行器以及完整配置。
 
 - [tmux 位置上下文决策记录](../../../.agents/notes/archived/feature/2026-07-27-tmux-location-context.md)——基于 tty 的检测与读数形状的设计理由。
 - [shell 子系统](../../../docs/subsystems/shell.zh.md)——只读查询所经由的执行器服务。
-- [context 组地图](../README.zh.md)——相邻的请求上下文包。
+- [上下文组地图](../README.zh.md)——相邻的请求上下文包。
 - [生成的配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tmux-context)——每个受支持配置字段及其源声明。
 
 -----

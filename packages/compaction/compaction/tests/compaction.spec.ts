@@ -70,7 +70,7 @@ class StubCompactionEngine extends CompactionEngine {
       content: summary,
       source: compactCheckpointSource(compactionId),
     }), {
-      surfaceOp: { op: 'replace', start, end },
+      surfaceOp: { op: 'replace', startSeq: start, endSeq: end },
       sourceEventSeqs: [startEvent.seq, summaryEvent.seq, ...shadowedSeqs],
     })
     const endEvent = session.append('compaction/end', { compactionId, turn: 0 })

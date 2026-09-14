@@ -27,6 +27,11 @@ function argsAfter(draft: string, token: string): string {
   return ''
 }
 
+/** A claimed name may stand alone; arguments require the token's separator. */
+function retainsClaim(draft: string, token: string): boolean {
+  return draft.startsWith(token) || draft === token.trimEnd()
+}
+
 /** The submit-plane slice of the published InputState. */
 export interface SubmitSnapshot {
   readonly phase: InputState['phase']
@@ -53,6 +58,7 @@ export class SubmitMachine {
       ...(c
         ? {
           claim: {
+            name: c.name,
             token: c.token,
             ...(c.hint !== undefined ? { hint: c.hint } : {}),
             ...(c.attachments === true ? { attachments: true } : {}),
@@ -82,9 +88,9 @@ export class SubmitMachine {
     }
   }
 
-  /** Claimed integrity watch: a draft that breaks the token prefix releases the claim. */
+  /** The complete command name retains its claim with or without the argument separator. */
   private onDraftChanged(draft: string): readonly InputEffect[] {
-    if (this.phase === 'claimed' && this.claim !== undefined && !draft.startsWith(this.claim.token)) {
+    if (this.phase === 'claimed' && this.claim !== undefined && !retainsClaim(draft, this.claim.token)) {
       this.phase = 'plain'
       this.claim = undefined
     }
@@ -199,7 +205,7 @@ export class SubmitMachine {
     }
     const text = ev.message ?? ev.outcome?.text
     if (ev.draft === flight.attempt.draftSnapshot
-      && this.claim !== undefined && ev.draft.startsWith(this.claim.token)) {
+      && this.claim !== undefined && retainsClaim(ev.draft, this.claim.token)) {
       this.phase = 'claimed'
       return text === undefined ? [] : [{ type: 'notice', level: 'error', text }]
     }

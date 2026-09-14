@@ -1,0 +1,10 @@
+- dialog "确认启用 Auto review（实验）？":
+  - heading "确认启用 Auto review（实验）？" [level=2]
+  - button "关闭":
+    - img
+  - img
+  - paragraph: Auto review 不使用沙箱。每次原生工具调用和 PTC 内层调用前，都会由与当前 agent 相同的模型进行审查。此功能仍属实验性，可能误放行或误拒绝，并会消耗额外 token。
+  - checkbox "我已了解这些风险，并愿意继续"
+  - text: 我已了解这些风险，并愿意继续
+  - button "取消"
+  - button "启用 Auto review" [disabled]

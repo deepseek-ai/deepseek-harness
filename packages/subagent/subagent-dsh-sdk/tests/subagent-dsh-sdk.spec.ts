@@ -6,9 +6,9 @@
  * quiescent disposal are all exercised end to end. No model, no key.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -113,9 +113,9 @@ function expectedFailure(fields: string): string {
 /**
  * Poll until `file` exists (the fake touches it once the probed state is
  * reached), so cancel tests wait on a CONDITION rather than an arbitrary
- * timeout. Fails loud if the child never signals readiness.
+ * timeout. The caller supplies the lane's effective test budget.
  */
-async function waitForFile(file: string, timeoutMs = 5000): Promise<void> {
+async function waitForFile(file: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (!existsSync(file)) {
     if (Date.now() > deadline) throw new Error(`fake runtime never became ready (${file})`)
@@ -524,7 +524,7 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     await ctx.fiber.dispose()
   })
 
-  it('cancelling between handshake and publish rejects start after reap', async () => {
+  it('cancelling between handshake and publish rejects start after reap', async ({ task }) => {
     // The abort lands while the child is INSIDE initialize (ready-file
     // handshake window): the fake touches READY, we abort, then GO lets the
     // handshake complete — so the post-race `flags.cancelled` recheck must
@@ -532,6 +532,8 @@ describe('dsh-subagent-dsh-sdk provider', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'subagent-dsh-sdk-midcancel-'))
     const ready = join(tmp, 'ready')
     const go = join(tmp, 'go')
+    const createHarness = runInternals.createHarness.bind(runInternals)
+    runInternals.createHarness = options => createHarness({ ...options, initializeTimeoutMs: task.timeout })
     try {
       const controller = new AbortController()
       const spec: SdkRunSpec = {
@@ -547,12 +549,24 @@ describe('dsh-subagent-dsh-sdk provider', () => {
         disposeGraceMs: 200,
       }
       const pending = startSdkRun(request('p', controller.signal), spec)
-      await waitForFile(ready)
-      controller.abort('mid-handshake')
-      const { writeFileSync } = await import('node:fs')
-      writeFileSync(go, 'go\n')
-      await expect(pending).rejects.toThrow('aborted before the SDK child started')
+      // Observe failed startup while readiness is pending; rollback owns the child.
+      const settled = pending.then(
+        run => ({ kind: 'started' as const, run }),
+        (error: unknown) => ({ kind: 'failed' as const, error }),
+      )
+      try {
+        await waitForFile(ready, task.timeout)
+        controller.abort('mid-handshake')
+        writeFileSync(go, 'go\n')
+        await expect(pending).rejects.toThrow('aborted before the SDK child started')
+      } finally {
+        controller.abort('test cleanup')
+        writeFileSync(go, 'go\n')
+        const outcome = await settled
+        if (outcome.kind === 'started') await outcome.run.dispose()
+      }
     } finally {
+      runInternals.createHarness = createHarness
       rmSync(tmp, { recursive: true, force: true })
     }
   })
@@ -737,19 +751,17 @@ describe('dsh-subagent-dsh-sdk provider', () => {
       cwd: process.cwd(),
       provider: 'p',
       model: 'm',
-      // The fake dies as soon as the prompt arrives: FAKE_HANG_PROMPT plus a
-      // short-lived process is simulated by killing via dispose below instead;
-      // here use FAKE_MALFORMED to make the prompt reply violate the protocol.
       env: { FAKE_MALFORMED_PROMPT: '1' },
-      shutdownTimeoutMs: 100,
-      disposeEofGraceMs: 200,
-      disposeGraceMs: 200,
+      shutdownTimeoutMs: DEFAULT_SHUTDOWN_TIMEOUT_MS,
+      disposeEofGraceMs: DEFAULT_DISPOSE_EOF_GRACE_MS,
+      disposeGraceMs: DEFAULT_DISPOSE_GRACE_MS,
       onError: (error) => {
         seen.push(error.message)
         throw new Error('sink failure must be contained')
       },
     }
     const run = await startSdkRun(request(), spec)
+    onTestFinished(() => run.dispose())
     const result = await run.result
     expect(result.stopReason).toBe('error')
     expect(result.diagnostic).toBe(

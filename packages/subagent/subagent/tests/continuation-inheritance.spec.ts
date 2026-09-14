@@ -1,7 +1,7 @@
 /**
  * Continuable-child delegation policy: a fresh continuable start seeds the
- * parent's explicit sandbox override and the pinned `approval/policy: never`
- * onto the child's own log as `source: 'delegation'` events, and a cold
+ * parent's Auto identity, explicit sandbox override, and the pinned
+ * `approval/policy: never` onto the child's own log, and a cold
  * resume replays that persisted snapshot instead of re-capturing the parent
  * (the one-shot `subagent-inprocess/tests/inheritance.spec.ts` counterpart).
  */
@@ -86,6 +86,75 @@ function foldedApprovalPolicy(ctx: Context, id: SessionId, events: readonly Sess
 }
 
 describe('continuable policy inheritance', () => {
+  it.each(['auto', 'danger-full-access'] as const)(
+    'persists the delegated %s identity across cold resume without reading the parent again',
+    { timeout: 20_000 },
+    async (preset) => {
+      const { ctx, parent } = await setup([textResponse('child done'), textResponse('resumed child done')])
+      parent.session.append('permission/preset', { preset })
+      setSandboxMode(parent.session, 'danger-full-access')
+      const current = vi.fn((session: Session) => session === parent.session ? preset : 'custom')
+      ctx.provide('permissionPresets', { current } as never)
+
+      const started = await ctx.subagents.startContinuable(startSpec(parent))
+      await waitNoActivation(ctx, started.childId)
+
+      const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(loaded.events.filter(event =>
+        event.type === 'sandbox/mode'
+        || event.type === 'approval/policy'
+        || event.type === 'permission/preset',
+      )).toMatchObject([
+        { type: 'sandbox/mode', data: { mode: 'danger-full-access', source: 'delegation' } },
+        { type: 'approval/policy', data: { policy: 'never', source: 'delegation' } },
+        { type: 'permission/preset', data: { preset } },
+      ])
+      expect(current).toHaveBeenCalledExactlyOnceWith(parent.session)
+      parent.session.append('permission/preset', { preset: preset === 'auto' ? 'danger-full-access' : 'auto' })
+      current.mockImplementation(() => { throw new Error('cold resume must not read parent permission') })
+      await queueHostSubagentPrompt(
+        ctx.subagents, parent, started.childId,
+        [{ type: 'text', text: 'continue please' }], { kind: 'user' }, new AbortController().signal,
+      )
+      await waitNoActivation(ctx, started.childId)
+      const resumed = await loadStoredSession(ctx.sessionPersistence, started.childId)
+      expect(resumed.events.filter(event => event.type === 'permission/preset')).toMatchObject([
+        { data: { preset } },
+      ])
+      expect(current).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  it.each([
+    { seedPreset: 'auto', preset: 'danger-full-access' },
+    { seedPreset: 'danger-full-access', preset: 'auto' },
+  ] as const)('captures $preset before child creation and overrides the $seedPreset fork prefix', { timeout: 20_000 }, async ({ seedPreset, preset }) => {
+    const { ctx, parent } = await setup([textResponse('parent turn'), textResponse('forked child')])
+    parent.session.append('permission/preset', { preset: seedPreset })
+    setSandboxMode(parent.session, 'danger-full-access')
+    parent.followup(createUserMessage({
+      content: [{ type: 'text', text: 'parent work' }],
+      source: { kind: 'user' },
+    }))
+    await parent.whenIdle()
+    parent.session.append('permission/preset', { preset })
+    let currentPreset: 'auto' | 'danger-full-access' = preset
+    ctx.provide('permissionPresets', {
+      current: (session: Session) => session === parent.session ? currentPreset : 'custom',
+    } as never)
+
+    const starting = ctx.subagents.startContinuable(startSpec(parent, 'fork'))
+    currentPreset = seedPreset
+    parent.session.append('permission/preset', { preset: seedPreset })
+    const started = await starting
+    await waitNoActivation(ctx, started.childId)
+    const loaded = await loadStoredSession(ctx.sessionPersistence, started.childId)
+    expect(loaded.events.filter(event => event.type === 'permission/preset')).toMatchObject([
+      { data: { preset: seedPreset } },
+      { data: { preset } },
+    ])
+  })
+
   it('seeds the parent sandbox override and pins approval to never', { timeout: 20_000 }, async () => {
     const { ctx, parent } = await setup([textResponse('child done')])
     setSandboxMode(parent.session, 'danger-full-access')

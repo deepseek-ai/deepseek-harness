@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-host-open-in-app` is the host half of the open-in-app feature: it resolves which catalog applications this host actually holds — each to a verified, directly usable launcher — and registers three routes on `ctx.webServer`: the resolved application list, per-application icons, and the launch endpoint that opens a workspace directory in one of them. The catalog is a fixed whitelist; resolution runs once per host process into one map that every route shares, so a click, menu open, or page reload never re-runs detection. Every route sits behind the composition's `connection` trust fence and browser authentication; resolution host commands run without a shell under a configured deadline, PATH names resolve in-process through the subprocess capability, and application adapters spawn detached with a credential-scrubbed environment and their own Windows visibility policy (file managers instead go through the OS shell's open verb — `dsh-native-command`'s path opener). The shipped consumer is the browser split button in [`dsh-client-ui-open-in-app`](../../client/ui-open-in-app/README.md); the feature was promoted from the community plugin `@dsh-plugins/open-anywhere`.
+Use `dsh-host-open-in-app` with its [browser companion](../../client/ui-open-in-app/README.md) to let users open a workspace directory in an installed editor, Git GUI, terminal, or file manager. It offers a fixed application catalog and shows only entries that the host can verify; newly installed applications appear after restart, while missing launchers are removed when detected. Requests require the deployment's browser authentication and host-origin trust checks. Detection and launch commands use configurable deadlines and do not pass inherited credentials to launched applications.
 
 ## Table of Contents
 
@@ -58,6 +58,8 @@ The catalog is a fixed whitelist covering editors and IDEs (Cursor, VS Code and 
 - **Linux and Windows CLI names** resolve in-process through the composition's subprocess capability (PATH/PATHEXT stat, no shell, no `which`); Linux GUI entries whose CLI is off PATH fall back to their XDG desktop entry's verified `TryExec`/`Exec` executable, and the `xdg-open` file-manager entry appears only when the host announces a display server.
 
 ### What to expect
+
+When the inherited process layer of the [launch environment](../../util/launch-environment/README.md) contains a non-empty `SSH_CONNECTION` or `SSH_TTY`, the application list is empty and the Web header hides Open In, including any remembered choice. Project and user `.env` values do not establish an SSH launch. The host skips application probing and refuses icon and launch requests for unavailable applications. This rule also applies when an SSH session carries a display or VS Code IPC connection; it does not identify remote deployments whose launchers remove both SSH markers.
 
 Resolution runs lazily, once per host process, on the first request that needs it; installing an application takes effect on the next restart, while an uninstalled one heals immediately — a launch that finds its executable gone re-resolves that one entry and drops it from the list when nothing proves it anymore. The icon route serves the real application icon on every platform where one is extractable: the bundle's `.icns` as a 128px PNG on macOS, the executable's associated icon as a 32px PNG on Windows, and the desktop entry's hicolor-theme icon (PNG or SVG) on Linux; a missing icon answers 404 and the browser surface renders a generic glyph.
 

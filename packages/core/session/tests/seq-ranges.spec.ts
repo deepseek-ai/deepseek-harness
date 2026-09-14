@@ -21,7 +21,7 @@ describe('sourceEventSeqs ranges', () => {
     expect(encodeSeqRanges(seqs([3, 2]))).toEqual([3, 2])
   })
 
-  it('does not impose a persistence-only provenance length limit', () => {
+  it('does not impose a persistence-only source-event length limit', () => {
     const values = Array.from({ length: 1_000_001 }, (_, index) => SessionSeq(index))
     expect(encodeSeqRanges(values)).toEqual([[0, 1_000_000]])
   })

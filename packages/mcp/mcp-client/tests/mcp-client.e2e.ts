@@ -3,7 +3,7 @@
  * 1. A self-written fixture server over stdio (controlled edge cases)
  * 2. @modelcontextprotocol/server-everything (official integration test server)
  * 3. @modelcontextprotocol/server-filesystem (real filesystem operations)
- * 4. An in-process StreamableHTTPServerTransport server over Streamable HTTP
+ * 4. An in-process NodeStreamableHTTPServerTransport server over Streamable HTTP
  *
  * No API key needed — all servers are local/keyless.
  */
@@ -15,10 +15,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { createMcpHandler, McpServer, type CallToolResult } from '@modelcontextprotocol/server'
+import { toNodeHandler, type NodeIncomingMessageLike } from '@modelcontextprotocol/node'
 import { z } from 'zod'
-import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import LocalAttachmentStore from '@deepseek-ai/dsh-attachment-local'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
@@ -475,40 +474,33 @@ describe('streamable-http — in-process MCP server', () => {
   let baseUrl: string
   /** Authorization header values observed by the HTTP server, in arrival order. */
   const seenAuth: Array<string | undefined> = []
+  const seenMessageHeaders: Array<string | string[] | undefined> = []
 
-  /**
-   * Stateless Streamable HTTP endpoint: a fresh McpServer + server transport
-   * per request (the SDK's documented stateless pattern — no session id, no
-   * SSE stream to keep). The tool set mirrors a minimal fixture server.
-   */
-  async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    seenAuth.push(req.headers.authorization)
+  const handler = createMcpHandler(() => {
     const server = new McpServer(
       { name: 'http-fixture', version: '1.0.0' },
       { capabilities: { tools: {} } },
     )
     server.registerTool('ping', {
       description: 'Replies pong.',
-      inputSchema: {},
-    }, async () => ({
+      inputSchema: z.object({}),
+    }, async (): Promise<CallToolResult> => ({
       content: [{ type: 'text', text: 'pong' }],
     }))
     server.registerTool('shout', {
       description: 'Upper-cases a message.',
-      inputSchema: { message: z.string().describe('Message to upper-case') },
+      inputSchema: z.object({ message: z.string().describe('Message to upper-case').meta({ 'x-mcp-header': 'message' }) }),
     }, async args => ({
       content: [{ type: 'text', text: args.message.toUpperCase() }],
     }))
-    // Stateless mode: sessionIdGenerator ABSENT (the runtime treats absent and
-    // explicit-undefined identically; exactOptionalPropertyTypes forbids the
-    // SDK-documented explicit `sessionIdGenerator: undefined` spelling).
-    const transport = new StreamableHTTPServerTransport({})
-    res.on('close', () => { void transport.close(); void server.close() })
-    // Same exactOptionalPropertyTypes mismatch the client transport factory
-    // documents (src/transport.ts): the SDK types optional callbacks without
-    // `| undefined`. The SDK constructed the object; the cast is safe.
-    await server.connect(transport as Transport)
-    await transport.handleRequest(req, res)
+    return server
+  })
+  const handle = toNodeHandler(handler)
+  async function handleMcpRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    seenAuth.push(req.headers.authorization)
+    seenMessageHeaders.push(req.headers['mcp-param-message'])
+    // The adapter excludes explicit undefined on Node's optional HTTP fields.
+    await handle(req as NodeIncomingMessageLike, res)
   }
 
   beforeAll(async () => {
@@ -540,7 +532,7 @@ describe('streamable-http — in-process MCP server', () => {
 
   afterAll(async () => {
     if (ctx) await ctx.fiber.dispose()
-    await sleep(200)
+    await handler.close()
     const closed: PromiseWithResolvers<void> = Promise.withResolvers()
     httpServer.close(() => { closed.resolve() })
     await closed.promise
@@ -568,6 +560,7 @@ describe('streamable-http — in-process MCP server', () => {
     })
     expect(result.isError).toBe(false)
     expect(result.content[0]).toEqual({ type: 'text', text: 'QUIET' })
+    expect(seenMessageHeaders).toContain('quiet')
   })
 
   it('sends configured headers on every HTTP request', () => {

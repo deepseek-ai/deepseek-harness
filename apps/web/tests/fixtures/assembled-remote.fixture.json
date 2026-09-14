@@ -1,0 +1,5859 @@
+{
+  "sessionList": {
+    "ok": true,
+    "value": {
+      "items": [
+        {
+          "sessionId": "fx-alpha",
+          "updatedAt": 1789268875874,
+          "running": true,
+          "blank": false,
+          "cwd": "/tmp/fixture"
+        },
+        {
+          "sessionId": "fx-beta",
+          "updatedAt": 1789268815874,
+          "running": false,
+          "blank": false,
+          "parentSessionId": "fx-alpha",
+          "cwd": "/tmp/fixture"
+        },
+        {
+          "sessionId": "fx-gamma",
+          "updatedAt": 1789268755874,
+          "running": false,
+          "blank": false,
+          "cwd": "/tmp/fixture"
+        }
+      ]
+    }
+  },
+  "settingsDescribe": {
+    "ok": true,
+    "value": {
+      "writable": true,
+      "hasDocument": true,
+      "namespaces": [
+        {
+          "ns": "llm-deepseek",
+          "schema": {},
+          "value": {
+            "apiKeyEnv": "DEEPSEEK_API_KEY"
+          },
+          "applies": "live",
+          "secrets": [
+            {
+              "path": [
+                "apiKey"
+              ],
+              "set": false
+            }
+          ],
+          "revision": 0
+        }
+      ]
+    }
+  },
+  "credentialsDescribe": {
+    "ok": true,
+    "value": {
+      "DEEPSEEK_API_KEY": {
+        "configured": true,
+        "source": "file",
+        "writable": true
+      }
+    }
+  },
+  "modelCatalog": {
+    "ok": true,
+    "value": {
+      "default": {
+        "provider": "deepseek-official",
+        "model": "deepseek-v4-flash"
+      },
+      "routableProviders": [
+        "deepseek-official",
+        "openai",
+        "acme-gateway"
+      ],
+      "groups": [
+        {
+          "id": "deepseek-official",
+          "name": "DeepSeek",
+          "models": [
+            {
+              "id": "deepseek-v4-flash",
+              "name": "DeepSeek-V4-Flash",
+              "description": "快速响应",
+              "reasoning": {
+                "efforts": [
+                  {
+                    "id": "off",
+                    "name": "Off"
+                  },
+                  {
+                    "id": "high",
+                    "name": "High"
+                  },
+                  {
+                    "id": "max",
+                    "name": "Max"
+                  }
+                ],
+                "defaultEffort": "high"
+              }
+            },
+            {
+              "id": "deepseek-v4-pro",
+              "name": "DeepSeek-V4-Pro",
+              "description": "复杂任务",
+              "reasoning": {
+                "efforts": [
+                  {
+                    "id": "off",
+                    "name": "Off"
+                  },
+                  {
+                    "id": "high",
+                    "name": "High"
+                  },
+                  {
+                    "id": "max",
+                    "name": "Max"
+                  }
+                ],
+                "defaultEffort": "high"
+              }
+            }
+          ]
+        },
+        {
+          "id": "openai",
+          "name": "OpenAI",
+          "models": [
+            {
+              "id": "gpt-5",
+              "name": "GPT-5",
+              "reasoning": {
+                "efforts": [
+                  {
+                    "id": "off",
+                    "name": "Off"
+                  },
+                  {
+                    "id": "medium",
+                    "name": "Medium"
+                  },
+                  {
+                    "id": "high",
+                    "name": "High"
+                  },
+                  {
+                    "id": "max",
+                    "name": "Max"
+                  }
+                ],
+                "defaultEffort": "medium"
+              }
+            }
+          ]
+        }
+      ],
+      "failures": []
+    }
+  },
+  "agentPresets": {
+    "ok": true,
+    "value": {
+      "presets": [
+        {
+          "id": "standard",
+          "trust": "system",
+          "isDefault": true
+        },
+        {
+          "id": "minimal",
+          "trust": "system",
+          "isDefault": false
+        },
+        {
+          "id": "my-agent",
+          "trust": "user",
+          "isDefault": false
+        }
+      ],
+      "authorable": true,
+      "modeSelectionEnabled": true
+    }
+  },
+  "commands": {
+    "ok": true,
+    "value": [
+      {
+        "name": "compact",
+        "description": "fixture：压缩当前会话上下文"
+      },
+      {
+        "name": "echo",
+        "description": "fixture：回显参数",
+        "input": {
+          "hint": "text to echo"
+        }
+      },
+      {
+        "definitionId": "@deepseek-ai/dsh-command-goal",
+        "name": "goal",
+        "description": "Set or view the goal for a long-running task",
+        "input": {
+          "hint": "<objective>",
+          "attachments": true
+        }
+      },
+      {
+        "definitionId": "@deepseek-ai/dsh-permission-presets",
+        "name": "permission",
+        "description": "Switch the permission preset (sandbox mode + approval policy)",
+        "input": {
+          "hint": "<preset>"
+        }
+      },
+      {
+        "definitionId": "@deepseek-ai/dsh-plan-mode",
+        "name": "plan",
+        "description": "Enter or leave plan mode",
+        "input": {
+          "hint": "[off|message]",
+          "attachments": true
+        }
+      }
+    ]
+  },
+  "workspace": {
+    "type": "baseline",
+    "value": {
+      "items": [
+        {
+          "workspaceId": "fx-ws-fixture",
+          "path": "/tmp/fixture",
+          "title": "fixture",
+          "sessionIds": [
+            "fx-alpha",
+            "fx-beta",
+            "fx-gamma"
+          ],
+          "createdAt": "2026-09-13T03:02:55.884Z",
+          "updatedAt": "2026-09-13T03:02:55.884Z"
+        },
+        {
+          "workspaceId": "fx-ws-home",
+          "path": "/home/fixture/Documents/project",
+          "title": "project",
+          "sessionIds": [],
+          "createdAt": "2026-09-13T03:02:55.884Z",
+          "updatedAt": "2026-09-13T03:02:55.884Z"
+        }
+      ],
+      "archivedSessionIds": []
+    }
+  },
+  "control": {
+    "type": "baseline",
+    "value": {
+      "queues": {
+        "fx-alpha": [],
+        "fx-beta": [],
+        "fx-gamma": []
+      },
+      "jobs": {
+        "fx-alpha": [],
+        "fx-beta": [],
+        "fx-gamma": []
+      },
+      "approvals": [],
+      "questions": [],
+      "projections": {
+        "fx-alpha": {
+          "asOfSeq": 552,
+          "values": {
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "title": "Fixture 历史会话",
+            "todos": [
+              {
+                "content": "梳理需求",
+                "status": "completed"
+              },
+              {
+                "content": "实现 fixture 样本",
+                "status": "in_progress"
+              },
+              {
+                "content": "跑后台构建",
+                "status": "in_progress"
+              },
+              {
+                "content": "浏览器验收",
+                "status": "pending"
+              }
+            ],
+            "permissions": {
+              "options": [
+                {
+                  "value": "workspace-write",
+                  "name": "workspace-write",
+                  "description": "Write inside the workspace and permitted temporary directories; wider retries require approval."
+                },
+                {
+                  "value": "danger-full-access",
+                  "name": "danger-full-access",
+                  "description": "Full file access without approval prompts."
+                }
+              ],
+              "currentValue": "workspace-write"
+            },
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 1914,
+              "outputTokens": 708,
+              "cacheReadTokens": 6880,
+              "cacheWriteTokens": 32
+            },
+            "contextPressure": {
+              "pressureTokens": 104,
+              "contextWindow": 128000
+            },
+            "contextBreakdown": {
+              "systemTokens": 17,
+              "toolsTokens": 0,
+              "messageTokens": 4427
+            },
+            "sessionStats": {
+              "turns": 75,
+              "steps": 87,
+              "llmMs": 69600,
+              "toolMs": 24800,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "imageLimits": {
+              "maxImageBytes": 5242880,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 104857600,
+              "maxImagePixels": 40000000,
+              "maxImageDimension": 2000,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "fx-beta": {
+          "asOfSeq": -1,
+          "values": {
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "todos": null,
+            "permissions": {
+              "options": [
+                {
+                  "value": "workspace-write",
+                  "name": "workspace-write",
+                  "description": "Write inside the workspace and permitted temporary directories; wider retries require approval."
+                },
+                {
+                  "value": "danger-full-access",
+                  "name": "danger-full-access",
+                  "description": "Full file access without approval prompts."
+                }
+              ],
+              "currentValue": "workspace-write"
+            },
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "imageLimits": {
+              "maxImageBytes": 5242880,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 104857600,
+              "maxImagePixels": 40000000,
+              "maxImageDimension": 2000,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        },
+        "fx-gamma": {
+          "asOfSeq": -1,
+          "values": {
+            "modelSelection": {
+              "lastUsed": null,
+              "next": null
+            },
+            "todos": null,
+            "permissions": {
+              "options": [
+                {
+                  "value": "workspace-write",
+                  "name": "workspace-write",
+                  "description": "Write inside the workspace and permitted temporary directories; wider retries require approval."
+                },
+                {
+                  "value": "danger-full-access",
+                  "name": "danger-full-access",
+                  "description": "Full file access without approval prompts."
+                }
+              ],
+              "currentValue": "workspace-write"
+            },
+            "plan": {
+              "active": false,
+              "pending": false
+            },
+            "goal": null,
+            "tokenUsage": {
+              "uncachedInputTokens": 0,
+              "outputTokens": 0,
+              "cacheReadTokens": 0,
+              "cacheWriteTokens": 0
+            },
+            "contextPressure": {},
+            "contextBreakdown": {
+              "systemTokens": 0,
+              "toolsTokens": 0,
+              "messageTokens": 0
+            },
+            "sessionStats": {
+              "turns": 0,
+              "steps": 0,
+              "llmMs": 0,
+              "toolMs": 0,
+              "ttftMs": 0,
+              "ttftSteps": 0,
+              "decodeMs": 0,
+              "decodeTokens": 0
+            },
+            "imageLimits": {
+              "maxImageBytes": 5242880,
+              "maxImagesPerMessage": 20,
+              "maxMessageImageBytes": 104857600,
+              "maxImagePixels": 40000000,
+              "maxImageDimension": 2000,
+              "mediaTypes": [
+                "image/png",
+                "image/jpeg",
+                "image/webp",
+                "image/gif"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "remoteEvents": [
+    {
+      "type": "ready",
+      "clientId": "36b204ff-b72f-4720-b58a-c86bebca8c42",
+      "host": {
+        "home": "/home/fixture"
+      }
+    },
+    {
+      "type": "waterfall",
+      "event": "approval/request",
+      "eventId": "fx-interaction-approval",
+      "agentId": "fx-alpha",
+      "request": {
+        "toolName": "dangerous_tool",
+        "reason": "fixture 常驻审批（可答：批准/拒绝后消失）"
+      }
+    },
+    {
+      "type": "waterfall",
+      "event": "user-questions/request",
+      "eventId": "fx-interaction-question",
+      "agentId": "fx-alpha",
+      "request": {
+        "questions": [
+          {
+            "id": "harness-profile",
+            "header": "偏好",
+            "question": "你现在更想招哪类 Agent/Harness 候选人？",
+            "options": [
+              {
+                "label": "工程落地型 (Recommended)",
+                "description": "更看重能直接做 runtime、tool executor、sandbox、trace 和线上问题排查。"
+              },
+              {
+                "label": "研究潜力型",
+                "description": "更看重 Agent 理解、训练评测思路和长期成长空间。"
+              },
+              {
+                "label": "均衡型",
+                "description": "同时要求工程能力和 Agent 认知，但可能筛选门槛更高。"
+              }
+            ]
+          },
+          {
+            "id": "work-mode",
+            "header": "方式",
+            "question": "你希望候选人优先展示哪种工作方式？",
+            "options": [
+              {
+                "label": "先做小型原型 (Recommended)",
+                "description": "用可运行结果尽快验证关键假设。"
+              },
+              {
+                "label": "先写完整设计",
+                "description": "先收敛边界、协议和风险，再开始实现。"
+              }
+            ]
+          },
+          {
+            "id": "signals",
+            "header": "信号",
+            "question": "哪些面试信号最重要？",
+            "detail": "按当前招聘目标选择；跳过则视为不设偏好。",
+            "multiSelect": true,
+            "options": [
+              {
+                "label": "系统设计"
+              },
+              {
+                "label": "代码质量"
+              },
+              {
+                "label": "Agent 产品判断"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "follow": {
+    "type": "snapshot",
+    "header": {
+      "version": 3,
+      "id": "fx-alpha",
+      "createdAt": 1789268875874,
+      "cwd": "/tmp/fixture",
+      "isSeeded": false
+    },
+    "cursor": 552,
+    "records": [
+      {
+        "type": "event",
+        "event": {
+          "seq": 365,
+          "time": 1789265568675,
+          "type": "turn/start",
+          "data": {
+            "turn": 51
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 366,
+          "time": 1789265569475,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 51：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "781d1628-a401-4577-9608-fad94469115f"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 367,
+          "time": 1789265570275,
+          "type": "step/start",
+          "data": {
+            "turn": 51,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 368,
+          "time": 1789265571075,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 51,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "回答 51：这是 fixture 生成的历史回复正文。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "41db22fd-d174-446f-8d4f-dd0769071b92"
+            },
+            "usage": {
+              "inputTokens": 21,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265571075,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265571075,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 51：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265571075,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 21,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265571075,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 369,
+          "time": 1789265571875,
+          "type": "step/end",
+          "data": {
+            "turn": 51,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 370,
+          "time": 1789265572675,
+          "type": "turn/end",
+          "data": {
+            "turn": 51,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 371,
+          "time": 1789265573475,
+          "type": "turn/start",
+          "data": {
+            "turn": 52
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 372,
+          "time": 1789265574275,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 52：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "ca2e9326-9086-477e-b80d-32005b85cbc6"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 373,
+          "time": 1789265575075,
+          "type": "step/start",
+          "data": {
+            "turn": 52,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 374,
+          "time": 1789265575875,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 52,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "reasoning",
+                  "text": "思考过程 52：这是一段可折叠的 reasoning 内容。"
+                },
+                {
+                  "type": "text",
+                  "text": "回答 52：这是 fixture 生成的历史回复正文。"
+                },
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-52",
+                  "name": "echo",
+                  "arguments": "{\"text\":\"turn 52\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "38c0ab81-0fc5-401d-a876-f0d1e766de03"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "reasoning"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "reasoning",
+                    "text": "思考过程 52：这是一段可折叠的 reasoning 内容。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 1,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 1,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 52：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 2,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 2,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-52",
+                    "name": "echo",
+                    "arguments": "{\"text\":\"turn 52\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265575875,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 375,
+          "time": 1789265576675,
+          "type": "tool/call",
+          "data": {
+            "turn": 52,
+            "step": 0,
+            "callId": "fx-call-52",
+            "name": "echo",
+            "arguments": "{\"text\":\"turn 52\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 376,
+          "time": 1789265577475,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 52,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-52"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-52",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "ECHO: TURN 52"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "e9bbfe6c-96f3-44b6-b65c-89997783be1e"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 377,
+          "time": 1789265578275,
+          "type": "step/end",
+          "data": {
+            "turn": 52,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 378,
+          "time": 1789265579075,
+          "type": "step/start",
+          "data": {
+            "turn": 52,
+            "step": 1
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 379,
+          "time": 1789265579875,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 52,
+            "step": 1,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "工具结果已消化（turn 52）。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "891ea3be-04ca-4adc-a1b5-70c311b5b0fd"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 9,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265579875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265579875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "工具结果已消化（turn 52）。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265579875,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 9,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265579875,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 380,
+          "time": 1789265580675,
+          "type": "step/end",
+          "data": {
+            "turn": 52,
+            "step": 1
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 381,
+          "time": 1789265581475,
+          "type": "turn/end",
+          "data": {
+            "turn": 52,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 382,
+          "time": 1789265582275,
+          "type": "turn/start",
+          "data": {
+            "turn": 53
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 383,
+          "time": 1789265583075,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 53：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "c26142ac-056b-47cb-bf77-6e554e565484"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 384,
+          "time": 1789265583875,
+          "type": "step/start",
+          "data": {
+            "turn": 53,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 385,
+          "time": 1789265584675,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 53,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "回答 53：这是 fixture 生成的历史回复正文。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "cc41f0c0-2a74-4bc9-b5a2-f02f4c455569"
+            },
+            "usage": {
+              "inputTokens": 23,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265584675,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265584675,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 53：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265584675,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 23,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265584675,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 386,
+          "time": 1789265585475,
+          "type": "step/end",
+          "data": {
+            "turn": 53,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 387,
+          "time": 1789265586275,
+          "type": "turn/end",
+          "data": {
+            "turn": 53,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 388,
+          "time": 1789265587075,
+          "type": "turn/start",
+          "data": {
+            "turn": 54
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 389,
+          "time": 1789265587875,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 54：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "eadaefc3-d83e-471e-ad64-8df6ae40c1eb"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 390,
+          "time": 1789265588675,
+          "type": "step/start",
+          "data": {
+            "turn": 54,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 391,
+          "time": 1789265589475,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 54,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "回答 54：这是 fixture 生成的历史回复正文。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "b8f5e883-ce1f-42ef-8106-dfa130620801"
+            },
+            "usage": {
+              "inputTokens": 24,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265589475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265589475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 54：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265589475,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 24,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265589475,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 392,
+          "time": 1789265590275,
+          "type": "step/end",
+          "data": {
+            "turn": 54,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 393,
+          "time": 1789265591075,
+          "type": "turn/end",
+          "data": {
+            "turn": 54,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 394,
+          "time": 1789265591875,
+          "type": "turn/start",
+          "data": {
+            "turn": 55
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 395,
+          "time": 1789265592675,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 55：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "116535cf-1160-4aff-bd8f-f89e4fc6c41f"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 396,
+          "time": 1789265593475,
+          "type": "step/start",
+          "data": {
+            "turn": 55,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 397,
+          "time": 1789265594275,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 55,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "reasoning",
+                  "text": "思考过程 55：这是一段可折叠的 reasoning 内容。"
+                },
+                {
+                  "type": "text",
+                  "text": "回答 55：这是 fixture 生成的历史回复正文。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "6a80e9b4-ca99-40ef-8de8-facbc8c27b76"
+            },
+            "usage": {
+              "inputTokens": 20,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265594275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "reasoning"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265594275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "reasoning",
+                    "text": "思考过程 55：这是一段可折叠的 reasoning 内容。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265594275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 1,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265594275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 1,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 55：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265594275,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 20,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265594275,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 398,
+          "time": 1789265595075,
+          "type": "step/end",
+          "data": {
+            "turn": 55,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 399,
+          "time": 1789265595875,
+          "type": "turn/end",
+          "data": {
+            "turn": 55,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 400,
+          "time": 1789265596675,
+          "type": "turn/start",
+          "data": {
+            "turn": 56
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 401,
+          "time": 1789265597475,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 56：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "093791f8-cb5b-4106-853d-306ed532feec"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 402,
+          "time": 1789265598275,
+          "type": "step/start",
+          "data": {
+            "turn": 56,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 403,
+          "time": 1789265599075,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 56,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "回答 56：这是 fixture 生成的历史回复正文。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "bc0ebb05-d212-4f30-a3eb-c4c209ff7103"
+            },
+            "usage": {
+              "inputTokens": 21,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265599075,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265599075,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 56：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265599075,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 21,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265599075,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 404,
+          "time": 1789265599875,
+          "type": "step/end",
+          "data": {
+            "turn": 56,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 405,
+          "time": 1789265600675,
+          "type": "turn/end",
+          "data": {
+            "turn": 56,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 406,
+          "time": 1789265601475,
+          "type": "turn/start",
+          "data": {
+            "turn": 57
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 407,
+          "time": 1789265602275,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 57：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "4196af12-5f06-4244-a83e-281b0e2e2565"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 408,
+          "time": 1789265603075,
+          "type": "step/start",
+          "data": {
+            "turn": 57,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 409,
+          "time": 1789265603875,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 57,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "回答 57：这是 fixture 生成的历史回复正文。"
+                },
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-57",
+                  "name": "echo",
+                  "arguments": "{\"text\":\"turn 57\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "dc114329-e3f4-43a4-bbd7-3524203a99e9"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265603875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265603875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 57：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265603875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 1,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265603875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 1,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-57",
+                    "name": "echo",
+                    "arguments": "{\"text\":\"turn 57\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265603875,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265603875,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 410,
+          "time": 1789265604675,
+          "type": "tool/call",
+          "data": {
+            "turn": 57,
+            "step": 0,
+            "callId": "fx-call-57",
+            "name": "echo",
+            "arguments": "{\"text\":\"turn 57\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 411,
+          "time": 1789265605475,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 57,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-57"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-57",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "ECHO: TURN 57"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "652931ce-6eb0-4400-8173-9735b82fdf8e"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 412,
+          "time": 1789265606275,
+          "type": "step/end",
+          "data": {
+            "turn": 57,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 413,
+          "time": 1789265607075,
+          "type": "step/start",
+          "data": {
+            "turn": 57,
+            "step": 1
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 414,
+          "time": 1789265607875,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 57,
+            "step": 1,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "工具结果已消化（turn 57）。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "02030b82-e0d9-4e8f-a17c-bfeaa78a74d0"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 9,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265607875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265607875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "工具结果已消化（turn 57）。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265607875,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 9,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265607875,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 415,
+          "time": 1789265608675,
+          "type": "step/end",
+          "data": {
+            "turn": 57,
+            "step": 1
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 416,
+          "time": 1789265609475,
+          "type": "turn/end",
+          "data": {
+            "turn": 57,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 417,
+          "time": 1789265610275,
+          "type": "turn/start",
+          "data": {
+            "turn": 58
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 418,
+          "time": 1789265611075,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 58：fixture 历史消息，用于翻页与渲染验收。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "d08478d2-30ac-49fa-b3ca-f71e8d4517ee"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 419,
+          "time": 1789265611875,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "[fixture] 上下文注入（turn 58）"
+              }
+            ],
+            "source": {
+              "kind": "plugin",
+              "plugin": "fixture"
+            },
+            "role": "user",
+            "id": "cbb94cfa-48f7-453b-9825-e61432572399"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 420,
+          "time": 1789265612675,
+          "type": "step/start",
+          "data": {
+            "turn": 58,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 421,
+          "time": 1789265613475,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 58,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "reasoning",
+                  "text": "思考过程 58：这是一段可折叠的 reasoning 内容。"
+                },
+                {
+                  "type": "text",
+                  "text": "回答 58：这是 fixture 生成的历史回复正文。"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "271e5020-8deb-418e-a4c2-d6609f31aa60"
+            },
+            "usage": {
+              "inputTokens": 23,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265613475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "reasoning"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265613475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "reasoning",
+                    "text": "思考过程 58：这是一段可折叠的 reasoning 内容。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265613475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 1,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265613475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 1,
+                  "block": {
+                    "type": "text",
+                    "text": "回答 58：这是 fixture 生成的历史回复正文。"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265613475,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 23,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265613475,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 422,
+          "time": 1789265614275,
+          "type": "step/end",
+          "data": {
+            "turn": 58,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 423,
+          "time": 1789265615075,
+          "type": "turn/end",
+          "data": {
+            "turn": 58,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 424,
+          "time": 1789265615875,
+          "type": "turn/start",
+          "data": {
+            "turn": 59
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 425,
+          "time": 1789265616675,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "用户字面量：# 不渲染 `code` [link](https://example.com)"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "14861e74-05a9-4e2b-b98a-c907999daa42"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 426,
+          "time": 1789265617475,
+          "type": "step/start",
+          "data": {
+            "turn": 59,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 427,
+          "time": 1789265618275,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 59,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "# Markdown fixture\n\nAssistant output renders **strong text**, *emphasis*, and `inline code`.\n\n- first item\n  - nested item\n\n| Area | State |\n| --- | --- |\n| history | rendered |\n| streaming | stable |\n\n[DeepSeek](https://www.deepseek.com)\n\n```ts\nconst markdown = true\n```"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "07a55bdb-ff08-40b3-8922-0422a2f04a87"
+            },
+            "usage": {
+              "inputTokens": 24,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265618275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265618275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "# Markdown fixture\n\nAssistant output renders **strong text**, *emphasis*, and `inline code`.\n\n- first item\n  - nested item\n\n| Area | State |\n| --- | --- |\n| history | rendered |\n| streaming | stable |\n\n[DeepSeek](https://www.deepseek.com)\n\n```ts\nconst markdown = true\n```"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265618275,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 24,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265618275,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 428,
+          "time": 1789265619075,
+          "type": "step/end",
+          "data": {
+            "turn": 59,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 429,
+          "time": 1789265619875,
+          "type": "turn/end",
+          "data": {
+            "turn": 59,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 430,
+          "time": 1789265620675,
+          "type": "turn/start",
+          "data": {
+            "turn": 60
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 431,
+          "time": 1789265621475,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 60：bash 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "de206a9a-a621-435f-88f0-9613ff152eb5"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 432,
+          "time": 1789265622275,
+          "type": "step/start",
+          "data": {
+            "turn": 60,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 433,
+          "time": 1789265623075,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 60,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-60",
+                  "name": "bash",
+                  "arguments": "{\"command\":\"ls -la\\necho done\",\"description\":\"fixture 终端样本\",\"workdir\":\"/tmp/fixture\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "4d338006-4348-4002-8a03-c730802f6f51"
+            },
+            "usage": {
+              "inputTokens": 20,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 4
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265623075,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265623075,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-60",
+                    "name": "bash",
+                    "arguments": "{\"command\":\"ls -la\\necho done\",\"description\":\"fixture 终端样本\",\"workdir\":\"/tmp/fixture\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265623075,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 20,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 4
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265623075,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 434,
+          "time": 1789265623875,
+          "type": "tool/call",
+          "data": {
+            "turn": 60,
+            "step": 0,
+            "callId": "fx-call-60",
+            "name": "bash",
+            "arguments": "{\"command\":\"ls -la\\necho done\",\"description\":\"fixture 终端样本\",\"workdir\":\"/tmp/fixture\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 435,
+          "time": 1789265624675,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 60,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-60"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-60",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "total 2\ndrwxr-xr-x fixture\n-rw-r--r-- demo.txt"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "aa4c1898-7bec-4831-8ba1-0700f4ae897e"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 436,
+          "time": 1789265625475,
+          "type": "step/end",
+          "data": {
+            "turn": 60,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 437,
+          "time": 1789265626275,
+          "type": "turn/end",
+          "data": {
+            "turn": 60,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 438,
+          "time": 1789265627075,
+          "type": "turn/start",
+          "data": {
+            "turn": 61
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 439,
+          "time": 1789265627875,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 61：write 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "6fd7a2c3-2ead-41a0-b954-21883b4bc03d"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 440,
+          "time": 1789265628675,
+          "type": "step/start",
+          "data": {
+            "turn": 61,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 441,
+          "time": 1789265629475,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 61,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-61",
+                  "name": "write",
+                  "arguments": "{\"file_path\":\"notes/demo.txt\",\"content\":\"hello fixture\\n\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "a3c1b7d4-200f-49b7-b550-bbc5ad98dbc9"
+            },
+            "usage": {
+              "inputTokens": 21,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265629475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265629475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-61",
+                    "name": "write",
+                    "arguments": "{\"file_path\":\"notes/demo.txt\",\"content\":\"hello fixture\\n\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265629475,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 21,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265629475,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 442,
+          "time": 1789265630275,
+          "type": "tool/call",
+          "data": {
+            "turn": 61,
+            "step": 0,
+            "callId": "fx-call-61",
+            "name": "write",
+            "arguments": "{\"file_path\":\"notes/demo.txt\",\"content\":\"hello fixture\\n\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 443,
+          "time": 1789265631075,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 61,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-61"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-61",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "wrote notes/demo.txt"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "4eedd943-773b-43d3-a104-e13550015670"
+            },
+            "meta": {
+              "diffs": [
+                {
+                  "path": "notes/demo.txt",
+                  "oldText": null,
+                  "newText": "hello fixture\n"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 444,
+          "time": 1789265631875,
+          "type": "step/end",
+          "data": {
+            "turn": 61,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 445,
+          "time": 1789265632675,
+          "type": "turn/end",
+          "data": {
+            "turn": 61,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 446,
+          "time": 1789265633475,
+          "type": "turn/start",
+          "data": {
+            "turn": 62
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 447,
+          "time": 1789265634275,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 62：edit 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "8f4e6682-2963-4daa-a912-84ff053ac32e"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 448,
+          "time": 1789265635075,
+          "type": "step/start",
+          "data": {
+            "turn": 62,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 449,
+          "time": 1789265635875,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 62,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-62",
+                  "name": "edit",
+                  "arguments": "{\"file_path\":\"notes/demo.txt\",\"old_string\":\"hello\",\"new_string\":\"hello fixture\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "f1b3b777-d4ec-4b33-80ac-fa4e9d87885a"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265635875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265635875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-62",
+                    "name": "edit",
+                    "arguments": "{\"file_path\":\"notes/demo.txt\",\"old_string\":\"hello\",\"new_string\":\"hello fixture\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265635875,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265635875,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 450,
+          "time": 1789265636675,
+          "type": "tool/call",
+          "data": {
+            "turn": 62,
+            "step": 0,
+            "callId": "fx-call-62",
+            "name": "edit",
+            "arguments": "{\"file_path\":\"notes/demo.txt\",\"old_string\":\"hello\",\"new_string\":\"hello fixture\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 451,
+          "time": 1789265637475,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 62,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-62"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-62",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "已编辑"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "37d72542-2cbc-4821-8897-329da97fe462"
+            },
+            "meta": {
+              "diffs": [
+                {
+                  "path": "notes/demo.txt",
+                  "oldText": "hello",
+                  "newText": "hello fixture"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 452,
+          "time": 1789265638275,
+          "type": "step/end",
+          "data": {
+            "turn": 62,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 453,
+          "time": 1789265639075,
+          "type": "turn/end",
+          "data": {
+            "turn": 62,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 454,
+          "time": 1789265639875,
+          "type": "turn/start",
+          "data": {
+            "turn": 63
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 455,
+          "time": 1789265640675,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 63：write 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "8e09ed22-fb26-4b3a-8ef5-1e2ac363e0f8"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 456,
+          "time": 1789265641475,
+          "type": "step/start",
+          "data": {
+            "turn": 63,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 457,
+          "time": 1789265642275,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 63,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-63",
+                  "name": "write",
+                  "arguments": "{\"file_path\":\"notes/new-demo.txt\",\"content\":\"hello fixture\\n\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "65f7aa11-c436-4b13-8715-63437a194d29"
+            },
+            "usage": {
+              "inputTokens": 23,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265642275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265642275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-63",
+                    "name": "write",
+                    "arguments": "{\"file_path\":\"notes/new-demo.txt\",\"content\":\"hello fixture\\n\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265642275,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 23,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265642275,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 458,
+          "time": 1789265643075,
+          "type": "tool/call",
+          "data": {
+            "turn": 63,
+            "step": 0,
+            "callId": "fx-call-63",
+            "name": "write",
+            "arguments": "{\"file_path\":\"notes/new-demo.txt\",\"content\":\"hello fixture\\n\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 459,
+          "time": 1789265643875,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 63,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-63"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-63",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "已写入"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "0d0c76cf-f5b2-4f77-97cb-b0b66a67d135"
+            },
+            "meta": {
+              "diffs": [
+                {
+                  "path": "notes/new-demo.txt",
+                  "oldText": null,
+                  "newText": "hello fixture\n"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 460,
+          "time": 1789265644675,
+          "type": "step/end",
+          "data": {
+            "turn": 63,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 461,
+          "time": 1789265645475,
+          "type": "turn/end",
+          "data": {
+            "turn": 63,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 462,
+          "time": 1789265646275,
+          "type": "turn/start",
+          "data": {
+            "turn": 64
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 463,
+          "time": 1789265647075,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 64：edit 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "99fcaad3-6e35-4e4f-a359-f97c673c72a2"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 464,
+          "time": 1789265647875,
+          "type": "step/start",
+          "data": {
+            "turn": 64,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 465,
+          "time": 1789265648675,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 64,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-64",
+                  "name": "edit",
+                  "arguments": "{\"file_path\":\"src/config.ts\",\"old_string\":\"const timeout = 30\",\"new_string\":\"const timeout = 60\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "e0ae34f7-02f8-4093-a01b-e92d87fcbc3c"
+            },
+            "usage": {
+              "inputTokens": 24,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265648675,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265648675,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-64",
+                    "name": "edit",
+                    "arguments": "{\"file_path\":\"src/config.ts\",\"old_string\":\"const timeout = 30\",\"new_string\":\"const timeout = 60\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265648675,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 24,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265648675,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 466,
+          "time": 1789265649475,
+          "type": "tool/call",
+          "data": {
+            "turn": 64,
+            "step": 0,
+            "callId": "fx-call-64",
+            "name": "edit",
+            "arguments": "{\"file_path\":\"src/config.ts\",\"old_string\":\"const timeout = 30\",\"new_string\":\"const timeout = 60\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 467,
+          "time": 1789265650275,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 64,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-64"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-64",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "已编辑"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "11a489c7-466c-45ba-a5de-228fecd455f2"
+            },
+            "meta": {
+              "diffs": [
+                {
+                  "path": "src/config.ts",
+                  "oldText": "const timeout = 30",
+                  "newText": "const timeout = 60"
+                },
+                {
+                  "path": "src/config.ts",
+                  "oldText": "retries: 1",
+                  "newText": "retries: 3"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 468,
+          "time": 1789265651075,
+          "type": "step/end",
+          "data": {
+            "turn": 64,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 469,
+          "time": 1789265651875,
+          "type": "turn/end",
+          "data": {
+            "turn": 64,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 470,
+          "time": 1789265652675,
+          "type": "turn/start",
+          "data": {
+            "turn": 65
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 471,
+          "time": 1789265653475,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 65：run_code 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "350becdf-2087-439b-be5e-cb19abf1dfff"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 472,
+          "time": 1789265654275,
+          "type": "step/start",
+          "data": {
+            "turn": 65,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 473,
+          "time": 1789265655075,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 65,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-65",
+                  "name": "run_code",
+                  "arguments": "{\"code\":\"const listing = await tools.bash({ command: \\\"ls notes\\\", description: \\\"List notes\\\" })\\nconst demo = await tools.read({ file_path: \\\"notes/demo.txt\\\" })\\nawait tools.read({ file_path: \\\"notes/missing.txt\\\" }).catch(() => \\\"tolerated\\\")\\nreturn { listing, demo }\",\"description\":\"Read the notes files and summarize\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "4af251a1-bd9f-4e7a-a7e8-9d4ac6f0f8e5"
+            },
+            "usage": {
+              "inputTokens": 20,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265655075,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265655075,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-65",
+                    "name": "run_code",
+                    "arguments": "{\"code\":\"const listing = await tools.bash({ command: \\\"ls notes\\\", description: \\\"List notes\\\" })\\nconst demo = await tools.read({ file_path: \\\"notes/demo.txt\\\" })\\nawait tools.read({ file_path: \\\"notes/missing.txt\\\" }).catch(() => \\\"tolerated\\\")\\nreturn { listing, demo }\",\"description\":\"Read the notes files and summarize\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265655075,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 20,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265655075,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 474,
+          "time": 1789265655875,
+          "type": "tool/call",
+          "data": {
+            "turn": 65,
+            "step": 0,
+            "callId": "fx-call-65",
+            "name": "run_code",
+            "arguments": "{\"code\":\"const listing = await tools.bash({ command: \\\"ls notes\\\", description: \\\"List notes\\\" })\\nconst demo = await tools.read({ file_path: \\\"notes/demo.txt\\\" })\\nawait tools.read({ file_path: \\\"notes/missing.txt\\\" }).catch(() => \\\"tolerated\\\")\\nreturn { listing, demo }\",\"description\":\"Read the notes files and summarize\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 475,
+          "time": 1789265656675,
+          "type": "tool/ptc-dispatch-start",
+          "data": {
+            "rootCallId": "fx-call-65",
+            "parentCallId": "fx-call-65",
+            "subCallId": "fx-call-65:ptc:1",
+            "name": "bash",
+            "arguments": {
+              "command": "ls notes",
+              "description": "List notes"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 476,
+          "time": 1789265657475,
+          "type": "tool/ptc-dispatch",
+          "data": {
+            "rootCallId": "fx-call-65",
+            "parentCallId": "fx-call-65",
+            "subCallId": "fx-call-65:ptc:1",
+            "name": "bash",
+            "arguments": {
+              "command": "ls notes",
+              "description": "List notes"
+            },
+            "isError": false,
+            "content": [
+              {
+                "type": "text",
+                "text": "demo.txt\nnew-demo.txt"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 477,
+          "time": 1789265658275,
+          "type": "tool/ptc-dispatch-start",
+          "data": {
+            "rootCallId": "fx-call-65",
+            "parentCallId": "fx-call-65",
+            "subCallId": "fx-call-65:ptc:2",
+            "name": "read",
+            "arguments": {
+              "file_path": "notes/demo.txt"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 478,
+          "time": 1789265659075,
+          "type": "tool/ptc-dispatch",
+          "data": {
+            "rootCallId": "fx-call-65",
+            "parentCallId": "fx-call-65",
+            "subCallId": "fx-call-65:ptc:2",
+            "name": "read",
+            "arguments": {
+              "file_path": "notes/demo.txt"
+            },
+            "isError": false,
+            "content": [
+              {
+                "type": "text",
+                "text": "hello fixture\n"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 479,
+          "time": 1789265659875,
+          "type": "tool/ptc-dispatch-start",
+          "data": {
+            "rootCallId": "fx-call-65",
+            "parentCallId": "fx-call-65",
+            "subCallId": "fx-call-65:ptc:3",
+            "name": "read",
+            "arguments": {
+              "file_path": "notes/missing.txt"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 480,
+          "time": 1789265660675,
+          "type": "tool/ptc-dispatch",
+          "data": {
+            "rootCallId": "fx-call-65",
+            "parentCallId": "fx-call-65",
+            "subCallId": "fx-call-65:ptc:3",
+            "name": "read",
+            "arguments": {
+              "file_path": "notes/missing.txt"
+            },
+            "isError": true,
+            "content": [
+              {
+                "type": "text",
+                "text": "Error: ENOENT: notes/missing.txt not found"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 481,
+          "time": 1789265661475,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 65,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-65"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-65",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "{\"listing\":\"demo.txt\\nnew-demo.txt\",\"demo\":\"hello fixture\\n\"}"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "ca689e1a-ebfb-4465-b187-43c3490abb9b"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 482,
+          "time": 1789265662275,
+          "type": "step/end",
+          "data": {
+            "turn": 65,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 483,
+          "time": 1789265663075,
+          "type": "turn/end",
+          "data": {
+            "turn": 65,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 484,
+          "time": 1789265663875,
+          "type": "turn/start",
+          "data": {
+            "turn": 66
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 485,
+          "time": 1789265664675,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 66：bash 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "4a5bb1d5-3698-407a-bde1-5f8acd048eab"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 486,
+          "time": 1789265665475,
+          "type": "step/start",
+          "data": {
+            "turn": 66,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 487,
+          "time": 1789265666275,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 66,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-66",
+                  "name": "bash",
+                  "arguments": "{\"command\":\"pnpm run check\",\"description\":\"fixture 终端样本\",\"workdir\":\"/tmp/fixture/deep/nested\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "68d3d448-1cac-44fd-8a6d-5446684ac98a"
+            },
+            "usage": {
+              "inputTokens": 21,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265666275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265666275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-66",
+                    "name": "bash",
+                    "arguments": "{\"command\":\"pnpm run check\",\"description\":\"fixture 终端样本\",\"workdir\":\"/tmp/fixture/deep/nested\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265666275,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 21,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265666275,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 488,
+          "time": 1789265667075,
+          "type": "tool/call",
+          "data": {
+            "turn": 66,
+            "step": 0,
+            "callId": "fx-call-66",
+            "name": "bash",
+            "arguments": "{\"command\":\"pnpm run check\",\"description\":\"fixture 终端样本\",\"workdir\":\"/tmp/fixture/deep/nested\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 489,
+          "time": 1789265667875,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 66,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-66"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-66",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "\u001b[1mRunning 4 checks\u001b[0m\n\u001b[32m✓\u001b[0m typecheck                                          1.82s\n\u001b[32m✓\u001b[0m lint                                               0.94s\n\u001b[32m✓\u001b[0m duplication                                        2.10s\n\u001b[31m✗\u001b[0m unit                                               8.41s\n\n\u001b[90mpackages/client/ui-primitives/tests/terminal-block.client.spec.tsx\u001b[0m\n  \u001b[31mFAIL\u001b[0m caps output at the configured line budget\n    expected 16 lines, received 24\n\nNAME                        LINES    BRANCHES    FUNCTIONS    UNCOVERED\nTerminalBlock.tsx           100%     100%        100%         -\nansi.ts                     100%     100%        100%         -\nclipboard.ts                100%     100%        100%         -\nCodeBlock.tsx               98.4%    96.2%       100%         41-43\nhighlight.ts                100%     100%        100%         -\nPill.tsx                    100%     100%        100%         -\nStateDot.tsx                100%     100%        100%         -\nmarkdown/Markdown.tsx       100%     100%        100%         -\n\n\u001b[31m1 of 4 checks failed\u001b[0m\n[exit code: 1]"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "0da2afe6-5036-4d36-b9f3-ff562585507f"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 490,
+          "time": 1789265668675,
+          "type": "step/end",
+          "data": {
+            "turn": 66,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 491,
+          "time": 1789265669475,
+          "type": "turn/end",
+          "data": {
+            "turn": 66,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 492,
+          "time": 1789265670275,
+          "type": "turn/start",
+          "data": {
+            "turn": 67
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 493,
+          "time": 1789265671075,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 67：grep 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "8dab4a18-bae1-492c-a43a-8337ae80abc3"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 494,
+          "time": 1789265671875,
+          "type": "step/start",
+          "data": {
+            "turn": 67,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 495,
+          "time": 1789265672675,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 67,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-67",
+                  "name": "grep",
+                  "arguments": "{\"pattern\":\"SEARCH_MAX_LINES\",\"path\":\"packages/client\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "53469dfd-6af1-4eb2-9273-53ea475b6e94"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265672675,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265672675,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-67",
+                    "name": "grep",
+                    "arguments": "{\"pattern\":\"SEARCH_MAX_LINES\",\"path\":\"packages/client\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265672675,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265672675,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 496,
+          "time": 1789265673475,
+          "type": "tool/call",
+          "data": {
+            "turn": 67,
+            "step": 0,
+            "callId": "fx-call-67",
+            "name": "grep",
+            "arguments": "{\"pattern\":\"SEARCH_MAX_LINES\",\"path\":\"packages/client\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 497,
+          "time": 1789265674275,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 67,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-67"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-67",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Found 9 of 42 matches\n\npackages/client/ui-primitives/src/SearchBlock.tsx\nLine 16: export const DEFAULT_SEARCH_MAX_LINES = 16\nLine 138: export function SearchBlock(props: SearchBlockProps) {\nLine 141:   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set())\npackages/client/ui-tool/src/client/tool/models/search-card-model.ts\nLine 45: export const CHAT_SEARCH_MAX_LINES = 8\nLine 130: export function searchCardModel(block: ToolCallBlock): SearchCardModel | null {\npackages/client/ui-tool/src/client/tool/toolviews/search-row.tsx\nLine 34: export function SearchRow({ toolName, block, inspect, t }: SearchRowProps) {\nLine 36:   const search = searchCardModel(block)\nLine 56:       search={search}\nLine 78:       yield ctx.slots.register({ name: 'tool.call.toolview', key: 'grep', locale: NS }, SearchRow)\n\n(Full grep result stored at: fixture://spill/grep-66. Read it to see every match.)"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "9a3df388-356c-4440-b0bf-b09e0dda0387"
+            },
+            "meta": {
+              "shape": "matches",
+              "files": [
+                {
+                  "path": "packages/client/ui-primitives/src/SearchBlock.tsx",
+                  "matches": [
+                    {
+                      "lineNumber": 16,
+                      "line": "export const DEFAULT_SEARCH_MAX_LINES = 16"
+                    },
+                    {
+                      "lineNumber": 138,
+                      "line": "export function SearchBlock(props: SearchBlockProps) {"
+                    },
+                    {
+                      "lineNumber": 141,
+                      "line": "  const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(() => new Set())"
+                    }
+                  ]
+                },
+                {
+                  "path": "packages/client/ui-tool/src/client/tool/models/search-card-model.ts",
+                  "matches": [
+                    {
+                      "lineNumber": 45,
+                      "line": "export const CHAT_SEARCH_MAX_LINES = 8"
+                    },
+                    {
+                      "lineNumber": 130,
+                      "line": "export function searchCardModel(block: ToolCallBlock): SearchCardModel | null {"
+                    }
+                  ]
+                },
+                {
+                  "path": "packages/client/ui-tool/src/client/tool/toolviews/search-row.tsx",
+                  "matches": [
+                    {
+                      "lineNumber": 34,
+                      "line": "export function SearchRow({ toolName, block, inspect, t }: SearchRowProps) {"
+                    },
+                    {
+                      "lineNumber": 36,
+                      "line": "  const search = searchCardModel(block)"
+                    },
+                    {
+                      "lineNumber": 56,
+                      "line": "      search={search}"
+                    },
+                    {
+                      "lineNumber": 78,
+                      "line": "      yield ctx.slots.register({ name: 'tool.call.toolview', key: 'grep', locale: NS }, SearchRow)"
+                    }
+                  ]
+                }
+              ],
+              "truncated": true,
+              "total": 42
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 498,
+          "time": 1789265675075,
+          "type": "step/end",
+          "data": {
+            "turn": 67,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 499,
+          "time": 1789265675875,
+          "type": "turn/end",
+          "data": {
+            "turn": 67,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 500,
+          "time": 1789265676675,
+          "type": "turn/start",
+          "data": {
+            "turn": 68
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 501,
+          "time": 1789265677475,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 68：glob 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "728f42ae-723b-485f-bf63-11b28892a89d"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 502,
+          "time": 1789265678275,
+          "type": "step/start",
+          "data": {
+            "turn": 68,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 503,
+          "time": 1789265679075,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 68,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-68",
+                  "name": "glob",
+                  "arguments": "{\"pattern\":\"**/SearchBlock*\",\"path\":\"packages/client\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "b6c6950d-d67b-45eb-a718-1a4fdb241e05"
+            },
+            "usage": {
+              "inputTokens": 23,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265679075,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265679075,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-68",
+                    "name": "glob",
+                    "arguments": "{\"pattern\":\"**/SearchBlock*\",\"path\":\"packages/client\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265679075,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 23,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265679075,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 504,
+          "time": 1789265679875,
+          "type": "tool/call",
+          "data": {
+            "turn": 68,
+            "step": 0,
+            "callId": "fx-call-68",
+            "name": "glob",
+            "arguments": "{\"pattern\":\"**/SearchBlock*\",\"path\":\"packages/client\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 505,
+          "time": 1789265680675,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 68,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-68"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-68",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "packages/client/ui-primitives/src/SearchBlock.tsx\npackages/client/ui-primitives/src/SearchBlock.module.css\npackages/client/ui-tool/src/client/tool/models/search-card-model.ts\npackages/client/ui-tool/src/client/tool/toolviews/search-row.tsx\npackages/client/ui-tool/tests/search-card.client.spec.tsx\n\n(Showing 5 of 23 paths. Full sorted result stored at: fixture://spill/glob-67. Read it to see every path.)"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "e6d88943-d180-472b-9c1b-d59a21a50ab9"
+            },
+            "meta": {
+              "shape": "paths",
+              "paths": [
+                "packages/client/ui-primitives/src/SearchBlock.tsx",
+                "packages/client/ui-primitives/src/SearchBlock.module.css",
+                "packages/client/ui-tool/src/client/tool/models/search-card-model.ts",
+                "packages/client/ui-tool/src/client/tool/toolviews/search-row.tsx",
+                "packages/client/ui-tool/tests/search-card.client.spec.tsx"
+              ],
+              "truncated": true,
+              "total": 23
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 506,
+          "time": 1789265681475,
+          "type": "step/end",
+          "data": {
+            "turn": 68,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 507,
+          "time": 1789265682275,
+          "type": "turn/end",
+          "data": {
+            "turn": 68,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 508,
+          "time": 1789265683075,
+          "type": "turn/start",
+          "data": {
+            "turn": 69
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 509,
+          "time": 1789265683875,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 69：read 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "f0564417-a09b-4e3a-8dd3-c0bd41604c23"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 510,
+          "time": 1789265684675,
+          "type": "step/start",
+          "data": {
+            "turn": 69,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 511,
+          "time": 1789265685475,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 69,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-69",
+                  "name": "read",
+                  "arguments": "{\"file_path\":\"packages/client/ui-primitives/src/ReadBlock.tsx\",\"offset\":41}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "bfbff068-730d-4cf8-b647-6086e170221a"
+            },
+            "usage": {
+              "inputTokens": 24,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265685475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265685475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-69",
+                    "name": "read",
+                    "arguments": "{\"file_path\":\"packages/client/ui-primitives/src/ReadBlock.tsx\",\"offset\":41}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265685475,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 24,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265685475,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 512,
+          "time": 1789265686275,
+          "type": "tool/call",
+          "data": {
+            "turn": 69,
+            "step": 0,
+            "callId": "fx-call-69",
+            "name": "read",
+            "arguments": "{\"file_path\":\"packages/client/ui-primitives/src/ReadBlock.tsx\",\"offset\":41}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 513,
+          "time": 1789265687075,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 69,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-69"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-69",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "<path>packages/client/ui-primitives/src/ReadBlock.tsx</path>\n<type>file</type>\n<content>\n41: export interface ReadBlockProps {\n42:   label?: string | undefined\n43:   lines: readonly ReadBlockLine[]\n44:   totalLines: number\n45:   lang?: string | undefined\n46:   maxLines?: number | undefined\n47:   className?: string | undefined\n48: }\n49: \n50: // A windowed read keeps the file line numbers in the gutter.\n51: const marker = \"fixture read sample\"\n\n(Showing lines 41-51 of 180. Use offset=52 to continue.)\n</content>"
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "937c02dd-63d8-4106-9310-a9df2055f0e9"
+            },
+            "meta": {
+              "path": "packages/client/ui-primitives/src/ReadBlock.tsx",
+              "offset": 41,
+              "lines": [
+                {
+                  "number": 41,
+                  "text": "export interface ReadBlockProps {"
+                },
+                {
+                  "number": 42,
+                  "text": "  label?: string | undefined"
+                },
+                {
+                  "number": 43,
+                  "text": "  lines: readonly ReadBlockLine[]"
+                },
+                {
+                  "number": 44,
+                  "text": "  totalLines: number"
+                },
+                {
+                  "number": 45,
+                  "text": "  lang?: string | undefined"
+                },
+                {
+                  "number": 46,
+                  "text": "  maxLines?: number | undefined"
+                },
+                {
+                  "number": 47,
+                  "text": "  className?: string | undefined"
+                },
+                {
+                  "number": 48,
+                  "text": "}"
+                },
+                {
+                  "number": 49,
+                  "text": ""
+                },
+                {
+                  "number": 50,
+                  "text": "// A windowed read keeps the file line numbers in the gutter."
+                },
+                {
+                  "number": 51,
+                  "text": "const marker = \"fixture read sample\""
+                }
+              ],
+              "totalLines": 180,
+              "lang": "ts"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 514,
+          "time": 1789265687875,
+          "type": "step/end",
+          "data": {
+            "turn": 69,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 515,
+          "time": 1789265688675,
+          "type": "turn/end",
+          "data": {
+            "turn": 69,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 516,
+          "time": 1789265689475,
+          "type": "turn/start",
+          "data": {
+            "turn": 70
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 517,
+          "time": 1789265690275,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 70：web_search 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "c7ba3fc7-e437-4d77-b212-e766b1ca1c47"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 518,
+          "time": 1789265691075,
+          "type": "step/start",
+          "data": {
+            "turn": 70,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 519,
+          "time": 1789265691875,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 70,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-70",
+                  "name": "web_search",
+                  "arguments": "{\"queries\":[\"deepseek harness architecture\"]}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "70f9aaef-f006-4b53-986d-631458679ef6"
+            },
+            "usage": {
+              "inputTokens": 20,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 4
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265691875,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265691875,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-70",
+                    "name": "web_search",
+                    "arguments": "{\"queries\":[\"deepseek harness architecture\"]}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265691875,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 20,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 4
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265691875,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 520,
+          "time": 1789265692675,
+          "type": "tool/call",
+          "data": {
+            "turn": 70,
+            "step": 0,
+            "callId": "fx-call-70",
+            "name": "web_search",
+            "arguments": "{\"queries\":[\"deepseek harness architecture\"]}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 521,
+          "time": 1789265693475,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 70,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-70"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-70",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Search results for deepseek harness architecture."
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "c2ddb04d-74c9-4a2f-83f6-47a48fc6fbc2"
+            },
+            "meta": {
+              "answer": "DeepSeek Harness is a plugin-based agent harness on vendored Cordis where **every capability is a plugin**.",
+              "sources": [
+                {
+                  "url": "https://github.com/deepseek-ai/deepseek-harness",
+                  "title": "DeepSeek Harness — plugin-based agent harness",
+                  "snippet": "Everything is a plugin: session, tools, agent-loop, and LLM adapters all mount on the same Cordis context.",
+                  "publishedAt": "2026-07-01"
+                },
+                {
+                  "url": "https://www.deepseek.com/blog/harness-architecture",
+                  "snippet": "The capability-seam pattern splits each capability into interface, implementation, and consumer packages."
+                },
+                {
+                  "url": "https://docs.deepseek.com/harness/plugins",
+                  "title": "Writing a harness plugin",
+                  "publishedAt": "2026-06-15"
+                }
+              ],
+              "truncated": true
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 522,
+          "time": 1789265694275,
+          "type": "step/end",
+          "data": {
+            "turn": 70,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 523,
+          "time": 1789265695075,
+          "type": "turn/end",
+          "data": {
+            "turn": 70,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 524,
+          "time": 1789265695875,
+          "type": "turn/start",
+          "data": {
+            "turn": 71
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 525,
+          "time": 1789265696675,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 71：web_fetch 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "b164bd50-e038-4ada-a92e-42b483efab9a"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 526,
+          "time": 1789265697475,
+          "type": "step/start",
+          "data": {
+            "turn": 71,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 527,
+          "time": 1789265698275,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 71,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-71",
+                  "name": "web_fetch",
+                  "arguments": "{\"url\":\"https://www.deepseek.com/blog/harness-architecture\"}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "72a35941-d5a4-44ec-9b4d-f14303cf165b"
+            },
+            "usage": {
+              "inputTokens": 21,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265698275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265698275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-71",
+                    "name": "web_fetch",
+                    "arguments": "{\"url\":\"https://www.deepseek.com/blog/harness-architecture\"}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265698275,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 21,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265698275,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 528,
+          "time": 1789265699075,
+          "type": "tool/call",
+          "data": {
+            "turn": 71,
+            "step": 0,
+            "callId": "fx-call-71",
+            "name": "web_fetch",
+            "arguments": "{\"url\":\"https://www.deepseek.com/blog/harness-architecture\"}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 529,
+          "time": 1789265699875,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 71,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-71"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-71",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "# Harness architecture\n\nEverything is a plugin."
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "57cf5cd3-3daf-4e2c-bb16-f8695bc2ab8c"
+            },
+            "meta": {
+              "url": "https://www.deepseek.com/blog/harness-architecture",
+              "statusCode": 200,
+              "truncated": false
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 530,
+          "time": 1789265700675,
+          "type": "step/end",
+          "data": {
+            "turn": 71,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 531,
+          "time": 1789265701475,
+          "type": "turn/end",
+          "data": {
+            "turn": 71,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 532,
+          "time": 1789265702275,
+          "type": "turn/start",
+          "data": {
+            "turn": 72
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 533,
+          "time": 1789265703075,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 72：请完整列出全部一百条条目。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "35a4608a-bd98-46a2-af6a-233b28470390"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 534,
+          "time": 1789265703875,
+          "type": "step/start",
+          "data": {
+            "turn": 72,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 535,
+          "time": 1789265704675,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 72,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "条目 1：第一条。条目 2：第二条。条目 3：这一条写到一半被"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "006a595a-cd1e-4137-af5c-e36dc98f354e"
+            },
+            "usage": {
+              "inputTokens": 22,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265704675,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265704675,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "条目 1：第一条。条目 2：第二条。条目 3：这一条写到一半被"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265704675,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 22,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265704675,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 536,
+          "time": 1789265705475,
+          "type": "step/end",
+          "data": {
+            "turn": 72,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 537,
+          "time": 1789265706275,
+          "type": "turn/end",
+          "data": {
+            "turn": 72,
+            "reason": {
+              "kind": "max-tokens"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 538,
+          "time": 1789265707075,
+          "type": "turn/start",
+          "data": {
+            "turn": 73
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 539,
+          "time": 1789265707875,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "image",
+                "attachment": {
+                  "attachmentId": "fixture:image",
+                  "mediaType": "image/png",
+                  "bytes": 247,
+                  "width": 160,
+                  "height": 90,
+                  "name": "fixture-image.png"
+                }
+              },
+              {
+                "type": "text",
+                "text": "历史用户图片"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "f7aa4d0e-5b76-4ccd-a566-150a227b0c27"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 540,
+          "time": 1789265708675,
+          "type": "step/start",
+          "data": {
+            "turn": 73,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 541,
+          "time": 1789265709475,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 73,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "结构化模型图片："
+                },
+                {
+                  "type": "image",
+                  "attachment": {
+                    "attachmentId": "fixture:image",
+                    "mediaType": "image/png",
+                    "bytes": 247,
+                    "width": 160,
+                    "height": 90,
+                    "name": "fixture-image.png"
+                  }
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-vision"
+              },
+              "id": "35080466-4027-4eba-95b8-538f1447867b"
+            },
+            "usage": {
+              "inputTokens": 23,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265709475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "text"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265709475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "text",
+                    "text": "结构化模型图片："
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265709475,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 1,
+                  "blockType": "image"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265709475,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 1,
+                  "block": {
+                    "type": "image",
+                    "attachment": {
+                      "attachmentId": "fixture:image",
+                      "mediaType": "image/png",
+                      "bytes": 247,
+                      "width": 160,
+                      "height": 90,
+                      "name": "fixture-image.png"
+                    }
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265709475,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 23,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265709475,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 542,
+          "time": 1789265710275,
+          "type": "step/end",
+          "data": {
+            "turn": 73,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 543,
+          "time": 1789265711075,
+          "type": "turn/end",
+          "data": {
+            "turn": 73,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 544,
+          "time": 1789265711875,
+          "type": "turn/start",
+          "data": {
+            "turn": 74
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 545,
+          "time": 1789265712675,
+          "type": "user/message",
+          "surfaceOp": "append",
+          "data": {
+            "content": [
+              {
+                "type": "text",
+                "text": "问题 74：todo_write 样本。"
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "df61981f-bcff-4984-9d9e-de8754da7bc8"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 546,
+          "time": 1789265713475,
+          "type": "step/start",
+          "data": {
+            "turn": 74,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 547,
+          "time": 1789265714275,
+          "type": "assistant/message",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 74,
+            "step": 0,
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "tool-call",
+                  "id": "fx-call-74",
+                  "name": "todo_write",
+                  "arguments": "{\"todos\":[{\"content\":\"梳理需求\",\"status\":\"completed\"},{\"content\":\"实现 fixture 样本\",\"status\":\"in_progress\"},{\"content\":\"跑后台构建\",\"status\":\"in_progress\"},{\"content\":\"浏览器验收\",\"status\":\"pending\"}]}"
+                }
+              ],
+              "source": {
+                "kind": "model",
+                "provider": "fixture",
+                "model": "fx-1"
+              },
+              "id": "c346330a-d740-45f6-9cbe-fb7b20d9f741"
+            },
+            "usage": {
+              "inputTokens": 24,
+              "outputTokens": 8,
+              "cacheReadTokens": 80,
+              "cacheWriteTokens": 0
+            },
+            "stream": [
+              {
+                "type": "chunk",
+                "time": 1789265714275,
+                "chunk": {
+                  "type": "block-start",
+                  "index": 0,
+                  "blockType": "tool-call"
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265714275,
+                "chunk": {
+                  "type": "block-end",
+                  "index": 0,
+                  "block": {
+                    "type": "tool-call",
+                    "id": "fx-call-74",
+                    "name": "todo_write",
+                    "arguments": "{\"todos\":[{\"content\":\"梳理需求\",\"status\":\"completed\"},{\"content\":\"实现 fixture 样本\",\"status\":\"in_progress\"},{\"content\":\"跑后台构建\",\"status\":\"in_progress\"},{\"content\":\"浏览器验收\",\"status\":\"pending\"}]}"
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265714275,
+                "chunk": {
+                  "type": "usage",
+                  "usage": {
+                    "inputTokens": 24,
+                    "outputTokens": 8,
+                    "cacheReadTokens": 80,
+                    "cacheWriteTokens": 0
+                  }
+                }
+              },
+              {
+                "type": "chunk",
+                "time": 1789265714275,
+                "chunk": {
+                  "type": "finish",
+                  "reason": {
+                    "kind": "stop"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 548,
+          "time": 1789265715075,
+          "type": "tool/call",
+          "data": {
+            "turn": 74,
+            "step": 0,
+            "callId": "fx-call-74",
+            "name": "todo_write",
+            "arguments": "{\"todos\":[{\"content\":\"梳理需求\",\"status\":\"completed\"},{\"content\":\"实现 fixture 样本\",\"status\":\"in_progress\"},{\"content\":\"跑后台构建\",\"status\":\"in_progress\"},{\"content\":\"浏览器验收\",\"status\":\"pending\"}]}"
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "type": "todo/write",
+          "time": 1789265715475,
+          "data": {
+            "todos": [
+              {
+                "content": "梳理需求",
+                "status": "completed"
+              },
+              {
+                "content": "实现 fixture 样本",
+                "status": "in_progress"
+              },
+              {
+                "content": "跑后台构建",
+                "status": "in_progress"
+              },
+              {
+                "content": "浏览器验收",
+                "status": "pending"
+              }
+            ]
+          },
+          "seq": 549
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 550,
+          "time": 1789265715875,
+          "type": "tool/result",
+          "surfaceOp": "append",
+          "data": {
+            "turn": 74,
+            "step": 0,
+            "message": {
+              "source": {
+                "kind": "tool",
+                "callId": "fx-call-74"
+              },
+              "content": [
+                {
+                  "type": "tool-result",
+                  "toolCallId": "fx-call-74",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Updated todo list: 1 pending, 2 in progress, 1 completed."
+                    }
+                  ],
+                  "isError": false
+                }
+              ],
+              "role": "user",
+              "id": "499968fd-a83f-45ad-80fe-b1d73651ff13"
+            }
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 551,
+          "time": 1789265716675,
+          "type": "step/end",
+          "data": {
+            "turn": 74,
+            "step": 0
+          }
+        }
+      },
+      {
+        "type": "event",
+        "event": {
+          "seq": 552,
+          "time": 1789265717475,
+          "type": "turn/end",
+          "data": {
+            "turn": 74,
+            "reason": {
+              "kind": "completed"
+            }
+          }
+        }
+      }
+    ],
+    "hasMore": true,
+    "projections": {
+      "asOfSeq": 552,
+      "values": {
+        "modelSelection": {
+          "lastUsed": null,
+          "next": null
+        },
+        "title": "Fixture 历史会话",
+        "todos": [
+          {
+            "content": "梳理需求",
+            "status": "completed"
+          },
+          {
+            "content": "实现 fixture 样本",
+            "status": "in_progress"
+          },
+          {
+            "content": "跑后台构建",
+            "status": "in_progress"
+          },
+          {
+            "content": "浏览器验收",
+            "status": "pending"
+          }
+        ],
+        "permissions": {
+          "options": [
+            {
+              "value": "workspace-write",
+              "name": "workspace-write",
+              "description": "Write inside the workspace and permitted temporary directories; wider retries require approval."
+            },
+            {
+              "value": "danger-full-access",
+              "name": "danger-full-access",
+              "description": "Full file access without approval prompts."
+            }
+          ],
+          "currentValue": "workspace-write"
+        },
+        "plan": {
+          "active": false,
+          "pending": false
+        },
+        "goal": null,
+        "tokenUsage": {
+          "uncachedInputTokens": 1914,
+          "outputTokens": 708,
+          "cacheReadTokens": 6880,
+          "cacheWriteTokens": 32
+        },
+        "contextPressure": {
+          "pressureTokens": 104,
+          "contextWindow": 128000
+        },
+        "contextBreakdown": {
+          "systemTokens": 17,
+          "toolsTokens": 0,
+          "messageTokens": 4427
+        },
+        "sessionStats": {
+          "turns": 75,
+          "steps": 87,
+          "llmMs": 69600,
+          "toolMs": 24800,
+          "ttftMs": 0,
+          "ttftSteps": 0,
+          "decodeMs": 0,
+          "decodeTokens": 0
+        },
+        "imageLimits": {
+          "maxImageBytes": 5242880,
+          "maxImagesPerMessage": 20,
+          "maxMessageImageBytes": 104857600,
+          "maxImagePixels": 40000000,
+          "maxImageDimension": 2000,
+          "mediaTypes": [
+            "image/png",
+            "image/jpeg",
+            "image/webp",
+            "image/gif"
+          ]
+        }
+      }
+    },
+    "assistantStream": {
+      "revision": 0
+    }
+  },
+  "attachment": {
+    "ok": true,
+    "value": {
+      "attachment": {
+        "attachmentId": "fixture:image",
+        "mediaType": "image/png",
+        "bytes": 247,
+        "width": 160,
+        "height": 90,
+        "name": "fixture-image.png"
+      },
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAKAAAABaCAYAAAA/xl1SAAAAvklEQVR42u3SMQ0AAAjAMIyhELM4AAe8PD1qYFlk9cCXEAEDYkAwIAYEA2JAMCAGBANiQDAgBgQDYkAwIAYEA2JAMCAGBANiQDAgBgQDYkAwIAYEA2JAMCAGxIBCYEAMCAbEgGBADAgGxIBgQAwIBsSAYEAMCAbEgGBADAgGxIBgQAwIBsSAYEAMCAbEgGBADAgGxIAYEAyIAcGAGBAMiAHBgBgQDIgBwYAYEAyIAcGAGBAMiAHBgBgQDIgB4bYWLb6pnOb1xAAAAABJRU5ErkJggg=="
+    }
+  }
+}

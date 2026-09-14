@@ -150,10 +150,7 @@ export class AcpSession {
       resumeSessionId: options.sessionId,
       agentOptions: options.agentOptions,
       signal: options.signal,
-      setup: async (agentCtx) => {
-        const agent = agentCtx.agent
-        /* v8 ignore next -- Agent factory setup always carries its unpublished Agent. */
-        if (agent === undefined) throw new Error('acp: resumed Agent is absent during setup')
+      setup: async (agentCtx, agent) => {
         modelControl = new AcpModelControl(
           ctx.llm,
           selectionFor(agent.session.requestHeader(), options.fallbackSelection),

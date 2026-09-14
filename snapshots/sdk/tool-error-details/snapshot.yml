@@ -1,0 +1,7 @@
+version: 1
+scenario: tool-error-details
+profile: sdk
+composition: both
+recording: authored
+header:
+  class: both

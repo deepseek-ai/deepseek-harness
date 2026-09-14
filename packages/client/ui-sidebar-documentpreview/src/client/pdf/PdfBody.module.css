@@ -1,0 +1,56 @@
+.body {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  overflow-x: hidden;
+  font-family: var(--dsw-font, sans-serif);
+  white-space: normal;
+}
+
+.page {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
+}
+
+/* An unrendered page holds its place as a quiet block; the block itself is
+   the loading feedback, so no spinner competes with the centred open wait. */
+.placeholder {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  background: var(--dsw-alias-bg-skeleton);
+}
+
+.canvas {
+  display: block;
+  width: min(var(--pdf-page-width), 100%);
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+.canvas[hidden] {
+  display: none;
+}
+
+.status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* The document-open wait fills the still-empty body and centres, matching the
+   owner's read spinner position. */
+.opening {
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+}

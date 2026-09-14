@@ -142,7 +142,7 @@ describe('releasedV2SessionFormatCodec headers', () => {
 })
 
 describe('releasedV2SessionFormatCodec rows', () => {
-  it('stores one event per row and compacts scalar, pair, and long-run provenance exactly', () => {
+  it('stores one event per row and compacts scalar, pair, and long-run source-event references exactly', () => {
     const source = artifact([
       feedback(0),
       userMessage(1, [0]),
@@ -159,7 +159,7 @@ describe('releasedV2SessionFormatCodec rows', () => {
     expect(decodeV2(encoded.header, encoded.rows)).toStrictEqual(source)
   })
 
-  it('keeps non-monotonic provenance scalar-only for the current backend reader', () => {
+  it('keeps non-monotonic source-event references scalar-only for the current backend reader', () => {
     const sourceEventSeqs = [4, 5, 1, 2, 3]
     const source = artifact([
       feedback(0), feedback(1), feedback(2), feedback(3), feedback(4), feedback(5),
@@ -186,7 +186,7 @@ describe('releasedV2SessionFormatCodec rows', () => {
     expect(decodeV2(encoded.header, encoded.rows)).toStrictEqual(source)
   })
 
-  it('expands mixed stored ranges and preserves non-provenance rows', () => {
+  it('expands mixed stored source-event ranges and preserves unrelated rows', () => {
     const rows: SessionFormatJsonObject[] = [feedback(0), feedback(1), feedback(2), feedback(3), feedback(4), {
       ...userMessage(5),
       sourceEventSeqs: [[0, 2], 4],
@@ -213,7 +213,7 @@ describe('releasedV2SessionFormatCodec rows', () => {
     ['duplicate scalars', [0, 0], /unique earlier/],
     ['overlapping range and scalar', [[0, 1], 1], /unique earlier/],
     ['non-monotonic range', [3, [0, 2]], /strictly increasing/],
-  ])('refuses malformed stored provenance: %s', (_name, sourceEventSeqs, message) => {
+  ])('refuses malformed stored source-event ranges: %s', (_name, sourceEventSeqs, message) => {
     const rows = [feedback(0), feedback(1), feedback(2), feedback(3), {
       ...userMessage(4), sourceEventSeqs,
     }]

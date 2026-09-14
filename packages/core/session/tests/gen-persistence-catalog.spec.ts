@@ -13,6 +13,7 @@ import {
   collectLogEvents,
   collectSurfaceEventTypes,
   render,
+  renderKnownEventTypes,
 } from '../../../../scripts/gen-persistence-catalog.ts'
 
 /** Create a fixture scan root; `files` maps `packages/…`-relative paths to source. */
@@ -45,6 +46,18 @@ afterEach(() => {
 const OWNER_MANIFEST = '{ "name": "@deepseek-ai/dsh-session" }\n'
 
 describe('gen-persistence-catalog collectLogEvents', () => {
+  it('generates required interpreter types from plugin-owned event declarations', () => {
+    const events = collectLogEvents(make({
+      'packages/group/fix/src/types.ts': merge('    /**\n     * Projects existing messages.\n     * @messageProjection\n     */\n    \'fix/project\': { seq: number }'),
+    }))
+    expect(events[0]?.messageProjection).toBe(true)
+    expect(renderKnownEventTypes(annotateSurface(events, [])))
+      .toContain("MESSAGE_PROJECTION_EVENT_TYPES: ReadonlySet<string> = new Set([\n  'fix/project',\n])")
+    expect(() => annotateSurface(events, ['fix/project'])).toThrow(/cannot declare both/)
+    const ordinary = events.map(({ messageProjection: _projection, ...event }) => event)
+    expect(renderKnownEventTypes(annotateSurface(ordinary, [])))
+      .toContain('MESSAGE_PROJECTION_EVENT_TYPES: ReadonlySet<string> = new Set([\n])')
+  })
   it('extracts a documented member of the owning top-level interface', () => {
     const events = collectLogEvents(make({
       'packages/core/fix/package.json': OWNER_MANIFEST,

@@ -9,7 +9,7 @@ Status: rejected — 实现（PR #679）证伪了行为等价前提：vitest 的
 三个包手写了用 promise 包装的定时器，而 `node:timers/promises` 内置模块早已提供同等能力；其他包（`dsh-llm-mock-server` 的 `pause()`、`dsh-lsp-stdio`、`dsh-acp-snapshot`）已经在使用该内置模块，因此这些手写副本同时也是一处一致性缺口：
 
 - `packages/llm/llm-retry/src/index.ts` 的 `cancellableDelay()`（约 14 行）：`new Promise` + `setTimeout` + 手动添加和移除中止监听器，定时器触发时 resolve 为 `true`、被中止时 resolve 为 `false`，仅在退避等待处消费一次。
-- `packages/workflow/workflow-worker-thread/src/host.ts` 的 `sleep()`（约 7 行）：promise 包装、已 unref 的 `setTimeout`，用作 dispose（资源释放）宽限的时间上界。
+- 原 `workflow-worker-thread` host 的 `sleep()`（约 7 行，在 PR #679 中评估）：promise 包装、已 unref 的 `setTimeout`，用作 dispose（资源释放）宽限的时间上界。
 - `packages/terminal/terminal-bash/src/session.ts` 的 `delay()`（约 4 行）：朴素的 promise 包装 `setTimeout`，用于轮询与拆卸等待。
 
 ## 提案

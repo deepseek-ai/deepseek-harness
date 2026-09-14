@@ -1,3 +1,4 @@
+import { OutputCollector } from '../src/output.ts'
 import { spawn as nodeSpawn, spawnSync as nodeSpawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -7,7 +8,6 @@ import {
   bindManagedProcess,
   childEnv,
   killGroup,
-  OutputCollector,
   spawnSubprocess,
   taskkillProcessTree,
   validateSubprocessSpec,

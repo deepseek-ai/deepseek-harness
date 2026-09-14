@@ -1,0 +1,11 @@
+version: 1
+scenario: system-prompt-in-history
+profile: headless
+composition: system-prompt-in-history
+recording: authored
+header:
+  class: system-prompt-in-history
+  pin: true
+  promptChanges: 1
+replay:
+  override: true

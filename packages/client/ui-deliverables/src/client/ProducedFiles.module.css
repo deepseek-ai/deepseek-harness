@@ -5,7 +5,7 @@
   grid-template-columns: max-content minmax(0, 1fr);
   align-items: start;
   column-gap: 8px;
-  margin-top: 16px;
+  margin-top: 4px;
   font-size: 13px;
   line-height: 22px;
 }
@@ -85,8 +85,7 @@
   text-underline-offset: 3px;
 }
 
-.file:focus-visible,
-.showFolder:focus-visible {
+.file:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--dsw-alias-border-l3);
 }
@@ -103,14 +102,6 @@
   display: inline;
 }
 
-.showFolder {
-  display: none;
-}
-
-.lane:has(.more[data-shown='6']) > .showFolder {
-  display: flex;
-}
-
 /* Each band budgets 96px per chip, 8px gaps, and 64px for the remainder. */
 @container (max-width: 687px) {
   .file:nth-of-type(6),
@@ -120,14 +111,6 @@
 
   .more[data-shown='5'] {
     display: inline;
-  }
-
-  .showFolder {
-    display: none;
-  }
-
-  .lane:has(.more[data-shown='5']) > .showFolder {
-    display: flex;
   }
 }
 
@@ -140,14 +123,6 @@
   .more[data-shown='4'] {
     display: inline;
   }
-
-  .showFolder {
-    display: none;
-  }
-
-  .lane:has(.more[data-shown='4']) > .showFolder {
-    display: flex;
-  }
 }
 
 @container (max-width: 479px) {
@@ -158,14 +133,6 @@
 
   .more[data-shown='3'] {
     display: inline;
-  }
-
-  .showFolder {
-    display: none;
-  }
-
-  .lane:has(.more[data-shown='3']) > .showFolder {
-    display: flex;
   }
 }
 
@@ -178,14 +145,6 @@
   .more[data-shown='2'] {
     display: inline;
   }
-
-  .showFolder {
-    display: none;
-  }
-
-  .lane:has(.more[data-shown='2']) > .showFolder {
-    display: flex;
-  }
 }
 
 @container (max-width: 271px) {
@@ -197,32 +156,4 @@
   .more[data-shown='1'] {
     display: inline;
   }
-
-  .showFolder {
-    display: none;
-  }
-
-  .lane:has(.more[data-shown='1']) > .showFolder {
-    display: flex;
-  }
-}
-
-.showFolder {
-  justify-self: start;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-  padding: 0 2px;
-  border: none;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--dsw-alias-label-tertiary);
-  font: inherit;
-  line-height: 20px;
-  cursor: pointer;
-}
-
-.showFolder:hover {
-  color: var(--dsw-alias-label-secondary);
-  text-decoration: underline;
 }

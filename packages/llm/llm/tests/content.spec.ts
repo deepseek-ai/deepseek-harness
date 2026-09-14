@@ -8,28 +8,19 @@ import {
   fileHandleText,
   projectFilesToText,
   offloadedImageText,
-  offloadedImagePrefixCount,
-  offloadRequestImagesWithPolicy,
   projectImagesForTextModel,
+  projectOffloadedImages,
+  requiredImageOffload,
   resolveImageAttachmentAccess,
   requestImageHandleText,
 } from '../src/index.ts'
-import type { ContentBlock, Message } from '../src/index.ts'
+import type { ContentBlock } from '../src/index.ts'
 
 const source = { kind: 'plugin' as const, plugin: 'test' }
 
 const OMITTED = '[omitted]'
 
-function offloadBase64(messages: readonly Message[], maxBytes: number | undefined): readonly Message[] {
-  return offloadRequestImagesWithPolicy(messages, {
-    representation: 'base64',
-    ...maxBytes === undefined ? {} : { maxBytes },
-    byteQuantum: 1,
-    placeholder: () => OMITTED,
-  })
-}
-
-function image(bytes: number): Extract<ContentBlock, { type: 'image' }> {
+function image(bytes: number, offloaded?: true): Extract<ContentBlock, { type: 'image' }> {
   return {
     type: 'image',
     attachment: {
@@ -39,158 +30,105 @@ function image(bytes: number): Extract<ContentBlock, { type: 'image' }> {
       width: 1,
       height: 1,
     },
+    ...offloaded === undefined ? {} : { offloaded },
   }
 }
 
-describe('base64 request-image offload', () => {
-  it('preserves every image when no payload bound is configured', () => {
+describe('requiredImageOffload traversal', () => {
+  it('visits image occurrences at every tool-result depth in message order', () => {
+    const seen: number[] = []
+    const content: ContentBlock[] = [
+      { type: 'text', text: 'before' },
+      image(1),
+      {
+        type: 'tool-result',
+        toolCallId: ToolCallId('shot'),
+        content: [
+          { type: 'text', text: 'x' },
+          image(2),
+          {
+            type: 'tool-result',
+            toolCallId: ToolCallId('nested'),
+            content: [{ type: 'tool-result', toolCallId: ToolCallId('deep'), content: [image(4)] }],
+          },
+        ],
+      },
+      image(3),
+    ]
+    expect(requiredImageOffload([createUserMessage({ content, source })],
+      { representation: 'raw', maxImages: 0 }, (block) => {
+        seen.push(block.attachment.bytes)
+        return block.attachment.bytes
+      })).toBe(4)
+    expect(seen).toEqual([1, 2, 4, 3])
+  })
+})
+
+describe('projectOffloadedImages', () => {
+  it('keeps messages without offloaded occurrences by identity', () => {
     const messages = [createUserMessage({ content: [image(300)], source })]
-    expect(offloadBase64(messages, undefined)).toBe(messages)
+    const projected = projectOffloadedImages(messages, () => OMITTED)
+    expect(projected[0]).toBe(messages[0])
   })
 
-  it('preserves the original request when its base64 payload fits exactly', () => {
-    const messages = [createUserMessage({ content: [image(3), image(3)], source })]
-    expect(offloadBase64(messages, 8)).toBe(messages)
-  })
-
-  it('keeps five 3 MiB images at 20 MiB and offloads the oldest after one more raw byte', () => {
-    const rawImageBytes = 3 * 1024 * 1024
-    const maxRequestImageBytes = 20 * 1024 * 1024
-    const exact = [createUserMessage({
-      content: Array.from({ length: 5 }, () => image(rawImageBytes)),
-      source,
-    })]
-    expect(offloadBase64(exact, maxRequestImageBytes)).toBe(exact)
-
-    const over = [createUserMessage({
-      content: [image(rawImageBytes + 1), ...Array.from({ length: 4 }, () => image(rawImageBytes))],
-      source,
-    })]
-    expect(offloadBase64(over, maxRequestImageBytes)[0]?.content).toEqual([
-      { type: 'text', text: OMITTED },
-      ...Array.from({ length: 4 }, () => image(rawImageBytes)),
-    ])
-  })
-
-  it('replaces the oldest nested occurrences without mutating durable messages', () => {
-    const shared = image(3)
+  it('replaces marked top-level and nested occurrences with route placeholders', () => {
     const messages = [
       createUserMessage({
-        content: [{
-          type: 'tool-result',
-          toolCallId: ToolCallId('shot'),
-          content: [shared],
-        }],
+        content: [{ type: 'tool-result', toolCallId: ToolCallId('shot'), content: [image(3, true)] }],
         source,
       }),
-      createUserMessage({ content: [shared, image(3)], source }),
+      createUserMessage({ content: [image(3, true), image(3)], source }),
     ]
-
-    const fitted = offloadBase64(messages, 8)
-    expect(fitted).not.toBe(messages)
-    expect(fitted[0]?.content).toEqual([{
+    const projected = projectOffloadedImages(messages, ref => `${OMITTED}:${ref.bytes}`)
+    expect(projected[0]?.content).toEqual([{
       type: 'tool-result',
       toolCallId: ToolCallId('shot'),
-      content: [{ type: 'text', text: OMITTED }],
+      content: [{ type: 'text', text: `${OMITTED}:3` }],
     }])
-    expect(fitted[1]?.content).toEqual([shared, image(3)])
-    expect(messages[0]?.content[0]).toMatchObject({ type: 'tool-result', content: [shared] })
+    expect(projected[1]?.content).toEqual([{ type: 'text', text: `${OMITTED}:3` }, image(3)])
+    expect(messages[1]?.content[0]).toEqual(image(3, true))
   })
 
-  it('replaces a single image that cannot fit', () => {
-    const messages = [createUserMessage({ content: [image(300)], source })]
-    expect(offloadBase64(messages, 8)[0]?.content)
-      .toEqual([{ type: 'text', text: OMITTED }])
-  })
-
-  it('keeps unchanged nested content while replacing a later image', () => {
+  it('keeps unchanged nested content while replacing a later occurrence', () => {
     const nested = {
       type: 'tool-result' as const,
       toolCallId: ToolCallId('text-only'),
       content: [{ type: 'text' as const, text: 'kept' }],
     }
-    const messages = [createUserMessage({ content: [nested, image(3)], source })]
-    expect(offloadBase64(messages, 1)[0]?.content).toEqual([
+    const messages = [createUserMessage({ content: [nested, image(3, true)], source })]
+    expect(projectOffloadedImages(messages, () => OMITTED)[0]?.content).toEqual([
       nested,
       { type: 'text', text: OMITTED },
     ])
   })
 })
 
-describe('offloadedImagePrefixCount', () => {
+describe('requiredImageOffload', () => {
+  const request = (lengths: number[], offloaded: number[] = []) => [createUserMessage({
+    content: lengths.map((bytes, index) => image(bytes, offloaded.includes(index) ? true : undefined)),
+    source,
+  })]
+  const bytesOf = (block: Extract<ContentBlock, { type: 'image' }>): number => block.attachment.bytes
+  const raw = { representation: 'raw' as const }
+
   it('removes nothing under unbounded budgets and whole quanta past them', () => {
     const lengths = [4, 4, 4, 4]
-    expect(offloadedImagePrefixCount(lengths, {})).toBe(0)
-    expect(offloadedImagePrefixCount(lengths, { maxBytes: 16 })).toBe(0)
-    expect(offloadedImagePrefixCount(lengths, { maxImages: 4 })).toBe(0)
+    expect(requiredImageOffload(request(lengths), raw, bytesOf)).toBe(0)
+    expect(requiredImageOffload(request(lengths), { ...raw, maxBytes: 16 }, bytesOf)).toBe(0)
+    expect(requiredImageOffload(request(lengths), { ...raw, maxImages: 4 }, bytesOf)).toBe(0)
     // One excess image rounds up to the whole count quantum.
-    expect(offloadedImagePrefixCount([...lengths, 4], { maxImages: 4, countQuantum: 2 })).toBe(2)
+    expect(requiredImageOffload(request([...lengths, 4]), { ...raw, maxImages: 4, countQuantum: 2 }, bytesOf)).toBe(2)
     // One excess byte removes a whole byte quantum, crossing the second image.
-    expect(offloadedImagePrefixCount([...lengths, 1], { maxBytes: 16, byteQuantum: 5 })).toBe(2)
-  })
-})
-
-describe('offloadRequestImagesWithPolicy', () => {
-  it('drops 129 MiB to 64 MiB and keeps the removed prefix stable through 192 MiB', () => {
+    expect(requiredImageOffload(request([...lengths, 1]), { ...raw, maxBytes: 16, byteQuantum: 5 }, bytesOf)).toBe(2)
+    // 129 one-mebibyte images under a 128 MiB bound with a 64 MiB quantum offload the oldest 65.
     const mib = 1024 * 1024
-    const project = (count: number) => offloadRequestImagesWithPolicy([
-      createUserMessage({ content: Array.from({ length: count }, () => image(mib)), source }),
-    ], {
-      representation: 'raw',
-      maxBytes: 128 * mib,
-      byteQuantum: 64 * mib,
-      placeholder: () => OMITTED,
-    })[0]?.content
-
-    expect(project(128)?.filter(block => block.type === 'image')).toHaveLength(128)
-    expect(project(129)?.filter(block => block.type === 'text')).toHaveLength(65)
-    expect(project(192)?.filter(block => block.type === 'text')).toHaveLength(65)
-    expect(project(193)?.filter(block => block.type === 'text')).toHaveLength(129)
+    const budget = { ...raw, maxBytes: 128 * mib, byteQuantum: 64 * mib }
+    expect(requiredImageOffload(request(Array.from({ length: 129 }, () => mib)), budget, bytesOf)).toBe(65)
   })
 
-  it('rounds a count excess up to a 20-image removal step', () => {
-    const projected = offloadRequestImagesWithPolicy([
-      createUserMessage({ content: Array.from({ length: 601 }, () => image(1)), source }),
-    ], {
-      representation: 'raw',
-      maxImages: 600,
-      countQuantum: 20,
-      placeholder: () => OMITTED,
-    })
-    expect(projected[0]?.content.filter(block => block.type === 'text')).toHaveLength(20)
-    expect(projected[0]?.content.filter(block => block.type === 'image')).toHaveLength(581)
-  })
-
-  it('uses route-owned request byte lengths when supplied', () => {
-    const messages = [createUserMessage({ content: [image(100), image(100)], source })]
-    const projected = offloadRequestImagesWithPolicy(messages, {
-      representation: 'raw',
-      maxBytes: 3,
-      byteLength: () => 2,
-      placeholder: () => OMITTED,
-    })
-    expect(projected[0]?.content).toEqual([
-      { type: 'text', text: OMITTED },
-      image(100),
-    ])
-  })
-
-  it('builds a distinct placeholder from each omitted attachment', () => {
-    const first = image(3)
-    const second = image(3)
-    first.attachment = { ...first.attachment, name: 'first.png' }
-    second.attachment = { ...second.attachment, name: 'second.png' }
-    const projected = offloadRequestImagesWithPolicy([
-      createUserMessage({ content: [first, second], source }),
-    ], {
-      representation: 'raw',
-      maxBytes: 3,
-      placeholder: ref => `omitted:${ref.name}`,
-    })
-    expect(projected[0]?.content).toEqual([
-      { type: 'text', text: 'omitted:first.png' },
-      second,
-    ])
+  it('skips offloaded occurrences and accounts inline bytes by their base64 length', () => {
+    expect(requiredImageOffload(request([3, 3, 3]), { representation: 'base64', maxBytes: 8 }, bytesOf)).toBe(1)
+    expect(requiredImageOffload(request([3, 3, 3], [0]), { representation: 'base64', maxBytes: 8 }, bytesOf)).toBe(0)
   })
 })
 
@@ -327,6 +265,11 @@ describe('projectImagesForTextModel', () => {
   it('returns image-free history unchanged', () => {
     const messages = [createUserMessage({ content: [{ type: 'text', text: 'plain' }], source })]
     expect(projectImagesForTextModel(messages)).toBe(messages)
+    const nested = [createUserMessage({
+      content: [{ type: 'tool-result', toolCallId: ToolCallId('plain-result'), content: messages[0]!.content }],
+      source,
+    })]
+    expect(projectImagesForTextModel(nested)).toBe(nested)
   })
 
   it('replaces direct and nested images while retaining unaffected messages and blocks', () => {
@@ -388,6 +331,30 @@ describe('file projection', () => {
         content: [fileBlock('deep.txt')],
       }],
     }])).toBe(true)
+  })
+
+  it('scans frozen branches and observes later mutations in file-free content', () => {
+    const nested: ContentBlock[] = [{ type: 'text', text: 'plain' }]
+    const empty: ContentBlock[] = []
+    Object.freeze(empty)
+    const content: ContentBlock[] = [
+      { type: 'tool-result', toolCallId: ToolCallId('empty'), content: empty },
+      { type: 'tool-result', toolCallId: ToolCallId('nested'), content: nested },
+    ]
+    Object.freeze(content[0])
+    Object.freeze(content[1])
+    Object.freeze(content)
+    expect(contentHasFile(Object.freeze([]))).toBe(false)
+    expect(contentHasFile(content)).toBe(false)
+    nested.push(fileBlock('later.txt'))
+    expect(contentHasFile(content)).toBe(true)
+    nested.pop()
+    expect(contentHasFile(content)).toBe(false)
+    nested.push(fileBlock('frozen.txt'))
+    Object.freeze(nested[0])
+    Object.freeze(nested[1])
+    Object.freeze(nested)
+    expect(contentHasFile(content)).toBe(true)
   })
 
   it('renders the handle with the read path or the explicit no-path fallback', () => {

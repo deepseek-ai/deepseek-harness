@@ -228,7 +228,7 @@ function appendSeparator(events: SessionEvent[], separator: number): void {
     time: TIME_ZERO + seq,
     data: { separator },
     ignorable: true,
-  } as SessionEvent)
+  } as unknown as SessionEvent)
 }
 
 function fragment(run: number, index: number): string {

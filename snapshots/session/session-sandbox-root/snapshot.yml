@@ -13,4 +13,4 @@ replay:
 permission: workspace-write
 workspace:
   final: true
-  parent: home
+  parent: outside-temp

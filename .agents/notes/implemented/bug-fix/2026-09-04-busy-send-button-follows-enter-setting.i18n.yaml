@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-04-busy-send-button-follows-enter-setting.md
+2026-09-04-busy-send-button-follows-enter-setting.md: 2db0848e3ce3b7a1b6b07ff6d6d23c06b23be5ef
+2026-09-04-busy-send-button-follows-enter-setting.zh.md: 7062f60320c4bc56f15f57388e79df9ce0e45c2f

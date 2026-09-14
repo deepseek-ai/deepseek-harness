@@ -112,6 +112,8 @@ export interface AclSandboxSpawnOptions {
    * child dies with the caller; stdout/stderr in the result are empty.
    */
   stdio?: 'pipe' | 'inherit'
+  /** Control pipe forwarded to the same payload descriptor in inherited-stdio mode. */
+  controlFileDescriptor?: 7
 }
 
 /** A settled confined child: captured stdio and the exit code. */
@@ -349,11 +351,17 @@ export class AclSandbox {
     const api = this.api
     const token = this.token
     if (api === undefined || token === undefined) throw new Error('AclSandbox is not initialized: call init() first')
+    if (options.controlFileDescriptor !== undefined && options.stdio !== 'inherit') {
+      throw new Error('control pipe requires inherited stdio')
+    }
     const args = options.args ?? []
     const cwd = options.cwd ?? process.cwd()
 
     if (options.stdio === 'inherit') {
-      const native = spawnSandboxedInherited(api, token, { command: options.command, args, cwd })
+      const native = spawnSandboxedInherited(api, token, {
+        command: options.command, args, cwd,
+        ...options.controlFileDescriptor === undefined ? {} : { controlFileDescriptor: options.controlFileDescriptor },
+      })
       let exitCodePromise: Promise<number> | undefined
       return {
         pid: native.pid,

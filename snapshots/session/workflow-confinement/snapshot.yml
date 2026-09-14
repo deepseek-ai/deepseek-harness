@@ -1,0 +1,13 @@
+version: 1
+scenario: workflow-confinement
+profile: headless
+composition: workflow-confinement
+recording: authored
+header:
+  class: workflow-confinement
+  pin: true
+platform: posix
+permission: read-only
+workspace:
+  final: true
+  parent: outside-temp

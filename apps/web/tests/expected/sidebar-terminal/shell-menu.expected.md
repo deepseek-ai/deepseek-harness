@@ -1,0 +1,5 @@
+- menu:
+  - menuitem "bash — /bin/bash":
+    - text: bash — /bin/bash
+    - img
+  - menuitem "sh — /bin/sh"

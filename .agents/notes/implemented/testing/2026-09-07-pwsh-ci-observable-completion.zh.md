@@ -6,9 +6,9 @@ Status: implemented
 
 ## Problem
 
-[托管 coverage 作业](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34033367752/job/101605386802) 因持久 PowerShell send 返回 `inferred_idle` 而非 `stdin_read` 判定失败。输出静默是受支持的有界推断，不是命令完成的证明。真实 shell 测试还在输出中查找被回显命令本身包含的文本，无法独立证明命令执行。
+托管 coverage 作业 (run 34033367752, job 101605386802) 因持久 PowerShell send 返回 `inferred_idle` 而非 `stdin_read` 判定失败。输出静默是受支持的有界推断，不是命令完成的证明。真实 shell 测试还在输出中查找被回显命令本身包含的文本，无法独立证明命令执行。
 
-[快照作业](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34033367752/job/101605386868) 在成功输出 `PWSH_OK` 后仍拒绝两个 PowerShell 场景。其 fixture 缺少 headless profile 的策略事件与运行时上下文消息；prompt 和工具 schema pin 也描述了更早、更小的组合。没有 PowerShell 的主机会跳过这些用例，无法发现此类漂移。
+快照作业 (run 34033367752, job 101605386868) 在成功输出 `PWSH_OK` 后仍拒绝两个 PowerShell 场景。其 fixture 缺少 headless profile 的策略事件与运行时上下文消息；prompt 和工具 schema pin 也描述了更早、更小的组合。没有 PowerShell 的主机会跳过这些用例，无法发现此类漂移。
 
 ## Decision
 

@@ -15,6 +15,7 @@ import { SessionSeq } from '@deepseek-ai/dsh-session'
 import type { Session, SessionEvent, SessionEventMap } from '@deepseek-ai/dsh-session'
 import { TypertRemoteService, Remote } from '@deepseek-ai/dsh-typert-protocol'
 import { CommandId } from './brand.ts'
+import type { CommandDefinitionId } from './brand.ts'
 import type {
   CommandDescriptor,
   CommandExecution,
@@ -23,7 +24,7 @@ import type {
   CommandSubmitAttachment,
 } from './types.ts'
 
-export { CommandId } from './brand.ts'
+export { CommandDefinitionId, CommandId } from './brand.ts'
 export type * from './types.ts'
 
 export const name = 'commands'
@@ -58,6 +59,8 @@ export interface CommandInvocation {
 
 /** Plugin-owned command registration. */
 export interface CommandDefinition {
+  /** Stable plugin-owned identity; absent for definitions without identity-based client behavior. */
+  readonly definitionId?: CommandDefinitionId
   /** Lowercase command name without the leading slash. */
   readonly name: string
   /** Human-readable summary used in discovery UI. */
@@ -205,6 +208,7 @@ function normalizeDefinition(definition: CommandDefinition): RegisteredCommand {
     })
   }
   const normalized = Object.freeze({
+    ...definition.definitionId === undefined ? {} : { definitionId: definition.definitionId },
     name: definition.name,
     description: definition.description,
     ...input === undefined ? {} : { input },
@@ -212,6 +216,7 @@ function normalizeDefinition(definition: CommandDefinition): RegisteredCommand {
     handler: definition.handler,
   })
   const descriptor = Object.freeze({
+    ...normalized.definitionId === undefined ? {} : { definitionId: normalized.definitionId },
     name: normalized.name,
     description: normalized.description,
     ...normalized.input === undefined ? {} : { input: normalized.input },

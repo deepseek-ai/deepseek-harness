@@ -27,14 +27,15 @@ afterEach(async () => {
 describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compacts mid-flight and keeps running', () => {
   it('summarizes older history into a checkpoint without breaking the task', async () => {
     workdir = await mkdtemp(join(tmpdir(), 'dsh-compaction-'))
+    // An older file result must exceed the framed checkpoint's fixed sections.
     for (let i = 1; i <= 4; i++) {
-      await writeFile(join(workdir, `file${i}.txt`), `This is file number ${i}. `.repeat(50))
+      await writeFile(join(workdir, `file${i}.txt`), `This is file number ${i}. `.repeat(200))
     }
 
     // Reasoning tokens require a larger generation cap than the retained checkpoint.
     ctx = await codingHarness(workdir, {
       personaPrefix: SYSTEM_PROMPT,
-      modelContextWindow: 2000,
+      modelContextWindow: 8000,
       compact: {
         thresholdRatio: 0.5,
         retainTokens: 400,
@@ -47,12 +48,20 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
     })
     const agent = await ctx.agentLoop.create(SessionId('e2e-compaction'), { provider: 'deepseek-official', model: 'deepseek-v4-flash' })
 
+    // Completed read turns cannot collapse into one retained parallel tool group.
+    for (let i = 1; i <= 4; i++) {
+      agent.followup(createUserMessage({
+        content: [{
+          type: 'text',
+          text: `Read only file${i}.txt using one bash cat command. Remember its number for my next question.`,
+        }], source: { kind: 'user' } }))
+      await waitForIdle(ctx, agent)
+    }
+
     agent.followup(createUserMessage({
       content: [{
         type: 'text',
-        text: 'Read file1.txt, file2.txt, file3.txt, and file4.txt one at a '
-        + 'time using cat (a separate bash command for each). After reading all four, tell me how '
-        + 'many files you read and the number mentioned in file1.txt.',
+        text: 'How many files have you read, and what number was mentioned in file1.txt? Do not read them again.',
       }], source: { kind: 'user' } }))
     await waitForIdle(ctx, agent)
 
@@ -67,7 +76,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
     // It succeeded at least once: a `compaction/summary` event describing the summary and a
     // replace-op user/message (the surface mutation) both landed.
     const summaries = events.filter(e => e.type === 'compaction/summary')
-    expect(summaries.length).toBeGreaterThan(0)
+    expect(summaries.length, JSON.stringify(ends.map(event => event.data.error))).toBeGreaterThan(0)
     const replaceNode = events.find((e) => {
       const se = e as unknown as { type: string; surfaceOp?: unknown }
       return se.type === 'user/message' && typeof se.surfaceOp === 'object' && se.surfaceOp !== null
@@ -78,11 +87,16 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('compaction: a long session compa
     // message-producing event count).
     const summaryData = summaries[0]!.data as { shadowedSeqs: number[] }
     expect(summaryData.shadowedSeqs.length).toBeGreaterThan(0)
+    expect(events.some(event => event.type === 'tool/result'
+      && summaryData.shadowedSeqs.includes(event.seq)
+      && event.data.message.content[0].content.some(block => block.type === 'text'
+        && block.text.includes('This is file number')))).toBe(true)
 
     // The conversation survived compaction: the agent produced a final answer
     // that reflects the work (it read four files).
     const answer = finalText(events).toLowerCase()
     expect(answer.length).toBeGreaterThan(0)
     expect(answer).toMatch(/\b(4|four)\b/)
+    expect(answer).toMatch(/\b(1|one)\b/)
   }, 240_000)
 })

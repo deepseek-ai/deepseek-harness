@@ -1,10 +1,12 @@
 /** Models section registration: slot declaration injection, the locale-following label thunk, and HMR recovery. */
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { TestRemote, scriptedSettingsRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { remoteDefaultResponses } from '@deepseek-ai/dsh-client-test-runtime/src/assembly/remote-default-responses.ts'
+import { ok, RemoteMock } from '@deepseek-ai/dsh-remote-mock'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, refreshIfLoaded } from '@deepseek-ai/dsh-client-ui-settings-models/client'
 import {
@@ -19,7 +21,8 @@ import { apply as hostApply } from '../src/index.ts'
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
 // FALLBACK_LOCALE (en); bench stages zh explicitly on the locale instead.
 
-async function bench(isLoopback = true, settings?: object, services: object = {}) {
+async function bench(isLoopback = true, mock = RemoteMock.create().load(remoteDefaultResponses), services: object = {}) {
+  onTestFinished(() => { mock.assertNoUnmatched() })
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   const locale = new LocaleRuntime(ctx)
@@ -37,10 +40,7 @@ async function bench(isLoopback = true, settings?: object, services: object = {}
       discoverModels: vi.fn(() => Promise.resolve({ ok: true, value: [] })),
       ...services,
     },
-    // Without a settings face the mirror's reads fail and stay contained; the
-    // Models join itself never fetches until a section actually loads. The real
-    // ui-settings apply also provides the settingsSchema service.
-    settings: settings ?? scriptedSettingsRemote().settings,
+    settings: mock.remote.settings,
   })
   // The fixed Host facts the settings provider reads its persistence from.
   remote.$host = { home: undefined, isLoopback }
@@ -259,25 +259,18 @@ describe('pushed invalidations', () => {
   it('welcome state follows the shared mirror across document commits', async () => {
     // The welcome notice derives from its settings scope: a document commit
     // reaches it through the mirror's one refresh, with no routing here.
-    const acknowledgement = { current: undefined as string | undefined }
-    const settings = {
-      describe: vi.fn(() => Promise.resolve({
-        ok: true as const,
-        value: {
-          writable: true,
-          hasDocument: false,
-          namespaces: [{
-            ns: WELCOME_NOTICE_SETTINGS_NAMESPACE,
-            schema: {},
-            value: acknowledgement.current === undefined ? {} : { [WELCOME_NOTICE_ACK_FIELD]: acknowledgement.current },
-            applies: 'live' as const,
-            secrets: [],
-            revision: 0,
-          }],
-        },
-      })),
+    const mock = RemoteMock.create().load(remoteDefaultResponses)
+    const namespace = {
+      ns: WELCOME_NOTICE_SETTINGS_NAMESPACE,
+      schema: {},
+      value: {},
+      applies: 'live' as const,
+      secrets: [],
+      revision: 0,
     }
-    const b = await bench(true, settings)
+    const document = { writable: true, hasDocument: false, namespaces: [namespace] }
+    mock.remote.settings.describe.mockResolvedValue(ok(document))
+    const b = await bench(true, mock)
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('settings.onboarding')
@@ -290,7 +283,10 @@ describe('pushed invalidations', () => {
     await vi.waitFor(() => {
       expect(injected.hooks.welcome.getSnapshot()).toMatchObject({ status: 'ready', acknowledged: false })
     })
-    acknowledgement.current = WELCOME_NOTICE_VERSION
+    mock.remote.settings.describe.mockResolvedValue(ok({
+      ...document,
+      namespaces: [{ ...namespace, value: { [WELCOME_NOTICE_ACK_FIELD]: WELCOME_NOTICE_VERSION }, revision: 1 }],
+    }))
     b.remote.emit('settings/document-updated', ['ui-onboarding', 1])
     await vi.waitFor(() => {
       expect(injected.hooks.welcome.getSnapshot()).toMatchObject({ status: 'ready', acknowledged: true })
@@ -298,24 +294,13 @@ describe('pushed invalidations', () => {
   })
 
   it('joins the refreshed mirror view on a settings invalidation', async () => {
-    let revision = 1
-    const describe = vi.fn(() => Promise.resolve({
-      ok: true as const,
-      value: {
-        writable: true,
-        hasDocument: false,
-        namespaces: [{
-          ns: 'llm-test',
-          schema: {},
-          value: {},
-          applies: 'live' as const,
-          secrets: [],
-          revision,
-        }],
-      },
-    }))
+    const mock = RemoteMock.create().load(remoteDefaultResponses)
+    const namespace = { ns: 'llm-test', schema: {}, value: {}, applies: 'live' as const, secrets: [], revision: 1 }
+    const document = { writable: true, hasDocument: false, namespaces: [namespace] }
+    const describe = mock.remote.settings.describe
+    describe.mockResolvedValue(ok(document))
     const listProviders = vi.fn(() => Promise.resolve({ ok: true as const, value: [] }))
-    const b = await bench(true, { describe }, { listProviders })
+    const b = await bench(true, mock, { listProviders })
     declare(b.slots)
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries('settings.section')
@@ -327,8 +312,8 @@ describe('pushed invalidations', () => {
     await injected.controller.load()
     expect(injected.hooks.snapshot.getSnapshot().namespaces.get('llm-test')?.revision).toBe(1)
 
-    revision = 2
-    b.remote.emit('settings/document-updated', ['llm-test', revision])
+    describe.mockResolvedValue(ok({ ...document, namespaces: [{ ...namespace, revision: 2 }] }))
+    b.remote.emit('settings/document-updated', ['llm-test', 2])
 
     await vi.waitFor(() => {
       expect(injected.hooks.snapshot.getSnapshot().namespaces.get('llm-test')?.revision).toBe(2)

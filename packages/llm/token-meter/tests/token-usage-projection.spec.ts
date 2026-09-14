@@ -275,7 +275,7 @@ describe('tokenUsage session projection', () => {
       content: [{ type: 'text', text: 'compacted' }],
       source: { kind: 'plugin', plugin: 'test' },
     }), {
-      surfaceOp: { op: 'replace', start: before.seq, end: before.seq },
+      surfaceOp: { op: 'replace', startSeq: before.seq, endSeq: before.seq },
       sourceEventSeqs: [before.seq],
     })
 
@@ -439,7 +439,7 @@ describe('contextPressure session projection', () => {
     const checkpoint = JSON.parse(JSON.stringify(
       ctx.sessionProjections.checkpoint(session),
     )) as ReturnType<typeof ctx.sessionProjections.checkpoint>
-    expect(checkpoint.contextPressure?.ver).toBe(4)
+    expect(checkpoint.contextPressure?.ver).toBe(5)
 
     await meterFiber.dispose()
     expect(ctx.sessionProjections.snapshot(session).values).not.toHaveProperty('contextPressure')
@@ -478,12 +478,28 @@ describe('contextPressure session projection', () => {
       content: [{ type: 'text', text: 'summary' }],
       source: { kind: 'plugin', plugin: 'test' },
     }), {
-      surfaceOp: { op: 'replace', start: question, end: grown },
+      surfaceOp: { op: 'replace', startSeq: question, endSeq: grown },
       sourceEventSeqs: [question, answer, grown],
     })
     const compacted = pressure(ctx, session)
     expect(compacted.pressureTokens).toBe(900)
     expect(compacted.projectedTokens).toBeLessThan(beforeCompaction!)
+  })
+
+  it.each(['start', 'end'] as const)('rejects a shadow claim with a mismatched %s endpoint', async (endpoint) => {
+    const { ctx, session } = await harness()
+    try {
+      const first = appendUser(session, 'first')
+      const last = appendUser(session, 'last')
+      appendSummaryMeter(ctx, session, first, last)
+      const target = endpoint === 'start' ? last : first
+      session.append('user/message', createUserMessage({
+        content: [{ type: 'text', text: 'summary' }], source: { kind: 'plugin', plugin: 'test' },
+      }), { surfaceOp: { op: 'replace', startSeq: target, endSeq: target }, sourceEventSeqs: [target] })
+      expect(() => pressure(ctx, session)).toThrow('has no adjacent shadow price')
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('folds a replacement without a claim at zero', async () => {
@@ -498,7 +514,7 @@ describe('contextPressure session projection', () => {
       content: [{ type: 'text', text: 'summary without a preceding claim' }],
       source: { kind: 'plugin', plugin: 'test' },
     }), {
-      surfaceOp: { op: 'replace', start: question, end: question },
+      surfaceOp: { op: 'replace', startSeq: question, endSeq: question },
       sourceEventSeqs: [question],
     })
 
@@ -519,7 +535,7 @@ describe('contextPressure session projection', () => {
       content: [{ type: 'text', text: '.' }],
       source: { kind: 'plugin', plugin: 'test' },
     }), {
-      surfaceOp: { op: 'replace', start: question, end: question },
+      surfaceOp: { op: 'replace', startSeq: question, endSeq: question },
       sourceEventSeqs: [question],
     })
     expect(pressure(ctx, session).projectedTokens).toBe(0)

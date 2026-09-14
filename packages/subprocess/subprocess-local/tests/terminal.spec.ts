@@ -13,6 +13,9 @@ import type { SubprocessTerminalSignal } from '@deepseek-ai/dsh-subprocess'
 
 class FakePty {
   pid = 123
+  readonly pause = vi.fn()
+  readonly resume = vi.fn()
+  readonly resize = vi.fn()
   readonly writes: string[] = []
   readonly kills: string[] = []
   autoExitOnKill = true
@@ -114,6 +117,41 @@ function makeHandle(pty: FakePty, inspector: ProcessInspector, graceMs: number):
 }
 
 describe('LocalTerminalHandle', () => {
+  it('pauses native output until the consumer drains and resumes before termination', async () => {
+    const pty = new FakePty()
+    const handle = makeHandle(pty, new FakeInspector(), 10)
+    const chunk = 'x'.repeat(handle.output.readableHighWaterMark + handle.output.writableHighWaterMark)
+    pty.emitData(chunk)
+    expect(pty.pause).toHaveBeenCalledOnce()
+    const chunks: Buffer[] = []
+    handle.output.on('data', (data: Buffer) => { chunks.push(data) })
+    await vi.waitFor(() => { expect(pty.resume).toHaveBeenCalledOnce() })
+    expect(Buffer.concat(chunks).toString()).toBe(chunk)
+    handle.output.pause()
+    pty.emitData(chunk)
+    expect(pty.pause).toHaveBeenCalledTimes(2)
+    await handle.terminate()
+    handle.output.emit('drain')
+    expect(pty.resume).toHaveBeenCalledTimes(2)
+    handle.output.destroy()
+  })
+
+  it('does not resume native output when a pending drain follows the PTY exit', async () => {
+    const pty = new FakePty()
+    const handle = makeHandle(pty, new FakeInspector(), 10)
+    try {
+      pty.emitData('x'.repeat(handle.output.readableHighWaterMark + handle.output.writableHighWaterMark))
+      expect(pty.pause).toHaveBeenCalledOnce()
+      pty.emitExit(0)
+      await expect(handle.done).resolves.toEqual({ exitCode: 0, signal: null })
+      handle.output.emit('drain')
+      expect(pty.resume).not.toHaveBeenCalled()
+    } finally {
+      await handle.terminate()
+      handle.output.destroy()
+    }
+  })
+
   it('terminates a managed range with TERM when it stops within the grace period', async () => {
     vi.useFakeTimers()
     const pty = new FakePty()
@@ -419,6 +457,8 @@ describe('LocalTerminalHandle', () => {
 
     pty.emitData('hello €')
     await handle.write('input\r')
+    await handle.resize(100, 30)
+    expect(pty.resize).toHaveBeenCalledWith(100, 30)
     expect(pty.writes).toEqual(['input\r'])
     expect(await handle.inspectForeground()).toEqual({ processGroupId: 456, inputWaiting: true })
     expect(inspector.stdinChecks).toEqual([[456, 123]])
@@ -427,6 +467,7 @@ describe('LocalTerminalHandle', () => {
 
     pty.emitExit(7, 9)
     pty.emitExit(0)
+    await expect(handle.resize(80, 24)).rejects.toThrow('terminal process has exited')
     expect(await handle.done).toEqual({ exitCode: null, signal: 'SIGKILL' })
     await handle.terminate()
     expect(Buffer.concat(chunks).toString('utf8')).toBe('hello €')

@@ -90,6 +90,14 @@ describe('PopupSelectView', () => {
     expect(rowLabels()).toEqual(['Dark', 'Light', 'Sepia'])
   })
 
+  it('renders an optional option badge as a superscript marker', async () => {
+    await mountOpen({
+      options: () => Promise.resolve([{ id: 'auto', label: 'Auto review', badge: 'EXP' }]),
+    })
+    const row = screen.getByRole('option', { name: 'Auto review EXP' })
+    expect(row.querySelector('sup')?.textContent).toBe('EXP')
+  })
+
   it('typing filters rows locally and rebases the highlight', async () => {
     const options = vi.fn(() => Promise.resolve(OPTIONS))
     const { search } = await mountOpen({ options })

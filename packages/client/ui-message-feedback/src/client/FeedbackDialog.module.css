@@ -1,0 +1,110 @@
+/* The card width leaves four categories on the first row and three on the
+   second. The doubled selector overrides the Modal card geometry. */
+.dialog.dialog {
+  gap: 38px;
+  width: min(488px, 100%);
+  border-radius: 18px;
+}
+
+.categories {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -14px;
+}
+
+.chip {
+  height: 28px;
+  padding: 0 12px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 14px;
+  corner-shape: round;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 18px;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.chip:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--dsw-alias-button-primary-fill);
+  outline-offset: 2px;
+}
+
+.chipActive,
+.chipActive:hover:not(:disabled) {
+  border-color: var(--dsw-alias-button-primary-fill);
+  background: var(--dsw-alias-button-primary-fill);
+  color: var(--dsw-alias-label-primary-foreground);
+}
+
+/* The field starts at three short lines, grows with its text where supported,
+   and scrolls after the cap. */
+.detail {
+  display: block;
+  width: 100%;
+  min-height: 116px;
+  max-height: 280px;
+  box-sizing: border-box;
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  field-sizing: content;
+  resize: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.detail::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
+.detail:focus {
+  outline: none;
+  border-color: var(--dsw-alias-border-l3);
+  box-shadow: 0 0 0 1px var(--dsw-alias-border-l3);
+}
+
+.submit {
+  width: 100%;
+  height: 44px;
+  border-radius: 18px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* The design's ringed green check, not the warning tint the Toast icon seat defaults to. */
+.toastIcon {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--dsw-alias-state-success-primary);
+  border-radius: 50%;
+  corner-shape: round;
+  color: var(--dsw-alias-state-success-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .detail {
+    transition: none;
+  }
+}

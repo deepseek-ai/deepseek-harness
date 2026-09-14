@@ -1,5 +1,5 @@
 /** Synthetic current-generation history and paced reply for browser measurements. */
-import { createAssistantMessage, createUserMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createSystemMessage, createUserMessage, createToolResultMessage, ToolCallId } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
 import { Session, SessionId, SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
@@ -26,12 +26,15 @@ export function syntheticHistory(): string {
   const session = Session.create(SessionId(SESSION_ID))
   for (let turn = 1; turn <= HISTORY_TURNS; turn++) {
     session.append('turn/start', { turn })
+    session.append('step/start', { turn, step: 1 })
+    if (turn === 1) session.append('system/message', {
+      turn, step: 1, message: createSystemMessage('', '@deepseek-ai/dsh-system-prompt'),
+    }, { surfaceOp: 'append' })
     const user = session.append('user/message', createUserMessage({
       content: [{ type: 'text', text: 'Review synthetic change ' + String(turn) + ': 检查增量渲染。 '.repeat(30) }],
       source: { kind: 'user' },
     }), { surfaceOp: 'append' })
     if (turn === 1) session.append('session/title', { title: TITLE, messageSeqs: [user.seq], source: { kind: 'fallback' } })
-    session.append('step/start', { turn, step: 1 })
     const callId = ToolCallId('synthetic-tool-' + String(turn))
     const tool = turn % 6 === 0
     const code = turn % 12 === 0

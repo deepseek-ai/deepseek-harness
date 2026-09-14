@@ -165,7 +165,7 @@ async function createPolicyDispatcher(policy: ProxyPolicy): Promise<Dispatcher> 
  *
  * A worker thread has its own `globalThis` and so its own dispatcher; installing here does not
  * reach it. No worker installs one today: both this repository ships — the workflow engine and the
- * code runtime — evaluate model-authored scripts, which must not receive a proxy URL that may carry
+ * PTC runtime — evaluate model-authored scripts, which must not receive a proxy URL that may carry
  * credentials. A worker that needs the policy has to be handed one explicitly and install it itself.
  *
  * @param policy - the resolved policy to install.

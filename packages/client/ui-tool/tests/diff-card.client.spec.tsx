@@ -2,25 +2,17 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
-import {
-  bindSnapshotSelector, conversationSnapshot, sessionSnapshot, workspaceSnapshot,
-} from '@deepseek-ai/dsh-client-test-runtime'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type {
-  ChatSnapshot, ConversationNode, RunningToolCall, SelectionTarget, ToolResultNode,
-} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import type { SessionListState } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { CHAT_DIFF_MAX_LINES, diffCardModel } from '../src/client/tool/models/diff-card-model.ts'
-import { createChatStore } from '@deepseek-ai/dsh-client-ui-chat/src/client/stores.ts'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
-import { DetailsPanel } from '@deepseek-ai/dsh-client-ui-chat/src/client/details/DetailsPanel.tsx'
 import { FileMutationRow, fileMutationToolview } from '../src/client/tool/toolviews/file-mutation-row.tsx'
-import { renderToolDetails, toolChatSnapshot, useEmptyTrajectory } from './tool-details-render.client.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
-import { zh as chatZh } from '@deepseek-ai/dsh-client-ui-chat/src/client/locale.ts'
 
 afterEach(cleanup)
 
@@ -29,7 +21,6 @@ type FileMutationRowProps = Parameters<typeof FileMutationRow>[0]
 const SID = 's1' as SessionId
 
 const t = makeTranslate(zh, commonZh)
-const chatT = makeTranslate(chatZh, commonZh)
 
 const ARGS = '{"file_path":"notes/demo.txt","old_string":"hello","new_string":"hello fixture"}'
 
@@ -354,89 +345,5 @@ describe('fileMutationToolview registration', () => {
     // Disposal removes each contribution (packages/AGENTS.md registry contract).
     disposeInjection()
     expect(registered.every(r => r.disposed)).toBe(true)
-  })
-})
-
-describe('DetailsPanel diff Output section', () => {
-  function mount(snapshot: ChatSnapshot, selection: SelectionTarget | null, cwd?: string) {
-    localStorage.clear()
-    const chat = createChatStore().create()
-    if (selection !== null) chat.actions.select(selection)
-    const sessions = createSnapshotStore<SessionListState>(cwd === undefined
-      ? { ids: [], byId: {}, current: undefined, phase: 'ready', subagentsByParent: {}, jobsBySession: {}, currentAddress: undefined }
-      : {
-        ids: [SID],
-        byId: { [SID]: { id: SID, displayTitle: 'r', running: false, blank: false, updatedAt: 0, cwd } },
-        current: SID,
-        phase: 'ready',
-        subagentsByParent: {}, jobsBySession: {},
-        currentAddress: undefined,
-      })
-    const session = createSnapshotStore(sessionSnapshot(SID))
-    const conversation = createSnapshotStore(conversationSnapshot())
-    const workspaces = createSnapshotStore(workspaceSnapshot())
-    const attention = createSnapshotStore(new Map())
-    return render(
-      <DetailsPanel
-        renderSlot={renderToolDetails(t)}
-        SessionProvider={({ children }) => children}
-        sessionId={SID}
-        useSession={bindSnapshotSelector(session)}
-        useSessions={bindSnapshotSelector(sessions)}
-        useSessionPendingInteraction={bindSnapshotSelector(attention)}
-        useWorkspaces={bindSnapshotSelector(workspaces)}
-        useConversation={bindSnapshotSelector(conversation)}
-        useChat={bindSnapshotSelector({ getSnapshot: () => snapshot, subscribe: () => () => {} })}
-        useTrajectory={useEmptyTrajectory}
-        useInput={(() => { throw new Error('unused') })}
-        inputActions={{
-          setDraft: () => {},
-          addAttachments: () => true,
-          removeAttachment: () => {},
-          pruneAttachments: () => {},
-          submit: () => {},
-        }}
-        useProjection={(() => undefined)}
-        useStore={bindSnapshotSelector(chat)}
-        actions={chat.actions}
-        closeDetails={vi.fn()}
-        t={chatT}
-      />,
-    )
-  }
-
-  function snapshot(over: {
-    nodes?: readonly ConversationNode[]
-    runningCalls?: readonly RunningToolCall[]
-  } = {}): ChatSnapshot {
-    const nodes = over.nodes ?? []
-    const runningCalls = over.runningCalls ?? []
-    return toolChatSnapshot(nodes, runningCalls)
-  }
-
-  const target: SelectionTarget = { turnSeq: 10, callId: 'c1', toolName: 'edit' }
-
-  it('renders the applied diff at full height, keeping the JSON Input section', () => {
-    const view = mount(snapshot({ nodes: [settled()] }), target)
-    expect(view.getByText(/"file_path"/)).toBeTruthy()
-    expect(view.container.querySelector('[data-diff]')).not.toBeNull()
-    expect(view.getByText('hello fixture')).toBeTruthy()
-  })
-
-  it('a running diff call renders its intended change, not the 运行中… placeholder', () => {
-    const view = mount(snapshot({ runningCalls: [running()] }), target)
-    expect(view.container.querySelector('[data-diff]')).not.toBeNull()
-    expect(view.queryByText('运行中…')).toBeNull()
-  })
-
-  it('a non-diff result keeps the flattened pre', () => {
-    const view = mount(snapshot({
-      nodes: [settled({
-        meta: undefined,
-        content: [{ type: 'text', text: 'permission denied' }],
-      })],
-    }), target)
-    expect(view.container.querySelector('[data-diff]')).toBeNull()
-    expect(view.getByText('输出').closest('section')?.querySelector('pre')?.textContent).toBe('permission denied')
   })
 })

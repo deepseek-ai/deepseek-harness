@@ -6,6 +6,8 @@ import type { Agent, AgentStatus } from '@deepseek-ai/dsh-agent'
 import CommandRuntime from '@deepseek-ai/dsh-commands'
 import SessionStore, { foldSurface, Session, SessionId } from '@deepseek-ai/dsh-session'
 import * as commandFeedback from '@deepseek-ai/dsh-command-feedback'
+import type { FeedbackRecord } from '@deepseek-ai/dsh-command-feedback/types'
+import { remoteMethods } from '@deepseek-ai/dsh-typert-protocol'
 import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 const { USER_ID, getOrCreateAnonymousUserId } = vi.hoisted(() => {
@@ -55,7 +57,7 @@ async function harness(): Promise<Harness> {
   await ctx.plugin(SessionStore)
   const plugin = await ctx.plugin(commandFeedback)
   const { agent, session } = stubAgent(ctx, `command-feedback-${Math.random()}`)
-  ctx.agents.register(agent)
+  await ctx.agents.register(agent)
   return { ctx, agent, session, plugin }
 }
 
@@ -72,10 +74,15 @@ async function run(test: Harness, suffix = ''): Promise<{ kind: string; text?: s
 }
 
 /** Authoritative feedback payloads in log order. */
-function feedbackTexts(session: Session): string[] {
+function feedbackRecords(session: Session): FeedbackRecord[] {
   return session.snapshotEvents()
     .filter(event => event.type === 'feedback/record')
-    .map(event => event.data.text)
+    .map(event => event.data)
+}
+
+/** The text of each authoritative feedback payload in log order. */
+function feedbackTexts(session: Session): (string | undefined)[] {
+  return feedbackRecords(session).map(record => record.text)
 }
 
 describe('@deepseek-ai/dsh-command-feedback registration', () => {
@@ -88,14 +95,57 @@ describe('@deepseek-ai/dsh-command-feedback registration', () => {
     expect(loader.unwrapExports(commandFeedback)).toBe(commandFeedback)
 
     expect(test.ctx.commands.list(test.agent)).toContainEqual({
+      definitionId: '@deepseek-ai/dsh-command-feedback',
       name: 'feedback',
-      description: 'record feedback about this session',
+      description: 'Record feedback about this session',
       input: { hint: '<text>' },
     })
     expect(test.ctx.commands.find(test.agent, 'feedback')).toMatchObject({ recordInput: false })
 
     await test.plugin.dispose()
     expect(test.ctx.commands.find(test.agent, 'feedback')).toBeUndefined()
+  })
+})
+
+describe('sessionFeedback Host Remote', () => {
+  it('publishes the exact Gateway namespace and Remote method name', async () => {
+    const test = await harness()
+    const binding = test.ctx.sessionFeedback.typertRemote
+    expect(binding.serviceKey).toBe('sessionFeedback')
+    expect(binding.namespace).toBe('sessionFeedback')
+    expect(remoteMethods(test.ctx.sessionFeedback)).toEqual([
+      { method: 'record', invocation: { kind: 'direct' } },
+    ])
+  })
+
+  it('records a remark on the live Session without command bookkeeping', async () => {
+    const test = await harness()
+    await expect(test.ctx.sessionFeedback.record({
+      sessionId: test.session.id, text: '  the diff view is unreadable ', category: 'product-interaction',
+    })).resolves.toEqual({ ok: true, value: { recorded: true } })
+    await expect(test.ctx.sessionFeedback.record({ sessionId: test.session.id }))
+      .resolves.toEqual({ ok: true, value: { recorded: true } })
+    expect(test.session.snapshotEvents().map(event => event.type)).toEqual(['feedback/record', 'feedback/record'])
+    expect(feedbackRecords(test.session)).toEqual([
+      { text: 'the diff view is unreadable', category: 'product-interaction' },
+      {},
+    ])
+    expect(getOrCreateAnonymousUserId).not.toHaveBeenCalled()
+  })
+
+  it('reports session-not-found for a Session no live owner carries', async () => {
+    const test = await harness()
+    const missing = SessionId('no-such-session')
+    await expect(test.ctx.sessionFeedback.record({ sessionId: missing, text: 'lost' }))
+      .resolves.toEqual({ ok: false, error: { code: 'session-not-found', sessionId: missing } })
+    expect(test.session.snapshotEvents()).toEqual([])
+  })
+
+  it('is mounted and unmounted with the plugin', async () => {
+    const test = await harness()
+    expect(test.ctx.get('sessionFeedback')).toBeDefined()
+    await test.plugin.dispose()
+    expect(test.ctx.get('sessionFeedback')).toBeUndefined()
   })
 })
 
@@ -114,12 +164,24 @@ describe('/feedback human command', () => {
 
   it('exports a command-independent feedback producer', async () => {
     const test = await harness()
-    commandFeedback.recordFeedback(test.session, '  recorded outside a command  ')
-    expect(test.session.snapshotEvents().map(event => event.type)).toEqual(['feedback/record'])
-    expect(feedbackTexts(test.session)).toEqual(['recorded outside a command'])
-    expect(() => { commandFeedback.recordFeedback(test.session, ' \n\t ') })
-      .toThrow('feedback text must not be empty')
-    expect(feedbackTexts(test.session)).toEqual(['recorded outside a command'])
+    commandFeedback.recordFeedback(test.session, { text: '  recorded outside a command  ' })
+    commandFeedback.recordFeedback(test.session, { text: ' \n\t ', category: 'service-stability' })
+    commandFeedback.recordFeedback(test.session, {})
+    expect(test.session.snapshotEvents().map(event => event.type))
+      .toEqual(['feedback/record', 'feedback/record', 'feedback/record'])
+    // Blank text is recorded as absent; an entry with neither member still records.
+    expect(feedbackRecords(test.session)).toEqual([
+      { text: 'recorded outside a command' },
+      { category: 'service-stability' },
+      {},
+    ])
+  })
+
+  it('publishes the fixed category taxonomy in presentation order', () => {
+    expect(commandFeedback.FEEDBACK_CATEGORIES).toEqual([
+      'task-result', 'instruction-following', 'product-interaction', 'service-stability',
+      'resource-cost', 'security-privacy-permission', 'other',
+    ])
   })
 
   it('keeps command bookkeeping around the authoritative feedback event', async () => {

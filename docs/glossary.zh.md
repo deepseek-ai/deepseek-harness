@@ -17,7 +17,7 @@ DeepSeek Harness 的领域词汇为每个概念规定一个规范术语。各术
 - **scoped dispatch**：规则是：关于某个 agent 的活动的事件以该 agent 的 carrier 进行分发。关于注册表本身的事件（如「一个工具被添加了」）属于*注册表主体*事件，保持不过滤。
 - **shadowing**：最具体者胜出的名称解析：一个带作用域的工具／片段／变量仅在该 scope 内替换同名的全局对应项。这是按 agent 定制 persona 和按 agent 定制工具变体的机制。
 - **restriction / scope-local 注册**：restriction（`tools.restrict`）为单个 scope 过滤全局工具集合（多个 restriction 取交集组合）；scope-local 注册在过滤之后合并。被过滤掉的全局工具既不出现在提示词中，也拒绝执行，与不存在的工具无法区分。
-- **setup window**：创建者组装 agent 作用域环境的创建时隙（`CreateAgentOptions.setup`）：此时 scope 和 agent 对象已存在，但 agent 或会话尚未发布，`agent/session-start` 尚未触发，首次提示词尚未组装。setup 只做注册，从不驱动 agent。
+- **setup window**：创建者组装 agent 作用域环境的创建时隙（`CreateAgentOptions.setup`）：此时 scope 和 agent 对象已存在，但 agent 或会话尚未发布，`agent/created` 尚未触发，首次提示词尚未组装。setup 只做注册，从不驱动 agent。
 - **lineage**：以数据形式携带的父子关系事实（`parentSession`、持久的 `delegationDepth`、运行时 `subagentDepth`）；从不影响可见性。<a id="lineage"></a>
 
 ## 目标

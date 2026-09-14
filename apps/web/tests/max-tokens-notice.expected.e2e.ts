@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // Assembled max-tokens snapshot: boots the real built `packages/client/*/lib/
 // client.js` bundles through AppWebEntry's ModuleLoader path against the
-// keyless fixture Connection RPC, opens the fixture session, and pins the
+// keyless RemoteMock transport, opens the fixture session, and pins the
 // surface its max-tokens turn (72) reaches — the turn-end notice row that a
 // provider output-cap truncation must render instead of ending silently.
 //

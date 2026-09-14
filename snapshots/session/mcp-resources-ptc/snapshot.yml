@@ -1,0 +1,8 @@
+version: 1
+scenario: mcp-resources-ptc
+profile: headless
+composition: mcp-resources-ptc
+recording: live
+header:
+  class: mcp-resources-ptc
+  pin: true

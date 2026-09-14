@@ -45,7 +45,7 @@ kind: "package-reference"
 
 ### Lookup 与 Context 提供方
 
-Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host 对象与作用域 Context。`registerHost()` 安装一个双向 Host Context adapter 及其 wire 声明，`configureHost()` 只替换其中的 resolver。`registerClient()` 为同一个 merge-declared kind 安装双向 Client adapter。`identifyHost(ctx)` 通过 Host adapter 识别活 Context 所代表的唯一 kind 与 identity，并拒绝歧义识别。
+Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host 对象与作用域 Context。`registerHost()` 安装 Host wire 声明及其 wire 到 Context 的 resolver，`configureHost()` 只替换该 resolver。`registerClient()` 为同一个 merge-declared kind 安装双向 Client adapter。Host 到 Client 的事件源显式携带领域 identity，而不从 Context 反向投影。
 
 -----
 

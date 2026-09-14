@@ -65,6 +65,7 @@ try {
     sessionId: SessionId("built-child"),
     meta: { cwd: storageRoot, parentSession: SessionId("built-parent") },
     agentOptions: { model: "test" },
+    parentAgent: parent.agent,
   });
   const result = Promise.withResolvers();
   const unregister = ctx.subagents.registerProvider({

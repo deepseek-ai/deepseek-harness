@@ -1,5 +1,5 @@
 ---
-description: "随包附带的「powered by dsh」徽章 skill，供启用、使用或排查该可选徽章提供方的用户与维护者阅读。"
+description: "随包附带的「powered by dsh」徽章 skill（技能），供启用、使用或排查该可选徽章提供方的用户与维护者阅读。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-agent（智能体）可以通过该内置提供方加载官方「powered by dsh」徽章 skill（技能），并遵循其指令，给文档、pull request 以及其他用 DeepSeek Harness 生成的内容添加署名徽章。该提供方没有配置，随附 CLI（命令行界面）组合以禁用状态包含该插件，因此部署方需要显式启用。该 skill 同时提供 Markdown 片段和随包分发的 PNG，供无法可靠导入远程图片的系统使用。
+agent（智能体）可以通过该内置提供方加载官方「powered by dsh」徽章 skill，并遵循其指令，给文档、PR（Pull Request）以及其他用 DeepSeek Harness 生成的内容添加署名徽章。该提供方没有配置，随附 CLI（命令行界面）组合以禁用状态包含该插件，因此部署方需要显式启用。该 skill 同时提供 Markdown 片段和随包分发的 PNG，供无法可靠导入远程图片的系统使用。
 
 ## 目录
 
@@ -43,7 +43,7 @@ agent（智能体）可以通过该内置提供方加载官方「powered by dsh�
 
 ### 徽章 skill 提供什么
 
-- **Markdown 片段。** 在文档、pull request 与 merge request 中嵌入官方徽章标记的指令。
+- **Markdown 片段。** 在文档、PR 与 merge request 中嵌入官方徽章标记的指令。
 - **随包分发的 PNG 资源。** `dsh-badge.png`（726×120 源图，按 121×20 渲染），在无法导入远程图片的环境中可用。
 
 ### 可观察的成功与失败
@@ -69,7 +69,7 @@ agent（智能体）可以通过该内置提供方加载官方「powered by dsh�
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 插件入口与不可变提供方：一个候选项、资源基底、正文加载 |
-| — | 不发布运行时不变式伴生入口；本包只持有一个不可变 provider 注册，注册唯一性与生命周期由 skill registry 负责。 |
+| — | 不发布运行时不变式伴生入口；本包只持有一个不可变的提供方注册，注册唯一性与生命周期检查由 skill 注册表负责。 |
 | [`assets/`](assets/) | 随包分发的 skill 正文（`dsh-badge.md`）与 PNG 资源（`dsh-badge.png`） |
 
 </details>
@@ -79,7 +79,7 @@ agent（智能体）可以通过该内置提供方加载官方「powered by dsh�
 <a id="further-exploration"></a>
 ## 进一步探索
 
-当包级约定不够用时阅读以下页面。它们从该提供方注册到的注册表逐步进入 skill 如何到达模型。
+当包级约定不够用时，请阅读以下页面。这些页面先介绍该提供方注册到的注册表，再说明 skill 如何到达模型。
 
 - [skill 子系统参考](../../../docs/subsystems/skills.zh.md)——该提供方实现的注册表与提供方约定。
 - [skill 包](../skill/README.zh.md)——该提供方注册到的注册表，以及已加载 skill 的共享渲染。

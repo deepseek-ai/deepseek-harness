@@ -9,9 +9,10 @@
  * refresh stay serial while writing.
  *
  * Exactly one scenario per header-composition class pins the tokenized header
- * sequence. Its prompt and tool-schema sequences live in independent
- * sidecars, each of which may be shared with another class pin when the bytes
- * are identical. Every live header is checked against the composed pin, so
+ * sequence and the tokenized `system/message` sequence. Its prompt and
+ * tool-schema sequences live in independent sidecars, each of which may be
+ * shared with another class pin when the bytes are identical. Every live
+ * header and system prompt is checked against the composed pin, so
  * session-dependent composition must declare a separate class instead of
  * escaping coverage.
  * @module @deepseek-ai/dsh-session-snapshot/suite
@@ -21,6 +22,7 @@ import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { isSurfaceEligibleType } from '@deepseek-ai/dsh-session/surface'
+import { SESSION_FORMAT_VERSION } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import { type AgentUnderTest, type HarvestedLog, type InputScript, runScenario } from './harness.ts'
 import {
@@ -43,7 +45,6 @@ import {
   normalizeSessionLog,
   normalizeSessionSnapshots,
   normalizeStdout,
-  scrubRequestHeaders,
   scrubSessionSnapshot,
   scrubSystemPrompts,
   scrubToolSchemas,
@@ -122,13 +123,13 @@ export interface Scenario {
   /**
    * Header-pinning scenario whose `system-prompt.expected.md` this pin reuses.
    * Defaults to this scenario. The source must own its prompt sidecar and
-   * declare the same {@link expectedHeaderChanges}; meaningless off a pin.
+   * declare the same {@link expectedPromptChanges}; only valid on a pin.
    */
   systemPromptSource?: string
   /**
    * Header-pinning scenario whose `tool-schemas.expected.json` this pin reuses.
    * Defaults to this scenario. The source must own its schema sidecar and
-   * declare the same {@link expectedHeaderChanges}; meaningless off a pin.
+   * declare the same {@link expectedHeaderChanges}; only valid on a pin.
    */
   toolSchemasSource?: string
   /**
@@ -147,10 +148,18 @@ export interface Scenario {
   pinsChildSystemPrompts?: readonly number[]
   /**
    * How many changed `request/header` snapshots this PINNING scenario's primary
-   * fixture legitimately carries (default 0). Their full prompt text is kept in
-   * the readable Markdown pin; any other count fails. Meaningless off the pin.
+   * fixture legitimately carries (default 0). Each change owns one more schema
+   * set in the structured JSON pin; any other count fails. Only valid on the pin.
    */
   expectedHeaderChanges?: number
+  /**
+   * How many later `system/message` events — replacements of surface node 0
+   * or in-history appends — this PINNING scenario's primary fixture
+   * legitimately carries after the initial prompt (default 0). Each change's
+   * full prompt text is kept in the readable Markdown pin; any other count
+   * fails. Only valid on the pin.
+   */
+  expectedPromptChanges?: number
   /**
    * Which header-composition class this scenario belongs to. Scenarios that
    * boot the same config compose the same header; each class has exactly one
@@ -371,15 +380,12 @@ interface NormalizedHeaderEvent {
 
 /** Normalize request-header payloads while retaining the reason that selects a pin revision. */
 function normalizedHeaderEvents(rawLog: string, ctx: NormalizeContext): NormalizedHeaderEvent[] {
-  return normalizeSessionLog(rawLog, ctx)
-    .split('\n')
-    .filter(line => line.trim().length > 0)
-    .map(line => JSON.parse(line) as {
-      type?: unknown
-      data?: { header?: unknown; reason?: unknown }
-    })
+  return parseJsonlRecords(normalizeSessionLog(rawLog, ctx))
     .filter(record => record.type === 'request/header')
-    .map(record => ({ header: record.data?.header, reason: record.data?.reason }))
+    .map((record) => {
+      const data = record.data as { header?: unknown; reason?: unknown } | undefined
+      return { header: data?.header, reason: data?.reason }
+    })
 }
 
 /**
@@ -394,13 +400,18 @@ function pinningHeaderPayloads(rawLog: string, ctx: NormalizeContext): unknown[]
     .map(event => event.header)
 }
 
-/** Extract every string system prompt from a normalized header sequence. */
-function systemPromptsFrom(headers: readonly unknown[]): string[] {
-  return headers.flatMap((header) => {
-    if (header === null || typeof header !== 'object') return []
-    const system = (header as { system?: unknown }).system
-    return typeof system === 'string' ? [system] : []
-  })
+/**
+ * The rendered prompt text of one parsed `system/message` record: its single
+ * text block, or `''` when the empty `content` records "no system prompt".
+ * Any other record yields `undefined`.
+ */
+function systemPromptOf(record: Record<string, unknown>): string | undefined {
+  if (record.type !== 'system/message') return undefined
+  const data = record.data as { message?: { content?: unknown } } | undefined
+  const content = data?.message?.content
+  if (!Array.isArray(content)) return undefined
+  const block = content[0] as { text?: unknown } | undefined
+  return content.length === 0 ? '' : typeof block?.text === 'string' ? block.text : undefined
 }
 
 /** Extract every array-valued tool catalog from a normalized header sequence. */
@@ -416,8 +427,7 @@ function toolSchemasFrom(headers: readonly unknown[]): unknown[][] {
  * The `data.header` payload of every `request/header` event in a session
  * JSONL, in log order, with the log's volatile values scrubbed first
  * ({@link normalizeSessionLog}) so headers harvested from different runs —
- * each embedding its own generated cwd in the composed prompt — compare on equal
- * footing.
+ * each embedding its own generated cwd — compare on equal footing.
  *
  * @param rawLog The session `.jsonl` content to extract headers from.
  * @param ctx The volatile values of the run that produced it.
@@ -428,16 +438,37 @@ export function normalizedHeaders(rawLog: string, ctx: NormalizeContext): unknow
 }
 
 /**
- * The normalized string-valued system prompts carried by request headers in a
- * session JSONL, in log order. Headers without a string prompt are omitted so
- * callers can assert one prompt per header explicitly.
+ * The normalized prompt text of every `system/message` event in a session
+ * JSONL, in log order: the first is the initial system prompt (surface node 0)
+ * and each later one replaced it or, on an in-history route, appended the
+ * changed prompt after the cached history. An empty `content` yields `''`; a
+ * `system/message` without a text block is omitted.
  *
  * @param rawLog The session `.jsonl` content to inspect.
  * @param ctx The volatile values of the run that produced it.
- * @returns The normalized system prompts, in header order.
+ * @returns The normalized system prompts, in log order.
  */
 export function normalizedSystemPrompts(rawLog: string, ctx: NormalizeContext): string[] {
-  return systemPromptsFrom(normalizedHeaders(rawLog, ctx))
+  return parseJsonlRecords(normalizeSessionLog(rawLog, ctx))
+    .flatMap((record) => {
+      const prompt = systemPromptOf(record)
+      return prompt === undefined ? [] : [prompt]
+    })
+}
+
+/**
+ * Whether every model request in a session JSONL is preceded by its system
+ * prompt: the log has no `request/header`, or a `system/message` event comes
+ * before its first `request/header`.
+ *
+ * @param rawLog The session `.jsonl` content to inspect.
+ * @returns True when the first `request/header` (if any) follows a `system/message`.
+ */
+export function systemPromptPrecedesRequests(rawLog: string): boolean {
+  const types = parseJsonlRecords(rawLog).map(record => record.type)
+  const firstHeader = types.indexOf('request/header')
+  const firstPrompt = types.indexOf('system/message')
+  return firstHeader < 0 || (firstPrompt >= 0 && firstPrompt < firstHeader)
 }
 
 /**
@@ -507,13 +538,16 @@ export function restorePinnedToolSchemas(header: unknown, schemas: readonly unkn
   return { ...header, tools: schemas }
 }
 
+/** Marker line separating one replaced prompt from the previous one in a prompt sidecar. */
+const SYSTEM_PROMPT_CHANGE_MARKER = '\n<!-- system/message change '
+
 /**
  * Render a normalized prompt as a repository-friendly Markdown snapshot.
  * Prompt text is unchanged except that a missing terminal newline is added so
  * the committed file follows the repository newline contract.
  *
- * @param prompt The normalized system prompt.
- * @param changes Full normalized prompts from later changed-header snapshots.
+ * @param prompt The normalized initial system prompt (surface node 0).
+ * @param changes Full normalized prompts from later `system/message` events, replacements or in-history appends.
  * @returns Markdown snapshot text ending in a newline.
  */
 export function formatSystemPromptSnapshot(
@@ -522,10 +556,22 @@ export function formatSystemPromptSnapshot(
 ): string {
   let snapshot = prompt.endsWith('\n') ? prompt : `${prompt}\n`
   for (const [index, change] of changes.entries()) {
-    snapshot += `\n<!-- request/header change ${index + 1} -->\n\n`
+    snapshot += `${SYSTEM_PROMPT_CHANGE_MARKER}${index + 1} -->\n\n`
     snapshot += change.endsWith('\n') ? change : `${change}\n`
   }
   return snapshot
+}
+
+/**
+ * Split a prompt sidecar into its initial prompt and each later change, the
+ * inverse of {@link formatSystemPromptSnapshot}.
+ *
+ * @param snapshot The Markdown sidecar text.
+ * @returns The initial prompt snapshot plus one entry per later `system/message`.
+ */
+export function parseSystemPromptSnapshot(snapshot: string): { initial: string; changes: string[] } {
+  const parts = snapshot.split(/\n<!-- system\/message change [1-9]\d* -->\n\n/)
+  return { initial: parts[0] as string, changes: parts.slice(1) }
 }
 
 /**
@@ -540,10 +586,9 @@ export function assertChildSystemPromptSnapshot(sidecar: string, classPin: strin
   if (sidecar === classPin) throw new Error(`${label} must differ from its class pin`)
 }
 
-/** Return the initial-prompt portion of a possibly multi-header snapshot. */
+/** Return the initial-prompt portion of a possibly multi-prompt snapshot. */
 function initialSystemPromptSnapshot(snapshot: string): string {
-  const marker = snapshot.indexOf('\n<!-- request/header change ')
-  return marker < 0 ? snapshot : snapshot.slice(0, marker)
+  return parseSystemPromptSnapshot(snapshot).initial
 }
 
 /**
@@ -600,6 +645,7 @@ function surfaceEventMessage(record: Record<string, unknown>): Record<string, un
     case 'user/message':
       message = data
       break
+    case 'system/message':
     case 'assistant/message':
     case 'tool/result':
       message = data.message
@@ -1103,11 +1149,40 @@ export function stabilizeRefreshLog(
 }
 
 /**
+ * Check every selected role for tool/path defects and current generations for canonical prompt/identity storage.
+ * Historical roles retain their released bytes, including roles retired by the current writer.
+ * @param dir Scenario directory containing canonical Session fixtures.
+ * @param scenarioName Scenario name used in failure diagnostics.
+ * @returns Resolves when all selected fixtures satisfy the storage checks.
+ */
+export async function assertSessionFixtureStorage(dir: string, scenarioName: string): Promise<void> {
+  const files = await sessionFixtures(dir)
+  const currentFixtures: string[] = []
+  for (const file of files) {
+    const fixture = await readFile(join(dir, file), 'utf8')
+    const version = assertSessionFixtureVersion(file, fixture)
+    expect(unknownToolCallIds(fixture), `${scenarioName}/${file} contains UNKNOWN_TOOL`)
+      .toEqual([])
+    expect(fixture, `${scenarioName}/${file} carries a non-canonical macOS cwd token`)
+      .not.toContain('/private{{cwd}}')
+    if (version !== SESSION_FORMAT_VERSION) continue
+    currentFixtures.push(fixture)
+    expect(scrubSystemPrompts(fixture), `${scenarioName}/${file} carries an unscrubbed system prompt`)
+      .toEqual(fixture)
+    expect(scrubToolSchemas(fixture), `${scenarioName}/${file} carries unscrubbed tool schemas`)
+      .toEqual(fixture)
+    expect(systemPromptPrecedesRequests(fixture), `${scenarioName}/${file} has a request/header with no preceding system/message`)
+      .toBe(true)
+  }
+  expect(redactSessionSnapshotIds(currentFixtures), `${scenarioName}: identity redaction fixed point`).toEqual(currentFixtures)
+}
+
+/**
  * Register the suite: one test per scenario (the expected-output and log comparisons and
- * the header-uniformity guard) plus the fixture guard block (no orphan
+ * the header and prompt uniformity guard) plus the fixture guard block (no orphan
  * scenario dirs, required files present, exactly one pin per header class,
- * shared sidecars unique and well-formed, every JSONL prompt-scrubbed,
- * non-pinning fixtures fully header-scrubbed). Must
+ * shared sidecars unique and well-formed, every JSONL prompt- and
+ * schema-scrubbed with a `system/message` before its first request). Must
  * run at vitest collection time — it calls `describe`/`it`. Throws
  * immediately if any header class lacks a pinning scenario or carries two
  * (the uniformity guard needs exactly one comparison anchor per class).
@@ -1130,7 +1205,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
       throw new Error(`acp-snapshot: duplicate scenario name "${scenario.name}"`)
     }
     scenariosByName.set(scenario.name, scenario)
-    for (const field of ['systemPromptSource', 'toolSchemasSource'] as const) {
+    for (const field of ['systemPromptSource', 'toolSchemasSource', 'expectedHeaderChanges', 'expectedPromptChanges'] as const) {
       if (scenario[field] !== undefined && scenario.pinsHeader !== true) {
         throw new Error(`acp-snapshot: ${scenario.name}.${field} is only valid on a header-pinning scenario`)
       }
@@ -1152,6 +1227,11 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
     }
   }
 
+  /**
+   * Resolve one pin's sidecar source. A prompt sidecar spans `1 + expectedPromptChanges`
+   * prompts and a schema sidecar spans `1 + expectedHeaderChanges` schema sets, so a shared
+   * source must declare the count that sizes the sidecar it lends.
+   */
   const sourceFor = (
     pinningScenario: Scenario,
     field: 'systemPromptSource' | 'toolSchemasSource',
@@ -1168,11 +1248,10 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
     if (source[field] !== undefined && source[field] !== source.name) {
       throw new Error(`acp-snapshot: ${pinningScenario.name} names ${label} source "${sourceName}", which does not own its sidecar`)
     }
-    const expectedChanges = pinningScenario.expectedHeaderChanges ?? 0
-    const sourceChanges = source.expectedHeaderChanges ?? 0
-    if (sourceChanges !== expectedChanges) {
+    const countField = field === 'systemPromptSource' ? 'expectedPromptChanges' : 'expectedHeaderChanges'
+    if ((source[countField] ?? 0) !== (pinningScenario[countField] ?? 0)) {
       throw new Error(
-        `acp-snapshot: ${pinningScenario.name} and ${sourceName} declare different header-change counts for shared ${label}`,
+        `acp-snapshot: ${pinningScenario.name} and ${sourceName} declare different ${countField} counts for shared ${label}`,
       )
     }
     return source
@@ -1208,7 +1287,10 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         let fixtureFiles = RECORDING ? [] : await sessionFixtures(dir)
         const childFixtureFiles = fixtureFiles.slice(1)
         const primaryFixtureFile = fixtureFiles[0] ?? sessionFixtureName(0, 0)
-        const comparesLog = scenario.comparesLog ?? scenario.hasModelTurn
+        // A retained historical generation is an immutable replay input: record
+        // and refresh never write or compare a current-writer session for it.
+        const comparesLog = scenario.comparesLog ?? (scenario.hasModelTurn
+          && manifest.sessionFormat === undefined)
         const result = await runScenario(input, {
           agent,
           mode: childMode,
@@ -1285,9 +1367,9 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
           fixtureFiles = outputFixtureFiles
           if (scenario.pinsHeader === true) {
             const primary = result.sessionLogs[0] as HarvestedLog
-            const pinningHeaders = pinningHeaderPayloads(primary.content, ctx)
-            const prompts = systemPromptsFrom(pinningHeaders)
-            expect(prompts.length, `${mode} produced no system prompt to snapshot`).toBeGreaterThan(0)
+            const prompts = normalizedSystemPrompts(primary.content, ctx)
+            expect(prompts.length, `${mode} produced a system prompt count that differs from 1 + expectedPromptChanges`)
+              .toBe(1 + (scenario.expectedPromptChanges ?? 0))
             const promptSnapshot = formatSystemPromptSnapshot(prompts[0] as string, prompts.slice(1))
             /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
             const promptSource = promptSourceByClass.get(classOf(scenario)) ?? scenario
@@ -1295,10 +1377,9 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             claimSharedSnapshot(promptClaims, promptPath, scenario.name, promptSnapshot)
             await writeFile(promptPath, promptSnapshot)
 
-            const schemaSets = toolSchemasFrom(pinningHeaders)
-            expect(schemaSets.length, `${mode} produced no tool schemas to snapshot`).toBeGreaterThan(0)
-            expect(schemaSets.length, `${mode} produced a tool-schema sequence that differs from its prompt sequence`)
-              .toBe(prompts.length)
+            const schemaSets = toolSchemasFrom(pinningHeaderPayloads(primary.content, ctx))
+            expect(schemaSets.length, `${mode} produced a tool-schema count that differs from 1 + expectedHeaderChanges`)
+              .toBe(1 + (scenario.expectedHeaderChanges ?? 0))
             const toolSchemasSnapshot = formatToolSchemasSnapshot(
               schemaSets[0] as unknown[],
               schemaSets.slice(1),
@@ -1328,10 +1409,7 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
             const log = result.sessionLogs[index]
             expect(log, `${mode}: no child session log at index ${index} to snapshot a prompt from`)
               .toBeDefined()
-            const prompts = systemPromptsFrom(pinningHeaderPayloads(
-              (log as HarvestedLog).content,
-              ctx,
-            ))
+            const prompts = normalizedSystemPrompts((log as HarvestedLog).content, ctx)
             expect(prompts.length, `${mode}: child ${index} produced no system prompt to snapshot`)
               .toBeGreaterThan(0)
             await writeFile(
@@ -1369,7 +1447,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         }
 
         // Every live full header must equal its class pin reconstructed from
-        // tokenized JSONL plus readable prompt and structured schema sidecars.
+        // tokenized JSONL plus the structured schema sidecar, and every live
+        // system prompt must equal the readable prompt sidecar.
         /* v8 ignore next -- construction guarantees the pin exists; a miss would fail the one-header assertion loudly. */
         const pinningScenario = pinningByClass.get(classOf(scenario)) ?? scenario
         /* v8 ignore next -- registration guarantees every scenario class has resolved sources. */
@@ -1387,6 +1466,8 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         const initialPromptSnapshot = initialSystemPromptSnapshot(promptSnapshot)
         expect(pinned.length, `the pinning fixture (${pinningScenario.name}) has an unexpected request/header count`)
           .toBe(1 + (pinningScenario.expectedHeaderChanges ?? 0))
+        expect(parseSystemPromptSnapshot(promptSnapshot).changes.length, `the prompt source (${promptSource.name}) has an unexpected system prompt change count`)
+          .toBe(pinningScenario.expectedPromptChanges ?? 0)
         const toolSchemasSnapshot = await readFile(
           join(snapshotsDir, schemaSource.name, TOOL_SCHEMAS_SNAPSHOT),
           'utf8',
@@ -1414,19 +1495,23 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         }
         for (const [logIndex, log] of result.sessionLogs.entries()) {
           const childSchemas = childPinnedSchemas.get(logIndex)
-          const expectedChanges = scenario.pinsHeader === true && logIndex === 0
-            ? scenario.expectedHeaderChanges ?? 0
-            : 0
+          const pinsPrimary = scenario.pinsHeader === true && logIndex === 0
+          const expectedChanges = pinsPrimary ? scenario.expectedHeaderChanges ?? 0 : 0
+          const expectedPromptChanges = pinsPrimary ? scenario.expectedPromptChanges ?? 0 : 0
           expect(headerChangeCount(log.content), `session ${log.id}: changed request/header count`)
             .toBe(expectedChanges)
-          const headerEvents = normalizedHeaderEvents(scrubSystemPrompts(log.content), ctx)
+          const headerEvents = normalizedHeaderEvents(log.content, ctx)
           const headers = headerEvents.map(event => event.header)
           const prompts = normalizedSystemPrompts(log.content, ctx)
           const schemaSets = normalizedToolSchemas(log.content, ctx)
-          expect(prompts.length, `session ${log.id}: every request/header must carry a string system prompt`)
-            .toBe(headers.length)
           expect(schemaSets.length, `session ${log.id}: every request/header must carry an array-valued tools field`)
             .toBe(headers.length)
+          if (headers.length > 0) {
+            expect(systemPromptPrecedesRequests(log.content), `session ${log.id}: a system/message must precede the first request/header`)
+              .toBe(true)
+            expect(prompts.length, `session ${log.id}: system/message count`)
+              .toBe(1 + expectedPromptChanges)
+          }
           if (childSchemas !== undefined) {
             expect(childSchemas.length, `session ${log.id}: ${childToolSchemasSnapshot(logIndex)} has an unexpected tool-schema count`)
               .toBe(1 + headerChangeCount(log.content))
@@ -1440,24 +1525,24 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
               : { ...classPin as Record<string, unknown>, tools: childSchemas[revision] }
             expect(header, `session ${log.id}: request/header #${k + 1} diverged from the pinned (${pinningScenario.name}) header`)
               .toEqual(expected)
-            if (expectedChanges === 0) {
-              // A pinned child owns its whole prompt: its scope-local sections
-              // are exactly what the class pin cannot describe.
-              const childPrompt = childPinnedPrompts.get(logIndex)
-              const promptOrigin = childPrompt === undefined
-                ? `${promptSource.name}/${SYSTEM_PROMPT_SNAPSHOT}`
-                : childSystemPromptSnapshot(logIndex)
-              expect(formatSystemPromptSnapshot(prompts[k] as string), `session ${log.id}: initial system prompt #${k + 1} diverged from ${promptOrigin}`)
+          }
+          if (expectedPromptChanges === 0) {
+            // A pinned child owns its whole prompt: its scope-local sections
+            // are exactly what the class pin cannot describe.
+            const childPrompt = childPinnedPrompts.get(logIndex)
+            const promptOrigin = childPrompt === undefined
+              ? `${promptSource.name}/${SYSTEM_PROMPT_SNAPSHOT}`
+              : childSystemPromptSnapshot(logIndex)
+            for (const [k, prompt] of prompts.entries()) {
+              expect(formatSystemPromptSnapshot(prompt), `session ${log.id}: system prompt #${k + 1} diverged from ${promptOrigin}`)
                 .toEqual(childPrompt ?? initialPromptSnapshot)
             }
           }
-          if (scenario.pinsHeader === true && logIndex === 0) {
-            const pinningHeaders = pinningHeaderPayloads(log.content, ctx)
-            const pinningPrompts = systemPromptsFrom(pinningHeaders)
-            const pinningSchemas = toolSchemasFrom(pinningHeaders)
+          if (pinsPrimary) {
+            const pinningSchemas = toolSchemasFrom(pinningHeaderPayloads(log.content, ctx))
             expect(formatSystemPromptSnapshot(
-              pinningPrompts[0] as string,
-              pinningPrompts.slice(1),
+              prompts[0] as string,
+              prompts.slice(1),
             ), `session ${log.id}: changed system prompts diverged from ${promptSource.name}/${SYSTEM_PROMPT_SNAPSHOT}`)
               .toEqual(promptSnapshot)
             expect(formatToolSchemasSnapshot(
@@ -1573,6 +1658,10 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
         }
         expect(promptSnapshot.length, `${promptSource.name}/${SYSTEM_PROMPT_SNAPSHOT} must not be empty`).toBeGreaterThan(0)
         expect(promptSnapshot.endsWith('\n'), `${promptSource.name}/${SYSTEM_PROMPT_SNAPSHOT} must end in a newline`).toBe(true)
+        expect(parseSystemPromptSnapshot(promptSnapshot).changes.length, `${promptSource.name}: prompt change count must match ${scenario.name}'s expectedPromptChanges`)
+          .toBe(scenario.expectedPromptChanges ?? 0)
+        expect(normalizedSystemPrompts(fixture, fixtureContext(fixture)).length, `${scenario.name}: a pinning fixture must carry exactly its declared system/message count`)
+          .toBe(1 + (scenario.expectedPromptChanges ?? 0))
         expect(toolSchemasSnapshot, `${schemaSource.name}/${TOOL_SCHEMAS_SNAPSHOT} must use canonical JSON formatting`)
           .toBe(formatToolSchemasSnapshot(toolSchemas.initial, toolSchemas.changes))
         expect(headerChangeCount(fixture), `${scenario.name}: a pinning fixture must carry exactly its declared changed headers`)
@@ -1622,30 +1711,12 @@ export function defineAcpSnapshotSuite(options: SnapshotSuiteOptions): void {
     })
 
     it('every committed JSONL has valid tool results and canonical fixture storage', async () => {
-      // Prompts and schemas always leave JSONL. Header pins retain prefixes;
-      // every other fixture tokenizes those too. Portable cwd tokens never
-      // retain a platform realpath prefix. Fixed-point checks make these
-      // storage rules fail loud.
+      // Prompt text and schemas always leave JSONL, every model request
+      // follows a logged system prompt, and portable cwd tokens never retain a
+      // platform realpath prefix. Fixed-point checks make these storage rules
+      // fail loud.
       for (const scenario of scenarios) {
-        const dir = join(snapshotsDir, scenario.name)
-        const files = await sessionFixtures(dir)
-        for (const file of files) {
-          const fixture = await readFile(join(dir, file), 'utf8')
-          expect(unknownToolCallIds(fixture), `${scenario.name}/${file} contains UNKNOWN_TOOL`)
-            .toEqual([])
-          expect(fixture, `${scenario.name}/${file} carries a non-canonical macOS cwd token`)
-            .not.toContain('/private{{cwd}}')
-          expect(scrubSystemPrompts(fixture), `${scenario.name}/${file} carries an unscrubbed system prompt`)
-            .toEqual(fixture)
-          expect(scrubToolSchemas(fixture), `${scenario.name}/${file} carries unscrubbed tool schemas`)
-            .toEqual(fixture)
-          if (scenario.pinsHeader !== true) {
-            expect(scrubRequestHeaders(fixture), `${scenario.name}/${file} carries unscrubbed header content`)
-              .toEqual(fixture)
-          }
-        }
-        const fixtures = await Promise.all(files.map(file => readFile(join(dir, file), 'utf8')))
-        expect(redactSessionSnapshotIds(fixtures), `${scenario.name}: identity redaction fixed point`).toEqual(fixtures)
+        await assertSessionFixtureStorage(join(snapshotsDir, scenario.name), scenario.name)
       }
     })
   })

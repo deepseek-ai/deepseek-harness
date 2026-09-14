@@ -1,7 +1,8 @@
 /**
- * ic_ds_* icon set for the dsh web UI. All glyphs render fill="currentColor"
- * and take {size, className}. Batch A mirrors the deepsuite icon library
- * (same figma source); batch B glyphs are harness-only figma extracts.
+ * ic_ds_* icon set for the dsh web UI. All glyphs ride currentColor (filled
+ * or stroked) and take {size, className}. Batch A mirrors the deepsuite icon
+ * library (same figma source); batch B glyphs are harness-only figma
+ * extracts; the product glyphs at the end are hand-authored.
  */
 import type { IconProps } from './props.ts'
 
@@ -241,10 +242,12 @@ export const IconCopyOutline16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
-/** ic_ds_refresh_outline_16 */
+/** ic_ds_refresh_outline_16, inset 10%: the exported glyph fills its box edge
+ * to edge, one visual size above the neighbouring 16px glyphs. */
 export const IconRefreshOutline16 = ({ size = 16, className }: IconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
+      transform="translate(0.8 0.8) scale(0.9)"
       d="M7.92136 0.349152C10.3744 0.349234 12.5564 1.5052 13.9557 3.29894L15.1281 2.12759C15.3303 1.92546 15.6767 2.06943 15.6767 2.35538V5.53923C15.6766 5.71626 15.5329 5.85976 15.3559 5.86002H12.171C11.8854 5.8597 11.7426 5.51465 11.9443 5.31249L12.9641 4.29056C11.8237 2.74305 9.98908 1.74106 7.92136 1.74097C4.46436 1.74097 1.66233 4.543 1.66233 8C1.66233 11.457 4.46436 14.259 7.92136 14.259C11.3782 14.2589 14.1804 11.4569 14.1804 8H15.5722C15.5722 12.2251 12.1465 15.6507 7.92136 15.6508C3.69614 15.6508 0.270508 12.2252 0.270508 8C0.270508 3.77478 3.69614 0.349152 7.92136 0.349152Z"
       fill="currentColor"
     />
@@ -460,7 +463,7 @@ export const IconRightUpOutline14 = ({ size = 8, className }: IconProps) => (
 export const IconRightUpOutline16 = ({ size = 16, className }: IconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
-      d="M13.588429 5.147807C13.588429 4.739638 13.587271 4.403003 13.582013 4.118684L1.703098 15.99968L0.85155 15.148178L0 14.294485L11.878915 2.413442C11.594721 2.408199 11.257569 2.409154 10.849776 2.409154H2.400594V0.000001H10.849776C11.644471 0.000001 12.338899 -0.001059 12.901622 0.059909C13.486363 0.123352 14.071136 0.265493 14.598303 0.648292C14.886598 0.857751 15.141981 1.110984 15.351433 1.399281C15.734578 1.926807 15.876362 2.512925 15.939743 3.098105C16.000775 3.660718 15.99968 4.353347 15.99968 5.147807V13.599133H13.588429V5.147807Z"
+      d="M11.3822 6.28945C11.3822 6.02863 11.3815 5.81352 11.3781 5.63184L3.7875 13.2238L3.24336 12.6797L2.69922 12.1342L10.2898 4.54219C10.1083 4.53884 9.89281 4.53945 9.63223 4.53945H4.2332V3H9.63223C10.14 3 10.5838 2.99932 10.9434 3.03828C11.317 3.07882 11.6907 3.16965 12.0275 3.41426C12.2118 3.5481 12.3749 3.70992 12.5088 3.89414C12.7536 4.23123 12.8443 4.60576 12.8848 4.97969C12.9237 5.3392 12.923 5.78179 12.923 6.28945V11.6898H11.3822V6.28945Z"
       fill="currentColor"
     />
   </svg>
@@ -515,11 +518,11 @@ export const IconUserOutline16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
-/** ic_ds_send_outline_16 */
-export const IconSendOutline16 = ({ size = 16, className }: IconProps) => (
-  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+/** ic_ds_paper_plane_outline_14 */
+export const IconPaperPlaneOutline14 = ({ size = 14, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path
-      d="M8.3125 0.981587C8.66767 1.0545 8.97902 1.20558 9.2627 1.43374C9.48724 1.61438 9.73029 1.85933 9.97949 2.10854L14.707 6.83608L13.293 8.25014L9 3.95717V15.0431H7V3.95717L2.70703 8.25014L1.29297 6.83608L6.02051 2.10854C6.26971 1.85933 6.51277 1.61438 6.7373 1.43374C6.97662 1.24126 7.28445 1.04542 7.6875 0.981587C7.8973 0.94841 8.1031 0.956564 8.3125 0.981587Z"
+      d="M11.8249 1.11733C12.4401 0.929305 13.0795 1.42149 13.0238 2.08968L12.2321 11.5935C12.1751 12.2735 11.4312 12.6646 10.8386 12.3263L7.99539 10.7011L6.0967 12.7005L6.07413 12.7248L6.04808 12.7465C5.55601 13.1565 4.80867 12.8069 4.80833 12.1665V8.69211C4.80843 8.44469 4.90686 8.20727 5.08181 8.0323L9.79684 3.31641L2.46775 6.6988L4.10251 7.35253L3.67364 8.42559L1.57874 7.5878V7.5852C0.807611 7.2988 0.757207 6.21577 1.5145 5.86622L11.7025 1.16421L11.8249 1.11733ZM5.96474 11.1603L6.9614 10.1107L5.96474 9.54118V11.1603ZM6.32937 8.41864L11.1086 11.149L11.791 2.95698L6.32937 8.41864Z"
       fill="currentColor"
     />
   </svg>
@@ -778,6 +781,17 @@ export const IconClockOutline16 = ({ size = 16, className }: IconProps) => (
   </svg>
 )
 
+/** Thin-stroke gauge: dial arc open at the bottom, filled hub, square-cut needle to the upper right.
+ * The dial center sits at y=8.75, not 8: the bottom opening leaves the glyph top-heavy, and the
+ * 0.75 drop optically centers the drawn extent in the 16 box. */
+export const IconGaugeOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3.49 13.26A6.375 6.375 0 1 1 12.51 13.26" stroke="currentColor" strokeWidth="1.25" />
+    <path d="M8 8.75L11.4 5.35" stroke="currentColor" strokeWidth="1.25" />
+    <circle cx="8" cy="8.75" r="1.55" fill="currentColor" />
+  </svg>
+)
+
 /** ic_send_outline_14 (figma extract): thin-stroke upward send arrow. */
 export const IconSendOutline14 = ({ size = 14, className }: IconProps) => (
   <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -921,5 +935,66 @@ export const IconArchiveOutline20 = ({ size = 20, className }: IconProps) => (
       fill="currentColor"
     />
     <path d="M12.7962 12.5661V11.0832H7.20548V12.5661L12.7962 12.5661Z" fill="currentColor" />
+  </svg>
+)
+
+/** Line-wrapping toggle glyph. */
+export const IconWrapLinesOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none"
+    stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" aria-hidden="true">
+    <path d="M1.5 3.5h13M1.5 7.5h10.25a2.5 2.5 0 0 1 0 5H8m2-2-2 2 2 2M1.5 11.5h3" />
+  </svg>
+)
+
+/**
+ * Plan row glyph of the composer menu (#3567): a document with three ruled
+ * lines and a pencil over its corner. Drawn on a 14 grid whose content spans
+ * 0.5..13.5, so at the menu's 16px render it fills the same extent as the
+ * 16-grid glyphs beside it.
+ */
+export const IconPlanOutline14 = ({ size = 14, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9.56143 3.14672V4.24774H3.94716V3.14672H9.56143Z" fill="currentColor" />
+    <path d="M9.56143 5.44201V6.54304H3.94716V5.44201H9.56143Z" fill="currentColor" />
+    <path d="M7.97328 7.73731V8.83833H3.94716V7.73731H7.97328Z" fill="currentColor" />
+    <path
+      d="M8.02789 0.500001C8.82106 0.500001 9.46528 0.499108 9.97973 0.553797C10.5054 0.609708 10.9678 0.729732 11.3714 1.01734C11.6057 1.18436 11.8125 1.38729 11.9827 1.61716C12.2758 2.01317 12.3982 2.46699 12.4552 2.98269C12.5109 3.48743 12.51 4.11964 12.51 4.89782V5.48599L11.2928 6.72061V4.89782C11.2928 4.09333 11.2923 3.53731 11.2453 3.1118C11.1995 2.69759 11.1162 2.47711 10.9986 2.31831C10.9034 2.18976 10.7879 2.07638 10.6568 1.98298C10.495 1.86762 10.2704 1.7858 9.84814 1.7409C9.41445 1.69482 8.84789 1.69427 8.02789 1.69427H5.4821C4.66215 1.69427 4.09555 1.69485 3.66184 1.7409C3.23978 1.78576 3.01501 1.86773 2.85315 1.98298C2.72221 2.07632 2.60657 2.18986 2.51139 2.31831C2.39384 2.4771 2.31045 2.69763 2.26467 3.1118C2.21772 3.53731 2.21716 4.09333 2.21716 4.89782V8.91011C2.21716 9.71498 2.21771 10.2714 2.26467 10.697C2.3104 11.111 2.39397 11.3308 2.51139 11.4896C2.60659 11.6182 2.72214 11.7315 2.85315 11.825C3.01505 11.9404 3.23938 12.023 3.66184 12.0679C4.09555 12.114 4.66212 12.1146 5.4821 12.1146H5.97554L4.80224 13.3034C4.3108 13.3002 3.88905 13.2923 3.53026 13.2541C3.00445 13.1982 2.5423 13.0784 2.13857 12.7906C1.90424 12.6235 1.6975 12.4216 1.52725 12.1917C1.23396 11.7955 1.1118 11.3412 1.05483 10.8252C0.999149 10.3205 1 9.68831 1 8.91011V4.89782C1 4.11964 0.999094 3.48743 1.05483 2.98269C1.11182 2.46701 1.23416 2.01316 1.52725 1.61716C1.69745 1.3874 1.90437 1.1843 2.13857 1.01734C2.54218 0.729872 3.00468 0.609682 3.53026 0.553797C4.04472 0.499135 4.68896 0.500001 5.4821 0.500001H8.02789Z"
+      fill="currentColor"
+    />
+    <path d="M12.6413 13.2999H8.82536L10.0608 12.1056H12.6413V13.2999Z" fill="currentColor" />
+    <path
+      d="M7.22216 11.8899L6.53753 13.2335C6.4571 13.3913 6.62775 13.5587 6.78861 13.4798L8.15787 12.8081L13 8.08806L12.0643 7.16994L7.22216 11.8899Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
+/**
+ * Compact row glyph of the composer menu: the composer's context-usage ring
+ * (ContextMeter) frozen at its resting look — a quiet track with one filled
+ * quarter arc. A restyle of the live ring revisits this copy.
+ */
+export const IconCompactOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="8" cy="8" r="6.4" stroke="currentColor" strokeWidth="1.6" opacity="0.35" />
+    <path d="M8 1.6A6.4 6.4 0 0 1 14.4 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+  </svg>
+)
+
+/**
+ * The permission shield contour on the 16 grid (design set 1556), stroked at
+ * {@link SHIELD_OUTLINE_STROKE}. The composer's permission selector composes
+ * its mode marks (check, pencil, exclamation) over this same path inside one
+ * svg, so the geometry lives here once.
+ */
+export const SHIELD_OUTLINE_PATH = 'M8.20554 0.899994L14.7901 3.36857V7.01026C14.7901 12 11.0466 14.2103 8.20554 15.3C5.36446 14.2103 1.62012 12 1.62012 7.01026V3.36857L8.20554 0.899994Z'
+
+/** Stroke width of {@link SHIELD_OUTLINE_PATH}. */
+export const SHIELD_OUTLINE_STROKE = '1.31831'
+
+/** Permission row glyph of the composer menu: the shield contour alone, without a mode mark. */
+export const IconShieldOutline16 = ({ size = 16, className }: IconProps) => (
+  <svg width={size} height={size} className={className} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d={SHIELD_OUTLINE_PATH} stroke="currentColor" strokeWidth={SHIELD_OUTLINE_STROKE} strokeLinejoin="round" />
   </svg>
 )

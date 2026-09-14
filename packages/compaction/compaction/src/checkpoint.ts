@@ -1,5 +1,5 @@
 /**
- * Compaction checkpoint provenance: the correlated source constructor and type
+ * Compaction checkpoint source: the correlated constructor and type
  * every backend uses for its replacement user message, plus the predicate that
  * recognizes persisted checkpoints.
  *
@@ -18,14 +18,14 @@ import type { CompactionId } from './brand.ts'
 
 const COMPACT_CHECKPOINT_MARKER = Object.freeze({ kind: 'plugin', plugin: 'compact' } as const)
 
-/** Message provenance carried by a concrete compaction checkpoint. */
+/** Message source carried by a concrete compaction checkpoint. */
 export type CompactionCheckpointSource = typeof COMPACT_CHECKPOINT_MARKER & {
   readonly compactionId: CompactionId
   readonly sourceCommandId?: CommandId
 }
 
 /**
- * Create checkpoint provenance correlated with one compaction transaction.
+ * Create a checkpoint source correlated with one compaction transaction.
  * @param compactionId - owning compaction identity.
  * @param sourceCommandId - initiating manual command, when present.
  * @returns immutable checkpoint source.

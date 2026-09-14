@@ -29,7 +29,7 @@ Compose this plugin instead of a concrete backend when the same composition must
 
 ### How the choice is made
 
-`native` requires every signal that the operator can see the host display and the native backend can serve it: a loopback-only bind (read from the injected `webServer`; an all-interfaces bind admits remote browsers no OS chooser can reach), no SSH launch (`SSH_CONNECTION`/`SSH_TTY` unset or blank), and a servable display session — assumed on darwin and win32; on linux, `DISPLAY`/`WAYLAND_DISPLAY` plus a zenity or kdialog binary on `PATH`; never on any other platform. Anything ambiguous resolves to `browse`, which works everywhere.
+`native` requires every signal that the operator can see the host display and the native backend can serve it: a loopback-only bind (read from the injected `webServer`; an all-interfaces bind admits remote browsers no OS chooser can reach), no SSH launch (the shared [launch-environment](../../util/launch-environment/README.md) predicate ignores project/user `.env` values and checks only inherited non-empty `SSH_CONNECTION`/`SSH_TTY`), and a servable display session — assumed on darwin and win32; on linux, `DISPLAY`/`WAYLAND_DISPLAY` plus a zenity or kdialog binary on `PATH`; never on any other platform. Anything ambiguous resolves to `browse`, which works everywhere.
 
 ### What you get
 
@@ -92,7 +92,7 @@ Read these when the chooser's contract is not enough: the seam definition first,
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as the GUI-host picking chooser only mounts a backend row and registers nothing model-facing.
+None, as the GUI host's directory-selection chooser only mounts a backend row and registers nothing model-facing.
 
 #### KV Cache effect
 

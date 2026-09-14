@@ -57,11 +57,11 @@ export interface ContextPressureProjection {
  * figure. Present these as approximations of composition, never as a total.
  */
 export interface ContextBreakdownProjection {
-  /** Heuristic tokens of the newest request envelope's system prompt; 0 before any request. */
+  /** Heuristic tokens of the last nonempty surviving system prompt in surface order; 0 when none exists. */
   systemTokens: number
   /** Heuristic tokens of the newest request envelope's tool schemas; 0 before any request. */
   toolsTokens: number
-  /** Heuristic tokens of the current model-visible conversation surface. */
+  /** Heuristic tokens of every other visible surface node, including superseded system prompts. */
   messageTokens: number
 }
 

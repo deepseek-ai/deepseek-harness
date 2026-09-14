@@ -3,11 +3,11 @@ import {
   type NormalizeContext,
   extractSnapshotSpillPaths,
   normalizeSessionLog,
-  normalizeSessionFormatProvenance,
+  normalizeSessionFormatMetadata,
   normalizeSessionSnapshot,
   normalizeSessionSnapshots,
   normalizeStdout,
-  scrubRequestHeaders,
+  scrubModelRequestBulk,
   scrubSessionSnapshot,
   scrubSystemPrompts,
   scrubToolSchemas,
@@ -265,6 +265,18 @@ describe('normalizeSessionLog', () => {
   const header = (over: object) => JSON.stringify({ type: 'session', version: 0, id: 's', createdAt: 123, ...over })
   const event = (over: object) => JSON.stringify({ type: 'turn/start', seq: 1, time: 999, data: { turn: 1 }, ...over })
 
+  it('keeps unexpected request-header fields observable in comparisons', () => {
+    const request = (system: boolean) => event({
+      type: 'request/header',
+      data: { header: { config: { model: 'mock' }, ...(system ? { system: 'unexpected prompt' } : {}) } },
+    })
+    for (const normalize of [normalizeSessionLog, normalizeSessionSnapshot]) {
+      const actual = normalize(`${header({})}\n${request(true)}\n`, ctx)
+      expect(actual).toContain('"system":"unexpected prompt"')
+      expect(actual).not.toEqual(normalize(`${header({})}\n${request(false)}\n`, ctx))
+    }
+  })
+
   it('zeroes the header createdAt', () => {
     const out = normalizeSessionLog(`${header({})}\n`, ctx)
     expect(out).toContain('"createdAt":0')
@@ -511,12 +523,35 @@ describe('normalizeSessionLog', () => {
     expect(out).toContain('"operation":"resume"')
   })
 
+  it('normalizes subagent catalog child creation clocks', () => {
+    const catalog = JSON.stringify({
+      type: 'subagent/catalog',
+      seq: 2,
+      time: 5,
+      data: {
+        version: 0,
+        childId: 'child',
+        childCreatedAt: 123,
+        mode: 'one-shot',
+      },
+    })
+    const out = normalizeSessionLog(`${header({})}\n${catalog}\n`, ctx)
+    expect(out).toContain('"childCreatedAt":0')
+  })
+
   it('handles complete envelopes when optional normalized fields are absent', () => {
     const bareHeader = JSON.stringify({ type: 'session', id: 's' })
     const bareHook = JSON.stringify({ type: 'hook/result', seq: 2, time: 5, data: { decision: 'allow' } })
     const nullDataHook = JSON.stringify({ type: 'hook/result', seq: 3, time: 6, data: null })
-    const out = normalizeSessionLog(`${bareHeader}\n${bareHook}\n${nullDataHook}\n`, ctx)
+    const bareCatalog = JSON.stringify({
+      type: 'subagent/catalog',
+      seq: 4,
+      time: 7,
+      data: { version: 0 },
+    })
+    const out = normalizeSessionLog(`${bareHeader}\n${bareHook}\n${nullDataHook}\n${bareCatalog}\n`, ctx)
     expect(out).toContain('"decision":"allow"')
+    expect(out).toContain('"version":0')
     expect(out).not.toContain('durationMs')
   })
 })
@@ -526,15 +561,25 @@ describe('normalizeSessionSnapshot', () => {
     const raw = [
       JSON.stringify({ type: 'session', version: 0, createdAt: 123, cwd: ctx.cwd }),
       JSON.stringify({
+        type: 'system/message',
+        seq: 6,
+        time: 998,
+        data: { turn: 1, step: 1, message: { role: 'system', content: [{ type: 'text', text: `work in ${ctx.cwd}` }] } },
+      }),
+      JSON.stringify({
         type: 'request/header',
         seq: 7,
         time: 999,
-        data: { header: { system: 'volatile', tools: [{ name: 'tool' }] } },
+        data: { header: { tools: [{ name: 'tool' }] } },
       }),
     ].join('\n') + '\n'
     expect(normalizeSessionSnapshot(raw, ctx)).toBe([
       JSON.stringify({ type: 'session', version: 0, createdAt: 0, cwd: '{{cwd}}' }),
-      JSON.stringify({ type: 'request/header', data: { header: { system: '{{system}}', tools: '{{tools}}' } } }),
+      JSON.stringify({
+        type: 'system/message',
+        data: { turn: 1, step: 1, message: { role: 'system', content: [{ type: 'text', text: '{{system}}' }] } },
+      }),
+      JSON.stringify({ type: 'request/header', data: { header: { tools: '{{tools}}' } } }),
     ].join('\n') + '\n')
   })
 
@@ -575,6 +620,64 @@ describe('normalizeSessionSnapshot', () => {
     ].join('\n'))
   })
 
+  it('preserves adjacent catalog facts in parent event order', () => {
+    const raw = [
+      JSON.stringify({ type: 'session', version: 0 }),
+      JSON.stringify({ type: 'tool/call', data: { callId: 'parallel' } }),
+      JSON.stringify({
+        type: 'subagent/catalog',
+        data: { version: 0, childId: '{{session:3}}', childCreatedAt: 123, mode: 'one-shot' },
+      }),
+      JSON.stringify({
+        type: 'subagent/catalog',
+        data: { version: 0, childId: '{{session:2}}', childCreatedAt: 124, mode: 'one-shot' },
+      }),
+      JSON.stringify({ type: 'tool/result', data: { callId: 'parallel' } }),
+    ].join('\n') + '\n'
+    const normalized = normalizeSessionSnapshot(raw, ctx)
+    expect(normalized.indexOf('{{session:3}}')).toBeLessThan(normalized.indexOf('{{session:2}}'))
+    expect(normalized).toContain('"childCreatedAt":0')
+  })
+
+  it('preserves malformed catalog payloads', () => {
+    const raw = [
+      JSON.stringify({ type: 'session', version: 0 }),
+      JSON.stringify({
+        type: 'subagent/catalog',
+        data: { version: 0, childId: '{{session:2}}', childCreatedAt: 1, mode: 'one-shot' },
+      }),
+      JSON.stringify({
+        type: 'subagent/catalog',
+        data: { version: 0, childId: 3, childCreatedAt: 3, mode: 'one-shot' },
+      }),
+    ].join('\n') + '\n'
+    const normalized = normalizeSessionSnapshot(raw, ctx)
+    expect(normalized).toContain('{{session:2}}')
+    expect(normalized).toContain('"childId":3')
+  })
+
+  it.each([
+    { sources: [0, 1] },
+    { sources: [0, 2] },
+  ])('preserves source references and catalog order: $sources', ({ sources }) => {
+    const records = [
+      { type: 'session', version: 2 },
+      { type: 'tool/call', data: { callId: 'parallel' } },
+      { type: 'subagent/catalog', data: { childId: 'child-z', childCreatedAt: 1, version: 0, mode: 'one-shot' } },
+      { type: 'subagent/catalog', data: { childId: 'child-a', childCreatedAt: 2, version: 0, mode: 'one-shot' } },
+      { type: 'tool/result', data: { callId: 'parallel' }, sourceEventSeqs: sources, surfaceOp: 'append' },
+    ]
+    const normalized = normalizeSessionSnapshot(records.map(record => JSON.stringify(record)).join('\n'), ctx)
+    expect(normalized).toBe([
+      records[0],
+      records[1],
+      { ...records[2], data: { ...records[2]?.data, childCreatedAt: 0 } },
+      { ...records[3], data: { ...records[3]?.data, childCreatedAt: 0 } },
+      records[4],
+    ].map(record => JSON.stringify(record)).join('\n') + '\n')
+    expect(normalizeSessionSnapshot(normalized, ctx)).toBe(normalized)
+  })
+
   it('migrates and re-packs multi-session fixtures after relationship-preserving id redaction', () => {
     const raw = [
       JSON.stringify({ type: 'session', version: 0, id: '{{session:1}}', createdAt: 0, delegationDepth: 0 }),
@@ -595,6 +698,20 @@ describe('normalizeSessionSnapshot', () => {
       }),
       JSON.stringify({ type: 'turn/start', data: { turn: 1 } }),
       JSON.stringify({ type: 'step/start', data: { turn: 1, step: 1 } }),
+      JSON.stringify({
+        type: 'system/message',
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            id: 'v2-to-v3-system-590b72aa4994fd6d3c6e61bb4bf5bf2f80bae0bc7564d388378ba4f51b816fd6',
+            role: 'system',
+            source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' },
+            content: [],
+          },
+        },
+        surfaceOp: 'append',
+      }),
       JSON.stringify({
         type: 'assistant/attempt',
         data: {
@@ -636,78 +753,16 @@ describe('normalizeSessionSnapshot', () => {
       .toThrow('session snapshot must start with a session header')
   })
 
-  it('compares migrated and fresh delivery watermarks without changing their raw generation identity', () => {
-    const id = '11111111-2222-3333-4444-555555555555'
-    const session = (version: 0 | 1, sessionFormatVersion?: number): string => [
-      JSON.stringify({ type: 'session', version, id, createdAt: 0, delegationDepth: 0 }),
-      JSON.stringify({ type: 'turn/start', data: { turn: 1 } }),
-      JSON.stringify({
-        type: 'session-log-deepseek/delivery-accepted',
-        data: {
-          sessionId: id,
-          throughSeq: 0,
-          ...sessionFormatVersion === undefined ? {} : { sessionFormatVersion },
-        },
-      }),
-      JSON.stringify({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }),
-      '',
-    ].join('\n')
-
-    const migratedV0 = normalizeSessionSnapshots([session(0)], { sessionIds: [], cwd: '/unused' })
-    const freshV1 = normalizeSessionSnapshots([session(1, 1)], { sessionIds: [], cwd: '/unused' })
-
-    expect(migratedV0).toEqual(freshV1)
-    expect(freshV1[0]).not.toContain('"sessionFormatVersion"')
+  it('preserves delivery and captured-source generations after artifact migration', () => {
+    const event = (version: number): string => JSON.stringify({
+      type: 'session-log-deepseek/delivery-accepted',
+      data: { sessionId: 's', throughSeq: 4, sessionFormatVersion: version },
+    })
+    expect(normalizeSessionFormatMetadata(event(0))).toBe(event(0))
+    expect(normalizeSessionFormatMetadata(event(3))).not.toBe(normalizeSessionFormatMetadata(event(0)))
   })
 
-  it('compares migrated and fresh session-reference captures without hiding other source fields', () => {
-    const id = '11111111-2222-3333-4444-555555555555'
-    const sourceId = '22222222-3333-4444-5555-666666666666'
-    const messageId = '33333333-4444-4555-8666-777777777777'
-    const session = (version: 0 | 1, capturedFormatVersion?: number): string => [
-      JSON.stringify({ type: 'session', version, id, createdAt: 0, delegationDepth: 0 }),
-      JSON.stringify({ type: 'turn/start', data: { turn: 1 } }),
-      JSON.stringify({
-        type: 'user/message',
-        data: {
-          id: messageId,
-          role: 'user',
-          content: [{ type: 'text', text: 'remember' }],
-          source: {
-            kind: 'session-reference',
-            form: 'recall',
-            version: 1,
-            references: [{
-              sessionId: sourceId,
-              label: 'Source',
-              capturedThroughSeq: 0,
-              ...capturedFormatVersion === undefined ? {} : { capturedFormatVersion },
-              compacted: false,
-              originalMessages: 1,
-              retainedMessages: 1,
-              omittedMessages: 0,
-              omittedBytes: 0,
-              truncated: false,
-              inputIndex: 0,
-            }],
-          },
-        },
-        surfaceOp: 'append',
-      }),
-      JSON.stringify({ type: 'turn/end', data: { turn: 1, reason: { kind: 'completed' } } }),
-      '',
-    ].join('\n')
-
-    const migratedV0 = normalizeSessionSnapshots([session(0)], { sessionIds: [], cwd: '/unused' })
-    const freshV1 = normalizeSessionSnapshots([session(1, 1)], { sessionIds: [], cwd: '/unused' })
-
-    expect(migratedV0).toEqual(freshV1)
-    expect(freshV1[0]).toContain('"label":"Source"')
-    expect(freshV1[0]).toContain('"version":1')
-    expect(freshV1[0]).not.toContain('"capturedFormatVersion"')
-  })
-
-  it('removes generation qualifiers only from their exact provenance positions', () => {
+  it('preserves opaque generation qualifiers and their lookalikes', () => {
     const raw = [
       JSON.stringify({
         type: 'session',
@@ -760,14 +815,14 @@ describe('normalizeSessionSnapshot', () => {
       .split('\n')
       .map(line => JSON.parse(line) as Record<string, unknown>) ?? []
 
-    expect(delivery?.data).toEqual({ throughSeq: 21, otherVersion: 8 })
+    expect(delivery?.data).toEqual({ sessionFormatVersion: 1, throughSeq: 21, otherVersion: 8 })
     expect(captured?.data).toMatchObject({
       source: {
         references: [
           null,
           'opaque',
           [{ capturedFormatVersion: 6 }],
-          { otherVersion: 9 },
+          { capturedFormatVersion: 1, otherVersion: 9 },
         ],
       },
     })
@@ -779,6 +834,14 @@ describe('normalizeSessionSnapshot', () => {
       },
     })
     expect(opaqueEvent?.data).toEqual({ capturedFormatVersion: 5, sessionFormatVersion: 4 })
+  })
+
+  it('preserves an unexpected session-reference payload instead of omitting its fields', () => {
+    const raw = JSON.stringify({
+      type: 'user/message',
+      data: { source: { kind: 'session-reference', form: 'recall', version: 1, references: {} } },
+    })
+    expect(normalizeSessionFormatMetadata(raw)).toBe(raw)
   })
 
   it('keeps session-reference lookalikes outside Message source positions unchanged', () => {
@@ -799,12 +862,12 @@ describe('normalizeSessionSnapshot', () => {
       '',
     ].join('\n')
 
-    const normalized = normalizeSessionFormatProvenance(lookalike).split('\n')
+    const normalized = normalizeSessionFormatMetadata(lookalike).split('\n')
     expect(JSON.parse(normalized[0] as string)).not.toHaveProperty('version')
     expect(normalized[1]).toBe(lookalike.split('\n')[1])
   })
 
-  it('projects persisted provenance ranges back to logical seq arrays', () => {
+  it('projects persisted source-event ranges back to logical seq arrays', () => {
     const raw = [
       JSON.stringify({ type: 'session', version: 0 }),
       JSON.stringify({
@@ -957,19 +1020,37 @@ describe('extractSnapshotSpillPaths', () => {
   })
 })
 
-describe('scrubRequestHeaders', () => {
+/** One `system/message` record whose single text block carries the rendered prompt. */
+function systemMessageEvent(text: string, seq = 2): string {
+  return JSON.stringify({
+    type: 'system/message',
+    seq,
+    time: 9,
+    data: {
+      turn: 1,
+      step: 1,
+      message: {
+        id: '11111111-1111-4111-8111-111111111111',
+        role: 'system',
+        content: text.length === 0 ? [] : [{ type: 'text', text }],
+        source: { kind: 'plugin', plugin: '@deepseek-ai/dsh-system-prompt' },
+      },
+    },
+  })
+}
+
+describe('scrubModelRequestBulk', () => {
   const headerLine = JSON.stringify({ type: 'session', version: 0, id: 's', createdAt: 1, cwd: '/w' })
   const headerEvent = (header: object) =>
     JSON.stringify({ type: 'request/header', seq: 3, time: 9, data: { header, reason: 'initial' } })
 
-  it('replaces header system and tools with tokens, keeping config and reason', () => {
+  it('replaces system/message text and header tools with tokens, keeping config and reason', () => {
     const ev = headerEvent({
       config: { model: 'm' },
-      system: 'You are an agent.\nBe brief.',
       tools: [{ name: 'read', description: 'Read a file.', parameters: { type: 'object' } }],
     })
-    const out = scrubRequestHeaders(`${headerLine}\n${ev}\n`)
-    expect(out).toContain('"system":"{{system}}"')
+    const out = scrubModelRequestBulk(`${headerLine}\n${systemMessageEvent('You are an agent.\nBe brief.')}\n${ev}\n`)
+    expect(out).toContain('"content":[{"type":"text","text":"{{system}}"}]')
     expect(out).toContain('"tools":"{{tools}}"')
     expect(out).toContain('"config":{"model":"m"}')
     expect(out).toContain('"reason":"initial"')
@@ -977,35 +1058,31 @@ describe('scrubRequestHeaders', () => {
     expect(out).not.toContain('Read a file')
   })
 
-  it('keeps an absent system/tools absent (presence is behavior)', () => {
-    const out = scrubRequestHeaders(`${headerLine}\n${headerEvent({ config: { model: 'm' } })}\n`)
+  it('keeps an absent tools field absent and an empty system prompt empty (presence is behavior)', () => {
+    const out = scrubModelRequestBulk(`${headerLine}\n${systemMessageEvent('')}\n${headerEvent({ config: { model: 'm' } })}\n`)
     expect(out).not.toContain('{{system}}')
+    expect(out).toContain('"content":[]')
     expect(out).not.toContain('{{tools}}')
   })
 
-  it('scrubs a header carrying only one of system/tools, leaving the other absent', () => {
-    const systemOnly = scrubRequestHeaders(`${headerLine}\n${headerEvent({ system: 'secret prompt' })}\n`)
-    expect(systemOnly).toContain('"system":"{{system}}"')
-    expect(systemOnly).not.toContain('{{tools}}')
-    const toolsOnly = scrubRequestHeaders(`${headerLine}\n${headerEvent({ tools: [{ name: 't' }] })}\n`)
-    expect(toolsOnly).toContain('"tools":"{{tools}}"')
-    expect(toolsOnly).not.toContain('{{system}}')
-  })
-
-  it('leaves malformed headers with no scrubbable payload byte-identical', () => {
+  it('leaves malformed records with no scrubbable payload byte-identical', () => {
     const headerless = JSON.stringify({ type: 'request/header', seq: 10, time: 9, data: { reason: 'initial' } })
     const nullData = JSON.stringify({ type: 'request/header', seq: 11, time: 9, data: null })
-    const raw = `${headerLine}\n${headerless}\n${nullData}\n`
-    expect(scrubRequestHeaders(raw)).toBe(raw)
+    const messageless = JSON.stringify({ type: 'system/message', seq: 12, time: 9, data: { turn: 1, step: 1 } })
+    const textless = JSON.stringify({
+      type: 'system/message', seq: 13, time: 9, data: { message: { content: [{ type: 'image', data: 'x' }] } },
+    })
+    const raw = `${headerLine}\n${headerless}\n${nullData}\n${messageless}\n${textless}\n`
+    expect(scrubModelRequestBulk(raw)).toBe(raw)
   })
 
   it('passes every other line through byte-for-byte and is idempotent', () => {
     const other = JSON.stringify({ type: 'assistant/chunk', seq: 4, time: 9, data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'hi' } } })
-    const raw = `${headerLine}\n${headerEvent({ config: { model: 'm' }, system: 's', tools: [] })}\n${other}\n`
-    const once = scrubRequestHeaders(raw)
+    const raw = `${headerLine}\n${systemMessageEvent('s')}\n${headerEvent({ config: { model: 'm' }, tools: [] })}\n${other}\n`
+    const once = scrubModelRequestBulk(raw)
     expect(once.split('\n')[0]).toBe(headerLine)
-    expect(once.split('\n')[2]).toBe(other)
-    expect(scrubRequestHeaders(once)).toBe(once)
+    expect(once.split('\n')[3]).toBe(other)
+    expect(scrubModelRequestBulk(once)).toBe(once)
   })
 })
 
@@ -1025,18 +1102,20 @@ describe('scrubSessionSnapshot', () => {
 
   it('preserves the header while projecting and scrubbing each body record', () => {
     const header = '  {"type":"session","version":0,"id":"s","createdAt":7}  '
+    const system = systemMessageEvent('secret', 0)
     const request = JSON.stringify({
-      type: 'request/header', seq: 0, time: 9,
-      data: { header: { system: 'secret', tools: [{ name: 'read' }] }, reason: 'initial' },
+      type: 'request/header', seq: 1, time: 9,
+      data: { header: { tools: [{ name: 'read' }] }, reason: 'initial' },
     })
     const event = JSON.stringify({
-      type: 'turn/start', seq: 1, time: 10,
+      type: 'turn/start', seq: 2, time: 10,
       data: { turn: 1, seq: 41, time: 42 },
     })
 
-    expect(scrubSessionSnapshot(`${header}\n${request}\n${event}\n`)).toBe([
+    expect(scrubSessionSnapshot(`${header}\n${system}\n${request}\n${event}\n`)).toBe([
       header,
-      '{"type":"request/header","data":{"header":{"system":"{{system}}","tools":"{{tools}}"},"reason":"initial"}}',
+      '{"type":"system/message","data":{"turn":1,"step":1,"message":{"id":"11111111-1111-4111-8111-111111111111","role":"system","content":[{"type":"text","text":"{{system}}"}],"source":{"kind":"plugin","plugin":"@deepseek-ai/dsh-system-prompt"}}}}',
+      '{"type":"request/header","data":{"header":{"tools":"{{tools}}"},"reason":"initial"}}',
       '{"type":"turn/start","data":{"turn":1,"seq":41,"time":42}}',
       '',
     ].join('\n'))
@@ -1049,39 +1128,24 @@ describe('scrubSessionSnapshot', () => {
 })
 
 describe('scrubSystemPrompts', () => {
-  it('scrubs only system prompt payloads while keeping tools verbatim', () => {
+  it('scrubs only system/message text while keeping header tools verbatim', () => {
     const header = JSON.stringify({
       type: 'request/header', seq: 1, time: 2,
-      data: {
-        header: {
-          system: 'full prompt',
-          tools: [{ name: 'read', description: 'full schema' }],
-        },
-        reason: 'initial',
-      },
+      data: { header: { tools: [{ name: 'read', description: 'full schema' }] }, reason: 'initial' },
     })
-    const changed = JSON.stringify({
-      type: 'request/header', seq: 2, time: 3,
-      data: {
-        header: {
-          system: 'new prompt',
-          tools: [{ name: 'read', description: 'changed schema' }],
-        },
-        reason: 'change',
-      },
-    })
-    const toolsOnly = JSON.stringify({
-      type: 'request/header', seq: 3, time: 4,
-      data: { header: { tools: [{ name: 'read', description: 'schema only' }] }, reason: 'resume' },
+    const replaced = JSON.stringify({
+      type: 'system/message', seq: 3, time: 4,
+      surfaceOp: { op: 'replace', start: 0, end: 0 },
+      sourceEventSeqs: [0],
+      data: { turn: 1, step: 2, message: { role: 'system', content: [{ type: 'text', text: 'new prompt' }] } },
     })
 
-    const out = scrubSystemPrompts(`${header}\n${changed}\n${toolsOnly}\n`)
-    expect(out).toContain('"system":"{{system}}"')
+    const out = scrubSystemPrompts(`${systemMessageEvent('full prompt', 0)}\n${header}\n${replaced}\n`)
+    expect(out.match(/"text":"{{system}}"/g)).toHaveLength(2)
     expect(out).not.toContain('full prompt')
     expect(out).not.toContain('new prompt')
-    expect(out).toContain('full schema')
-    expect(out).toContain('changed schema')
-    expect(out.split('\n')[2]).toBe(toolsOnly)
+    expect(out).toContain('"surfaceOp":{"op":"replace","start":0,"end":0}')
+    expect(out.split('\n')[1]).toBe(header)
     expect(scrubSystemPrompts(out)).toBe(out)
   })
 })
@@ -1091,35 +1155,25 @@ describe('scrubToolSchemas', () => {
     const header = JSON.stringify({
       type: 'request/header', seq: 1, time: 2,
       data: {
-        header: {
-          system: 'full prompt',
-          tools: [{ name: 'read', description: 'full schema', parameters: { type: 'object' } }],
-        },
+        header: { tools: [{ name: 'read', description: 'full schema', parameters: { type: 'object' } }] },
         reason: 'initial',
       },
     })
     const changed = JSON.stringify({
       type: 'request/header', seq: 2, time: 3,
-      data: {
-        header: {
-          system: 'new prompt',
-          tools: [{ name: 'grep', description: 'new schema' }],
-        },
-        reason: 'change',
-      },
+      data: { header: { tools: [{ name: 'grep', description: 'new schema' }] }, reason: 'change' },
     })
-    const systemOnly = JSON.stringify({
+    const toolless = JSON.stringify({
       type: 'request/header', seq: 3, time: 4,
-      data: { header: { system: 'prompt only' }, reason: 'resume' },
+      data: { header: { config: { model: 'm' } }, reason: 'resume' },
     })
 
-    const out = scrubToolSchemas(`${header}\n${changed}\n${systemOnly}\n`)
+    const out = scrubToolSchemas(`${systemMessageEvent('full prompt', 0)}\n${header}\n${changed}\n${toolless}\n`)
     expect(out.match(/"tools":"{{tools}}"/g)).toHaveLength(2)
     expect(out).not.toContain('full schema')
     expect(out).not.toContain('new schema')
     expect(out).toContain('full prompt')
-    expect(out).toContain('new prompt')
-    expect(out.split('\n')[2]).toBe(systemOnly)
+    expect(out.split('\n')[3]).toBe(toolless)
     expect(scrubToolSchemas(out)).toBe(out)
   })
 })

@@ -31,19 +31,10 @@
   disabled: true
 
 - id: tool-subagent
-  config:
-    provider: spawn
-    toolName: subagent
-    backgroundMode: one-shot
-    maxDepth: 1
+  disabled: true
 
 - id: tool-subagent-fork
-  config:
-    provider: fork
-    toolName: subagent_fork
-    backgroundMode: one-shot
-    enableRunInBackground: false
-    maxDepth: 1
+  disabled: true
 
 - insert:
     - id: agent-team

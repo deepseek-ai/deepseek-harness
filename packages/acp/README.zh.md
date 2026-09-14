@@ -1,15 +1,15 @@
 ---
-description: "ACP（Agent Client Protocol）包组：通过 JSON-RPC stdio 将全新 harness agent 暴露给程序化客户端的仅自动化服务器。"
+description: "ACP（Agent Client Protocol）包组：通过 JSON-RPC stdio 将全新 harness agent（智能体）暴露给程序化客户端的仅面向自动化的服务器。"
 kind: "package-group"
 ---
 
-# acp/ — Agent Client Protocol 自动化
+# acp/：Agent Client Protocol 自动化
 
 [English](README.md) | 中文
 
 ## 概述
 
-acp 组提供一个包：一台服务器，让程序与自动化可以通过标准 Agent Client Protocol 运行持久 DeepSeek Harness agent。客户端可以创建、列出、恢复与关闭会话，挂载标准 MCP 服务器，选择模型选项，发送文本与图片提示词，接收语义更新，响应权限提示并取消工作——无需人类参与。从另一个 harness 启动这种服务器的配套客户端位于 `subagent/subagent-acp`。本页是组的映射；包 README 负责各自的包级约定。
+acp 组提供一个包：一个服务器，让程序与自动化流程可以通过标准 Agent Client Protocol 运行持久 DeepSeek Harness agent。客户端可以创建、列出、恢复与关闭会话，挂载标准 MCP 服务器，选择模型选项，发送文本与图片提示词，接收语义更新，响应权限提示并取消工作——无需人类参与。从另一个 harness 启动这种服务器的配套客户端位于 `subagent/subagent-acp`。本页概述该包组；各包的具体约定由其 README 规定。
 
 ## 目录
 
@@ -24,7 +24,7 @@ acp 组提供一个包：一台服务器，让程序与自动化可以通过标�
 
 | 包 | 职责 |
 |---|---|
-| [`acp/`](acp/README.zh.md) | 让程序通过 ACP 管理持久 agent、挂载 MCP 服务器、选择模型选项、发送或取消工作并接收语义更新 |
+| [`acp/`](acp/README.zh.md) | 让程序通过 ACP 管理持久 agent、挂载 MCP 服务器、选择模型选项、发送提示词、取消工作并接收语义更新 |
 
 -----
 

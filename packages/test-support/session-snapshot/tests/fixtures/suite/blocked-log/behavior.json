@@ -1,9 +1,9 @@
 {
   "prompt": "error",
   "logs": [{
-    "file": "b/main/session.v2.jsonl",
+    "file": "b/main/session.v3.jsonl",
     "lines": [
-      { "type": "session", "version": 2, "id": "{{SID}}", "createdAt": 400, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
+      { "type": "session", "version": 3, "id": "{{SID}}", "createdAt": 400, "cwd": "{{CWD}}", "isSeeded": false, "delegationDepth": 0 },
       { "type": "hook/result", "seq": 0, "time": 8, "data": { "turn": 1, "point": "Stop", "handlerId": "fake:Stop:1", "decision": "block", "durationMs": 37 } }
     ]
   }]

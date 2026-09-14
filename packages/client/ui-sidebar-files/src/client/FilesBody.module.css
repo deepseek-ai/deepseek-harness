@@ -1,0 +1,208 @@
+/* The pane body is a block scroller with a definite height, so the tree takes
+   that height outright: the header row stays put and the levels below are the
+   one scroller. */
+.root {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.5;
+}
+
+/* The header row, its path, and its control are the text preview's
+   (ui-sidebar-documentpreview TextPreview `.header`, `.path`, `.tool`), copied so
+   the two pane types read as one; keep the two sheets in step. TODO: once the
+   artifact and slot surfaces settle, one copy in ui-primitives could serve
+   every pane header.
+
+   One 38px row flush under the pane's strip: the root's path, then reload at
+   its end. With the strip's 38px above, its rule lies where the conversation
+   header's does (ui-conversation ConversationRoot `.header`, 76px with the
+   same rule). */
+.header {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 4px;
+  align-items: center;
+  box-sizing: border-box;
+  height: 38px;
+  padding: 0 6px 0 16px;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* The path is never ellipsized. Its text sits at the left while it fits: the
+   auto margin takes the free space. Once it is wider than the box, the auto
+   margin is zero and `flex-end` holds the name at the right edge, so the
+   directories run off the left and the box clips them there, faded by the
+   mask while `data-files-path-clipped` is set. The margin plus the row's gap
+   put the text 16px clear of the first control. */
+.path {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-width: 0;
+  margin-right: 12px;
+  overflow: hidden;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.path[data-files-path-clipped] {
+  mask-image: linear-gradient(to right, transparent, black 28px);
+}
+
+.pathText {
+  flex: none;
+  margin-right: auto;
+}
+
+.pathDirectory {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.pathName {
+  color: var(--dsw-alias-label-primary);
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  /* The workspace list's 2px scrollbar offset (ui-workspace WorkspaceBrowser
+     `.list`): the bar sits 2px clear of the pane's edge, and the stable gutter
+     stands in for the right padding so the rows keep their inset whether or
+     not the tree overflows. */
+  margin-right: 2px;
+  padding: 8px 0 8px 8px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+/* The bar also stops 2px short of the body's ends, matching its 2px edge
+   offset. WebKit-only: the Firefox path has no track to inset. */
+.body::-webkit-scrollbar-track {
+  margin: 2px;
+}
+
+.level {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Every nested level indents by one step; the root level sits under the header. */
+.level .level {
+  padding-left: 18px;
+}
+
+.item {
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  /* Rows abut, so the hover fill is the whole row; the tree's air is this
+     inset, not a gap between rows. */
+  padding: 5px 10px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.row:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The folder glyph rides the tertiary ink, as the workspace tree's does (ui-workspace Rows `.slot`). */
+.icon {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* The type's coloured sheet at the folder glyph's 16px; its colour is its own. */
+.fileIcon {
+  flex: 0 0 auto;
+}
+
+.name {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Neither a file nor a directory: shown so the directory is reported whole,
+   greyed so nobody tries to open it. */
+.other {
+  color: var(--dsw-alias-label-tertiary);
+  cursor: default;
+}
+
+.other:hover {
+  background: transparent;
+}
+
+.note {
+  margin: 0;
+  padding: 3px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px;
+}
+
+.statusLine {
+  margin: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.6;
+}
+
+/* The same icon button as the Sidebar's strip controls above it: a 28px
+   circle around a 15px glyph. */
+.tool {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  color: var(--dsw-alias-label-secondary);
+  line-height: 1;
+  background: transparent;
+  border: none;
+  border-radius: 28px;
+  cursor: pointer;
+}
+
+.tool svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tool:hover {
+  color: var(--dsw-alias-label-primary);
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* The folder sheet before the chip's text; the chip's title row centres it
+   on the text's line and spaces it. */
+.titleIcon {
+  flex: none;
+}

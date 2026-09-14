@@ -41,7 +41,7 @@ export interface SpillOwner {
 /**
  * Producer of a spilled artifact. Tool results carry their model-issued call id;
  * session references identify the captured source session instead. Descriptive
- * provenance only, never access control.
+ * source description only, never access control.
  */
 export type SpillSource = {
   kind: 'tool'

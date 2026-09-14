@@ -59,12 +59,66 @@ describe('highlightToHtml', () => {
 })
 
 describe('CodeBlock', () => {
+  it('reports the stable source-content wrapper to its owner', () => {
+    const contentRef = vi.fn<(node: HTMLDivElement | null) => void>()
+    const view = render(<CodeBlock code="plain text" contentRef={contentRef} />)
+    const content = view.container.querySelector('[data-code-block-content]')
+    expect(contentRef).toHaveBeenCalledWith(content)
+    view.rerender(<CodeBlock code="updated text" contentRef={contentRef} />)
+    expect(view.container.querySelector('[data-code-block-content]')).toBe(content)
+    view.unmount()
+    expect(contentRef).toHaveBeenLastCalledWith(null)
+  })
+
   it('renders the highlighted tree for TypeScript', () => {
     const view = render(<CodeBlock code={'const a = 1\n'} lang="ts" />)
     const pre = view.container.querySelector('pre.shiki')
     expect(pre).not.toBeNull()
     expect(pre!.textContent).toBe('const a = 1')
     expect(pre!.querySelectorAll('span[style]').length).toBeGreaterThan(1)
+    expect(view.container.querySelector('[data-line-numbers]')).toBeNull()
+  })
+
+  it.each(['ts', 'unregistered'])('numbers %s source lines without copying the gutter', async (lang) => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.useFakeTimers()
+    try {
+      Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+      const code = 'const first = 1\n\nconst last = 3'
+      const view = render(<CodeBlock code={`${code}\n`} lang={lang} lineNumbers />)
+      expect(view.container.querySelector('[data-line-numbers]')).not.toBeNull()
+      expect([...view.container.querySelectorAll('code > .line')].map(line => line.textContent))
+        .toEqual(['const first = 1', '', 'const last = 3'])
+      expect(view.container.querySelector('pre')!.textContent).toBe(code)
+      await act(async () => { fireEvent.click(view.getByRole('button', { name: '复制' })) })
+      expect(writeText).toHaveBeenCalledWith(code)
+      await act(async () => { await vi.runOnlyPendingTimersAsync() })
+    } finally {
+      cleanup()
+      vi.useRealTimers()
+      if (clipboard === undefined) Reflect.deleteProperty(navigator, 'clipboard')
+      else Object.defineProperty(navigator, 'clipboard', clipboard)
+    }
+  })
+
+  it('keeps an empty numbered line and widens the gutter as streaming content grows', () => {
+    const view = render(<CodeBlock code="" lineNumbers />)
+    expect(view.container.querySelectorAll('code > .line')).toHaveLength(1)
+    expect(view.container.querySelector('pre')!.textContent).toBe('')
+    const gutter = () => view.container.querySelector<HTMLElement>('[data-line-numbers]')!
+      .style.getPropertyValue('--dsl-code-block-line-number-width')
+    expect(gutter()).toBe('2ch')
+    view.rerender(<CodeBlock code="const first = 1" lang="ts" streaming lineNumbers />)
+    const code = ['const first = 1', ...Array.from({ length: 99 }, (_, index) => `const line${index} = 0`)].join('\n')
+    view.rerender(<CodeBlock code={code} lang="ts" streaming lineNumbers />)
+    expect(view.container.querySelectorAll('code > .line')).toHaveLength(100)
+    const firstLine = view.container.querySelector('code > .line')
+    expect(view.container.querySelector('pre')!.textContent).toBe(code)
+    expect(gutter()).toBe('3ch')
+    view.rerender(<CodeBlock code={code} lang="ts" lineNumbers />)
+    expect(view.container.querySelector('code > .line')).toBe(firstLine)
+    expect(gutter()).toBe('3ch')
   })
 
   it('renders the plain arm for an unknown language with the text verbatim', () => {

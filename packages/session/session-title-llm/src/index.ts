@@ -17,7 +17,7 @@ import {
 } from '@deepseek-ai/dsh-session-title'
 import type {
   SessionTitleAutomaticMode,
-  SessionTitleModelProvenance,
+  SessionTitleModelIdentity,
   SessionTitleProviderRequest,
   SessionTitleProviderResult,
   SessionTitleUserMessage,
@@ -30,7 +30,7 @@ export interface SessionTitleLlmRequestEventData {
   /** Exact human `user/message` seqs represented in `messages`. */
   readonly messageSeqs: SessionSeq[]
   /** Exact auxiliary LLM route. */
-  readonly route: SessionTitleModelProvenance
+  readonly route: SessionTitleModelIdentity
   /** Exact auxiliary system prompt. */
   readonly system: string
   /** Exact auxiliary message list. */
@@ -174,7 +174,7 @@ export function registerSessionTitleLlmProvider(
 function resolveRoute(
   config: ResolvedSessionTitleLlmConfig,
   request: SessionTitleProviderRequest,
-): SessionTitleModelProvenance {
+): SessionTitleModelIdentity {
   if (config.provider !== undefined && config.model !== undefined) {
     return { provider: config.provider, model: config.model }
   }

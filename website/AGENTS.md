@@ -15,3 +15,5 @@ Production builds remove the configured output directory after VitePress resolve
 The build also emits each route's raw-Markdown twin (with a parent-level alias per index route) and a root `llms.txt` index into `.dist/`, so a page's URL, minus any trailing slash, plus `.md` serves it as plain Markdown. Both derive from the publication manifest at build time; neither is ever a file in this tree.
 
 Run `pnpm docs:check` after changing this subtree; the gate rejects additional non-ignored Markdown under `website/`.
+
+The default-theme extension owns the Mermaid fullscreen viewer. Keep its enhancements separate from Markdown projection and preserve the original SVG. Route, language, theme, and rendered-SVG changes close the active view; theme disposal releases every observer, listener, and scroll lock. The [viewer decision](../.agents/notes/implemented/feature/2026-09-14-docs-mermaid-viewer.md) explains SVG isolation and verification.

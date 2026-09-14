@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // Trajectory image surfaces over the BUILT client graph (the ptc-fixture
-// idiom: real bundles via AppWebEntry, keyless fixture Connection RPC).
+// idiom: real bundles via AppWebEntry, keyless RemoteMock transport).
 // Opens the fixture history session whose turn 73 carries an image in BOTH a
 // user message and an assistant message, and pins the Trajectory surfaces:
 // selecting the ledger record renders the shared ui-attachment gallery from

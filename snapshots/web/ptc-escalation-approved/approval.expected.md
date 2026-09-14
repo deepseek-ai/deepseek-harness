@@ -1,0 +1,4 @@
+- text: Waiting for approval
+- group "Approval details": "escalate sandbox to workspace-write: Create the file requested by the user"
+- button "Reject"
+- button "Allow once"

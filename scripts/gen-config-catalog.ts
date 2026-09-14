@@ -8,7 +8,7 @@
  */
 
 import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
 import { LINK_MAP } from './gen-cordis-catalog.ts'
 import { parseJsDoc, pointer, rawJsDoc } from './jsdoc.ts'
@@ -87,7 +87,7 @@ interface FileCtx {
   sf: ts.SourceFile
   /** Local binding name → `{ imported, specifier }`; default imports record
    * `imported: 'default'`. */
-  imports: Map<string, { imported: string; specifier: string }>
+  imports: Map<string, { imported: string; specifier: string; typeOnly?: boolean }>
 }
 
 /** Throw one aggregate error for every violation the walk collected. */
@@ -105,7 +105,7 @@ function loadFile(abs: string, rel: string, cache: Map<string, FileCtx>): FileCt
   if (cached) return cached
   const text = readFileSync(abs, 'utf8')
   const sf = ts.createSourceFile(abs, text, ts.ScriptTarget.Latest, true)
-  const imports = new Map<string, { imported: string; specifier: string }>()
+  const imports: FileCtx['imports'] = new Map()
   for (const stmt of sf.statements) {
     if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue
     const specifier = stmt.moduleSpecifier.text
@@ -114,7 +114,11 @@ function loadFile(abs: string, rel: string, cache: Map<string, FileCtx>): FileCt
     if (clause.name) imports.set(clause.name.text, { imported: 'default', specifier })
     if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
       for (const el of clause.namedBindings.elements) {
-        imports.set(el.name.text, { imported: (el.propertyName ?? el.name).text, specifier })
+        imports.set(el.name.text, {
+          imported: (el.propertyName ?? el.name).text,
+          specifier,
+          typeOnly: clause.phaseModifier === ts.SyntaxKind.TypeKeyword || el.isTypeOnly,
+        })
       }
     }
     if (clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
@@ -218,6 +222,69 @@ interface World {
   cache: Map<string, FileCtx>
   /** Workspace package name → repo-relative package dir. */
   pkgDirByName: Map<string, string>
+  /** Exact public export declarations used to verify shared schema imports. */
+  pkgExportsByName: Map<string, unknown>
+  /** Source-plane TypeScript resolution, loaded only for shared schema imports. */
+  compilerOptions?: ts.CompilerOptions
+}
+
+/** Resolve an explicitly exported workspace module to its mapped source file. */
+function loadWorkspaceSource(world: World, from: FileCtx, specifier: string): FileCtx {
+  const pkg = specifier.split('/').slice(0, specifier.startsWith('@') ? 2 : 1).join('/')
+  const dir = world.pkgDirByName.get(pkg)
+  if (dir === undefined) throw new Error(`schema import '${specifier}' is not a workspace package`)
+  const subpath = specifier === pkg ? '.' : `.${specifier.slice(pkg.length)}`
+  const exports = world.pkgExportsByName.get(pkg)
+  if (typeof exports !== 'object' || exports === null || Array.isArray(exports)
+    || !Object.hasOwn(exports, subpath) || (exports as Record<string, unknown>)[subpath] == null) {
+    throw new Error(`workspace package '${pkg}' does not explicitly export '${subpath}'`)
+  }
+  if (world.compilerOptions === undefined) {
+    const parsed = ts.getParsedCommandLineOfConfigFile(resolve(world.scanRoot, 'tsconfig.json'), {}, {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic(diagnostic) {
+        throw new Error(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n'))
+      },
+    })
+    if (parsed === undefined || parsed.errors.length > 0) {
+      throw new Error(`cannot resolve schema import '${specifier}' through the workspace source tsconfig`)
+    }
+    world.compilerOptions = parsed.options
+  }
+  const resolved = ts.resolveModuleName(specifier, from.abs, world.compilerOptions, ts.sys).resolvedModule
+  if (resolved === undefined) throw new Error(`schema import '${specifier}' has no workspace source mapping`)
+  const sourcePath = relative(resolve(world.scanRoot, dir, 'src'), resolved.resolvedFileName)
+  if (isAbsolute(sourcePath) || sourcePath === '..' || sourcePath.startsWith(`..${sep}`)
+    || !sourcePath.endsWith('.ts') || sourcePath.endsWith('.d.ts')) {
+    throw new Error(`schema import '${specifier}' must resolve inside ${dir}/src to a TypeScript source file`)
+  }
+  const rel = relative(world.scanRoot, resolved.resolvedFileName).split(sep).join('/')
+  return loadFile(resolved.resolvedFileName, rel, world.cache)
+}
+
+/** Find a directly declared const schema, requiring public exports at imported entries. */
+function schemaConst(ctx: FileCtx, name: string, exported: boolean): ts.Expression | null {
+  for (const statement of ctx.sf.statements) {
+    if (!ts.isVariableStatement(statement) || !(statement.declarationList.flags & ts.NodeFlags.Const)) continue
+    if (exported && !statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword)) continue
+    const declaration = statement.declarationList.declarations.find(item => ts.isIdentifier(item.name) && item.name.text === name)
+    if (declaration?.initializer !== undefined) return declaration.initializer
+  }
+  return null
+}
+
+/** Follow only const identities and named value imports; never execute schema factories. */
+function schemaAlias(world: World, ctx: FileCtx, name: string): { ctx: FileCtx; expr: ts.Expression } {
+  const local = schemaConst(ctx, name, false)
+  if (local !== null) return { ctx, expr: local }
+  const imported = ctx.imports.get(name)
+  if (imported === undefined || imported.typeOnly || imported.imported === '*' || imported.imported === 'default') {
+    throw new Error(`schema alias '${name}' must name a const or named value import`)
+  }
+  const target = loadWorkspaceSource(world, ctx, imported.specifier)
+  const expr = schemaConst(target, imported.imported, true)
+  if (expr === null) throw new Error(`schema import '${imported.specifier}' has no exported const '${imported.imported}'`)
+  return { ctx: target, expr }
 }
 
 /** How a schema key path fared against the declared config type: definitely
@@ -290,7 +357,16 @@ function declForTypeName(world: World, ctx: FileCtx, name: string): { decl: Type
     return findExportedTypeDecl(world, loadRelative(world, ctx, imp.specifier), imp.imported) ?? 'unknown'
   }
   const dir = world.pkgDirByName.get(imp.specifier)
-  if (dir === undefined) return 'unknown'
+  if (dir === undefined) {
+    try {
+      const target = loadWorkspaceSource(world, ctx, imp.specifier)
+      return findExportedTypeDecl(world, target, imp.imported) ?? 'unknown'
+    } catch {
+      // External or unsupported declarations remain unknown for type presence;
+      // a runtime schema alias reports the same resolution failure separately.
+      return 'unknown'
+    }
+  }
   const entryRel = `${dir}/src/index.ts`
   let entry: FileCtx
   try {
@@ -413,17 +489,19 @@ function unwrapExpr(expr: ts.Expression): ts.Expression {
  * Statically walk a schemastery schema expression to its key paths plus the
  * packages whose schemas an intersect composes. A key path is the top-level
  * key or a nested path through object/array compositions (`agents[].id`).
- * Handles the declaration forms the repo uses — `z.object({…})` (possibly behind
- * chained calls) and `z.intersect([X.Config, …])` — and hard-errors on
+ * Handles object/union calls, chained refinements, named const schema imports
+ * through public workspace source paths, and `z.intersect([X.Config, …])`; errors on
  * anything else, so a schema the walk cannot see fails the gate instead of
  * silently thinning it. Nested values that are neither `object` nor `array`
  * compositions (primitives, unions, dynamic-key dicts) contribute no paths.
  */
 function walkSchemaExpr(
+  world: World,
   ctx: FileCtx,
   expr: ts.Expression,
   where: string,
   violations: string[],
+  aliases = new Set<string>(),
 ): { keys: string[]; composes: string[] } {
   const keys: string[] = []
   const composes: string[] = []
@@ -451,6 +529,22 @@ function walkSchemaExpr(
   }
   const visit = (e: ts.Expression): void => {
     const call = unwrapExpr(e)
+    if (ts.isIdentifier(call)) {
+      const identity = `${ctx.abs}#${call.text}`
+      if (aliases.has(identity)) {
+        violations.push(`${where}: cyclic schema alias '${call.text}' in ${ctx.rel}.`)
+        return
+      }
+      try {
+        const target = schemaAlias(world, ctx, call.text)
+        const result = walkSchemaExpr(world, target.ctx, target.expr, where, violations, new Set([...aliases, identity]))
+        keys.push(...result.keys)
+        composes.push(...result.composes)
+      } catch (error) {
+        violations.push(`${where}: ${error instanceof Error ? error.message : String(error)}.`)
+      }
+      return
+    }
     if (!ts.isCallExpression(call) || !ts.isPropertyAccessExpression(call.expression)) {
       violations.push(`${where}: schema expression is not a statically walkable schemastery call.`)
       return
@@ -475,7 +569,7 @@ function walkSchemaExpr(
           const imp = ctx.imports.get(part.expression.text)
           if (imp && !imp.specifier.startsWith('.')) { composes.push(imp.specifier); continue }
         }
-        if (ts.isCallExpression(part)) { visit(part); continue }
+        if (ts.isCallExpression(part) || ts.isIdentifier(part)) { visit(part); continue }
         violations.push(`${where}: intersect element '${part.getText(ctx.sf)}' is neither a workspace plugin's Config nor an inline schema call.`)
       }
       return
@@ -485,7 +579,8 @@ function walkSchemaExpr(
     if (method === 'union' && call.arguments[0] && ts.isArrayLiteralExpression(call.arguments[0])) {
       for (const el of call.arguments[0].elements) {
         const part = unwrapExpr(el)
-        if (ts.isCallExpression(part)) { visit(part); continue }
+        if (ts.isCallExpression(part) || ts.isIdentifier(part)) { visit(part); continue }
+        violations.push(`${where}: union element '${part.getText(ctx.sf)}' is not a schema call or const alias.`)
       }
       return
     }
@@ -582,10 +677,11 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
   // Pre-pass: package name → dir, so schema-path lookups can follow
   // workspace-package imports while individual packages are still being walked.
   const pkgDirByName = new Map<string, string>()
+  const pkgExportsByName = new Map<string, unknown>()
   const manifests: { dir: string; pkg: string }[] = []
   for (const manifestRel of globSync('packages/*/*/package.json', { cwd: scanRoot }).map(path => path.split(sep).join('/')).sort()) {
     const dir = manifestRel.slice(0, -'/package.json'.length)
-    const manifest = JSON.parse(readFileSync(resolve(scanRoot, manifestRel), 'utf8')) as { name?: string; os?: string[]; cpu?: string[] }
+    const manifest = JSON.parse(readFileSync(resolve(scanRoot, manifestRel), 'utf8')) as { name?: string; os?: string[]; cpu?: string[]; exports?: unknown }
     const pkg = manifest.name
     if (!pkg) {
       violations.push(`${manifestRel} has no "name".`)
@@ -597,9 +693,10 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
       continue
     }
     pkgDirByName.set(pkg, dir)
+    pkgExportsByName.set(pkg, manifest.exports)
     manifests.push({ dir, pkg })
   }
-  const world: World = { scanRoot, cache, pkgDirByName }
+  const world: World = { scanRoot, cache, pkgDirByName, pkgExportsByName }
 
   for (const { dir, pkg } of manifests) {
     const entryRel = `${dir}/src/index.ts`
@@ -719,7 +816,7 @@ export function collectConfigCatalog(scanRoot: string = root): CatalogEntry[] {
     // Statically walk the runtime schema (when one exists) for the subset check.
     const schemaExpr = findSchemaExpr(ctx, pluginClass)
     if (schemaExpr) {
-      const { keys, composes } = walkSchemaExpr(ctx, unwrapExpr(schemaExpr), `${pkg} (${entryRel})`, violations)
+      const { keys, composes } = walkSchemaExpr(world, ctx, unwrapExpr(schemaExpr), `${pkg} (${entryRel})`, violations)
       entry.schemaKeys = keys
       entry.schemaComposes = composes
     } else {

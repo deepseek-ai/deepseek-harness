@@ -66,11 +66,10 @@ async function harness(presets?: readonly string[]) {
         options.meta === undefined ? {} : { meta: options.meta },
       )
       const agent = stubAgent(session)
-      const agentCtx = ctx.extend({ agent })
-      ;(agent as { ctx?: Context }).ctx = agentCtx
-      await options.setup?.(agentCtx)
-      const unregister = ctx.agents.register(agent)
-      return { agent, dispose: () => { unregister(); return Promise.resolve() } }
+      ;(agent as { ctx?: Context }).ctx = ctx
+      await options.setup?.(ctx, agent)
+      const unregister = await ctx.agents.register(agent)
+      return { agent, dispose: async () => { await unregister() } }
     },
     async resume() {
       throw new Error('test harness has no persisted sessions')

@@ -1,5 +1,5 @@
 ---
-description: "在 Host Team 层之后，为源码 checkout 的 Web profile 添加实验性 Agent Teams 面板。"
+description: "在 Host Team 层之后，为 Web profile 添加公开发布的实验性 Agent Teams 面板。"
 kind: "package-bundle"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-agent-team-web-profile` 是 [Agent Teams](../agent-team/README.zh.md) 的私有 Web 层。把它放在 `@deepseek-ai/dsh-web-app` 与 [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.zh.md) 之后，即可在浏览器中显示 Team roster、任务板与 teammate 导航。移除任一实验层都会让稳定的 base 与 Web composition 保持不变。正式发布会排除本包，因此只能从源码 checkout 使用。
+`dsh-experimental-agent-team-web-profile` 是 [Agent Teams](../agent-team/README.zh.md) 公开发布的实验性 Web 层。把它放在 `@deepseek-ai/dsh-web-app` 与 [`@deepseek-ai/dsh-experimental-agent-team-profile`](../agent-team-profile/README.zh.md) 之后，即可在浏览器中显示 Team roster、任务板与 teammate 导航。移除任一实验层都会让稳定的 base 与 Web composition 保持不变。随附 Web profile 默认不会启用它。
 
 ## 目录
 
@@ -27,11 +27,11 @@ kind: "package-bundle"
 
 ### 安装到 profile
 
-在本仓库 checkout 中，按以下顺序把 Host 与 Web Agent Teams 层添加到已初始化的 `web` profile：
+按以下顺序把 Host 与 Web Agent Teams 层添加到已初始化的 `web` profile：
 
 ```sh
-pnpm dsh plugin --profile web add ./packages/experimental/agent-team-profile
-pnpm dsh plugin --profile web add ./packages/experimental/agent-team-web-profile
+dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-profile
+dsh plugin --profile web add @deepseek-ai/dsh-experimental-agent-team-web-profile
 ```
 
 第一条命令提供 Team domain、生成的 Remote 方法与模型工具。第二条命令激活本包声明的 patch 及其浏览器 presentation。执行 `dsh plugin --profile web remove @deepseek-ai/dsh-experimental-agent-team-web-profile` 移除本包时，Web 层也会从 profile 的有序 bundle 列表中移除。
@@ -54,7 +54,7 @@ pnpm dsh plugin --profile web add ./packages/experimental/agent-team-web-profile
 |---|---|
 | [`cordis.patch.yml`](cordis.patch.yml) | 包含 `ui-agent-team` 行的有序 Web patch |
 | [`src/index.ts`](src/index.ts) | 空模块入口；patch 是运行时内容 |
-| — | 不发布运行时不变式伴生入口；本包是静态 bundle，不持有可独立观察的运行时关系。 |
+| — | 不发布运行时不变式伴生入口；本包只携带静态 profile patch，Remote assembly 与 Team UI 负责各自的激活要求。 |
 
 </details>
 
@@ -63,7 +63,7 @@ pnpm dsh plugin --profile web add ./packages/experimental/agent-team-web-profile
 <a id="further-exploration"></a>
 ## 进一步探索
 
-- [实验性包](../README.zh.md)——孵化状态与发布排除规则。
+- [实验性包](../README.zh.md)——孵化状态与发布规则。
 - [Agent Teams Host profile](../agent-team-profile/README.zh.md)——所需的 domain、Remote 与模型工具层。
 - [Agent Teams 浏览器 UI](../client-ui-agent-team/README.zh.md)——roster、任务板与 teammate 导航行为。
 - [Web bundle](../../bundle/web-app/README.zh.md)——本 patch 扩展的稳定浏览器层。
@@ -85,7 +85,7 @@ pnpm dsh plugin --profile web add ./packages/experimental/agent-team-web-profile
 
 - **有序组合**——`dsh-base`、`dsh-web-app`、`dsh-experimental-agent-team-profile` 与本包必须保持这个顺序。
 - **Preset-scoped 旧控制项**——稳定 Web preset 仍会在 preset scope 内挂载 continuable Subagent 控制项。顶层 Host profile override 不会替换这些 scoped registration，因此在 Web 获得 Team-aware preset 前，Team roster 与旧 child 控制项可能同时出现。[Web Agent Teams 决策](../../../.agents/notes/archived/feature/2026-08-06-agent-teams-web.md)记录了这项暂缓的 composition 工作。
-- **仅限源码 checkout**——正式 CLI、Web、npm 与 Python 发布产物都不包含这个私有包。
+- **仅显式启用**——本包公开发布，但随附 Web profile 默认不会启用任何 Agent Teams 层。
 
 <a id="dev-note"></a>
 ### 开发备注

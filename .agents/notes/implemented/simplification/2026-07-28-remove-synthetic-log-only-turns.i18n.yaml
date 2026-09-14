@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-07-28-remove-synthetic-log-only-turns.md
-2026-07-28-remove-synthetic-log-only-turns.md: e5138ad22a68d2c7dd6d201df5522536e1d26414
-2026-07-28-remove-synthetic-log-only-turns.zh.md: 2fb15ff837b4984a069a2a5306f167fe72177f6b
+2026-07-28-remove-synthetic-log-only-turns.md: b35045d036dbb3ea18431b76cec2c41674de5607
+2026-07-28-remove-synthetic-log-only-turns.zh.md: 3dbcd0d9b258f4ea9f4515ba009e75487a96c342

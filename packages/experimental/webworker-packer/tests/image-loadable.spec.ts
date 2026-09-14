@@ -35,7 +35,8 @@ const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url))
 
 /** A leaf workspace package: real build output, no dependencies to drag in. */
 const SUBJECT = '@deepseek-ai/dsh-timeout'
-const LANDLOCK = '@deepseek-ai/node-addon-landlock-run'
+const LANDLOCK = '@deepseek-ai/node-addon-system'
+const LANDLOCK_ENTRY = `${LANDLOCK}/landlock-run`
 const PLUGIN_INVENTORY = '@deepseek-ai/dsh-plugin-package-inventory-deepseek'
 const WEB_SERVER = '@deepseek-ai/dsh-host-webserver'
 
@@ -50,7 +51,7 @@ describe('preview example overlays', () => {
       .toContain("previewStatus = 'ready'")
     expect(new TextDecoder().decode(result.files['workspace/.agents/skills/preview-tour/SKILL.md']))
       .toContain('name: preview-tour')
-    expect(Object.keys(result.files).filter(path => path.endsWith('/session.v2.jsonl'))).toHaveLength(3)
+    expect(Object.keys(result.files).filter(path => path.endsWith('/session.v3.jsonl'))).toHaveLength(3)
   })
 
   it('fails loud when a declared seed tree is absent', () => {
@@ -86,7 +87,7 @@ const subjectBuilt = [
   'vendor/loader/lib/index.js',
   'packages/host/webserver/lib/index.js',
   'packages/llm/plugin-package-inventory-deepseek/lib/index.js',
-  'native/landlock-run/packages/entry/lib/index.js',
+  'native/system/packages/entry/lib/index.js',
   'packages/preset/agent-presets/lib/typert.host.js',
   'packages/preset/agent-presets/lib/typert.remote-client.js',
 ].every(path => existsSync(join(repoRoot, path)))
@@ -240,7 +241,7 @@ const archive = async (): Promise<Uint8Array> =>
     expect(result.packages.has(LANDLOCK)).toBe(true)
     expect(result.missing).toEqual([])
     expect(Object.hasOwn(result.files, `node_modules/${LANDLOCK}/lib/index.js`)).toBe(true)
-    expect(createNodeBuiltins()[LANDLOCK]).toBeUndefined()
+    expect(createNodeBuiltins()[LANDLOCK_ENTRY]).toBeUndefined()
 
     const vfs = loadVfsImage(await inflateImage(result.image, 'the packed Landlock package'), DEFAULT_ROOT)
     const loader = new WorkerModuleLoader({
@@ -251,7 +252,7 @@ const archive = async (): Promise<Uint8Array> =>
     })
     setActiveVfs(vfs)
     setActiveModuleLoader(loader)
-    const landlock = loader.requireFrom(`${DEFAULT_ROOT}/workspace`)(LANDLOCK) as {
+    const landlock = loader.requireFrom(`${DEFAULT_ROOT}/workspace`)(LANDLOCK_ENTRY) as {
       LAUNCHER_BIN: string
       LAUNCHER_FAILURE_EXIT: number
       launcherPath(): string

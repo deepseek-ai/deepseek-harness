@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-jobs` 让工具可以把长时间工作注册为后台任务：工作获得稳定的 `<kind>-N` id，在 agent 继续推进的同时保持运行，拥有它的 agent 可以随时读取输出、带超时等待或请求取消。任务属于启动它的 agent 会话，因此一个 agent 的工作永远不会被另一个 agent 看到；完成以会话内通知而非轮询的方式送达给拥有者。本包只提供约定：进程本地注册表位于 `dsh-jobs-local`，模型侧控制与完成通知位于 `dsh-tool-jobs`。加载一个实现才能获得后台任务；没有实现时 `ctx.jobs` 不存在，`start()` 无法运行。
+`dsh-jobs` 让工具可以在 agent（智能体）继续推进时保持长时间工作运行。每项任务都会获得稳定的 `<kind>-N` id，拥有它的 agent 可以读取输出、带超时等待或请求取消。归属范围限定在 agent 会话内，因此其他 agent 无法查看或停止任务；任务完成时会通过会话内通知送达，无需轮询。只有部署提供任务执行能力时，后台任务才能启动。
 
 ## 目录
 
@@ -46,7 +46,7 @@ kind: "package-reference"
 - name: '@deepseek-ai/dsh-tool-jobs'
 ```
 
-在已提供 agent、tools 与 system-prompt 服务的 harness 基础上加载这两个插件，即可获得完整功能：`dsh-jobs-local` 提供进程内后台任务注册表，`dsh-tool-jobs` 提供 `job_output`、`job_list`、`job_kill` 工具以及完成通知投递。
+在已提供 agent、工具与系统提示词服务的 harness 基础上加载这两个插件，即可获得完整功能：`dsh-jobs-local` 提供进程内后台任务注册表，`dsh-tool-jobs` 提供 `job_output`、`job_list`、`job_kill` 工具以及完成通知投递。
 
 ### 可能出什么问题
 
@@ -65,10 +65,10 @@ kind: "package-reference"
 ### 设计理念
 
 - **约定与实现分属不同包。** `JobRegistry` 是抽象 Cordis 服务；直接加载该类会抛出异常，因此错误配置的组合会在加载时失败，而不是注册一个空的 `ctx.jobs`。
-- **每进程一个注册表，按所有者给出答案。** 一个实例服务进程内的每套组合，因此注册与投递都相对注册方所在 scope：从不带 scope 的上下文注册的控制器或监听器服务于每个所有者；在某套 agent 组合的 scope 下注册的，恰好服务于该组合下组合出的 agent。
+- **每个进程一个注册表，按所有者返回结果。** 一个实例服务进程内的每套组合，因此注册与投递都相对注册方所在 scope：从不带 scope 的上下文注册的控制器或监听器服务于每个所有者；在某套 agent 组合的 scope 下注册的，恰好服务于该组合下组合出的 agent。
 - **访问以所有者的会话 id 为界。** id 可预测，因此是授权——而非保密——构成边界。
 - **结算首次优先，完成最后宣布。** 一条终止记录、释放的等待方，以及一轮受到隔离的监听器通知；完成在记录提交且该结算的所有其他观察者都已看到之后才宣布，因为报告方可能同步开启一个模型轮次。
-- **注册的存续期长于生产方与控制器 fiber。** 所有者与服务释放会取消正在运行的工作并等待守约的生产方；抛出异常的销毁取消只强制失败记录。
+- **注册的存续期长于生产方与控制器 fiber。** 所有者与服务释放会取消正在运行的工作并等待守约的生产方；销毁期间的取消若抛出异常，只会将记录强制标记为失败。
 
 ### 源码地图
 
@@ -81,7 +81,7 @@ kind: "package-reference"
 
 ### 服务操作
 
-每个操作都是已注册任务之上的薄投影：`get` 与 `list` 返回非消费式快照，`read` 推进唯一的流游标，`kill` 在改变状态前调用生产方取消，`wait` 阻塞至超时，`start()` 在调用生产方 `run()` 一次之前预检访问、校验与准入，同时拒绝任何没有已附加控制器服务的所有者；监听器按所有者粒度观察终止记录与可见集变化，`attachController` 把控制器可用性限定在其 effect 生命周期内。确切签名与行为见 [`src/index.ts`](src/index.ts) 的 JSDoc 与生成的 [`ctx.jobs` cordis 接口面](../../../docs/subsystems/jobs.zh.md)。
+每个操作都是已注册任务之上的薄投影：`get` 与 `list` 返回非消费式快照，`read` 推进唯一的流游标，`kill` 在改变状态前调用生产方取消，`wait` 最多阻塞至超时，`start()` 在调用生产方 `run()` 一次之前预检访问、校验与准入，同时拒绝任何没有已附加控制器服务的所有者；监听器按所有者粒度观察终止记录与可见集变化，`attachController` 把控制器可用性限定在其 effect 生命周期内。确切签名与行为见 [`src/index.ts`](src/index.ts) 的 JSDoc 与生成的 [`ctx.jobs` Cordis 接口面](../../../docs/subsystems/jobs.zh.md)。
 
 </details>
 
@@ -92,7 +92,7 @@ kind: "package-reference"
 
 当包级约定不够用时阅读以下页面。它们从任务类型逐步进入随附实现、模型侧控制与设计记录。
 
-- [后台任务运行时子系统](../../../docs/subsystems/jobs.zh.md)——任务类型、快照字段与 `ctx.jobs` 的 cordis 接口面。
+- [后台任务运行时子系统](../../../docs/subsystems/jobs.zh.md)——任务类型、快照字段与 `ctx.jobs` 的 Cordis 接口面。
 - [jobs 组映射](../README.zh.md)——同级组页面及其包表格。
 - [进程本地注册表](../jobs-local/README.zh.md)——在本进程中运行任务的随附实现。
 - [模型侧任务控制](../tool-jobs/README.zh.md)——`job_output`、`job_list` 与 `job_kill` 工具及完成通知。
@@ -104,7 +104,7 @@ kind: "package-reference"
 <a id="model-experience"></a>
 ## 模型体验
 
-通过生产方插件与控制器插件间接影响模型，它们拥有任务注册表上的全部模型渲染。
+通过生产方插件与控制器插件间接影响模型；它们负责基于任务注册表完成所有面向模型的渲染。
 
 #### KV Cache 影响
 

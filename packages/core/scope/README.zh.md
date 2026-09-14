@@ -1,5 +1,5 @@
 ---
-description: "面向插件作者与维护者的作用域注册库，用于构建按 agent 或按分组隔离贡献的注册表或事件表面。"
+description: "面向插件作者与维护者的作用域注册库，用于构建按 agent（智能体）或按分组隔离贡献的注册表或事件接口。"
 kind: "package-library"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-library"
 
 ## 概述
 
-零依赖的 `dsh-scope` 库让注册拥有按 agent 归属的家。用 `createScope(ctx, key)` 创建带标签的上下文，通过它进行的每项注册只在一个作用域内可见，并随该作用域 dispose（资源释放）而撤销；用 `scopeOf(ctx)` 读取上下文的作用域标签；用 `scopeTarget(base, key)` 把带作用域的事件路由到键相同的监听器，同时让无标签监听器保持全局可见。键可以构成父链：子作用域看得见祖先的各层（近者遮蔽远者），标签为祖先的监听器能收到子孙键的事件——反向永不成立。该机制与键的具体含义无关：agent loop（智能体循环）为每个存活的 agent 创建一个作用域，agent preset 的常驻挂载则是其 agent 们的父作用域，但底层包无需依赖两者即可使用。构建必须按 agent 或按分组隔离贡献的注册表或事件表面时，请选择本包。
+`dsh-scope` 让插件作者能够为每个 agent 或分组提供隔离的贡献集合与统一生命周期。子作用域继承祖先贡献，且较近的定义优先；祖先作用域可以观察后代活动，这两种关系均不反向成立。释放作用域会移除它拥有的一切。按 agent 或分组隔离必须脱离 agent loop（智能体循环）与 preset 工作时，请使用这个零依赖库。
 
 ## 目录
 
@@ -57,7 +57,7 @@ await scope.dispose()   // unwinds every registration made through scope.ctx
 
 ### 设计理念
 
-注册上下文同时决定可见性与所有权：通过带作用域上下文进行的注册在该作用域内可见、并随其 dispose，从而防止贡献在一个作用域中可见、却随另一个作用域拆除。该原语用于路由受信任的同进程插件；它不是沙箱或权限边界。交出带作用域的上下文，也会交出创建该上下文的插件的服务解析范围（解析沿创建者 fiber 的依赖链行进），因此作用域应由具备这些带作用域注册所需依赖的插件来创建。
+注册上下文同时决定可见性与所有权：通过带作用域上下文进行的注册在该作用域内可见、并随其 dispose（资源释放），从而防止贡献在一个作用域中可见、却随另一个作用域拆除。该原语用于路由受信任的同进程插件；它不是沙箱或权限边界。交出带作用域的上下文，也会交出创建该上下文的插件的服务解析范围（解析沿创建者 fiber 的依赖链行进），因此作用域应由具备这些带作用域注册所需依赖的插件来创建。
 
 ### 源码地图
 
@@ -87,7 +87,7 @@ await scope.dispose()   // unwinds every registration made through scope.ctx
 
 - [作用域注册子系统](../../../docs/subsystems/scope.zh.md)——身份、载体与层类型。
 - [agent 作用域上下文 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-08-agent-scope-contexts.zh.md)——安全非目标与上下文设计。
-- [agent 作用域 runtime 设计 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-12-agent-scope-runtime-design.zh.md)——循环如何构建按 agent 的作用域。
+- [agent 作用域运行时设计 Agent Note](../../../.agents/notes/implemented/architecture/2026-07-12-agent-scope-runtime-design.zh.md)——循环如何构建按 agent 的作用域。
 - [core 分组地图](../README.zh.md)——core 各包如何组合。
 
 -----
@@ -98,7 +98,7 @@ await scope.dispose()   // unwinds every registration made through scope.ctx
 
 这些限制说明该原语何时需要特别留意。它们是当前包约束，不是任务积压。
 
-- **只有感知作用域的表层才会隔离状态**：注册表必须按 `scopeOf()` 归档，事件必须通过 `scopeTarget()` 分发；仅仅通过带作用域的上下文调用任意 Cordis 服务，并不会改变该服务仍为上下文全局这一事实。
+- **只有感知作用域的 API 才会隔离状态**：注册表必须按 `scopeOf()` 归档，事件必须通过 `scopeTarget()` 分发；仅仅通过带作用域的上下文调用任意 Cordis 服务，并不会改变该服务仍为上下文全局这一事实。
 - **一个上下文只携带一个最近的作用域键**：层级关系存在于键级父关系中而非上下文标签里；嵌套作用域上下文仍遮蔽为单一标签，多成员策略集仍不受支持。
 - **服务可达性来自作用域创建者**：交出 `Scope.ctx` 也会交出创建插件注入的服务范围，因此，若作用域创建者提供的服务范围较宽，持有者之后也无法将其收窄。
 

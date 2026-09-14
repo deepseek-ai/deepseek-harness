@@ -3,16 +3,15 @@
 // turn wall time click-opens the Turn-time dialog. Both sit right of the
 // branch action in the tail's IconActions row, ahead of the plain clock text.
 
-import { useEffect, useRef, useState, type CSSProperties, type MutableRefObject } from 'react'
 import { createPortal } from 'react-dom'
-import {
-  IconClockOutline16, IconDatabaseOutline16, useAnchoredPosition, useDismissOnOutsidePointer,
-} from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconClockOutline16, IconDatabaseOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TurnTokenUsage } from '../contract/chat-nodes.ts'
 import type { ChatViewSlotProps } from '../contract/slots.ts'
 import { formatLatencySeconds, formatRunDuration, formatTokensPerSecond } from './message-chrome.ts'
 import { formatCacheHitPercent, formatExactTokens, formatTokens } from './token-format.ts'
+import { MEASURE_STYLE, useStatDialog } from './stat-dialog.ts'
 import css from './TurnUsagePanel.module.css'
+import dialogCss from './stat-dialog.module.css'
 
 export interface TurnUsagePanelProps {
   usage: TurnTokenUsage
@@ -37,58 +36,6 @@ function formatCompactCount(value: number, t: ChatViewSlotProps['t']): string {
 
 function formatExactCount(value: number, t: ChatViewSlotProps['t']): string {
   return t('message.turnUsage.count', { count: formatExactTokens(value, t) })
-}
-
-/** Viewport margin the placement clamp keeps (the Menu portal margin). */
-const PANEL_MARGIN = 12
-
-/** Distance between the trigger's top edge and the panel's bottom. */
-const PANEL_GAP = 8
-
-/**
- * Unplaced portal panel: hidden but laid out so the clamp measures real
- * dimensions (the `useAnchoredPosition` measure pass).
- */
-const MEASURE_STYLE: CSSProperties = { visibility: 'hidden', left: 0, top: 0 }
-
-interface StatDialogSeat {
-  open: boolean
-  setOpen: (open: boolean) => void
-  rootRef: MutableRefObject<HTMLSpanElement | null>
-  panelRef: MutableRefObject<HTMLDivElement | null>
-  pos: CSSProperties | null
-}
-
-/** One trigger-anchored dialog seat: open state, viewport-clamped placement, outside-close. */
-function useStatDialog(): StatDialogSeat {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLSpanElement | null>(null)
-  const panelRef = useRef<HTMLDivElement | null>(null)
-
-  // Portal placement: the dialog is fixed above the trigger and clamped inside
-  // the viewport, so a trigger near the window edge cannot push it off-screen.
-  const pos = useAnchoredPosition({
-    open,
-    anchorRef: rootRef,
-    panelRef,
-    side: 'top',
-    gap: PANEL_GAP,
-    margin: PANEL_MARGIN,
-  })
-
-  // Outside pointerdown closes through the shared primitive; the portaled
-  // panel counts as inside. Escape close stays local, one listener while open.
-  useDismissOnOutsidePointer(rootRef, open, setOpen, panelRef)
-  useEffect(() => {
-    if (!open) return
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') setOpen(false)
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => { document.removeEventListener('keydown', onKeyDown) }
-  }, [open])
-
-  return { open, setOpen, rootRef, panelRef, pos }
 }
 
 /**
@@ -120,24 +67,24 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
       {open && createPortal(
         <div
           ref={panelRef}
-          className={css.panel}
+          className={dialogCss.panel}
           role="dialog"
           aria-label={t('message.turnUsage.title')}
           style={pos ?? MEASURE_STYLE}
         >
-          <div className={css.title}>
-            <span className={css.titleLabel}>
+          <div className={dialogCss.title}>
+            <span className={dialogCss.titleLabel}>
               <IconDatabaseOutline16 />
               {t('message.turnUsage.title')}
             </span>
-            <span className={css.titleValue}>{formatExactCount(usage.totalTokens, t)}</span>
+            <span className={dialogCss.titleValue}>{formatExactCount(usage.totalTokens, t)}</span>
           </div>
-          <div className={css.titleRule} aria-hidden />
-          <dl className={css.details} data-turn-usage-details>
+          <div className={dialogCss.titleRule} aria-hidden />
+          <dl className={dialogCss.details} data-turn-usage-details>
             {routes !== '' && (
               <>
                 <dt>{t('message.turnUsage.model')}</dt>
-                <dd className={css.route}>{routes}</dd>
+                <dd className={dialogCss.route}>{routes}</dd>
               </>
             )}
             {cacheHit !== null && (
@@ -164,7 +111,7 @@ export function TurnUsagePanel({ usage, t }: TurnUsagePanelProps) {
             <dd>
               {formatExactCount(usage.outputTokens, t)}
               {usage.reasoningTokens !== undefined && (
-                <span className={css.reasoning}>
+                <span className={dialogCss.reasoning}>
                   {t('message.turnUsage.reasoning', { tokens: formatExactCount(usage.reasoningTokens, t) })}
                 </span>
               )}
@@ -199,19 +146,19 @@ export function TurnTimePanel({ runMs, tokensPerSecond, ttftMs, t }: TurnTimePan
       {open && createPortal(
         <div
           ref={panelRef}
-          className={css.panel}
+          className={dialogCss.panel}
           role="dialog"
           aria-label={t('message.turnTime.title')}
           style={pos ?? MEASURE_STYLE}
         >
-          <div className={css.title}>
-            <span className={css.titleLabel}>
+          <div className={dialogCss.title}>
+            <span className={dialogCss.titleLabel}>
               <IconClockOutline16 />
               {t('message.turnTime.title')}
             </span>
           </div>
-          <div className={css.titleRule} aria-hidden />
-          <dl className={css.details} data-turn-time-details>
+          <div className={dialogCss.titleRule} aria-hidden />
+          <dl className={dialogCss.details} data-turn-time-details>
             <dt>{t('message.turnTime.duration')}</dt>
             <dd>{formatRunDuration(runMs, t)}</dd>
             {tokensPerSecond !== undefined && (

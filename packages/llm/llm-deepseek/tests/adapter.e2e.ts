@@ -7,13 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
-import LlmRuntime, { createUserMessage, ToolCallId, ReasoningEffortId, createMessage } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { createUserMessage, ToolCallId, ReasoningEffortId, createMessage, createSystemMessage } from '@deepseek-ai/dsh-llm'
 import type { Message, ToolSchema } from '@deepseek-ai/dsh-llm'
 import AttachmentStore, { AttachmentId, ImageVariantId } from '@deepseek-ai/dsh-attachment'
+import LocalAttachments from '@deepseek-ai/dsh-attachment-local'
 import type {
   ImageAttachmentLimits,
   ImageAttachmentRef,
-  ImageRequestPolicy,
+  ImageRequestTarget,
   RequestImageAttachment,
   SaveImageAttachment,
   StoredImageAttachment,
@@ -25,18 +26,22 @@ import * as PluginPackageInventoryDeepSeek from '@deepseek-ai/dsh-plugin-package
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import * as LlmDeepSeek from '@deepseek-ai/dsh-llm-deepseek'
 import type { Config } from '@deepseek-ai/dsh-llm-deepseek'
+import type { WireMessage, WireRequest } from '../src/protocols/chat-completions/types.ts'
 import { assemble, type AssembledResult } from './assemble.ts'
 
 /**
  * Real-API e2e for the direct-fetch adapter: V4 Flash across thinking modes
  * and a max-effort tool round trip with reasoning passback. The suite skips
  * entirely without $DEEPSEEK_API_KEY; the pre-release vision smoke additionally
- * requires $DEEPSEEK_VISION_E2E=1 (see vitest.e2e.config.ts).
+ * requires $DEEPSEEK_VISION_E2E=1, and the Flash image/system-update smoke
+ * requires $DEEPSEEK_FLASH_E2E=1 (see vitest.e2e.config.ts).
  */
 
 const FLASH = 'deepseek-v4-flash'
 const VISION = 'deepseek-v4-flash-vision-exp'
 const VISION_E2E_ENABLED = process.env.DEEPSEEK_VISION_E2E === '1'
+/** A model whose endpoint reads the latest `system` message at any position; unset skips the in-history smoke. */
+const IN_HISTORY_MODEL = process.env.DEEPSEEK_IN_HISTORY_MODEL
 const TEST_PNG = Uint8Array.from(readFileSync(
   new URL('../../llm-pi-ai/tests/fixtures/qr-code.png', import.meta.url),
 ))
@@ -87,7 +92,7 @@ class E2eAttachmentStore extends AttachmentStore {
 
   override readImageRequest(
     _ref: ImageAttachmentRef,
-    _policy: ImageRequestPolicy,
+    _target: ImageRequestTarget,
     _signal?: AbortSignal,
   ): Promise<RequestImageAttachment> {
     return Promise.resolve(this.version)
@@ -99,12 +104,17 @@ beforeEach(async () => {
   vi.stubEnv('DSH_HOME', identityHome)
 })
 
-async function harness(_model: string, config: Partial<Config> = {}) {
+async function harness(model: string, config: Partial<Config> = {}) {
   const ctx = new Context()
   contexts.push(ctx)
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(E2eAttachmentStore)
-  await ctx.plugin(LlmDeepSeek, config)
+  await ctx.plugin(LlmDeepSeek, {
+    protocol: 'chat-completions',
+    baseURL: LlmDeepSeek.PUBLIC_BASE_URL,
+    ...model === VISION ? { models: [{ id: VISION, inputModalities: ['text', 'image'] }] } : {},
+    ...config,
+  })
   return ctx
 }
 
@@ -140,10 +150,39 @@ const weatherTool: ToolSchema = {
 }
 
 describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', () => {
+  it.skipIf(process.env.DEEPSEEK_FLASH_E2E !== '1')('deepseek-flash accepts images and retains system updates', async () => {
+    const ctx = new Context()
+    contexts.push(ctx)
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LocalAttachments)
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: LlmDeepSeek.PUBLIC_BASE_URL, maxTokens: 4096 })
+    const model = 'deepseek-flash'
+    await expect(ctx.llm.resolveModelInfo('deepseek-official', model)).resolves.toMatchObject({
+      inputModalities: ['text', 'image'], systemPromptUpdate: 'in-history',
+    })
+    const attachment = await ctx.attachments.saveImage({ data: readFileSync(new URL('fixtures/red.png', import.meta.url)), mediaType: 'image/png' })
+    const message = ask('What is the dominant color of this image?')[0]!
+    const history: Message[] = [
+      createSystemMessage('Answer with one English color word.', 'test'),
+      { ...message, content: [...message.content, { type: 'image', attachment }] },
+    ]
+    const reply = async () => {
+      const response = await assemble(ctx, { model, messages: history, reasoningEffort: ReasoningEffortId('high') })
+      expect(response.finish.kind, JSON.stringify(response.finish)).toBe('stop')
+      history.push(response.message)
+      return textOf(response).trim().toLowerCase()
+    }
+    expect(await reply()).toMatch(/^red[.!]?$/)
+    history.push(createSystemMessage('Reply to every user message with exactly banana.', 'test'), ...ask('Answer now.'))
+    expect(await reply()).toBe('banana')
+    history.push(...ask('Answer again.'))
+    expect(await reply()).toBe('banana')
+  })
+
   it.skipIf(!VISION_E2E_ENABLED)('uses the built-in official route to upload, reference, and delete one image', async () => {
     const key = process.env.DEEPSEEK_API_KEY
     if (key === undefined) throw new Error('e2e ran without DEEPSEEK_API_KEY')
-    const baseURL = process.env.DEEPSEEK_BASE_URL ?? LlmDeepSeek.PUBLIC_BASE_URL
+    const baseURL = LlmDeepSeek.PUBLIC_BASE_URL
     const ctx = await harness(VISION, { baseURL })
     await ctx.plugin(E2eAttachmentStore)
     const attachments = ctx.attachments as E2eAttachmentStore
@@ -160,7 +199,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       return response
     }
     vi.stubGlobal('fetch', observedFetch)
-    const files = new LlmDeepSeek.DeepSeekFilesClient({ baseURL, apiKey: key })
+    const files = new LlmDeepSeek.DeepSeekFilesClient({ protocol: 'chat-completions', baseURL, apiKey: key })
 
     try {
       const result = await assemble(ctx, {
@@ -195,7 +234,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
     await ctx.plugin(SessionLogDeepSeek, { enabled: true })
     await ctx.plugin(PluginPackageInventoryDeepSeek)
-    await ctx.plugin(LlmDeepSeek, { thinking: 'disabled' })
+    await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: LlmDeepSeek.PUBLIC_BASE_URL, thinking: 'disabled' })
     const session = ctx.sessions.create(SessionId('real-extension-fields'))
     session.append('turn/start', { turn: 1 })
 
@@ -225,7 +264,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
       contexts.push(ctx)
       await ctx.plugin(LlmRuntime)
       await ctx.plugin(LocalCredentialProvider, { path: join(dir, '.credentials.yaml'), watch: false })
-      await ctx.plugin(LlmDeepSeek, {})
+      await ctx.plugin(LlmDeepSeek, { protocol: 'chat-completions', baseURL: LlmDeepSeek.PUBLIC_BASE_URL })
 
       const result = await assemble(ctx, {
         model: FLASH,
@@ -315,6 +354,98 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('llm-deepseek e2e (real API)', ()
         `DeepSeek Flash tool-result turn finished as ${JSON.stringify(second.finish)}`,
       ).toBe('stop')
       expect(textOf(second).toLowerCase()).toMatch(/sunny|22/)
+    },
+  )
+
+  it.skipIf(IN_HISTORY_MODEL === undefined)(
+    'an in-history model follows a mid-history system message and keeps the cached prefix',
+    async () => {
+      const model = IN_HISTORY_MODEL as string
+      const ctx = await harness(model, {
+        thinking: 'disabled',
+        models: [{ id: model, systemPromptUpdate: 'in-history' }],
+      })
+      await expect(ctx.llm.resolveModelInfo('deepseek-official', model))
+        .resolves.toMatchObject({ systemPromptUpdate: 'in-history' })
+      const system = (text: string) => createSystemMessage(text, 'test')
+      // A nonce before the padding isolates the provider cache across runs and retries.
+      const nonce = randomBytes(16).toString('hex')
+      const padding = Array.from({ length: 40 }, (_, index) => `Rule ${String(index + 1)}: keep every answer short and factual.`).join('\n')
+      // Both update strategies use identical prompt bytes, with the changed instruction near the head.
+      const prompt = (word: string) => `Test ${nonce}. When the user says ping, reply with exactly the word: ${word}\n${padding}`
+      const initial = prompt('pong')
+      const latest = prompt('banana')
+      const history = [system(initial), ...ask('ping')]
+      const wireRequests: WireMessage[][] = []
+      const nativeFetch = globalThis.fetch
+      const observedFetch: typeof fetch = async (input, init) => {
+        if (init?.method !== 'POST' || typeof init.body !== 'string') return nativeFetch(input, init)
+        const body = JSON.parse(init.body) as WireRequest
+        if (body.model === model) {
+          wireRequests.push(body.messages)
+          if (wireRequests.length === 1) {
+            expect(body.messages).toEqual([
+              { role: 'system', content: initial }, { role: 'user', content: 'ping' },
+            ])
+          } else if (wireRequests.length === 2) {
+            expect(JSON.stringify(body.messages)).toBe(JSON.stringify(wireRequests[0]))
+          } else if (wireRequests.length === 3) {
+            expect(JSON.stringify(body.messages.slice(0, history.length)))
+              .toBe(JSON.stringify(wireRequests[0]))
+            expect(body.messages[3]).toEqual({ role: 'system', content: latest })
+          } else if (wireRequests.length === 4) {
+            expect(body.messages[0]).toEqual(wireRequests[2]![3])
+            expect(body.messages.slice(1)).toEqual([
+              wireRequests[2]![1], wireRequests[2]![2], wireRequests[2]![4],
+            ])
+          }
+        }
+        return nativeFetch(input, init)
+      }
+      vi.stubGlobal('fetch', observedFetch)
+      try {
+        const first = await assemble(ctx, { model, messages: history, maxTokens: 50 })
+        expect(first.finish.kind).toBe('stop')
+        expect(textOf(first).trim()).toBe('pong')
+        const initialTokens = first.usage?.inputTokens ?? 0
+        expect(initialTokens).toBeGreaterThan(0)
+
+        // Measure reusable tokens rather than assuming a provider cache-block size.
+        const warm = await assemble(ctx, { model, messages: history, maxTokens: 50 })
+        expect(warm.finish.kind).toBe('stop')
+        expect(textOf(warm).trim()).toBe('pong')
+        const reusableTokens = warm.usage?.cacheReadTokens ?? 0
+        expect(reusableTokens).toBeLessThanOrEqual(initialTokens)
+        expect(reusableTokens).toBeGreaterThan(0)
+        const assistant = createMessage({
+          role: 'assistant', content: first.message.content, source: { kind: 'plugin', plugin: 'test' },
+        })
+
+        const updated = await assemble(ctx, {
+          model,
+          messages: [...history, assistant, system(latest), ...ask('ping')],
+          maxTokens: 50,
+        })
+        expect(updated.finish.kind).toBe('stop')
+        expect(textOf(updated).trim()).toBe('banana')
+
+        const replaced = await assemble(ctx, {
+          model,
+          messages: [system(latest), ...ask('ping'), assistant, ...ask('ping')],
+          maxTokens: 50,
+        })
+        expect(replaced.finish.kind).toBe('stop')
+        expect(textOf(replaced).trim()).toBe('banana')
+        expect(wireRequests).toHaveLength(4)
+
+        const cached = updated.usage?.cacheReadTokens ?? 0
+        expect(replaced.usage?.cacheReadTokens).toBeDefined()
+        const baselineCached = replaced.usage?.cacheReadTokens ?? 0
+        expect(cached).toBeGreaterThanOrEqual(reusableTokens)
+        expect(cached).toBeGreaterThan(baselineCached)
+      } finally {
+        vi.stubGlobal('fetch', nativeFetch)
+      }
     },
   )
 

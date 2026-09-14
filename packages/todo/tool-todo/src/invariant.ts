@@ -60,6 +60,7 @@ function validateEvent(event: SessionEvent, trace: TurnTrace, fail: InvariantFai
 /** Validate one existing log in a single pass and return its tail trace. */
 function seedTrace(session: Session, fail: InvariantFailure): TurnTrace {
   const trace: TurnTrace = { open: false }
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
   for (const event of session.snapshotEvents()) {
     validateEvent(event, trace, fail)
     advanceTrace(trace, event)

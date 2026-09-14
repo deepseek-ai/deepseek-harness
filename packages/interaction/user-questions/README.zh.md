@@ -26,7 +26,7 @@ kind: "package-reference"
 
 ### 公开 API
 
-- `ctx.userQuestions.ask(request): Promise<AskUserQuestionAnswer>` 派发回答者 waterfall，并等待第一个接受请求的回答。
+- `ctx.userQuestions.ask(request): Promise<AskUserQuestionAnswer>` 派发回答者 waterfall，并等待首个被接受的回答。
 
 ### 关键类型
 
@@ -76,4 +76,4 @@ kind: "package-reference"
 
 </details>
 
-**运行时不变式：** 不发布伴生入口。单个 provider slot 在注册时校验，ask 结果直接返回调用方；该 seam 不发布独立 request/answer 审计流。
+**运行时不变式：** 不发布伴生入口。answerer waterfall 按请求解析并把结果直接返回调用方；该 seam 不发布独立的请求／回答审计流。

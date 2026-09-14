@@ -18,6 +18,43 @@
   color: var(--dsw-alias-label-tertiary);
 }
 
+.pickerPreference {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 16px;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: 14px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.pickerPreferenceCopy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pickerPreferenceTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pickerPreferenceTitle {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.pickerPreferenceDescription {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 /* Cards, not rows: a preset is a thing you pick, and the description is the
    part that tells them apart — a row would bury it beside the actions. */
 .group {
@@ -63,7 +100,7 @@
 }
 
 
-.card:hover:not(.cardActive) {
+.card:hover:not(.cardActive):not(.cardSelectionDisabled) {
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
@@ -73,6 +110,16 @@
 .cardActive {
   background: var(--dsw-alias-bg-module-platform);
   border-color: var(--dsw-static-neutral-bluish-400);
+}
+
+/* Mode selection is off, not the preset itself: mute only the selectable
+   body while the independent view/copy/location actions stay fully usable. */
+.cardSelectionDisabled {
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.cardSelectionDisabled .cardMain {
+  opacity: 0.48;
 }
 
 /* A broken preset reads as damaged before anything else: the card cannot be

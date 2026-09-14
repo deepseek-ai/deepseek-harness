@@ -9,7 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
-import { isSurfaceEvent, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
+import { KNOWN_SESSION_EVENT_TYPES, SessionLogOffset, SessionSeq } from '@deepseek-ai/dsh-session'
 import type {
   Session,
   SessionEvent,
@@ -17,12 +17,14 @@ import type {
   SessionLogOffset as SessionLogOffsetType,
   SessionSeq as SessionSeqType,
   SessionSeqCursor,
+  SurfaceOp,
 } from '@deepseek-ai/dsh-session'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
   DeepSeekSessionLogExtension,
   DeepSeekSessionLogWireEvent,
   DeepSeekSessionLogWireHeader,
+  DeepSeekSessionLogWireSurfaceOp,
 } from './types.ts'
 
 export type * from './types.ts'
@@ -68,23 +70,43 @@ function wireHeader(session: Session): DeepSeekSessionLogWireHeader {
 
 /** Translate compile-time sequence brands to raw numeric request fields. */
 function wireEvent(event: SessionEvent): DeepSeekSessionLogWireEvent {
-  const surfaceEvent = isSurfaceEvent(event) ? event : undefined
-  const surfaceOp = surfaceEvent?.surfaceOp
-  return {
-    type: event.type,
+  const common = {
     seq: Number(event.seq),
     time: event.time,
     data: event.data as JsonValue,
     ...event.ignorable === undefined ? {} : { ignorable: event.ignorable },
-    ...surfaceEvent?.sourceEventSeqs === undefined
-      ? {}
-      : { sourceEventSeqs: surfaceEvent.sourceEventSeqs.map(Number) },
-    ...surfaceOp === undefined
-      ? {}
-      : surfaceOp === 'append'
-        ? { surfaceOp }
-        : { surfaceOp: { op: 'replace' as const, start: Number(surfaceOp.start), end: Number(surfaceOp.end) } },
   }
+  switch (event.type) {
+    case 'system/message':
+    case 'user/message':
+    case 'tool/result':
+      return {
+        ...common,
+        type: event.type,
+        surfaceOp: wireSurfaceOp(event.surfaceOp),
+        ...event.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: event.sourceEventSeqs.map(Number) },
+      }
+    case 'assistant/message':
+      return { ...common, type: event.type, surfaceOp: wireSurfaceOp(event.surfaceOp) }
+    default: {
+      // Restored unknown ignorable records are opaque, not current surface events.
+      if (!KNOWN_SESSION_EVENT_TYPES.has(event.type) && event.ignorable === true) {
+        const opaque = event as { surfaceOp?: JsonValue; sourceEventSeqs?: JsonValue }
+        return {
+          ...common, type: event.type, ignorable: true,
+          ...opaque.surfaceOp === undefined ? {} : { surfaceOp: opaque.surfaceOp },
+          ...opaque.sourceEventSeqs === undefined ? {} : { sourceEventSeqs: opaque.sourceEventSeqs },
+        }
+      }
+      return { ...common, type: event.type }
+    }
+  }
+}
+
+function wireSurfaceOp(op: SurfaceOp): DeepSeekSessionLogWireSurfaceOp {
+  return op === 'append'
+    ? op
+    : { op: 'replace', startSeq: Number(op.startSeq), endSeq: Number(op.endSeq) }
 }
 
 /**
@@ -98,6 +120,7 @@ export function acceptedThrough(session: Session): SessionSeqCursor {
   const length = session.seq
   const start = previous?.scannedEvents ?? SessionLogOffset(0)
   for (let index = start; index < length; index++) {
+    // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
     const event = session.eventAt(SessionSeq(index))
     if (event === undefined) {
       throw new Error(`session-log-deepseek: missing event ${String(index)} below captured length ${String(length)}`)
@@ -142,9 +165,11 @@ export function apply(ctx: Context, config: Config): void {
       if (session === undefined) return undefined
 
       const afterSeq = acceptedThrough(session)
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       const snapshot = session.snapshotEvents()
       const throughSeq = snapshot.at(-1)?.seq
       if (throughSeq === undefined) return undefined
+      // oxlint-disable-next-line typescript/no-deprecated -- Existing Session history read; migration deferred.
       const suffix = session.snapshotEvents(SessionLogOffset(afterSeq + 1))
       const value: DeepSeekSessionLogExtension = {
         version: 1,

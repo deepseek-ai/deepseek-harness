@@ -28,7 +28,7 @@ Host 入口闭包中的运行期 value import 所到达的 workspace 包，只�
 
 constructor 身份或模块状态必须共享的导出列入 `peerRequiredHostExports`；一旦使用这类导出，整条包依赖边就保留在范围一致的 `peerDependencies` 与 `devDependencies` 中。每个导出表的 key 都是精确 module specifier，每个 value 都是经审查的导出集合。验证器从 Host 入口沿运行期本地 import 扫描，记录具名与默认 import 和 re-export，并拒绝既没有包级分类、也没有导出级分类的导出；除非完整的精确入口已按包分类，否则 namespace、dynamic 和 side-effect import 仍无法限定范围。
 
-Client bundle 使用的 workspace import、纯类型 import、模块扩充、`dsh.client.inject`、invariant companion 和仅有元数据的现存 peer 只属于 `devDependencies`。Host 运行时导入的普通第三方包属于 `dependencies`；其他第三方关系保持原区段。Workspace 引用使用 `workspace:^`。
+Client bundle 使用的 workspace import、纯类型 import、模块扩充、`dsh.client.inject` 和仅有元数据的现存 peer 只属于 `devDependencies`。Host 运行时 import（包括额外 Node 入口）遵循 Host 分类。[浏览器第三方构建输入](2026-09-08-browser-third-party-build-inputs.zh.md)规定普通第三方声明，部分取代本决策对它们原区段的保留。Workspace 引用使用 `workspace:^`。
 
 部分开发期关系只存在于 `dsh.client.inject` 或 TypeScript project reference 中。策略的 `configurationOnlyDevDependencies` 表只列出这些已评审的依赖边，并将它们保留在 `devDependencies` 中。
 

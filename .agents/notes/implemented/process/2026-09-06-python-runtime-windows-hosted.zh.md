@@ -6,7 +6,7 @@ Status: implemented
 
 ## 问题
 
-当 #3629 加入故障切换选择器与作业私有的 Windows 工具链后，[build-exe-for-python-sdk.yml](../../../../.github/workflows/build-exe-for-python-sdk.yml) 中的 Windows x64 目标开始对受信任的 PR CI 通过 `DSH_CI_FAILOVER_WINDOWS=selfhosted` 解析运行器。共享的 `dsh-win-ci` 池并未让该通道更可靠。2026-09-06（所有时间均为 UTC；每次运行都执行 #3629 迁移工作流的选择器，该选择器自 07:56 合并起生效）：安装后 wheel 冒烟测试在 09:12 于 `dsh-win-ci-16` 上为[PR #3640（`ci/benchmark-standard-runner`）的提交 `ca3ffe95`](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34023970384)通过，随后 10:06 在 `dsh-win-ci-21` 上为[PR #3337（`feat/visualizer-host-plugin`）](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34026500701)失败，10:46 在 `dsh-win-ci-04` 上为[PR #3640 的最终 head `c5ba873f`](https://github.com/deepseek-harness/deepseek-harness/actions/runs/34028339888/job/101473395734)失败——`smoke_sdk_profile_plugin` 打包的 `dsh plugin add` 子进程无输出即退出，而该次运行的 Linux 与 macOS 单元均通过；11:29 的作业重试再次出现相同的无声死亡。迁移提案（[#3629](https://github.com/deepseek-harness/deepseek-harness/pull/3629)）保持 `proposed`，因为其吞吐量与共享负载验收标准从未实测。
+当 #3629 加入故障切换选择器与作业私有的 Windows 工具链后，[build-exe-for-python-sdk.yml](../../../../.github/workflows/build-exe-for-python-sdk.yml) 中的 Windows x64 目标开始对受信任的 PR CI 通过 `DSH_CI_FAILOVER_WINDOWS=selfhosted` 解析运行器。共享的 `dsh-win-ci` 池并未让该通道更可靠。2026-09-06（所有时间均为 UTC；每次运行都执行 #3629 迁移工作流的选择器，该选择器自 07:56 合并起生效）：安装后 wheel 冒烟测试在 09:12 于 `dsh-win-ci-16` 上为PR #3640（`ci/benchmark-standard-runner`）的最初实测修订 (run 34023970384)通过，随后 10:06 在 `dsh-win-ci-21` 上为PR #3337（`feat/visualizer-host-plugin`） (run 34026500701)失败，10:46 在 `dsh-win-ci-04` 上为PR #3640 的最终实测修订 (run 34028339888, job 101473395734)失败——`smoke_sdk_profile_plugin` 打包的 `dsh plugin add` 子进程无输出即退出，而该次运行的 Linux 与 macOS 单元均通过；11:29 的作业重试再次出现相同的无声死亡。迁移提案（#3629）保持 `proposed`，因为其吞吐量与共享负载验收标准从未实测。
 
 ## 决策
 

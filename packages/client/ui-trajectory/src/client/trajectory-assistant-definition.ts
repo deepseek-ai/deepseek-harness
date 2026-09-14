@@ -5,6 +5,7 @@ import type {
   PartialAssistant, RequestView,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
+import { assistantStreamFirstTokenTime } from '@deepseek-ai/dsh-llm/assistant-stream'
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { trajectoryNode } from './trajectory-definition-common.ts'
 import {
@@ -191,6 +192,17 @@ function updateChunk(
   }
 }
 
+/** The Step retains its first token across live chunks and settled retry attempts. */
+function settleTiming(
+  state: AssistantState,
+  event: SessionEvent<'assistant/message' | 'assistant/attempt'>,
+): AssistantState {
+  return {
+    ...state,
+    firstTokenTime: state.firstTokenTime ?? assistantStreamFirstTokenTime(event.data.stream),
+  }
+}
+
 function settleMessage(
   state: AssistantState,
   match: ConversationMatch,
@@ -198,7 +210,7 @@ function settleMessage(
 ): AssistantState {
   const blocks = toAssistantBlocks(event.data.message.content)
   return {
-    ...state,
+    ...settleTiming(state, event),
     sawChunk: false,
     blocks,
     visibleBlocks: countVisibleBlocks(blocks),
@@ -226,6 +238,9 @@ function fallbackState(context: ConversationNodeContext<AssistantState>): Assist
     if (event.type === 'assistant/live-chunk') {
       state ??= initialState(event.data.turn, event.data.step, event.seq, event.time, false)
       state = updateChunk(state, event.data.chunk, event.seq, event.time)
+    } else if (event.type === 'assistant/attempt') {
+      state ??= initialState(event.data.turn, event.data.step, event.seq, event.time, false)
+      state = settleTiming(state, event)
     } else if (event.type === 'assistant/message') {
       state ??= initialState(event.data.turn, event.data.step, event.seq, event.time, false)
       state = settleMessage(state, match, event)
@@ -252,7 +267,7 @@ function finalNode(
       step: state.step,
       blocks: toAssistantBlocks(event.data.message.content),
       usage: event.data.usage,
-      provenance: {
+      providerMetadata: {
         provider: event.data.message.source.provider,
         model: event.data.message.source.model,
       },
@@ -309,7 +324,7 @@ function assistantRequest(
       ? {}
       : {
         resultSeq: node.seq,
-        ...(node.provenance === undefined ? {} : { provenance: node.provenance }),
+        ...(node.providerMetadata === undefined ? {} : { providerMetadata: node.providerMetadata }),
       }),
     ...(state.usage === undefined ? {} : { usage: state.usage }),
   }
@@ -325,6 +340,7 @@ const trajectoryAssistantDefinition: ConversationNodeDefinition<AssistantState> 
     }
     if (event.type === 'assistant/live-chunk'
       || event.type === 'assistant/message'
+      || event.type === 'assistant/attempt'
       || event.type === 'llm/retry'
       || event.type === 'step/end') {
       return { id: `${event.data.turn}:${event.data.step}`, role: 'update' }
@@ -348,6 +364,7 @@ const trajectoryAssistantDefinition: ConversationNodeDefinition<AssistantState> 
       return updateChunk(context.state, match.event.data.chunk, match.event.seq, match.event.time)
     }
     if (match.event.type === 'assistant/message') return settleMessage(context.state, match, match.event)
+    if (match.event.type === 'assistant/attempt') return settleTiming(context.state, match.event)
     if (match.event.type === 'step/end') return { ...context.state, stepEnd: match }
     if (match.event.type !== 'llm/retry') return context.state
     const data = match.event.data
@@ -372,7 +389,7 @@ const trajectoryAssistantDefinition: ConversationNodeDefinition<AssistantState> 
     }
   },
   publication: (match) => {
-    if (match.event.type === 'step/start') return 'none'
+    if (match.event.type === 'step/start' || match.event.type === 'assistant/attempt') return 'none'
     if (match.event.type !== 'assistant/live-chunk') return 'immediate'
     const type = match.event.data.chunk.type
     return type === 'usage' || type === 'finish' ? 'none' : 'animation-frame'
