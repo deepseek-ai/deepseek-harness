@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-manager` turns the `mcp` settings namespace into a live fleet of MCP servers: declare servers under `mcp.servers` in `settings.yaml` (or let a management surface write them), and the manager mounts one `dsh-mcp-client` instance per enabled entry — adding, rebuilding, disabling, and removing instances as the document changes, without a restart. It aggregates every server's connection status behind `ctx.mcpServers`, offers `restart` as the manual recovery for a server whose reconnect budget ran out, and `probe` to test a configuration without touching the live instance set. Secret values stay out of the document through `${env:NAME}` and `${credential:REF}` templates, and a rotated credential rebuilds exactly the servers that reference it. Add it when servers should be user-managed at runtime; composition-pinned servers can stay as plain `dsh-mcp-client` rows.
+`dsh-mcp-manager` turns the `mcp` settings namespace into a live fleet of MCP servers: declare servers under `mcp.servers` in `settings.yaml` (or let a management surface write them), and the manager mounts one `dsh-mcp-client` instance per enabled entry, adding, rebuilding, disabling, and removing instances as the document changes without a restart. `ctx.mcpServers` aggregates every server's connection status, `restart` recovers a server whose reconnect budget ran out, and `probe` tests a configuration without touching the live instances. `${env:NAME}` and `${credential:REF}` templates keep secrets out of the document, and a rotated credential rebuilds only the servers referencing it.
 
 ## Table of Contents
 

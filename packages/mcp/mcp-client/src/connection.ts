@@ -250,13 +250,13 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
   }
 
   /** Decide retry ownership after a failed connection's close barrier settles. */
-  function settleFailedGeneration(generation: Client, quiesced: boolean): void {
+  function settleFailedGeneration(generation: Client, quiesced: boolean, lastError: string): void {
     if (!isCurrent(generation)) return
     if (!quiesced) {
       client = undefined
       closeClient = undefined
       ctx.logger.error(`${label}: failed generation could not confirm transport closure — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
-      status.update({ state: 'failed', reason: 'unclosed-generation', ...lastErrorText === undefined ? {} : { lastError: lastErrorText } })
+      status.update({ state: 'failed', reason: 'unclosed-generation', lastError })
       return
     }
     generationDown(generation)
@@ -437,7 +437,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${describeError(error)}`)
       const quiesced = await closeGeneration()
       attemptSettled = true
-      settleFailedGeneration(generation, quiesced)
+      settleFailedGeneration(generation, quiesced, describeError(error))
       return
     }
     attemptSettled = true

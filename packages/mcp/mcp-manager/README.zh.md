@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-manager` 把 `mcp` 设置命名空间变成一支活的 MCP 服务器编队：在 `settings.yaml` 的 `mcp.servers` 下声明服务器（或由管理界面写入），管理器就会为每个启用条目挂载一个 `dsh-mcp-client` 实例——随文档变化增添、重建、停用、移除实例，全程无需重启。它在 `ctx.mcpServers` 背后聚合每台服务器的连接状态，提供 `restart` 作为重连预算耗尽后的手动恢复手段，并提供 `probe` 在不触碰在运实例集的前提下测试一份配置。借助 `${env:NAME}` 与 `${credential:REF}` 模板，密钥值不进文档；轮换某个凭据只会重建引用它的那些服务器。当服务器应由用户在运行时管理时引入它；由组合钉死的服务器可以继续用普通的 `dsh-mcp-client` 行。
+`dsh-mcp-manager` 把 `mcp` 设置命名空间变成一支活的 MCP 服务器编队：在 `settings.yaml` 的 `mcp.servers` 下声明服务器（或由管理界面写入），管理器为每个启用的条目挂载一个 `dsh-mcp-client` 实例，并随文档变化增加、重建、停用与移除实例，无需重启。`ctx.mcpServers` 汇总每台服务器的连接状态，`restart` 恢复重连预算耗尽的服务器，`probe` 在不触碰活动实例的情况下测试一份配置。`${env:NAME}` 与 `${credential:REF}` 模板让密钥不进入文档，轮换的凭据只重建引用它的服务器。
 
 ## 目录
 
