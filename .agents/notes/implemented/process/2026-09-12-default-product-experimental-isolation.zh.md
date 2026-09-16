@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-[`verify-default-product-isolation`](../../../../scripts/verify-default-product-isolation.ts) 在静态 CI 和包 hygiene 中运行。它从所有应用与 Python runtime 出发，遍历运行时依赖、可选依赖和 peer，解析 workspace 与 npm 别名，并按 npm 前缀或仓库目录识别实验包。发布 denylist 的成员关系不影响此分类。
+[`verify-default-product-isolation`](../../../../scripts/verify-default-product-isolation.ts) 在静态 CI 和包 hygiene 中运行。它从所有应用与 Python runtime 出发，遍历运行时依赖、可选依赖和 peer，解析 workspace 与 npm 别名，并按 npm 前缀或仓库目录识别实验包。发布 denylist 的成员关系不影响此分类。启动器在 `OPTIONAL_BUNDLES` 里点名的组合包是唯一声明的例外（[随安装提供的可选组合包](2026-09-15-shipped-optional-bundles.zh.md)）。
 
 源码检查还读取所选包的运行时导入、安装自带的 profile bundle 列表、bundle patch、随产品提供的 Agent preset，以及声明的配置树。它使用生产 patch 解析器加载默认 Web 各层，并使用启动时的同一个 patch 引擎完成组合。检查对象包括最终 entry 和应用 patch 后的 Include 树，因此仅按 id 覆盖 group 的 patch 也无法隐藏替换后的插件。禁用的插件行仍纳入检查；普通插件配置数据不会被解释为另一个 Loader entry 列表。默认入口缺失会使检查失败。
 

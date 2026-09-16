@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
+import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginInventorySettingsTab } from '../src/client/PluginInventorySettingsTab.tsx'
@@ -25,6 +28,8 @@ function props(
     t,
     list,
     presetName,
+    useClientSync: bindSnapshotSelector(createSnapshotStore<ClientEntryState>({ syncing: false, failures: [] })),
+    retryClient: vi.fn(),
   } as PluginInventorySettingsTabProps
 }
 
@@ -82,9 +87,10 @@ async function renderReady(snapshot: Snapshot = SNAPSHOT): Promise<ReturnType<ty
 
 const globalToggle = (): HTMLElement =>
   screen.getByRole('button', { name: (name: string) => name.startsWith(en.globalTitle) })
+const presetToggle = (): HTMLElement => screen.getByRole('button', { name: en.presetTitle })
 
 describe('PluginInventorySettingsTab', () => {
-  it('shows the default preset first and keeps the global plane collapsed', async () => {
+  it('shows the default preset first with both groups collapsed', async () => {
     const view = await renderReady()
 
     const switcher = screen.getByRole('button', { name: en.switcherLabel })
@@ -100,7 +106,11 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.getByText(en.presetSubtitle)).toBeTruthy()
     expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('6')
 
-    // Only the preset group lists rows while the global plane stays collapsed.
+    // Both groups start collapsed; opening the preset group lists its rows while the global plane stays folded.
+    expect(presetToggle().getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    fireEvent.click(presetToggle())
+    expect(presetToggle().getAttribute('aria-expanded')).toBe('true')
     expect(screen.getAllByRole('listitem')).toHaveLength(6)
     expect(screen.getAllByText(en.enabledTag)).toHaveLength(3)
     expect(screen.getByText(en.conditionalTag)).toBeTruthy()
@@ -150,6 +160,7 @@ describe('PluginInventorySettingsTab', () => {
       }],
     })
 
+    fireEvent.click(presetToggle())
     expect(screen.getByRole('button', { name: 'tool-subagent, tool-subagent-primary, Enabled' })
       .getAttribute('aria-expanded')).toBe('false')
     const secondary = screen.getByRole('button', { name: `tool-subagent, ${longId}, Disabled` })
@@ -212,6 +223,7 @@ describe('PluginInventorySettingsTab', () => {
 
     pickPreset('ptc')
     expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('3')
+    fireEvent.click(presetToggle())
     fireEvent.click(screen.getByRole('button', { name: 'tool-bash, bash, Enabled' }))
     // An unnamed preset labels its source by id.
     expect(screen.getByText(en.fromPreset).nextElementSibling?.textContent).toBe('ptc')
@@ -221,16 +233,18 @@ describe('PluginInventorySettingsTab', () => {
     expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('0')
   })
 
-  it('collapses the preset group until a search forces it open', async () => {
+  it('keeps the preset group folded until opened or searched', async () => {
     const view = await renderReady()
-    const toggle = screen.getByRole('button', { name: en.presetTitle })
+    const toggle = presetToggle()
 
+    // The header keeps its count while the rows are folded away.
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('6')
+    expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(0)
+    fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     fireEvent.click(toggle)
     expect(toggle.getAttribute('aria-expanded')).toBe('false')
-    // The header keeps its count while the rows are folded away.
-    expect(view.container.querySelector('[data-preset-plugin-count]')?.getAttribute('data-preset-plugin-count')).toBe('6')
-    expect(view.container.querySelectorAll('[data-plugin-scope="preset"] li')).toHaveLength(0)
 
     fireEvent.change(screen.getByRole('searchbox', { name: en.search }), { target: { value: 'pwsh' } })
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
@@ -260,6 +274,7 @@ describe('PluginInventorySettingsTab', () => {
     ])
     fireEvent.keyDown(document, { key: 'Escape' })
 
+    fireEvent.click(presetToggle())
     fireEvent.click(screen.getByRole('button', { name: 'pwsh, pwsh, Conditional' }))
     expect(screen.getByText(en.fromPreset).nextElementSibling?.textContent).toBe('Localized standard')
 
@@ -311,7 +326,7 @@ describe('PluginInventorySettingsTab', () => {
     expect(screen.queryAllByRole('listitem')).toHaveLength(0)
   })
 
-  it('renders a rosterless deployment as one expanded global list', async () => {
+  it('renders a rosterless deployment as one global list, folded until opened', async () => {
     const view = await renderReady({
       entries: [
         { entryId: 'hmr', moduleName: '@deepseek-ai/cordis-plugin-hmr', enabled: true, fiberPhase: 'active' },
@@ -320,6 +335,9 @@ describe('PluginInventorySettingsTab', () => {
     } as unknown as Snapshot)
 
     expect(screen.queryByRole('button', { name: en.switcherLabel })).toBeNull()
+    expect(globalToggle().getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    fireEvent.click(globalToggle())
     expect(globalToggle().getAttribute('aria-expanded')).toBe('true')
     expect(screen.getAllByRole('listitem')).toHaveLength(2)
 
@@ -344,6 +362,8 @@ describe('PluginInventorySettingsTab', () => {
 
     expect(screen.queryByRole('button', { name: (name: string) => name.startsWith(en.globalTitle) })).toBeNull()
     expect(screen.queryByText(en.empty)).toBeNull()
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    fireEvent.click(presetToggle())
     expect(screen.getAllByRole('listitem')).toHaveLength(1)
   })
 
@@ -377,4 +397,20 @@ describe('PluginInventorySettingsTab', () => {
     pendingFailure.unmount()
     await act(async () => { deferredFailure.reject(new Error('late failure')) })
   })
+})
+
+it('shows current-page sync errors and retries without re-reading Host inventory', async () => {
+  const list = vi.fn(async () => ({ entries: [] }))
+  const sync = createSnapshotStore<ClientEntryState>({ syncing: true, failures: [] })
+  const retryClient = vi.fn()
+  render(<PluginInventorySettingsTab {...props(list)} useClientSync={bindSnapshotSelector(sync)} retryClient={retryClient} />)
+  expect(screen.getByRole('status').textContent).toContain('Syncing plugins on this page')
+  await waitFor(() => { expect(list).toHaveBeenCalledOnce() })
+  act(() => { sync.set({ syncing: false, failures: [{ id: 'client-addon', message: 'download failed' }] }) })
+  expect(screen.getByText('client-addon: download failed')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry this page' }))
+  expect(retryClient).toHaveBeenCalledOnce()
+  expect(list).toHaveBeenCalledOnce()
+  act(() => { sync.set({ syncing: false, failures: [] }) })
+  expect(screen.queryByRole('alert')).toBeNull()
 })

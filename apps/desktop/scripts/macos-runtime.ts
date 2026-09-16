@@ -32,7 +32,9 @@ export async function signMacOSRuntime(root: string, appId: string, expected: Ma
       const path = files[next++]
       if (path === undefined) return
       const identifier = `${appId}.runtime.${createHash('sha256').update(path).digest('hex')}`
-      await signMacOSRuntimeCode(join(root, path), identifier, expected)
+      const entitlements = path === 'dependencies/node/bin/node'
+        ? join(import.meta.dirname, 'node-entitlements.plist') : undefined
+      await signMacOSRuntimeCode(join(root, path), identifier, expected, entitlements)
       verifyMacOSRuntimeCode(join(root, path), expected)
     }
   })

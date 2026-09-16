@@ -9,6 +9,7 @@
     "src/index.ts",
     "src/types.ts",
     "src/terminal.ts",
+    "src/retention.ts",
     "src/stream.ts",
     "src/shells.ts"
   ],
@@ -48,6 +49,9 @@
     },
     {
       "path": "../../util/deque"
+    },
+    {
+      "path": "../../util/lazy-require"
     }
   ]
 }

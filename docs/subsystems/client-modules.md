@@ -36,7 +36,7 @@ interface WebBootEntry {
 ```
 
 ```ts type-equiv
-/** Initial scheduling phase for one content-addressed combo script. */
+/** Initial scheduling phase for one revisioned combo script. */
 type WebBootBatchPhase = 'bootstrap' | 'application'
 ```
 
@@ -45,9 +45,9 @@ type WebBootBatchPhase = 'bootstrap' | 'application'
 interface WebBootBatch {
   /** Parser-blocking bootstrap or preloaded application scheduling. */
   phase: WebBootBatchPhase
-  /** Content-addressed combo script endpoint. */
+  /** Revisioned combo script endpoint. */
   url: string
-  /** Revision over the combined plugin script bytes and indexed source map. */
+  /** Revision derived from the ordered entry revisions. */
   rev: string
   /** Graph entry ids whose factories the script registers, in execution order. */
   entries: string[]
@@ -57,7 +57,7 @@ interface WebBootBatch {
 ```ts type-equiv
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 interface WebBootGraph {
-  /** Consistency anchor over the whole graph (content + bundle hashes). */
+  /** Consistency anchor over the current entry and batch descriptors. */
   rev: string
   /**
    * Composed entries in module-graph order — a dynamic package row precedes
@@ -70,7 +70,7 @@ interface WebBootGraph {
 }
 ```
 
-Each initial row's `rev` is an opaque process nonce plus sequence, so graph composition does not hash every plugin artifact. After HMR observes a change, that row's revision becomes the hash of its new bundle and available source map. The initial descriptors partition rows into bootstrap and application scheduling phases, and either phase may contain several descriptors. Their URLs contain only the ordered package-resource list and revision; phase names do not enter the route. Graph composition preserves row order while greedily splitting before the map-form URL exceeds 3 KiB. Startup combo revisions hash the combined plugin script bytes and indexed source map, and the graph revision hashes both rows and descriptors. `immediately` marks the stage-one registration barrier; rows within one combo share its script transport, while separate combos load independently.
+Each initial row's `rev` is an opaque process nonce plus sequence, so graph composition does not hash every plugin artifact. After HMR observes a bundle change, that row's revision becomes the hash of its new executable bytes. The initial descriptors partition rows into bootstrap and application scheduling phases, and either phase may contain several descriptors. Their URLs contain only the ordered package-resource list and a revision derived from those row revisions; phase names do not enter the route. Graph composition preserves row order while greedily splitting before the map-form URL exceeds 3 KiB, without concatenating scripts or reading maps. The graph revision hashes the entry and batch descriptors. `immediately` marks the stage-one registration barrier; rows within one combo share its script transport, while separate combos load independently.
 
 ## The scan
 
@@ -82,7 +82,7 @@ Package metadata — including the negative "not a client package" verdict — i
 
 ## The bundle route and index injection
 
-`GET`/`HEAD /plugins/??<package-a>/client.js,<package-b>/client.js&rev=<rev>` serves an exact generated combo script; a one-resource request uses the same form and is the HMR path. Its absolute `sourceMappingURL` changes every resource suffix in parallel, yielding `/plugins/??<package-a>/client.js.map,<package-b>/client.js.map&rev=<rev>`. The map is Indexed Source Map v3 even for one resource. An authored component map supplies its section; a component without one receives an identity section whose `sourcesContent` is the generated bundle and whose source name is its packaged `sourceURL` or plugin route. Every startup request URL is at most 3 KiB measured as UTF-8 bytes; partitioning uses the longer map form. All application URLs are preloaded, and all bootstrap URLs execute before the graph global and Vite entry. All advertised responses use long-lived immutable caching. Unknown or altered resource lists, missing revisions, and stale revisions answer 404 rather than serving different bytes or letting the SPA fallback return HTML as JavaScript; other methods are 405. The injection rows carry the current graph on every index render, so a reload always boots against the live composition.
+`GET`/`HEAD /plugins/??<package-a>/client.js,<package-b>/client.js&rev=<rev>` addresses one generated combo script; a one-resource request uses the same form and is the HMR path. The script is concatenated once on its first `GET` and ends with an absolute `sourceMappingURL` whose resource suffixes are `.js.map`. The map files are not read by startup, index rendering, script `GET`, or `HEAD`; the first map `GET` reads and validates them, composes one Indexed Source Map v3, and caches that body. An authored component map supplies its section; a component without one receives an identity section whose `sourcesContent` is the captured bundle and whose source name is its packaged `sourceURL` or plugin route. Every startup request URL is at most 3 KiB measured as UTF-8 bytes; partitioning uses the longer map form. All application URLs are preloaded, and all bootstrap URLs execute before the graph global and Vite entry. Materialized responses use long-lived immutable caching. Unknown or altered resource lists, missing revisions, and stale revisions answer 404 rather than serving different bytes or letting the SPA fallback return HTML as JavaScript; other methods are 405. The injection rows carry the current graph on every index render, so a reload always boots against the live composition.
 
 ## The service
 
@@ -98,9 +98,9 @@ interface ClientArtifactBaseline {
 }
 ```
 
-`ClientModuleRegistry` (`ctx.clientModules`, defined in [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)) exposes reads and the rebuild face; signatures are in the generated [service catalog](#ctxclientmodules--clientmoduleregistry). `graph()` returns the current composed graph (a stable object between changes), `clientPath(id)` returns the bundle's absolute path, and `artifactBaseline(id)` returns the bundle stat values captured before the current snapshot was read. `rebuilt(id)` is the only entry point through which changed bundle content reaches the graph: it re-hashes the bundle together with its current source map, and only a real rev change recomposes the graph and notifies. `onRebuilt` fires per changed bundle with the new rev; `onGraphChanged` fires after any flush that recomposed the graph (row added or removed, or a rebuilt rev change) and is pull-model — listeners re-read `graph()`. Both notification paths contain listener exceptions so one throwing subscriber cannot skip later subscribers or kill whatever triggered the flush.
+`ClientModuleRegistry` (`ctx.clientModules`, defined in [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)) exposes reads and the rebuild face; signatures are in the generated [service catalog](#ctxclientmodules--clientmoduleregistry). `graph()` returns the current composed graph (a stable object between changes), `clientPath(id)` returns the bundle's absolute path, and `artifactBaseline(id)` returns the bundle stat values captured before the current snapshot was read. `fetchBundle()` resolves the same lazy response used by the HTTP route. `rebuilt(id)` is the only entry point through which changed bundle content reaches the graph: it re-hashes the bundle bytes, and only a real revision change recomposes the graph and notifies. `onRebuilt` fires per changed bundle with the new revision; `onGraphChanged` fires after any flush that recomposed the graph (row added or removed, or a rebuilt revision change) and is pull-model — listeners re-read `graph()`. Both notification paths contain listener exceptions so one throwing subscriber cannot skip later subscribers or kill whatever triggered the flush.
 
-In development, [dsh-client-hmr](../../packages/client/hmr/README.md) is the registry's watch driver: its node half stat-polls every graph row's bundle from the module host's pre-read baseline, calls `rebuilt(id)` only for a changed or dirty row, resyncs its watch set through `onGraphChanged`, and broadcasts rev changes to the browser half over SSE. Source-map changes alone do not trigger a reload; the current map joins the snapshot when a bundle change does. Production graphs omit the HMR row entirely; the module host itself never watches files.
+[`dsh-client-hmr`](../../packages/client/hmr/README.md) delivers live graph snapshots in the shipped Web composition. The Host forwards existing graph-change notifications immediately, and reconnect sends the current full graph. A graph describes desired browser entries without asserting that Host cleanup has completed. Its artifact poll separately reports rebuilt revisions. Source-map changes alone do not trigger a reload; a new combo-map URL appears only after a bundle revision changes, and each map body is fixed by its first `GET`. Client Modules validates snapshots and serializes reconciliation with those rebuilds; it owns the boot-created entry map, single-resource arrivals, asynchronous removal, unused-module/style cleanup and page-local retry status. Static platform modules and the bootstrap retain their page lifetime; Electron installation is a separate flow.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -133,11 +133,12 @@ clientPath(id: string): string | undefined
 /**
  * Serve an advertised revisioned bundle or source map without a Web server.
  * Unknown URLs return 404, unsupported methods return 405, and `HEAD`
- * returns the same immutable headers without a body.
+ * returns the same immutable headers without materializing a body. Each body
+ * is built once on its first `GET`; script construction never reads maps.
  * @param request - shell-carrier request for a `/plugins` resource.
  * @returns the exact response also exposed by the optional Web route.
  */
-fetchBundle(request: Request): Response
+async fetchBundle(request: Request): Promise<Response>
 
 /**
  * Filesystem baseline captured before an entry's current bytes were read.
@@ -150,8 +151,8 @@ fetchBundle(request: Request): Response
 artifactBaseline(id: string): ClientArtifactBaseline | undefined
 
 /**
- * Re-hash one bundle (the HMR watch's registration hook — the only entry
- * point through which bundle content changes reach the graph).
+ * Publish one completed bundle generation (the HMR watch's registration
+ * hook — the only entry point through which build changes reach the graph).
  * @param id - entry id (package name).
  * @returns the new rev, or undefined for an unknown id.
  */

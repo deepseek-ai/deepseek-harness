@@ -199,6 +199,15 @@ class SystemdScopeOwner implements BoundProcessOwner {
     private readonly sleep: (delayMs: number, signal?: AbortSignal) => Promise<void>,
   ) {}
 
+  inspectTaskCount(): number | undefined {
+    const result = this.runSync(this.systemctl, [
+      '--user', 'show', '--property=LoadState', '--property=ActiveState', '--property=TasksCurrent', this.unit,
+    ], { encoding: 'utf8', env: managerEnvironment(), timeout: SYSTEMCTL_TIMEOUT_MS })
+    if (result.error !== undefined || result.status !== 0 || typeof result.stdout !== 'string') return undefined
+    const state = this.parseUnitState(result.stdout)
+    return state.loadState === 'loaded' && state.activeState === 'active' ? state.tasksCurrent : undefined
+  }
+
   signal(signal: 'SIGTERM' | 'SIGKILL'): void {
     if (this.stopped) return
     this.terminationRequested = true

@@ -51,10 +51,10 @@ export const tabInfoFactory: SlotHookFactory<'sidebar.right.pane.tab', UseSideba
 }
 
 /**
- * Forward the framework-bound tab hook to a guide replacement.
+ * Forward the framework-bound tab hook to guide content.
  * @param _standard - the guide's framework standard props.
  * @param useTabInfo - the enclosing tab's framework-bound reader.
  * @returns the same reader for the replacement.
  */
-export const guideTabInfoFactory: SlotHookFactory<'sidebar.right.tab.guide', UseSidebarRightTabInfo> =
-  (_standard, useTabInfo) => useTabInfo
+export const guideTabInfoFactory =
+  (_standard: unknown, useTabInfo: UseSidebarRightTabInfo): UseSidebarRightTabInfo => useTabInfo

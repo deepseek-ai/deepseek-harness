@@ -88,6 +88,7 @@ describe('DeepSeekFileStore', () => {
     const first = await store.ensureUploaded(VERSION, native, POLICY)
     expect(first.record.scope).toBe(deepSeekFileScope(`${CONNECTION.baseURL}/v1`, CONNECTION.apiKey))
     expect(first.record.scope).not.toBe(chat.record.scope)
+    expect((await store.ensureUploaded(VERSION, { ...native, baseURL: `${native.baseURL}/v1/` }, POLICY)).record).toEqual(first.record)
     const reopened = new DeepSeekFileStore({ index, fetch: fetchImpl, now: () => now })
     expect((await reopened.ensureUploaded(VERSION, native, POLICY)).record).toEqual(first.record)
     await reopened.invalidate(VERSION, chat.record.fileId, native)

@@ -1,4 +1,6 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react'
+import type { ClientEntryState } from '@deepseek-ai/dsh-client-modules/client'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { PluginInventorySnapshot } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconChevronDownOutline14,
@@ -18,6 +20,10 @@ type AgentPresetRow = AgentPresetGroup['rows'][number]
 
 /** Registration-side Remote face used by the section. */
 export interface PluginInventorySettingsTabInjected {
+  /** Page-local module synchronization, independent from the Host inventory. */
+  hooks: { clientSync: ObservableSnapshot<ClientEntryState> }
+  /** Retry the latest client graph without changing the Host composition. */
+  retryClient: () => void
   /** Read a current Host inventory snapshot. */
   list: () => Promise<PluginInventorySnapshot>
   /**
@@ -197,7 +203,10 @@ function StateTag({ kind, label }: { readonly kind: EnablementKind; readonly lab
 }
 
 /** Render the read-only plugin inventory: agent presets first, then the global plane. */
-export function PluginInventorySettingsTab({ list, presetName, t }: PluginInventorySettingsTabProps): ReactNode {
+export function PluginInventorySettingsTab(
+  { list, presetName, t, useClientSync, retryClient }: PluginInventorySettingsTabProps,
+): ReactNode {
+  const clientSync = useClientSync(snapshot => snapshot)
   const sectionId = useId()
   const [request, setRequest] = useState(0)
   const [query, setQuery] = useState('')
@@ -257,8 +266,9 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
   const otherMatchCount = otherPresetMatches
     .reduce((total, preset) => total + preset.rows.filter(rowMatch).length, 0)
 
-  const presetEffectiveOpen = searching || (presetOpen ?? true)
-  const globalEffectiveOpen = searching || (globalOpen ?? presets.length === 0)
+  // Both groups start collapsed; a search opens them for as long as it lasts.
+  const presetEffectiveOpen = searching || (presetOpen ?? false)
+  const globalEffectiveOpen = searching || (globalOpen ?? false)
   const nothingMatches = searching && globalCount === 0 && selectedRows.length === 0
     && otherPresetMatches.length === 0
 
@@ -375,6 +385,14 @@ export function PluginInventorySettingsTab({ list, presetName, t }: PluginInvent
 
   return (
     <div className={css.section} aria-busy={state.status === 'loading'}>
+      {clientSync.syncing ? <p className={css.status} role="status">{t('clientSyncing')}</p> : null}
+      {clientSync.failures.length === 0 ? null : (
+        <div className={css.failure} data-client-sync-failure>
+          <p role="alert">{t('clientSyncFailed')}</p>
+          <ul>{clientSync.failures.map(failure => <li key={failure.id}>{failure.id}: {failure.message}</li>)}</ul>
+          <button type="button" disabled={clientSync.syncing} onClick={retryClient}>{t('clientSyncRetry')}</button>
+        </div>
+      )}
       {state.status === 'loading' ? <p className={css.status}>{t('loading')}</p> : null}
       {state.status === 'error' ? (
         <div className={css.failure}>

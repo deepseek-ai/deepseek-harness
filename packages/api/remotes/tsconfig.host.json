@@ -73,6 +73,12 @@
     },
     {
       "path": "../terminal-controller/tsconfig.host.json"
+    },
+    {
+      "path": "../../boot/plugin-manager"
+    },
+    {
+      "path": "../../host/plugin-inventory"
     }
   ]
 }

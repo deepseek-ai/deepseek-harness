@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
+import { PluginPackages } from '@deepseek-ai/dsh-app-boot'
 import TypertRegistry from '@deepseek-ai/dsh-typert-registry'
 import * as typertLoader from '@deepseek-ai/dsh-typert-loader'
 import { validateTypertManifest } from '@deepseek-ai/dsh-typert-loader'
@@ -27,11 +28,13 @@ async function writePackage(
   base: string,
   pkgName: string,
   options: {
+    manifestName?: string
     typertExport?: boolean
     typertTarget?: unknown
     typertSource?: string
     pluginSource?: string
     omitExports?: boolean
+    pluginSubpath?: string
   } = {},
 ): Promise<void> {
   const dir = join(base, 'node_modules', ...pkgName.split('/'))
@@ -40,8 +43,9 @@ async function writePackage(
   if (options.typertExport !== false && options.typertSource !== undefined) {
     exportsField['./typert'] = options.typertTarget ?? './typert.host.js'
   }
+  if (options.pluginSubpath !== undefined) exportsField[options.pluginSubpath] = './index.js'
   await writeFile(join(dir, 'package.json'), JSON.stringify({
-    name: pkgName,
+    name: options.manifestName ?? pkgName,
     type: 'module',
     ...(options.omitExports ? { main: './index.js' } : { exports: exportsField }),
   }))
@@ -54,11 +58,11 @@ async function writePackage(
 function typertSource(pkgName: string, entryName: string): string {
   return [
     'import { z } from \'zod\'',
-    `export const ${entryName} = z.object({ id: z.string() })`,
+    `export const ${entryName} = () => z.object({ id: z.string() })`,
     'export const TYPERT = {',
     `  package: '${pkgName}',`,
     '  face: \'host\',',
-    `  schemas: [{ name: '${entryName}', schema: ${entryName} }],`,
+    `  schemas: [{ name: '${entryName}', create: ${entryName} }],`,
     '  model: { services: [], events: [], objects: [] },',
     '  invocations: [],',
     '}',
@@ -69,7 +73,7 @@ function typertSource(pkgName: string, entryName: string): string {
 function invocationTypertSource(pkgName: string): string {
   return [
     'import { z } from \'zod\'',
-    'const Text = z.string()',
+    'const Text = () => z.string()',
     'export const TYPERT = {',
     `  package: '${pkgName}',`,
     '  face: \'host\',',
@@ -81,10 +85,10 @@ function invocationTypertSource(pkgName: string): string {
     '    invocation: { kind: \'direct\' },',
     '    parameters: [{',
     '      name: \'request\', wire: \'request\', source: \'json\',',
-    `      codec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', schema: Text },`,
+    `      codec: { mode: 'strict', typeSymbol: '${pkgName}/types#Request', create: Text },`,
     '    }],',
     "    cancellation: { parameter: 'signal' },",
-    `    result: { mode: 'strict', typeSymbol: '${pkgName}/types#Result', schema: Text },`,
+    `    result: { mode: 'strict', typeSymbol: '${pkgName}/types#Result', create: Text },`,
     '    sourceLocation: { file: \'src/index.ts\', line: 8, column: 3 },',
     '  }],',
     '}',
@@ -106,6 +110,7 @@ async function boot(): Promise<Context> {
       return module
     },
   } as unknown as NonNullable<typeof context.loader.internal>
+  await context.plugin(PluginPackages)
   // zod must be resolvable from the fixture packages; link the workspace copy.
   await mkdir(join(root as string, 'node_modules'), { recursive: true })
   return context
@@ -163,7 +168,7 @@ describe('typert loader', () => {
     })
     expect(descriptor?.parameters[0]?.codec.mode).toBe('strict')
     if (descriptor?.parameters[0]?.codec.mode === 'strict') {
-      expect(descriptor.parameters[0].codec.schema.parse('request')).toBe('request')
+      expect(descriptor.parameters[0].codec.create().parse('request')).toBe('request')
     }
 
     await fiber.dispose()
@@ -177,13 +182,16 @@ describe('typert loader', () => {
 
     let failure: unknown
     try {
-      await mountTypertLoader(ctx, { packages: ['@fixture/missing', '@fixture/plain'] })
+      await mountTypertLoader(ctx, {
+        packages: ['@fixture/missing', '@fixture/plain', '@fixture/subpath/plugin'],
+      })
     } catch (error) {
       failure = error
     }
     expect(failure).toBeInstanceOf(AggregateError)
     expect((failure as Error).message).toContain('configured package "@fixture/missing" cannot be resolved')
     expect((failure as Error).message).toContain('configured package "@fixture/plain" does not export "./typert"')
+    expect((failure as Error).message).toContain('configured package "@fixture/subpath/plugin" cannot be resolved')
   })
 
   it('auto-registers a mounted package exporting ./typert and withdraws it on unmount', LOADER_TEST_TIMEOUT, async () => {
@@ -227,6 +235,28 @@ describe('typert loader', () => {
     expect(ctx.typert.get('@fixture/with-typert#Thing')).toBeDefined()
   })
 
+  it('skips package-subpath rows and validates npm aliases against the manifest owner', LOADER_TEST_TIMEOUT, async () => {
+    root = await mkdtemp(join(tmpdir(), 'dsh-typert-loader-'))
+    await linkZod(root)
+    await writePackage(root, '@fixture/subpath', {
+      pluginSubpath: './plugin',
+      typertSource: typertSource('@fixture/subpath', 'Subpath'),
+    })
+    await writePackage(root, 'fixture-alias', {
+      manifestName: '@fixture/actual',
+      typertSource: typertSource('@fixture/actual', 'Aliased'),
+    })
+    const ctx = await boot()
+    await ctx.loader.create({ name: '@fixture/subpath/plugin' })
+    await ctx.loader.create({ name: 'fixture-alias' })
+    await ctx.loader.await()
+
+    await mountTypertLoader(ctx)
+
+    expect(ctx.typert.getPackage('@fixture/subpath')).toBeUndefined()
+    expect(ctx.typert.get('@fixture/actual#Aliased')).toBeDefined()
+  })
+
   it('follows entries mounted after activation', LOADER_TEST_TIMEOUT, async () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-typert-loader-'))
     await linkZod(root)
@@ -259,11 +289,11 @@ describe('typert loader', () => {
         'import { z } from \'zod\'',
         'globalThis.__dshTypertLoaderGate.started()',
         'await globalThis.__dshTypertLoaderGate.wait',
-        'export const Pending = z.object({ id: z.string() })',
+        'export const Pending = () => z.object({ id: z.string() })',
         'export const TYPERT = {',
         '  package: \'@fixture/pending\',',
         '  face: \'host\',',
-        '  schemas: [{ name: \'Pending\', schema: Pending }],',
+        '  schemas: [{ name: \'Pending\', create: Pending }],',
         '  model: { services: [], events: [], objects: [] },',
         '  invocations: [],',
         '}',
@@ -299,7 +329,7 @@ describe('typert loader', () => {
     root = await mkdtemp(join(tmpdir(), 'dsh-typert-loader-'))
     await linkZod(root)
     await writePackage(root, '@fixture/broken', {
-      typertSource: 'export const TYPERT = { package: \'@fixture/broken\', face: \'host\', schemas: [{ name: \'\', schema: {} }], model: { services: [], events: [], objects: [] }, invocations: [] }\n',
+      typertSource: 'export const TYPERT = { package: \'@fixture/broken\', face: \'host\', schemas: [{ name: \'\', create: {} }], model: { services: [], events: [], objects: [] }, invocations: [] }\n',
     })
     const ctx = await boot()
     await ctx.loader.create({ name: '@fixture/broken' })
@@ -413,7 +443,7 @@ describe('validateTypertManifest', () => {
     expect(validateTypertManifest('pkg', {
       package: 'pkg',
       face: 'host',
-      schemas: [{ name: 'A', schema: zodish }],
+      schemas: [{ name: 'A', create: () => zodish }],
       model: { services: [], events: [], objects: [] },
       invocations: [],
     }).schemas).toHaveLength(1)
@@ -423,10 +453,10 @@ describe('validateTypertManifest', () => {
     expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'client' })).toThrow('TYPERT.face is not "host"')
     expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'host', schemas: 'x' })).toThrow('schemas must be an array')
     expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'host', schemas: [null] })).toThrow('non-object schema')
-    expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'host', schemas: [{ name: '', schema: zodish }] }))
+    expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'host', schemas: [{ name: '', create: () => zodish }] }))
       .toThrow('missing or empty name')
-    expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'host', schemas: [{ name: 'A', schema: {} }] }))
-      .toThrow('not a zod v4 schema instance')
+    expect(() => validateTypertManifest('pkg', { package: 'pkg', face: 'host', schemas: [{ name: 'A', create: {} }] }))
+      .toThrow('has no create() factory')
     expect(() => validateTypertManifest('pkg', {
       package: 'pkg',
       face: 'host',
@@ -542,8 +572,8 @@ describe('validateTypertManifest', () => {
     })).toThrow('cancellation parameter must be "signal"')
     expect(() => validateTypertManifest('pkg', {
       ...base,
-      invocations: [{ ...descriptor, result: { mode: 'strict', typeSymbol: 'pkg#Result', schema: zodish } }],
-    })).toThrow('result codec is not backed by a zod v4 schema')
+      invocations: [{ ...descriptor, result: { mode: 'strict', typeSymbol: 'pkg#Result', create: zodish } }],
+    })).toThrow('result codec has no create() factory')
     expect(() => validateTypertManifest('pkg', {
       ...base,
       invocations: [{
@@ -637,7 +667,7 @@ describe('validateTypertManifest', () => {
 })
 
 function strictCodec(typeSymbol: string) {
-  return { mode: 'strict', typeSymbol, schema: z.string() }
+  return { mode: 'strict', typeSymbol, create: () => z.string() }
 }
 
 function strictInvocation() {
@@ -664,7 +694,7 @@ function completeManifest(zodish: object) {
   return {
     package: 'pkg',
     face: 'host',
-    schemas: [{ name: 'Schema', schema: zodish }],
+    schemas: [{ name: 'Schema', create: () => zodish }],
     invocations: [],
     model: {
       services: [{

@@ -19,12 +19,12 @@
  * @module dsh-llm-pi-ai/provider
  */
 
-import { createProvider } from '@earendil-works/pi-ai'
 import type { Api, ApiKeyAuth, Model, Provider, ProviderStreams } from '@earendil-works/pi-ai'
 import { anthropicMessagesApi } from '@earendil-works/pi-ai/api/anthropic-messages.lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import { openAIResponsesApi } from '@earendil-works/pi-ai/api/openai-responses.lazy'
 import { catalogProvider, PiAiCatalogError } from './catalog.ts'
+import { createProvider } from './models.ts'
 
 /**
  * Wire protocols a configured route may name, mapped to pi-ai's lazily loaded

@@ -92,6 +92,7 @@ const PACKAGE_LIBRARIES: Readonly<Record<string, string>> = {
   'packages/util/chunked-list': 'Persistent collection operations and checkpoint validation without a plugin surface.',
   'packages/util/home-paths': 'Zero-dependency harness-home path resolver.',
   'packages/util/launch-environment': 'Zero-dependency environment resolver.',
+  'packages/util/lazy-require': 'Caller-relative CommonJS-compatible dependency loader.',
   'packages/util/native-command': 'Host-side subprocess runner utility.',
   'packages/util/output-retention': 'Zero-dependency retention utility.',
   'packages/util/package-manifest': 'Shared package manifest declarations with type-only exports.',

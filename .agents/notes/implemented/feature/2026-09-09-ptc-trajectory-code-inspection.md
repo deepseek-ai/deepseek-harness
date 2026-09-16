@@ -16,6 +16,8 @@ The result view preserves recorded text and uses a tree only for complete JSON o
 
 The [PTC runtime decision](2026-06-15-ptc.md) still owns execution and settlement; the [client presentation decision](../architecture/2026-08-23-client-derived-tool-presentation.md) still owns deriving UI from recorded facts. This inspector adds no Session events or host presentation fields.
 
+Trajectory thinking opens by default and supports manual disclosure. [Chat disclosure defaults](../bug-fix/2026-09-14-chat-presentation-defaults.md) are a separate presentation decision.
+
 ## Alternatives considered
 
 **Keep source inside the argument tree.** JSON escaping obscures program structure and makes copying executable source cumbersome.
@@ -26,4 +28,4 @@ The [PTC runtime decision](2026-06-15-ptc.md) still owns execution and settlemen
 
 ## Consequences
 
-Readers can inspect and copy recorded programs without changing replay data. Schemas with no recognizable language hint receive no syntax highlighting. Component tests cover recorded-name recognition, schema fallback, exact source and argument copying, output states, and independent wrapping. JSON-tree tests cover clipping geometry, missing `ResizeObserver`, clipboard settlement after hover changes or unmount, and value-read counts during hover. Thinking tests cover body arrival, manual disclosure, and switching records; the [PTC browser scenario](../../../../apps/web/tests/ptc-round.e2e.ts) pins the assembled inspector and verifies overflow and the original-JSON round trip.
+Readers can inspect and copy recorded programs without changing replay data. Schemas with no recognizable language hint receive no syntax highlighting. Component tests cover recorded-name recognition, schema fallback, exact source and argument copying, output states, and independent wrapping. JSON-tree tests cover clipping geometry, missing `ResizeObserver`, clipboard settlement after hover changes or unmount, and value-read counts during hover. Thinking tests cover manual disclosure and switching Trajectory records; the [PTC browser scenario](../../../../apps/web/tests/ptc-round.e2e.ts) pins the assembled inspector and verifies overflow and the original-JSON round trip.

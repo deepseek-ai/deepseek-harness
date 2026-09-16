@@ -211,6 +211,23 @@ export function collectRuntimeSourceExportUses(path: string, source: string): Ru
   const sourceFile = ts.createSourceFile(path, source, ts.ScriptTarget.Latest, true)
   const uses = new Map<string, RuntimeSourceExportUse>()
   const sourceLines = source.split(/\r?\n/u)
+  const lazyRequireBindings = new Set<string>()
+  const lazyRequireNamespaces = new Set<string>()
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)
+      || !ts.isStringLiteralLike(statement.moduleSpecifier)
+      || statement.moduleSpecifier.text !== '@deepseek-ai/dsh-lazy-require') continue
+    const bindings = statement.importClause?.namedBindings
+    if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      lazyRequireNamespaces.add(bindings.name.text)
+    } else if (bindings !== undefined) {
+      for (const element of bindings.elements) {
+        if ((element.propertyName ?? element.name).text === 'createLazyRequire') {
+          lazyRequireBindings.add(element.name.text)
+        }
+      }
+    }
+  }
   const record = (specifier: string, exportName: string, locationNode: ts.Node): void => {
     const key = `${specifier}\0${exportName}`
     if (uses.has(key)) return
@@ -267,10 +284,16 @@ export function collectRuntimeSourceExportUses(path: string, source: string): Ru
       && !node.isTypeOnly
       && ts.isExternalModuleReference(node.moduleReference)) {
       add(node.moduleReference.expression, NAMESPACE_RUNTIME_EXPORT, node.name)
-    } else if (ts.isCallExpression(node)
-      && (node.expression.kind === ts.SyntaxKind.ImportKeyword
-        || ts.isIdentifier(node.expression) && node.expression.text === 'require')) {
-      add(node.arguments[0], NAMESPACE_RUNTIME_EXPORT)
+    } else if (ts.isCallExpression(node)) {
+      const lazyRequire = ts.isIdentifier(node.expression)
+        ? lazyRequireBindings.has(node.expression.text)
+        : ts.isPropertyAccessExpression(node.expression)
+          && ts.isIdentifier(node.expression.expression)
+          && lazyRequireNamespaces.has(node.expression.expression.text)
+          && node.expression.name.text === 'createLazyRequire'
+      if (node.expression.kind === ts.SyntaxKind.ImportKeyword
+        || ts.isIdentifier(node.expression) && node.expression.text === 'require'
+        || lazyRequire) add(node.arguments[0], NAMESPACE_RUNTIME_EXPORT)
     } else if (ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node) || ts.isJsxFragment(node)) {
       record('react/jsx-runtime', NAMESPACE_RUNTIME_EXPORT, node)
     }

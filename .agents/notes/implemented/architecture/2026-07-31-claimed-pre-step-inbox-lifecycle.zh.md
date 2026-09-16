@@ -18,13 +18,13 @@ Status: implemented
 
 持久 inbox 仍是两份通过 `MessageId` 寻址的 `UserMessage[]` 列表。`append`、`prepend` 与 `splice` 接受 target；`replace(messageId, newMessage)` 与 `remove(messageId)` 则在提交规范化 splice 前，通过 `MessageId` 跨两份列表定位待处理消息。替换可以改变标识，并先将旧消息作为 discarded 发布，再将新消息作为 inserted 发布。每次插入发出 `agent/inbox/inserted { message }`；普通删除记录 `outcome: 'canceled'` 并发出 `agent/inbox/discarded { message }`。领取记录不带 outcome 的纯删除，并由 `ReactLoopInbox` 发出 claimed 事件。这些实时事件不增加 placement、outcome 或批次字段。
 
-`Agent.inbox` 只暴露用于读取和变更待处理工作的结构化 `Inbox` 接口；仅供循环使用的 `hasPending` 与领取操作不在该公开接口上。dsh-agent-loop 只构造一个 `ReactLoopInbox`，同时用于结构化命令与驱动器操作。具体构造函数直接接收 `SessionProjectionRegistry`，而不是更宽泛的 Cordis `Context`，并在首次读取前从 agent 作用域注册标准定义。`AgentLoop` 激活时要求该注册表服务存在，注册表则对多个 live agent 作用域贡献的定义进行引用计数。
+`Agent.inbox` 只暴露用于读取和变更待处理工作的结构化 `Inbox` 接口；仅供循环使用的 `hasPending` 与领取操作不在该公开接口上。dsh-agent-loop 只构造一个 `ReactLoopInbox`，同时用于结构化命令与驱动器操作。具体构造函数直接接收 `SessionProjectionRegistry`，而不是更宽泛的 Cordis `Context`。`AgentLoop` 在服务生命周期内持有标准投影注册，让没有 live Agent 时的冷 Inbox 读取仍然可用；`ReactLoopInbox` 只读取和变更该共享状态。
 
-两类事件接口服务不同消费方。跟踪单条消息的观察方使用 `agent/inbox/inserted`、`claimed` 与 `discarded`。每个 `ReactLoopInbox` 都从其 agent 作用域在持久 `agent/inbox/spliced` 流上贡献标准 `inbox` 投影；UI 编辑与移除通过 Inbox 变更方法处理，从而让同一投影记录所有变化。该投影重建持久历史时，会拒绝不安全或越界的坐标，以及跨两份列表重复的 `MessageId`，并报告出错事件的 seq。整体队列的 control 消费方使用投影变更流：Session controller 先发布 projection frame，再从同一份折叠后的 inbox 值派生 queue replacement。
+两类事件接口服务不同消费方。跟踪单条消息的观察方使用 `agent/inbox/inserted`、`claimed` 与 `discarded`。`AgentLoop` 在持久 `agent/inbox/spliced` 流上贡献标准 `inbox` 投影；UI 编辑与移除通过 Inbox 变更方法处理，从而让同一投影记录所有变化。该投影重建持久历史时，会拒绝不安全或越界的坐标，以及跨两份列表重复的 `MessageId`，并报告出错事件的 seq。整体队列的 control 消费方使用通用投影变更流，直接读取完整的 Inbox 值。
 
 必须对当前步骤进行原子改写的插件从 `agent/pre-step` 返回消息。只需要稍后上下文的插件可以直接修改 `agent.inbox`。Workspace context 同时使用两条路径：异步文件系统投影会暂存一条可替换的 `next-step` 消息，而下一次进入步骤的 pre-step 会把该消息或新组合的基线折入最终批次，并移除仍待处理的副本。reject 会让该条目继续排队。
 
-已归档的[可寻址队列项决策](../../archived/feature/2026-07-29-addressable-queue-operations.md)描述了已被取代的单次出现包装层设计。`MessageId` 负责寻址，而 `ReactLoopInbox` 把 `inbox` 作为持久 splice 上的标准会话投影贡献给投影注册表。通用投影传输层会将该折叠结果用于实时更新、历史尾页的重连基线和冷进程重启恢复，无需 live Agent 镜像。
+已归档的[可寻址队列项决策](../../archived/feature/2026-07-29-addressable-queue-operations.md)描述了已被取代的单次出现包装层设计。`MessageId` 负责寻址，而 `AgentLoop` 把 `inbox` 作为持久 splice 上的标准会话投影贡献给投影注册表。通用投影传输层会将该折叠结果用于实时更新、历史尾页的重连基线和冷进程重启恢复，无需 live Agent 镜像。
 
 ## 曾考虑的替代方案
 
@@ -36,7 +36,7 @@ Status: implemented
 
 ## 验证
 
-agent loop（智能体循环）覆盖固定先 `turn/start`、再领取、后 pre-step 的顺序、实时事件的确切载荷、边界平衡的无步骤 reject、最终批次改写、领取后插入的输入、监听器失败、取消，以及最后一个所有者卸载后移除 agent 作用域投影。Inbox 和消费方测试固定纯领取删除、普通删除的 canceled 结果、agent-instructions 的暂存、替换与同一步骤进入、plan/goal/钩子行为、UI 清理、压缩（compaction）、检查点、恢复后的持久投影、对非法持久坐标或跨列表重复标识的拒绝，以及 controller 早于投影注册表注册时仍使用折叠后队列值。只有当持久性不属于测试对象时，消费方领域测试才使用进程内 Inbox 桩；领取、持久投影、恢复、校验与实时通知测试通过生产 AgentLoop 测试 harness 创建 Agent，因此测试支持代码不会重新实现该投影。生成的事件与类型目录只公开新的 waterfall 与载荷。
+agent loop（智能体循环）覆盖固定先 `turn/start`、再领取、后 pre-step 的顺序、实时事件的确切载荷、边界平衡的无步骤 reject、最终批次改写、领取后插入的输入、监听器失败、取消，以及Agent 卸载后 Inbox 仍可读取，以及 AgentLoop 卸载时移除投影。Inbox 和消费方测试固定纯领取删除、普通删除的 canceled 结果、agent-instructions 的暂存、替换与同一步骤进入、plan/goal/钩子行为、UI 清理、压缩（compaction）、检查点、恢复后的持久投影、对非法持久坐标或跨列表重复标识的拒绝，以及 controller 早于投影注册表注册时仍使用折叠后队列值。只有当持久性不属于测试对象时，消费方领域测试才使用进程内 Inbox 桩；领取、持久投影、恢复、校验与实时通知测试通过生产 AgentLoop 测试 harness 创建 Agent，因此测试支持代码不会重新实现该投影。生成的事件与类型目录只公开新的 waterfall 与载荷。
 
 ## 后果
 

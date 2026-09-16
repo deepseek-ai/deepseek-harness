@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-util-workspace-path",
   "description": "Browser-safe Workspace path and display helpers",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },

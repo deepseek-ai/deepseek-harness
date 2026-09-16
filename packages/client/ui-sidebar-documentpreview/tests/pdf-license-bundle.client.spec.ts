@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 
 const packageRoot = resolve(import.meta.dirname, '..')
 const bundlePath = join(packageRoot, 'lib/client.js')
+const pdfChunkPath = join(packageRoot, 'lib/client.pdf.js')
 const require = createRequire(import.meta.url)
 const licenseNames = [
   'LICENSE',
@@ -41,22 +42,32 @@ function runPnpm(args: string[], cwd: string, timeout: number): string {
 }
 
 describe('published PDF.js licenses', () => {
-  it.skipIf(!existsSync(bundlePath))('keeps every bundled license in the packed client artifact', ({ task }) => {
+  it.skipIf(!existsSync(bundlePath))('keeps every bundled license in the packed PDF chunk', ({ task }) => {
+    expect(existsSync(pdfChunkPath)).toBe(true)
     const output = mkdtempSync(join(tmpdir(), 'dsh-document-preview-pack-'))
     try {
       const packed = JSON.parse(runPnpm([
         'pack', '--json', '--pack-destination', output,
       ], packageRoot, task.timeout)) as { filename: string; files: { path: string }[] }
       expect(packed.files.map(file => file.path)).toContain('lib/client.js')
+      expect(packed.files.map(file => file.path)).toContain('lib/client.pdf.js')
       expect(packed.files.some(file => file.path.endsWith('pdfjs-NOTICES.txt'))).toBe(false)
 
       const client = run('tar', ['-xOf', resolve(packageRoot, packed.filename), 'package/lib/client.js'], packageRoot, task.timeout)
-      expect(client).toContain('//! Bundled PDF.js license notices')
+      const pdf = run('tar', ['-xOf', resolve(packageRoot, packed.filename), 'package/lib/client.pdf.js'], packageRoot, task.timeout)
+      expect([...client.matchAll(/require\.async\("(\.\/client[^"/]*\.js)"\)/gu)].map(match => match[1]))
+        .toEqual(['./client.pdf.js'])
+      expect(client).not.toMatch(/\brequire\("\.\/client[^"/]*\.js"\)/u)
+      expect([...pdf.matchAll(/require\("(\.\/client[^"/]*\.js)"\)/gu)].map(match => match[1]))
+        .toEqual([])
+      expect(client).not.toContain('//! Bundled PDF.js license notices')
+      expect(client).not.toContain('/pdfjs-dist/')
+      expect(pdf).toContain('//! Bundled PDF.js license notices')
       const pdfRoot = dirname(require.resolve('pdfjs-dist/package.json'))
       for (const name of licenseNames) {
         const source = readFileSync(join(pdfRoot, name), 'utf8').trimEnd()
         const commented = [`// ${name}`, '// ', ...source.split('\n').map(line => `// ${line}`)].join('\n')
-        expect(client, `${name} must be visible in package/lib/client.js`).toContain(commented)
+        expect(pdf, `${name} must be visible in package/lib/client.pdf.js`).toContain(commented)
       }
     } finally {
       rmSync(output, { recursive: true, force: true })

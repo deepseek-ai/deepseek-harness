@@ -1,0 +1,3 @@
+#!/bin/sh
+export ELECTRON_RUN_AS_NODE=1
+exec "$DSH_DESKTOP_NODE_EXECUTABLE" --expose-internals "$@"

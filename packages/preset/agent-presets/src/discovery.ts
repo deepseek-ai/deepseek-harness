@@ -97,25 +97,19 @@ export function entryListProblem(rows: unknown, at = ''): string | undefined {
   return undefined
 }
 
+/** Package lookup injected into preset discovery. */
+type PackageResolves = (specifier: string, base: string) => boolean
+
 /**
- * Whether a package name is installed anywhere above `base`.
+ * Whether a package specifier is installed above `base` without importing it.
  *
- * Node's own upward `node_modules` walk, stopping at the package directory:
- * the question is whether the package is there at all, which is what a row
- * naming a package a rename or an uninstall took away gets wrong. A pnpm
- * store link answers through the symlink, and a link left dangling by a
- * deleted checkout answers false — the shape a stale profile install leaves.
- *
- * `existsSync` rather than the async `stat`: the walk is a handful of lookups
- * per package and runs on every roster read, where 150 promise round-trips
- * cost more than the lookups they wrap.
- * @param name - the package specifier, possibly carrying a subpath.
- * @param base - the URL to walk up from.
- * @returns true when the package directory is installed above `base`.
+ * The direct disk walk accepts unexported subpaths and rejects stale links
+ * whose package directory no longer exists.
+ * @param name - package specifier, possibly carrying a subpath.
+ * @param base - directory URL whose ancestors contain candidate `node_modules` directories.
+ * @returns true when the package is installed.
  */
 function packageInstalled(name: string, base: string): boolean {
-  // A scoped name spends two segments on the package; anything after either
-  // form is a subpath export, which lives inside the package directory.
   const pkg = name.split('/').slice(0, name.startsWith('@') ? 2 : 1).join('/')
   let dir = fileURLToPath(base)
   for (;;) {
@@ -129,35 +123,19 @@ function packageInstalled(name: string, base: string): boolean {
 /**
  * Whether one classified row names a module that exists, importing nothing.
  *
- * Each kind is checked by what actually answers it. A package name is looked
- * up on disk — the same upward walk Node's own resolver starts with — and a
- * relative or `file:` specifier is statted, because both name one file.
- * Nothing is evaluated either way, so a row is judged without its plugin
- * observing that discovery looked.
- *
- * `import.meta.resolve` is deliberately not the fallback for a name the disk
- * lookup misses. Its `parentURL` argument only takes effect under
- * `--experimental-import-meta-resolve`, which no launch passes, so it would
- * resolve from THIS module rather than from the harness — reporting a
- * dependency visible only to this package as healthy, and a plugin the mount
- * can import as broken. The resolver that does honour an explicit parent is
- * the Loader's internal one, whose `resolveSync` signature differs between
- * Node 22 and 24 (`ModuleLoader.fromInternal` tags the raw object rather than
- * normalising it); reaching into that for a case the walk already covers buys
- * nothing a supported deployment needs, because every plugin a preset names
- * is installed beside the roster.
- *
- * What that gives up: a package resolvable ONLY through a loader hook — an
- * import map, or a tree with no `node_modules` at all — is reported broken.
- * No supported install produces one.
+ * Package rows delegate to the injected lookup. Relative and `file:` rows use
+ * file metadata. No check evaluates the named module.
  * @param row - the classified specifier, from {@link classifyRowSpecifier}.
  * @param presetBase - directory URL a preset-relative specifier resolves against.
  * @param harnessBase - base URL a package name resolves against.
+ * @param resolves - package lookup selected by the owning caller.
  * @returns true when the row names something that can be imported.
  */
-async function rowResolves(row: RowSpecifier, presetBase: string, harnessBase: string): Promise<boolean> {
+async function rowResolves(
+  row: RowSpecifier, presetBase: string, harnessBase: string, resolves: PackageResolves,
+): Promise<boolean> {
   if (row.kind === 'builtin') return true
-  if (row.kind === 'package') return isBuiltin(row.specifier) || packageInstalled(row.specifier, harnessBase)
+  if (row.kind === 'package') return isBuiltin(row.specifier) || resolves(row.specifier, harnessBase)
   const url = row.kind === 'file' ? new URL(row.specifier) : new URL(row.specifier, presetBase)
   return await isFile(fileURLToPath(url))
 }
@@ -195,6 +173,7 @@ async function unresolvableRows(
   rows: readonly unknown[],
   presetBase: string,
   harnessBase: string,
+  resolves: PackageResolves,
   at = '',
 ): Promise<UnresolvableRow[]> {
   const found: UnresolvableRow[] = []
@@ -203,10 +182,10 @@ async function unresolvableRows(
     if (Boolean(row.disabled)) continue
     const positional = at === '' ? `row ${String(index + 1)}` : `${at} row ${String(index + 1)}`
     if (row.group === true) {
-      found.push(...await unresolvableRows(row.config as readonly unknown[], presetBase, harnessBase, positional))
+      found.push(...await unresolvableRows(row.config as readonly unknown[], presetBase, harnessBase, resolves, positional))
       continue
     }
-    if (await rowResolves(classifyRowSpecifier(row.name), presetBase, harnessBase)) continue
+    if (await rowResolves(classifyRowSpecifier(row.name), presetBase, harnessBase, resolves)) continue
     const label = typeof row.id === 'string' && row.id !== '' ? `row "${row.id}"` : positional
     found.push({ label, name: row.name })
   }
@@ -218,11 +197,15 @@ async function unresolvableRows(
  * loadable. Parsed with the loader's own YAML dialect ({@link entryListSchema},
  * the one carrying `!!js`), so health can never call a composition broken
  * that the loader would accept.
+ * A package-lookup failure becomes this composition's broken reason, so one
+ * preset cannot abort discovery of the rest of the roster.
  * @param path - absolute path of the composition file.
  * @param harnessBase - base URL a row's package name resolves against.
  * @returns one human-readable reason, or undefined when the file is loadable.
  */
-async function compositionProblem(path: string, harnessBase: string): Promise<string | undefined> {
+async function compositionProblem(
+  path: string, harnessBase: string, resolves: PackageResolves,
+): Promise<string | undefined> {
   let content: string
   try {
     content = await readFile(path, 'utf8')
@@ -246,7 +229,13 @@ async function compositionProblem(path: string, harnessBase: string): Promise<st
   // The composition's own directory, exactly as `Include` derives it, so a
   // row naming a file the preset ships resolves the way the mount will.
   const presetBase = new URL('.', pathToFileURL(path)).href
-  const unresolvable = await unresolvableRows(rows as readonly unknown[], presetBase, harnessBase)
+  let unresolvable: UnresolvableRow[]
+  try {
+    unresolvable = await unresolvableRows(rows as readonly unknown[], presetBase, harnessBase, resolves)
+  } catch (error) {
+    const full = error instanceof Error ? error.message : String(error)
+    return `the composition's plugins cannot be checked: ${full.replace(/\n[\s\S]*$/, '')}`
+  }
   const [first] = unresolvable
   if (first === undefined) return undefined
   if (unresolvable.length === 1) {
@@ -287,9 +276,12 @@ async function isFile(path: string): Promise<boolean> {
  * @param root - the directory and the trust its presets inherit.
  * @param harnessBase - base URL a row's package name resolves against; the
  * caller's own `ctx.baseUrl`, which is where the installed harness lives.
+ * @param resolves - package-presence lookup for the active runtime.
  * @returns the root's presets ordered by id.
  */
-export async function scanRoot(root: PresetRoot, harnessBase: string): Promise<AgentPreset[]> {
+export async function scanRoot(
+  root: PresetRoot, harnessBase: string, resolves: PackageResolves = packageInstalled,
+): Promise<AgentPreset[]> {
   const dir = resolve(expandHomePath(root.path))
   let children
   try {
@@ -304,7 +296,7 @@ export async function scanRoot(root: PresetRoot, harnessBase: string): Promise<A
     const directory = join(dir, child.name)
     const path = join(directory, COMPOSITION_FILE)
     const broken = await isFile(path)
-      ? await compositionProblem(path, harnessBase)
+      ? await compositionProblem(path, harnessBase, resolves)
       : `the composition file ${COMPOSITION_FILE} is missing — the directory still occupies the id; delete it or restore the file`
     // Display text only, and never fatal: a preset with unreadable metadata
     // still mounts, it just shows its id.
@@ -326,15 +318,17 @@ export async function scanRoot(root: PresetRoot, harnessBase: string): Promise<A
  * Scan every root in precedence order.
  * @param roots - roots in precedence order; an earlier root wins a duplicate id.
  * @param harnessBase - base URL a row's package name resolves against.
+ * @param resolves - package-presence lookup for the active runtime.
  * @returns every discovered preset, first-root-wins per id.
  */
 export async function discoverPresets(
   roots: readonly PresetRoot[],
   harnessBase: string,
+  resolves: PackageResolves = packageInstalled,
 ): Promise<AgentPreset[]> {
   const byId = new Map<string, AgentPreset>()
   for (const root of roots) {
-    for (const preset of await scanRoot(root, harnessBase)) {
+    for (const preset of await scanRoot(root, harnessBase, resolves)) {
       if (byId.has(preset.id)) continue
       byId.set(preset.id, preset)
     }

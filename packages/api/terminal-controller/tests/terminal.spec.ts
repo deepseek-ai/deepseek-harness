@@ -16,6 +16,7 @@ function fixture() {
   const outcome = Promise.withResolvers<SubprocessOutcome>()
   const handle = {
     pid: 123, output, done: outcome.promise, write: vi.fn(async () => {}), resize: vi.fn(async () => {}),
+    inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
     inspectForeground: async () => undefined, signalForeground: async () => 123,
     terminate: vi.fn(async () => { output.end(); outcome.resolve({ exitCode: 0, signal: null }) }),
   }
@@ -226,3 +227,10 @@ async function readFrame(iterator: AsyncIterator<TerminalFrame>): Promise<Termin
   if (result.done === true) throw new Error('Terminal stream ended before its expected frame')
   return result.value
 }
+
+it('refuses retention before allocation commit and disposes an uncommitted screen directly', async () => {
+  const { terminal, handle } = fixture()
+  expect(() => terminal.retain(new AbortController().signal)).toThrow('not been committed')
+  await terminal.dispose()
+  expect(handle.terminate).toHaveBeenCalledOnce()
+})

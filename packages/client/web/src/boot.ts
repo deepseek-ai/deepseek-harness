@@ -41,9 +41,10 @@ export class AppWebEntry {
   /**
    * Load and activate every client entry, then hand the mount point to the
    * UI renderer. Plugin failures remain visible on the boot page.
-   * @returns Resolves after application mount or failure rendering.
+   * @param onFailure - Optional carrier-owned fatal presentation; keeps the boot page visible.
+   * @returns Resolves after application mount or failure reporting.
    */
-  async run(): Promise<void> {
+  async run(onFailure?: (reason: unknown) => void): Promise<void> {
     try {
       // Boot-readiness gate: whichever bootstrap applies the injection table
       // settles this deferred once every row has taken effect — the served
@@ -82,12 +83,15 @@ export class AppWebEntry {
         ctx,
         modules: this.modules,
         manifest: this.manifest,
-        onEntryState: (name, state) => { this.page.setState(name, state) },
+        onEntryState: (name, state) => {
+          if (onFailure === undefined || state !== 'failed') this.page.setState(name, state)
+        },
       })
       await mountClient(ctx, this.container)
     } catch (reason) {
       console.error(reason)
-      this.page.fail(reason instanceof Error ? reason.message : String(reason))
+      if (onFailure !== undefined) onFailure(reason)
+      else this.page.fail(reason instanceof Error ? reason.message : String(reason))
     }
   }
 

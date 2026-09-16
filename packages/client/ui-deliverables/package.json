@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-deliverables",
   "description": "Produced-files turn tail and clickable final-response file references for Web",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },

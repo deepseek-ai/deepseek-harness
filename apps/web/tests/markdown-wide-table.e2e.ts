@@ -431,6 +431,44 @@ describe('web e2e: markdown tables fill the column, wide ones break out and scro
     expect(tripwire.pageErrors).toEqual([])
   }, 120_000)
 
+  it('gives the gutter to painted table content, not transparent breakout padding', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-width-handle-hit'))
+    await settleAt(1680)
+    const hitAtHandle = async (marker: string) => {
+      const wrapper = page.locator('[class*="tableScroll"]', { hasText: marker })
+      await wrapper.evaluate((element) => { element.scrollIntoView({ block: 'center', behavior: 'instant' }) })
+      return await page.evaluate((tableMarker) => {
+        const handle = document.querySelector<HTMLElement>('[data-width-handle="right"]')
+        const wrapper = [...document.querySelectorAll<HTMLElement>('[class*="tableScroll"]')]
+          .find(candidate => candidate.textContent?.includes(tableMarker) ?? false)
+        const table = wrapper?.querySelector('table') ?? null
+        if (handle === null || table === null) throw new Error(`missing hit-test geometry for ${tableMarker}`)
+        const handleRect = handle.getBoundingClientRect()
+        const tableRect = table.getBoundingClientRect()
+        const x = handleRect.left + handleRect.width / 2
+        const y = tableRect.top + tableRect.height / 2
+        const hit = document.elementFromPoint(x, y)
+        return {
+          tableCoversHandle: tableRect.left <= x && tableRect.right >= x,
+          hitTable: hit !== null && table.contains(hit),
+          hitHandle: hit !== null && handle.contains(hit),
+        }
+      }, marker)
+    }
+
+    expect(await hitAtHandle(WIDE_MARKER)).toEqual({
+      tableCoversHandle: true,
+      hitTable: true,
+      hitHandle: false,
+    })
+    expect(await hitAtHandle(SHORT_MARKER)).toEqual({
+      tableCoversHandle: false,
+      hitTable: false,
+      hitHandle: true,
+    })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 120_000)
+
   it('keeps the fill/scroll relations under page zoom', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-markdown-wide-table-zoom'))
     await sweep()

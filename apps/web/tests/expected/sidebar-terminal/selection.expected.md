@@ -1,3 +1,0 @@
-- text: Shell
-- button "Shell": bash — /bin/bash
-- button "Start terminal"

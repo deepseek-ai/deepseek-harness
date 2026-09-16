@@ -14,8 +14,8 @@ const login = vi.hoisted(() => vi.fn())
 // The whole of what this module does with pi-ai is run one provider's login
 // against a collection built with the harness store, so the collection is the
 // boundary worth observing; a real login would open a browser.
-vi.mock('@earendil-works/pi-ai', async importOriginal => ({
-  ...await importOriginal<typeof import('@earendil-works/pi-ai')>(),
+vi.mock('../src/models.ts', async importOriginal => ({
+  ...await importOriginal<typeof import('../src/models.ts')>(),
   createModels: () => ({ setProvider: () => {}, login }),
 }))
 

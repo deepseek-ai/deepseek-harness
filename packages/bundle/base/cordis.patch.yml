@@ -13,16 +13,23 @@
 # driven); the grouping is for readers.
 
 - insert:
+    - id: tool-plugin-manager
+      name: '@deepseek-ai/dsh-plugin-manager/tools'
+      disabled: true
+
+    - id: plugin-manager
+      name: '@deepseek-ai/dsh-plugin-manager'
+      disabled: !!js "!ctx.get('profileContext')"
+
     - id: timer
       name: '@deepseek-ai/cordis-plugin-timer'
 
-    # Module reload is opt-in per profile. `patchReload: live` config watching
-    # uses the launcher's watch-only fallback and does not require this row.
+    # Profile configuration reloads by default; module roots are opt-in.
     - id: hmr
-      name: '@deepseek-ai/cordis-plugin-hmr'
-      disabled: true
+      name: '@deepseek-ai/dsh-hmr'
+      disabled: !!js "!ctx.get('profileContext')"
       config:
-        root: ['.']
+        root: []
 
     - id: llm
       name: '@deepseek-ai/dsh-llm'

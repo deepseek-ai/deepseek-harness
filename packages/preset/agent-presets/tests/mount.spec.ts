@@ -6,6 +6,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
+import { PluginPackages } from '@deepseek-ai/dsh-app-boot'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
@@ -44,6 +45,7 @@ async function harness(roster: Config = { default: 'standard', roots: ROOTS, inc
   const ctx = new Context()
   ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
   await ctx.plugin(Loader)
+  await ctx.plugin(PluginPackages)
   ctx.loader.builtins.include = Include
   // A preset outside this workspace cannot resolve `cordis-plugin-group` by
   // name, so the app registers it as a builtin; the fixtures compose the same
@@ -371,6 +373,59 @@ describe('the preset roster', () => {
       .toEqual(['broken', 'isolated', 'late', 'leaky', 'minimal', 'nested-broken', 'not-a-preset', 'pending', 'standard', 'two-broken'])
     expect(listed.find(preset => preset.id === 'standard')?.trust).toBe('system')
     expect(listed.find(preset => preset.id === 'not-a-preset')?.broken).toMatch(/is missing/)
+  })
+
+  it('uses the profile package service when checking bare package rows', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-preset-profile-package-'))
+    roots.push(root)
+    const presetDir = join(root, 'profile-package')
+    await mkdir(presetDir)
+    await writeFile(join(presetDir, COMPOSITION_FILE), '- id: package\n  name: profile-package/plugin.js\n')
+    const scoped = await harness({
+      default: 'profile-package', roots: [{ path: root, trust: 'user' }],
+      includeShippedRoot: false, includeUserRoot: false,
+    })
+    const packageOf = vi.spyOn(scoped.pluginPackages, 'packageOf').mockReturnValue({
+      name: 'profile-package', version: '1.0.0', dir: presetDir,
+      manifestPath: join(presetDir, 'package.json'), manifest: {},
+    })
+
+    const [listed] = await scoped.agentPresets.list()
+    expect(listed).toMatchObject({ id: 'profile-package', trust: 'user' })
+    expect(listed?.broken).toBeUndefined()
+    expect(packageOf).toHaveBeenCalledWith('profile-package/plugin.js', pathToFileURL(FIXTURES).href + '/')
+  })
+
+  it('isolates a package lookup failure to the preset being checked', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-preset-package-failure-'))
+    roots.push(root)
+    await mkdir(join(root, 'healthy'))
+    await writeFile(join(root, 'healthy', COMPOSITION_FILE), '[]\n')
+    await mkdir(join(root, 'lookup-failure'))
+    await writeFile(
+      join(root, 'lookup-failure', COMPOSITION_FILE),
+      '- id: package\n  name: profile-package/plugin.js\n',
+    )
+    const scoped = await harness({
+      default: 'healthy', roots: [{ path: root, trust: 'user' }],
+      includeShippedRoot: false, includeUserRoot: false,
+    })
+    const packageOf = vi.spyOn(scoped.pluginPackages, 'packageOf').mockImplementation(() => {
+      throw new Error('profile package lookup failed')
+    })
+
+    const listed = await scoped.agentPresets.list()
+    expect(listed.find(preset => preset.id === 'lookup-failure')?.broken)
+      .toBe("the composition's plugins cannot be checked: profile package lookup failed")
+    expect(listed.find(preset => preset.id === 'healthy')?.broken).toBeUndefined()
+    await expect(agentOn(scoped, 'sess-after-package-failure')).resolves.toBeDefined()
+
+    packageOf.mockImplementation(() => {
+      throw 'raw profile package lookup failed'
+    })
+    const rawListed = await scoped.agentPresets.list()
+    expect(rawListed.find(preset => preset.id === 'lookup-failure')?.broken)
+      .toBe("the composition's plugins cannot be checked: raw profile package lookup failed")
   })
 
   it('exposes the configured default id', () => {

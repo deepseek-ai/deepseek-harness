@@ -1,0 +1,4 @@
+# Web e2e fixture bundle: one inert row whose mount state exposes live layer changes.
+- insert:
+    - id: fixture-row
+      name: '@fixture/bundle'

@@ -1,0 +1,8 @@
+version: 1
+scenario: plugin-manager
+profile: headless
+composition: plugin-manager
+recording: live
+header:
+  class: plugin-manager
+  pin: true

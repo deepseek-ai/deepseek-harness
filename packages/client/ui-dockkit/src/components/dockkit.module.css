@@ -159,7 +159,10 @@
   gap: 4px;
   align-items: center;
   height: 28px;
-  padding: 10px 6px 0 10px;
+  /* The start inset is a published variable so a host that pins the surface
+     against window chrome (the right sidebar fullscreen under macOS traffic
+     lights) can widen it per pane; the fallback is the design's own 10px. */
+  padding: 10px 6px 0 var(--dsh-dockkit-strip-inline-start, 10px);
   touch-action: none;
 }
 

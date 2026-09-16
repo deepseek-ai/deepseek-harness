@@ -52,6 +52,7 @@ Chat 中的一条用户消息把文件与图片放在同一个靠右、可换行
 | 文件 | 职责 |
 |---|---|
 | [`src/client/ComposerAttachments.tsx`](src/client/ComposerAttachments.tsx) | 有序图片／文件栏＋拖放遮罩的组装 |
+| [`src/client/drop-events.ts`](src/client/drop-events.ts) | 每个已挂载附件视图的 effect 安装的 document 拖放监听 |
 | [`src/AttachmentRail.tsx`](src/AttachmentRail.tsx) | 附件横向溢出、滚轮转换、边缘箭头 |
 | [`src/client/MessageImages.tsx`](src/client/MessageImages.tsx) | 每消息画廊＋灯箱的组装 |
 | [`src/MessageImage.tsx`](src/MessageImage.tsx) | 单图尺寸、加载／重试、点击打开；本地提交回显预览直接显示其 object URL |

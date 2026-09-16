@@ -83,7 +83,7 @@ A session can switch to a different preset only while it has produced nothing �
 
 ### Failures and recovery
 
-A preset whose composition is missing, unparsable, not a list of named plugin rows, or naming a module that cannot be resolved is listed as broken with a reason naming the rows at fault; composing such a preset is refused up front, so a session never starts half-composed. What survives to session creation is a row whose module loads and then refuses — a plugin that throws, or one waiting for a service the composition never supplies — which fails the creation and rolls it back, naming every failed row including those inside a group. Fix the preset's file or delete it, then retry.
+A preset whose composition is missing, unparsable, not a list of named plugin rows, or naming a module that cannot be resolved is listed as broken with a reason naming the rows at fault; a package-lookup failure marks only the preset being checked as broken, while the rest of the roster remains available. Composing a broken preset is refused up front, so a session never starts half-composed. What survives to session creation is a row whose module loads and then refuses — a plugin that throws, or one waiting for a service the composition never supplies — which fails the creation and rolls it back, naming every failed row including those inside a group. Fix the preset's file or delete it, then retry.
 
 -----
 

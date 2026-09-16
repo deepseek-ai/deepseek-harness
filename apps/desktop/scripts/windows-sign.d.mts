@@ -15,7 +15,7 @@ export function buildWindowsSigningEnvironment(environment: NodeJS.ProcessEnv, i
 }): NodeJS.ProcessEnv
 
 /**
- * Create the electron-builder hook for a hardware-backed Windows code-signing certificate.
+ * Serialize hardware-token signing and stop all queued tasks after the first failure.
  *
  * @param options Release signing configuration.
  * @returns The signing hook.

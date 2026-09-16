@@ -89,13 +89,21 @@ describe('TerminalBlock prompt label', () => {
 })
 
 describe('TerminalBlock states', () => {
-  it('running shows the command line only: no output, no placeholder, no copy', () => {
-    const view = render(<TerminalBlock command="sleep 5" running output="partial" />)
+  it('running with nothing printed yet shows the command line only: no placeholder, no copy, no body', () => {
+    const view = render(<TerminalBlock command="sleep 5" running />)
     expect(view.getByText('sleep 5')).toBeTruthy()
-    expect(view.queryByText('partial')).toBeNull()
     expect(view.queryByText('无输出')).toBeNull()
     expect(view.queryByRole('button')).toBeNull()
     expect(view.container.firstElementChild?.getAttribute('data-running')).toBe('')
+    expect(view.container.firstElementChild?.hasAttribute('data-body')).toBe(false)
+  })
+
+  it('running shows the output printed so far under the banner, still without a copy control', () => {
+    const view = render(<TerminalBlock command="pnpm add x" running output={'Progress: resolved 1\n'} />)
+    expect(outputLines(view.container)).toEqual(['Progress: resolved 1'])
+    expect(view.queryByRole('button')).toBeNull()
+    expect(view.container.firstElementChild?.getAttribute('data-running')).toBe('')
+    expect(view.container.firstElementChild?.getAttribute('data-body')).toBe('')
   })
 
   it('running still shows a settled-looking status pill when one is supplied', () => {
@@ -184,6 +192,12 @@ describe('TerminalBlock status pill', () => {
   it('renders the exit-code pill for a non-zero exit', () => {
     render(<TerminalBlock command="false" output="a" exitCode={1} />)
     expect(screen.getByText('退出码 1')).toBeTruthy()
+  })
+
+  it('renders the no-exit-code pill and the error dot for a command that settled without one', () => {
+    const view = render(<TerminalBlock command="pnpm add x" output="spawn pnpm ENOENT" exitCode={null} />)
+    expect(view.getByText('未正常退出')).toBeTruthy()
+    expect(runStateOf(view.container)).toEqual({ state: 'error', label: '失败' })
   })
 
   it('renders the signal pill, which outranks the exit code', () => {

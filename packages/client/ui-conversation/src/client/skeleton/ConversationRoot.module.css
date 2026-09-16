@@ -18,9 +18,8 @@
 
      W adapts to the column, not the viewport (a collapsed sidebar widens the
      column without resizing the window): the component publishes the column's
-     live width as --dsh-conversation-column-width (px, via ResizeObserver —
-     container-type would re-anchor the subtree's portal-free position:fixed
-     descendants) and the clamp keeps a 680px floor (a step under the figma
+     live width as --dsh-conversation-column-width (px, via ResizeObserver)
+     and the clamp keeps a 680px floor (a step under the figma
      748px — the full-width reading felt wide on every screen), takes 64% of
      wider columns, and caps at 920px for line-length
      readability. A dragged user preference (--dsh-chat-user-width, published
@@ -53,6 +52,30 @@
   display: none;
 }
 
+/* macOS hiddenInset titlebar: the title row doubles as the window drag
+   region; interactive children opt out. */
+:global([data-platform='darwin']) .titleRow {
+  -webkit-app-region: drag;
+}
+
+:global([data-platform='darwin']) .titleRow button,
+:global([data-platform='darwin']) .titleRow a,
+:global([data-platform='darwin']) .headerLeading,
+:global([data-platform='darwin']) .headerActions,
+:global([data-platform='darwin']) .headerUtilities,
+:global([data-platform='darwin']) .headerCorner {
+  -webkit-app-region: no-drag;
+}
+
+/* Blank state on macOS desktop: the chrome rows are gone but the leading seat
+   (the hidden sidebar's reopen control) stays on screen, so the header keeps
+   its layout without the rule. */
+:global([data-platform='darwin']) .headerHidden {
+  display: block;
+  min-height: 0;
+  border-bottom: none;
+}
+
 .titleRow {
   display: flex;
   align-items: center;
@@ -66,6 +89,21 @@
   align-items: center;
   gap: 10px;
   min-width: 0;
+}
+
+/* Leading seat before the breadcrumbs; laid out only while its occupant
+   renders something, and the occupant owns its own trailing gap (a CSS-hidden
+   occupant keeps the seat non-empty, so a seat-owned margin would push the
+   breadcrumbs while nothing shows). */
+.headerLeading {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.headerLeading:empty {
+  display: none;
 }
 
 .crumbs {
@@ -211,25 +249,27 @@
   min-height: 0;
 }
 
-/* Width handles: 40px col-resize strips beside the transcript, absolute in
+/* Width handles: 10px col-resize strips beside the transcript, absolute in
    .body (NOT the scrollport: an absolute strip there would extend the
    scrollable range; NOT .root: a strip from the column top would paint its
-   glow through the header's transparent background). Inner edge sits 24px
-   outside the content column — the
-   same offset the glow line paints at — and the strip extends 40px outward
-   from there; the outer edge is clamped to keep a 24px safe zone against the
+   glow through the header's transparent background). The inner edge sits
+   24px outside the content column and the strip extends 10px outward; the
+   outer edge is clamped to keep a 24px safe zone against the
    column edges (sidebar side and scrollbar side stay drag-free). When the
    margin cannot fit inset + strip + safe zone the computed width goes
    negative and the strip resolves to zero — no mispositioned hit area on
    narrow columns. Known half-scrollbar (~4px) centering offset vs the
-   gutter-reserved content box is accepted: it stays well inside the strip. */
+   gutter-reserved content box is accepted: it consumes part of the 10px
+   strip but remains within it. */
 .widthHandle {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 8;
+  /* Concrete overflow content establishes z-index 1, while the sticky
+     composer remains above both layers. */
+  z-index: 0;
   width: min(
-    40px,
+    10px,
     calc((100% - var(--dsh-chat-content-width)) / 2 - 24px - 24px)
   );
   cursor: col-resize;
@@ -243,44 +283,50 @@
   left: calc(50% + var(--dsh-chat-content-width) / 2 + 24px);
 }
 
-/* The glow: a short 3px bar riding the pointer's Y, inset 16px outward from
-   the strip's inner edge (40px from the content column),
-   not a full-height rule — a 24px solid core centered on the pointer
+/* The glow: a short 2px bar riding the pointer's Y, centered in the strip
+   (29px from the content column), not a full-height rule — a 16px solid core
+   centered on the pointer
    (published by pointermove as --dsh-width-handle-pointer-y), fading to
-   transparent over 40px each side (~104px total). A solid CORE, not a single
-   solid stop: a lone peak washes out over the fade. The scrollbar hover tint,
-   not a border token: this is a draggable bar and the border alphas (4-16%)
-   disappear against the base fill. Before the first move the fallback centers
-   the glow at 50% height. */
+   transparent over 28px each side (72px total). A solid CORE, not a single
+   solid stop: a lone peak washes out over the fade. The resting scrollbar
+   tint keeps this secondary affordance quiet in both themes. Before the first
+   move the fallback centers the glow at 50% height. */
 .widthHandle::after {
   content: '';
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 3px;
-  border-radius: 3px;
+  width: 2px;
+  border-radius: 2px;
   background: linear-gradient(
     to bottom,
-    transparent calc(var(--dsh-width-handle-pointer-y, 50%) - 52px),
-    var(--dsw-alias-scrollbar-hover-l1) calc(var(--dsh-width-handle-pointer-y, 50%) - 12px),
-    var(--dsw-alias-scrollbar-hover-l1) calc(var(--dsh-width-handle-pointer-y, 50%) + 12px),
-    transparent calc(var(--dsh-width-handle-pointer-y, 50%) + 52px)
+    transparent calc(var(--dsh-width-handle-pointer-y, 50%) - 36px),
+    var(--dsw-alias-scrollbar-bg-l1) calc(var(--dsh-width-handle-pointer-y, 50%) - 8px),
+    var(--dsw-alias-scrollbar-bg-l1) calc(var(--dsh-width-handle-pointer-y, 50%) + 8px),
+    transparent calc(var(--dsh-width-handle-pointer-y, 50%) + 36px)
   );
   opacity: 0;
   pointer-events: none;
 }
 
 .widthHandle[data-side='left']::after {
-  right: 16px;
+  right: 4px;
 }
 
 .widthHandle[data-side='right']::after {
-  left: 16px;
+  left: 4px;
 }
 
 .widthHandle:hover::after,
 .widthHandle[data-dragging]::after {
   opacity: 1;
+}
+
+/* A drag starts above the composer band. Pointer capture keeps it active when
+   crossing the footer; lift only the active handle so its indicator remains
+   visible without making the resting footer gutter draggable. */
+.widthHandle[data-dragging] {
+  z-index: 8;
 }
 
 /* Views that elect a composer overlay (trajectory etc.) own their full-bleed
@@ -370,7 +416,12 @@
   position: sticky;
   bottom: 0;
   /* Above markdown CodeBlock sticky banners (z-index 6) so the footer never
-     paints under a sticking code header while scrolling. */
+     paints under a sticking code header while scrolling. The pinned compaction
+     header (MessageItem.module.css, ui-chat) and the turn-navigation rail slot
+     (TurnNavigator.module.css, ui-chat) also take 7 to clear the same banners.
+     Among elements of equal rank the later one in DOM order wins, so the
+     composer stays above the pinned header on the extreme small-viewport
+     overlap and the pinned header stays above the rail. */
   z-index: 7;
   /* Input mask (figma 1205:27463): transcript fades out under a FIXED 36px
      band at the seat's top (the figma 24% of the resting ~150px composer),

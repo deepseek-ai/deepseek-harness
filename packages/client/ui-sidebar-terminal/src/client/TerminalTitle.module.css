@@ -1,0 +1,2 @@
+.title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name { width: 120px; min-width: 48px; max-width: 100%; padding: 0 4px; color: inherit; font: inherit; background: var(--dsw-alias-bg-l1); border: 0.5px solid var(--dsw-alias-border-l3); border-radius: 4px; outline: none; }

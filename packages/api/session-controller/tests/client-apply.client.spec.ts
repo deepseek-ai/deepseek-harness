@@ -18,7 +18,7 @@ const ROSTER = webApp.closure([SELF])
 const it = createClientTest({ roster: ROSTER })
 const EVENTS = '$events'
 const CONTROL = 'session/control'
-const BASELINE = { type: 'baseline', value: { queues: {}, jobs: {}, projections: {} } }
+const BASELINE = { type: 'baseline', value: { jobs: {}, projections: {} } }
 /** The first client boot pays the cold module transform of the cone. */
 const COLD_BOOT_TIMEOUT_MS = 60_000
 
@@ -77,6 +77,37 @@ describe('Session Controller Client apply', () => {
     const { client } = await bench(start)
     await vi.waitFor(() => { expect(connected).toHaveBeenCalledOnce() })
     await client.reload(SELF)
+    expect(connected).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps immediate control projections when the ready notification follows their baseline', async ({ mock, start }) => {
+    const connected = vi.spyOn(ClientSessions.prototype, 'handleConnected')
+    const sessionId = sid('immediate-baseline')
+    mock.remote.session.list.mockResolvedValue(ok({ items: [{
+      sessionId, updatedAt: 1, running: false, blank: false,
+    }] }))
+    let projection = { asOfSeq: 20, values: { title: 'Before restart' } }
+    mock.stream(CONTROL, (_args, stream) => {
+      stream.push({ type: 'baseline', value: { jobs: {}, projections: { [sessionId]: projection } } })
+    })
+    const { client, sessions } = await bench(start)
+    await vi.waitFor(() => {
+      expect(sessions.list.getSnapshot().byId[sessionId]?.title).toBe('Before restart')
+    })
+    client.ctx.emit('connection/reset')
+    await client.flush()
+    expect(sessions.list.getSnapshot().byId[sessionId]?.title).toBe('Before restart')
+
+    projection = { asOfSeq: 1, values: { title: 'After restart' } }
+    client.connection.reconnect()
+    await vi.waitFor(() => {
+      expect(sessions.list.getSnapshot().byId[sessionId]?.title).toBe('After restart')
+    })
+
+    await client.unload(SELF)
+    client.connection.reconnect()
+    await mock.streams.opened(EVENTS, 3)
+    await vi.waitFor(() => { expect(client.connection.generation.getSnapshot()?.id).toBe(3) })
     expect(connected).toHaveBeenCalledTimes(2)
   })
 

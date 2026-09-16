@@ -6,7 +6,7 @@
  */
 import { Context, type Plugin } from '@deepseek-ai/cordis'
 import type { Entry } from '@deepseek-ai/cordis-plugin-loader'
-import { tearDownEntryFiber } from '@deepseek-ai/dsh-client-hmr/client'
+import { tearDownEntryFiber } from '@deepseek-ai/dsh-client-modules/client'
 import {
   installConnection,
   type ConnectionHandle,
@@ -262,7 +262,7 @@ export class TestClient {
   }
 
   /**
-   * Rebuild one Loader entry: client-hmr's registry-first fiber teardown, then
+   * Rebuild one Loader entry: Client Modules' registry-first fiber teardown, then
    * `entry.refresh()`. Each client's module table retains its own instance-bound
    * Connection plugin, so reloads do not coordinate through process globals.
    * Requires a live client: after `dispose()` the Loader holds no entries and

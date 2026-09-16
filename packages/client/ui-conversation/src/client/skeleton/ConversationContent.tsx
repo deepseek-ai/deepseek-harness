@@ -16,6 +16,20 @@ type ConversationContentProps = Omit<ConversationSlotProps, 'useSession' | 'useC
   onHandleEnd: () => void
 }
 
+const WHEEL_DELTA_LINE = 1
+const WHEEL_DELTA_PAGE = 2
+const FALLBACK_WHEEL_LINE_PX = 16
+
+/** Convert a wheel event's vertical delta to scrollport pixels. */
+function wheelDeltaY(event: React.WheelEvent, scrollport: HTMLElement): number {
+  if (event.deltaMode === WHEEL_DELTA_LINE) {
+    const lineHeight = Number.parseFloat(getComputedStyle(scrollport).lineHeight)
+    return event.deltaY * (Number.isFinite(lineHeight) ? lineHeight : FALLBACK_WHEEL_LINE_PX)
+  }
+  if (event.deltaMode === WHEEL_DELTA_PAGE) return event.deltaY * scrollport.clientHeight
+  return event.deltaY
+}
+
 /** One transcript width handle: pointer capture + rAF-throttled symmetric
  * resize (both sides write the one centered width, so outward travel widens
  * by 2× the pointer distance). pointermove publishes the pointer's Y as a CSS
@@ -45,6 +59,7 @@ function WidthHandle(props: {
     if (frame.current !== null) { cancelAnimationFrame(frame.current); frame.current = null }
   }
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
     e.preventDefault()
     e.currentTarget.setPointerCapture(e.pointerId)
     origin.current = e.clientX
@@ -85,6 +100,16 @@ function WidthHandle(props: {
     setDragging(false)
     callbacks.current.onEnd()
   }, [])
+  const onWheel = useCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    const body = e.currentTarget.parentElement
+    /* v8 ignore next -- a width handle renders only inside the Conversation body. */
+    if (body === null) return
+    const scrollport = body.querySelector<HTMLElement>(':scope > [data-conversation-scroll]')
+    /* v8 ignore next -- the Conversation body always contains its direct scroll element. */
+    if (scrollport === null) return
+    if (e.ctrlKey || e.deltaY === 0) return
+    scrollport.scrollBy({ top: wheelDeltaY(e, scrollport) })
+  }, [])
 
   return (
     <div
@@ -97,6 +122,7 @@ function WidthHandle(props: {
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerCancel}
       onLostPointerCapture={onPointerCancel}
+      onWheel={onWheel}
     />
   )
 }

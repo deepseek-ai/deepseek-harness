@@ -1,21 +1,15 @@
 /** One PTY, a bounded terminal emulator and its detachable browser followers. */
-import { createRequire } from 'node:module'
 import { RemoteError } from '@deepseek-ai/dsh-typert-protocol'
 import type { Terminal as HeadlessTerminal } from '@xterm/headless'
 import type { SerializeAddon as Serializer } from '@xterm/addon-serialize'
 import type { SubprocessTerminalHandle } from '@deepseek-ai/dsh-subprocess'
+import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
 import { TerminalFollower } from './stream.ts'
-import type { TerminalAttachmentId, TerminalFrame, WebTerminalInfo } from './types.ts'
+import { TerminalRetention, type TerminalRetentionPolicy } from './retention.ts'
+import type { TerminalAttachmentId, TerminalFrame, TerminalRetentionFrame, WebTerminalInfo } from './types.ts'
 
-const { Terminal, SerializeAddon } = loadXterm()
-
-function loadXterm() {
-  // The Preview's CommonJS wrapper owns its outer require binding; these literal calls also retain the CJS entries.
-  const require = createRequire(import.meta.url)
-  const { Terminal } = require('@xterm/headless') as typeof import('@xterm/headless')
-  const { SerializeAddon } = require('@xterm/addon-serialize') as typeof import('@xterm/addon-serialize')
-  return { Terminal, SerializeAddon }
-}
+const requireHeadless = createLazyRequire<typeof import('@xterm/headless')>('@xterm/headless', import.meta.url)
+const requireSerialize = createLazyRequire<typeof import('@xterm/addon-serialize')>('@xterm/addon-serialize', import.meta.url)
 
 /** Process lifetime is independent of follower and component lifetimes. */
 export class BrowserTerminal {
@@ -26,6 +20,7 @@ export class BrowserTerminal {
   private operations: Promise<unknown> = Promise.resolve()
   private readonly drained: Promise<void>
   private closing: Promise<void> | undefined
+  private retention: TerminalRetention | undefined
   private controller: { id: TerminalAttachmentId; follower: TerminalFollower } | undefined
 
   /**
@@ -40,10 +35,37 @@ export class BrowserTerminal {
     scrollback: number,
     private readonly maxBufferedBytes: number,
   ) {
+    const { Terminal } = requireHeadless()
+    const { SerializeAddon } = requireSerialize()
     this.screen = new Terminal({ cols: info.cols, rows: info.rows, scrollback, allowProposedApi: true })
     this.serializer = new SerializeAddon()
     this.screen.loadAddon(this.serializer)
     this.drained = this.consume()
+  }
+
+  /**
+   * Start monitoring after this allocation is committed to its Session owner.
+   * @param policy - validated Host timing policy.
+   * @param closing - closes the id before any asynchronous termination.
+   * @param closed - removes the exact successfully terminated owner record.
+   * @param failed - diagnostic sink for background cleanup failure.
+   */
+  monitor(policy: TerminalRetentionPolicy, closing: () => void, closed: () => void, failed: (error: unknown) => void): void {
+    this.retention = new TerminalRetention(policy, () => this.handle.inspectActivity(), async () => {
+      closing()
+      await this.closeProcess()
+      closed()
+    }, failed)
+  }
+
+  /**
+   * Retain this committed process independently of output attachment.
+   * @param signal - physical window stream lifetime.
+   * @returns its hold acknowledgement and lifetime.
+   */
+  retain(signal: AbortSignal): AsyncIterable<TerminalRetentionFrame> {
+    if (this.retention === undefined) throw new Error('Terminal has not been committed')
+    return this.retention.retain(signal)
   }
 
   /**
@@ -86,6 +108,7 @@ export class BrowserTerminal {
    * @returns when the provider accepts the input.
    */
   write(id: TerminalAttachmentId, data: string): Promise<void> {
+    this.retention?.invalidate()
     return this.enqueue(async () => { this.requireController(id); await this.handle.write(data) })
   }
 
@@ -120,6 +143,16 @@ export class BrowserTerminal {
    * @returns after process cleanup and final output drainage; failures remain retryable.
    */
   close(): Promise<void> {
+    return this.retention?.close() ?? this.closeProcess()
+  }
+
+  /**
+   * Stop unattended cleanup scheduling and await final process cleanup.
+   * @returns after terminal and monitor quiescence.
+   */
+  dispose(): Promise<void> { return this.retention?.dispose() ?? this.closeProcess() }
+
+  private closeProcess(): Promise<void> {
     if (this.closing !== undefined) return this.closing
     this.closing = (async () => {
       await this.handle.terminate()

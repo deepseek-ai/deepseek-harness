@@ -96,6 +96,8 @@ registry 的两个行为决定了「怎么尝试一次发布」。写入之间�
 
 报错会点名这个包、点名是哪条声明把它标成 optional 的，并按顺序给出出路——把它作为类型引入（声明合并需要的仅此而已），或者调整写法让模块作用域不再需要这个包。动态 `import()` 只是把失败推迟到首次使用，它属于那种确实需要这个包、并且自己处理缺失的调用方；会想到它，往往说明这个依赖并不 optional，所以门禁不把它作为解法给出。
 
+初始化与启动无关、且兼容 CommonJS 的必需 Host 依赖可以使用 `createLazyRequire(specifier, import.meta.url)`。调用方保留 type-only import，传入字面量依赖 specifier，并在所属操作中调用返回的 loader。`verify-package-dependencies` 会把该字面量识别为 Host runtime edge，因此 Client/Host 包即使没有静态值 import，仍会把它保留在 `dependencies`。该工具只缓存成功加载，并保留调用方相对解析；它不会把 optional 依赖变成必需依赖，也不会隐藏首次使用失败。
+
 ### 发布族对象
 
 这个领域里的实体是**发布族**：一组共享版本基线与 tag 命名、可整体发布的包。新增一族等于加一个子类和一条 workflow lane，不改核心。

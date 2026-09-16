@@ -99,7 +99,7 @@ slot scope 是闭集 `root | session-maybe | session`：
 - Concurrent 纪律：渲染平面只从 hooks 格读（uSES 一致性保证）；props 格回调只在事件 handler 空间用；描述符解析 render-safe（幂等缓存、废弃渲染残留由 prune 收尸）。
 - 第三方组件值零依赖，类型一行 type-only import（declaration merging 进 `SessionStandardProps` / `SessionMaybeStandardProps`）。
 
-### 队列只读镜像
+### 输入投递
 
 - 队列语义：running 不锁输入；普通消息经 `session.prompt {mode:'queue'}` 排队，命令永不排队。
 

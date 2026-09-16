@@ -244,7 +244,9 @@ interface SubprocessOutcome {
 
 `spawnTerminal(spec)` 是非管道进程原语。提供方分配控制终端，并负责 UTF-8 文本传输、前台进程组检查与信号发送，以及一项须等待的 TERM→KILL 操作；该操作会使提供方仍可观察到的每个会话成员完全停稳，提供方则会记录执行基底特有的可观察性限制。PTY 后端仍负责提示符检测、就绪推断、scrollback、沙箱策略和持久会话所有权；普通 `spawn()` 无法重建控制终端语义。
 
-终端 spec 完全指定 argv、cwd、环境覆盖、终端类型、尺寸、清理宽限期与可选的分配取消。其句柄公开 `pid`、有序输出、`done`、`write`、`resize`、`inspectForeground`、`signalForeground` 和须等待的 `terminate`；[`SubprocessTerminalSpawnSpec` 与 `SubprocessTerminalHandle`](../../packages/subprocess/subprocess/src/types.ts) 定义这些字段和操作。`resize(cols, rows)` 更新正在运行的 PTY 尺寸，进程退出后拒绝调用。
+终端 spec 完全指定 argv、cwd、环境覆盖、终端类型、尺寸、清理宽限期与可选的分配取消和 shell 活动观察。其句柄公开 `pid`、有序输出、`done`、`write`、`resize`、`inspectForeground`、`inspectActivity`、`signalForeground` 和须等待的 `terminate`；[`SubprocessTerminalSpawnSpec` 与 `SubprocessTerminalHandle`](../../packages/subprocess/subprocess/src/types.ts) 定义这些字段和操作。`resize(cols, rows)` 更新正在运行的 PTY 尺寸，进程退出后拒绝调用。
+
+`inspectActivity()` 返回 `SubprocessTerminalActivity`：`state` 为 `idle`、`busy` 或 `unknown`，`revision` 随 provider 观察到的活动或输入变化。终端请求通过 `shellActivity` 启用受支持的 shell 生命周期观察；各 provider 的支持范围和保守返回 unknown 的情况见 [subprocess-local](../../packages/subprocess/subprocess-local/README.zh.md#running-terminal-sessions)。
 
 `terminalEnvironment(signal?)` 返回 `SubprocessTerminalEnvironment`：执行环境平台（`posix` 或 `windows`）与可选的 `defaultShell`。这些事实来自提供方，而非 Web 服务器或浏览器。`resolveExecutable` 验证候选 shell；`SubprocessExecutableNotFoundError` 表示可执行文件不存在，提供方与传输故障仍作为错误报告。
 

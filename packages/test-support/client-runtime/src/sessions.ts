@@ -277,6 +277,17 @@ export class TestSessions implements ISessions {
   }
 
   /**
+   * Publish one complete projection value through the fixture Session face.
+   * @param id - session id.
+   * @param key - registered projection key.
+   * @param value - complete value for that key.
+   */
+  async setProjection(id: string, key: string, value: unknown): Promise<void> {
+    const record = this.require(id)
+    await this.stabilize(() => { record.session.projections.set(key, value) })
+  }
+
+  /**
    * Replace a Session's complete contiguous event window.
    * @param id - Session identity.
    * @param entries - complete event window.

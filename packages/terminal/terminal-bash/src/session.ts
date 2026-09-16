@@ -1,8 +1,8 @@
 /** Persistent PTY session with bounded output, readiness, and terminal-protocol replies. */
 
 import { Buffer } from 'node:buffer'
-import { createRequire } from 'node:module'
 import type { IDisposable, Terminal as HeadlessTerminalType } from '@xterm/headless'
+import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
 import type {
   SubprocessOutcome,
   SubprocessTerminalForeground,
@@ -25,8 +25,7 @@ import type {
 import type { ResolvedConfig } from './config.ts'
 import { CONTROLLED_PROMPT, TerminalSanitizer } from './sanitize.ts'
 
-// Node exposes this package's CommonJS main as default-only, so load its named export through require.
-const { Terminal: HeadlessTerminal } = createRequire(import.meta.url)('@xterm/headless') as typeof import('@xterm/headless')
+const requireHeadless = createLazyRequire<typeof import('@xterm/headless')>('@xterm/headless', import.meta.url)
 
 function utf8Tail(text: string, maxBytes: number): { text: string; truncated: boolean } {
   if (Buffer.byteLength(text) <= maxBytes) return { text, truncated: false }
@@ -281,6 +280,7 @@ export class LocalPtySession implements TerminalBackendSession {
     private readonly config: ResolvedConfig,
   ) {
     this.pid = terminal.pid
+    const { Terminal: HeadlessTerminal } = requireHeadless()
     this.emulator = new HeadlessTerminal({ cols: config.cols, rows: config.rows, scrollback: 0 })
     this.emulatorData = this.emulator.onData((data) => {
       this.pendingResponseWrites += 1

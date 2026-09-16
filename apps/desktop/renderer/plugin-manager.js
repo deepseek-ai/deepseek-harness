@@ -14,9 +14,6 @@ async function main() {
   document.querySelector('#installed-heading').textContent = messages.installed
   document.querySelector('#empty').textContent = messages.noPlugins
 
-  document.querySelector('#recovery-description').textContent = messages.recoveryDescription
-  document.querySelector('#retry').textContent = messages.retry
-  document.querySelector('#disable-all').textContent = messages.disableAll
 
   const list = document.querySelector('#plugins')
   const empty = document.querySelector('#empty')
@@ -24,6 +21,12 @@ async function main() {
   const form = document.querySelector('#install-form')
   const input = document.querySelector('#package-spec')
   const refresh = document.querySelector('#refresh')
+  const updateForm = document.querySelector('#update-form')
+  const updateVersion = document.querySelector('#update-version')
+  let updateName = ''
+  let updateTrigger
+  document.querySelector('#update-submit').textContent = messages.update
+  document.querySelector('#update-cancel').textContent = messages.cancel
 
   function setBusy(busy, statusMessage = '') {
     for (const control of document.querySelectorAll('button, input')) control.disabled = busy
@@ -31,9 +34,6 @@ async function main() {
   }
 
   async function render() {
-    const backend = await api.backend.status()
-    document.querySelector('#recovery').hidden = backend.phase !== 'error'
-    document.querySelector('#startup-error').textContent = backend.phase === 'error' ? backend.message : ''
     const plugins = await api.plugins.list()
     list.replaceChildren(...plugins.map(plugin => {
       const item = document.createElement('li')
@@ -53,9 +53,13 @@ async function main() {
       update.type = 'button'
       update.textContent = messages.update
       update.addEventListener('click', () => {
-        const next = window.prompt(message('targetVersion', { name: plugin.name }), plugin.version)?.trim()
-        if (next === undefined || next === '' || next === plugin.version) return
-        void run(() => api.plugins.update(plugin.name, next), message('updating', { name: plugin.name }))
+        updateName = plugin.name
+        updateTrigger = update
+        document.querySelector('#update-label').textContent = message('targetVersion', { name: plugin.name })
+        updateVersion.value = plugin.version
+        updateForm.hidden = false
+        updateVersion.focus()
+        updateVersion.select()
       })
       const actions = document.createElement('span')
       actions.className = 'package-actions'
@@ -106,8 +110,18 @@ async function main() {
       input.value = ''
     }, message('installing', { spec }))
   })
-  document.querySelector('#retry').addEventListener('click', () => void run(() => api.backend.retry(), messages.retry))
-  document.querySelector('#disable-all').addEventListener('click', () => void run(() => api.plugins.disableAll(), messages.changingActivation))
+  updateForm.addEventListener('submit', (event) => {
+    event.preventDefault()
+    const version = updateVersion.value.trim()
+    if (version === '') return
+    const name = updateName
+    updateForm.hidden = true
+    void run(() => api.plugins.update(name, version), message('updating', { name }))
+  })
+  document.querySelector('#update-cancel').addEventListener('click', () => {
+    updateForm.hidden = true
+    updateTrigger.focus()
+  })
   refresh.addEventListener('click', () => void load(messages.refreshing, messages.refreshed))
 
   await load(messages.loadingPlugins, '')

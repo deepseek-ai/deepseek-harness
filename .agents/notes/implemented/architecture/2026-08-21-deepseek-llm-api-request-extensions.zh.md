@@ -14,13 +14,13 @@ Status: implemented
 
 ## 决策
 
-`@deepseek-ai/dsh-deepseek-llm-api-extensions` 注册 `ctx.deepseekLlmApiExtensions`，即 `deepseek-official` 请求正文顶层字段的增量注册表。贡献方通过 `register()` 认领一个经声明合并的字段。适配器在序列化确切协议消息后调用 `prepare()`、传入请求取消信号，在 HTTP 前拒绝准备失败或基础字段冲突，合并分离字段，并在 HTTP 2xx 后调用捕获的 `accept()` 事务。即使贡献方忽略信号，注册表也会在取消后停止等待准备。接受失败仍以 `REQUEST_EXTENSION` 使请求失败；传输失败与非 2xx 失败绝不会接受贡献。未挂载注册表的组合会保留可复用基础适配器。随附组合会挂载注册表与两个贡献方：插件包元数据默认开启，会话日志上传默认关闭，需要设置 `session-log-deepseek.enabled: true`。无密钥 `deepseek-official` 回放会使用合成的空基础正文执行准备，并在第一个已记录分片前调用同一接受事务；它保持的是 2xx 后扩展副作用，而非字段字节。
+`@deepseek-ai/dsh-deepseek-llm-api-extensions` 注册 `ctx.deepseekLlmApiExtensions`，即 `deepseek-official` 请求正文顶层字段的增量注册表。贡献方通过 `register()` 认领一个经声明合并的字段。适配器在序列化确切协议消息后调用 `prepare()`、传入请求取消信号，在 HTTP 前拒绝准备失败或基础字段冲突，合并分离字段，并在 HTTP 2xx 后调用捕获的 `accept()` 事务。即使贡献方忽略信号，注册表也会在取消后停止等待准备。接受失败仍以 `REQUEST_EXTENSION` 使请求失败；传输失败与非 2xx 失败绝不会接受贡献。未挂载注册表的组合会保留可复用基础适配器。随附组合会挂载注册表与两个贡献方：插件包元数据和会话日志上传均默认开启；按[默认上传决策](2026-09-14-session-log-upload-default.zh.md)，设置 `session-log-deepseek.enabled: false` 可关闭日志上传。无密钥 `deepseek-official` 回放会使用合成的空基础正文执行准备，并在第一个已记录分片前调用同一接受事务；它保持的是 2xx 后扩展副作用，而非字段字节。
 
 提供方无关的 `llm` 包与 `llm-pi-ai` 不包含任何扩展类型、服务查找、字段合并或接受调用。
 
 ## 增量会话日志字段
 
-`@deepseek-ai/dsh-session-log-deepseek` 以显式选择启用的方式拥有 `dsh_session_log`。启用后，每个携带存活会话 id 的请求都会发送该确切会话身份最大持久 `session-log-deepseek/delivery-accepted` 水位之后的连续权威事件后缀。该字段包含不可变会话 header 与完整事件信封。2xx 会为已发送的 `throughSeq` 追加新水位；该事件会进入下一次请求的后缀。Fork 日志会保留父级水位 id，因此子会话会在自己的身份下从序列零开始。并发接受可能乱序到达，最大水位仍保持权威。进程内 fold 会让每条会话事件只被扫描一次，并增量消费后续追加；新的会话对象或 HMR generation 会从持久历史重建该 fold。
+`@deepseek-ai/dsh-session-log-deepseek` 拥有默认开启的 `dsh_session_log` 字段。启用后，每个携带存活会话 id 的请求都会发送该确切会话身份最大持久 `session-log-deepseek/delivery-accepted` 水位之后的连续权威事件后缀。该字段包含不可变会话 header 与完整事件信封。2xx 会为已发送的 `throughSeq` 追加新水位；该事件会进入下一次请求的后缀。Fork 日志会保留父级水位 id，因此子会话会在自己的身份下从序列零开始。并发接受可能乱序到达，最大水位仍保持权威。进程内 fold 会让每条会话事件只被扫描一次，并增量消费后续追加；新的会话对象或 HMR generation 会从持久历史重建该 fold。
 
 失败方向为至少一次。传输失败或提供方拒绝不会记录水位。远端接受后、水位持久化前发生崩溃，会在恢复后触发重放，绝不会跳过序列。现有会话检查点会持久化该事件；上传插件不拥有第二份存储。
 
@@ -50,7 +50,7 @@ Status: implemented
 
 ## 验证
 
-注册表测试固定重复所有权、effect 作用域 dispose（资源释放）、分离字段值、并发且可取消的准备、保留接收者的接受操作、单次接受结算与失败聚合。会话测试固定默认关闭策略、显式启用后的首次完整／后续后缀交付、与基础正文消息无关的直接完整事件信封、增量水位 fold、持久化重启恢复、fork 身份围栏、乱序接受与 invariant 延迟加载。插件包清单测试固定默认开启与显式关闭策略、宿主与 standing preset 发现、冲突的 Loader 解析基址、manifest 解析、生命周期过滤及确切名称／版本排序。直接适配器 mock 测试证明 HTTP 前准备失败、取消、非 2xx 不接受、2xx 在后续流失败前接受，以及字段冲突。无密钥回放会固定 2xx 后扩展接受，TypeScript JSON-RPC 与 Python 打包运行时快照则通过两套 SDK 投影接受事件。真实 Loader 组合会固定默认包元数据与显式启用的会话上传，一个真实 API 请求会挂载两个随附扩展并证明官方端点接受它们；pi-ai 测试保持其协议请求不变。
+注册表测试固定重复所有权、effect 作用域 dispose（资源释放）、分离字段值、并发且可取消的准备、保留接收者的接受操作、单次接受结算与失败聚合。会话测试固定默认开启与显式关闭策略、首次完整／后续后缀交付、与基础正文消息无关的直接完整事件信封、增量水位 fold、持久化重启恢复、fork 身份围栏、乱序接受与 invariant 延迟加载。插件包清单测试固定默认开启与显式关闭策略、宿主与 standing preset 发现、冲突的 Loader 解析基址、manifest 解析、生命周期过滤及确切名称／版本排序。直接适配器 mock 测试证明 HTTP 前准备失败、取消、非 2xx 不接受、2xx 在后续流失败前接受，以及字段冲突。无密钥回放会固定 2xx 后扩展接受，TypeScript JSON-RPC 与 Python 打包运行时快照则通过两套 SDK 投影接受事件。真实 Loader 组合会固定默认包元数据、默认会话上传与显式关闭上传，一个真实 API 请求会挂载两个随附扩展并证明官方端点接受它们；pi-ai 测试保持其协议请求不变。
 
 ## 考虑过的替代方案
 
@@ -85,7 +85,7 @@ Status: implemented
 
 ## 后果
 
-DeepSeek 官方请求会把存活包版本发送到解析后的 `baseURL`，包括已配置 gateway。显式选择启用会话日志后，请求还会携带完整的未接受会话新后缀。这些字段对模型不可见，不增加提示词 token，也不改变 KV Cache，但可能显著增大 HTTP 正文。Manifest 解析、字段冲突、接受记录或提供方 schema 拒绝会使模型请求失败，而不会静默丢弃元数据。
+DeepSeek 官方请求会把存活包版本发送到解析后的 `baseURL`，包括已配置 gateway。除非关闭会话日志上传，否则符合条件的请求还会携带完整的未接受会话新后缀。这些字段对模型不可见，不增加提示词 token，也不改变 KV Cache，但可能显著增大 HTTP 正文。Manifest 解析、字段冲突、接受记录或提供方 schema 拒绝会使模型请求失败，而不会静默丢弃元数据。
 
 `delivery-accepted` 事件会成为权威日志的一部分，并在后续请求中自行交付。崩溃恢复可能重复后缀，但不会根据 assistant 输出推断接受，也不会创建第二份本地游标存储。缺少存活会话的直接调用会省略会话字段；宿主包清单仍然可用。
 

@@ -30,6 +30,7 @@ export type {
   SubprocessStdinMode,
   SubprocessStdio,
   SubprocessTerminalForeground,
+  SubprocessTerminalActivity,
   SubprocessTerminalEnvironment,
   SubprocessTerminalHandle,
   SubprocessTerminalSignal,

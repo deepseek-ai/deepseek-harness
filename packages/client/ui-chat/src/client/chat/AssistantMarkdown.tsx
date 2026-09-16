@@ -58,8 +58,6 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
     return { resolve: value => localPathMediaUrl(protocol, origin, value) }
   }, [])
   const last = blocks.length - 1
-  const hasBodyOrToolCall = blocks.some(block => block.kind === 'tool-call'
-    || (block.kind === 'text' && block.text.trim() !== ''))
   // Tool-call heads render as tool rows in the chat view's grouping pass, so
   // a node that is only those heads (or empty) would paint an empty root
   // between tool groups — skip the shell unless something visible remains.
@@ -91,12 +89,7 @@ export const AssistantMarkdown = memo(function AssistantMarkdown({
             hidden={reasoningHidden}
             reveal={revealProcess}
           >
-            <ReasoningRow
-              text={block.text}
-              running={streaming && i === last}
-              defaultExpanded={!hasBodyOrToolCall && block.text.trim() !== ''}
-              t={t}
-            />
+            <ReasoningRow text={block.text} running={streaming && i === last} t={t} />
           </ProcessReasoning>,
         )
         break

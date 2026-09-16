@@ -1,6 +1,9 @@
 - id: terminal-controller
   config:
     maxTerminals: 2
+    unattendedTimeoutMs: 2000
+    activityPollIntervalMs: 100
+    cleanupRetryMs: 100
     shellCandidates: [/bin/bash, /bin/sh]
     shell:
       path: /bin/bash

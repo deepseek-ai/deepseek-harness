@@ -10,7 +10,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Simplified Chinese terminal copy. */
 export const zh = {
   recoveryFailed: '恢复终端失败：{message}', retryRecovery: '重试恢复终端',
-  shell: 'Shell', start: '启动终端', description: '在会话工作区运行命令',
+  shell: '选择 Shell', shellLoading: '正在读取 Shell…', shellEmpty: '没有可用的 Shell', description: '在会话工作区运行命令',
   title: '终端', new: '新建终端', loading: '正在读取终端环境…', creating: '正在启动…',
   connecting: '正在连接…', disconnected: '连接已断开。', reconnect: '重新连接',
   readonly: '此页面当前只读。', control: '接管输入',
@@ -27,7 +27,7 @@ export const zh = {
 /** English terminal copy. */
 export const en = {
   recoveryFailed: 'Terminal recovery failed: {message}', retryRecovery: 'Retry terminal recovery',
-  shell: 'Shell', start: 'Start terminal', description: 'Run commands in the Session workspace',
+  shell: 'Choose shell', shellLoading: 'Loading shells…', shellEmpty: 'No shells available', description: 'Run commands in the Session workspace',
   title: 'Terminal', new: 'New terminal', loading: 'Reading terminal environment…', creating: 'Starting…',
   connecting: 'Connecting…', disconnected: 'Disconnected.', reconnect: 'Reconnect',
   readonly: 'This view is read-only.', control: 'Take control',

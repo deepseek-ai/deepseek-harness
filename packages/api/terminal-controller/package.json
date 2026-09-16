@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-api-terminal-controller",
   "description": "Session-owned interactive terminals with shell discovery, screen recovery and typed Remote control",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -55,6 +55,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/dsh-deque": "workspace:^",
+    "@deepseek-ai/dsh-lazy-require": "workspace:^",
     "@deepseek-ai/dsh-typert-protocol": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "@xterm/headless": "^6.0.0",

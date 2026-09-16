@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/process/2026-09-12-default-product-experimental-isolation.md
-2026-09-12-default-product-experimental-isolation.md: d2312d6061f372e910bfd625512230ccd48a586a
-2026-09-12-default-product-experimental-isolation.zh.md: 6ea86f1f3e859719ffd8287e66ebe63df77d64c2
+2026-09-12-default-product-experimental-isolation.md: 5c2485e4f737b822088a680b0006f395a5479fa9
+2026-09-12-default-product-experimental-isolation.zh.md: 3a412a491ab8356a4e29d706fed55226dc0f6038

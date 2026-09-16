@@ -39,6 +39,10 @@ dsh Web 客户端的侧边栏让用户识别当前构建、启动新会话、将
 
 实时收起时，展开内容在当前宽度淡出，上方控件共用同一段透明度渐变，并向左平移进入 56px 轨道，由布局的栏滑动结束整段动画。页面初始即为收起状态时会静态渲染轨道；减少动态效果模式会禁用两段过渡。固定在底部的 `sidebar.settings` 控件共用相同的透明度渐变时序，但不发生横向位移。
 
+### macOS 桌面
+
+在 `html[data-platform='darwin']`（仅由桌面 preload 设置）下，展开的侧边栏列顶部有一条 52px 的顶部条：避开 hiddenInset 红绿灯、承载收起按钮，并作为窗口拖拽区；收起时整列隐藏而非保留轨道。本包向会话头部的 `conversation.session.header.leading` 座注册 `HeaderLeadingControls`——打开侧边栏与 New Session 两个控件，纯由 CSS 依据 AppFrame 发布的 `data-sidebar-collapsed` 属性仅在列隐藏时显示。设计依据与窗口集成约定见 [macOS 隐藏标题栏 Agent Note](../../../.agents/notes/implemented/feature/2026-09-13-macos-hidden-titlebar-vibrancy.zh.md)。
+
 ### 滚动条
 
 栏内的滚动条是一种指针可供性：只要指针不在栏内，外壳就把滚动条间接层重新绑定为 `transparent`；指针离开后滑块再保留 2 秒，因此没人指向的列表不会带着滚动条。避免行位移的空间预留属于滚动区域本身（ui-workspace），所以显示滑块不会引起重排。

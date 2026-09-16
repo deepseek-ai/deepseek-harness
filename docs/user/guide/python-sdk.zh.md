@@ -157,7 +157,7 @@ dsh plugin --profile sdk-minimal add file:C:/work/my-plugin-bundle
 | 运行时上下文与 compaction | 不存在 |
 | 会话持久化 | `<dsh_home>/sessions` 下的未压缩 JSONL |
 
-该 profile 的唯一组合包会在空根之上插入完整配置树，且不包含 `dsh-base`，因此基础 profile 以后新增的工具不会隐式出现。它包含 SDK 协议、一个由环境配置的 DeepSeek 适配器、本地执行与持久化；文件系统工具、settings、托管凭据、遥测、Web 工具、subagent、本地指令发现和 compaction 均不存在。它固定使用 `danger-full-access`，因此按平台选择的持久 shell 可以修改运行时可见的任何路径；应使用一次性 checkout 或容器。
+该 profile 的唯一组合包会在空根之上插入完整配置树，且不包含 `dsh-base`，因此基础 profile 以后新增的工具不会隐式出现。它包含 SDK 协议、一个由环境配置的 DeepSeek 适配器、本地执行与持久化；文件系统工具、settings、托管凭据、OTel 遥测、Web 工具、subagent、本地指令发现和 compaction 均不存在。[DeepSeek 会话日志贡献器](../../../packages/session/session-log-deepseek/README.zh.md)默认随 DeepSeek 请求上传完整的未接受日志后缀；在 profile patch 中设置 `session-log-deepseek.enabled: false` 可将其关闭。它固定使用 `danger-full-access`，因此按平台选择的持久 shell 可以修改运行时可见的任何路径；应使用一次性 checkout 或容器。
 
 已安装 wheel 仍会打包完整 `web` profile 与前端产物。如果 Python SDK 部署还需要浏览器应用，请针对显式 `DSH_HOME` 运行 `dsh web`；`web` 是独立 CLI 应用，不能为 Python SDK client 提供服务。
 

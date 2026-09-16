@@ -93,6 +93,8 @@ class FakeTerminal implements SubprocessTerminalHandle {
     this.writes.push(data)
   }
 
+  async inspectActivity() { return { state: 'unknown' as const, revision: 0 } }
+
   async inspectForeground() {
     const processGroupId = this.inspector.foregroundPgid()
     return processGroupId === undefined

@@ -8,13 +8,13 @@ import {
   throwLastError,
 } from '../src/index.ts'
 import { PROCESS_INFORMATION_SIZE, STARTUPINFOW_SIZE } from '../src/abi.ts'
-import { PROCESS_INFORMATION, STARTUPINFOW, errorText } from '../src/ffi.ts'
+import { errorText, processInformationType, startupInfoType } from '../src/ffi.ts'
 import type { NativePtr, Win32ProcessBindings } from '../src/index.ts'
 
 describe('shared Win32 process ABI', () => {
   it('matches the verified x64 structure sizes', () => {
-    expect(STARTUPINFOW.size).toBe(STARTUPINFOW_SIZE)
-    expect(PROCESS_INFORMATION.size).toBe(PROCESS_INFORMATION_SIZE)
+    expect(startupInfoType().size).toBe(STARTUPINFOW_SIZE)
+    expect(processInformationType().size).toBe(PROCESS_INFORMATION_SIZE)
   })
 
   it('handles NULL pointer out-parameters', () => {

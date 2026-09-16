@@ -21,6 +21,7 @@ import * as stream from '../../src/node/builtin_modules/implemented/stream.ts'
 import * as vm from '../../src/node/builtin_modules/mock/vm.ts'
 import * as workerThreads from '../../src/node/builtin_modules/mock/worker_threads.ts'
 import * as nodePty from '../../src/node/external_packages/node-pty.ts'
+import * as execa from '../../src/node/external_packages/execa.ts'
 import * as piAi from '../../src/node/external_packages/pi-ai.ts'
 import * as ripgrep from '../../src/node/external_packages/ripgrep.ts'
 import * as ws from '../../src/node/external_packages/ws.ts'
@@ -43,6 +44,7 @@ const CALLED: [string, Record<string, unknown>, readonly string[]][] = [
   // these three need a real process, so they stay refusals.
   ['node:child_process', childProcess, ['execFileSync', 'execSync', 'fork']],
   ['node-pty', nodePty, ['spawn', 'open']],
+  ['execa', execa, ['execa']],
   ['@deepseek-ai/pi-ai', piAi, [
     'createProvider', 'createModels', 'openAICompletionsApi', 'openAIResponsesApi', 'anthropicMessagesApi',
     'isContextOverflow', 'getSupportedThinkingLevels',

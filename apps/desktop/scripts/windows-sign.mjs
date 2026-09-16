@@ -134,7 +134,7 @@ export function buildWindowsSigningEnvironment(environment, input) {
 }
 
 /**
- * Create the electron-builder hook for a SafeNet-backed Windows code-signing certificate.
+ * Serialize SafeNet signing and stop all queued tasks after the first failure.
  *
  * @param {{ certificateFile?: string, signTool?: string, tokenPin?: string, keyContainer?: string, commandInterpreter?: string }} options Release signing configuration.
  * @returns {(configuration: { path: string, hash: string, isNest: boolean }) => Promise<void>} The signing hook.
@@ -146,39 +146,43 @@ export function createWindowsTokenSigner(options) {
   const commandInterpreter = options.commandInterpreter
     ?? process.env.ComSpec
     ?? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe')
-  return async (configuration) => {
-    if (configuration.hash !== 'sha256') {
-      throw new Error(`Windows release signing requires SHA-256, received ${configuration.hash}`)
-    }
-    await repairDanglingAuthenticodeDirectory(configuration.path)
-    const secrets = [tokenPin]
-    let result
-    try {
-      result = await execFileAsync(commandInterpreter, [
-        '/d',
-        '/v:off',
-        '/c',
-        WINDOWS_SIGN_SCRIPT,
-      ], {
-        cwd: WINDOWS_SIGN_SCRIPT_DIRECTORY,
-        env: buildWindowsSigningEnvironment(process.env, {
-          certificateFile,
-          signTool,
-          path: configuration.path,
-          isNest: configuration.isNest,
-          tokenPin,
-          keyContainer,
-        }),
-        windowsHide: false,
-      })
-    }
-    catch (error) {
-      throw createRedactedWindowsSigningError(error, configuration.path, secrets)
-    }
-    const stdout = redactedSigningOutput(result.stdout, secrets)
-    const stderr = redactedSigningOutput(result.stderr, secrets)
-    if (stdout !== '') process.stdout.write(stdout)
-    if (stderr !== '') process.stderr.write(stderr)
+  let pending = Promise.resolve()
+  return (configuration) => {
+    pending = pending.then(async () => {
+      if (configuration.hash !== 'sha256') {
+        throw new Error(`Windows release signing requires SHA-256, received ${configuration.hash}`)
+      }
+      await repairDanglingAuthenticodeDirectory(configuration.path)
+      const secrets = [tokenPin]
+      let result
+      try {
+        result = await execFileAsync(commandInterpreter, [
+          '/d',
+          '/v:off',
+          '/c',
+          WINDOWS_SIGN_SCRIPT,
+        ], {
+          cwd: WINDOWS_SIGN_SCRIPT_DIRECTORY,
+          env: buildWindowsSigningEnvironment(process.env, {
+            certificateFile,
+            signTool,
+            path: configuration.path,
+            isNest: configuration.isNest,
+            tokenPin,
+            keyContainer,
+          }),
+          windowsHide: true,
+        })
+      }
+      catch (error) {
+        throw createRedactedWindowsSigningError(error, configuration.path, secrets)
+      }
+      const stdout = redactedSigningOutput(result.stdout, secrets)
+      const stderr = redactedSigningOutput(result.stderr, secrets)
+      if (stdout !== '') process.stdout.write(stdout)
+      if (stderr !== '') process.stderr.write(stderr)
+    })
+    return pending
   }
 }
 

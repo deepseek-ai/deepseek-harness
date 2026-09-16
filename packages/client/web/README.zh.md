@@ -27,6 +27,8 @@ kind: "package-library"
 
 组装浏览器应用时使用它：`apps/web` 的 Vite 入口对挂载点运行 `new AppWebEntry(container).run()`，启动页会在激活过程中向用户展示进度。普通浏览器调用方不传任何选项。默认使用预注入的页面传输，除非提供 `seams` 覆盖：当 `globalThis.__DSH_TRANSPORT__` 携带 `loadBundle` 时，模块阶段将其采纳为 bundle 传输并跳过 `immediately` 层级的 HTTP 预取，而显式 `seams` 仍然优先（例如外部 `<script>` 执行无法到达页面上下文的 jsdom 测试）。
 
+静态应用页面在入口运行前安装 `__DSH_BOOT_READY__`。`run()` 等待期间会立即显示启动页；页面所有者通过 `applyIndexInjections`（也从 `./injections` 导出）应用 Host 注入项，并在所有脚本完成后兑现延迟对象。延迟对象拒绝时显示启动失败；若调用方提供 `run(onFailure)`，则由外部呈现错误并保留加载页。Desktop 使用该回调请求原生恢复。Desktop 与 WebWorker 共享注入解释器；服务端 `tapIndex` HTML 转换仅适用于服务端提供的文档。
+
 外壳基础样式会在支持的浏览器中为普通内容自动添加中西文间距。语义化代码以及终端、diff、读取和搜索输出容器会保留源码中的原始间距和列对齐；不支持 `text-autospace` 的浏览器会忽略这两项声明。
 
 ### 启动过程是怎样的
@@ -66,6 +68,8 @@ kind: "package-library"
 ### 启动页机制
 
 启动页是原生 DOM 加本地 CSS，其回退字体与颜色匹配加载期间到达的主题 token。`internal/status` 事件驱动一个 spinner 节点与逐 entry 标签；hydrate 会保留该节点与动画相位直到应用提交，`fail()` 渲染抛出的原因。React 挂载、slot 渲染与应用组装位于 `ui-renderer`；`ui-layout` 拥有组装后的浏览器标题投影。
+
+启动内核把清单条目创建交给 Client Modules，使启动后的动态图同步继续持有相同的条目身份。初始激活审计仍然严格；后续页面本地失败显示在「设置 → 插件 → 插件列表」。
 
 ### 源码地图
 

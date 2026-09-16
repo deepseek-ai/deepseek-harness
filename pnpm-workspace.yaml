@@ -15,6 +15,7 @@ packages:
   - python/sdk-runtime
 
 overrides:
+  'extract-zip>yauzl': '3.4.0'
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
 
@@ -55,15 +56,15 @@ minimumReleaseAgeExclude:
   # point of bumping it; waiting out the release age would defeat that.
   - '@earendil-works/pi-ai@0.85.1'
   - '@earendil-works/pi-telemetry@0.85.1'
-  - node-addon-native-custom-loader@0.1.4
-  - node-addon-require-builtin-darwin-arm64@0.1.4
-  - node-addon-require-builtin-darwin-x64@0.1.4
-  - node-addon-require-builtin-linux-arm64-gnu@0.1.4
-  - node-addon-require-builtin-linux-x64-gnu@0.1.4
-  - node-addon-require-builtin-win32-arm64-msvc@0.1.4
-  - node-addon-require-builtin-win32-ia32-msvc@0.1.4
-  - node-addon-require-builtin-win32-x64-msvc@0.1.4
-  - node-addon-require-builtin@0.1.4
+  - node-addon-native-custom-loader@0.1.6
+  - node-addon-require-builtin-darwin-arm64@0.1.6
+  - node-addon-require-builtin-darwin-x64@0.1.6
+  - node-addon-require-builtin-linux-arm64-gnu@0.1.6
+  - node-addon-require-builtin-linux-x64-gnu@0.1.6
+  - node-addon-require-builtin-win32-arm64-msvc@0.1.6
+  - node-addon-require-builtin-win32-ia32-msvc@0.1.6
+  - node-addon-require-builtin-win32-x64-msvc@0.1.6
+  - node-addon-require-builtin@0.1.6
   # The active pnpm supply-chain policy blocks this reviewed runtime closure
   # until its release-age window expires unless every exact package is exempt.
   - '@anthropic-ai/claude-agent-sdk-darwin-arm64@0.3.263'
@@ -86,7 +87,6 @@ minimumReleaseAgeExclude:
   - '@trycua/cua-driver-win32-arm64-msvc@0.28.0'
   - '@trycua/cua-driver-win32-x64-msvc@0.28.0'
   - '@trycua/cua-driver@0.28.0'
-
 patchedDependencies:
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch

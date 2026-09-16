@@ -45,11 +45,11 @@ export async function bootClient(options: ClientBootOptions): Promise<void> {
   })
 
   const rows = manifest.plugins.map(row => row.id)
-  await Promise.all(rows.map(async (name) => {
-    onEntryState?.(name, 'loading')
-    const id = await loader.create({ name })
-    if (loader.resolve(id).fiber === undefined) onEntryState?.(name, 'failed')
-  }))
+  for (const name of rows) onEntryState?.(name, 'loading')
+  await options.modules.entries.start(loader, manifest)
+  for (const entry of loader.entries()) {
+    if (entry.fiber === undefined) onEntryState?.(entry.options.name, 'failed')
+  }
 
   await loader.await()
   assertEntriesActive(ctx)

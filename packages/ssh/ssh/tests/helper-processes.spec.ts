@@ -78,7 +78,7 @@ function terminal() {
   const terminate = vi.fn(async () => { output.end(); completion.resolve(outcome) })
   const resize = vi.fn(async (_cols: number, _rows: number) => {})
   const handle: SubprocessTerminalHandle = {
-    resize,
+    resize, inspectActivity: async () => ({ state: 'unknown', revision: 0 }),
     pid: 42, output, done: completion.promise, write, inspectForeground, signalForeground, terminate,
   }
   return { handle, completion, output, write, resize, inspectForeground, signalForeground, terminate }
@@ -389,4 +389,24 @@ describe.skipIf(process.platform === 'win32')('SSH helper process settlement', (
       await expect(test.owner.done(run.id)).resolves.toMatchObject({ outcome })
     } finally { await test.close() }
   })
+})
+
+it.skipIf(process.platform === 'win32')('keeps opted-in terminal reservations after root exit until owned cleanup succeeds', async () => {
+  const test = await harness()
+  const child = terminal()
+  test.spawnTerminal.mockResolvedValueOnce(child.handle)
+  try {
+    const run = await test.prepare({ ...terminalRequest, terminal: { ...terminalRequest.terminal, shellActivity: true } })
+    run.channels.terminal!.end()
+    run.channels.terminal!.resume()
+    await test.owner.start(run.id)
+    child.output.end()
+    child.completion.resolve(outcome)
+    await expect(test.owner.done(run.id)).resolves.toEqual({ outcome, spills: {}, collected: {} })
+    expect(child.terminate).not.toHaveBeenCalled()
+    expect(await test.owner.terminal(run.id, 'activity')).toEqual({ state: 'unknown', revision: 0 })
+    await test.owner.terminate(run.id)
+    expect(child.terminate).toHaveBeenCalledOnce()
+    await expect.poll(async () => await readdir(test.root)).toEqual([])
+  } finally { await test.close() }
 })

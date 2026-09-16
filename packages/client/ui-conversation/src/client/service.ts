@@ -24,7 +24,8 @@ import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
   ComposerAttachment, ComposerFileAttachment, ComposerImageAttachment, DraftFileUpload,
 } from './contract/slots.ts'
-import type { QueueAction, QueueItemId } from './contract/queue.ts'
+import type { QueueAction } from '@deepseek-ai/dsh-api-session-controller/types'
+import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { ComposerBlocks } from './contract/composer-blocks.ts'
 import type {
   DraftAttachmentId, DraftAttachmentSerializationResult, SessionInputResolver, SubmitAttachment, SubmitOutcome,
@@ -56,7 +57,7 @@ export interface IConversation {
    * @param action - requested queue operation.
    * @returns completion; converged QueueDock races resolve, while other failures reject.
    */
-  updateQueue(itemId: QueueItemId, action: QueueAction): Promise<void>
+  updateQueue(itemId: MessageId, action: QueueAction): Promise<void>
   /**
    * Cancel the scoped session's in-flight turn while preserving its pending Queue.
    * @returns completion; failures reject as in send.
@@ -491,7 +492,7 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /** Apply one operation to a pending queue occurrence. */
-  async updateQueue(itemId: QueueItemId, action: QueueAction): Promise<void> {
+  async updateQueue(itemId: MessageId, action: QueueAction): Promise<void> {
     const session = this.scopedSession('updateQueue')
     const result = await session.updateQueue(itemId, action)
     if (!result.ok) {

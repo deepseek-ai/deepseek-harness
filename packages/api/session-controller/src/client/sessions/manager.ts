@@ -8,7 +8,6 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
 import type {
   SessionControlBaseline,
   SessionControlFrame,
-  SessionQueuedItem,
   SessionSummary,
   SessionJob as JobView,
 } from '../../types.ts'
@@ -96,8 +95,6 @@ export class SessionManager {
   private readonly sessions = new Map<SessionId, Session>()
   /** In-flight Session disposals remain here after instances leave `sessions`, so manager disposal can await quiescence. */
   private readonly sessionDisposals = new Set<Promise<void>>()
-  /** Latest transient queues, retained independently of Session object materialization. */
-  private readonly queues = new Map<SessionId, readonly SessionQueuedItem[]>()
   /**
    * Sessions that finished running while not selected — the sidebar's green
    * "done" reminder (manager-owned, survives connection generations; cleared
@@ -117,7 +114,7 @@ export class SessionManager {
   private listPhase: SessionListPhase = 'pending'
   private listError: RemoteFailure | null = null
   private listInflight: Promise<void> | null = null
-  /** Mutations arriving after a list request starts are replayed over its response. */
+  /** Active list request's mutation log; its identity also fences completion after reconnect. */
   private listMutations: SessionListMutation[] | null = null
   private readonly addresses = new Map<SessionId, SubagentAddress>()
   private readonly catalogs = new Map<SessionId, SubagentCatalogSnapshot>()
@@ -290,11 +287,6 @@ export class SessionManager {
     if (session === undefined) {
       session = this.createSession(sessionId)
       this.sessions.set(sessionId, session)
-      // Install the latest control baseline before the running-bit sync: a
-      // not-running summary must sweep replayed queue
-      // rows the same way a live status flip would (their retirement events dropped
-      // while the session was uninstantiated).
-      session.replaceControl(this.queues.get(sessionId) ?? [])
       // Sync the running and blank bits from the list snapshot into the new
       // instance (consistency when the list precedes open).
       const summary = this.summaries.find(s => s.sessionId === sessionId)
@@ -449,7 +441,7 @@ export class SessionManager {
 
   // ---- List API ----
 
-  /** Full refresh via session.list (single-flight: an in-flight call is reused). */
+  /** Full refresh via session.list (single-flight within one Host generation). */
   refreshList(): Promise<void> {
     if (this.listInflight !== null) return this.listInflight
     this.listState = 'loading'
@@ -461,6 +453,7 @@ export class SessionManager {
     this.listInflight = (async () => {
       try {
         const result = await this.remote.session.list({})
+        if (this.listMutations !== mutations) return
         if (result.ok) {
           const baseline: SessionSummary[] = this.listPhase === 'pending'
             ? [...result.value.items]
@@ -510,12 +503,15 @@ export class SessionManager {
         }
       } catch (error) {
         if (!isRemoteFailure(error)) throw error
+        if (this.listMutations !== mutations) return
         this.listState = 'error'
         this.listError = error
       } finally {
-        this.listMutations = null
-        this.listInflight = null
-        this.notifier.markDirty()
+        if (this.listMutations === mutations) {
+          this.listMutations = null
+          this.listInflight = null
+          this.notifier.markDirty()
+        }
       }
     })()
     return this.listInflight
@@ -669,22 +665,12 @@ export class SessionManager {
       this.notifier.markDirty()
       return
     }
-    if (frame.type === 'jobs') {
-      if (frame.jobs.length === 0) this.jobsBySession.delete(frame.sessionId)
-      else this.jobsBySession.set(frame.sessionId, frame.jobs)
-      this.notifier.markDirty()
-      return
-    }
-    this.queues.set(frame.sessionId, frame.items)
-    this.sessions.get(frame.sessionId)?.handleControlFrame(frame)
+    if (frame.jobs.length === 0) this.jobsBySession.delete(frame.sessionId)
+    else this.jobsBySession.set(frame.sessionId, frame.jobs)
+    this.notifier.markDirty()
   }
 
   private replaceControlBaseline(baseline: SessionControlBaseline): void {
-    this.queues.clear()
-    for (const [sessionId, items] of Object.entries(baseline.queues)) {
-      this.queues.set(sessionId as SessionId, items)
-    }
-
     this.jobsBySession.clear()
     for (const [sessionId, jobs] of Object.entries(baseline.jobs)) {
       if (jobs.length > 0) this.jobsBySession.set(sessionId as SessionId, jobs)
@@ -693,11 +679,7 @@ export class SessionManager {
     for (const [sessionId, block] of Object.entries(baseline.projections)) {
       const store = this.projectionStore(sessionId as SessionId)
       const asOfSeq = sessionSeqCursor(block.asOfSeq)
-      store.truncate(asOfSeq)
       store.seed({ ...block, asOfSeq })
-    }
-    for (const [sessionId, session] of this.sessions) {
-      session.replaceControl(this.queues.get(sessionId) ?? [])
     }
     this.notifier.markDirty()
   }
@@ -738,7 +720,6 @@ export class SessionManager {
     this.updateCatalogActivity(sessionId, false)
     if (durableSubagent) this.sessions.get(sessionId)?.handleRunning(false)
     else this.sessions.get(sessionId)?.handleRemoved()
-    this.queues.delete(sessionId)
     this.jobsBySession.delete(sessionId)
     if (!durableSubagent) this.projectionStores.delete(sessionId)
     const inflightCatalog = this.catalogInflight.get(sessionId)
@@ -788,9 +769,14 @@ export class SessionManager {
 
   /**
    * Repair one re-established Host-event generation with queryable baselines.
+   * Discard old projection cuts before new queries, including cold Sessions
+   * absent from the process-local control baseline.
    * Opened Session follow streams resume independently through API Gateway.
    */
   handleConnected(): void {
+    for (const store of this.projectionStores.values()) store.clear()
+    this.listMutations = null
+    this.listInflight = null
     void this.refreshList()
     const selectedAddress = this.selected === undefined ? undefined : this.addresses.get(this.selected)
     if (selectedAddress !== undefined) void this.refreshSubagents(selectedAddress.parentSessionId)
@@ -934,14 +920,15 @@ export class SessionManager {
       this.entryCache.set(entry.sessionId, entry)
       return entry
     })
+    const itemIds = new Set(items.map(entry => entry.sessionId))
     for (const id of this.entryCache.keys()) {
-      if (!items.some(e => e.sessionId === id)) this.entryCache.delete(id)
+      if (!itemIds.has(id)) this.entryCache.delete(id)
     }
     const sameOrder = items.length === this.itemsCache.length && items.every((e, i) => e === this.itemsCache[i])
     if (!sameOrder) this.itemsCache = items
     const selected = this.selected
     const current = selected !== undefined
-      && (items.some(item => item.sessionId === selected) || this.addresses.has(selected))
+      && (itemIds.has(selected) || this.addresses.has(selected))
       ? selected
       : undefined
     return {

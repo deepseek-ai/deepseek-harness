@@ -54,3 +54,17 @@
   width: 100%;
   min-height: 100%;
 }
+
+.loadingIcon {
+  display: flex;
+  flex: none;
+  animation: turn 0.8s linear infinite;
+}
+
+@keyframes turn {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loadingIcon { animation: none; }
+}

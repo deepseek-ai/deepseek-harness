@@ -5,7 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { withFileLock, writeFileAtomic } from '../src/index.ts'
 
 const state = vi.hoisted(() => ({
-  failLockCreateWithEPERM: false,
+  lockPermissionFailures: 0,
+  releaseLockBeforeProbe: false,
   renameAttempts: 0,
   renameFailures: [] as string[],
 }))
@@ -24,8 +25,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       return actual.rename(...args)
     }),
     writeFile: (async (path: unknown, ...rest: never[]) => {
-      if (state.failLockCreateWithEPERM && String(path).endsWith('.lock')) {
-        state.failLockCreateWithEPERM = false
+      if (state.lockPermissionFailures > 0 && String(path).endsWith('.lock')) {
+        state.lockPermissionFailures -= 1
+        if (state.releaseLockBeforeProbe) await actual.rm(String(path))
         throw Object.assign(new Error('EPERM: injected exclusive-create failure'), { code: 'EPERM' })
       }
       return (actual.writeFile as (path: unknown, ...args: never[]) => Promise<void>)(path, ...rest)
@@ -38,7 +40,8 @@ const scratchDirs: string[] = []
 afterEach(async () => {
   vi.useRealTimers()
   vi.restoreAllMocks()
-  state.failLockCreateWithEPERM = false
+  state.lockPermissionFailures = 0
+  state.releaseLockBeforeProbe = false
   state.renameAttempts = 0
   state.renameFailures.length = 0
   await Promise.all(scratchDirs.splice(0).map(dir => rm(dir, {
@@ -165,7 +168,7 @@ describe('withFileLock', () => {
     const lockPath = `${target}.lock`
     await writeFile(lockPath, 'holder\n')
     const release = setTimeout(() => { void rm(lockPath, { force: true }) }, 50)
-    state.failLockCreateWithEPERM = true
+    state.lockPermissionFailures = 1
     let called = false
 
     try {
@@ -176,13 +179,28 @@ describe('withFileLock', () => {
     expect(called).toBe(true)
   })
 
-  it('preserves EPERM when no lock path exists', async () => {
+  it.each(['win32', 'linux'] as const)('preserves persistent EPERM on %s when no lock path exists', async (platform) => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
     const dir = await scratch()
     const operation = vi.fn(async () => {})
-    state.failLockCreateWithEPERM = true
+    state.lockPermissionFailures = 2
 
     await expect(withFileLock(join(dir, 'document'), operation)).rejects.toMatchObject({ code: 'EPERM' })
     expect(operation).not.toHaveBeenCalled()
+  })
+
+  it('acquires the Windows lock when its holder releases before the contention probe', async () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    const dir = await scratch()
+    const target = join(dir, 'document')
+    await writeFile(`${target}.lock`, 'holder\n')
+    state.lockPermissionFailures = 1
+    state.releaseLockBeforeProbe = true
+    const operation = vi.fn(async () => 'acquired')
+
+    await expect(withFileLock(target, operation)).resolves.toBe('acquired')
+    expect(operation).toHaveBeenCalledOnce()
+    expect(await readdir(dir)).toEqual([])
   })
 
   it('rejects an invalid parent hierarchy before running the operation', async () => {

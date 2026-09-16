@@ -144,8 +144,9 @@ export interface FileLockOptions {
  * rename-based commit of {@link writeFileAtomic}, readers stay lock-free and
  * only writers contend. `EEXIST` is contention directly; an `EPERM` is
  * contention only when a fresh `lstat` confirms the lock path exists, covering
- * Windows exclusive-create behavior without hiding an unrelated permission
- * failure. Contention backs off exponentially and fails with a timed-out error
+ * Windows exclusive-create behavior. Windows retries one unconfirmed EPERM
+ * because the holder can release before the probe; a repeated unconfirmed
+ * permission error is rethrown. Contention backs off exponentially and times out
  * after the deadline. The contender never removes an existing lock because
  * file age cannot prove that its owner stopped; orphan recovery is an operator
  * action. The parent directory must exist.
@@ -162,12 +163,19 @@ export async function withFileLock<T>(
   const lockPath = `${filename}.lock`
   const deadline = Date.now() + (options?.waitMs ?? DEFAULT_LOCK_WAIT_MS)
   let delay = LOCK_RETRY_INITIAL_MS
+  let retriedUnconfirmedPermissionError = false
   for (;;) {
     try {
       await writeFile(lockPath, `${process.pid}\n`, { mode: 0o600, flag: 'wx' })
       break
     } catch (error) {
-      if (!await isLockContention(error, lockPath)) throw error
+      if (!await isLockContention(error, lockPath)) {
+        // Windows can release the competing lock between exclusive create and lstat.
+        if (process.platform !== 'win32'
+          || (error as NodeJS.ErrnoException | null)?.code !== 'EPERM'
+          || retriedUnconfirmedPermissionError) throw error
+        retriedUnconfirmedPermissionError = true
+      }
     }
     if (Date.now() >= deadline) {
       throw new Error(`atomic-write: timed out waiting for the writer lock at ${lockPath}`)

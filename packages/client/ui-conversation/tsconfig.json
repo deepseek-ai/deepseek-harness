@@ -48,6 +48,9 @@
       "path": "../ui-session"
     },
     {
+      "path": "../../core/agent"
+    },
+    {
       "path": "../../core/session"
     },
     {

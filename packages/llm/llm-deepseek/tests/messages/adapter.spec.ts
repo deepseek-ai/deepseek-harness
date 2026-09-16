@@ -91,6 +91,24 @@ describe('direct Messages HTTP', () => {
     expect(llm.imageRequestPricing('deepseek-official', MODEL)).toBeDefined()
   })
 
+  it.each([
+    ['https://provider.example', 'https://provider.example/v1/messages'],
+    ['https://provider.example/v1/', 'https://provider.example/v1/messages'],
+    ['https://provider.example/v1beta', 'https://provider.example/v1beta/v1/messages'],
+    ['https://provider.example/v2', 'https://provider.example/v2/v1/messages'],
+    ['https://provider.example/anthropic', 'https://provider.example/anthropic/v1/messages'],
+    ['https://v1.provider.example', 'https://v1.provider.example/v1/messages'],
+  ])('resolves the Messages endpoint from %s', async (baseURL, expected) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(sse(textEvents), {
+      headers: { 'content-type': 'text/event-stream' },
+    }))
+    vi.stubGlobal('fetch', fetchImpl)
+
+    await chunks(adapter({ baseURL }).stream(options()))
+
+    expect(fetchImpl.mock.calls[0]?.[0]).toBe(expected)
+  })
+
   it.each([true, false])('maps non-2xx responses (JSON=%s)', async (json) => {
     const http = await endpoint((response) => { response.statusCode = 429; response.setHeader('retry-after', '3'); response.end(json ? JSON.stringify({ error: { type: 'rate_limit_error', message: 'slow down' } }) : '<html>busy</html>') })
     await expect(chunks(adapter({ baseURL: http.url }).stream(options()))).rejects.toMatchObject({ code: 'RATE_LIMIT', failure: { status: 429, providerRetryAfterMs: 3000 } })

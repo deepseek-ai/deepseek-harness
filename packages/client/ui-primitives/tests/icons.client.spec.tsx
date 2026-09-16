@@ -17,8 +17,8 @@ const icons = Object.fromEntries(
 const iconNames = Object.keys(icons)
 
 describe('ic_ds_ icon set', () => {
-  it('exports the full icon set (46 deepsuite + 21 figma extracts + twelve product glyphs outside those sets)', () => {
-    expect(iconNames.length).toBe(79)
+  it('exports the full icon set (46 deepsuite + 21 figma extracts + fourteen product glyphs outside those sets)', () => {
+    expect(iconNames.length).toBe(81)
     // The composer menu's own glyphs, pinned by name.
     expect(iconNames).toEqual(expect.arrayContaining(['IconPlanOutline14', 'IconCompactOutline16', 'IconShieldOutline16']))
   })

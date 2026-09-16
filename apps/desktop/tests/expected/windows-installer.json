@@ -1,0 +1,18 @@
+{
+  "launchCheckboxState": 1,
+  "nativeProgressVisible": false,
+  "cases": [
+    "enter-validates-current-path-and-unchecked-launch",
+    "completion-preserves-window-position",
+    "welcome-ready-before-first-show",
+    "successful-install-paints-100-before-finish",
+    "registered-directory-with-trailing-separators",
+    "registered-directory-and-checked-launch",
+    "launch-failure-retry-and-prompt-dismissal",
+    "progress-remains-monotonic-across-native-resets",
+    "running-app-preserved-and-native-progress-hidden",
+    "silent-update-retains-directory-and-ignores-unrelated-process",
+    "invalid-destination-rejection",
+    "uninstall"
+  ]
+}

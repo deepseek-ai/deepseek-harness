@@ -99,7 +99,7 @@ Slot scope is the closed set `root | session-maybe | session`:
 - Concurrent discipline: the render plane reads only from the hooks compartment (uSES consistency guarantee); props-compartment callbacks are used only in event-handler space; descriptor resolution is render-safe (idempotent caching, with prune reaping residue from abandoned renders).
 - Third-party components take zero value dependencies; types are a one-line type-only import (declaration merging into `SessionStandardProps` / `SessionMaybeStandardProps`).
 
-### The read-only queue mirror
+### Input delivery
 
 - Queue semantics: running does not lock input; ordinary messages queue through `session.prompt {mode:'queue'}`, and commands never queue.
 

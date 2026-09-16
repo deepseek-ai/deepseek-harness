@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-resources",
   "description": "Unified client resource model: protocol-registered providers turn URL addresses into live values, consumed through the useResource global standard hook",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },

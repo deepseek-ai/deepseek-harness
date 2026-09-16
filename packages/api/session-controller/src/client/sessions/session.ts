@@ -1,6 +1,7 @@
 // Sessions remain resident after creation so their open Remote sources keep running off-screen.
 
 import type { Context } from '@deepseek-ai/cordis'
+import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import { randomUUID } from '@deepseek-ai/dsh-util-crypto'
 import type { AttachmentIdType, FileAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
@@ -13,9 +14,7 @@ import type {
   QueueAction,
   SessionAddress,
   SessionAssistantStreamBaseline,
-  SessionControlFrame,
   SessionProjectionBaseline,
-  SessionQueuedItem,
   SessionRequestId,
 } from '../../types.ts'
 import type {
@@ -36,7 +35,6 @@ import type { SessionRemotes } from './remotes.ts'
 import { ProjectionValueStore } from './projection-store.ts'
 import type { ProjectionsBaseline } from './projection-store.ts'
 import { resolvedClientTimeZone } from '../time-zone.ts'
-import { SessionQueueMirror } from './queue-mirror.ts'
 import {
   ClientAssistantStream,
   type ClientAssistantStreamResult,
@@ -99,8 +97,7 @@ export class Session implements SessionFace {
   private jumpTargetSeq: SessionSeq | null = null
   /** The running jump loop's completion, shared by retargeting callers. */
   private jumpPromise: Promise<void> | null = null
-  /** Authoritative stream-only inbox snapshot; pending work never hits history. */
-  private readonly queueMirror = new SessionQueueMirror()
+  private readonly stopObservingInbox: () => void
   private readonly assistantStream = new ClientAssistantStream()
   private running = false
   private address: SubagentAddress | undefined
@@ -121,7 +118,7 @@ export class Session implements SessionFace {
   /** Local submission echoes, insertion-ordered (see SessionSnapshot.pendingSubmissions). */
   private pendingSubmissions: readonly PendingSubmission[] = []
   /** Per-echo settlement state; `retiring` latches the first observation so a
-   *  queue frame and its durable event cannot both retire one echo. */
+   *  Inbox projection and its durable event cannot both retire one echo. */
   private readonly submissionSettlements = new Map<SessionRequestId, {
     readonly onRetire?: ((retirement: PendingSubmissionRetirement) => void) | undefined
     retiring: boolean
@@ -173,6 +170,9 @@ export class Session implements SessionFace {
       this.snapshotCache = this.buildSnapshot()
     })
     this.snapshotCache = this.buildSnapshot()
+    this.stopObservingInbox = this.projections.faceOf('inbox').subscribe(() => {
+      this.observeSubmissionInbox()
+    })
   }
 
   /**
@@ -453,7 +453,7 @@ export class Session implements SessionFace {
   }
 
   /** Rebuild an opened history source after address replacement.
-   *  Invalidates any in-flight open first; queue state belongs to the independently
+   *  Invalidates any in-flight open first; projection state belongs to the independently
    *  reconnecting control stream and remains untouched. */
   async resync(): Promise<void> {
     if (this.openState === 'cold') return // never opened: no window to rebuild (doOpen flips to 'loading' synchronously, so cold implies no in-flight open)
@@ -490,26 +490,6 @@ export class Session implements SessionFace {
   }
 
   // ---- Manager-only entry points (@internal; never called by the UI) ----
-
-  /**
-   * Replace every transient control value for this Session from one stream baseline.
-   * @param queue - complete pending queue for this Session.
-   */
-  replaceControl(queue: readonly SessionQueuedItem[]): void {
-    this.queueMirror.replace(queue)
-    this.observeSubmissionQueue(queue)
-    this.notifier.markDirty()
-  }
-
-  /**
-   * Apply one Session-addressed live control update.
-   * @param frame - queue replacement addressed to this Session.
-   */
-  handleControlFrame(frame: Extract<SessionControlFrame, { type: 'queue' }>): void {
-    this.queueMirror.replace(frame.items)
-    this.observeSubmissionQueue(frame.items)
-    this.notifier.markDirty()
-  }
 
   /**
    * Running-bit relay from the host stream (list entry and snapshot stay consistent).
@@ -588,6 +568,7 @@ export class Session implements SessionFace {
    * @returns when the Remote iterator has completed teardown.
    */
   async dispose(): Promise<void> {
+    this.stopObservingInbox()
     // Unsettled echoes retire as failed so their owners can restore or
     // release browser resources; echoes already scheduled as observed keep
     // that settlement.
@@ -713,18 +694,25 @@ export class Session implements SessionFace {
     const event = entry.event
     const awaitingFirstTurn = this.firstPromptPendingTurn
     if (event.type === 'turn/start') this.firstPromptPendingTurn = false
-    const queueChanged = this.queueMirror.acceptDurable(event)
     this.eventSource.append(entry)
     // After the feed append: the conversation assembly's animation frame is
     // registered by the feed subscribers above, so the echo-retirement frame
     // scheduled here always runs after the durable node became renderable.
     this.observeSubmissionEvent(event)
-    return queueChanged || awaitingFirstTurn !== this.firstPromptPendingTurn
+    return awaitingFirstTurn !== this.firstPromptPendingTurn
   }
 
-  /** Retire the matching echo when a durable browser-prompt `user/message` becomes visible. */
+  /** Observe durable acceptance even when insertion and claim share one projection notification. */
   private observeSubmissionEvent(event: { readonly type: string; readonly data?: unknown }): void {
-    if (this.submissionSettlements.size === 0 || event.type !== 'user/message') return
+    if (this.submissionSettlements.size === 0) return
+    if (event.type === 'agent/inbox/spliced') {
+      const splice = event.data as { readonly inserted?: unknown } | undefined
+      if (Array.isArray(splice?.inserted)) {
+        for (const message of splice.inserted) this.observeSubmissionEvent({ type: 'user/message', data: message })
+      }
+      return
+    }
+    if (event.type !== 'user/message') return
     // Structural read: window entries may be compact history records, so the
     // fields are narrowed rather than trusted (same posture as Conversation
     // assembly matchers).
@@ -734,12 +722,15 @@ export class Session implements SessionFace {
     this.scheduleObservedRetirement(source.rpcId as SessionRequestId, attachmentRefsIn(data?.content))
   }
 
-  /** Retire echoes whose prompts landed in the host inbox instead of the log (running-turn submissions). */
-  private observeSubmissionQueue(items: readonly SessionQueuedItem[]): void {
+  /** Retire local echoes when their accepted messages appear in the durable Inbox projection. */
+  private observeSubmissionInbox(): void {
     if (this.submissionSettlements.size === 0) return
-    for (const item of items) {
-      if (item.rpcId !== undefined) {
-        this.scheduleObservedRetirement(item.rpcId, attachmentRefsIn(item.message.content))
+    const inbox = this.projections.get('inbox') as InboxState | undefined
+    if (inbox === undefined) return
+    for (const message of [...inbox['next-turn'], ...inbox['next-step']]) {
+      const source = message.source
+      if (source.kind === 'user' && 'rpcId' in source) {
+        this.scheduleObservedRetirement(source.rpcId, attachmentRefsIn(message.content))
       }
     }
   }
@@ -795,7 +786,6 @@ export class Session implements SessionFace {
   private buildSnapshot(): SessionSnapshot {
     return {
       sessionId: this.sessionId,
-      queue: this.queueMirror.snapshot(),
       pendingSubmissions: this.pendingSubmissions,
       running: this.running,
       subagent: this.address === undefined

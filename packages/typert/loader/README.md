@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-With `dsh-typert-loader` mounted, every package that mounts in a Loader composition automatically contributes its generated Typert reflection and schemas to the runtime registry — and withdraws them when the package or the plugin unmounts. Packages without the generated export are skipped, so adding the plugin to any composition is safe. An explicit `packages` list covers plugins nested behind another Loader entry, whose fibers carry no resolvable package specifier. It is a Node-only plugin and needs the config-tree resolution anchor to resolve packages.
+With `dsh-typert-loader` mounted, every package that mounts in a Loader composition automatically contributes its generated Typert reflection and schema factories to the runtime registry — and withdraws them when the package or the plugin unmounts. Packages without the generated export are skipped, so adding the plugin to any composition is safe. An explicit `packages` list covers plugins nested behind another Loader entry, whose fibers carry no resolvable package specifier. It is a Node-only plugin and needs the config-tree resolution anchor to resolve packages.
 
 ## Table of Contents
 
@@ -44,7 +44,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### What gets registered
 
-Each qualifying Loader entry contributes its generated host-face reflection and schemas to the runtime registry. Registration follows the entry lifecycle: it is withdrawn when the entry or the plugin unmounts, and an import that settles after either owner is gone is discarded.
+Each qualifying Loader entry contributes its generated host-face reflection and schema factories to the runtime registry. Registration follows the entry lifecycle: it is withdrawn when the entry or the plugin unmounts, and an import that settles after either owner is gone is discarded.
 
 ### Observable behavior and failures
 
@@ -66,7 +66,7 @@ The plugin is an incremental scanner mirroring the client-modules node half: eve
 
 ### Manifest validation
 
-`validateTypertManifest()` is the module/file boundary: the manifest crosses from a build artifact into the typed registry, so every field is checked. The manifest must name the package that exports it, carry face `host`, hold zod v4 schema instances, and keep well-formed service, event, object, member, type, and documentation records; invocation descriptors must use strict codecs. Every failure names the package and the defect.
+`validateTypertManifest()` is the module/file boundary: the manifest crosses from a build artifact into the typed registry, so every field is checked. The manifest must name the package that exports it, carry face `host`, hold schema factories, and keep well-formed service, event, object, member, type, and documentation records; invocation descriptors must use strict codecs with factories. Every failure names the package and the defect.
 
 ### Caching and ownership
 

@@ -185,6 +185,6 @@ export class Entry {
     const plugin = this.loader.unwrapExports(exports)
     this._patchContext([])
     this.loader.showLog(this, 'apply')
-    this.fiber = this.ctx.registry.plugin(plugin, this.options.config, this.getOuterStack)
+    this.fiber = this.ctx.registry.plugin(plugin, this.options.config, this.getOuterStack).ctx.fiber
   }
 }

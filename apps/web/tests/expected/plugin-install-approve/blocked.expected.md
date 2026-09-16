@@ -1,0 +1,22 @@
+- dialog "插件安装失败":
+  - button "返回编辑":
+    - img
+    - text: 编辑
+  - button "关闭":
+    - img
+  - alert: 插件安装失败
+  - paragraph: 有依赖的安装脚本需要你允许后才能继续
+  - paragraph: native-package
+  - paragraph: 版本 1.0.0
+  - group "需要允许安装脚本":
+    - heading "需要允许安装脚本" [level=3]
+    - paragraph: 以下包声明了安装脚本，pnpm 默认不运行。
+    - list:
+      - listitem:
+        - code: native-package
+    - paragraph: 允许后，脚本会以你的权限在本机运行，授权保存在当前 profile，之后不再询问。
+    - paragraph: 只在信任这些包时允许。
+    - button "允许这些脚本并重试"
+  - button "查看安装详情":
+    - text: 查看安装详情
+    - img

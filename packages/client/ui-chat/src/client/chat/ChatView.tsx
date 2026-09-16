@@ -6,6 +6,7 @@ import type {
   ConversationTimelineSnapshot, RenderMessageImages,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionSeq } from '@deepseek-ai/dsh-session/types'
+import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { ChatViewSlotProps, OpenFileOptions } from '../contract/slots.ts'
 import type { ChatSnapshot } from '../contract/snapshot.ts'
@@ -139,7 +140,7 @@ function openFailureMessage(error: unknown, fallback: string): string {
 function observedRpcIds(
   order: readonly string[],
   nodes: ChatSnapshot['nodes'],
-  queue: readonly { readonly rpcId?: string }[],
+  inbox: InboxState | undefined,
 ): ReadonlySet<string> {
   const observed = new Set<string>()
   for (const key of order) {
@@ -150,8 +151,8 @@ function observedRpcIds(
       | undefined
     if (source?.kind === 'user' && typeof source.rpcId === 'string') observed.add(source.rpcId)
   }
-  for (const item of queue) {
-    if (item.rpcId !== undefined) observed.add(item.rpcId)
+  for (const { source } of [...inbox?.['next-turn'] ?? [], ...inbox?.['next-step'] ?? []]) {
+    if (source.kind === 'user' && 'rpcId' in source) observed.add(source.rpcId)
   }
   return observed
 }
@@ -233,7 +234,7 @@ export function ChatView({
     [turnNavigationItems, turnOutline],
   )
   const timeline = useChat(s => s.timeline)
-  const inbox = useSession(s => s.queue)
+  const inbox = useProjection('inbox') as unknown as InboxState | undefined
   // Workspace root off the session list row: path summaries display relative to it.
   const cwd = useSessions(s => s.byId[sessionId]?.cwd)
   const running = useSession(s => s.running)
@@ -281,7 +282,7 @@ export function ChatView({
   }, [])
 
   const pendingSteering = useMemo(
-    () => inbox.filter(item => item.placement === 'steering'),
+    () => inbox?.['next-step'].filter(message => message.source.kind === 'user') ?? [],
     [inbox],
   )
   const pendingSubmissions = useSession(s => s.pendingSubmissions)

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-web",
   "description": "Web boot kernel: static module table, Cordis loader, framework-free boot page, and UI-renderer handoff",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -19,7 +19,11 @@
       "default": "./lib/index.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./injections": {
+      "types": "./lib/types/apply-injections.d.ts",
+      "default": "./lib/apply-injections.js"
+    }
   },
   "license": "MIT",
   "devDependencies": {
@@ -35,7 +39,8 @@
     "@deepseek-ai/cordis": "workspace:^",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^"
@@ -43,6 +48,7 @@
   "files": [
     "lib/index.js",
     "lib/**/*.css",
+    "lib/apply-injections.js",
     "lib/types/**/*.d.ts"
   ]
 }

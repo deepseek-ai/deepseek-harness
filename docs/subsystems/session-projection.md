@@ -67,7 +67,7 @@ interface ProjectionDefinition<
 }
 ```
 
-The whole-value event rule is load-bearing: a state-carrying log event carries the complete post-change state, never a bare delta — it keeps every transition trivially cheap and every served value self-describing (last-wins for consumers).
+Every served projection value is a complete read model. A source event may carry a whole value or a domain-owned operation; the unit's deterministic `apply` owns replay, and checkpoint plus forward tail replay reconstructs the same state.
 
 ## The snapshot and the change feed
 

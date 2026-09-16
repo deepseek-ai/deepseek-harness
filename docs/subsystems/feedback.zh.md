@@ -290,7 +290,7 @@ fork 种子可以包含父 Session 的反馈事件，但 payload 保留父级 `s
 
 插件释放会关闭操作接纳，并排空已进入各 Session 队列的工作。
 
-显式启用后，[`session-log-deepseek`](../../packages/session/session-log-deepseek/README.zh.md) 会在后续符合条件的 DeepSeek 请求中，把反馈作为普通 `dsh_session_log` 后缀的一部分传送。记录反馈不会触发 LLM 请求，也不会单独上传 `dsh_feedback`。对于非 DeepSeek 路由，[OTel 后端](../../packages/session/session-telemetry-otel/README.zh.md)可以将权威日志前缀释放至已记录的反馈。命令确认文本确认记录并标识 Session 与匿名用户，不报告遥测策略或投递结果。
+默认情况下，[`session-log-deepseek`](../../packages/session/session-log-deepseek/README.zh.md) 会在后续符合条件的 DeepSeek 请求中，把反馈作为普通 `dsh_session_log` 后缀的一部分传送；组合可用 `enabled: false` 禁用它。记录反馈不会触发 LLM 请求，也不会单独上传 `dsh_feedback`。对于非 DeepSeek 路由，[OTel 后端](../../packages/session/session-telemetry-otel/README.zh.md)可以将权威日志前缀释放至已记录的反馈。命令确认文本确认记录并标识 Session 与匿名用户，不报告遥测策略或投递结果。
 
 ## Web 界面
 

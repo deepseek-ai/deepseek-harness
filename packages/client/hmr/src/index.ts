@@ -1,12 +1,11 @@
 /**
- * HMR plugin, node half: the host end of the dev reload chain. One interval
+ * Host transport for Web client graph changes and rebuilt bundles. One interval
  * stat-polls every graph row's client bundle (polling by design: network mounts
  * deliver no inotify events), reports changes through
  * `clientModules.rebuilt(id)`, and serves the `/plugins/events` SSE channel
  * broadcasting graph/rebuilt frames to the browser half (src/client/).
- * The web bundle mounts this row unconditionally: without a rebuild
- * watcher rewriting client bundles, the poll observes no changes and the
- * chain stays idle.
+ * The Web composition mounts this transport for live graph updates;
+ * a development rebuild watcher also supplies bundle changes.
  */
 import { statSync } from 'node:fs'
 import type { ServerResponse } from 'node:http'
@@ -24,7 +23,7 @@ export { EVENTS_ENDPOINT } from './events.ts'
 /** Cordis plugin name. */
 export const name = 'client-hmr'
 
-/** Required services: the web plugin table and the route registry. */
+/** Required services: the client graph and Web route registry. */
 export const inject = ['clientModules', 'webServer']
 
 /** Plugin config, validated by the same-named schemastery schema. */
@@ -61,7 +60,7 @@ function sameBundleStat(left: WatchedBundleStat, right: WatchedBundleStat): bool
 }
 
 /**
- * Mount the dev chain: bundle watches, rebuilt reporting, and the SSE channel.
+ * Mount bundle watches and graph/rebuilt SSE delivery.
  * @param ctx - host plugin context carrying clientModules and webServer.
  * @param config - validated {@link Config}.
  */
@@ -75,7 +74,7 @@ export function apply(ctx: Context, config: Config): void {
   const rehash = (id: string, watch: WatchedBundle, current: WatchedBundleStat): void => {
     try {
       // rebuilt() replaces the opaque startup rev on its first call; later
-      // calls stay silent when the content hash is unchanged.
+      // calls stay silent until the completed-build entry stamp changes.
       ctx.clientModules.rebuilt(id)
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
@@ -102,7 +101,7 @@ export function apply(ctx: Context, config: Config): void {
       return
     }
     // The module host captured its baseline before reading the bytes in the
-    // startup batch. Only a mismatch crosses into the content-hash path.
+    // startup batch. Only a mismatch crosses into generation publication.
     if (!sameBundleStat(current, watch)) rehash(id, watch, current)
   }
 
@@ -117,8 +116,9 @@ export function apply(ctx: Context, config: Config): void {
         continue
       }
       if (!watch.dirty && sameBundleStat(current, watch)) continue
-      // Stat-before-hash preserves a detectable older baseline for writes that
-      // land during hashing. Repeated stat changes heal a torn read.
+      // Stat-before-publication preserves a detectable older baseline for
+      // writes that land during the read. The preset stamps the entry after
+      // sibling chunks, so a completed build supplies the final stat change.
       rehash(id, watch, current)
     }
   }
@@ -143,7 +143,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => {
     // Initial sync covers rows already in the graph; the subscription covers
     // rows arriving later (boot-window activations, including this plugin's
-    // own row — no self-exemption, a modules/hmr rebuild rides the same chain).
+    // own row; bootstrap revisions also reach page diagnostics).
     syncWatches()
     const unsubscribe = ctx.clientModules.onGraphChanged(syncWatches)
     const timer = setInterval(pollWatches, pollIntervalMs)
@@ -158,6 +158,11 @@ export function apply(ctx: Context, config: Config): void {
   // --- /plugins/events SSE channel ----------------------------------------
   const connections = new Set<ServerResponse>()
 
+  const publishGraph = (): void => {
+    const line = sseData({ type: 'graph', graph: ctx.clientModules.graph() })
+    for (const res of connections) res.write(line)
+  }
+
   const connect = (res: ServerResponse): void => {
     res.writeHead(200, {
       'content-type': 'text/event-stream',
@@ -167,8 +172,8 @@ export function apply(ctx: Context, config: Config): void {
     // Comment line on open so clients/proxies see a live channel even when
     // no rebuild ever happens; EventSource frame parsing skips it naturally.
     res.write(': connected\n\n')
-    res.write(sseData({ type: 'graph', graph: ctx.clientModules.graph() }))
     connections.add(res)
+    res.write(sseData({ type: 'graph', graph: ctx.clientModules.graph() }))
     res.on('close', () => { connections.delete(res) })
   }
 
@@ -187,11 +192,13 @@ export function apply(ctx: Context, config: Config): void {
         connect(res)
       },
     })
+    const unsubscribeGraph = ctx.clientModules.onGraphChanged(publishGraph)
     const unsubscribe = ctx.clientModules.onRebuilt((id, rev) => {
       const line = sseData({ type: 'rebuilt', id, rev })
       for (const res of connections) res.write(line)
     })
     return () => {
+      unsubscribeGraph()
       unsubscribe()
       disposeRoute()
       for (const res of connections) res.destroy()

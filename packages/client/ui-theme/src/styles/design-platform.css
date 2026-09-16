@@ -244,6 +244,8 @@ body {
   --dsw-specific-sidebar-nav-item-active: var(--dsw-static-neutral-bluish-100);
   --dsw-specific-sidebar-nav-item-hover: var(--dsw-static-neutral-bluish-75);
   --dsw-specific-tip: var(--dsw-static-neutral-bluish-60);
+
+  background-color: var(--dsw-alias-bg-base);
 }
 
 body[data-ds-dark-theme] {

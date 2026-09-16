@@ -91,7 +91,7 @@ The merge-extensible protocol maps keep static associations in the type system, 
 
 ### Wire identity grammar
 
-Every namespace, method, lookup, and Context segment must satisfy `isTypertRemoteSegment()`, so generated names cross the shared RPC carrier unchanged. Strict codecs carry generated schemas; `src-json` codecs identify the weaker source-launch path.
+Every namespace, method, lookup, and Context segment must satisfy `isTypertRemoteSegment()`, so generated names cross the shared RPC carrier unchanged. Strict codecs carry generated schema factories; `src-json` codecs identify the weaker source-launch path.
 
 ### Source map
 

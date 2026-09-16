@@ -83,7 +83,7 @@ To select Chat Completions explicitly, patch the existing plugin:
     protocol: chat-completions
 ```
 
-`protocol` defaults to `messages`, with official root `https://api.deepseek.com/anthropic`; `chat-completions` uses `https://api.deepseek.com`. Shipped first-party compositions inherit this default. Neither protocol requires `baseURL`: its official default applies when both `baseURL` and `$DEEPSEEK_BASE_URL` are absent. Switching protocols retains endpoint overrides, so users must supply an address compatible with the selected protocol. An explicit `https://api.deepseek.com` override selects the Chat root: remove that override to use the official Messages default, or set it to `https://api.deepseek.com/anthropic`. Chat appends `/chat/completions`; Messages appends `/v1/messages`. Apart from trailing slashes, neither infers or removes custom path suffixes such as `/v1`. Both share the `llm-deepseek` settings section, `apiKeyEnv`, and `deepseek-official`, so saved model selections remain valid.
+`protocol` defaults to `messages`, with official root `https://api.deepseek.com/anthropic`; `chat-completions` uses `https://api.deepseek.com`. Shipped first-party compositions inherit this default. Neither protocol requires `baseURL`: its official default applies when both `baseURL` and `$DEEPSEEK_BASE_URL` are absent. Switching protocols retains endpoint overrides, so users must supply an address compatible with the selected protocol. An explicit `https://api.deepseek.com` override selects the Chat root: remove that override to use the official Messages default, or set it to `https://api.deepseek.com/anthropic`. Chat appends `/chat/completions`. Messages and its Files API treat only an exact final `/v1` path segment as the existing Anthropic API version and append `/messages` or `/files`; every other base receives `/v1/messages` or `/v1/files`. The official Messages root therefore retains its recommended `/anthropic/v1` request paths without granting compatibility to arbitrary version-like suffixes. Trailing slashes do not change these results. Both protocols share the `llm-deepseek` settings section, `apiKeyEnv`, and `deepseek-official`, so saved model selections remain valid.
 
 Messages sends text, thinking, tool calls, and tool results as content blocks, reasoning effort as `output_config.effort`, and images as Files references or inline base64. Models declaring `systemPromptUpdate: in-history` retain the initial top-level system and send new system snapshots after their corresponding user/tool-result turn; undeclared models use the latest snapshot as the top-level system. Replay metadata identifies the Messages format, model, and signatures. Chat requests serialize durable content without those signatures. Invalid Messages replay metadata emits a warning and omits signatures while retaining text and tool history.
 
@@ -105,7 +105,7 @@ Connection facts are re-read once per operation through the optional settings an
 
 ### Provider-specific request fields
 
-For either protocol, when `ctx.deepseekLlmApiExtensions` is present, the adapter prepares its registered top-level fields from the exact serialized base request before `fetch`. Preparation or field collisions fail before HTTP; after a 2xx response, the adapter accepts every captured contribution before consuming SSE. Transport and non-2xx failures do not accept them. Shipped compositions use this for the optional incremental `dsh_session_log` field and the default-on active `dsh_plugin_packages` inventory; both stay outside model input.
+For either protocol, when `ctx.deepseekLlmApiExtensions` is present, the adapter prepares its registered top-level fields from the exact serialized base request before `fetch`. Preparation or field collisions fail before HTTP; after a 2xx response, the adapter accepts every captured contribution before consuming SSE. Transport and non-2xx failures do not accept them. Shipped compositions use this for the default-on incremental `dsh_session_log` field and the default-on active `dsh_plugin_packages` inventory; both stay outside model input.
 
 ### Failures and recovery
 
@@ -157,7 +157,7 @@ Read these pages when the package-level contract is not enough. They move from t
 - [LLM streaming subsystem](../../../docs/subsystems/llm-streaming.md) — the `StreamChunk` protocol and adapter contract.
 - [llm-retry](../llm-retry/README.md) — the retry executor that applies this adapter's `retryPolicy`.
 - [DeepSeek request extensions](../deepseek-llm-api-extensions/README.md) — lifecycle and acceptance semantics for provider-specific top-level fields.
-- [Session-log upload](../../session/session-log-deepseek/README.md) — the opt-in incremental `dsh_session_log` contribution.
+- [Session-log upload](../../session/session-log-deepseek/README.md) — the default-on incremental `dsh_session_log` contribution.
 - [Plugin package inventory](../plugin-package-inventory-deepseek/README.md) — the default-on `dsh_plugin_packages` contribution.
 - [Twin LLM adapters](../../../.agents/notes/implemented/architecture/2026-06-13-twin-llm-adapters.md) — why DeepSeek ships two structurally different adapters.
 - [Mandatory app attribution headers](../../../.agents/notes/implemented/architecture/2026-06-21-mandatory-app-attribution-headers.md) — the identity every provider request carries.

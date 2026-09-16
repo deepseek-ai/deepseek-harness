@@ -447,6 +447,7 @@ describe('ConversationRoot resident composer', () => {
     expect(host?.contains(seat)).toBe(true)
     expect(seat?.contains(textarea)).toBe(true)
     expect(b.slotCalls).toContain('conversation.session.header.lineage')
+    expect(b.slotCalls).toContain('conversation.session.header.leading')
     expect(b.slotCalls).toContain('conversation.session.header.actions')
     expect(b.slotCalls).toContain('conversation.session.header.utilities')
     expect(b.slotCalls).toContain('conversation.session.header.corner')
@@ -678,6 +679,57 @@ describe('ConversationRoot resident composer', () => {
         else Object.defineProperty(Element.prototype, name, descriptor)
       }
     }
+  })
+
+  it('forwards wheel scrolling from a width handle to the transcript', () => {
+    const b = mount(sessionSnapshotOf())
+    const scrollport = b.view.container.querySelector('[data-conversation-scroll]') as HTMLElement
+    const handle = b.view.container.querySelector('[data-width-handle="right"]') as HTMLElement
+    const scrollBy = vi.fn()
+    Object.defineProperty(scrollport, 'clientHeight', { value: 480, configurable: true })
+    Object.defineProperty(scrollport, 'scrollBy', { value: scrollBy, configurable: true })
+    scrollport.style.lineHeight = '20px'
+
+    fireEvent.wheel(handle, { deltaY: 120, deltaMode: 0 })
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 120 })
+
+    fireEvent.wheel(handle, { deltaY: 3, deltaMode: 1 })
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 60 })
+    scrollport.style.lineHeight = 'normal'
+    fireEvent.wheel(handle, { deltaY: 3, deltaMode: 1 })
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 48 })
+    fireEvent.wheel(handle, { deltaY: -1, deltaMode: 2 })
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: -480 })
+    const calls = scrollBy.mock.calls.length
+    fireEvent.wheel(handle, { deltaY: 0, deltaMode: 0 })
+    fireEvent.wheel(handle, { ctrlKey: true, deltaY: 120, deltaMode: 0 })
+    expect(scrollBy).toHaveBeenCalledTimes(calls)
+
+    scrollport.removeAttribute('data-conversation-scroll')
+    const nestedScrollport = document.createElement('div')
+    nestedScrollport.setAttribute('data-conversation-scroll', '')
+    const nestedScrollBy = vi.fn()
+    Object.defineProperty(nestedScrollport, 'scrollBy', { value: nestedScrollBy, configurable: true })
+    scrollport.append(nestedScrollport)
+    fireEvent.wheel(handle, { deltaY: 120, deltaMode: 0 })
+    expect(scrollBy).toHaveBeenCalledTimes(calls)
+    expect(nestedScrollBy).not.toHaveBeenCalled()
+  })
+
+  it('starts width dragging only from the primary pointer button', () => {
+    const b = mount(sessionSnapshotOf())
+    const handle = b.view.container.querySelector('[data-width-handle="right"]') as HTMLElement
+    const captured = new Set<number>()
+    Object.defineProperties(handle, {
+      setPointerCapture: { configurable: true, value: (pointerId: number) => { captured.add(pointerId) } },
+      releasePointerCapture: { configurable: true, value: (pointerId: number) => { captured.delete(pointerId) } },
+      hasPointerCapture: { configurable: true, value: (pointerId: number) => captured.has(pointerId) },
+    })
+    fireEvent.pointerDown(handle, { pointerId: 1, button: 1, clientX: 800, clientY: 300 })
+    expect(handle.hasAttribute('data-dragging')).toBe(false)
+    fireEvent.pointerDown(handle, { pointerId: 2, button: 0, clientX: 800, clientY: 300 })
+    expect(handle.hasAttribute('data-dragging')).toBe(true)
+    fireEvent.pointerCancel(handle, { pointerId: 2 })
   })
 
   it('hero phase renders no width handles (no transcript to size)', () => {

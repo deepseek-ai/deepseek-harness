@@ -17,6 +17,7 @@ import type {} from '@deepseek-ai/dsh-agent'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-app-boot'
 import type { DeepSeekPluginPackageIdentity, DeepSeekPluginPackageInventoryExtension } from './types.ts'
 import type {} from './types.ts'
 
@@ -69,12 +70,14 @@ function identityFromManifest(path: string, allowAnonymous: boolean): DeepSeekPl
 }
 
 /** Resolve a bare package without requiring it to export `./package.json`. */
-function barePackageManifest(packageName: string, anchors: readonly string[]): string | undefined {
+function barePackageManifest(
+  packageName: string, anchors: readonly string[], packages: Context['pluginPackages'] | undefined,
+): string | undefined {
   for (const anchor of anchors) {
-    const searchPaths = createRequire(anchor).resolve.paths(packageName)
-    /* v8 ignore next -- active non-builtin package entries always have Node package search paths */
-    if (searchPaths === null) continue
-    for (const searchPath of searchPaths) {
+    const pkg = packages?.packageOf(packageName, anchor)
+    if (pkg !== undefined) return pkg.manifestPath
+    if (packages !== undefined) continue
+    for (const searchPath of createRequire(anchor).resolve.paths(packageName) as string[]) {
       const manifest = join(searchPath, packageName, 'package.json')
       if (existsSync(manifest)) return manifest
     }
@@ -99,7 +102,10 @@ class PackageIdentityResolver {
   // TODO: Invalidate manifest identities if in-process package-version replacement becomes a supported upgrade path.
   private readonly cache = new Map<string, DeepSeekPluginPackageIdentity | undefined>()
 
-  constructor(private readonly hostBaseUrl: string) {}
+  constructor(
+    private readonly hostBaseUrl: string,
+    private readonly packages: Context['pluginPackages'] | undefined,
+  ) {}
 
   /** Resolve one Loader entry's owning package, or absence for a non-package loose module. */
   resolve({ entry, bareBaseUrl }: ActiveEntry): DeepSeekPluginPackageIdentity | undefined {
@@ -112,7 +118,7 @@ class PackageIdentityResolver {
     const packageName = barePackageName(entry.options.name)
     let manifest: string | undefined
     if (packageName !== undefined) {
-      manifest = barePackageManifest(packageName, anchors)
+      manifest = barePackageManifest(packageName, anchors, this.packages)
       if (manifest === undefined) {
         throw new Error(`plugin-package-inventory-deepseek: cannot resolve active package ${JSON.stringify(packageName)}`)
       }
@@ -186,7 +192,7 @@ async function collectActivePluginPackages(
 export function apply(ctx: Context, config: Config): void {
   if (config.enabled === false) return
   const hostBaseUrl = ctx.baseUrl ?? import.meta.url
-  const resolver = new PackageIdentityResolver(hostBaseUrl)
+  const resolver = new PackageIdentityResolver(hostBaseUrl, ctx.get('pluginPackages'))
   ctx.deepseekLlmApiExtensions.register('dsh_plugin_packages', {
     prepare: async (request) => {
       const value: DeepSeekPluginPackageInventoryExtension = {

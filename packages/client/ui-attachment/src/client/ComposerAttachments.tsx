@@ -9,6 +9,7 @@ import { DropOverlay } from '../DropOverlay.tsx'
 import { FileCard } from '../FileCard.tsx'
 import { ImageLightbox } from '../ImageLightbox.tsx'
 import { attachmentRailLabels, dropOverlayLabels, fileCardLabels, lightboxLabels } from './labels.ts'
+import { installDocumentDropEvents } from './drop-events.ts'
 import css from './ComposerAttachments.module.css'
 
 /** Rail item retaining its browser-owned attachment for callbacks. */
@@ -29,54 +30,7 @@ export function ComposerAttachments({
   }, [attachments, preview])
 
   useEffect(() => {
-    const fileTransfer = (event: globalThis.DragEvent): DataTransfer | null => {
-      const dataTransfer = event.dataTransfer
-      if (dataTransfer === null || !dataTransfer.types.includes('Files')) return null
-      return dataTransfer
-    }
-    const reset = (): void => {
-      dragDepth.current = 0
-      setDragActive(false)
-    }
-    const onDragEnter = (event: globalThis.DragEvent): void => {
-      if (fileTransfer(event) === null) return
-      event.preventDefault()
-      dragDepth.current += 1
-      setDragActive(true)
-    }
-    const onDragOver = (event: globalThis.DragEvent): void => {
-      const dataTransfer = fileTransfer(event)
-      if (dataTransfer === null) return
-      event.preventDefault()
-      dataTransfer.dropEffect = canAcceptDrop ? 'copy' : 'none'
-    }
-    const onDragLeave = (event: globalThis.DragEvent): void => {
-      if (fileTransfer(event) === null) return
-      dragDepth.current = Math.max(0, dragDepth.current - 1)
-      if (dragDepth.current === 0) setDragActive(false)
-      const leftViewport = event.clientX <= 0 || event.clientY <= 0
-        || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight
-      if ((event.target === document.documentElement || event.target === document.body) && leftViewport) reset()
-    }
-    const onDrop = (event: globalThis.DragEvent): void => {
-      const dataTransfer = fileTransfer(event)
-      if (dataTransfer === null) return
-      event.preventDefault()
-      reset()
-      if (canAcceptDrop) onAddFiles([...dataTransfer.files])
-    }
-    document.addEventListener('dragenter', onDragEnter)
-    document.addEventListener('dragover', onDragOver)
-    document.addEventListener('dragleave', onDragLeave)
-    document.addEventListener('drop', onDrop)
-    window.addEventListener('dragend', reset)
-    return () => {
-      document.removeEventListener('dragenter', onDragEnter)
-      document.removeEventListener('dragover', onDragOver)
-      document.removeEventListener('dragleave', onDragLeave)
-      document.removeEventListener('drop', onDrop)
-      window.removeEventListener('dragend', reset)
-    }
+    return installDocumentDropEvents(canAcceptDrop, onAddFiles, dragDepth, setDragActive)
   }, [canAcceptDrop, onAddFiles])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({

@@ -1,5 +1,5 @@
 ---
-description: "运行时 Typert 注册表：保存生成的包反射、实时 Zod schema 与 Remote 调用描述符，并按需为消费方解析。"
+description: "运行时 Typert 注册表：保存生成的包反射、惰性 Zod schema factory 与 Remote 调用描述符，并按需为消费方解析。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-typert-registry` 让生成的 Typert 产物在运行时可按需查询：每个包的反射——服务、事件与对象——其实时 Zod schema 与 Remote 调用描述符都保存在稳定键下，消费方可以按需查询或解析。注册是原子且按 fiber 作用域的：贡献要么整体落地要么完全不落地，并在注册组件卸载时自动撤销。同一服务还托管 Remote 调用所经由的 lookup 与作用域 Context 提供方注册表。它不执行 TypeScript 分析，也不生成 schema；这些由生成器与 loader 负责。
+`dsh-typert-registry` 让生成的 Typert 产物在运行时可按需查询：每个包的反射、惰性 Zod schema factory 与 Remote 调用描述符都保存在稳定键下。消费方首次请求 schema 时才会物化并缓存它。注册是原子且按 fiber 作用域的：贡献要么整体落地要么完全不落地，并在注册组件卸载时自动撤销。同一服务还托管 Remote 调用所经由的 lookup 与作用域 Context 提供方注册表。它不执行 TypeScript 分析，也不生成 schema；这些由生成器与 loader 负责。
 
 ## 目录
 
@@ -37,7 +37,7 @@ kind: "package-reference"
 
 ### 查询 schema 与反射
 
-消费方用 `get(key)`、`resolve(key)` 或 `list(filter?)` 读取 schema，用 `getPackage(name, face?)` 或 `listPackages(filter?)` 读取包反射。`resolve()` 能区分格式错误的键、未注册的包，以及已注册但未以该名称提供 schema 的包，各自给出不同的错误。`toJSONSchema(key)` 把实时 Zod schema 投影为 JSON Schema，且不缓存结果。
+消费方用 `get(key)`、`resolve(key)` 或 `list(filter?)` 读取 schema，用 `getPackage(name, face?)` 或 `listPackages(filter?)` 读取包反射。首次读取会物化一个进程 realm 内的 schema 实例，后续读取复用该实例。`resolve()` 能区分格式错误的键、未注册的包，以及已注册但未以该名称提供 schema 的包，各自给出不同的错误。`toJSONSchema(key)` 把已物化的 Zod schema 投影为 JSON Schema，但不缓存该投影。
 
 ### 注册贡献
 
@@ -72,7 +72,7 @@ Remote 调用通过 `ctx.typert.lookups` 与 `ctx.typert.contexts` 解析 Host �
 
 ### 标识与校验
 
-键是稳定的：反射用 `<package>#<face>`，schema 用 `<package>#<name>`，端点用 `<namespace>/<method>`。校验会拒绝含 `#` 的名称、超出 RPC 端点段文法的 wire 名称、重复键，以及在其注册表生命周期内改变 wire 声明的 lookup 定义；严格编解码器必须携带可解析的 schema。
+键是稳定的：反射用 `<package>#<face>`，schema 用 `<package>#<name>`，端点用 `<namespace>/<method>`。校验会拒绝含 `#` 的名称、超出 RPC 端点段文法的 wire 名称、重复键，以及在其注册表生命周期内改变 wire 声明的 lookup 定义；schema 条目与严格编解码器必须携带 factory。
 
 ### 源码地图
 

@@ -1,5 +1,5 @@
 ---
-description: "仅用于开发环境的浏览器客户端插件热重载：重建插件 bundle 后原地替换运行中的插件，供开发者迭代 web GUI。"
+description: "Web 客户端插件的动态图同步与开发时 bundle 重载。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-client-hmr` 会在浏览器客户端插件的 bundle 重建后原地重载该插件，让编辑插件源码的开发者无需整页刷新即可看到变更。如果没有重建 watcher，整条链路保持空闲：只有 `pnpm run dev:web` 之类的进程重写客户端 bundle 时才会产生它所响应的重建。每次重载只替换一个插件并携带全新组件状态，而数据层（连接、运行时与 Session 对象）保持不变。这里的一切都是浏览器侧的开发机制；模型永远看不到它。
+`dsh-client-hmr` 让已打开的 Web 页面与 Host 插件图保持同步，并重载重建后的浏览器 bundle。普通插件的启停无需刷新页面或重启 Host 即可生效。代码重建会替换受影响插件并重置其组件状态。模型不会收到新的输入或输出。
 
 ## 目录
 
@@ -25,15 +25,15 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-为正在编辑的插件启用重建 watcher，然后保存：浏览器会从 dev server 拾取重建后的 bundle，并在不重载页面的情况下替换该插件。在客户端开发期间使用它；在生产构建中没有任何可观察行为，因为没有 watcher 会重写 bundle。
+随包提供的 Web 组合挂载此传输，以交付插件动态变更。开发时，bundle watcher 还会提供代码重建。停用此传输会停止向已打开的页面交付图更新。
 
 ### 启动重载链路
 
-对同一个宿主运行 `pnpm run dev:web`（或任何写入插件 `lib/client.js` 的 tsdown watch 进程）；重建后的插件随后会被自动逐个替换进运行中的浏览器。
+对同一个宿主运行 `pnpm run dev:web`（或使用共享 Client tsdown 预设的 watch 进程）；重建后的插件随后会被自动逐个替换进运行中的浏览器。该预设会在所有包内 chunk 写完后标记 `lib/client.js`，因此仅 chunk 发生重建也会推进包 revision，无需 Host 扫描 chunk。
 
 ### 一次重载做什么
 
-每次重载都会重新执行插件 bundle，并用全新状态重新挂载插件。依赖被重载插件的插件会随之自动重载。失败的重载会以可见方式报告，并在下一次重建时从头重试。
+每次成功的重载都会重新执行插件 bundle，并用全新状态重新挂载插件。依赖被重载插件的插件会随之自动重载。失败会显示在插件列表中，可直接重试，无需等待下一次重建。
 
 ### 配置
 
@@ -59,11 +59,11 @@ kind: "package-reference"
 
 ### 设计理念
 
-链路分为两半，共用一份约定：node 半侧负责 bundle 检测与通知，浏览器半侧负责替换。node 半侧运行一个 interval，从 module host 读取文件前的基线开始 stat 轮询每个图 bundle。未变化的启动 row 无需读取内容或求 hash 即可开始监视；发生变化的 row，或产物恢复后的 dirty row，会进入 `rebuilt()`，且只广播真实 revision 变更。`rebuilt()` 会把当前 source map 与已变化的 bundle 一起读取；仅写入 map 不会重载可执行代码。node 半侧还提供 `/plugins/events`，一个广播 `graph` 与 `rebuilt` 帧的 SSE（Server-Sent Events）通道。
+Host 半侧监听每个包带完成标记的入口产物，并提供 `/plugins/events`。它转发现有的图变化与重建通知；每个新连接都会收到当前完整图。图描述浏览器的目标条目，不保证 Host 清理已经完成。Host 的激活与清理仍由 Host 生命周期管理。入口字节与构建完成时间戳共同标识 revision；未变化的产物无需读取内容。浏览器半侧将两种帧都交给 Client Modules，由它串行处理条目变更并等待浏览器资源清理。
 
 ### 浏览器侧替换
 
-收到 `rebuilt` 帧后，帧内 revision 会让 `invalidate` 选择该插件不可变的单资源 combo URL，而不是初始多资源 URL。`prefetch` 在旧 fiber 仍在服务时加载并注册新 factory。其余顺序是：先从注册表删除，再拆卸（在 fiber 的 disposer 发出 `internal/plugin` 之前执行 `registry.delete`，否则 vendored Loader 会把该 entry 标为禁用）、等待旧 fiber 卸载完成、删除 `entry.fiber`、移除自身拥有的 `<style data-plugin>` 标签，然后 `entry.refresh()` 重新导入并挂载，`fiber.await()` 直接把启动失败重新抛出。替换之所以安全，是因为在惰性 CJS 模型下执行只是注册：每个模块副作用都位于 factory 闭包中，在物化时运行。
+收到 `rebuilt` 帧后，控制器使旧模块失效，并在旧 fiber 仍然服务时预取其单资源脚本。随后删除注册表 runtime、等待旧 fiber 清理、清除条目中的 fiber 引用并移除自身样式。模块系统先物化新导出，再由 `entry.refresh()` 通过 Loader 挂载；这样即使 Loader 只记录导入错误，页面诊断仍能获得失败原因。CSS 在旧 effect 完成清理后注入。
 
 ### 级联与自重载
 
@@ -71,14 +71,14 @@ fiber 的激活 epoch 会串联其服务提供方的 uid，因此替换提供方
 
 ### 失败策略
 
-不回滚：导入失败会让 entry 失去 fiber（下一个 `rebuilt` 帧从头重试），apply 失败则会在外壳的状态投影中留下 FAILED fiber。两者都会输出醒目的错误日志。
+下载失败时，正在运行的插件保持活动。旧 fiber 被卸载后，导入或激活失败不会恢复先前的 bundle。失败会显示为当前页面的同步错误。「设置 → 插件 → 插件列表」会针对最新图重试，即使其 revision 未变化；后续重建也会重试受影响的插件。无关且已成功运行的插件保持活动。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | node 半侧：bundle stat 轮询、`rebuilt` 上报、`/plugins/events` SSE 通道 |
-| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：SSE 订阅、串行重载队列、fiber 替换 |
+| [`src/client/index.ts`](src/client/index.ts) | 浏览器半侧：SSE 订阅与共享条目控制器调用 |
 | [`src/events.ts`](src/events.ts) | 共享帧类型（`graph` / `rebuilt`）与端点常量 |
 
 </details>
@@ -114,8 +114,8 @@ fiber 的激活 epoch 会串联其服务提供方的 uid，因此替换提供方
 这些限制说明重载驱动器不会保留或恢复什么。它们是当前包约束，不是任务积压。
 
 - **重载有意保持粗粒度**——全新 fiber 与全新组件；被重载插件内的 React 状态会丢失，而数据层（连接 fiber、运行时 fiber、Session 对象）不受影响。react-refresh 级状态保留与重新执行 bundle 冲突，因此有意排除。
-- **失败时不回滚**——失败的重载会让该 entry 保持 FAILED 并在 loader 状态投影中可见；系统不会自动恢复先前 bundle。
-- **重建帧不会替换启动图**——每个帧都携带单资源 combo 重载所需的插件产物 revision；页面重载时才接收重新组合的启动图。
+- **失败时不回滚**——旧 fiber 被卸载后，替换失败不会恢复先前的 bundle。
+- **仅负责 Web 传输**——Electron 的安装和后端重启流程不使用此 SSE 路径。条目对账本身不依赖传输。
 
 <a id="dev-note"></a>
 ### 开发备注

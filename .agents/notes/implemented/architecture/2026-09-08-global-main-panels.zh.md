@@ -12,7 +12,7 @@ Status: implemented
 
 布局声明 root 作用域的 keyed `main` slot。保留的 `conversation` key 属于 Conversation 插件，其 `main.conversation` 子 slot 保留可选的会话绑定。其他主面板条目不获得隐式会话绑定。
 
-侧栏拥有 root 作用域的 `sidebar.panellist` list。每个 list 条目提供图标，以及与主面板条目匹配的 id；字符串或随语言变化的标签提供普通可见文字、无障碍名称和折叠提示。默认组合不注册面板条目，因此空列表没有 DOM 或间距。选中操作检查实时主面板条目，对缺失的 key 报错而不替换当前面板。
+侧栏拥有 root 作用域的 `sidebar.panellist` list。每个 list 条目提供图标，以及与主面板条目匹配的 id；字符串或随语言变化的标签提供普通可见文字、无障碍名称和折叠提示。本决定落地时默认组合不注册面板条目，因此空列表没有 DOM 或间距；现在 web bundle 的插件管理器注册了第一个条目（[插件管理移到 Web 侧栏](2026-09-09-plugin-management-in-the-web-sidebar.zh.md)）。选中操作检查实时主面板条目，对缺失的 key 报错而不替换当前面板。
 
 渲染器与布局控制器共享一个直接创建的 root 存储。其 `panelInfo` 和 `layoutInfo` 对象保持独立的引用。框架提供 `usePanelInfo`；各行和中央内容订阅所需的选中态值，AppFrame 仅读取布局信息。右侧 Sidebar 的 root 控制器决定是否挂载其会话子树，并把最终所需的列宽报告给框架。
 

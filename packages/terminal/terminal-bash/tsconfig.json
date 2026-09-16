@@ -37,6 +37,9 @@
     },
     {
       "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../util/lazy-require"
     }
   ]
 }

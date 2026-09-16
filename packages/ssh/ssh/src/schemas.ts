@@ -50,6 +50,7 @@ export const spawnSchema = z.object({
   }).strict().optional(),
   terminal: z.object({
     terminalType: z.string().min(1), rows: z.number().int().positive(), cols: z.number().int().positive(),
+    shellActivity: z.boolean().optional(),
   }).strict().optional(),
 }).strict().refine(value => (value.stdio === undefined) !== (value.terminal === undefined), 'select ordinary or terminal execution')
 /** Connection handshake binds sockets and workspace to one helper process. */
@@ -83,3 +84,5 @@ export const doneSchema = z.object({
 }).strict()
 /** Remote terminal foreground observation. */
 export const foregroundSchema = z.object({ processGroupId: z.number().int().positive(), inputWaiting: z.boolean() }).strict().nullable()
+/** Conservative shell lifecycle and process observation returned by the execution provider. */
+export const terminalActivitySchema = z.object({ state: z.enum(['idle', 'busy', 'unknown']), revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER) }).strict()

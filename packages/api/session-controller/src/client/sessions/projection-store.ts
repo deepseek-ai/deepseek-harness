@@ -67,9 +67,9 @@ interface Channel {
 /**
  * One session's projection values. Framework semantics, uniform across every
  * key: a baseline seeds rows at its cut, a push frame updates one row, and in
- * both paths a lower-or-equal seq loses — a replayed frame cannot regress a
- * value, a stale baseline cannot overwrite a newer frame. A key the store has
- * never seen reads `undefined` (capability absent). Faces are identity-stable
+ * both paths a lower-or-equal seq within the Host generation loses. A replayed
+ * frame cannot regress a value; a stale baseline cannot overwrite a newer
+ * frame. A key the store has never seen reads `undefined` (capability absent). Faces are identity-stable
  * per key (create-on-demand, cached) so the React side binds each exactly
  * once; the store-level channel (`subscribeAny`) serves coarse consumers (the
  * manager's list projection reads the `title` key).
@@ -159,16 +159,9 @@ export class ProjectionValueStore {
     }
   }
 
-  /**
-   * Drop rows beyond a replacement control baseline. Such rows describe
-   * process state the Host lost before persisting it and would otherwise
-   * outrank recomputed lower-seq values forever. The caller seeds the new
-   * baseline immediately afterward.
-   * @param lastSeq - highest durable sequence reflected by the baseline.
-   */
-  truncate(lastSeq: SessionSeqCursor): void {
-    for (const [key, row] of this.rows) {
-      if (row.seq <= lastSeq) continue
+  /** Discard one Host generation's values and watermarks while preserving subscribed faces. */
+  clear(): void {
+    for (const key of this.rows.keys()) {
       this.rows.delete(key)
       this.changed(key)
     }

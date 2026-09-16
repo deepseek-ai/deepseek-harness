@@ -18,6 +18,7 @@ export function terminalBlockLabels(t: TranslateNS<'conversation'>): TerminalBlo
   return {
     signal: signal => t('terminal.signal', { signal }),
     exitCode: code => t('terminal.exitCode', { code }),
+    noExitCode: t('terminal.noExitCode'),
     running: t('terminal.running'),
     failed: t('terminal.failed'),
     done: t('terminal.done'),

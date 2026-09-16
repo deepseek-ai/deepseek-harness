@@ -57,7 +57,7 @@ export type {
 } from './tab-registry.ts'
 export type {
   SidebarRightTabInfo, SidebarRightTabInjected, UseSidebarRightTabInfo, SidebarRightTabActions,
-  SidebarRightTabMenuOwnerProps, SidebarRightTabNavigation, SidebarRightTabPlacement,
+  SidebarRightTabMenuOwnerProps, SidebarRightTabNavigation, SidebarRightTabPlacement, SidebarRightGuideEntryOwnerProps,
 } from './contract/slots.ts'
 export type {
   SidebarRightNavigationParams, SidebarRightResourceParams, SidebarRightResourceParamsMap,
@@ -68,6 +68,7 @@ export type { FloatRect, PaneId, TabId, TabRecord } from '@deepseek-ai/dsh-clien
 export type { PinResource, SidebarRightNavigator, TabOccurrence } from './tab-domain.ts'
 export type { SidebarRightKey } from './locales.ts'
 export type { OpenContentIntent } from './stores.ts'
+export type { SidebarRightOpenTab } from './tab-inventory.ts'
 
 /** This package's copy namespace. */
 const NS = 'sidebarRight'
@@ -101,7 +102,7 @@ export function apply(ctx: ClientContext): void {
   // its own apply top level for the same reason.
   const t = ctx.locale.bind(NS)
   const tabs = new SidebarRightTabRegistry(ctx)
-  const { controller, adopt } = createSidebarRightController(
+  const { controller, adopt, forget } = createSidebarRightController(
     tabs,
     (address, signal) => { ctx.resources.pin(address, signal) },
   )
@@ -131,7 +132,10 @@ export function apply(ctx: ClientContext): void {
       create: (scopeKey) => {
         const instance = handle.create(scopeKey)
         if (scopeKey !== undefined) adoptions.push(adopt(scopeKey as SessionId, instance))
-        return instance
+        return { ...instance, clearPersisted() {
+          instance.clearPersisted()
+          if (scopeKey !== undefined) forget(scopeKey as SessionId)
+        } }
       },
     }
     const layout: ILayout = ctx.layout
@@ -189,6 +193,9 @@ export function apply(ctx: ClientContext): void {
       name: 'sidebar.right.pane.tab',
       key: GUIDE_ID,
       children: {
+        'sidebar.right.tab.guide.entry': {
+          kind: 'keyed', scope: 'session', inject: { hooks: { tabInfo: guideTabInfoFactory } },
+        },
         'sidebar.right.tab.guide': {
           kind: 'chain', scope: 'session', inject: { hooks: { tabInfo: guideTabInfoFactory } },
         },

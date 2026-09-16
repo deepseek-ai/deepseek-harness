@@ -7,6 +7,9 @@
   "include": ["src"],
   "references": [
     {
+      "path": "../../boot/app-boot"
+    },
+    {
       "path": "../../../vendor/cosmokit"
     },
     {

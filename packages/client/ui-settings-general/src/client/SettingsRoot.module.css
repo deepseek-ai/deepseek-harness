@@ -38,7 +38,8 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
-/* Rail trigger: the same 36x36 circle box as the other rail controls. */
+/* Rail trigger: the same 36x36 box and 12px rounding as the other rail
+   controls. */
 .trigger.rail {
   flex: none;
   width: 36px;
@@ -47,8 +48,6 @@
   justify-content: center;
   gap: 0;
   padding: 0;
-  border-radius: 50%;
-  corner-shape: round;
 }
 
 .triggerLabel {

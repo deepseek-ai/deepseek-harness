@@ -35,6 +35,7 @@ import type {
   TypertFace,
   TypertPackageFilter,
   TypertPackageRecord,
+  TypertSchemaFactory,
   TypertSchemaFilter,
   TypertSchemaRecord,
 } from './types.ts'
@@ -444,7 +445,7 @@ interface HostContextResolverEntry {
  * @typert service typert
  */
 export class TypertRegistry extends Service implements TypertRegistryContract {
-  private readonly schemas = new Map<string, TypertSchemaRecord>()
+  private readonly schemas = new Map<string, TypertSchemaFactoryRecord>()
   private readonly packages = new Map<string, TypertPackageRecord>()
   private readonly localStore: DescriptorStore
   private readonly remoteStore: RemoteStore
@@ -522,21 +523,22 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
   /**
    * Look up one schema by `<package>#<name>`.
    * @param key - global schema key.
-   * @returns the live schema record, or `undefined` when absent.
+   * @returns a record containing the cached schema, or `undefined` when absent.
    */
   get(key: string): TypertSchemaRecord | undefined {
-    return this.schemas.get(key)
+    const record = this.schemas.get(key)
+    return record === undefined ? undefined : materializeSchema(record)
   }
 
   /**
    * Resolve one required schema.
    * @param key - global schema key.
-   * @returns the live schema record.
+   * @returns a record containing the cached schema.
    * @throws when the key is malformed, the package face is absent, or the schema is not contributed.
    */
   resolve(key: string): TypertSchemaRecord {
     const record = this.schemas.get(key)
-    if (record !== undefined) return record
+    if (record !== undefined) return materializeSchema(record)
     const hash = key.indexOf('#')
     if (hash <= 0 || hash === key.length - 1) {
       throw new Error(`typert: invalid schema key "${key}" — expected "<package>#<name>"`)
@@ -553,10 +555,10 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
   /**
    * Enumerate live schemas in registration order.
    * @param filter - optional package and face restriction.
-   * @returns matching schema records.
+   * @returns matching records containing the cached schemas.
    */
   list(filter: TypertSchemaFilter = {}): TypertSchemaRecord[] {
-    return [...this.schemas.values()].filter(record => matches(record, filter))
+    return [...this.schemas.values()].filter(record => matches(record, filter)).map(materializeSchema)
   }
 
   /**
@@ -606,11 +608,14 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
     }
   }
 
-  private validateSchemas(contribution: TypertContribution): TypertSchemaRecord[] {
-    const records: TypertSchemaRecord[] = []
+  private validateSchemas(contribution: TypertContribution): TypertSchemaFactoryRecord[] {
+    const records: TypertSchemaFactoryRecord[] = []
     const batch = new Set<string>()
     for (const schema of contribution.schemas) {
       validateSegment('schema name', schema.name)
+      if (typeof schema.create !== 'function') {
+        throw new Error(`typert: schema "${schema.name}" has no create() factory`)
+      }
       const key = typertKey(contribution.package, schema.name)
       if (batch.has(key) || this.schemas.has(key)) {
         throw new Error(`typert: schema "${key}" is already registered`)
@@ -624,6 +629,24 @@ export class TypertRegistry extends Service implements TypertRegistryContract {
       })
     }
     return records
+  }
+}
+
+interface TypertSchemaFactoryRecord extends TypertSchemaFactory {
+  readonly package: string
+  readonly face: TypertFace
+  readonly key: string
+  value?: z.ZodType
+}
+
+function materializeSchema(record: TypertSchemaFactoryRecord): TypertSchemaRecord {
+  const schema = record.value ??= record.create()
+  return {
+    name: record.name,
+    schema,
+    package: record.package,
+    face: record.face,
+    key: record.key,
   }
 }
 
@@ -697,8 +720,8 @@ function validateInvocation(descriptor: InvocationDescriptor): void {
 function validateCodec(codec: InvocationDescriptor['result'], subject: string): void {
   if (codec.mode === 'src-json') return
   validateNonempty(`${subject} type symbol`, codec.typeSymbol)
-  if (typeof codec.schema.parse !== 'function') {
-    throw new Error(`typert: ${subject} strict codec has no parse() method`)
+  if (typeof codec.create !== 'function') {
+    throw new Error(`typert: ${subject} strict codec has no create() factory`)
   }
 }
 

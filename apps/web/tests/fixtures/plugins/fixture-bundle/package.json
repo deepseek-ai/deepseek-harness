@@ -1,0 +1,13 @@
+{
+  "name": "@fixture/bundle",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Web e2e fixture: a bundle whose one row is an inert plugin.",
+  "type": "module",
+  "main": "index.js",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

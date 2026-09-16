@@ -1,6 +1,7 @@
 // Shared plumbing for the web smoke tests (dist location, free port, failure shots).
 import { existsSync, mkdirSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Locator, Page } from 'playwright'
@@ -9,6 +10,25 @@ import type { Browser, Locator, Page } from 'playwright'
 export const DIST_INDEX = fileURLToPath(new URL('../dist/index.html', import.meta.url))
 
 export const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url))
+
+const installationRequire = createRequire(join(REPO_ROOT, 'apps/cli/package.json'))
+
+/**
+ * The built copy of a workspace package, as the dsh installation resolves it.
+ * The Host plugins a scaffold profile loads run from built packages through
+ * Node's own loader; a scaffold call that must share their module state
+ * (app-boot keeps the root Include it mounted per context) has to run that
+ * same copy, not the source a bare import gets through the tsconfig paths,
+ * and not the test runner's own inlined copy of the built file either.
+ * `require` of an ES module goes through Node's loader and shares its
+ * module map with the plugins' imports; it needs a graph without top-level
+ * await, which the built Host packages keep.
+ * @param name - the workspace package name.
+ * @returns the package's built module namespace, for the caller to type as the package's own.
+ */
+export function requireBuilt(name: string): unknown {
+  return installationRequire(name)
+}
 
 /**
  * Browser language a page must advertise to boot into the product's Chinese

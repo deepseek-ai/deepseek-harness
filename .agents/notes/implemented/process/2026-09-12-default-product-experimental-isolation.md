@@ -10,7 +10,7 @@ Public npm availability does not make an experimental package part of the defaul
 
 ## Decision
 
-[`verify-default-product-isolation`](../../../../scripts/verify-default-product-isolation.ts) runs in static CI and package hygiene. It follows runtime dependencies, optional dependencies, and peers from every app and the Python runtime, resolves workspace and npm aliases, and identifies experimental packages by their npm prefix or repository directory. Publication denylist membership has no effect on this classification.
+[`verify-default-product-isolation`](../../../../scripts/verify-default-product-isolation.ts) runs in static CI and package hygiene. It follows runtime dependencies, optional dependencies, and peers from every app and the Python runtime, resolves workspace and npm aliases, and identifies experimental packages by their npm prefix or repository directory. Publication denylist membership has no effect on this classification. The bundles the launcher names in `OPTIONAL_BUNDLES` are the one declared exception ([shipped optional bundles](2026-09-15-shipped-optional-bundles.md)).
 
 The source check also reads runtime imports in the selected packages, installation-owned profile bundle lists, bundle patches, shipped agent presets, and declared configuration trees. It loads the default Web layers with the production patch parser and composes them with the same patch engine used at boot. The effective rows and patched Include trees are checked, so an id-only patch cannot hide a replacement group's plugins. Disabled plugin rows remain checked; ordinary plugin configuration data is not interpreted as another Loader entry list. Missing default roots fail the check.
 

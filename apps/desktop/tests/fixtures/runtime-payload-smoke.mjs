@@ -1,21 +1,48 @@
-/** Exercise filtered Desktop native and HTML dependencies under its bundled Node. */
+/** Exercise filtered Desktop native and HTML dependencies under its Electron Node runtime. */
 
 import assert from 'node:assert/strict'
-import { closeSync, mkdtempSync, openSync, readFileSync, readSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 
 const runtime = process.argv[2]
 assert.ok(runtime, 'Pass the filtered resources/dsh directory')
 const root = resolve(runtime)
 const descriptor = JSON.parse(readFileSync(join(root, 'desktop-runtime.json'), 'utf8'))
-assert.equal(process.versions.node, descriptor.release.nodeVersion, 'Run with the bundled Node version')
+assert.equal(process.versions.node, descriptor.release.nodeVersion, 'Run with the Electron Node runtime version')
 assert.equal(process.platform, descriptor.platform)
 assert.equal(process.arch, descriptor.arch)
 const requireRuntime = createRequire(join(root, 'package.json'))
 const scratch = mkdtempSync(join(tmpdir(), 'dsh-runtime-payload-'))
+
+/** Run a package script with only the shipped node launcher available on PATH. */
+function checkPnpm() {
+  const resources = dirname(root)
+  const bin = join(resources, 'runtime', 'bin')
+  const pnpm = join(resources, 'runtime', 'pnpm', 'bin', 'pnpm.mjs')
+  writeFileSync(join(scratch, 'package.json'), JSON.stringify({
+    name: 'desktop-node-script-smoke', private: true, scripts: { check: 'node check.cjs' },
+  }))
+  writeFileSync(join(scratch, 'check.cjs'), `
+const assert = require('node:assert/strict')
+assert.equal(process.execPath, ${JSON.stringify(process.execPath)})
+assert.ok(process.versions.electron)
+assert.ok(process.execArgv.includes('--expose-internals'))
+assert.equal(typeof require('internal/modules/esm/loader').getOrInitializeCascadedLoader, 'function')
+console.log('desktop-node-script-ok')
+`)
+  const environment = Object.fromEntries(Object.entries(process.env).filter(([name]) => /^(?:systemroot|windir|comspec)$/iu.test(name)))
+  const systemBin = process.platform === 'win32' ? join(process.env.SystemRoot, 'System32') : '/usr/bin:/bin'
+  const output = execFileSync(process.execPath, ['--expose-internals', pnpm, 'run', 'check'], {
+    cwd: scratch, encoding: 'utf8', timeout: 45_000,
+    env: { ...environment, ELECTRON_RUN_AS_NODE: '1', DSH_DESKTOP_NODE_EXECUTABLE: process.execPath,
+      PATH: `${bin}${delimiter}${systemBin}`, HOME: scratch, USERPROFILE: scratch, TMP: scratch, TEMP: scratch, TMPDIR: scratch },
+  })
+  assert.match(output, /desktop-node-script-ok/u)
+}
 
 /** Spawn only a fixed Node program and await the terminal's drained exit event. */
 async function checkPty() {
@@ -23,10 +50,15 @@ async function checkPty() {
   const script = join(scratch, 'pty.cjs')
   writeFileSync(script, "process.stdout.write('runtime-payload-pty-ok\\n')\n", { flag: 'wx', mode: 0o600 })
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => (
-    /^(?:path|systemroot|windir|comspec)$/iu.test(name)
+    /^(?:path|systemroot|windir|comspec|ELECTRON_RUN_AS_NODE)$/iu.test(name)
   )))
   Object.assign(env, { HOME: scratch, USERPROFILE: scratch, TMP: scratch, TEMP: scratch, TMPDIR: scratch })
-  const terminal = pty.spawn(process.execPath, [script], { cwd: scratch, env, cols: 80, rows: 24 })
+  env.DSH_DESKTOP_NODE_EXECUTABLE = process.execPath
+  env.PATH = `${join(dirname(root), 'runtime', 'bin')}${delimiter}${env.PATH ?? env.Path ?? ''}`
+  // A Windows GUI executable needs a console-owning shell when launched inside ConPTY.
+  const executable = process.platform === 'win32' ? process.env.ComSpec : process.execPath
+  const args = process.platform === 'win32' ? ['/d', '/c', 'node', script] : [script]
+  const terminal = pty.spawn(executable, args, { cwd: scratch, env, cols: 80, rows: 24 })
   let output = ''
   let exited = false
   let timedOut = false
@@ -61,22 +93,6 @@ async function checkPty() {
     } finally {
       exitSubscription.dispose()
     }
-  }
-}
-
-/** fs-ext implements seek on Windows through SetFilePointerEx and on POSIX through lseek. */
-function checkFsExt() {
-  const fsExt = requireRuntime('fs-ext')
-  const file = join(scratch, 'seek.txt')
-  writeFileSync(file, 'abcdef', { flag: 'wx', mode: 0o600 })
-  const fd = openSync(file, 'r')
-  try {
-    assert.equal(fsExt.seekSync(fd, 2, fsExt.constants.SEEK_SET), 2)
-    const bytes = Buffer.alloc(4)
-    assert.equal(readSync(fd, bytes, 0, bytes.length, null), 4)
-    assert.equal(bytes.toString(), 'cdef')
-  } finally {
-    closeSync(fd)
   }
 }
 
@@ -121,7 +137,7 @@ function checkHtml() {
 }
 
 try {
-  checkFsExt()
+  checkPnpm()
   checkKoffi()
   await checkSharp()
   checkHtml()
@@ -134,5 +150,5 @@ try {
 // Natural event-loop drain includes node-pty's worker and console-list helper teardown.
 process.once('beforeExit', () => {
   console.log(JSON.stringify({ node: process.versions.node, platform: process.platform, arch: process.arch,
-    fsExt: true, koffi: true, sharp: true, html: true, pty: true }))
+    koffi: true, sharp: true, html: true, pty: true, pnpm: true }))
 })

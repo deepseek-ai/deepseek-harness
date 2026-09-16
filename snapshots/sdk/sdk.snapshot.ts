@@ -543,12 +543,12 @@ async function runScenario(scenario: CorpusScenario): Promise<{
   await mkdir(patchRoot, { recursive: true })
   const assertions = SDK_ASSERTIONS[scenario.name] ?? {}
   const patches = [...authoredPatches(scenario, !recording), ...assertions.patches ?? []]
-    .map((patch, index) => materializeProfilePatch(patch, cwd, patchRoot, index))
+    .map((patch, index) => materializeProfilePatch(patch, cwd, 'sdk', patchRoot, index))
   let childSessionsRoot: string | undefined
   let childEnvironment: Record<string, string> = {}
   if (assertions.dshSdkChild !== undefined) {
     const childHome = join(cwd, '.child-dsh')
-    const childPatch = materializeProfilePatch(assertions.dshSdkChild.config, cwd, patchRoot, patches.length)
+    const childPatch = materializeProfilePatch(assertions.dshSdkChild.config, cwd, 'sdk', patchRoot, patches.length)
     await mkdir(childHome, { recursive: true })
     childSessionsRoot = join(childHome, 'sessions')
     childEnvironment = {

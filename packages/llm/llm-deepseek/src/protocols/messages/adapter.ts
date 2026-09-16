@@ -8,7 +8,7 @@ import { idleWatchdog, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { catalogModelInfo, modelInfo } from '../../common/model-info.ts'
 import type { DeepSeekAdapterOptions, DeepSeekConnectionOptions as Connection } from '../../common/types.ts'
 import type { DeepSeekFileStore } from '../../common/file-store.ts'
-import { MESSAGES_FILES_BETA } from '../../common/files-api.ts'
+import { MESSAGES_FILES_BETA, messagesApiRoot } from '../../common/messages-api.ts'
 import { FileResolutionFailure, RequestFiles } from '../../common/request-files.ts'
 import { prepareRequestExtensions } from '../../common/request-extensions.ts'
 import { imagePricing, inlineImages, prepareFileIds, prepareImages } from './images.ts'
@@ -119,7 +119,7 @@ export class DeepSeekMessagesAdapter extends LlmAdapter {
         ...options.purpose === undefined ? {} : { purpose: options.purpose },
       }, this.dependencies.prepareExtensions)
       signal.throwIfAborted()
-      const response = await fetch(`${connection.baseURL.replace(/\/+$/u, '')}/v1/messages`, {
+      const response = await fetch(`${messagesApiRoot(connection.baseURL)}/messages`, {
         method: 'POST', signal, body: extensions.payload, redirect: 'error',
         headers: {
           ...attributionHeaders(),

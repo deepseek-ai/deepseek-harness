@@ -1,5 +1,5 @@
 ---
-description: "The runtime Typert registry: stores generated package reflection, live Zod schemas, and Remote invocation descriptors, and resolves them for consumers."
+description: "The runtime Typert registry: stores generated package reflection, lazy Zod schema factories, and Remote invocation descriptors, and resolves them for consumers."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-typert-registry` makes generated Typert artifacts queryable at runtime: each package's reflection — services, events, and objects — its live Zod schemas, and Remote invocation descriptors live under stable keys that consumers can query or resolve on demand. Registrations are atomic and fiber-scoped: a contribution lands whole or not at all and is withdrawn automatically when the registering component unloads. The same service hosts the lookup and scoped-Context provider registries that Remote calls resolve through. It performs no TypeScript analysis and generates no schemas; the generator and the loader handle those.
+`dsh-typert-registry` makes generated Typert artifacts queryable at runtime: each package's reflection, lazy Zod schema factories, and Remote invocation descriptors live under stable keys. A schema is materialized and cached when a consumer first requests it. Registrations are atomic and fiber-scoped: a contribution lands whole or not at all and is withdrawn automatically when the registering component unloads. The same service hosts the lookup and scoped-Context provider registries that Remote calls resolve through. It performs no TypeScript analysis and generates no schemas; the generator and the loader handle those.
 
 ## Table of Contents
 
@@ -37,7 +37,7 @@ Load the registry plugin; the Client face is installed the same way by the Clien
 
 ### Querying schemas and reflection
 
-Consumers read schemas with `get(key)`, `resolve(key)`, or `list(filter?)` and package reflection with `getPackage(name, face?)` or `listPackages(filter?)`. `resolve()` distinguishes a malformed key, an absent package, and a registered package that contributes no schema under that name, each with its own error. `toJSONSchema(key)` projects a live Zod schema to JSON Schema without caching.
+Consumers read schemas with `get(key)`, `resolve(key)`, or `list(filter?)` and package reflection with `getPackage(name, face?)` or `listPackages(filter?)`. The first schema read materializes one process-realm instance; later reads reuse it. `resolve()` distinguishes a malformed key, an absent package, and a registered package that contributes no schema under that name, each with its own error. `toJSONSchema(key)` projects the materialized Zod schema to JSON Schema without caching the projection.
 
 ### Registering a contribution
 
@@ -72,7 +72,7 @@ Each sub-registry publishes `TypertRegistryChange` events to subscribed listener
 
 ### Identity and validation
 
-Keys are stable: `<package>#<face>` for reflection, `<package>#<name>` for schemas, and `<namespace>/<method>` for endpoints. Validation rejects names containing `#`, wire names outside the RPC segment grammar, duplicate keys, and lookup definitions whose wire declaration changes during the registry lifetime; strict codecs must carry a parseable schema.
+Keys are stable: `<package>#<face>` for reflection, `<package>#<name>` for schemas, and `<namespace>/<method>` for endpoints. Validation rejects names containing `#`, wire names outside the RPC segment grammar, duplicate keys, and lookup definitions whose wire declaration changes during the registry lifetime; schema entries and strict codecs must carry a factory.
 
 ### Source map
 

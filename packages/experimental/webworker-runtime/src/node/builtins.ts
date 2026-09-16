@@ -48,6 +48,7 @@ import * as nodeWorkerThreads from './builtin_modules/mock/worker_threads.ts'
 import * as systemFlock from './external_packages/node-addon-system-flock.ts'
 import * as koffi from './external_packages/koffi.ts'
 import * as nodePty from './external_packages/node-pty.ts'
+import * as execa from './external_packages/execa.ts'
 import * as piAi from './external_packages/pi-ai.ts'
 import * as ripgrep from './external_packages/ripgrep.ts'
 import * as sharp from './external_packages/sharp.ts'
@@ -90,6 +91,7 @@ const EXTERNALS: Record<string, StaticModuleFactory> = {
   'koffi': () => koffi,
   'sharp': () => sharp,
   'node-pty': () => nodePty,
+  'execa': () => execa,
   'ws': () => ws,
   '@vscode/ripgrep': () => ripgrep,
   '@earendil-works/pi-ai': () => piAi,

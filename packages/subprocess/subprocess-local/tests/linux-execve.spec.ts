@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 afterEach(() => {
-  vi.doUnmock('koffi')
+  vi.doUnmock('@deepseek-ai/dsh-lazy-require')
   vi.resetModules()
 })
 
@@ -17,7 +17,9 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
       : nativeFcntl)
     const load = vi.fn(() => ({ func }))
     const errno = vi.fn(() => 2)
-    vi.doMock('koffi', () => ({ default: { errno, load } }))
+    vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
+      createLazyRequire: () => () => ({ errno, load }),
+    }))
 
     const { loadLinuxExecve } = await import('../src/linux-execve.ts')
     const execve = loadLinuxExecve()
@@ -65,7 +67,9 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
       ? nativeExecve
       : nativeFcntl)
     const errno = vi.fn(() => 9)
-    vi.doMock('koffi', () => ({ default: { errno, load: () => ({ func }) } }))
+    vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
+      createLazyRequire: () => () => ({ errno, load: () => ({ func }) }),
+    }))
 
     const { loadLinuxExecve } = await import('../src/linux-execve.ts')
     expect(() => loadLinuxExecve()('/bin/tool', ['tool'], {})).toThrow(expect.objectContaining({
@@ -87,7 +91,9 @@ describe.skipIf(process.platform !== 'linux')('Linux libc execve binding', () =>
       ? nativeExecve
       : nativeFcntl)
     const errno = vi.fn(() => 5)
-    vi.doMock('koffi', () => ({ default: { errno, load: () => ({ func }) } }))
+    vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
+      createLazyRequire: () => () => ({ errno, load: () => ({ func }) }),
+    }))
 
     const { loadLinuxExecve } = await import('../src/linux-execve.ts')
     expect(() => loadLinuxExecve()('/bin/tool', ['tool'], {})).toThrow(expect.objectContaining({

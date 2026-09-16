@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Win32Error } from '@deepseek-ai/dsh-win32-process'
 import { ERROR_BROKEN_PIPE } from '@deepseek-ai/dsh-win32-process/src/abi.ts'
-import { PROCESS_INFORMATION } from '@deepseek-ai/dsh-win32-process/src/ffi.ts'
+import { processInformationType } from '@deepseek-ai/dsh-win32-process/src/ffi.ts'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import koffi from 'koffi'
 
@@ -133,7 +133,7 @@ function happyStubs(): HappyStubs {
     _token: unknown, _app: unknown, _cmd: unknown, _pa: unknown, _ta: unknown,
     _inherit: unknown, _flags: unknown, _env: unknown, _cwd: unknown, _si: unknown, processInfo: NativePtr,
   ) => {
-    koffi.encode(processInfo, PROCESS_INFORMATION, { hProcess: fresh(), hThread: fresh(), dwProcessId: 1234, dwThreadId: 5678 })
+    koffi.encode(processInfo, processInformationType(), { hProcess: fresh(), hThread: fresh(), dwProcessId: 1234, dwThreadId: 5678 })
     return 1
   })
   const peekNamedPipe = vi.fn(() => 0)

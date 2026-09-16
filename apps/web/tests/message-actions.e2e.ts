@@ -247,6 +247,59 @@ describe('web e2e: message IconActions and clocks on settled history', () => {
     await expect.poll(() => page.getByRole('button', { name: 'Edit' }).count(), { timeout: 5_000 }).toBe(0)
   }, 60_000)
 
+  it.skipIf(MODE === 'record')('keeps an action tooltip above the sticky composer', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-message-action-tooltip-layer'))
+    await page.evaluate(() => { (document.activeElement as HTMLElement | null)?.blur() })
+    await page.mouse.move(0, 0)
+    const copy = page.getByRole('button', { name: 'Copy', exact: true }).last()
+    const composer = page.locator('[data-composer-seat]')
+    const tooltip = page.getByRole('tooltip', { name: 'Copy', exact: true })
+    try {
+      // Grow the sticky seat upward so the bottom tooltip overlaps it without
+      // depending on the fixture's resting composer height.
+      await composer.evaluate((element) => { element.style.paddingTop = '48px' })
+      await copy.evaluate((button) => {
+        const scrollport = button.closest<HTMLElement>('[data-conversation-scroll]')
+        const composer = scrollport?.querySelector<HTMLElement>('[data-composer-seat]') ?? null
+        if (scrollport === null || composer === null) throw new Error('conversation geometry is unavailable')
+        const buttonRect = button.getBoundingClientRect()
+        const composerTop = composer.getBoundingClientRect().top
+        scrollport.scrollTop += buttonRect.bottom - (composerTop - 8)
+      })
+      await copy.hover()
+      await tooltip.waitFor({ state: 'visible', timeout: 5_000 })
+      // Tooltip is intentionally pointer-transparent. Enable hit testing only
+      // for this stacking probe; paint order is unchanged.
+      await tooltip.evaluate((element) => { element.style.pointerEvents = 'auto' })
+      const probe = await tooltip.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
+        const x = rect.left + rect.width / 2
+        const y = rect.top + rect.height / 2
+        const composer = document.querySelector<HTMLElement>('[data-composer-seat]')
+        if (composer === null) throw new Error('composer geometry is unavailable')
+        const composerRect = composer.getBoundingClientRect()
+        const hit = document.elementFromPoint(x, y)
+        return {
+          insideComposer: composerRect.top <= y && y <= composerRect.bottom,
+          hitsTooltip: hit !== null && element.contains(hit),
+        }
+      })
+      expect(probe.insideComposer).toBe(true)
+      expect(probe.hitsTooltip).toBe(true)
+    } finally {
+      if (await tooltip.count() > 0) {
+        await tooltip.evaluate((element) => { element.style.removeProperty('pointer-events') })
+      }
+      if (await composer.count() > 0) {
+        await composer.evaluate((element) => { element.style.removeProperty('padding-top') })
+      }
+      await page.mouse.move(0, 0)
+      if (await copy.count() > 0) await copy.evaluate((element) => { element.blur() })
+      if (await tooltip.count() > 0) await tooltip.waitFor({ state: 'hidden', timeout: 5_000 })
+    }
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('matches the conversation aria golden with IconActions and clocks', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-message-actions-aria'))
     await page.getByRole('button', { name: /^Select model, current/ })

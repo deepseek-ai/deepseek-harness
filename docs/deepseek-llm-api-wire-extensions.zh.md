@@ -73,7 +73,7 @@
 
 ## `dsh_session_log`
 
-[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.zh.md) 贡献权威会话日志的一段连续后缀。该字段默认禁用。启用后，它适用于携带存活会话且至少存在一个事件的请求；直接请求、陈旧会话 id 或空日志会省略该字段。下方示例使用逻辑 Session 格式 2 仅为说明协议字段，并不标识[当前写入格式](session-format-status.zh.md)。
+[`@deepseek-ai/dsh-session-log-deepseek`](../packages/session/session-log-deepseek/README.zh.md) 贡献权威会话日志的一段连续后缀。该字段默认启用。它适用于携带存活会话且至少存在一个事件的请求；直接请求、陈旧会话 id 或空日志会省略该字段，组合可用 `enabled: false` 禁用它。下方示例使用逻辑 Session 格式 2 仅为说明协议字段，并不标识[当前写入格式](session-format-status.zh.md)。
 
 ```json
 {
@@ -157,6 +157,6 @@
 
 ## 暴露内容与接收方要求
 
-请求标头会暴露 Harness 应用版本、一个匿名 Harness-home 身份和可选的会话身份。`dsh_plugin_packages` 会暴露存活 npm 包的名称与版本。启用后，`dsh_session_log` 可能暴露会话工作目录、系统提示词快照、用户与 Assistant 内容、嵌入式 Assistant stream、失败 attempt 输出、工具参数与结果、压缩摘要、反馈和插件持有的事件。适配器 API key 不是会话事件，因此不会进入该字段。通过 `baseURL` 选择的网关会收到与官方端点相同的值。
+请求标头会暴露 Harness 应用版本、一个匿名 Harness-home 身份和可选的会话身份。`dsh_plugin_packages` 会暴露存活 npm 包的名称与版本。除非组合禁用该字段，`dsh_session_log` 可能暴露会话工作目录、系统提示词快照、用户与 Assistant 内容、嵌入式 Assistant stream、失败 attempt 输出、工具参数与结果、压缩摘要、反馈和插件持有的事件。适配器 API key 不是会话事件，因此不会进入该字段。通过 `baseURL` 选择的网关会收到与官方端点相同的值。
 
 接收方按名称定位扩展字段，按各字段自己的 `version` 分派，保留不同的包版本，并忽略 JSON 成员顺序。会话日志接收方必须先校验连续序号范围，再解释事件类型。遇到不带 `ignorable: true` 的未知权威事件时，接收方无法进行无损重建。即使缺少注册表或某项贡献，基础请求仍然可用；字段缺失表示该项贡献不适用于本次请求。

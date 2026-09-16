@@ -1,6 +1,6 @@
 /** ACL/token bindings layered on the shared Win32 process owner. */
 
-import koffi from 'koffi'
+import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
 import {
   ERROR_INSUFFICIENT_BUFFER,
   Win32Error,
@@ -22,9 +22,18 @@ export {
 } from '@deepseek-ai/dsh-win32-process'
 export type { NativePtr } from '@deepseek-ai/dsh-win32-process'
 
-type Ptr = ReturnType<typeof koffi.pointer>
-const PVOID: Ptr = koffi.pointer('void')
-const PPVOID: Ptr = koffi.pointer(PVOID)
+type Koffi = typeof import('koffi')['default']
+type Ptr = ReturnType<Koffi['pointer']>
+
+const requireKoffi = createLazyRequire<Koffi>('koffi', import.meta.url)
+let cachedTypes: { PVOID: Ptr; PPVOID: Ptr } | undefined
+
+function ffiTypes(): { PVOID: Ptr; PPVOID: Ptr } {
+  if (cachedTypes !== undefined) return cachedTypes
+  const koffi = requireKoffi()
+  const PVOID = koffi.pointer('void')
+  return cachedTypes = { PVOID, PPVOID: koffi.pointer(PVOID) }
+}
 
 /** ACL/token calls composed with the generic Win32 process binding table. */
 export interface Win32Bindings extends Win32ProcessBindings {
@@ -115,7 +124,7 @@ export function isInvalidHandle(handle: NativePtr | null | undefined): boolean {
  * @param value - unsigned value to store.
  */
 export function encodeUint32(slot: NativePtr, value: number): void {
-  koffi.encode(slot, 'uint32', value)
+  requireKoffi().encode(slot, 'uint32', value)
 }
 
 /**
@@ -124,7 +133,7 @@ export function encodeUint32(slot: NativePtr, value: number): void {
  * @returns pointer address.
  */
 export function ptrAddress(ptr: NativePtr): bigint {
-  return koffi.address(ptr)
+  return requireKoffi().address(ptr)
 }
 
 /**
@@ -133,7 +142,7 @@ export function ptrAddress(ptr: NativePtr): bigint {
  * @returns allocated pointer.
  */
 export function allocBytes(length: number): NativePtr {
-  return koffi.alloc('uint8', length) as NativePtr
+  return requireKoffi().alloc('uint8', length) as NativePtr
 }
 
 /**
@@ -153,7 +162,7 @@ export function allocOverlapped(): NativePtr {
  * @returns decoded pointer, or null for address zero.
  */
 export function decodePtrAt(buffer: Buffer, offset: number): NativePtr | null {
-  const value = koffi.decode(buffer, offset, PVOID) as NativePtr | null
+  const value = requireKoffi().decode(buffer, offset, ffiTypes().PVOID) as NativePtr | null
   return isNullPtr(value) ? null : value
 }
 
@@ -164,7 +173,7 @@ export function decodePtrAt(buffer: Buffer, offset: number): NativePtr | null {
  * @returns decoded value.
  */
 export function decodeUint8At(ptr: NativePtr, offset: number): number {
-  return koffi.decode(ptr, offset, 'uint8') as number
+  return requireKoffi().decode(ptr, offset, 'uint8') as number
 }
 
 /**
@@ -174,7 +183,7 @@ export function decodeUint8At(ptr: NativePtr, offset: number): number {
  * @returns decoded value.
  */
 export function decodeUint16At(ptr: NativePtr, offset: number): number {
-  return koffi.decode(ptr, offset, 'uint16') as number
+  return requireKoffi().decode(ptr, offset, 'uint16') as number
 }
 
 /**
@@ -184,7 +193,7 @@ export function decodeUint16At(ptr: NativePtr, offset: number): number {
  * @returns decoded value.
  */
 export function decodeUint32At(ptr: NativePtr, offset: number): number {
-  return koffi.decode(ptr, offset, 'uint32') as number
+  return requireKoffi().decode(ptr, offset, 'uint32') as number
 }
 
 /**
@@ -221,6 +230,8 @@ let cached: Win32Bindings | undefined
 
 function bindings(): Win32Bindings {
   if (cached !== undefined) return cached
+  const koffi = requireKoffi()
+  const { PVOID, PPVOID } = ffiTypes()
   cached = extendWin32ProcessBindings(({ kernel32, advapi32, bind }) => ({
     openProcess: bind(kernel32, 'OpenProcess', PVOID, ['uint32', 'int', 'uint32']),
     openProcessToken: bind(advapi32, 'OpenProcessToken', 'int', [PVOID, 'uint32', PPVOID]),

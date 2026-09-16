@@ -211,12 +211,3 @@ export async function verifyDesktopRuntime(
   }
   return descriptor
 }
-
-/**
- * Identify exact runtime content independently of its installation path.
- * @param descriptor - Validated runtime metadata.
- * @returns SHA-256 runtime identity.
- */
-export function desktopRuntimeId(descriptor: DesktopRuntimeDescriptor): string {
-  return createHash('sha256').update(JSON.stringify(descriptor)).digest('hex')
-}

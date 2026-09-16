@@ -38,3 +38,6 @@
         toolName: subagent_codex_secondary
         backgroundMode: one-shot
         maxDepth: provider-managed
+
+- id: plugin-package-inventory-deepseek
+  disabled: true

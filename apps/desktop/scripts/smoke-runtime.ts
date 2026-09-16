@@ -5,13 +5,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DesktopHostProcess } from '../src/host-process.ts'
 import { createPluginProfile } from '../src/project-manager.ts'
-import { linkDesktopHostPackages, validateDesktopPluginGraph } from '../src/profile-packages.ts'
 import type { DesktopRuntimeDescriptor } from '../src/runtime-tree.ts'
 
 /**
  * Prove the final resource tree boots and serves its matching Web frontend.
  * @param root - Materialized dsh resources.
- * @param node - Prepared target Node executable.
+ * @param node - Prepared target Electron executable.
  * @param runtime - Verified resource descriptor.
  */
 export async function smokeDesktopRuntime(root: string, node: string, runtime: DesktopRuntimeDescriptor): Promise<void> {
@@ -33,9 +32,11 @@ export async function smokeDesktopRuntime(root: string, node: string, runtime: D
 import { Context } from '@deepseek-ai/cordis'
 export function apply(ctx) {
   if (!(ctx instanceof Context)) throw new Error('desktop runtime: external plugin loaded another Cordis instance')
+  ctx.effect(() => ctx.webServer.register({ kind: 'exact', path: '/desktop-smoke',
+    handler(_request, response) { response.end('plugin route ready') } }))
 }
 `)
-    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n')
+    writeFileSync(join(plugin, 'bundle.yml'), '- insert:\n    - id: desktop-runtime-smoke-plugin\n      name: desktop-runtime-smoke-plugin\n      inject: [webServer]\n')
     const manifest = JSON.parse(readFileSync(join(profile, 'package.json'), 'utf8')) as {
       dependencies: Record<string, string>
       dsh: { profile: { bundles: string[] } }
@@ -43,14 +44,16 @@ export function apply(ctx) {
     manifest.dependencies[pluginName] = '1.0.0'
     manifest.dsh.profile.bundles.push(pluginName)
     writeFileSync(join(profile, 'package.json'), JSON.stringify(manifest))
-    linkDesktopHostPackages(profile, root, runtime)
-    validateDesktopPluginGraph(profile, root, runtime, [pluginName])
+    writeFileSync(join(profile, 'cordis.patch.yml'), '- id: webserver\n  config:\n    host: 127.0.0.1\n    port: 0\n')
     const ready = await host.start()
-    if (ready.dshVersion !== runtime.release.version) throw new Error('desktop runtime: Host reported another dsh release')
-    const response = await host.fetch(new Request('dsh-app://app/'))
+    const login = await fetch(ready.url, { redirect: 'manual' })
+    const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).join('; ')
+    const response = await fetch(new URL('/', ready.url), { headers: { cookie } })
     if (response.status !== 200 || !(await response.text()).includes('<html')) {
       throw new Error('desktop runtime: packaged frontend smoke failed')
     }
+    const pluginResponse = await fetch(new URL('/desktop-smoke', ready.url), { headers: { cookie } })
+    if (await pluginResponse.text() !== 'plugin route ready') throw new Error('desktop runtime: plugin HTTP route failed')
   } finally {
     await host.stop()
     rmSync(home, { recursive: true, force: true })

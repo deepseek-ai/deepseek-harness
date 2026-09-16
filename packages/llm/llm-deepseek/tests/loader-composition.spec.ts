@@ -75,8 +75,8 @@ async function loadComposition(
     "  name: '@deepseek-ai/dsh-deepseek-llm-api-extensions'",
     '- id: session-log-deepseek',
     "  name: '@deepseek-ai/dsh-session-log-deepseek'",
-    ...options.enableSessionLog === true
-      ? ['  config:', '    enabled: true']
+    ...options.enableSessionLog !== undefined
+      ? ['  config:', `    enabled: ${String(options.enableSessionLog)}`]
       : [],
     '- id: plugin-package-inventory-deepseek',
     "  name: '@deepseek-ai/dsh-plugin-package-inventory-deepseek'",
@@ -152,10 +152,10 @@ async function extensionServer(protocol: 'chat-completions' | 'messages') {
 }
 
 describe('llm-deepseek real dynamic composition', () => {
-  it.each(['chat-completions', 'messages'] as const)('keeps session upload off and package inventory on by default through %s Loader composition', async (protocol) => {
+  it.each(['chat-completions', 'messages'] as const)('keeps package inventory on when the %s Loader composition disables session upload', async (protocol) => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await extensionServer(protocol)
-    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, protocol })
+    const { ctx } = await loadComposition({ withDynamic: false, baseURL: server.url, protocol, enableSessionLog: false })
     const session = ctx.sessions.create(SessionId('extension-composition'))
     session.append('turn/start', { turn: 1 })
 
@@ -171,13 +171,12 @@ describe('llm-deepseek real dynamic composition', () => {
     expect(SessionLogDeepSeek.acceptedThrough(session)).toBe(-1)
   })
 
-  it.each(['chat-completions', 'messages'] as const)('sends the canonical session suffix when the %s Loader composition explicitly enables upload', async (protocol) => {
+  it.each(['chat-completions', 'messages'] as const)('sends the canonical session suffix by default through %s Loader composition', async (protocol) => {
     vi.stubEnv('DEEPSEEK_API_KEY', 'entry-key')
     const server = await extensionServer(protocol)
     const { ctx } = await loadComposition({
       withDynamic: false,
       baseURL: server.url,
-      enableSessionLog: true,
       protocol,
     })
     const session = ctx.sessions.create(SessionId('extension-composition-enabled'))

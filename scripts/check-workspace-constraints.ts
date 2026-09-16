@@ -13,6 +13,7 @@ import {
   PRIVATE_EXPERIMENTAL_PACKAGE_DIRECTORIES,
 } from './experimental-package-policy.ts'
 import { hasTypertRemoteNavigation, isForbiddenPublicationFile } from './publication-payload.ts'
+import { OPTIONAL_BUNDLES } from '../packages/boot/app-boot/src/profile.ts'
 import { collectProjectReferenceFaceViolations } from './project-reference-faces.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -59,10 +60,9 @@ const standardReleaseMemberDirectory = /^(?:packages\/(?!experimental\/)[^/]+\/[
 const desktopApplicationDirectory = 'apps/desktop'
 const localArtifactDirs = new Set(['node_modules'])
 const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
-  '@deepseek-ai/dsh': ['lib/*.js'],
+  '@deepseek-ai/dsh': ['lib/*.js', 'lib/types/*.d.ts'],
   '@deepseek-ai/dsh-desktop-host': [
     'lib/index.js',
-    'config/desktop.cordis.patch.yml',
   ],
   // Sourcemaps stay out by payload policy; the worker-preview surface
   // (dist/preview.html and dist/preview/) backs opt-in experimental
@@ -148,6 +148,8 @@ function workspaceManifests(): WorkspaceManifest[] {
 }
 
 const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
+  // Owned Worker bundles import this public bootstrap before their business entry.
+  '@deepseek-ai/dsh-app-boot': ['lib/worker/profile-resolution-bootstrap.js'],
   // Statically linked client libraries keep their stylesheets next to the emitted
   // JavaScript, which imports them by relative path: the compile shell runs
   // them through its own CSS pipeline, so the sheets are published artifacts.
@@ -155,7 +157,9 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // unpublished, as everywhere else in the repository.
   '@deepseek-ai/dsh-client-ui-primitives': ['lib/**/*.css'],
   '@deepseek-ai/dsh-client-ui-dockkit': ['lib/**/*.css'],
-  '@deepseek-ai/dsh-client-web': ['lib/**/*.css'],
+  '@deepseek-ai/dsh-client-ui-sidebar-documentpreview': ['lib/client.*.js'],
+  '@deepseek-ai/dsh-client-ui-sidebar-terminal': ['lib/client.*.js'],
+  '@deepseek-ai/dsh-client-web': ['lib/**/*.css', 'lib/apply-injections.js'],
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-experimental-ptc-runtime-python': ['py/**/*.py'],
@@ -499,11 +503,16 @@ const dependencySections = ['dependencies', 'devDependencies', 'peerDependencies
 const runtimeDependencySections = ['dependencies', 'optionalDependencies', 'peerDependencies'] as const
 
 /**
- * Prevent an official runtime from requiring a package its release omits.
+ * Prevent an official runtime from requiring an experimental package. The dsh installation's `dependencies`
+ * may hold the bundles the launcher's `OPTIONAL_BUNDLES` names: shipped switched off, they are not a requirement
+ * ([rationale](../.agents/notes/implemented/process/2026-09-15-shipped-optional-bundles.md)).
  * @param manifests - release, private experimental, and deployment-root manifests.
+ * @param optionalBundles - the bundles the installation ships switched off; the launcher's list by default.
  * @returns One error for each forbidden runtime dependency.
  */
-export function checkExperimentalDependencyIsolation(manifests: readonly WorkspaceManifest[]): string[] {
+export function checkExperimentalDependencyIsolation(
+  manifests: readonly WorkspaceManifest[], optionalBundles: readonly string[] = OPTIONAL_BUNDLES,
+): string[] {
   const experimentalNames = new Set(manifests
     .filter(entry => experimentalPackageDirectory.test(entry.dir))
     .map(entry => entry.manifest.name)
@@ -511,9 +520,11 @@ export function checkExperimentalDependencyIsolation(manifests: readonly Workspa
   const errors: string[] = []
   for (const { dir, manifest } of manifests) {
     if (!standardReleaseMemberDirectory.test(dir) && dir !== 'python/sdk-runtime') continue
+    const offered = manifest.name === '@deepseek-ai/dsh' ? new Set(optionalBundles) : new Set<string>()
     for (const section of runtimeDependencySections) {
       for (const name of Object.keys(manifest[section] ?? {})) {
         if (!experimentalNames.has(name)) continue
+        if (section === 'dependencies' && offered.has(name)) continue
         errors.push(`${manifest.name ?? dir}: ${section}.${name} must not reference an experimental package`)
       }
     }

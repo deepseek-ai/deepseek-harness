@@ -1605,18 +1605,19 @@ describe('FaceModelEmitter', { timeout: 60_000 }, () => {
     const modulePath = join(root, 'host.mjs')
     writeFileSync(modulePath, artifact.js)
     const generated = await import(`${pathToFileURL(modulePath).href}?test=${Date.now()}`) as {
-      Payload: { safeParse(value: unknown): { success: boolean } }
+      Payload: () => { safeParse(value: unknown): { success: boolean } }
       TYPERT: {
         package: string
         face: string
-        schemas: { name: string; schema: unknown }[]
+        schemas: { name: string; create: () => unknown }[]
         model: { services: { key: string; members: { signature: string }[] }[] }
       }
     }
-    expect(generated.Payload.safeParse({ name: 'ready', count: 2 }).success).toBe(true)
-    expect(generated.Payload.safeParse({ name: 'ready', count: 'two' }).success).toBe(false)
+    expect(generated.Payload().safeParse({ name: 'ready', count: 2 }).success).toBe(true)
+    expect(generated.Payload().safeParse({ name: 'ready', count: 'two' }).success).toBe(false)
+    expect(generated.Payload()).toBe(generated.Payload())
     expect(generated.TYPERT).toMatchObject({ package: '@fixture/host', face: 'host' })
-    expect(generated.TYPERT.schemas[0]?.schema).toBe(generated.Payload)
+    expect(generated.TYPERT.schemas[0]?.create).toBe(generated.Payload)
     const demo = generated.TYPERT.model.services.find(service => service.key === 'demo')
     expect(demo).toMatchObject({ key: 'demo' })
     expect(demo?.members.map(member => member.signature)).toContain(
@@ -1631,7 +1632,7 @@ describe('FaceModelEmitter', { timeout: 60_000 }, () => {
       'import { Payload } from \'./host.js\'',
       'import type { Payload as SourcePayload } from \'@fixture/host\'',
       'import type { z } from \'zod\'',
-      'const precise: z.ZodType<SourcePayload> = Payload',
+      'const precise: () => z.ZodType<SourcePayload> = Payload',
       'void precise',
       '',
     ].join('\n'))

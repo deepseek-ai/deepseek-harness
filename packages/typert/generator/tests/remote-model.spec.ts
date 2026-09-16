@@ -25,9 +25,9 @@ interface RuntimeDescriptor {
   readonly parameters: readonly {
     readonly wire: string
     readonly acceptsUndefined?: true
-    readonly codec: { readonly schema: RuntimeSchema }
+    readonly codec: { readonly create: () => RuntimeSchema }
   }[]
-  readonly result: { readonly schema: RuntimeSchema }
+  readonly result: { readonly create: () => RuntimeSchema }
 }
 
 interface RuntimeRemoteModule {
@@ -152,10 +152,10 @@ describe('Remote model generation', { timeout: 60_000 }, () => {
     expect(generated.TYPERT_REMOTE.package).toBe('@fixture/remote')
     const create = generated.TYPERT_REMOTE.descriptors[0]
     expect(create?.cancellation).toEqual({ parameter: 'signal' })
-    expect(create?.parameters[1]?.codec.schema.safeParse({ title: 'ship' }).success).toBe(true)
-    expect(create?.parameters[1]?.codec.schema.safeParse({ title: 1 }).success).toBe(false)
-    expect(create?.result.schema.safeParse({ ref: 'goal-1' }).success).toBe(true)
-    expect(create?.result.schema.safeParse({ ref: 1 }).success).toBe(false)
+    expect(create?.parameters[1]?.codec.create().safeParse({ title: 'ship' }).success).toBe(true)
+    expect(create?.parameters[1]?.codec.create().safeParse({ title: 1 }).success).toBe(false)
+    expect(create?.result.create().safeParse({ ref: 'goal-1' }).success).toBe(true)
+    expect(create?.result.create().safeParse({ ref: 1 }).success).toBe(false)
     expect(generated.TYPERT_REMOTE.descriptors[2]?.mode).toBe('stream')
 
     const declarationMap = JSON.parse(artifact?.remote?.dtsMap ?? '') as RemoteDeclarationMap
@@ -208,15 +208,15 @@ export type {`,
     const maybe = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/maybe'))
     const clear = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/clear'))
     expect(maybe?.parameters[0]?.acceptsUndefined).toBe(true)
-    expect(maybe?.parameters[0]?.codec.schema.safeParse(undefined).success).toBe(true)
-    expect(maybe?.result.schema.safeParse(undefined).success).toBe(true)
-    expect(clear?.result.schema.safeParse(undefined).success).toBe(true)
-    expect(clear?.result.schema.safeParse(null).success).toBe(false)
+    expect(maybe?.parameters[0]?.codec.create().safeParse(undefined).success).toBe(true)
+    expect(maybe?.result.create().safeParse(undefined).success).toBe(true)
+    expect(clear?.result.create().safeParse(undefined).success).toBe(true)
+    expect(clear?.result.create().safeParse(null).success).toBe(false)
     const labelled = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/labelled'))
     expect(labelled?.parameters[0]?.acceptsUndefined).toBeUndefined()
     expect(labelled?.parameters[1]?.acceptsUndefined).toBe(true)
-    expect(labelled?.parameters[1]?.codec.schema.safeParse(undefined).success).toBe(true)
-    expect(labelled?.parameters[1]?.codec.schema.safeParse(7).success).toBe(false)
+    expect(labelled?.parameters[1]?.codec.create().safeParse(undefined).success).toBe(true)
+    expect(labelled?.parameters[1]?.codec.create().safeParse(7).success).toBe(false)
   })
 
   it('evaluates declaration-merged mapped and conditional boundaries for codecs without widening consumer types', async () => {
@@ -282,13 +282,13 @@ export type GenericResult = {
     const executable = remoteJs.replace("from 'zod'", `from ${JSON.stringify(import.meta.resolve('zod'))}`)
     const generated = await import(`data:text/javascript,${encodeURIComponent(executable)}`) as RuntimeRemoteModule
     const dispatch = generated.TYPERT_REMOTE.descriptors.find(descriptor => descriptor.id.endsWith('/dispatch'))
-    const schema = dispatch?.parameters[0]?.codec.schema
+    const schema = dispatch?.parameters[0]?.codec.create()
     expect(schema?.safeParse({ kind: 'ship', payload: { count: 2, meta: { nested: [true, null] } } }).success).toBe(true)
     expect(schema?.safeParse({ kind: 'ship', payload: { count: '2', meta: {} } }).success).toBe(false)
     expect(schema?.safeParse({ kind: 'cancel', payload: { reason: 'obsolete' } }).success).toBe(true)
     expect(schema?.safeParse({ kind: 'unknown', payload: {} }).success).toBe(false)
-    expect(dispatch?.result.schema.safeParse({ kind: 'ship', value: { accepted: true } }).success).toBe(true)
-    expect(dispatch?.result.schema.safeParse({ kind: 'ship', value: { cancelled: true } }).success).toBe(false)
+    expect(dispatch?.result.create().safeParse({ kind: 'ship', value: { accepted: true } }).success).toBe(true)
+    expect(dispatch?.result.create().safeParse({ kind: 'ship', value: { cancelled: true } }).success).toBe(false)
   })
 
   it('imports public type arguments nested under a named generic boundary', () => {

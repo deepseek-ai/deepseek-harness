@@ -20,7 +20,7 @@ import {
   KEY_ESCAPE_COMMAND, KEY_SPACE_COMMAND, KEY_TAB_COMMAND, PASTE_COMMAND,
 } from 'lexical'
 import { mergeRegister } from '@lexical/utils'
-import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/input.ts'
+import type { ArbitrateKey, ArbitrateOutcome } from '../../contract/draft-editor.ts'
 
 /** The bar-supplied behavior behind each intercepted gesture. */
 export interface ComposerKeymapHandlers {

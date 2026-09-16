@@ -33,7 +33,7 @@ export interface GuideInjected {
 /** The guide body's composed props: the tab it draws, its chain child, and the entries. */
 export type GuideBodyProps =
   & PropsRuntime<'sidebar.right.pane.tab'>
-  & PropsRenderSlots<'sidebar.right.tab.guide'>
+  & PropsRenderSlots<'sidebar.right.tab.guide' | 'sidebar.right.tab.guide.entry'>
   & InjectFace<GuideInjected>
 
 /** Entry count past which the guide drops the capsules' descriptions to stay light. */
@@ -67,30 +67,36 @@ function EntryBox({ entry, described, onPick }: {
 }
 
 /** The shipped guide: the tab's own compass over the doors out of the column. */
-function ShippedGuide({ entries, onPick }: {
-  entries: readonly SidebarRightGuideBox[]
-  onPick: (entry: SidebarRightGuideBox) => void
-}): ReactNode {
+function ShippedGuide({ children }: { children: ReactNode }): ReactNode {
   return (
     <div className={css.guide} data-sidebar-right-guide>
       <span className={css.hero} aria-hidden="true"><CompassGlyph size={56} /></span>
-      {/* Keyed by position in the ordered list: one type may contribute several capsules, and `order` is not unique. */}
-      {entries.map((entry, index) => (
-        <EntryBox key={`${entry.kind}:${index}`} entry={entry} described={entries.length <= MAX_DESCRIBED_ENTRIES} onPick={onPick} />
-      ))}
+      {children}
     </div>
   )
 }
 
 /** The guide tab's body, replaceable through its chain child. */
-export function GuideBody({ useTabInfo, useGuideEntries, renderSlotChain }: GuideBodyProps): ReactNode {
+export function GuideBody({ useTabInfo, useGuideEntries, renderSlot, renderSlotChain }: GuideBodyProps): ReactNode {
   const { tab } = useTabInfo()
   const entries = useGuideEntries(entries => entries)
   const options = {
     hookContext: useTabInfo,
     fallback: (
-      <ShippedGuide entries={entries}
-        onPick={(entry) => { tab.actions.openTab(entry.kind, { replaceTab: true }) }} />
+      <ShippedGuide>{entries.map((entry) => {
+        const described = entries.length <= MAX_DESCRIBED_ENTRIES
+        const description = described ? entry.description?.() : undefined
+        return <div key={JSON.stringify([entry.providerId, entry.id])} className={css.entryCell}>
+          {renderSlot('sidebar.right.tab.guide.entry', {
+            entryId: entry.id, kind: entry.kind, title: entry.title(),
+            ...description === undefined ? {} : { description },
+          }, {
+            entryKey: entry.providerId, hookContext: useTabInfo,
+            fallback: <EntryBox entry={entry} described={described}
+              onPick={(selected) => { tab.actions.openTab(selected.kind, { replaceTab: true }) }} />,
+          })}
+        </div>
+      })}</ShippedGuide>
     ),
   } satisfies ChainRenderOpts & { hookContext: HookContextOf<'sidebar.right.tab.guide'> }
   return renderSlotChain('sidebar.right.tab.guide', {}, options)

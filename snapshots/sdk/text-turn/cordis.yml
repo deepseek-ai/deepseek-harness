@@ -28,11 +28,6 @@
     enableRunInBackground: false
     maxDepth: 1
 
-- id: session-log-deepseek
-  name: '@deepseek-ai/dsh-session-log-deepseek'
-  config:
-    enabled: true
-
 - insert:
     - id: snapshot-message-feedback
       name: '@deepseek-ai/dsh-message-feedback'

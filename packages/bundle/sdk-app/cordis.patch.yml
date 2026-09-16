@@ -20,3 +20,6 @@
       inject: [sdkAppStartup, loader]
       config:
         maxTokensAsSuccess: !!js "process.env.DSH_MAX_TOKENS_AS_SUCCESS === undefined ? true : JSON.parse(process.env.DSH_MAX_TOKENS_AS_SUCCESS)"
+
+- id: hmr
+  disabled: true

@@ -58,7 +58,7 @@ profile 在第一方指导之前提供 `You are a coding agent powered by the {{
 
 - **profile 可能省略 SDK server**：TypeScript client 选择的自定义 profile 必须保留本组合包或另一个 `dsh-sdk-jsonrpc-server` 配置项；没有 peer 响应时，client 初始化会失败。
 - **用户插件可以破坏 stdout 纯净性**：profile 与逐次启动 patch 属于受信任应用组合。随附组合包不会向 stdout 写入非协议内容，但无法约束任意插入插件。
-- **配置变化需要重启**：随附 `sdk` profile 使用 `patchReload: startup`，因此一个 stdio 连接不会观察到 server 或 agent 依赖被替换。
+- **配置变化需要重启**：`sdk-app` 组合包在 YAML 中禁用 HMR，因此一个 stdio 连接不会观察到 server 或 agent 依赖被替换。
 
 
 <a id="dev-note"></a>

@@ -34,6 +34,12 @@
     },
     {
       "path": "../ui-slots"
+    },
+    {
+      "path": "../modules"
+    },
+    {
+      "path": "../store"
     }
   ]
 }

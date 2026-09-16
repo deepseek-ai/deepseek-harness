@@ -13,3 +13,7 @@
             name: DeepSeek
             models:
               - id: deepseek-v4-flash
+
+- id: session-log-deepseek
+  config:
+    enabled: false

@@ -136,6 +136,7 @@ describe('ui-sidebar-right apply', () => {
     // store instance is minted here from the handle the registration declared.
     const handle = seat('rightbar.session').store as ReturnType<typeof createSidebarRightStore>
     const instance = handle.create()
+    instance.clearPersisted()
     const release = injected.bindService({ sessionId: SESSION, actions: instance.actions, surfaces: {}, canSplitPane: () => true })
     injected.openTab('guide', { revealIfOpened: false })
     const surface = instance.getSnapshot().bySession[SESSION]
@@ -167,6 +168,9 @@ describe('ui-sidebar-right apply', () => {
     occurrence.tabActions.close()
     expect(instance.getSnapshot().bySession[SESSION]?.layout.tabs[guide.id]).toBeUndefined()
     expect(occurrence.signal.aborted).toBe(true)
+    expect(ctx.sidebarRight.openTabs.getSnapshot().length).toBeGreaterThan(0)
+    instance.clearPersisted()
+    expect(ctx.sidebarRight.openTabs.getSnapshot()).toEqual([])
   })
 
   it('hands the guide body the registry\'s entry boxes, observable', async () => {
@@ -179,7 +183,7 @@ describe('ui-sidebar-right apply', () => {
       id: 'spec/files',
       kind: 'files',
       title: () => 'Files',
-      guide: [{ order: 10, title: () => 'Files' }],
+      guide: [{ id: 'default', order: 10, title: () => 'Files' }],
     })
     expect(seen).toHaveBeenCalledOnce()
     expect(guideEntries.getSnapshot().map(entry => entry.kind)).toEqual(['files'])

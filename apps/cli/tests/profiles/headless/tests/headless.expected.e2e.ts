@@ -241,7 +241,7 @@ describe('headless stream-json snapshots', () => {
       tempDirPrefix: 'headless-snapshot-profile-',
       binScript: dshBinScript,
       configPath: headlessOverlayPath,
-      binArgs: ['--profile', 'headless', '--patch', headlessOverlayPath, task],
+      binArgs: ['headless', '--patch', headlessOverlayPath, task],
       tsconfigPath,
       env: {
         DSH_PERMISSION_MODE: 'danger-full-access',

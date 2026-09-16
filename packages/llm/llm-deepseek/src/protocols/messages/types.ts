@@ -18,7 +18,7 @@ export interface WireMessage {
   content: WireBlock[]
 }
 
-/** JSON body submitted to /v1/messages. */
+/** JSON body submitted to the resolved Messages endpoint. */
 export interface WireRequest {
   model: string
   stream: true

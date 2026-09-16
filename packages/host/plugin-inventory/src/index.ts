@@ -17,8 +17,12 @@ import type {
 
 export type * from './types.ts'
 
-/** Brand an existing Loader-tree entry id at the owning boundary. */
-function pluginEntryId(value: string): PluginEntryId {
+/**
+ * Brand an existing Loader-tree entry id at the owning boundary.
+ * @param value - the entry id as the Loader tree spells it.
+ * @returns the same id as the inventory's branded entry id.
+ */
+export function pluginEntryId(value: string): PluginEntryId {
   return value as PluginEntryId
 }
 
@@ -64,29 +68,38 @@ export class PluginInventoryGateway extends TypertRemoteService {
    */
   @Remote('list')
   async list(): Promise<PluginInventorySnapshot> {
-    const entries: PluginInventoryEntry[] = []
-    for (const entry of this.ctx.loader.entries()) {
-      if (entry.options.group) continue
-      entries.push({
-        entryId: pluginEntryId(entry.id),
-        moduleName: entry.options.name,
-        enabled: !entry.disabled,
-        fiberPhase: entry.fiber === undefined ? null : FIBER_PHASE[entry.fiber.state],
-      })
-    }
-    const presets = this.ctx.get('agentPresets')
-    if (presets === undefined) return { entries }
-    const agentPresets: AgentPresetPluginGroup[] = (await presets.compositionInventory()).map(
-      composition => ({
-        ...composition,
-        rows: composition.rows.map(({ fiberState, ...row }) => ({
-          ...row,
-          fiberPhase: fiberState === undefined ? null : FIBER_PHASE[fiberState],
-        })),
-      }),
-    )
-    return { entries, agentPresets }
+    return readPluginInventory(this.ctx)
   }
 }
 
 export default PluginInventoryGateway
+
+/** Read current Loader entries and optional preset compositions.
+ * @param ctx Context with the Loader service.
+ * @returns Current inventory without a separate runtime cache.
+ */
+export async function readPluginInventory(ctx: Context): Promise<PluginInventorySnapshot> {
+  const entries: PluginInventoryEntry[] = []
+  for (const entry of ctx.loader.entries()) {
+    if (entry.options.group) continue
+    entries.push({
+      entryId: pluginEntryId(entry.id),
+      moduleName: entry.options.name,
+      enabled: !entry.disabled,
+      fiberPhase: entry.fiber === undefined ? null : FIBER_PHASE[entry.fiber.state],
+    })
+  }
+  const presets = ctx.get('agentPresets')
+  const management = ctx.get('pluginManager') === undefined ? {} : { managementAvailable: true }
+  if (presets === undefined) return { entries, ...management }
+  const agentPresets: AgentPresetPluginGroup[] = (await presets.compositionInventory()).map(
+    composition => ({
+      ...composition,
+      rows: composition.rows.map(({ fiberState, ...row }) => ({
+        ...row,
+        fiberPhase: fiberState === undefined ? null : FIBER_PHASE[fiberState],
+      })),
+    }),
+  )
+  return { entries, agentPresets, ...management }
+}

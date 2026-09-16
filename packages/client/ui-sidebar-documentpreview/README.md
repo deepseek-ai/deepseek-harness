@@ -53,7 +53,7 @@ PNG, JPEG, GIF, WebP, BMP, ICO, and SVG render through Blob URLs in an `<img>` s
 
 Shared copy comes from `sidebarDocumentPreview`; each builtin renderer owns its localized labels.
 
-Initial reads, additional pages, and HTML/PDF/image preparation share an icon-only loading spinner that exposes its label to assistive technology and respects reduced-motion preferences; every wait before content exists centres the spinner in the pane, so opening a file shows one spinner in one position until the body appears. Loaded pages stay visible while another page loads. PDF pages fill the pane's width edge to edge as one vertical sequence and render lazily near the viewport; an unrendered page holds its place as a quiet 3:4 placeholder block. Code previews show source line numbers by default without including them in copied text; plain text uses the same font size and line height as code. Code sits on the pane's own background rather than the chat card's fill; its banner is adjacent to a full-height inner scrollport, so both scrollbars begin below the copy control.
+Initial reads, additional pages, and HTML/PDF/image preparation share an icon-only loading spinner that exposes its label to assistive technology and respects reduced-motion preferences; every wait before content exists centres the spinner in the pane, so opening a file shows one spinner in one position until the body appears. Loaded pages stay visible while another page loads. The PDF body loads its package-local `client.pdf.js` chunk only when a PDF preview mounts; PDF.js, its Worker source, and embedded support data stay out of the startup `client.js`. PDF pages fill the pane's width edge to edge as one vertical sequence and render lazily near the viewport; an unrendered page holds its place as a quiet 3:4 placeholder block. Code previews show source line numbers by default without including them in copied text; plain text uses the same font size and line height as code. Code sits on the pane's own background rather than the chat card's fill; its banner is adjacent to a full-height inner scrollport, so both scrollbars begin below the copy control.
 
 <a id="navigation"></a>
 ## Navigation
@@ -78,6 +78,7 @@ No direct effect; what the user reads here never enters a model request.
 - **Finite local HTML dependencies.** Only direct classic `.js` and stylesheet `.css` references are packed. Browser-resolved resources retain browser origin and network restrictions; no runtime file-read bridge is exposed to the iframe.
 - **Package-local wrap glyphs.** `IconWrapFill16` and `IconNowrapFill16` live in `src/client/icons.tsx` until the shared icon set carries them; their props already match the shared icon contract.
 - **Scroll writes are unthrottled.** Every scroll event records its offset in the store; the line blocks are memoized so the resulting re-render hands React the same elements back.
+- **A failed PDF chunk load requires a page reload.** React caches a rejected lazy import for the page lifetime; ordinary PDF open or render failures remain retryable inside the loaded body.
 
 <a id="dev-note"></a>
 ### Dev Note

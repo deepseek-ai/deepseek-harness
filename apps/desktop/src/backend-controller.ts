@@ -3,7 +3,7 @@
 import { desktopErrorState } from './startup-error.ts'
 
 /** Backend availability presented by the desktop window. */
-export type DesktopBackendState = { readonly phase: 'starting' } | { readonly phase: 'ready' } | { readonly phase: 'error'; readonly message: string; readonly profileRecovery?: boolean }
+export type DesktopBackendState = { readonly phase: 'starting' } | { readonly phase: 'ready' } | { readonly phase: 'error'; readonly message: string }
 
 /** Child lifecycle owned by the desktop backend controller. */
 export interface DesktopBackendHost {

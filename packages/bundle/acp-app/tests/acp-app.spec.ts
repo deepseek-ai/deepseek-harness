@@ -24,7 +24,7 @@ describe('dsh-acp-app bundle', () => {
       disabled?: boolean
       insert?: Array<{ config?: { model?: string; provider?: string }; id?: string; inject?: string[]; name?: string }>
     }>
-    expect(patches.find(patch => patch.id === 'hmr')).toBeUndefined()
+    expect(patches.find(patch => patch.id === 'hmr')).toMatchObject({ disabled: true })
     expect(patches.find(patch => patch.id === 'session-title-llm')).toMatchObject({ disabled: true })
     const rows = patches.flatMap(patch => patch.insert ?? [])
     expect(rows.find(row => row.id === 'acp-app-startup')?.name).toBe('@deepseek-ai/dsh-acp-app')

@@ -284,8 +284,6 @@ export default defineConfig({
         'packages/experimental/inspector/src/shared/bridge/messages/runtime/{command-codec,console-frames,frames,value-codec}.ts',
         'packages/experimental/inspector/src/shared/bridge/messages/sources/{codec,frames}.ts',
         'packages/experimental/inspector/src/worker/inspection/{cordis-store,query-router,realm-store}.ts',
-        'packages/client/modules/src/client/system.ts',
-        'packages/client/hmr/src/client/index.ts',
         // Web config-tree boot round: the new host-side web-transport halves
         // whose remaining branches need real-composition/process harnesses.
         // TODO(gui): cover and remove with the client test lane above.

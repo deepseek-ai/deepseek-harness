@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-package-manifest",
   "description": "Shared type declarations for package.json.dsh configuration fields",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },

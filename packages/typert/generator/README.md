@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-typert-generator` lets maintainers turn public TypeScript types into build artifacts and compiler-independent models. Packages opt in through the `./typert` and optional `./client/typert` exports, and generation rejects declarations, publish lists, Remote exports, or Zod projections that it cannot represent correctly. Repository builds can emit executable schemas and matching declarations, while tools can call `WorkspaceAnalyzer` for inspection or catalog generation without publishing artifacts. Generation runs only at build time and never in a live agent session.
+`dsh-typert-generator` lets maintainers turn public TypeScript types into build artifacts and compiler-independent models. Packages opt in through the `./typert` and optional `./client/typert` exports, and generation rejects declarations, publish lists, Remote exports, or Zod projections that it cannot represent correctly. Repository builds emit executable schema factories and matching declarations, while tools can call `WorkspaceAnalyzer` for inspection or catalog generation without publishing artifacts. Generation runs only at build time and never in a live agent session.
 
 ## Table of Contents
 
@@ -83,7 +83,7 @@ Host and Client are independent TypeScript programs. Direct project references e
 
 ### Emission and publication contract
 
-`FaceModelEmitter` emits executable JavaScript containing supported Zod schemas and the `TYPERT` contribution, plus a declaration file whose schemas are typed `z.ZodType<SourceType>` through the package's public export; unsupported Zod projections fail. The Host face with Remote methods additionally emits `typert.remote-client.*` projections of Host Remote contracts for the Client. `WorkspaceTypertGenerator` validates each contributor's `package.json`: `./typert` and `./client/typert` (and `./remote` when Remote methods exist) must point at the exact generated files, and the `files` list must include them.
+`FaceModelEmitter` emits executable JavaScript containing success-cached Zod schema factories and the `TYPERT` contribution, plus a declaration file whose factories return `z.ZodType<SourceType>` through the package's public export; unsupported Zod projections fail. The Host face with Remote methods additionally emits `typert.remote-client.*` projections of Host Remote contracts for the Client. `WorkspaceTypertGenerator` validates each contributor's `package.json`: `./typert` and `./client/typert` (and `./remote` when Remote methods exist) must point at the exact generated files, and the `files` list must include them.
 
 ### Catalog projection
 

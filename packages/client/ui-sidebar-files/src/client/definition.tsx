@@ -33,6 +33,7 @@ export function filesDefinition(t: TranslateNS<'sidebarFiles'>): SidebarRightTab
     priority: 'builtin',
     title: () => t('type.label'),
     guide: [{
+      id: 'workspace',
       order: 10,
       title: () => t('guide.title'),
       description: () => t('guide.description'),

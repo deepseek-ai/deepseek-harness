@@ -15,7 +15,7 @@ import type { PendingSubmissionRetirement } from '../src/client/contract/session
 import type { SessionRequestId } from '../src/types.ts'
 import { sessionBench } from './remote/bench.client.ts'
 import {
-  FOLLOW, err, fileRef, followScript, history, imageRef, pushEvent, queueFrame,
+  FOLLOW, err, fileRef, followScript, history, imageRef, pushEvent,
 } from './remote/session.client.ts'
 
 /** A Session talks through the Gateway client; its dependency cone is the Typert registry and the Connection. */
@@ -54,14 +54,17 @@ function promptEvent(seq: SessionSeq, rpcId: SessionRequestId, refs: readonly At
   } as unknown as SessionEvent
 }
 
-/** The Host's queue holding one occurrence of the prompt `rpcId`. */
-function queuedFrame(rpcId: SessionRequestId, refs: readonly AttachmentRef[] = []) {
-  return queueFrame(SID, [{ id: 'm-queued', rpcId, content: refs.map(attachmentBlock) }])
+function queuedItem(rpcId: SessionRequestId, refs: readonly AttachmentRef[] = []) {
+  return createUserMessage({
+    source: { kind: 'user', rpcId },
+    content: refs.map(attachmentBlock),
+  })
 }
 
 /** Let the frame-delayed retirement (setTimeout fallback in this node environment) run. */
-function settleFrames(): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, 0))
+async function settleFrames(): Promise<void> {
+  await Promise.resolve()
+  await new Promise(resolve => setTimeout(resolve, 0))
 }
 
 describe('beginSubmission', () => {
@@ -172,6 +175,24 @@ describe('observed retirement', () => {
     expect(retirements).toEqual([{ reason: 'observed', attachments: refs }])
   })
 
+  it('retires an accepted echo when a claim clears the projection before its notification', async ({ mock, start }) => {
+    const session = await sessionBench(mock, start, SID)
+    await session.open()
+    const onRetire = vi.fn()
+    const handle = session.beginSubmission({ mode: 'steer', text: 'accepted', attachments: [], onRetire })
+    const refs = [imageRef('claimed-image')]
+    const message = queuedItem(handle.requestId, refs)
+    session.projections.apply('inbox', { 'next-turn': [], 'next-step': [message] }, SessionSeq(0))
+    session.projections.apply('inbox', { 'next-turn': [], 'next-step': [] }, SessionSeq(1))
+    await pushEvent(mock, {
+      type: 'agent/inbox/spliced', seq: SessionSeq(0), time: 1,
+      data: { target: 'next-step', start: 0, inserted: [message] },
+    })
+    await settleFrames()
+    expect(session.getSnapshot().pendingSubmissions).toEqual([])
+    expect(onRetire).toHaveBeenCalledExactlyOnceWith({ reason: 'observed', attachments: refs })
+  })
+
   it('a queue occurrence carrying the rpcId retires the echo (running-turn submissions)', async ({ mock, start }) => {
     const session = await sessionBench(mock, start, SID)
     const retirements: PendingSubmissionRetirement[] = []
@@ -183,12 +204,14 @@ describe('observed retirement', () => {
       onRetire: retirement => retirements.push(retirement),
     })
     const refs = [imageRef('att-q')]
-    session.handleControlFrame(queuedFrame(handle.requestId, refs))
+    session.projections.apply('inbox', { 'next-turn': [queuedItem(handle.requestId, refs)], 'next-step': [] }, SessionSeq(1))
     await settleFrames()
     expect(session.getSnapshot().pendingSubmissions).toEqual([])
     expect(retirements).toEqual([{ reason: 'observed', attachments: refs }])
     // The queue projection keeps the correlation id for render-time dedupe.
-    expect(session.getSnapshot().queue).toMatchObject([{ rpcId: handle.requestId }])
+    expect(session.projections.get('inbox')).toMatchObject({
+      'next-turn': [{ source: { rpcId: handle.requestId } }],
+    })
   })
 
   it('retires a mixed echo with durable references in original selection order', async ({ mock, start }) => {
@@ -247,7 +270,7 @@ describe('observed retirement', () => {
       attachments: [],
       onRetire: retirement => retirements.push(retirement),
     })
-    session.handleControlFrame(queuedFrame(handle.requestId))
+    session.projections.apply('inbox', { 'next-turn': [queuedItem(handle.requestId, [])], 'next-step': [] }, SessionSeq(1))
     await pushEvent(mock, promptEvent(SessionSeq(0), handle.requestId))
     await settleFrames()
     expect(retirements).toEqual([{ reason: 'observed', attachments: [] }])

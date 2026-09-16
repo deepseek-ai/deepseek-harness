@@ -102,6 +102,8 @@ export interface ClientTransportHooks {
    * transport can set this; served pages never carry the global at all.
    */
   ownsHost?: boolean
+  /** HTTP origin of a shell-owned Host when its WebSocket uses a different page origin. */
+  streamBaseUrl?: string
 }
 
 /** Page global carrying {@link ClientTransportHooks}; absent in the served web app. */

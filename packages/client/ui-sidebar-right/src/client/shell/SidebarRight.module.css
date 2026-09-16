@@ -51,6 +51,37 @@
   inset: 0;
   z-index: 40;
   border: none;
+  /* Electron drag regions are window geometry, not stacking: the conversation
+     title row's and the sidebar top strip's drag bands underneath keep taking
+     the pointer through this overlay, making the first strip's tabs unclickable.
+     The panel appears after both in DOM order, so this subtracts its whole box;
+     the strip rule below restores dragging on the strip's blank run. */
+  -webkit-app-region: no-drag;
+}
+
+/* macOS fullscreen: the panel reaches the window's top-left corner, where the
+   hiddenInset traffic lights (x 16..~68) float over the first pane's tab
+   strip. Widen that strip's start inset (dockkit publishes the variable);
+   panes below or right of a divider sit clear of the lights, and every
+   non-first split cell resets the inherited value for its whole subtree. */
+:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] .panelBody {
+  /* Lights end near x 68; 88 leaves the same 20px of air the conversation
+     header's leading controls keep after them (ui-sidebar HeaderLeadingControls). */
+  --dsh-dockkit-strip-inline-start: 88px;
+}
+
+:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] .panelBody :global([data-dockkit-cell]):not(:first-child) {
+  --dsh-dockkit-strip-inline-start: 10px;
+}
+
+/* Fullscreen keeps a window drag affordance on the tab strips' blank runs;
+   tabs and strip controls opt back out. */
+:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-strip]) {
+  -webkit-app-region: drag;
+}
+
+:global([data-platform='darwin']) .panel[data-sidebar-right-panel='fullscreen'] :global([data-dockkit-strip]) > * {
+  -webkit-app-region: no-drag;
 }
 
 @media (prefers-reduced-motion: reduce) {

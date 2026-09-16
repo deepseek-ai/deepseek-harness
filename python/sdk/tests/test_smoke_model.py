@@ -549,3 +549,14 @@ def test_profile_plugin_failure_reports_native_exit_status(monkeypatch: pytest.M
     assert f"returncode={returncode}" in message
     assert f"0x{returncode & 0xffffffff:08x}" in message
     assert "stdout='' stderr=''" in message
+
+
+@pytest.mark.parametrize("prefix", ["", "File created with exactly 18 bytes.\n\n"])
+def test_live_turn_accepts_explanation_before_final_sentinel(prefix: str) -> None:
+    SMOKE["assert_live_turn"]("create", live_result(final_response=prefix + SMOKE["LIVE_API_SENTINEL"]))
+
+
+@pytest.mark.parametrize("answer", ["", "PYTHON_SDK_LIVE_OK but the operation failed", "PYTHON_SDK_LIVE_OK\nFailure"])
+def test_live_turn_rejects_missing_final_sentinel(answer: str) -> None:
+    with pytest.raises(AssertionError, match="turn returned"):
+        SMOKE["assert_live_turn"]("create", live_result(final_response=answer))

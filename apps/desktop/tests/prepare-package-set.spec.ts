@@ -61,17 +61,13 @@ describe('desktop package-set selection', () => {
     ]))).toThrow(/omit @deepseek-ai\/dsh-desktop-host/u)
   })
 
-  it('requires the Desktop Host entry and its packaged overlay', () => {
+  it('requires the Desktop Host entry', () => {
     const files = [
       'package/lib/index.js',
-      'package/config/desktop.cordis.patch.yml',
     ]
     expect(() => {
       assertDesktopHostPackageFiles(files)
     }).not.toThrow()
-    expect(() => {
-      assertDesktopHostPackageFiles(files.slice(0, 1))
-    }).toThrow(/desktop\.cordis\.patch\.yml/u)
     expect(() => {
       assertDesktopHostPackageFiles(files.slice(1))
     }).toThrow(/lib\/index\.js/u)

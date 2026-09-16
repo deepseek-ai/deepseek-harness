@@ -60,7 +60,7 @@ profile 在第一方指导之前提供 `You are a coding agent powered by the {{
 
 - **profile 可以省略 ACP bridge**：自定义 ACP 启动 profile 必须保留本组合包或另一个 `dsh-acp` 配置项；否则没有 peer 响应 client。
 - **用户插件可能破坏 stdout 纯净性**：profile 与单次启动 patch 属于受信任的应用组合。随附组合包不会向 stdout 写入非协议内容，但无法约束任意插入的插件。
-- **配置更改需要重启**：随附 `acp` profile 使用 `patchReload: startup`，确保一条 stdio 连接不会观察到 bridge 或 Agent 依赖被替换。
+- **配置更改需要重启**：`acp-app` 组合包在 YAML 中禁用 HMR，确保一条 stdio 连接不会观察到 bridge 或 Agent 依赖被替换。
 
 
 <a id="dev-note"></a>

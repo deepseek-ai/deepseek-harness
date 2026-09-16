@@ -7,7 +7,9 @@
   },
   "files": [
     "src/client/index.ts",
+    "src/client/bindings.ts",
     "src/client/model.ts",
+    "src/client/retention.ts",
     "src/client/shell-preference.ts",
     "src/types.ts",
     "src/client/close-requests.ts"

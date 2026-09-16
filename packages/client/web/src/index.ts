@@ -9,3 +9,4 @@
 export { AppWebEntry, type BootSeams } from './boot.ts'
 export { getStaticModules } from './seed.ts'
 export { PLATFORM_MODULES, PRELOADED_CLIENT_EXTERNALS, type PlatformModule } from './platform.ts'
+export { applyIndexInjections } from './apply-injections.ts'

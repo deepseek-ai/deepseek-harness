@@ -123,9 +123,9 @@ export async function runSshHelper(transport: HelperTransport): Promise<void> {
       await processes.resizeTerminal(input.id, input.cols, input.rows)
       return null
     }
-    if (method === 'terminal.write' || method === 'terminal.inspect' || method === 'terminal.signal') {
+    if (method === 'terminal.write' || method === 'terminal.inspect' || method === 'terminal.activity' || method === 'terminal.signal') {
       const input = z.object({ id: processIdSchema, value: z.string().optional() }).strict().parse(raw)
-      return processes.terminal(input.id, method === 'terminal.write' ? 'write' : method === 'terminal.inspect' ? 'inspect' : 'signal', input.value)
+      return processes.terminal(input.id, method === 'terminal.write' ? 'write' : method === 'terminal.inspect' ? 'inspect' : method === 'terminal.activity' ? 'activity' : 'signal', input.value)
     }
     if (method === 'executable') {
       const input = z.object({ command: z.string(), env: environmentSchema.optional() }).strict().parse(raw)

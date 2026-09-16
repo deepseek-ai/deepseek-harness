@@ -16,7 +16,7 @@ import type { TerminalAttachmentId, WebTerminalId } from '../src/types.ts'
 
 const roots: Context[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(ctx => ctx.fiber.dispose())) })
-const config: Config = { shellCandidates: ['zsh', 'bash', 'sh'], shell: { path: '/bin/bash', name: 'bash', args: ['--noprofile', '--norc', '-i'] }, maxTerminals: 2, maxCols: 200, maxRows: 100, scrollback: 100, maxBufferedBytes: 100_000, maxInputBytes: 1000, disposeGraceMs: 100 }
+const config: Config = { shellCandidates: ['zsh', 'bash', 'sh'], shell: { path: '/bin/bash', name: 'bash', args: ['--noprofile', '--norc', '-i'] }, maxTerminals: 2, maxCols: 200, maxRows: 100, scrollback: 100, maxBufferedBytes: 100_000, maxInputBytes: 1000, disposeGraceMs: 100, unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 }
 const id = 'test-terminal' as WebTerminalId
 const request = { id, cols: 80, rows: 24 }
 const signal = (): AbortSignal => new AbortController().signal
@@ -37,6 +37,7 @@ function fixture(overrides: Partial<Config> = {}) {
   const done = Promise.withResolvers<{ exitCode: number; signal: null }>()
   const handle = {
     pid: 123, output, done: done.promise, write: vi.fn(async () => {}), resize: vi.fn(async () => {}),
+    inspectActivity: vi.fn<SubprocessTerminalHandle['inspectActivity']>(async () => ({ state: 'unknown', revision: 0 })),
     inspectForeground: async () => undefined, signalForeground: async () => 123,
     terminate: vi.fn(async () => { output.end(); done.resolve({ exitCode: 0, signal: null }) }) }
   const checked: SubprocessTerminalHandle = handle
@@ -224,7 +225,7 @@ describe('TerminalController', () => {
     handle.terminate.mockRejectedValueOnce(new Error('still alive'))
     await expect(controller.create(agent, request, abort.signal)).rejects.toThrow('cleanup failed')
     expect(controller.list(agent.id)).toMatchObject([{ id, state: 'failed', error: 'lost request' }])
-    await expect(controller.create(agent, request, signal())).rejects.toThrow('Close the failed terminal allocation')
+    await expect(controller.create(agent, request, signal())).rejects.toThrow('closed in this Session')
     await expect(controller.create(agent, { ...request, id: 'another' as WebTerminalId }, signal())).rejects.toMatchObject({ code: 'terminal/limit-reached', details: { limit: 1 } })
     await controller.close(agent, id)
     expect(controller.list(agent.id)).toEqual([])
@@ -410,6 +411,14 @@ describe('shell resolution', () => {
     // Loader input is unvalidated; the schema's declared type describes its normalized output.
     const parse = (input: unknown): Config => TerminalController.Config(input as Config)
     expect(parse({}).shell).toBeUndefined()
+    expect(parse({})).toMatchObject({ unattendedTimeoutMs: 7_200_000, activityPollIntervalMs: 30_000, cleanupRetryMs: 60_000 })
+    expect(parse({ unattendedTimeoutMs: 0 }).unattendedTimeoutMs).toBe(0)
+    for (const key of ['unattendedTimeoutMs', 'activityPollIntervalMs', 'cleanupRetryMs']) {
+      for (const value of [-1, 0.5, Number.POSITIVE_INFINITY, Number.MAX_SAFE_INTEGER + 1]) {
+        expect(() => parse({ [key]: value })).toThrow()
+      }
+    }
+    for (const key of ['activityPollIntervalMs', 'cleanupRetryMs']) expect(() => parse({ [key]: 0 })).toThrow()
     expect(parse({ shell: { path: 'custom', name: 'Project shell' } }).shell).toEqual({ path: 'custom', name: 'Project shell', args: [] })
     expect(() => parse({ shell: { name: 'Project shell' } })).toThrow()
   })
@@ -540,4 +549,79 @@ it('propagates optional-shell discovery transport errors and cancellation', asyn
 it('deduplicates Windows executable paths regardless of letter case', async () => {
   const h = fixture({ shell: { path: 'C:\\Windows\\cmd.exe', name: 'Command Prompt', args: [] }, shellCandidates: ['c:\\windows\\cmd.exe'] })
   expect(await h.controller.shells(h.agent, signal())).toEqual([{ path: 'C:\\Windows\\cmd.exe', name: 'Command Prompt', args: [] }])
+})
+
+it('retains a known terminal without Agent resolution and fences stream admission after explicit close', async () => {
+  const h = fixture()
+  await h.controller.create(h.agent, request, signal())
+  const abort = new AbortController()
+  const held = h.controller.retain(h.agent.id, id, abort.signal)[Symbol.asyncIterator]()
+  expect(await held.next()).toMatchObject({ value: { type: 'retained' } })
+  expect(h.subprocess.spawnTerminal).toHaveBeenCalledOnce()
+  expect(() => h.controller.retain('missing-session' as SessionId, id, signal())).toThrow('unavailable')
+  const ended = held.next()
+  await h.controller.close(h.agent, id)
+  expect(await ended).toMatchObject({ done: true })
+  expect(() => h.controller.retain(h.agent.id, id, signal())).toThrow('unavailable')
+  await expect(h.controller.create(h.agent, request, signal())).rejects.toThrow('closed in this Session')
+})
+
+it('reclaims confirmed idle processes and preserves closed identity exclusion after removing their screens', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  const h = fixture({ unattendedTimeoutMs: 100, activityPollIntervalMs: 10 })
+  try {
+    h.handle.inspectActivity.mockResolvedValue({ state: 'busy', revision: 0 })
+    await h.controller.create(h.agent, request, signal())
+    await vi.advanceTimersByTimeAsync(500)
+    expect(h.handle.terminate).not.toHaveBeenCalled()
+    h.handle.inspectActivity.mockResolvedValue({ state: 'idle', revision: 1 })
+    await vi.advanceTimersByTimeAsync(110)
+    expect(h.handle.terminate).toHaveBeenCalledOnce()
+    expect(h.controller.list(h.agent.id)).toEqual([])
+    await expect(h.controller.create(h.agent, request, signal())).rejects.toThrow('closed in this Session')
+    expect(h.subprocess.spawnTerminal).toHaveBeenCalledOnce()
+  } finally {
+    await h.ctx.fiber.dispose()
+    vi.useRealTimers()
+  }
+})
+
+it.each(['allocation', 'committed'] as const)('retains failed %s cleanup, reports scheduled failures, and releases resources after retry', async (phase) => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  const h = fixture({ unattendedTimeoutMs: 100, activityPollIntervalMs: 10, cleanupRetryMs: 20 })
+  h.handle.terminate.mockRejectedValueOnce(new Error('still alive')).mockRejectedValueOnce(new Error('still alive again'))
+  try {
+    if (phase === 'allocation') {
+      const abort = new AbortController()
+      h.subprocess.spawnTerminal.mockImplementationOnce(async () => { abort.abort(new Error('disconnected during spawn')); return h.handle })
+      await expect(h.controller.create(h.agent, request, abort.signal)).rejects.toThrow('cleanup failed')
+    } else {
+      h.handle.inspectActivity.mockResolvedValue({ state: 'idle', revision: 1 })
+      await h.controller.create(h.agent, request, signal())
+      await vi.advanceTimersByTimeAsync(100)
+    }
+    expect(h.controller.list(h.agent.id)).toHaveLength(1)
+    expect(() => h.controller.retain(h.agent.id, id, signal())).toThrow('unavailable')
+    await vi.advanceTimersByTimeAsync(20)
+    expect(h.handle.terminate).toHaveBeenCalledTimes(2)
+    expect(h.controller.list(h.agent.id)).toHaveLength(1)
+    await vi.advanceTimersByTimeAsync(20)
+    expect(h.handle.terminate).toHaveBeenCalledTimes(3)
+    expect(h.controller.list(h.agent.id)).toEqual([])
+  } finally {
+    await h.ctx.fiber.dispose()
+    vi.useRealTimers()
+  }
+})
+
+it('classifies missing and closing terminal identities for localized recovery actions', async () => {
+  const h = fixture()
+  expect(() => h.controller.follow(h.agent, id, 'view' as TerminalAttachmentId, signal()))
+    .toThrow(expect.objectContaining({ code: 'terminal/unavailable' }))
+  await h.controller.create(h.agent, request, signal())
+  h.handle.terminate.mockRejectedValueOnce(new Error('cleanup pending'))
+  await expect(h.controller.close(h.agent, id)).rejects.toThrow('cleanup pending')
+  expect(() => h.controller.follow(h.agent, id, 'view' as TerminalAttachmentId, signal()))
+    .toThrow(expect.objectContaining({ code: 'terminal/unavailable' }))
+  await expect(h.controller.create(h.agent, request, signal())).rejects.toMatchObject({ code: 'terminal/unavailable' })
 })

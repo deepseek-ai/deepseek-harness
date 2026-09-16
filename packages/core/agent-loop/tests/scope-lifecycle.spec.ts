@@ -1,5 +1,5 @@
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
 import { Context, symbols, type EffectMeta, type Fiber } from '@deepseek-ai/cordis'
 import LlmRuntime from '@deepseek-ai/dsh-llm'
 import SessionStore, { SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
@@ -284,8 +284,11 @@ describe('agent scope lifecycle', () => {
     expect(after.sections.find(s => s.name === 'deployment:persona-prefix')?.text).toBe('You are the deployment.')
   })
 
-  it('keeps the inbox projection until the last owning agent fiber unloads', async () => {
-    const ctx = await harness()
+  it('owns the inbox projection until AgentLoop unloads', async () => {
+    const { ctx, loopFiber } = await harnessWithLoop()
+    onTestFinished(() => ctx.fiber.dispose())
+    const cold = ctx.sessions.create(SessionId('projection-before-any-agent'))
+    expect(ctx.sessionProjections.stateOf(cold, 'inbox')).toEqual({ 'next-turn': [], 'next-step': [] })
     let first!: Awaited<ReturnType<typeof ctx.agents.create>>
     let second!: Awaited<ReturnType<typeof ctx.agents.create>>
     const firstOwner = await ctx.plugin(Object.assign(async (inner: Context) => {
@@ -305,10 +308,11 @@ describe('agent scope lifecycle', () => {
     await firstOwner.dispose()
     expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeDefined()
     await secondOwner.dispose()
-    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeUndefined()
+    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeDefined()
 
     await Promise.all([first.dispose(), second.dispose()])
-    await ctx.fiber.dispose()
+    await loopFiber.dispose()
+    expect(ctx.sessionProjections.stateOf(second.agent.session, 'inbox')).toBeUndefined()
   })
 
   it('agent.ctx listeners hear only their own agent (scoped dispatch end to end)', async () => {

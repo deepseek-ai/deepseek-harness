@@ -16,11 +16,11 @@ Status: implemented
 
 助手内容块保留持久化的模型可见内容。带版本的 `ReplayEnvelope` 仅保存协议格式、模型标识、对齐的块类型以及内容块未包含的签名。同模型续接原样恢复签名，包括空签名；外部历史不生成虚构签名。不可用的元数据遵循现有[回放降级规则](../architecture/2026-07-14-provider-routed-llm-adapters.zh.md)：请求省略签名并记录警告，保留持久化内容；工具参数等内容校验仍会正常报错。提供者回放数据对循环保持不透明，同时能够随 Session 持久化和内容块裁剪保留。
 
-两种协议均优先为确定性请求图片使用 Files 引用，并共享上传缓存、刷新、配额恢复和附件卸载。Files 客户端保留所选协议与已配置端点：Messages 使用 `/v1/files` 并携带必需的 beta 标头，Chat Completions 使用 `/files`。缓存 id 仍按配置的端点和凭据限定作用域。Messages 元数据不含过期时间，因此本地复用从原始上传时间起受限，但不宣称远端文件已删除。Files 解析失败会按独立的内联图片预算重建完整请求；调用方取消则停止请求。共享图片策略在请求与 token 计量中保留 128 MiB 的保留图片预算、20 MiB 的内联 base64 预算，以及最旧前缀卸载。
+两种协议均优先为确定性请求图片使用 Files 引用，并共享上传缓存、刷新、配额恢复和附件卸载。Files 客户端保留所选协议与已配置端点：Messages 遵循[严格匹配 `/v1` 的根地址规则](../bug-fix/2026-09-15-messages-v1-base-url.zh.md)，Chat Completions 则追加 `/files`。Messages Files 请求携带必需的 beta 标头。缓存 id 按解析后的 Files 根地址和凭据限定作用域，因此等价的 `/v1` 与无版本 Messages 根地址可以复用上传。Messages 元数据不含过期时间，因此本地复用从原始上传时间起受限，但不宣称远端文件已删除。Files 解析失败会按独立的内联图片预算重建完整请求；调用方取消则停止请求。共享图片策略在请求与 token 计量中保留 128 MiB 的保留图片预算、20 MiB 的内联 base64 预算，以及最旧前缀卸载。
 
 系统提示词更新在端点与模型显式声明支持时，使用现有[路由能力](2026-09-02-in-history-system-prompt-replacement.zh.md)。Messages 保留初始顶层 system，在对应的用户或工具结果轮次之后，将后续快照发送为原生 system 轮次，保留此前发送的前缀。这个位置不同于循环先 system、后 user 的接纳顺序；序列化既不改写持久化日志，也不改变对话轮次的顺序。未声明能力的路由将最新快照归并到顶层，直接压缩调用也如此。仅凭协议或模型名称推断能力并不充分，因为支持情况和更新语义取决于实际部署的端点。
 
-Web 始终显示 DeepSeek，不提供协议选择器。两个协议共用 `baseURL` 与 `apiKeyEnv`，没有嵌套的协议配置表。未提供地址覆盖时使用当前协议的官方默认值；Messages 为 `https://api.deepseek.com/anthropic`。切换协议保留已有端点覆盖，部署者负责其兼容性。模型目录只维护一份，包含 `deepseek-flash` 的文本/图片和历史内 system 更新能力，也保留 V4 条目。显式 `chat-completions` 仍受支持，并使用自己的官方默认值；不会为匹配协议而改写自定义 `baseURL` 或环境覆盖。
+Web 始终显示 DeepSeek，不提供协议选择器。两个协议共用 `baseURL` 与 `apiKeyEnv`，没有嵌套的协议配置表。未提供地址覆盖时使用当前协议的官方默认值；Messages 为 `https://api.deepseek.com/anthropic`。切换协议保留已有端点覆盖，部署者负责其兼容性。Messages 遵循严格匹配 `/v1` 的根地址规则，不根据其他版本式后缀推断兼容性。模型目录只维护一份，包含 `deepseek-flash` 的文本/图片和历史内 system 更新能力，也保留 V4 条目。显式 `chat-completions` 仍受支持，并使用自己的官方默认值，追加 `/chat/completions` 而不增加版本段。
 
 两种传输都在原生序列化后使用现有[请求扩展注册表](../architecture/2026-08-21-deepseek-llm-api-request-extensions.zh.md)，并在 HTTP 2xx 后、读取流之前接受已捕获贡献。会话日志投递和插件清单仍由原有包负责，并留在模型输入之外。辅助 [web 搜索提供方](../../../../packages/web/web-search-deepseek/README.zh.md)保留独立的端点、请求与设置。
 

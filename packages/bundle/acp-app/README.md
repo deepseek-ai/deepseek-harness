@@ -60,7 +60,7 @@ Stable for a fixed profile, provider, model, and tool roster. Profile changes ta
 
 - **A profile can omit the ACP bridge** — a custom ACP launch profile must retain this bundle or another `dsh-acp` row; otherwise no peer answers the client.
 - **User plugins can violate stdout purity** — profile and per-launch patches are trusted application composition. The shipped bundle writes no non-protocol stdout, but it cannot contain an arbitrary inserted plugin.
-- **Configuration changes require restart** — the shipped `acp` profile uses `patchReload: startup` so one stdio connection never observes a replacement bridge or Agent dependency.
+- **Configuration changes require restart** — the `acp-app` bundle disables HMR in YAML so one stdio connection never observes a replacement bridge or Agent dependency.
 
 
 <a id="dev-note"></a>

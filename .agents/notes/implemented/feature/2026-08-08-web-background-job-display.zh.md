@@ -81,7 +81,7 @@ abstract onJobsChanged(listener: JobsChangedListener): () => void
 
 `SessionListState` 带有 `jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>`，由 `SessionManager` 拥有，按 last-wins 从帧折叠而来；被清空的集合存为缺失的键，使「缺失」与 `[]` 成为同一种表示。
 
-它放在列表镜像而不是 `Session` 上，有三个理由：header 入口本来就通过 `useSessions` 读列表状态；没有任何东西需要 `session/queue` 那种实例化前的缓冲（没有 composer 行为依赖任务）；将来侧栏加指示器时不必再开第二条通道。
+它放在列表镜像而不是 `Session` 上，有三个理由：header 入口本来就通过 `useSessions` 读列表状态；没有 composer 行为依赖任务；将来侧栏加指示器时不必再开第二条通道。
 
 两个替换点让它保持诚实。每一代 control 流都会先清空完整任务镜像，再安装新 baseline 中的非空集合。`api-session/removed` 事件也会删除该 Session 的条目，不依赖任务注册表 disposal 通知与它之间的顺序。
 

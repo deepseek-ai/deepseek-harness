@@ -12,7 +12,7 @@ The macOS Sandbox run (run 34238200206, job 102101292119) times out while waitin
 
 The [user-patch test](../../../../packages/boot/app-boot/tests/user-patches.spec.ts) writes real patch files and delivers their add, change, and unlink events through a Chokidar watcher without native watch handles. App-boot watcher registration, refresh serialization, Include recomposition, plugin activation, failure reporting, and recovery remain real; plugin rollback is absent under the [Loader policy](../simplification/2026-09-09-nontransactional-loader.md). The fixture restores its watcher factory and disposes the Context even when setup fails before the local cleanup block.
 
-The separate [watcher tests](../../../../packages/boot/app-boot/tests/watch-config.spec.ts) own native notification delivery, including add/change/unlink, initially absent parents, and filesystem aliases. The refresh test does not establish operating-system delivery guarantees.
+The separate [watcher tests](../../../../packages/boot/hmr/tests/watch-config.spec.ts) own native notification delivery, including add/change/unlink, initially absent parents, and filesystem aliases. The refresh test does not establish operating-system delivery guarantees.
 
 ## Alternatives considered
 

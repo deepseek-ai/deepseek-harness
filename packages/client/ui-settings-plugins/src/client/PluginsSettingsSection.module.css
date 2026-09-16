@@ -83,3 +83,26 @@
   font-size: 13px;
   color: var(--dsw-alias-label-tertiary);
 }
+
+/* Configurable tab: the card list. */
+
+.configurable {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Preset detail page: the settings section over the same cards. */
+
+.presetSettings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.presetSettingsTitle {
+  margin: 0;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}

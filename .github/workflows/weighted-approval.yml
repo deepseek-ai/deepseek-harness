@@ -2,36 +2,65 @@ name: weighted-approval
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft, edited]
+  issue_comment:
+    types: [created, edited, deleted]
   workflow_run:
     workflows: [weighted-approval-review-event]
     types: [completed]
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   statuses: write
 
 concurrency:
-  group: weighted-approval-${{ github.event.pull_request.number || github.event.workflow_run.head_sha }}
+  group: weighted-approval-${{ (github.event.pull_request.number || github.event.issue.number) && format('weighted-approval-review-event:{0}', github.event.pull_request.number || github.event.issue.number) || github.event.workflow_run.display_title }}
   cancel-in-progress: false
 
 jobs:
   publish-status:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    if: >-
+      (github.event_name != 'pull_request_target' || github.event.pull_request.state == 'open') &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
+      (github.event_name != 'issue_comment' || (github.event.issue.pull_request && github.event.issue.state == 'open' &&
+        (contains(github.event.comment.body, '/delegate') || contains(github.event.changes.body.from, '/delegate'))))
     name: weighted approval publisher
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       # SECURITY: the status-writing job executes policy from the trusted default
-      # branch and reads pull-request reviews only as API data.
+      # branch and reads pull-request reviews and comments only as API data.
       - name: Check out trusted approval policy
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
+      - name: Revoke previous approval status
+        id: revoke
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/review-ownership/check-approval.mjs pending
+      # SECURITY: dependency setup runs in the status-writing job.
+      - if: steps.revoke.outputs.active == 'true'
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: '3.10'
+          cache: pip
+          cache-dependency-path: .github/review-ownership/requirements.txt
+      - name: Install production lexer
+        if: steps.revoke.outputs.active == 'true'
+        run: python3 -m pip install -r .github/review-ownership/requirements.txt
       - name: Publish weighted approval status
+        if: steps.revoke.outputs.active == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: node .github/review-ownership/check-approval.mjs
+      - name: Publish approval setup failure
+        if: failure() && steps.revoke.outputs.active == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: node .github/review-ownership/check-approval.mjs error

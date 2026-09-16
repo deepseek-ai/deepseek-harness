@@ -16,7 +16,7 @@ An authorized prefix includes all unhanded canonical context from seq 0 through 
 
 The backend uses on-demand capture with complete history and the existing redaction waterfall. `DISABLED` constructs no transport. `FULL` is rejected rather than aliased. Direct `ctx.sessionTelemetry.emit()` calls are no-ops, so callers cannot bypass feedback authorization. SDK scheduled flush and shutdown may finish previously authorized batches but never capture new records. Sending after submission needs no further user interaction or model call.
 
-The [canonical-feedback decision](2026-09-05-canonical-feedback-log.md) owns storage, versions, deletion, and plain command confirmation. The [opt-in DeepSeek contribution](../../../../packages/session/session-log-deepseek/README.md) remains independent, with its existing destination and acceptance behavior.
+The [canonical-feedback decision](2026-09-05-canonical-feedback-log.md) owns storage, versions, deletion, and plain command confirmation. The [default-on DeepSeek contribution](../../../../packages/session/session-log-deepseek/README.md) remains independent, with its existing destination and acceptance behavior.
 
 ## Alternatives considered
 
@@ -28,6 +28,6 @@ The [canonical-feedback decision](2026-09-05-canonical-feedback-log.md) owns sto
 
 ## Consequences
 
-Handoff is best-effort, not collector acceptance. Same-object cursors suppress repeated capture, but fresh cold snapshots and new feedback after restart can repeat prefixes; receivers deduplicate on `(session.id, session.format_version, event.seq)`. There is no durable OTel outbox, delivery watermark, or harness HTTP retry promise. SDK batching and loss behavior apply after enqueue. OTel and the opt-in DeepSeek path can overlap. Withdrawal exports a deletion event, not remote erasure.
+Handoff is best-effort, not collector acceptance. Same-object cursors suppress repeated capture, but fresh cold snapshots and new feedback after restart can repeat prefixes; receivers deduplicate on `(session.id, session.format_version, event.seq)`. There is no durable OTel outbox, delivery watermark, or harness HTTP retry promise. SDK batching and loss behavior apply after enqueue. OTel and the default-on DeepSeek path can overlap. Withdrawal exports a deletion event, not remote erasure.
 
 [OTel tests](../../../../packages/session/session-telemetry-otel/tests/otel.spec.ts) cover explicit-feedback capture, provider-independent behavior, lifecycle silence, fork consent, cold commits, and direct-call denial. [Coordinator tests](../../../../packages/session/session-telemetry/tests/telemetry.spec.ts) cover history capture; [base tests](../../../../packages/bundle/base/tests/base.spec.ts) pin the mounted default.

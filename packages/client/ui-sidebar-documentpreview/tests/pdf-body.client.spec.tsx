@@ -12,7 +12,7 @@ import type { openPdf } from '../src/client/pdf/runtime.ts'
 const engine = vi.hoisted(() => ({ open: vi.fn<typeof openPdf>(), render: vi.fn<typeof renderPdfPage>() }))
 vi.mock('../src/client/pdf/runtime.ts', () => ({ openPdf: engine.open }))
 vi.mock('../src/client/pdf/document.ts', () => ({ renderPdfPage: engine.render }))
-import { PdfBody, type PdfBodyProps } from '../src/client/pdf/PdfBody.tsx'
+import { PdfBody, type PdfBodyProps } from '../src/client/pdf/pdf.tsx'
 import { createPdfStore, type PdfState } from '../src/client/pdf/store.ts'
 import { en } from '../src/client/pdf/locales.ts'
 import { PdfWorkerFailure } from '../src/client/pdf/errors.ts'

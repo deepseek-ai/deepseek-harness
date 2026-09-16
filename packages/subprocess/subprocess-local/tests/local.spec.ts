@@ -20,6 +20,19 @@ function unmockWin32ForIsolatedRuntime(): void {
   vi.doUnmock('@deepseek-ai/dsh-win32-process')
 }
 
+function mockNodePtyForIsolatedRuntime(spawn: unknown): void {
+  vi.doMock('@deepseek-ai/dsh-lazy-require', () => ({
+    createLazyRequire: (specifier: string) => () => {
+      if (specifier === 'node-pty') return { spawn }
+      throw new Error(`unexpected lazy dependency ${specifier}`)
+    },
+  }))
+}
+
+function unmockLazyRequireForIsolatedRuntime(): void {
+  vi.doUnmock('@deepseek-ai/dsh-lazy-require')
+}
+
 function spec(command: string, overrides: Partial<SubprocessSpawnSpec> = {}): SubprocessSpawnSpec {
   // Windows has no bash; the suite's simple commands translate to node one-liners.
   const argv = process.platform === 'win32'
@@ -295,6 +308,7 @@ describe('LocalSubprocessRuntime', () => {
       done: Promise.resolve({ exitCode: 0, signal: null }),
       write: async () => {},
       resize: async () => {},
+      inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
       inspectForeground: async () => undefined,
       signalForeground: async () => 1,
       terminate,
@@ -323,6 +337,7 @@ describe('LocalSubprocessRuntime', () => {
       done: Promise.resolve({ exitCode: 0, signal: null }),
       write: async () => {},
       resize: async () => {},
+      inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
       inspectForeground: async () => undefined,
       signalForeground: async () => 1,
       terminate: vi.fn(async () => { throw firstFailure }),
@@ -376,6 +391,7 @@ describe('LocalSubprocessRuntime', () => {
       done: Promise.resolve({ exitCode: 0, signal: null }),
       write: async () => {},
       resize: async () => {},
+      inspectActivity: async () => ({ state: 'unknown' as const, revision: 0 }),
       inspectForeground: async () => undefined,
       signalForeground: async () => 1,
       terminate: vi.fn(async () => { throw failure }),
@@ -440,7 +456,7 @@ describe('LocalSubprocessRuntime', () => {
     }
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
-    vi.doMock('node-pty', () => ({ spawn: () => terminal }))
+    mockNodePtyForIsolatedRuntime(() => terminal)
     vi.doMock('../src/process-inspector.ts', async importOriginal => ({
       ...await importOriginal<typeof import('../src/process-inspector.ts')>(),
       createProcessInspector: () => inspector,
@@ -463,7 +479,7 @@ describe('LocalSubprocessRuntime', () => {
       await expect.poll(() => (service as unknown as { terminals: Set<SubprocessTerminalHandle> }).terminals.size).toBe(0)
       await fiber.dispose()
     } finally {
-      vi.doUnmock('node-pty')
+      unmockLazyRequireForIsolatedRuntime()
       vi.doUnmock('../src/process-inspector.ts')
       vi.doUnmock('../src/linux-scope.ts')
       unmockWin32ForIsolatedRuntime()
@@ -531,7 +547,7 @@ describe('LocalSubprocessRuntime', () => {
 
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
-    vi.doMock('node-pty', () => ({ spawn: nodePtySpawn }))
+    mockNodePtyForIsolatedRuntime(nodePtySpawn)
     vi.doMock('../src/linux-scope.ts', () => ({
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
@@ -597,7 +613,7 @@ describe('LocalSubprocessRuntime', () => {
     } finally {
       await fiber?.dispose()
       directProbe.mockRestore()
-      vi.doUnmock('node-pty')
+      unmockLazyRequireForIsolatedRuntime()
       vi.doUnmock('../src/linux-scope.ts')
       unmockWin32ForIsolatedRuntime()
       vi.resetModules()
@@ -632,7 +648,7 @@ describe('LocalSubprocessRuntime', () => {
 
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
-    vi.doMock('node-pty', () => ({ spawn: nodePtySpawn }))
+    mockNodePtyForIsolatedRuntime(nodePtySpawn)
     vi.doMock('../src/linux-scope.ts', () => ({
       signalLinuxDirectProcess,
       launchLinuxScope: vi.fn(),
@@ -655,7 +671,7 @@ describe('LocalSubprocessRuntime', () => {
       expect(cleanup).toHaveBeenCalledOnce()
     } finally {
       await fiber?.dispose()
-      vi.doUnmock('node-pty')
+      unmockLazyRequireForIsolatedRuntime()
       vi.doUnmock('../src/linux-scope.ts')
       unmockWin32ForIsolatedRuntime()
       vi.resetModules()
@@ -676,7 +692,7 @@ describe('LocalSubprocessRuntime', () => {
     }
     vi.resetModules()
     mockWin32ForIsolatedRuntime()
-    vi.doMock('node-pty', () => ({ spawn: () => terminal }))
+    mockNodePtyForIsolatedRuntime(() => terminal)
     try {
       const { default: IsolatedLocalSubprocessRuntime } = await import('../src/index.ts')
       const ctx = new Context()
@@ -711,7 +727,7 @@ describe('LocalSubprocessRuntime', () => {
       await fiber.dispose()
       expect(disposalErrors).toHaveLength(1)
     } finally {
-      vi.doUnmock('node-pty')
+      unmockLazyRequireForIsolatedRuntime()
       unmockWin32ForIsolatedRuntime()
       vi.resetModules()
     }

@@ -44,7 +44,7 @@
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: Private Preview
-          - button "容量 1" [expanded]:
+          - button "模型选项 1" [expanded]:
             - img
           - button "删除模型 1":
             - img
@@ -56,6 +56,11 @@
           - textbox "最大输出 token 数 1":
             - /placeholder: 256K
             - text: 64K
+          - text: 图片输入
+          - combobox "图片输入 1":
+            - option "默认（仅文本）"
+            - option "支持" [selected]
+            - option "不支持"
           - button "添加模型":
             - img
             - text: 添加模型

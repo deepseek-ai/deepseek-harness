@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -22,7 +22,7 @@ it('signs Mach-O files in their final locations and verifies each signature', as
   writeFileSync(join(path, 'addon.node'), Buffer.from('cffaedfe00000000', 'hex'))
   writeFileSync(join(path, 'source.js'), 'export {}')
   await expect(signMacOSRuntime(path, 'com.example.app', identity)).resolves.toBe(1)
-  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), expect.stringMatching(/^com\.example\.app\.runtime\.[a-f0-9]{64}$/u), identity)
+  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), expect.stringMatching(/^com\.example\.app\.runtime\.[a-f0-9]{64}$/u), identity, undefined)
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'addon.node'), identity)
 })
 it('awaits other signers before rejecting and permitting output cleanup', async () => {
@@ -45,4 +45,16 @@ it('awaits other signers before rejecting and permitting output cleanup', async 
   } finally { release() }
   expect(await result).toBeInstanceOf(AggregateError)
   expect(verifyMacOSRuntimeCode).toHaveBeenCalledWith(join(path, 'b.node'), identity)
+})
+
+it('grants JIT only to the standalone Node interpreter', async () => {
+  const path = root()
+  mkdirSync(join(path, 'dependencies/node/bin'), { recursive: true })
+  const node = join(path, 'dependencies/node/bin/node')
+  const addon = join(path, 'addon.node')
+  for (const file of [node, addon]) writeFileSync(file, Buffer.from('cffaedfe00000000', 'hex'))
+  await signMacOSRuntime(path, 'com.example.app', identity)
+  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(node, expect.any(String), identity,
+    join(import.meta.dirname, '../scripts/node-entitlements.plist'))
+  expect(signMacOSRuntimeCode).toHaveBeenCalledWith(addon, expect.any(String), identity, undefined)
 })

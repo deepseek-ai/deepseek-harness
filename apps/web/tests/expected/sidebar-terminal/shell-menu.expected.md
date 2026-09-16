@@ -1,5 +1,5 @@
 - menu:
-  - menuitem "bash — /bin/bash":
-    - text: bash — /bin/bash
+  - menuitem "bash":
+    - text: bash
     - img
-  - menuitem "sh — /bin/sh"
+  - menuitem "sh"

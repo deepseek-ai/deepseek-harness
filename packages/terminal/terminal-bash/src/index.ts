@@ -170,6 +170,16 @@ async function startupSession(
   }
 }
 
+/** Reject a failed startup only after its unpublished resources reach quiescence. */
+async function rejectAfterStartupCleanup(error: unknown, cleanup: () => Promise<void>): Promise<never> {
+  try {
+    await cleanup()
+  } catch (cleanupError: unknown) {
+    throw new TerminalBackendCleanupError(error, cleanupError)
+  }
+  throw error
+}
+
 /** Local shell backend registered under the configured type. */
 export class BashTerminalBackend implements TerminalBackend {
   readonly type: string
@@ -205,17 +215,17 @@ export class BashTerminalBackend implements TerminalBackend {
       graceMs: this.config.disposeGraceMs,
       signal: spec.signal,
     })
-    const session = this.createSession(terminal, this.config)
+    let session: LocalPtySession
+    try {
+      session = this.createSession(terminal, this.config)
+    } catch (error) {
+      return rejectAfterStartupCleanup(error, () => terminal.terminate())
+    }
     try {
       await startupSession(session, this.config.shellDialect, this.config.timeoutMs, spec.signal)
       return session
     } catch (error) {
-      try {
-        await session.close('PTY startup failed')
-      } catch (closeError: unknown) {
-        throw new TerminalBackendCleanupError(error, closeError)
-      }
-      throw error
+      return rejectAfterStartupCleanup(error, () => session.close('PTY startup failed'))
     }
   }
 }

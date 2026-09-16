@@ -10,5 +10,4 @@ export type {
   DshManifest,
   DshPackageManifest,
   DshProfileManifest,
-  ProfilePatchReload,
 } from './types.ts'

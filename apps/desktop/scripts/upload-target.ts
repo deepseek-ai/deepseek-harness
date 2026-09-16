@@ -6,6 +6,7 @@ import { resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
 import type { DesktopPackageTargetName } from './package-target.ts'
+import { loadDesktopPackageEnvironment } from './desktop-package-environment.mjs'
 import {
   createDesktopUploadPlan,
   type DesktopUploadArtifact,
@@ -57,13 +58,15 @@ async function main(): Promise<void> {
   if (target === undefined || positionals.length !== 1) {
     throw new Error('desktop upload: expected exactly one target')
   }
-  const plan = await createDesktopUploadPlan(targetName(target))
+  const name = targetName(target)
+  const environment = loadDesktopPackageEnvironment(name === 'win-x64' ? 'win32' : 'darwin')
+  const plan = await createDesktopUploadPlan(name, { environment })
   const client = new S3Client({
     region: 'Auto',
     endpoint: 'https://cos.ap-beijing.myqcloud.com',
     credentials: {
-      accessKeyId: requiredEnvironmentValue(process.env, plan.secretIdEnvName),
-      secretAccessKey: requiredEnvironmentValue(process.env, plan.secretKeyEnvName),
+      accessKeyId: requiredEnvironmentValue(environment, plan.secretIdEnvName),
+      secretAccessKey: requiredEnvironmentValue(environment, plan.secretKeyEnvName),
     },
   })
   process.stdout.write(`desktop upload: ${plan.target} ${plan.version} -> ${plan.publicUrl}\n`)

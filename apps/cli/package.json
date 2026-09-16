@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh",
-  "description": "dsh CLI: profile boot, plugin management, and the browser UI alias",
-  "version": "0.1.5-rc.2",
+  "description": "dsh CLI: profile launch, plugin management, and configuration inspection",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -15,7 +15,8 @@
     "dsh": "lib/bin.js"
   },
   "files": [
-    "lib/*.js"
+    "lib/*.js",
+    "lib/types/*.d.ts"
   ],
   "dsh": {
     "configTrees": [
@@ -29,7 +30,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/cordis-plugin-hmr": "workspace:^",
+    "@deepseek-ai/dsh-hmr": "workspace:^",
     "@deepseek-ai/cordis-plugin-include": "workspace:^",
     "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/cordis-plugin-timer": "workspace:^",
@@ -46,6 +47,9 @@
     "@deepseek-ai/dsh-compaction-basic": "workspace:^",
     "@deepseek-ai/dsh-compaction-tool-result-pruner": "workspace:^",
     "@deepseek-ai/dsh-cordis-client-runner": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:^",
+    "@deepseek-ai/dsh-experimental-agent-team-web-profile": "workspace:^",
+    "@deepseek-ai/dsh-experimental-auto-review": "workspace:^",
     "@deepseek-ai/dsh-fs-local": "workspace:^",
     "@deepseek-ai/dsh-goal": "workspace:^",
     "@deepseek-ai/dsh-goal-round-driver": "workspace:^",
@@ -98,9 +102,11 @@
     "@deepseek-ai/schemastery": "workspace:^",
     "commander": "^15.0.0",
     "js-yaml": "^4.2.0",
-    "node-addon-require-builtin": "^0.1.4",
+    "node-addon-require-builtin": "^0.1.6",
     "@deepseek-ai/dsh-http-proxy": "workspace:^",
-    "@deepseek-ai/dsh-mcp-resources": "workspace:^"
+    "@deepseek-ai/dsh-mcp-resources": "workspace:^",
+    "@deepseek-ai/dsh-plugin-manager": "workspace:^",
+    "@deepseek-ai/dsh-atomic-write": "workspace:^"
   },
   "devDependencies": {
     "@agentclientprotocol/sdk": "1.4.0",
@@ -113,7 +119,6 @@
     "@deepseek-ai/dsh-credentials-local": "workspace:^",
     "@deepseek-ai/dsh-deepseek-llm-api-extensions": "workspace:^",
     "@deepseek-ai/dsh-experimental-agent-team": "workspace:^",
-    "@deepseek-ai/dsh-experimental-agent-team-profile": "workspace:^",
     "@deepseek-ai/dsh-experimental-ptc-runtime-python": "workspace:^",
     "@deepseek-ai/dsh-experimental-tool-agent-team": "workspace:^",
     "@deepseek-ai/dsh-fs-observation-policy": "workspace:^",
@@ -148,5 +153,13 @@
     "@types/ws": "8.18.1",
     "execa": "^10.0.0",
     "ws": "8.21.0"
+  },
+  "exports": {
+    "./profile-boot": {
+      "types": "./lib/types/profile-boot.d.ts",
+      "default": "./lib/profile-boot.js"
+    },
+    "./lib/*": "./lib/*",
+    "./package.json": "./package.json"
   }
 }

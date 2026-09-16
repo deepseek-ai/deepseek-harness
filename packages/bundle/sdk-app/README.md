@@ -58,7 +58,7 @@ Stable for a fixed profile, provider, model, and tool roster. Profile changes ta
 
 - **A profile can omit the SDK server** — a custom profile selected by the TypeScript client must retain this bundle or another `dsh-sdk-jsonrpc-server` row; client initialization fails when no peer answers.
 - **User plugins can violate stdout purity** — profile and per-launch patches are trusted application composition. The shipped bundle writes no non-protocol stdout, but it cannot contain an arbitrary inserted plugin.
-- **Configuration changes require restart** — the shipped `sdk` profile uses `patchReload: startup` so one stdio connection never observes a replacement server or Agent dependency.
+- **Configuration changes require restart** — the `sdk-app` bundle disables HMR in YAML so one stdio connection never observes a replacement server or Agent dependency.
 
 
 <a id="dev-note"></a>

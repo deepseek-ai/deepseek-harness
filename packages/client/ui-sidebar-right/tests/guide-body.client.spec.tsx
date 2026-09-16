@@ -30,7 +30,7 @@ function Glyph({ size }: IconProps): ReactNode {
 /** One entry capsule as the registry lists it. */
 function box(kind: string, order: number, icon?: SidebarRightGuideBox['icon'], description?: string): SidebarRightGuideBox {
   return {
-    kind,
+    kind, providerId: `provider/${kind}`, id: `${kind}-${order}`,
     order,
     title: () => `${kind} title`,
     ...icon === undefined ? {} : { icon },
@@ -42,7 +42,7 @@ function box(kind: string, order: number, icon?: SidebarRightGuideBox['icon'], d
  * Mount the body with the entries observable and a chain that renders its
  * fallback, which is what the chain does with no registrant.
  */
-function mountGuide(entries: readonly SidebarRightGuideBox[]) {
+function mountGuide(entries: readonly SidebarRightGuideBox[], custom?: (key: string) => ReactNode) {
   const guideEntries = createSnapshotStore<readonly SidebarRightGuideBox[]>(entries)
   const openTab = vi.fn()
   const renderSlot = vi.fn((_seat: string, _owner: unknown, options: { fallback: ReactNode }) => options.fallback)
@@ -50,11 +50,13 @@ function mountGuide(entries: readonly SidebarRightGuideBox[]) {
     useTabInfo: () => ({ tab: { ...TAB, actions: { openResource: vi.fn(), openTab, close: vi.fn() } } }),
     useGuideEntries: bindSnapshotSelector(guideEntries),
     renderSlotChain: renderSlot,
+    renderSlot: vi.fn((_slot: string, _owner: unknown, options: { entryKey: string; fallback: ReactNode }) =>
+      custom?.(options.entryKey) ?? options.fallback),
   } as unknown as GuideBodyProps
   const view = render(<GuideBody {...props} />)
   const boxes = (): string[] =>
     [...view.container.querySelectorAll('[data-sidebar-right-guide-entry]')].map(node => node.getAttribute('data-sidebar-right-guide-entry') ?? '')
-  return { view, guideEntries, openTab, renderSlot, boxes, useTabInfo: props.useTabInfo }
+  return { view, guideEntries, openTab, renderSlot, entrySlot: props.renderSlot, boxes, useTabInfo: props.useTabInfo }
 }
 
 describe('GuideBody', () => {
@@ -120,7 +122,10 @@ describe('GuideBody', () => {
   it('keeps two boxes of one type at the same order apart', () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
     try {
-      const { boxes } = mountGuide([box('notes', 10), box('notes', 10)])
+      const { boxes } = mountGuide([
+        { ...box('notes', 10), providerId: 'a:b', id: 'c' },
+        { ...box('notes', 10), providerId: 'a', id: 'b:c' },
+      ])
       expect(boxes()).toEqual(['notes', 'notes'])
       // React reports colliding keys through console.error; two boxes rendered
       // without one is the whole assertion.
@@ -130,4 +135,18 @@ describe('GuideBody', () => {
       cleanup()
     }
   })
+})
+
+it('dispatches custom guide content by active provider identity and retains the fallback for other entries', () => {
+  const custom = (key: string) => key === 'extension/terminal' ? <button>Choose a shell</button> : undefined
+  const terminal = { ...box('terminal', 20), providerId: 'extension/terminal' }
+  const h = mountGuide([box('files', 10), terminal], custom)
+  expect(h.view.getByText('Choose a shell')).toBeDefined()
+  expect(h.view.getByText('files title')).toBeDefined()
+  expect(h.entrySlot).toHaveBeenCalledWith('sidebar.right.tab.guide.entry', {
+    entryId: terminal.id, kind: 'terminal', title: 'terminal title',
+  }, expect.objectContaining({ entryKey: 'extension/terminal', hookContext: h.useTabInfo }))
+  act(() => { h.guideEntries.set([{ ...terminal, providerId: 'builtin/terminal' }]) })
+  expect(h.view.queryByText('Choose a shell')).toBeNull()
+  expect(h.view.getByText('terminal title')).toBeDefined()
 })

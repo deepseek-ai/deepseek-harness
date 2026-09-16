@@ -1,7 +1,9 @@
+import { execFile } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { validateDesktopPackageEnvironment } from '../scripts/desktop-package-environment.mjs'
 import {
   buildWindowsSigningEnvironment,
   createRedactedWindowsSigningError,
@@ -10,6 +12,11 @@ import {
   repairDanglingAuthenticodeDirectory,
   scrubWindowsSigningEnvironment,
 } from '../scripts/windows-sign.mjs'
+
+vi.mock('node:child_process', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:child_process')>()
+  return { ...actual, execFile: vi.fn() }
+})
 
 vi.mock('node:crypto', () => ({
   X509Certificate: class {
@@ -28,6 +35,38 @@ const CERTIFICATE_FILE = 'C:\\release\\server.cer'
 const SIGN_SCRIPT = resolve(import.meta.dirname, '../scripts/windows-sign.cmd')
 
 describe('Windows token signing', () => {
+  it('stops concurrent and subsequent signing tasks after a PIN failure', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'dsh-windows-pin-failure-'))
+    try {
+      const certificateFile = join(directory, 'server.cer')
+      const signTool = join(directory, 'signtool.exe')
+      const path = join(directory, 'application.exe')
+      await writeFile(certificateFile, 'code-signing-certificate-fixture')
+      await writeFile(signTool, 'fixture')
+      await writeFile(path, 'fixture')
+      validateDesktopPackageEnvironment({
+        DSH_DESKTOP_APP_ID: 'com.example.desktop', DOWNLOAD_TEST_ORIGIN: 'https://updates.example.com',
+        DSH_DESKTOP_WINDOWS_CER_FILE: certificateFile, DSH_DESKTOP_WINDOWS_SIGNTOOL: signTool,
+        DSH_DESKTOP_WINDOWS_TOKEN_PIN: 'fixture-pin', DSH_DESKTOP_WINDOWS_KEY_CONTAINER: 'fixture-container',
+      }, { platform: 'win32', arch: 'x64' })
+      expect(execFile).not.toHaveBeenCalled()
+      vi.mocked(execFile).mockImplementationOnce((...args: unknown[]) => {
+        const callback = args.at(-1) as (error: Error) => void
+        callback(Object.assign(new Error('signing failed'), { stderr: 'SignTool Error: No private key is available.', code: 1 }))
+        return undefined as unknown as ReturnType<typeof execFile>
+      })
+      const sign = createWindowsTokenSigner({ certificateFile, signTool, tokenPin: 'fixture-pin', keyContainer: 'fixture-container' })
+      const task = { path, hash: 'sha256', isNest: false }
+      const results = await Promise.allSettled([sign(task), sign(task), sign(task)])
+      expect(results.map(result => result.status)).toEqual(['rejected', 'rejected', 'rejected'])
+      await expect(sign(task)).rejects.toThrow('No private key is available.')
+      expect(execFile).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.mocked(execFile).mockReset()
+      await rm(directory, { recursive: true, force: true })
+    }
+  })
+
   it('passes only the validated BAT fields to the signing command interpreter', () => {
     expect(buildWindowsSigningEnvironment({
       SystemRoot: 'C:\\Windows',

@@ -8,7 +8,7 @@ English | [中文](2026-08-18-session-history-and-event-transport.zh.md)
 
 The browser consumes three kinds of data with different lifecycles: persistable, paginated Session logs; process-local state that needs an opening baseline to converge after reconnect; and immediate notifications that need no replay.
 
-These kinds of data cannot share one recovery rule. Session logs have stable sequence numbers and persistence, so a cursor can fill gaps; queue, jobs, and Workspace lists need a complete snapshot to replace an old mirror; ordinary notifications only promise delivery within the current Connection generation.
+These kinds of data cannot share one recovery rule. Session logs have stable sequence numbers and persistence, so a cursor can fill gaps; jobs, projection values, and Workspace lists need a complete snapshot to replace an old mirror; ordinary notifications only promise delivery within the current Connection generation.
 
 Observing Session history, lists, and projections must allow cold reads. If transport performs a general Typert lookup whenever an argument contains a Session or Agent, opening a page, switching tabs, or reconnecting the network implicitly resumes an Agent, so observation gains execution side effects.
 
@@ -158,7 +158,8 @@ Each method explicitly selects a cold inspection, live-only lookup, or resume-ca
 | `session.follow(address)` | one live or prepared observation carrying the opening page and projections | Publishes the snapshot first, then promotes an ordinary cold Session once in the background |
 | `session.control()` | current attached Agents, pending registry, and process-local registries | Baseline and reconnect do not resume an Agent |
 | `session.attachment`, fork source read | authorized durable Session data | A read does not resume an Agent |
-| `session.updateQueue`, `cancel` | only the current live Agent | Does not resume vanished state |
+| `session.updateQueue` | live Agent or ordinary persisted Session | Resumes an ordinary cold Session before mutating its Inbox |
+| `session.cancel` | only the current live Agent | Does not resume vanished state |
 | `models`, `selectModel`, `rename`, `prompt` | command resolves the target Session | Resumes only when the method explicitly permits it |
 | `create` and fork target | new Session/Agent | The user command supplies creation authority |
 
@@ -204,9 +205,9 @@ A terminal failure from the initial page, repair page, or follow enters the curr
 
 `session.control()` is a Host-wide snapshot stream. One browser can observe transient state for all current live Sessions without opening a journal for every transcript.
 
-Each generation emits a complete baseline first, followed by queue, jobs, and projection deltas. The baseline reads attached Agents and process-local registries without resuming cold Agents.
+Each generation emits a complete baseline first, followed by jobs and projection deltas. The baseline reads process-local registries and folded projection values without resuming cold Agents.
 
-Queue and jobs use complete replacement values and apply last-wins. Agent attach, detach, Session disposal, and owner disposal can all clear a stale mirror through an empty value or a new baseline.
+Jobs use complete replacement values and apply last-wins. Projection updates carry monotonically increasing revisions, while a new baseline replaces the complete projection map. Session and owner disposal clear stale mirrors.
 
 The original `approval/request` and `user-questions/request` events are forwardable waterfalls. If an Agent-scoped Client listener claims a request, it returns directly. If all delivered Clients call `next()`, the original Cordis waterfall continues to later Host listeners. Session control neither stores nor replays these requests.
 
@@ -313,7 +314,7 @@ API Proxy carries only independent business APIs it owns. Session, Workspace, Re
 
 **Split Session transport and Session commands into two public packages.** Both depend on Session address, Agent activation policy, subagent ownership, error mapping, and Client mount ordering. One public Controller preserves unified ownership while internal classes can evolve independently.
 
-**Move queue, jobs, projection, Workspace, and logs to ordinary `$on`.** Ordinary events have no reconnect baseline, cursor, or gap repair, so one missed delivery leaves permanently stale state. Only notifications that need no recovery, can be repaired by an independent query, or carry their own lifetime as a waterfall fit `$on`.
+**Move jobs, projections, Workspace, and logs to ordinary `$on`.** Ordinary events have no reconnect baseline, cursor, or gap repair, so one missed delivery leaves permanently stale state. Only notifications that need no recovery, can be repaired by an independent query, or carry their own lifetime as a waterfall fit `$on`.
 
 **Make every domain Controller inherit a page/follow/retry base class.** Session journals and Workspace snapshots have different opening, recovery, and ordering rules. Gateway's three compositional stream objects reuse transport lifecycle while domain adapters declare only their own frame semantics.
 
@@ -345,7 +346,7 @@ Connection tests pin missing, duplicate, and withdrawn generation sources, readi
 
 Session Host tests pin cold page/follow without increasing attached Agents, contiguous events reaching a cold follow after an explicit prompt, direct-subagent ownership, message-aligned pagination, and terminal-error projection.
 
-Session control tests pin baseline-first delivery, no cold-Session resume, attach/detach cleanup, queue and jobs replacement, and the projection watermark.
+Session control tests pin baseline-first delivery, no cold-Session resume, jobs replacement, and the projection watermark.
 
 Session Client tests pin one journal owner per Session, no writeback from stale open epochs, independent cancellation of control and journal, and retaining the published window during carrier retry.
 

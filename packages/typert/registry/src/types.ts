@@ -71,24 +71,27 @@ export interface TypertPackageModel {
   readonly objects: readonly TypertObjectModel[]
 }
 
-/** One generated live Zod schema. */
-export interface TypertSchema {
+/** One generated Zod schema factory. */
+export interface TypertSchemaFactory {
   readonly name: string
-  readonly schema: z.ZodType
+  /** Materialize and return the process-realm schema on first use. */
+  readonly create: () => z.ZodType
 }
 
 /** One generated package contribution registered and withdrawn atomically. */
 export interface TypertContribution {
   readonly package: string
   readonly face: TypertFace
-  readonly schemas: readonly TypertSchema[]
+  readonly schemas: readonly TypertSchemaFactory[]
   readonly model: TypertPackageModel
   /** Host invocation definitions, empty when the package exports no Remote methods. */
   readonly invocations: readonly InvocationDescriptor[]
 }
 
 /** A live schema plus its contribution identity. */
-export interface TypertSchemaRecord extends TypertSchema {
+export interface TypertSchemaRecord {
+  readonly name: string
+  readonly schema: z.ZodType
   readonly package: string
   readonly face: TypertFace
   readonly key: string

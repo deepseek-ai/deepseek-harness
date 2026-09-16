@@ -91,7 +91,7 @@ Host 装配以转发给消费方的 Cordis 事件扩展 `TypertRemoteEventSelect
 
 ### Wire 标识文法
 
-每个命名空间、方法、查找与 Context 段都必须满足 `isTypertRemoteSegment()`，生成的名字才能原样跨共享 RPC 载体传输。严格编解码器携带生成的 schema；`src-json` 编解码器标识约束更弱的源码启动路径。
+每个命名空间、方法、查找与 Context 段都必须满足 `isTypertRemoteSegment()`，生成的名字才能原样跨共享 RPC 载体传输。严格编解码器携带生成的 schema factory；`src-json` 编解码器标识约束更弱的源码启动路径。
 
 ### 源码地图
 

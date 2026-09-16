@@ -3,11 +3,13 @@
 // TestSessions mints tagged scopes through the production createScope, so the
 // service's scopeOf/binding path runs against production resolution (no local
 // tag probe).
+import type { UserMessage } from '@deepseek-ai/dsh-llm/types'
+import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { makeTranslate, RemoteError, SlotTestRuntime } from '@deepseek-ai/dsh-client-test-runtime'
 import type {
-  BeginSubmissionInput, PendingSubmissionRetirement, QueuedMessage,
+  BeginSubmissionInput, PendingSubmissionRetirement,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { ComposerBlockRegistry } from '../src/client/input/blocks.ts'
@@ -80,15 +82,15 @@ describe('ConversationController', () => {
   it('treats QueueDock Steer pre-admission races as converged Queue delivery', async () => {
     const b = await bench()
     b.updateQueue.mockResolvedValueOnce({
-      ok: false, error: new RemoteError('session/steer-unavailable', 'closed', { itemId: 'item-1' as QueuedMessage['id'] }),
+      ok: false, error: new RemoteError('session/steer-unavailable', 'closed', { itemId: 'item-1' as MessageId }),
     } as never)
     await expect(b.scoped.updateQueue('item-1' as never, { kind: 'steer' })).resolves.toBeUndefined()
     b.updateQueue.mockResolvedValueOnce({
-      ok: false, error: new RemoteError('session/queue-item-not-found', 'claimed', { itemId: 'item-1' as QueuedMessage['id'] }),
+      ok: false, error: new RemoteError('session/queue-item-not-found', 'claimed', { itemId: 'item-1' as MessageId }),
     } as never)
     await expect(b.scoped.updateQueue('item-2' as never, { kind: 'steer' })).resolves.toBeUndefined()
     b.updateQueue.mockResolvedValueOnce({
-      ok: false, error: new RemoteError('session/queue-item-not-found', 'claimed', { itemId: 'item-1' as QueuedMessage['id'] }),
+      ok: false, error: new RemoteError('session/queue-item-not-found', 'claimed', { itemId: 'item-1' as MessageId }),
     } as never)
     await expect(b.scoped.updateQueue('item-3' as never, { kind: 'remove' }))
       .rejects.toThrow('conversation.updateQueue failed: session/queue-item-not-found: claimed')
@@ -783,20 +785,16 @@ describe('draft image dimension probe', () => {
 })
 
 describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
-  const row = (id: string): QueuedMessage => ({
+  const row = (id: string): UserMessage => ({
     id: id as never,
-    messageId: `message-${id}` as never,
-    placement: 'queued',
+    role: 'user',
+    source: { kind: 'user' },
     content: [{ type: 'text', text: id }],
-    preview: id,
-    text: id,
   })
 
   it('steers every queued row in FIFO order and leaves steering rows alone', async () => {
     const b = await bench()
-    await b.runtime.sessions.updateSessionSnapshot('s1', (draft) => {
-      draft.queue = [row('q-1'), { ...row('q-2'), placement: 'steering' }, row('q-3')]
-    })
+    await b.runtime.sessions.setProjection('s1', 'inbox', { 'next-turn': [row('q-1'), row('q-3')], 'next-step': [row('q-2')] })
     b.shell.steerQueue()
     await vi.waitFor(() => {
       expect(b.updateQueue).toHaveBeenCalledTimes(2)
@@ -809,12 +807,10 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
 
   it('converges silently when the turn closes or a row is claimed mid-steer', async () => {
     const b = await bench()
-    await b.runtime.sessions.updateSessionSnapshot('s1', (draft) => {
-      draft.queue = [row('q-1'), row('q-2')]
-    })
+    await b.runtime.sessions.setProjection('s1', 'inbox', { 'next-turn': [row('q-1'), row('q-2')], 'next-step': [] })
     // The turn closes before the second row: the flush stops, silently.
     b.updateQueue.mockResolvedValueOnce({
-      ok: false, error: new RemoteError('session/steer-unavailable', 'closed', { itemId: 'item-1' as QueuedMessage['id'] }),
+      ok: false, error: new RemoteError('session/steer-unavailable', 'closed', { itemId: 'item-1' as MessageId }),
     } as never)
     b.shell.steerQueue()
     await vi.waitFor(() => { expect(b.updateQueue).toHaveBeenCalledTimes(1) })
@@ -822,11 +818,9 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
 
     // A row the host already claimed (e.g. a repeated empty-draft chord):
     // the duplicate Steer is a silent no-op.
-    await b.runtime.sessions.updateSessionSnapshot('s1', (draft) => {
-      draft.queue = [row('q-3')]
-    })
+    await b.runtime.sessions.setProjection('s1', 'inbox', { 'next-turn': [row('q-3')], 'next-step': [] })
     b.updateQueue.mockResolvedValueOnce({
-      ok: false, error: new RemoteError('session/queue-item-not-found', 'claimed', { itemId: 'item-1' as QueuedMessage['id'] }),
+      ok: false, error: new RemoteError('session/queue-item-not-found', 'claimed', { itemId: 'item-1' as MessageId }),
     } as never)
     b.shell.steerQueue()
     await vi.waitFor(() => { expect(b.updateQueue).toHaveBeenCalledTimes(2) })
@@ -836,9 +830,7 @@ describe('InputHub queue steering (empty-draft accelerated Enter)', () => {
 
   it('surfaces one notice on a genuine steer failure and stops', async () => {
     const b = await bench()
-    await b.runtime.sessions.updateSessionSnapshot('s1', (draft) => {
-      draft.queue = [row('q-1'), row('q-2')]
-    })
+    await b.runtime.sessions.setProjection('s1', 'inbox', { 'next-turn': [row('q-1'), row('q-2')], 'next-step': [] })
     b.updateQueue.mockResolvedValueOnce({
       ok: false, error: new RemoteError('gateway/internal', 'broken', {}),
     } as never)

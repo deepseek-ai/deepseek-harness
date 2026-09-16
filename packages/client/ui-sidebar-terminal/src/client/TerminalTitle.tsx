@@ -4,7 +4,7 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import { TerminalIcon } from './TerminalIcon.tsx'
 import type { TerminalInjected } from './face.ts'
 import type {} from './locales.ts'
-import css from './TerminalBody.module.css'
+import css from './TerminalTitle.module.css'
 
 /**
  * Render the terminal name, editable in place on double-click.

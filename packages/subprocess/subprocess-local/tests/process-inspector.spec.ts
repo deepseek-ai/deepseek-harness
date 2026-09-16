@@ -89,6 +89,30 @@ function fakeInternals() {
 }
 
 describe('Linux process inspector', () => {
+  it.each(['EACCES', 'EMFILE'])('refuses to publish an empty snapshot when /proc enumeration fails with %s', (code) => {
+    const fake = fakeInternals()
+    const readDir = fake.internals.readDir.bind(fake.internals)
+    fake.internals.readDir = () => { throw Object.assign(new Error('Enumeration failed'), { code }) }
+    const inspector = createProcessInspector('linux', 'x64', fake.internals)
+    expect(() => inspector.snapshot()).toThrow('/proc directory is unreadable')
+    fake.internals.readDir = readDir
+    fake.dirs.set('/proc', ['10'])
+    fake.files.set('/proc/10/stat', stat(10, 10, 10, 10, '500'))
+    expect(inspector.snapshot().complete).toBe(true)
+    expect(inspector.snapshot().tree(10)).toEqual([{ pid: 10, started: '500' }])
+  })
+
+  it('makes no stdin-wait claim when process or task directories cannot be enumerated', () => {
+    const fake = fakeInternals()
+    fake.files.set('/proc/10/stat', stat(10, 10, 10, 10, '500'))
+    fake.links.set('/proc/10/fd/0', '/dev/pts/1')
+    fake.devices.set('/proc/10/fd/0', { character: true, rdev: 99 })
+    const inspector = createProcessInspector('linux', 'x64', fake.internals)
+    expect(inspector.isStdinWaiting(10, 10)).toBe(false)
+    fake.dirs.set('/proc', ['10'])
+    expect(inspector.isStdinWaiting(10, 10)).toBe(false)
+  })
+
   it('treats zombie-only process groups as quiescent and fails closed when unobservable', () => {
     const fake = fakeInternals()
     expect(linuxProcessGroupHasLiveMembers(77, fake.internals)).toBeUndefined()

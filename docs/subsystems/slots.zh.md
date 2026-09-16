@@ -144,6 +144,7 @@ root
 │     │     └─ conversation.trajectory.images
 │     ├─ conversation.session.header
 │     │  ├─ conversation.session.header.lineage
+│     │  ├─ conversation.session.header.leading
 │     │  ├─ conversation.session.header.actions
 │     │  ├─ conversation.session.header.utilities
 │     │  └─ conversation.session.header.corner
@@ -166,7 +167,8 @@ root
 ├─ rightbar
 │  └─ rightbar.session
 │     ├─ sidebar.right.pane.tab
-│     │  └─ sidebar.right.tab.guide
+│     │  ├─ sidebar.right.tab.guide
+│     │  └─ sidebar.right.tab.guide.entry
 │     ├─ sidebar.right.pane.tab.title
 │     └─ sidebar.right.tab.menu.item
 └─ shell.overlay

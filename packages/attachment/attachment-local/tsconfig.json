@@ -7,6 +7,7 @@
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
     { "path": "../attachment" },
-    { "path": "../../util/home-paths" }
+    { "path": "../../util/home-paths" },
+    { "path": "../../util/lazy-require" }
   ]
 }

@@ -130,7 +130,9 @@ describe('web e2e: workspace recency', () => {
     await socket.close()
     await expect.poll(() => releaseWorkspace !== undefined).toBe(true)
     const workspaceTitle = basename(scaffold.workspaceCwd)
-    await page.getByRole('treeitem').filter({ has: page.getByText(workspaceTitle, { exact: true }) }).hover()
+    // Session titles can fall back to the workspace name while reconnect projections reload.
+    await page.locator('[role="treeitem"][aria-expanded]')
+      .filter({ has: page.getByText(workspaceTitle, { exact: true }) }).hover()
     await page.getByRole('button', { name: `New session in ${workspaceTitle}` }).click()
     await pick('In one list')
     await expect.poll(titles).toEqual(['New Session', ...TITLES])

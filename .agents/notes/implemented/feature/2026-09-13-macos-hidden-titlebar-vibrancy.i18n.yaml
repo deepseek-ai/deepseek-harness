@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-13-macos-hidden-titlebar-vibrancy.md
+2026-09-13-macos-hidden-titlebar-vibrancy.md: b6b2f249a1843f937cf73d4eb193d47e1b9e8ad5
+2026-09-13-macos-hidden-titlebar-vibrancy.zh.md: 8d4a4d17bda2e8c7845b66443cc883c6177b7343

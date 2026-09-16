@@ -346,7 +346,10 @@ jobs:
 
       - name: Install Playwright Chromium and hosted dependencies
         if: vars.DSH_CI_FAILOVER_LINUX != 'selfhosted' || github.event.pull_request.user.login == 'dependabot[bot]'
-        run: pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium
+        # Ephemeral runner images can carry Ubuntu mirrors whose HTTP endpoints are unreachable.
+        run: |
+          sudo find /etc/apt -maxdepth 2 -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i -E 's@http://([a-z]{2}\.)?archive\.ubuntu\.com/ubuntu@https://archive.ubuntu.com/ubuntu@g; s@http://security\.ubuntu\.com/ubuntu@https://security.ubuntu.com/ubuntu@g' {} +
+          pnpm --filter @deepseek-ai/dsh-web-frontend exec playwright install --with-deps chromium
 
       # The persistent VM image owns Playwright's Linux system packages; do
       # not mutate the shared host with apt on every failover run.
@@ -464,6 +467,13 @@ jobs:
 
       - name: Install uv
         run: python -m pip install uv==0.11.23
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Test production blame scoring
+        run: uv run --python 3.10 --with-requirements .github/review-ownership/requirements.txt python -m unittest discover -s .github/review-ownership -p 'test_*.py'
 
       - name: Run complete keyless Python suite
         run: uv run --python 3.10 --group test --project python/sdk pytest

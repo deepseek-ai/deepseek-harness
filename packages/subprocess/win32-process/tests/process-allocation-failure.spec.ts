@@ -1,5 +1,5 @@
 import koffi from 'koffi'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   drainPipe,
   spawnInheritedJobProcess,
@@ -7,12 +7,18 @@ import {
   waitForProcessExit,
 } from '../src/index.ts'
 import * as ffi from '../src/ffi.ts'
-import { PROCESS_INFORMATION } from '../src/ffi.ts'
+import { processInformationType } from '../src/ffi.ts'
+import * as koffiLoader from '../src/koffi.ts'
 import type { NativePtr, Win32ProcessBindings } from '../src/ffi.ts'
 
 vi.mock('../src/ffi.ts', { spy: true })
+vi.mock('../src/koffi.ts', { spy: true })
 
 const PVOID = koffi.pointer('void')
+
+beforeEach(() => {
+  vi.mocked(koffiLoader.requireKoffi).mockReturnValue(koffi)
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -47,7 +53,7 @@ describe('spawnInheritedJobProcess allocation cleanup', () => {
       getStdHandle: vi.fn((selector: number) => BigInt(100 - selector)),
       setHandleInformation: vi.fn(() => 1),
       createProcessAsUserW: vi.fn((_token, _app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, _startup, info) => {
-        koffi.encode(info, PROCESS_INFORMATION, {
+        koffi.encode(info, processInformationType(), {
           hProcess: 60n,
           hThread: 61n,
           dwProcessId: 1234,
@@ -83,7 +89,7 @@ describe('shared process allocation cleanup', () => {
       }),
       setHandleInformation: vi.fn(() => 1),
       createProcessAsUserW: vi.fn((_token, _app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, _startup, info) => {
-        koffi.encode(info, PROCESS_INFORMATION, {
+        koffi.encode(info, processInformationType(), {
           hProcess: 60n,
           hThread: 61n,
           dwProcessId: 1234,

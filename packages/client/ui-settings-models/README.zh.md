@@ -35,9 +35,11 @@ kind: "package-reference"
 
 ### 编辑提供方
 
-收起的「自定义设置」折叠区承载精选的额外字段：两个家族都有 `baseURL`（deepseek 的占位符显示公共端点）、各适配器自己的模型目录，以及适配器未提供的 pi-ai 路由的**显示名称**与 **API 协议**。Profile `headers` 仍是 `settings.yaml` 或 Cordis 配置中的部署配置，Models 页面不提供编辑器。Provider ID 保持固定：它是 settings 的键、其他每个 namespace 与每一条已记录会话引用的名字，也是页面读不回、因而搬不走的凭据引用词干。推理等级刻意不在可编辑字段之列：它是按模型的能力，提供方级的控件只可能被设成某些模型会拒绝的值。每个 DeepSeek 行编辑 `id`、可选显示 `name` 与可选 `contextWindow`/`maxTokens`；该精选集之外的现有字段在编辑后仍会保留。
+收起的「自定义设置」折叠区承载精选的额外字段：两个家族都有 `baseURL`（deepseek 的占位符显示公共端点）、各适配器自己的模型目录，以及适配器未提供的 pi-ai 路由的**显示名称**与 **API 协议**。Profile `headers` 仍是 `settings.yaml` 或 Cordis 配置中的部署配置，Models 页面不提供编辑器。Provider ID 保持固定：它是 settings 的键、其他每个 namespace 与每一条已记录会话引用的名字，也是页面读不回、因而搬不走的凭据引用词干。推理等级刻意不在可编辑字段之列：它是按模型的能力，提供方级的控件只可能被设成某些模型会拒绝的值。每个模型行可编辑 `id`、可选显示 `name`、可选 `contextWindow`/`maxTokens` 和图片输入；无关的模型字段在编辑后仍会保留。
 
 `llm-deepseek` 的 DeepSeek 卡片编辑共用的端点、凭据和模型目录，不提供协议选择器。Cordis YAML 选择 Messages 时，官方端点占位符为 `https://api.deepseek.com/anthropic`；保存卡片不会改写协议配置。
+
+展开**自定义设置 → 模型选项 → 图片输入**，声明模型是否支持图片。选择**支持**会写入文本和图片输入；选择**不支持**会写入仅文本。DeepSeek 的**默认（仅文本）**会移除 `inputModalities`；缺省的声明表示仅文本。Pi-ai 的**使用默认值**会移除 `input`，继承已安装模型目录或提供方的默认值。DeepSeek 选择**不支持**或**默认（仅文本）**时，还会移除 `imagePixelBudget` 和 `imageMaxBytes`，因为适配器在没有图片输入时拒绝这些限制。仅为实际能够处理图片的模型声明支持。
 
 ### 新增与删除提供方
 

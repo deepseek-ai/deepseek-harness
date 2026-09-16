@@ -336,6 +336,26 @@ describe.skipIf(!built)('Web process failure matrix', () => {
     }
   })
 
+  it('reports a patch failure during watcher registration and accepts a correction', async () => {
+    const f = fixture()
+    const observerPath = fileURLToPath(f.observer.name)
+    // This sibling mounts after HMR's watchers, before application readiness.
+    writeFileSync(observerPath, readFileSync(observerPath, 'utf8').replace(
+      'export function apply(ctx, config) {',
+      `export const inject = ['hmr']
+export function apply(ctx, config) {
+  writeFileSync(${JSON.stringify(f.patch)}, ${JSON.stringify(f.render('matrix-optional', 'import'))})`,
+    ))
+    const app = start(f)
+    try {
+      await app.wait(() => app.logs().includes('config reload at') && app.logs().includes('missing.mjs'))
+      await app.serves()
+      writeFileSync(f.patch, f.render('matrix-optional', undefined, 2))
+      await app.wait(() => app.events().includes('target apply 2\n'))
+      await app.serves()
+    } finally { exit(await app.close(), 0) }
+  })
+
   it.each(['startup', 'HMR'])('optional HTTP bind failure at %s leaves Web serving', async (phase) => {
     const f = fixture()
     const blocker = createServer()

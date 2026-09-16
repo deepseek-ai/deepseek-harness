@@ -2,7 +2,7 @@
 // and asserts its catalog, defaults, Loader lifecycle, and one complete Auto
 // producer-to-tool path. Browser scenarios in this lane own visual behavior.
 import { randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -513,6 +513,7 @@ afterEach(async () => {
 
 it('assembles the shipped Web transport, catalog, guidance, and defaults', async () => {
   scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
+  expect(existsSync(join(scaffold.harnessHome, 'profiles', 'node_modules'))).toBe(false)
   const ctx = scaffold.ctx
   expect(ctx.llm.listProviders().some(provider => provider.id === 'deepseek-messages')).toBe(false)
   expect(ctx.agentDefaultModel.currentSelection()).toEqual({ provider: 'deepseek-official', model: 'deepseek-flash' })
@@ -640,8 +641,9 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   }
 }, 120_000)
 
-it('ships PTC with run_code but without the general workflow SDK binding', async () => {
-  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
+it('ships PTC with run_code but without the general workflow SDK binding under dual resolution', async () => {
+  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, profileResolutionMode: 'dual' })
+  expect(existsSync(join(scaffold.harnessHome, 'profiles', 'node_modules'))).toBe(true)
   const ctx = scaffold.ctx
   const handle = await ctx.agents.create({
     sessionId: SessionId('shipped-ptc-composition'),

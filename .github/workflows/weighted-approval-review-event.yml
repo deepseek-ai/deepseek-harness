@@ -9,6 +9,7 @@ permissions: {}
 
 jobs:
   record-review-event:
+    if: github.event.pull_request.state == 'open'
     name: record weighted approval review event
     runs-on: ubuntu-latest
     timeout-minutes: 2

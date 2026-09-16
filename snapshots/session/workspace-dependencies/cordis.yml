@@ -1,0 +1,12 @@
+- insert:
+    - id: workspace-dependencies
+      name: ../../../apps/desktop-host/src/workspace-dependencies.ts
+      config:
+        source: !!js process.cwd() + '/runtime-source'
+        root: !!js process.cwd() + '/runtime-installed'
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true

@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-`dsh-experimental-agent-team-profile` 是在 `@deepseek-ai/dsh-base` 之上启用 [Agent Teams](../agent-team/README.zh.md) 的公开实验性 profile 层。它的 patch 会插入 Team domain 与 Team-scoped 工具，并禁用普通 subagent 委派和名称重叠的全局 continuable-child control。Workflow 仍可创建 fresh 子代理。必须将本包显式添加到已初始化的 profile；随附 profile 默认都不会启用它。
+`dsh-experimental-agent-team-profile` 是在 `@deepseek-ai/dsh-base` 之上启用 [Agent Teams](../agent-team/README.zh.md) 的公开实验性 profile 层。它的 patch 会插入 Team domain 与 Team-scoped 工具，并禁用普通 subagent 委派和名称重叠的全局 continuable-child control。Workflow 仍可创建 fresh 子代理。dsh 安装随附本包作为可选组合包，随附 profile 都不会启用它；可在 Web 侧栏的插件页开启，或显式添加到已初始化的 profile。
 
 ## 目录
 
@@ -91,7 +91,7 @@ Team 策略与 schema 由 [`@deepseek-ai/dsh-experimental-tool-agent-team`](../t
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **仅显式启用**——本包公开发布，但随附 CLI、Web、SDK、ACP 与 Python profile 都不会启用它。
+- **仅显式启用**——本包随安装提供但默认关闭；随附 CLI、Web、SDK、ACP 与 Python profile 都不会启用它。
 - **Workflow 子代理工具**——[Team 工具可见性限制](../tool-agent-team/README.zh.md#known-limitations-and-deferred-work)也适用于 workflow 子代理。
 - **共享 checkout**——所有 teammate 都观察同一个工作目录；本 bundle 不提供 worktree 隔离或文件系统锁。
 - **需要 base profile**——本 patch 依赖 `dsh-base` 提供的配置行 id 与 Subagent 提供方；它不是独立 profile。

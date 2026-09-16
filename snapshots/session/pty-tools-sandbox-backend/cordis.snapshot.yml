@@ -21,3 +21,6 @@
             models:
               - id: deepseek-v4-flash
               - id: deepseek-v4-pro
+
+- id: plugin-package-inventory-deepseek
+  disabled: true

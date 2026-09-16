@@ -1,8 +1,10 @@
 /** Lazy libc execve and descriptor bindings used by the one-shot Linux bootstrap. */
 
 import { getSystemErrorMessage, getSystemErrorName } from 'node:util'
-import koffi from 'koffi'
 import { SUBPROCESS_CONTROL_FD } from '@deepseek-ai/dsh-subprocess/control'
+import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
+
+const requireKoffi = createLazyRequire<typeof import('koffi')['default']>('koffi', import.meta.url)
 
 /** Replace the current process image while preserving the supplied argv and environment. */
 export type LinuxExecve = (
@@ -46,6 +48,7 @@ function systemError(errno: number, syscall: string, path?: string): Error {
  */
 export function loadLinuxExecve(): LinuxExecve {
   if (cachedExecve !== undefined) return cachedExecve
+  const koffi = requireKoffi()
   const libc = koffi.load(null)
   const nativeExecve = libc.func(
     'int execve(const char *pathname, const char **argv, const char **envp)',

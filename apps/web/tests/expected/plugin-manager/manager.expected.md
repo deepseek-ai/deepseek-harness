@@ -1,0 +1,28 @@
+- heading "插件" [level=1]
+- paragraph: 添加和管理插件
+- button "刷新"
+- button "添加插件":
+  - img
+  - text: 添加插件
+- heading "内置" [level=3]
+- text: "3"
+- list:
+  - listitem:
+    - button "查看 experimental-agent-team-profile": experimental-agent-team-profile
+    - text: 官方 Experimental profile bundle enabling Agent Teams over dsh-base
+    - switch "启用 experimental-agent-team-profile"
+  - listitem:
+    - button "查看 experimental-agent-team-web-profile": experimental-agent-team-web-profile
+    - text: 官方 Experimental Web profile layer for Agent Teams Remote and UI plugins
+    - switch "启用 experimental-agent-team-web-profile"
+  - listitem:
+    - button "查看 experimental-auto-review": experimental-auto-review
+    - text: 官方 Per-tool LLM authorization review for the DeepSeek Harness Auto permission preset
+    - switch "启用 experimental-auto-review"
+- heading "已安装" [level=3]
+- text: "1"
+- list:
+  - listitem:
+    - button "查看 bundle": bundle
+    - text: "Web e2e fixture: a bundle whose one row is an inert plugin."
+    - switch "启用 bundle"

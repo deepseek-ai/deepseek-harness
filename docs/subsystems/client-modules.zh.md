@@ -36,7 +36,7 @@ interface WebBootEntry {
 ```
 
 ```ts type-equiv
-/** Initial scheduling phase for one content-addressed combo script. */
+/** Initial scheduling phase for one revisioned combo script. */
 type WebBootBatchPhase = 'bootstrap' | 'application'
 ```
 
@@ -45,9 +45,9 @@ type WebBootBatchPhase = 'bootstrap' | 'application'
 interface WebBootBatch {
   /** Parser-blocking bootstrap or preloaded application scheduling. */
   phase: WebBootBatchPhase
-  /** Content-addressed combo script endpoint. */
+  /** Revisioned combo script endpoint. */
   url: string
-  /** Revision over the combined plugin script bytes and indexed source map. */
+  /** Revision derived from the ordered entry revisions. */
   rev: string
   /** Graph entry ids whose factories the script registers, in execution order. */
   entries: string[]
@@ -57,7 +57,7 @@ interface WebBootBatch {
 ```ts type-equiv
 /** The composed client entry graph the host injects as `window.__DSH_BOOT__`. */
 interface WebBootGraph {
-  /** Consistency anchor over the whole graph (content + bundle hashes). */
+  /** Consistency anchor over the current entry and batch descriptors. */
   rev: string
   /**
    * Composed entries in module-graph order — a dynamic package row precedes
@@ -70,7 +70,7 @@ interface WebBootGraph {
 }
 ```
 
-每个初始 row 的 `rev` 都是不透明的进程 nonce 加序号，因此组合图时不会哈希每个插件产物。HMR 观察到变化后，该 row 的 revision 才改为新 bundle 及其可用 sourcemap 的哈希。初始描述把 row 划入 bootstrap 与 application 两个调度阶段，每个阶段都可以包含多条描述。URL 只含有序 package 资源列表与 revision，阶段名不会进入路由。图组合保持 row 顺序，并在 map 形式 URL 超过 3 KiB 前贪心切分。启动 combo revision 对合并后的插件脚本字节与 indexed sourcemap 求哈希，图 revision 则对 row 与描述一并求哈希。`immediately` 标记第一阶段的 registration barrier；同一 combo 中的 row 共享脚本传输，不同 combo 则独立加载。
+每个初始 row 的 `rev` 都是不透明的进程 nonce 加序号，因此组合图时不会哈希每个插件产物。HMR 观察到 bundle 变化后，该 row 的 revision 才改为新可执行字节的哈希。初始 descriptor 把 row 划入 bootstrap 与 application 两个调度阶段，每个阶段都可以包含多条 descriptor。URL 只含有序 package 资源列表和从这些 row revision 派生的 revision，阶段名不会进入路由。图组合保持 row 顺序，并在 map 形式 URL 超过 3 KiB 前贪心切分，不拼接脚本，也不读取 map。图 revision 对 entry 与 batch descriptor 求哈希。`immediately` 标记第一阶段的 registration barrier；同一 combo 中的 row 共享脚本传输，不同 combo 则独立加载。
 
 ## 扫描
 
@@ -82,7 +82,7 @@ interface WebBootGraph {
 
 ## bundle 路由与 index 注入
 
-`GET`／`HEAD /plugins/??<package-a>/client.js,<package-b>/client.js&rev=<rev>` 提供精确生成的 combo 脚本；单资源请求采用同一形式，也是 HMR 路径。其绝对 `sourceMappingURL` 平行改写每个资源后缀，得到 `/plugins/??<package-a>/client.js.map,<package-b>/client.js.map&rev=<rev>`。即使只有一个资源，map 仍采用 Indexed Source Map v3。组件有自带 map 时直接用于对应 section；没有时则获得 identity section，其 `sourcesContent` 是构建后 bundle，source 名取打包后的 `sourceURL` 或插件路由。每条启动请求 URL 按 UTF-8 字节计算都不超过 3 KiB；切分按更长的 map 形式计算。所有 application URL 都会预加载，所有 bootstrap URL 都会在图全局量与 Vite entry 之前执行。所有已发布响应都使用长期 immutable 缓存。未知或被修改的资源列表、缺少 revision 及陈旧 revision 都返回 404，绝不提供其他字节，也不会让 SPA fallback 把 HTML 当作 JavaScript 返回；其他方法返回 405。注入行在每次 index 渲染时携带当前图，因此重新加载总是基于实时组合启动。
+`GET`／`HEAD /plugins/??<package-a>/client.js,<package-b>/client.js&rev=<rev>` 寻址一份生成的 combo 脚本；单资源请求采用同一形式，也是 HMR 路径。脚本在首次 `GET` 时只拼接一次，并以绝对 `sourceMappingURL` 结尾，其中每个资源后缀改为 `.js.map`。启动、index 渲染、脚本 `GET` 和 `HEAD` 都不会读取 map 文件；首次 map `GET` 才会读取并校验这些文件、组合一份 Indexed Source Map v3，并缓存该 body。组件有自带 map 时直接用于对应 section；没有时则获得 identity section，其 `sourcesContent` 是捕获的 bundle，source 名取打包后的 `sourceURL` 或插件路由。每条启动请求 URL 按 UTF-8 字节计算都不超过 3 KiB；切分按更长的 map 形式计算。所有 application URL 都会预加载，所有 bootstrap URL 都会在图全局量与 Vite entry 之前执行。已物化响应使用长期 immutable 缓存。未知或被修改的资源列表、缺少 revision 及陈旧 revision 都返回 404，绝不提供其他字节，也不会让 SPA fallback 把 HTML 当作 JavaScript 返回；其他方法返回 405。注入行在每次 index 渲染时携带当前图，因此重新加载总是基于实时组合启动。
 
 ## 服务
 
@@ -98,9 +98,9 @@ interface ClientArtifactBaseline {
 }
 ```
 
-`ClientModuleRegistry`（`ctx.clientModules`，定义于 [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)）暴露读取面与重建面；签名见生成的[服务目录](#ctxclientmodules--clientmoduleregistry)。`graph()` 返回当前组合出的图（两次变更之间是同一个稳定对象），`clientPath(id)` 返回 bundle 的绝对路径，`artifactBaseline(id)` 返回读取当前快照前捕获的 bundle stat 值。`rebuilt(id)` 是变化后的 bundle 内容到达图的唯一入口：它把 bundle 与当前 source map 一起重新哈希，只有 rev 真正变化才会重新组合图并发出通知。`onRebuilt` 按发生变化的 bundle 逐个触发并携带新 rev；`onGraphChanged` 在任何一次重新组合了图的 flush 之后触发（行的增删，或 rebuilt 带来的 rev 变化），并采用拉取模型——监听器自行重读 `graph()`。两条通知路径都会兜住监听器异常，因此一个抛错的订阅者既不能让后续订阅者被跳过，也不能杀死触发这次 flush 的一方。
+`ClientModuleRegistry`（`ctx.clientModules`，定义于 [`packages/client/modules/src/index.ts`](../../packages/client/modules/src/index.ts)）暴露读取面与重建面；签名见生成的[服务目录](#ctxclientmodules--clientmoduleregistry)。`graph()` 返回当前组合出的图（两次变更之间是同一个稳定对象），`clientPath(id)` 返回 bundle 的绝对路径，`artifactBaseline(id)` 返回读取当前快照前捕获的 bundle stat 值。`fetchBundle()` 解析 HTTP 路由所使用的同一份惰性响应。`rebuilt(id)` 是变化后的 bundle 内容到达图的唯一入口：它重新哈希 bundle 字节，只有 revision 真正变化才会重新组合图并发出通知。`onRebuilt` 按发生变化的 bundle 逐个触发并携带新 revision；`onGraphChanged` 在任何一次重新组合了图的 flush 之后触发（行的增删，或 rebuilt 带来的 revision 变化），并采用拉取模型——监听器自行重读 `graph()`。两条通知路径都会兜住监听器异常，因此一个抛错的订阅者既不能让后续订阅者被跳过，也不能杀死触发这次 flush 的一方。
 
-开发环境下，[dsh-client-hmr](../../packages/client/hmr/README.zh.md) 是注册表的监视驱动：它的 Node 半从 module host 读文件前记录的基线出发，对图中每一行的 bundle 做 stat 轮询，只为变化或标脏的 row 调用 `rebuilt(id)`，经 `onGraphChanged` 重新同步监视集合，并通过 SSE（Server-Sent Events）把 rev 变化广播给浏览器半。仅 source map 变化不会触发重载；bundle 变化时，当前 map 会一起进入快照。生产环境的图完全不含 HMR（热模块替换）行；module host 自身从不监视文件。
+随包提供的 Web 组合通过 [`dsh-client-hmr`](../../packages/client/hmr/README.zh.md) 交付动态图快照。Host 立即转发现有图变化通知，重连会发送当前完整图。图描述浏览器的目标条目，不声明 Host 清理已经完成。产物轮询另外报告重建 revision。仅 source map 变化不会触发重载；新 combo-map URL 只会在 bundle revision 变化后出现，每份 map body 由其首次 `GET` 固定。Client Modules 校验快照，并将对账与重建串行协调；它持有启动创建的条目映射，负责单资源到达、异步移除、未使用模块与样式清理，以及页面本地重试状态。静态平台模块与 bootstrap 保持页面生命周期；Electron 安装属于独立流程。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
@@ -133,11 +133,12 @@ clientPath(id: string): string | undefined
 /**
  * Serve an advertised revisioned bundle or source map without a Web server.
  * Unknown URLs return 404, unsupported methods return 405, and `HEAD`
- * returns the same immutable headers without a body.
+ * returns the same immutable headers without materializing a body. Each body
+ * is built once on its first `GET`; script construction never reads maps.
  * @param request - shell-carrier request for a `/plugins` resource.
  * @returns the exact response also exposed by the optional Web route.
  */
-fetchBundle(request: Request): Response
+async fetchBundle(request: Request): Promise<Response>
 
 /**
  * Filesystem baseline captured before an entry's current bytes were read.
@@ -150,8 +151,8 @@ fetchBundle(request: Request): Response
 artifactBaseline(id: string): ClientArtifactBaseline | undefined
 
 /**
- * Re-hash one bundle (the HMR watch's registration hook — the only entry
- * point through which bundle content changes reach the graph).
+ * Publish one completed bundle generation (the HMR watch's registration
+ * hook — the only entry point through which build changes reach the graph).
  * @param id - entry id (package name).
  * @returns the new rev, or undefined for an unknown id.
  */

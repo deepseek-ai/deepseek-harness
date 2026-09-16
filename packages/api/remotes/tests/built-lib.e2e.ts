@@ -176,12 +176,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
         identity: candidate => candidate.builtAgentId,
       })
 
-      let invalidRejected = false
-      try {
-        await client.remote.goals.create(rootAgent.id, { objective: 1 })
-      } catch {
-        invalidRejected = true
-      }
+      const invalidResult = await client.remote.goals.create(rootAgent.id, { objective: 1 })
       // Every generated method resolves to the RemoteResult envelope; the
       // business values below are what the assertions pin.
       const rootResult = await client.remote.goals.create(rootAgent.id, { objective: 'root goal' })
@@ -193,7 +188,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       const agentContext = client.extend({ builtAgentId: scopedAgent.id })
       const scopedResult = await agentContext.remote.goals.create({ objective: 'scoped goal', maxGoalRounds: 3 })
       const result = {
-        invalidRejected,
+        invalidResult,
         rootResult: rootResult.value,
         rootEdit: rootEdit.value,
         scopedResult: scopedResult.value,
@@ -215,7 +210,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
     const result = await runPlainNode(script)
     expect(result.exitCode, `stderr:\n${result.stderr}`).toBe(0)
     const output = JSON.parse(result.stdout.trim().split('\n').at(-1) ?? '{}') as {
-      invalidRejected: boolean
+      invalidResult: { ok: boolean; error?: { code: string } }
       rootResult: { ref: { id: string; revision: number } }
       rootEdit: { objective: string; revision: number }
       scopedResult: { ref: { id: string; revision: number } }
@@ -225,7 +220,7 @@ describe.skipIf(!requiredArtifacts)('Goal Remote built LIB chain', () => {
       scopedEvents: number
     }
     expect(output).toMatchObject({
-      invalidRejected: true,
+      invalidResult: { ok: false, error: { code: 'gateway/input-invalid' } },
       rootResult: { ref: { revision: 1 } },
       rootEdit: { objective: 'edited root goal', revision: 2 },
       scopedResult: { ref: { revision: 1 } },

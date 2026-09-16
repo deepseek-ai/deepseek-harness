@@ -5,7 +5,7 @@
  * Unrecognized assets and target runtime binaries are retained. Paths name the copied
  * node_modules tree, including nested package containers.
  * @param path - Path relative to the production node_modules directory.
- * @param target - Platform and architecture of the bundled Node executable.
+ * @param target - Platform and architecture of the Electron Node runtime.
  * @returns Omission reason, or undefined when the entry must be copied.
  */
 export function desktopRuntimeFileExclusion(

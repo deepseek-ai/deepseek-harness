@@ -58,6 +58,8 @@ Only writers contend — readers never take the lock — and a contender backs o
 
 ### Failures to plan for
 
+Windows retries one `EPERM` when the lock cannot be observed, because its holder can release between exclusive creation and the existence check. A repeated unconfirmed `EPERM` is rethrown without running the operation.
+
 The lock's parent directory must already exist, so `withFileLock` rejects an invalid parent hierarchy before running the operation. A process that exits while holding the lock leaves the lock sibling behind; later writers time out, and an operator removes it only after verifying that no writer still owns it.
 
 -----

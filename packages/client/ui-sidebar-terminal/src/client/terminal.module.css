@@ -1,0 +1,19 @@
+.root { display: flex; flex: 1; flex-direction: column; box-sizing: border-box; height: 100%; min-height: 0; padding-top: 8px; color: var(--dsw-alias-label-primary); font-size: 13px; }
+.screen { flex: 1; min-height: 0; min-width: 0; overflow: hidden; padding: 8px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); }
+.screen :global(.xterm) { height: 100%; }
+.screen :global(.xterm-viewport) { background: var(--dsw-alias-bg-base); }
+.status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 5px 12px; background: var(--dsw-alias-bg-l2); }
+.error { margin: 0; padding: 10px 12px; overflow-wrap: anywhere; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-l2); }
+.empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 16px; min-height: 0; padding: 24px; overflow: auto; text-align: center; }
+.emptyMessage { max-width: 28ch; margin: 0; line-height: 1.6; overflow-wrap: anywhere; }
+.actionIcon { display: flex; }
+
+/* Cursor colors depend on its cell, so they must not update xterm's shared ANSI theme. */
+.screen :global(.xterm-cursor) { opacity: 1; }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-block) { background-color: var(--terminal-cursor); color: var(--terminal-cursor-accent); }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-block:not(.xterm-cursor-blink)) { background-color: var(--terminal-cursor) !important; color: var(--terminal-cursor-accent) !important; }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-outline) { outline-color: var(--terminal-cursor); }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-bar) { box-shadow: 1px 0 0 var(--terminal-cursor) inset; }
+.screen :global(.xterm .xterm-rows .xterm-cursor.xterm-cursor-underline) { border-bottom-color: var(--terminal-cursor); }
+.screen :global(.xterm .xterm-rows.xterm-focus .xterm-cursor.xterm-cursor-block.xterm-cursor-blink) { animation: terminal-cursor-blink 1s step-end infinite; }
+@keyframes terminal-cursor-blink { 0% { background-color: var(--terminal-cursor); color: var(--terminal-cursor-accent); } 50% { background-color: var(--terminal-cursor-cell-background); color: var(--terminal-cursor-cell-foreground); } }

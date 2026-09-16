@@ -85,8 +85,8 @@ Client 应用只装配 `@deepseek-ai/dsh-api-remotes`。该包以运行时值导
 | 构建 | `@deepseek-ai/dsh-typert-generator` | 从 Host `ts.Program` 严格分析 Remote 签名、类型图、lookup、Context 与源码位置，并生成 Host 和 Host-for-Client 产物 |
 | Host | `@deepseek-ai/dsh-typert-registry` 与 Loader | 把生成的 Host 描述符、schema 及业务包注册项放入 `ctx.typert`，并持有 lookup 与 Context 提供方 |
 | Host | `@deepseek-ai/dsh-api-session-controller` | 负责应用的 Agent/Session 身份策略，并配置对应的 Typert lookup |
-| Host | `@deepseek-ai/dsh-api-gateway` | 提供 `ctx.typertGateway`，认领 Remote endpoint，解析对象或 Context，调用实时 Cordis 服务，并校验请求值和返回值 |
-| Client | `@deepseek-ai/dsh-api-gateway/client` | 提供 `ctx.remote` 与 `remote.<namespace>` 子服务，把生成的描述符挂成具体方法，并通过 Connection 发起、校验和取消调用 |
+| Host | `@deepseek-ai/dsh-api-gateway` | 提供 `ctx.typertGateway`，认领 Remote endpoint，校验请求值，解析对象或 Context，并调用实时 Cordis 服务 |
+| Client | `@deepseek-ai/dsh-api-gateway/client` | 提供 `ctx.remote` 与 `remote.<namespace>` 子服务，把生成的描述符挂成具体方法，并通过 Connection 发起和取消调用 |
 | Client | `@deepseek-ai/dsh-api-remotes/client` | 显式选择并挂载本应用允许使用的 `/remote` 贡献，向业务代码带入对应的声明合并 |
 | 双侧 | `@deepseek-ai/dsh-client-connection` | 提供 RPC carrier、请求关联、信任边界、取消、响应 envelope 与 `/api` HTTP bridge |
 

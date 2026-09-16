@@ -43,17 +43,29 @@
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: DeepSeek-V41-Flash
-          - button "容量 1":
+          - button "模型选项 1" [expanded]:
             - img
           - button "删除模型 1":
             - img
+          - text: 上下文窗口
+          - textbox "上下文窗口 1":
+            - /placeholder: 1M
+            - text: 1M
+          - text: 最大输出 token 数
+          - textbox "最大输出 token 数 1":
+            - /placeholder: 256K
+          - text: 图片输入
+          - combobox "图片输入 1":
+            - option "默认（仅文本）"
+            - option "支持" [selected]
+            - option "不支持"
           - textbox "模型 ID 2":
             - /placeholder: 模型 ID
             - text: deepseek-v4-flash
           - textbox "显示名称 2":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Flash
-          - button "容量 2":
+          - button "模型选项 2":
             - img
           - button "删除模型 2":
             - img
@@ -63,7 +75,7 @@
           - textbox "显示名称 3":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Pro
-          - button "容量 3":
+          - button "模型选项 3":
             - img
           - button "删除模型 3":
             - img
@@ -73,7 +85,7 @@
           - textbox "显示名称 4":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Flash-Vision-Exp
-          - button "容量 4":
+          - button "模型选项 4":
             - img
           - button "删除模型 4":
             - img

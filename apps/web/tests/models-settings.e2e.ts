@@ -238,12 +238,18 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await dialog.getByLabel('推理强度').count()).toBe(0)
     await dialog.getByRole('button', { name: '添加模型' }).click()
     await dialog.getByLabel('模型 ID 1').fill('acme-large')
+    await dialog.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await dialog.getByLabel('图片输入 1').inputValue()).toBe('default')
+    await dialog.getByLabel('图片输入 1').selectOption('enabled')
     await dialog.getByRole('button', { name: '创建提供方', exact: true }).click()
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()
     await row.waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('acme-gateway:')
+    await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
+      inputModalities: ['text', 'image'],
+    })
 
     // The tag follows the adapter's installed catalog: this route is in no
     // catalog, while minimax-cn is — even though both now have profiles.
@@ -269,11 +275,14 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await protocol.inputValue()).toBe('openai-completions')
     const name = dialog.getByLabel('显示名称', { exact: true })
     expect(await name.inputValue()).toBe('Acme Gateway')
+    await dialog.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await dialog.getByLabel('图片输入 1').inputValue()).toBe('enabled')
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DECLARED_EDIT_EXPECTED, snapshot, MODE)
 
     await protocol.selectOption('anthropic-messages')
     await name.fill('Acme 网关')
+    await dialog.getByLabel('图片输入 1').selectOption('disabled')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await expect.poll(async () => dialog.getByLabel('API 协议').count(), { timeout: 10_000 }).toBe(0)
     // The adapter re-resolved the route under the new protocol and re-registered
@@ -287,6 +296,30 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('api: anthropic-messages')
     expect(document).toContain('displayName: Acme 网关')
+    await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
+      inputModalities: ['text'],
+    })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('restores the provider default for image input', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-image-default'))
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' }).click()
+    await dialog.getByText('自定义设置').click()
+    await dialog.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await dialog.getByLabel('图片输入 1').inputValue()).toBe('disabled')
+    await dialog.getByLabel('图片输入 1').selectOption('default')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByLabel('模型 ID 1').waitFor({ state: 'detached', timeout: 10_000 })
+    await expect(scaffold.ctx.llm.resolveModelInfo('acme-gateway', 'acme-large')).resolves.toMatchObject({
+      inputModalities: ['text'],
+    })
+    await dialog.getByRole('button', { name: '编辑 Acme 网关 (acme-gateway)' }).click()
+    await dialog.getByText('自定义设置').click()
+    await dialog.getByRole('button', { name: '模型选项 1' }).click()
+    expect(await dialog.getByLabel('图片输入 1').inputValue()).toBe('default')
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

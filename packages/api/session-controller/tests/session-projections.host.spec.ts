@@ -236,7 +236,10 @@ describe('session.history projections block', () => {
   })
 
   it('reconstructs a cold persisted queue without publishing or resuming an Agent', async () => {
-    const { ctx } = await harness(true)
+    const ctx = new Context()
+    ownedContexts.add(ctx)
+    await mountAgentLoopTestDependencies(ctx)
+    await mountAgentLoopTestHarness(ctx)
     const coldId = SessionId('cold-persisted-queue')
     const meta: SessionHeader = { version: SESSION_FORMAT_VERSION, id: coldId, createdAt: 1, cwd: '/tmp', isSeeded: false }
     const message = createUserMessage({

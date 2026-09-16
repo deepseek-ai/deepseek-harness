@@ -1,0 +1,9 @@
+DeepSeek Harness 无法使用
+应用无法启动或已意外停止。
+Desktop Host failed
+Plugin initialization failed
+
+如果应用文件缺失或损坏，请关闭应用并重新安装。任务数据存储在独立位置。
+退出
+重启
+禁用全部第三方插件并重启

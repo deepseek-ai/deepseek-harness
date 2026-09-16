@@ -175,7 +175,10 @@ export function resolveRgPath(): Promise<string> {
       ? join(executable.dir, `${executable.name}-rg.exe`)
       : `${process.execPath}-rg`
     if ('pkg' in process && existsSync(executableSidecar)) return executableSidecar
-    return (await import('@vscode/ripgrep')).rgPath
+    const dependency = (await import('@vscode/ripgrep')).rgPath
+    return process.versions.electron === undefined
+      ? dependency
+      : dependency.replace(/\.asar(?=[\\/])/u, '.asar.unpacked')
   })
   return rgPathPromise
 }

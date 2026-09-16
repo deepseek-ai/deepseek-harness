@@ -39,7 +39,7 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 
 [默认页](2026-09-08-sidebar-default-pages.zh.md)取代此处的默认补入引导页；[最后一个 tab 的关闭规则](2026-09-08-sidebar-last-tab-close-rules.zh.md)负责显式关闭，移动 tab 仍会处理被清空的格。
 
-`ui-sidebar-right` 为每个会话 id 保存一份 `SurfaceState`——布局、历史与铸造计数——住在坑位注册时声明的 store 里。每个 action 先铸造意图所需的 id，向库的 planner 索取操作，对结果跑一遍 settle planner，把整个意图记为一条历史账，再把该会话的 surface 整体赋回；没有 action 就地改布局。settle 是产品规则：最后一个 tab 被关闭、拖走或悬浮出去的停靠 pane 会被合并掉；展开且为空的根 pane 会填入当前默认页。折叠的布局可以保持为空，直到下次展开；没有单独的关闭 pane 手势。状态仅在内存：刷新使所有会话回到折叠默认态，切换会话时各 surface 保持原样。布局是呈现状态，永不进入会话日志。
+`ui-sidebar-right` 为每个会话 id 保存一份 `SurfaceState`——布局、历史与铸造计数——住在坑位注册时声明的 store 里。每个 action 先铸造意图所需的 id，向库的 planner 索取操作，对结果跑一遍 settle planner，把整个意图记为一条历史账，再把该会话的 surface 整体赋回；没有 action 就地改布局。settle 是产品规则：最后一个 tab 被关闭、拖走或悬浮出去的停靠 pane 会被合并掉；展开且为空的根 pane 会填入当前默认页。折叠的布局可以保持为空，直到下次展开；没有单独的关闭 pane 手势。[布局持久化与 provider 恢复](../architecture/2026-09-14-sidebar-layout-provider-recovery.zh.md)负责 Session 作用域的浏览器存储和刷新。布局是呈现状态，永不进入会话日志。
 
 ### 面之外
 
@@ -76,7 +76,7 @@ Agent 产出的文件是最尖锐的案例。产出文件 chip 或 `read` 行的
 ## Consequences
 
 - 停靠面自身不再溢出面板：`.surface` 与 `.pane` 收在列内（`min-width: 0`、`overflow: hidden`），长的不换行行在正文内滚动，tab 条控件在任何分栏下都可见。
-- 布局可撤销且按会话隔离，同时仅在内存；刷新使所有会话回到折叠态。undo 只能经 `@internal` 服务方法触达；产品不显示历史控件。
+- 布局可撤销、可持久化且按 Session 隔离。undo 只能经 `@internal` 服务方法触达；产品不显示历史控件。
 - 展开的布局不保留空 pane。空侧 pane 被合并，空根 pane 只在展开时填入当前默认页。新会话以及关闭最后一个 tab 后收起的布局保持为空，直到下次展开。
 - 一个 pane 最多持有一个引导 tab：第二个不能被添加、打开、复制或搬入；唯一性按 pane 算，所以分栏仍给新 pane 种引导。
 - pane 只有在等分后的两半都仍能容下不可收缩部分时才可分栏：tab 条的固定控件（条宽减去 chip 盒与填充，因此右上 pane 的面板控件只计在承载它的那一半）加一个最小宽度的 chip，由组件层在每次提交与尺寸变化后测量。否则分栏控件保留但禁用并带自己的文案，对应的边缘落区不再提供，用户拖窄的 pane 保持原尺寸；产品最多两个水平窗格，不因拉宽或拖分隔条而提高上限。

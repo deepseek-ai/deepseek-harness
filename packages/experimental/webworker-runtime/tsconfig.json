@@ -37,6 +37,9 @@
     },
     {
       "path": "../../util/crypto"
+    },
+    {
+      "path": "../../client/web"
     }
   ]
 }

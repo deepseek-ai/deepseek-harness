@@ -20,3 +20,7 @@
       inject: [sdkAppStartup, loader]
       config:
         maxTokensAsSuccess: true
+
+- id: session-log-deepseek
+  config:
+    enabled: false

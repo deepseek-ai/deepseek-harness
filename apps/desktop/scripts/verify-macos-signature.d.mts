@@ -19,12 +19,14 @@ export function assertMacOSRuntimeSignatureDetails(details: string, expected: Ma
  * @param path - Writable standalone Mach-O file.
  * @param identifier - Stable code-signing identifier derived from the release app ID and CAS digest.
  * @param expected - Public release identity.
+ * @param entitlements - Optional entitlement plist for this executable.
  * @returns Resolves after codesign exits successfully.
  */
 export function signMacOSRuntimeCode(
   path: string,
   identifier: string,
   expected: MacOSSigningEnvironment,
+  entitlements?: string,
 ): Promise<void>
 
 /**

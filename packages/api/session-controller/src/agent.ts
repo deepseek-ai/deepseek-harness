@@ -197,7 +197,11 @@ export class ApiSessionAgentController {
       this.resumes.set(sessionId, resume)
     }
     try {
-      return { agent: await resume }
+      const agent = await resume
+      // A shared resume can publish an identity that subagent routing adopts
+      // before every waiter observes it; apply the live ownership policy again.
+      const published = this.liveAgent(sessionId)
+      return published ?? { agent }
     } catch (error: unknown) {
       if (error instanceof ApiSessionNotFound) {
         return { error: new RemoteError('session/not-found', error.message, { sessionId }) }

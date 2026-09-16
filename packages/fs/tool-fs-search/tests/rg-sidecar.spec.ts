@@ -1,8 +1,8 @@
 import { join, parse } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { dependencyRgPath, existsSync } = vi.hoisted(() => ({
-  dependencyRgPath: '/node_modules/@vscode/ripgrep/bin/rg',
+const { dependency, existsSync } = vi.hoisted(() => ({
+  dependency: { rgPath: '/node_modules/@vscode/ripgrep/bin/rg' },
   existsSync: vi.fn(),
 }))
 const originalPlatform = process.platform
@@ -13,18 +13,21 @@ vi.mock('node:fs', async (importOriginal) => {
   return { ...actual, existsSync }
 })
 
-vi.mock('@vscode/ripgrep', () => ({ rgPath: dependencyRgPath }))
+vi.mock('@vscode/ripgrep', () => ({ get rgPath() { return dependency.rgPath } }))
 
 beforeEach(() => {
   vi.resetModules()
   existsSync.mockReset()
+  dependency.rgPath = '/node_modules/@vscode/ripgrep/bin/rg'
   Reflect.deleteProperty(process, 'pkg')
+  Reflect.deleteProperty(process.versions, 'electron')
   Reflect.defineProperty(process, 'platform', { configurable: true, enumerable: true, value: originalPlatform })
   process.execPath = originalExecPath
 })
 
 afterEach(() => {
   Reflect.deleteProperty(process, 'pkg')
+  Reflect.deleteProperty(process.versions, 'electron')
   Reflect.defineProperty(process, 'platform', { configurable: true, enumerable: true, value: originalPlatform })
   process.execPath = originalExecPath
 })
@@ -58,7 +61,7 @@ describe('ripgrep resolution', () => {
     existsSync.mockReturnValue(true)
     const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
 
-    await expect(resolveRgPath()).resolves.toBe(dependencyRgPath)
+    await expect(resolveRgPath()).resolves.toBe(dependency.rgPath)
     expect(existsSync).not.toHaveBeenCalled()
   })
 
@@ -67,11 +70,21 @@ describe('ripgrep resolution', () => {
     existsSync.mockReturnValue(false)
     const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
 
-    await expect(resolveRgPath()).resolves.toBe(dependencyRgPath)
+    await expect(resolveRgPath()).resolves.toBe(dependency.rgPath)
     const executable = parse(process.execPath)
     const sidecar = process.platform === 'win32'
       ? join(executable.dir, `${executable.name}-rg.exe`)
       : `${process.execPath}-rg`
     expect(existsSync).toHaveBeenCalledWith(sidecar)
+  })
+
+  it('uses the unpacked executable path for an Electron ASAR dependency', async () => {
+    Reflect.defineProperty(process.versions, 'electron', { configurable: true, value: '44.0.0' })
+    dependency.rgPath = '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar/dsh/node_modules/@vscode/ripgrep/bin/rg'
+    const { resolveRgPath } = await import('@deepseek-ai/dsh-tool-fs-search')
+
+    await expect(resolveRgPath()).resolves.toBe(
+      '/Applications/DeepSeek Harness.app/Contents/Resources/app.asar.unpacked/dsh/node_modules/@vscode/ripgrep/bin/rg',
+    )
   })
 })

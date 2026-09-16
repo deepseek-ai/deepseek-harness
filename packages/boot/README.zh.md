@@ -9,7 +9,7 @@ kind: "package-group"
 
 ## 概述
 
-boot 组提供每个 dsh app bin 启动所需的全部能力：`app-boot` 把 `cordis.yml` 连同你的环境与 patch 层变成运行中的应用，并给出清晰的失败信息；`cmdline` 让应用持有自己的命令行 flag 与 `--help`。借助这些包，你可以运行 `dsh`，也可以编写以同样方式启动的新应用或测试用 fixture（测试前置数据）。两者都是 `apps/cli` 与测试专用 Loader fixture 导入的库，绝不是组合加载的插件。本页列出该包组的构成；各包 README 负责各自的包级约定。
+boot 组负责启动 profile 应用并管理其已安装组合。`app-boot` 解析配置并启动 Loader，`cmdline` 提供应用参数，`plugin-manager` 提供与 CLI 共享的当前 profile 操作。各包 README 负责各自的细节。
 
 ## 目录
 
@@ -24,6 +24,8 @@ boot 组提供每个 dsh app bin 启动所需的全部能力：`app-boot` 把 `c
 |---|---|---|
 | [`app-boot`](app-boot/README.zh.md) | 从 `cordis.yml` 启动 dsh 应用：加载 `.env`、应用 profile 与 patch 层，并清晰报告启动失败 | （供各 bin 使用的库） |
 | [`cmdline`](cmdline/README.zh.md) | 让应用持有自己的 flag、`--help` 与退出码；启动器自身 flag 之后的一切原样传入 | `cmdlineArgs`、`appExit` |
+| [`hmr`](hmr/README.zh.md) | 协调模块与配置重载，并与包修改互斥执行 | `hmr` |
+| [`plugin-manager`](plugin-manager/README.zh.md) | 通过共享 CLI 操作管理当前 profile 插件与组合包 | `pluginManager` |
 
 <a id="related-documentation"></a>
 ## 相关文档
@@ -32,6 +34,8 @@ boot 组提供每个 dsh app bin 启动所需的全部能力：`app-boot` 把 `c
 - [Profile 组合包](../bundle/README.zh.md)——可由 `dsh --profile` 组合挂载的可安装 patch 层。
 - [dsh-home-paths](../util/home-paths/README.zh.md)——两个包都依赖的 harness home 解析器。
 - [dsh-cmdline](cmdline/README.zh.md)——flag 家族如何由应用持有而非启动器。
+
+- [Profile 管理](../../docs/subsystems/boot.zh.md)——服务方法与结果记录。
 
 <a id="dev-note"></a>
 ## 开发备注

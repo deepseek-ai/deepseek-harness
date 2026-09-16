@@ -19,7 +19,7 @@
 import { useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  FishLogo, IconNewChatOutline16, IconPanelLeftOutline16, Tooltip,
+  FishLogo, IconNewChatOutline16, IconPanelLeftOutline16, isDarwinDesktop, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
@@ -163,6 +163,29 @@ export function SidebarRoot({
 
   const buildVersion = localBuildVersion()
 
+  const darwinDesktop = isDarwinDesktop()
+  // Rail resting state is the whale mark; hovering swaps in the panel icon
+  // (the expand affordance, figma sidebar-hover flow). Expanded it is a plain
+  // panel icon.
+  const toggle = (
+    <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500}>
+      <button
+        type="button"
+        className={clsx(css.iconButton, css.toggle)}
+        aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
+        onClick={() => { toggleSidebar() }}
+      >
+        {!wide && (
+          <span className={css.railMark} aria-hidden="true">
+            {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
+          </span>
+        )}
+        {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
+        <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
+      </button>
+    </Tooltip>
+  )
+
   return (
     <div
       ref={column}
@@ -177,6 +200,9 @@ export function SidebarRoot({
       }}
       onPointerLeave={() => { armLinger() }}
     >
+      {/* macOS hiddenInset titlebar: the strip shares the row with the
+          traffic lights and keeps the toggle at the sidebar's top-right. */}
+      {darwinDesktop && <div className={css.topStrip}>{toggle}</div>}
       <div className={css.logoRow}>
         {/* Expanded, the brand doubles as a New Session shortcut; the
             collapsed rail's logo is the expand toggle below instead. */}
@@ -206,24 +232,7 @@ export function SidebarRoot({
             </span>
           </button>
         )}
-        {/* Rail resting state is the whale mark; hovering swaps in the panel
-            icon (the expand affordance, figma sidebar-hover flow). */}
-        <Tooltip label={collapsed ? t('toggle.open') : t('toggle.collapse')} delayMs={500}>
-          <button
-            type="button"
-            className={clsx(css.iconButton, css.toggle)}
-            aria-label={collapsed ? t('toggle.open') : t('toggle.collapse')}
-            onClick={() => { toggleSidebar() }}
-          >
-            {!wide && (
-              <span className={css.railMark} aria-hidden="true">
-                {renderSlot('sidebar.brand.mark', { size: 24 }, { fallback: <FishLogo size={24} /> })}
-              </span>
-            )}
-            {/* Rail icons render at 18 (figma rail spec); expanded keeps the glyph-native sizes. */}
-            <IconPanelLeftOutline16 className={css.panelIcon} size={wide ? 16 : 18} />
-          </button>
-        </Tooltip>
+        {!darwinDesktop && toggle}
       </div>
 
       {/* Expanded, the button carries its own label — tooltip only on the rail. */}

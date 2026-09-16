@@ -18,7 +18,8 @@ import * as PluginPackageInventoryDeepSeek from '@deepseek-ai/dsh-plugin-package
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import * as SessionLogDeepSeek from '@deepseek-ai/dsh-session-log-deepseek'
 import * as Messages from '../../src/index.ts'
-import { DeepSeekFilesClient, MESSAGES_FILES_BETA } from '../../src/common/files-api.ts'
+import { DeepSeekFilesClient } from '../../src/common/files-api.ts'
+import { MESSAGES_FILES_BETA } from '../../src/common/messages-api.ts'
 import { assemble, options, user } from './helpers.ts'
 
 const IN_HISTORY_MODEL = process.env.DEEPSEEK_IN_HISTORY_MODEL
@@ -139,7 +140,7 @@ describe.skipIf(!process.env.DEEPSEEK_API_KEY)('DeepSeek Messages real API', () 
     await ctx.plugin(AgentRegistry)
     await ctx.plugin(SessionStore)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-    await ctx.plugin(SessionLogDeepSeek, enabled ? { enabled: true } : {})
+    await ctx.plugin(SessionLogDeepSeek, enabled ? {} : { enabled: false })
     ctx.baseUrl = import.meta.url
     // Select the source module while Loader owns its active package entry.
     ctx.loader.internal = {

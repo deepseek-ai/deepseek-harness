@@ -46,12 +46,16 @@ There is no general `dsh.client.provide` alias mechanism. Dynamic rows and stati
 The modules Node half injects the startup protocol into the served HTML in this order:
 
 1. Install `window.__ModuleLoader__` in queue mode with `pendingQueue`, `load()`, and `create()`.
-2. Start preloading every content-addressed application combo URL containing the rows other than modules.
+2. Start preloading every revisioned application combo URL containing the rows other than modules.
 3. Execute every blocking bootstrap combo URL; these currently contain the ordinary modules factory registration.
 4. Assign `window.__DSH_BOOT__`, including all scheduling descriptors and every row's one-resource HMR combo URL.
 5. Execute the Vite main module.
 
 The bootstrap combo currently registers only the modules factory. The startup kernel passes the raw graph and shell seeds to `__ModuleLoader__.create()`. The facade removes the modules registration, materializes it with a `require` function that rejects every external, and invokes its `createClientModuleSystem` export. The modules bundle parses the graph, constructs and returns `ClientModuleSystem`, caches its own exports as the modules row, and switches the same facade to live mode. The kernel installs that instance as its Loader's `internal`, and the modules plugin reads it there when it provides `ctx.modules`. The modules client face consequently has a zero-external bootstrap requirement and no module-global system identity.
+
+The Host publishes graph and combo descriptors without concatenating response bodies. Each script URL shares one lazy Promise that concatenates its captured bundle bytes on first `GET` and appends the corresponding map URL; each map URL has a separate lazy Promise that reads and composes source maps only on its first `GET`. `HEAD` requests trigger neither body. The Web URL remains gated by Loader settlement and the required-entry audit, but that readiness point does not materialize combo bodies; an index request reads the current graph.
+
+The theme Host contribution is prepended to index collection. CSS in the head selects the initial document canvas palette, using `prefers-color-scheme` directly for the `system` preference; a body script applies the existing palette attribute and font-size variable before the loading page and application module.
 
 After the `immediately` tier has registered its factories, the kernel creates all Loader entries, awaits Cordis quiescence, and requires every fiber to be ACTIVE. It then calls `ctx.uiRenderer.mount(container)`. The dynamic `ui-renderer` package owns React, slot rendering, hydration of the existing boot DOM, and the React root lifecycle; the startup kernel and failure page remain React-free.
 
@@ -79,7 +83,7 @@ Ordinary installed libraries remain `dependencies`: a dynamic build may bundle a
 
 Bundle contents stay stable when an internal DSH relationship is development-only, because each build face declares externality directly. Static libraries remain host-assembled, while dynamic packages retain uniform artifacts and lifecycle governance. The shipped profile owns the complete Client package roster, so individual Client packages do not ask npm to solve the same graph again through peer placement.
 
-The startup protocol depends on the modules package id, and modules must remain self-contained at runtime. Combo generation preserves its ordinary package artifact and gives every other row one shared initial transport; HMR uses the same route with that row as its sole resource. A missing bootstrap registration fails before Cordis starts; later plugin import, apply, and service-wait failures remain visible through the boot page's ACTIVE scan.
+The startup protocol depends on the modules package id, and modules must remain self-contained at runtime. Combo generation preserves its ordinary package artifact and gives every other row one shared initial transport; HMR uses the same route with that row as its sole resource. Deferring response bodies moves concatenation to first access, while separately deferring maps keeps debugger-only work off script delivery. A missing bootstrap registration fails before Cordis starts; later plugin import, apply, and service-wait failures remain visible through the boot page's ACTIVE scan.
 
 The shell consumes built `lib/` products, so source and browser artifacts can drift until the relevant build or watcher runs. Typechecking source alone does not prove the served application uses the same code.
 

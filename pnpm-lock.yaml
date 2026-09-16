@@ -5,12 +5,13 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  extract-zip>yauzl: 3.4.0
   '@deepseek-ai/cosmokit': link:vendor/cosmokit
   '@deepseek-ai/schemastery': link:vendor/schemastery
 
 patchedDependencies:
   '@electron/osx-sign@1.3.3': 280e7b2816caf01423097d24e79107a66afeb563a348630ce9928ae8499a5861
-  '@yao-pkg/pkg@6.21.0': 28edd2180c36691c481522ef81f6f6614505f45e491aad542ac4663d4e6b3ff8
+  '@yao-pkg/pkg@6.21.0': 07f08c630d0d3886d81fd4600116d07e4871ddcd57f92cb22746b6d246cdc337
   node-pty@1.2.0-beta.15: b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0
 
 importers:
@@ -82,7 +83,7 @@ importers:
         version: 4.1.8(vitest@4.1.8)
       '@yao-pkg/pkg':
         specifier: 6.21.0
-        version: 6.21.0(patch_hash=28edd2180c36691c481522ef81f6f6614505f45e491aad542ac4663d4e6b3ff8)(supports-color@9.4.0)
+        version: 6.21.0(patch_hash=07f08c630d0d3886d81fd4600116d07e4871ddcd57f92cb22746b6d246cdc337)(supports-color@9.4.0)
       '@yarnpkg/cli-dist':
         specifier: 4.17.1
         version: 4.17.1
@@ -161,9 +162,6 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../vendor/cordis
-      '@deepseek-ai/cordis-plugin-hmr':
-        specifier: workspace:^
-        version: link:../../vendor/hmr
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:^
         version: link:../../vendor/include
@@ -185,6 +183,9 @@ importers:
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:^
         version: link:../../packages/boot/app-boot
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:^
+        version: link:../../packages/util/atomic-write
       '@deepseek-ai/dsh-base':
         specifier: workspace:^
         version: link:../../packages/bundle/base
@@ -212,6 +213,15 @@ importers:
       '@deepseek-ai/dsh-cordis-client-runner':
         specifier: workspace:^
         version: link:../../packages/extensions/cordis-client-runner
+      '@deepseek-ai/dsh-experimental-agent-team-profile':
+        specifier: workspace:^
+        version: link:../../packages/experimental/agent-team-profile
+      '@deepseek-ai/dsh-experimental-agent-team-web-profile':
+        specifier: workspace:^
+        version: link:../../packages/experimental/agent-team-web-profile
+      '@deepseek-ai/dsh-experimental-auto-review':
+        specifier: workspace:^
+        version: link:../../packages/experimental/auto-review
       '@deepseek-ai/dsh-fs-local':
         specifier: workspace:^
         version: link:../../packages/fs/fs-local
@@ -224,6 +234,9 @@ importers:
       '@deepseek-ai/dsh-headless':
         specifier: workspace:^
         version: link:../../packages/bundle/headless
+      '@deepseek-ai/dsh-hmr':
+        specifier: workspace:^
+        version: link:../../packages/boot/hmr
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:^
         version: link:../../packages/util/home-paths
@@ -254,6 +267,9 @@ importers:
       '@deepseek-ai/dsh-plan-mode':
         specifier: workspace:^
         version: link:../../packages/plan/plan-mode
+      '@deepseek-ai/dsh-plugin-manager':
+        specifier: workspace:^
+        version: link:../../packages/boot/plugin-manager
       '@deepseek-ai/dsh-pwsh-local':
         specifier: workspace:^
         version: link:../../packages/shell/pwsh-local
@@ -375,8 +391,8 @@ importers:
         specifier: ^4.2.0
         version: 4.2.0
       node-addon-require-builtin:
-        specifier: ^0.1.4
-        version: 0.1.4
+        specifier: ^0.1.6
+        version: 0.1.6
     devDependencies:
       '@agentclientprotocol/sdk':
         specifier: 1.4.0
@@ -408,9 +424,6 @@ importers:
       '@deepseek-ai/dsh-experimental-agent-team':
         specifier: workspace:^
         version: link:../../packages/experimental/agent-team
-      '@deepseek-ai/dsh-experimental-agent-team-profile':
-        specifier: workspace:^
-        version: link:../../packages/experimental/agent-team-profile
       '@deepseek-ai/dsh-experimental-ptc-runtime-python':
         specifier: workspace:^
         version: link:../../packages/experimental/ptc-runtime-python
@@ -526,9 +539,15 @@ importers:
       '@aws-sdk/client-s3':
         specifier: 3.1067.0
         version: 3.1067.0
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../packages/boot/app-boot
       '@deepseek-ai/dsh-home-paths':
         specifier: workspace:^
         version: link:../../packages/util/home-paths
+      '@electron/get':
+        specifier: ^5.1.0
+        version: 5.1.0(supports-color@9.4.0)
       '@electron/notarize':
         specifier: 2.5.0
         version: 2.5.0
@@ -546,13 +565,16 @@ importers:
         version: 26.15.3(dmg-builder@26.15.3)(electron-builder-squirrel-windows@26.15.3)
       electron:
         specifier: ^44.0.0
-        version: 44.0.0(supports-color@9.4.0)
+        version: 44.0.0
       electron-builder:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)
       extract-zip:
         specifier: ^2.0.1
         version: 2.0.1(supports-color@9.4.0)
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
       js-yaml:
         specifier: ^4.2.0
         version: 4.3.1
@@ -571,42 +593,24 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../vendor/cordis
-      '@deepseek-ai/cordis-plugin-include':
-        specifier: workspace:^
-        version: link:../../vendor/include
       '@deepseek-ai/dsh':
         specifier: workspace:^
         version: link:../cli
-      '@deepseek-ai/dsh-api-gateway':
-        specifier: workspace:^
-        version: link:../../packages/api/gateway
       '@deepseek-ai/dsh-app-boot':
         specifier: workspace:^
         version: link:../../packages/boot/app-boot
       '@deepseek-ai/dsh-client-connection':
         specifier: workspace:^
         version: link:../../packages/client/connection
-      '@deepseek-ai/dsh-client-modules':
+      '@deepseek-ai/dsh-home-paths':
         specifier: workspace:^
-        version: link:../../packages/client/modules
-      '@deepseek-ai/dsh-client-ui-directory-picker-native':
-        specifier: workspace:^
-        version: link:../../packages/client/ui-directory-picker-native
-      '@deepseek-ai/dsh-cmdline':
-        specifier: workspace:^
-        version: link:../../packages/boot/cmdline
-      '@deepseek-ai/dsh-host-directory-picker-native':
-        specifier: workspace:^
-        version: link:../../packages/host/directory-picker-native
+        version: link:../../packages/util/home-paths
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../packages/host/webserver
-      '@deepseek-ai/dsh-launch-environment':
+      '@deepseek-ai/dsh-tools':
         specifier: workspace:^
-        version: link:../../packages/util/launch-environment
-      '@deepseek-ai/dsh-web-frontend':
-        specifier: workspace:^
-        version: link:../web
+        version: link:../../packages/core/tools
 
   apps/web:
     devDependencies:
@@ -730,6 +734,9 @@ importers:
       '@deepseek-ai/dsh-deque':
         specifier: workspace:^
         version: link:../packages/util/deque
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../packages/util/lazy-require
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../packages/llm/llm
@@ -1002,6 +1009,9 @@ importers:
       '@deepseek-ai/dsh-permission-presets':
         specifier: workspace:^
         version: link:../../interaction/permission-presets
+      '@deepseek-ai/dsh-plugin-manager':
+        specifier: workspace:^
+        version: link:../../boot/plugin-manager
       '@deepseek-ai/dsh-scope':
         specifier: workspace:^
         version: link:../../core/scope
@@ -1205,6 +1215,9 @@ importers:
       '@deepseek-ai/dsh-deque':
         specifier: workspace:^
         version: link:../../util/deque
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../../util/lazy-require
       '@deepseek-ai/dsh-typert-protocol':
         specifier: workspace:^
         version: link:../../typert/protocol
@@ -1358,6 +1371,9 @@ importers:
 
   packages/attachment/attachment-local:
     dependencies:
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../../util/lazy-require
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
         version: link:../../../vendor/schemastery
@@ -1383,12 +1399,12 @@ importers:
       '@deepseek-ai/dsh-package-manifest':
         specifier: workspace:^
         version: link:../../util/package-manifest
-      chokidar:
-        specifier: 4.0.3
-        version: 4.0.3
       js-yaml:
         specifier: ^4.2.0
         version: 4.2.0
+      node-addon-require-builtin:
+        specifier: ^0.1.6
+        version: 0.1.6
       resolve.exports:
         specifier: ^2.0.3
         version: 2.0.3
@@ -1399,9 +1415,6 @@ importers:
       '@deepseek-ai/cordis-plugin-group':
         specifier: workspace:^
         version: link:../../../vendor/group
-      '@deepseek-ai/cordis-plugin-hmr':
-        specifier: workspace:^
-        version: link:../../../vendor/hmr
       '@deepseek-ai/cordis-plugin-include':
         specifier: workspace:^
         version: link:../../../vendor/include
@@ -1439,6 +1452,107 @@ importers:
         specifier: ^15.0.0
         version: 15.0.0
 
+  packages/boot/hmr:
+    dependencies:
+      '@babel/code-frame':
+        specifier: ^7.29.0
+        version: 7.29.7
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      chokidar:
+        specifier: ^4.0.3
+        version: 4.0.3
+      picomatch:
+        specifier: ^4.0.3
+        version: 4.0.4
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/cordis-plugin-timer':
+        specifier: workspace:^
+        version: link:../../../vendor/timer
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../app-boot
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:^
+        version: link:../../util/atomic-write
+      '@deepseek-ai/dsh-cmdline':
+        specifier: workspace:^
+        version: link:../cmdline
+      '@types/babel__code-frame':
+        specifier: ^7.27.0
+        version: 7.27.0
+      '@types/picomatch':
+        specifier: ^3.0.2
+        version: 3.0.2
+      esbuild:
+        specifier: ^0.28.1
+        version: 0.28.1
+
+  packages/boot/plugin-manager:
+    dependencies:
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../app-boot
+      '@deepseek-ai/dsh-atomic-write':
+        specifier: workspace:^
+        version: link:../../util/atomic-write
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:^
+        version: link:../../util/values
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+      execa:
+        specifier: ^10.0.0
+        version: 10.0.0
+      yaml:
+        specifier: ^2.9.0
+        version: 2.9.0
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/cordis-plugin-timer':
+        specifier: workspace:^
+        version: link:../../../vendor/timer
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
+      '@deepseek-ai/dsh-hmr':
+        specifier: workspace:^
+        version: link:../hmr
+      '@deepseek-ai/dsh-host-plugin-inventory':
+        specifier: workspace:^
+        version: link:../../host/plugin-inventory
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+      '@deepseek-ai/dsh-typert-protocol':
+        specifier: workspace:^
+        version: link:../../typert/protocol
+
   packages/browser-use/browser-use:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -1469,9 +1583,6 @@ importers:
 
   packages/bundle/base:
     dependencies:
-      '@deepseek-ai/cordis-plugin-hmr':
-        specifier: workspace:^
-        version: link:../../../vendor/hmr
       '@deepseek-ai/cordis-plugin-timer':
         specifier: workspace:^
         version: link:../../../vendor/timer
@@ -1538,6 +1649,9 @@ importers:
       '@deepseek-ai/dsh-goal-round-driver':
         specifier: workspace:^
         version: link:../../goal/goal-round-driver
+      '@deepseek-ai/dsh-hmr':
+        specifier: workspace:^
+        version: link:../../boot/hmr
       '@deepseek-ai/dsh-jobs-local':
         specifier: workspace:^
         version: link:../../jobs/jobs-local
@@ -1562,6 +1676,9 @@ importers:
       '@deepseek-ai/dsh-plan-mode':
         specifier: workspace:^
         version: link:../../plan/plan-mode
+      '@deepseek-ai/dsh-plugin-manager':
+        specifier: workspace:^
+        version: link:../../boot/plugin-manager
       '@deepseek-ai/dsh-plugin-package-inventory-deepseek':
         specifier: workspace:^
         version: link:../../llm/plugin-package-inventory-deepseek
@@ -2001,6 +2118,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-plan':
         specifier: workspace:^
         version: link:../../client/ui-plan
+      '@deepseek-ai/dsh-client-ui-plugin-manager':
+        specifier: workspace:^
+        version: link:../../client/ui-plugin-manager
       '@deepseek-ai/dsh-client-ui-reference':
         specifier: workspace:^
         version: link:../../client/ui-reference
@@ -2303,6 +2423,9 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:^
         version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:^
+        version: link:../store
       '@deepseek-ai/dsh-host-webserver':
         specifier: workspace:^
         version: link:../../host/webserver
@@ -2701,6 +2824,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
       '@deepseek-ai/dsh-api-remotes':
         specifier: workspace:^
         version: link:../../api/remotes
@@ -3465,6 +3591,60 @@ importers:
         specifier: ^18.2.0
         version: 18.3.1
 
+  packages/client/ui-plugin-manager:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-api-remotes':
+        specifier: workspace:^
+        version: link:../../api/remotes
+      '@deepseek-ai/dsh-client-locale':
+        specifier: workspace:^
+        version: link:../locale
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:^
+        version: link:../store
+      '@deepseek-ai/dsh-client-test-runtime':
+        specifier: workspace:^
+        version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-layout':
+        specifier: workspace:^
+        version: link:../ui-layout
+      '@deepseek-ai/dsh-client-ui-primitives':
+        specifier: workspace:^
+        version: link:../ui-primitives
+      '@deepseek-ai/dsh-client-ui-renderer':
+        specifier: workspace:^
+        version: link:../ui-renderer
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        specifier: workspace:^
+        version: link:../ui-sidebar
+      '@deepseek-ai/dsh-client-ui-slots':
+        specifier: workspace:^
+        version: link:../ui-slots
+      '@deepseek-ai/dsh-plugin-manager':
+        specifier: workspace:^
+        version: link:../../boot/plugin-manager
+      '@deepseek-ai/dsh-util-crypto':
+        specifier: workspace:^
+        version: link:../../util/crypto
+      '@testing-library/react':
+        specifier: ^16.1.0
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/react':
+        specifier: ~18.3.1
+        version: 18.3.31
+      clsx:
+        specifier: ^2.1.1
+        version: 2.1.1
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.3.1(react@18.3.1)
+
   packages/client/ui-primitives:
     devDependencies:
       '@deepseek-ai/cordis':
@@ -3843,6 +4023,12 @@ importers:
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:^
         version: link:../locale
+      '@deepseek-ai/dsh-client-modules':
+        specifier: workspace:^
+        version: link:../modules
+      '@deepseek-ai/dsh-client-store':
+        specifier: workspace:^
+        version: link:../store
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:^
         version: link:../../test-support/client-runtime
@@ -3981,6 +4167,9 @@ importers:
       '@deepseek-ai/dsh-client-test-runtime':
         specifier: workspace:^
         version: link:../../test-support/client-runtime
+      '@deepseek-ai/dsh-client-ui-conversation':
+        specifier: workspace:^
+        version: link:../ui-conversation
       '@deepseek-ai/dsh-client-ui-layout':
         specifier: workspace:^
         version: link:../ui-layout
@@ -4215,6 +4404,9 @@ importers:
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/client/ui-sidebar-terminal:
     devDependencies:
@@ -4834,6 +5026,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: workspace:^
         version: link:../ui-slots
+      '@deepseek-ai/dsh-host-webserver':
+        specifier: workspace:^
+        version: link:../../host/webserver
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
@@ -5957,7 +6152,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@puppeteer/browsers':
         specifier: 3.2.2
-        version: 3.2.2(yauzl@2.10.0)
+        version: 3.2.2(yauzl@3.4.0)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -6009,10 +6204,6 @@ importers:
         version: 4.22.4
 
   packages/experimental/client-ui-agent-team:
-    dependencies:
-      react:
-        specifier: ^18.2.0
-        version: 18.3.1
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -6059,6 +6250,9 @@ importers:
       '@types/react':
         specifier: ~18.3.1
         version: 18.3.31
+      react:
+        specifier: ^18.2.0
+        version: 18.3.1
       react-dom:
         specifier: ^18.2.0
         version: 18.3.1(react@18.3.1)
@@ -6169,6 +6363,9 @@ importers:
 
   packages/experimental/inspector:
     dependencies:
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../boot/app-boot
       '@deepseek-ai/dsh-brand':
         specifier: workspace:^
         version: link:../../util/brand
@@ -6317,6 +6514,9 @@ importers:
 
   packages/experimental/webworker-runtime:
     dependencies:
+      '@deepseek-ai/dsh-client-web':
+        specifier: workspace:^
+        version: link:../../client/web
       '@deepseek-ai/dsh-util-crypto':
         specifier: workspace:^
         version: link:../../util/crypto
@@ -7899,6 +8099,9 @@ importers:
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../../preset/agent-presets
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../boot/app-boot
       '@deepseek-ai/dsh-deepseek-llm-api-extensions':
         specifier: workspace:^
         version: link:../deepseek-llm-api-extensions
@@ -8252,6 +8455,9 @@ importers:
       '@deepseek-ai/dsh-agent-loop':
         specifier: workspace:^
         version: link:../../core/agent-loop
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../boot/app-boot
       '@deepseek-ai/dsh-atomic-write':
         specifier: workspace:^
         version: link:../../util/atomic-write
@@ -8447,6 +8653,9 @@ importers:
 
   packages/sandbox/sandbox-windows-acl:
     dependencies:
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../../util/lazy-require
       '@deepseek-ai/dsh-win32-process':
         specifier: workspace:^
         version: link:../../subprocess/win32-process
@@ -10780,6 +10989,9 @@ importers:
 
   packages/subprocess/subprocess-local:
     dependencies:
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../../util/lazy-require
       '@deepseek-ai/dsh-win32-process':
         specifier: workspace:^
         version: link:../win32-process
@@ -10805,6 +11017,9 @@ importers:
 
   packages/subprocess/win32-process:
     dependencies:
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../../util/lazy-require
       koffi:
         specifier: ^3.1.0
         version: 3.1.1
@@ -10833,6 +11048,9 @@ importers:
 
   packages/terminal/terminal-bash:
     dependencies:
+      '@deepseek-ai/dsh-lazy-require':
+        specifier: workspace:^
+        version: link:../../util/lazy-require
       '@deepseek-ai/dsh-pwsh-local':
         specifier: workspace:^
         version: link:../../shell/pwsh-local
@@ -11308,6 +11526,9 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:^
         version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-app-boot':
+        specifier: workspace:^
+        version: link:../../boot/app-boot
       '@deepseek-ai/dsh-typert-registry':
         specifier: workspace:^
         version: link:../registry
@@ -11388,6 +11609,12 @@ importers:
         version: link:../../runtime-diagnostics/invariants
 
   packages/util/launch-environment:
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+
+  packages/util/lazy-require:
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: workspace:^
@@ -12028,6 +12255,9 @@ importers:
       '@deepseek-ai/dsh-hooks-codex':
         specifier: workspace:^
         version: link:../../packages/hooks/hooks-codex
+      '@deepseek-ai/dsh-host-plugin-inventory':
+        specifier: workspace:^
+        version: link:../../packages/host/plugin-inventory
       '@deepseek-ai/dsh-http-proxy':
         specifier: workspace:^
         version: link:../../packages/util/http-proxy
@@ -12070,6 +12300,9 @@ importers:
       '@deepseek-ai/dsh-plan-mode':
         specifier: workspace:^
         version: link:../../packages/plan/plan-mode
+      '@deepseek-ai/dsh-plugin-manager':
+        specifier: workspace:^
+        version: link:../../packages/boot/plugin-manager
       '@deepseek-ai/dsh-plugin-package-inventory-deepseek':
         specifier: workspace:^
         version: link:../../packages/llm/plugin-package-inventory-deepseek
@@ -12136,6 +12369,9 @@ importers:
       '@deepseek-ai/dsh-session-title':
         specifier: workspace:^
         version: link:../../packages/session/session-title
+      '@deepseek-ai/dsh-session-title-llm':
+        specifier: workspace:^
+        version: link:../../packages/session/session-title-llm
       '@deepseek-ai/dsh-settings':
         specifier: workspace:^
         version: link:../../packages/settings/settings
@@ -12377,8 +12613,8 @@ importers:
         specifier: link:../cosmokit
         version: link:../cosmokit
       node-addon-require-builtin:
-        specifier: ^0.1.4
-        version: 0.1.4
+        specifier: ^0.1.6
+        version: 0.1.6
 
   vendor/logger-console:
     dependencies:
@@ -15888,9 +16124,6 @@ packages:
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
     hasBin: true
 
-  buffer-crc32@0.2.13:
-    resolution: {integrity: sha512-VO9Ht/+p3SN7SKWqcrgEzjGbRSJYTx+Q1pTQC0wrWqHx0vpJraQ6GtHx8tvcg1rlK1byhU5gccxgOgj7B0TDkQ==}
-
   buffer-equal-constant-time@1.0.1:
     resolution: {integrity: sha512-zRpUiDwd/xk6ADqPMATG8vc9VPrkck7T07OIx0gnjmJAnHnTVXNQG3vfvWNuiZIkwu9KrKdA1iJKfsfTVxE6NA==}
 
@@ -16720,9 +16953,6 @@ packages:
   fast-xml-parser@5.7.3:
     resolution: {integrity: sha512-C0AaNuC+mscy6vrAQKAc/rMq+zAPHodfHGZu4sGVehvAQt/JLG1O5zEcYcXSY5zSqr4YVgxsB+pHXTq0i7eDlg==}
     hasBin: true
-
-  fd-slicer@1.1.0:
-    resolution: {integrity: sha512-cE1qsB/VwyQozZ+q1dGxR8LBYNZeofhEdUNGSMbQD3Gw2lAzX9Zb3uIU6Ebc/Fmyjo9AWWfnn0AUCHqtevs/8g==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -17831,56 +18061,56 @@ packages:
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
 
-  node-addon-native-custom-loader@0.1.4:
-    resolution: {integrity: sha512-DreegO6EoC1JHWYBv3j8Miwp2Zl/CyBeNyoeyCbnEdjyYFEulR4Gcb3wj9fXF7KMDY0ZJ5MWwHcXP8GVNyScnA==}
+  node-addon-native-custom-loader@0.1.6:
+    resolution: {integrity: sha512-QaW7d8lTcGCXrpNVyFDtID3vrpa7vFdpcY9pql2/9FGFSe7tcSnhQOKZX+1aOWq+pB1d2ZwNnKAdQI5nD9wAXA==}
     engines: {node: '>=20'}
 
-  node-addon-require-builtin-darwin-arm64@0.1.4:
-    resolution: {integrity: sha512-pqiTPbqlDKRIo8YKoWMjuFge4kyHbsdYkAcGW5MAVcJSCyU0M1hhpiLdWlvX753XKL3xlGeuPmv2NqTNRV0/hw==}
+  node-addon-require-builtin-darwin-arm64@0.1.6:
+    resolution: {integrity: sha512-KpaAh0mDcIScoJs7gD/mjXREcENJ023/DgWW3GrlLXFVzCE6bK6wFrTFpNfnkxZZP8yWsEWOg1o5T+uQ7olgTQ==}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [darwin]
 
-  node-addon-require-builtin-darwin-x64@0.1.4:
-    resolution: {integrity: sha512-i9oThh+w6d+H79YQuc3d3MZCx4YZ6aMWlQ0HYMgOTWvSRzppXmksa/xPV8O20G1gjpq5do/9/hgImixj3XIcjQ==}
+  node-addon-require-builtin-darwin-x64@0.1.6:
+    resolution: {integrity: sha512-lh9o5rCvmkH8MZgBBmhyKzJRc1M1hJzgXLTFzB6iomRXNH9P1DKjN2nAJLmvGrdTij47Wcch1JVnlV5AG0cRCQ==}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [darwin]
 
-  node-addon-require-builtin-linux-arm64-gnu@0.1.4:
-    resolution: {integrity: sha512-qbmYtkiIFp7h1ZvYYHH0MGFQbc03OyvplkeS90j+t3VMomkRc/YwZ140WzVM3eYJYZ7XHq+s1GL5ZdFQFPUXBQ==}
+  node-addon-require-builtin-linux-arm64-gnu@0.1.6:
+    resolution: {integrity: sha512-DrQA3aS1LBn4NgrewbZkzSAWdSSRPD/fYO5AkQfvriQ/TQD3E2adB012sZ5eac6p9TAcTjUIYhk395AYVxo4Zw==}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  node-addon-require-builtin-linux-x64-gnu@0.1.4:
-    resolution: {integrity: sha512-4jC617+yOrYYuKgNmN2KMD722G6BICpjEzAcmzA3j5tt+zmey5M/c/z9JxqdjnNmU9CQWseBaJu/fGdbHZXSOg==}
+  node-addon-require-builtin-linux-x64-gnu@0.1.6:
+    resolution: {integrity: sha512-8wCxrFlB2Ld5DhxIm2P+nNFnQ0wjzDE5sXF68EUhLH0X+z313B07TUQFMBKCOkyhZIIBh590dBmhHCuA43No2A==}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  node-addon-require-builtin-win32-arm64-msvc@0.1.4:
-    resolution: {integrity: sha512-4TW96aPR108R3RxJbUNLXU6FLTZ7n8fWtSpPbPtvYWXa9cXojvCMdH4BvrHM6W2M+Iu42nqMxRyylP3PeTjOmA==}
+  node-addon-require-builtin-win32-arm64-msvc@0.1.6:
+    resolution: {integrity: sha512-NET6DiLnKrK2DHuO4NNN+zJz0CFas+RwpJlGY0d3A3A3tc5dJQqZXgw8DzLOn4cSTAQCaDq6+LbPyYX7jE2F3Q==}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [win32]
 
-  node-addon-require-builtin-win32-ia32-msvc@0.1.4:
-    resolution: {integrity: sha512-a3ZRkiMKaE7uRjI+H+Ic7dvhPIk0rW9mHV47IEiqJzoRZqnDp5JPjQfAnngu979HR59Ghy+mfexJ/kStBlP3eQ==}
+  node-addon-require-builtin-win32-ia32-msvc@0.1.6:
+    resolution: {integrity: sha512-oj4G51r81kJ3E2t5KknKhBNb8TmTWzc/t9x7jkBF9JeRd+1a0kr99mVJVYwJNxq9d3jpt7dgBdI8mxaomuXOEQ==}
     engines: {node: '>=20 <23'}
     cpu: [ia32]
     os: [win32]
 
-  node-addon-require-builtin-win32-x64-msvc@0.1.4:
-    resolution: {integrity: sha512-EGx7AcJKB7fNxo/YHV32JTUg1Hetbdnh6uPaqPhklhyRSMM13/7hZK1pTACqMS9dwnR3Lakxl9HKG9/eAoIyyg==}
+  node-addon-require-builtin-win32-x64-msvc@0.1.6:
+    resolution: {integrity: sha512-ZQ+6thVzQBOFamW7s3t2YqHsw99EEPBNH1uAjvCx4QfnjFJTsu6I/H3prpN8i6cSt6gjnQtArfWc2LXN2ufcJQ==}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [win32]
 
-  node-addon-require-builtin@0.1.4:
-    resolution: {integrity: sha512-yuXz43GmtQyMrO75u2Z8KZAafMhnMH8RTOZBJWGDU9HoD2QxT6q4PF28iLNm/OS9BkS8MHwCKpgTk3d6qW584A==}
+  node-addon-require-builtin@0.1.6:
+    resolution: {integrity: sha512-P9ZGMDkloktirLJSggfpxsJ9jog5FItE1Omxpj50UBn3LhD6TS6/yx0jEBXsCGK3P9EtW1EpQVA1QL5gb11GaQ==}
     engines: {node: '>=20'}
 
   node-api-version@0.2.1:
@@ -19361,8 +19591,9 @@ packages:
     resolution: {integrity: sha512-2rAgRKu54VsHkqI0/tYkmluGXHD4KW7yZoycuqDQ15QOTnc2VVfy0nN/1eMhnQLO00A+dwtK20xuCnc1YGeUyg==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=23}
 
-  yauzl@2.10.0:
-    resolution: {integrity: sha512-p4a9I6X6nu6IhoGmBqAcbJy1mlC4j27vEPZX9F4L4/vZT3Lyq1VkFHw/V/PUcB9Buo+DG3iHkT0x3Qya58zc3g==}
+  yauzl@3.4.0:
+    resolution: {integrity: sha512-jIH9yLR9wqr0wOS0TpBvo/g/2UgZH5qePVbjgRliiF0BYvOZyaBknKsF+x9Iht0O6sqgnB93rCICdOZFecJuDw==}
+    engines: {node: '>=12'}
 
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
@@ -21350,12 +21581,12 @@ snapshots:
 
   '@publint/pack@0.1.4': {}
 
-  '@puppeteer/browsers@3.2.2(yauzl@2.10.0)':
+  '@puppeteer/browsers@3.2.2(yauzl@3.4.0)':
     dependencies:
       modern-tar: 0.8.5
       yargs: 18.1.0
     optionalDependencies:
-      yauzl: 2.10.0
+      yauzl: 3.4.0
 
   '@quansync/fs@1.0.0':
     dependencies:
@@ -22415,7 +22646,7 @@ snapshots:
       - bare-buffer
       - react-native-b4a
 
-  '@yao-pkg/pkg@6.21.0(patch_hash=28edd2180c36691c481522ef81f6f6614505f45e491aad542ac4663d4e6b3ff8)(supports-color@9.4.0)':
+  '@yao-pkg/pkg@6.21.0(patch_hash=07f08c630d0d3886d81fd4600116d07e4871ddcd57f92cb22746b6d246cdc337)(supports-color@9.4.0)':
     dependencies:
       '@babel/generator': 7.29.7
       '@babel/parser': 7.29.7
@@ -22709,8 +22940,6 @@ snapshots:
       electron-to-chromium: 1.5.393
       node-releases: 2.0.51
       update-browserslist-db: 1.2.3(browserslist@4.28.6)
-
-  buffer-crc32@0.2.13: {}
 
   buffer-equal-constant-time@1.0.1: {}
 
@@ -23332,7 +23561,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.0.0(supports-color@9.4.0):
+  electron@44.0.0:
     dependencies:
       '@electron-internal/extract-zip': 1.0.5
       '@electron/get': 5.1.0(supports-color@9.4.0)
@@ -23663,7 +23892,7 @@ snapshots:
     dependencies:
       debug: 4.4.3(supports-color@9.4.0)
       get-stream: 5.2.0
-      yauzl: 2.10.0
+      yauzl: 3.4.0
     optionalDependencies:
       '@types/yauzl': 2.10.3
     transitivePeerDependencies:
@@ -23696,10 +23925,6 @@ snapshots:
       fast-xml-builder: 1.2.0
       path-expression-matcher: 1.5.0
       strnum: 2.4.0
-
-  fd-slicer@1.1.0:
-    dependencies:
-      pend: 1.2.0
 
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
@@ -24989,54 +25214,54 @@ snapshots:
 
   node-addon-api@7.1.1: {}
 
-  node-addon-native-custom-loader@0.1.4: {}
+  node-addon-native-custom-loader@0.1.6: {}
 
-  node-addon-require-builtin-darwin-arm64@0.1.4:
+  node-addon-require-builtin-darwin-arm64@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin-darwin-x64@0.1.4:
+  node-addon-require-builtin-darwin-x64@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin-linux-arm64-gnu@0.1.4:
+  node-addon-require-builtin-linux-arm64-gnu@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin-linux-x64-gnu@0.1.4:
+  node-addon-require-builtin-linux-x64-gnu@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin-win32-arm64-msvc@0.1.4:
+  node-addon-require-builtin-win32-arm64-msvc@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin-win32-ia32-msvc@0.1.4:
+  node-addon-require-builtin-win32-ia32-msvc@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin-win32-x64-msvc@0.1.4:
+  node-addon-require-builtin-win32-x64-msvc@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optional: true
 
-  node-addon-require-builtin@0.1.4:
+  node-addon-require-builtin@0.1.6:
     dependencies:
-      node-addon-native-custom-loader: 0.1.4
+      node-addon-native-custom-loader: 0.1.6
     optionalDependencies:
-      node-addon-require-builtin-darwin-arm64: 0.1.4
-      node-addon-require-builtin-darwin-x64: 0.1.4
-      node-addon-require-builtin-linux-arm64-gnu: 0.1.4
-      node-addon-require-builtin-linux-x64-gnu: 0.1.4
-      node-addon-require-builtin-win32-arm64-msvc: 0.1.4
-      node-addon-require-builtin-win32-ia32-msvc: 0.1.4
-      node-addon-require-builtin-win32-x64-msvc: 0.1.4
+      node-addon-require-builtin-darwin-arm64: 0.1.6
+      node-addon-require-builtin-darwin-x64: 0.1.6
+      node-addon-require-builtin-linux-arm64-gnu: 0.1.6
+      node-addon-require-builtin-linux-x64-gnu: 0.1.6
+      node-addon-require-builtin-win32-arm64-msvc: 0.1.6
+      node-addon-require-builtin-win32-ia32-msvc: 0.1.6
+      node-addon-require-builtin-win32-x64-msvc: 0.1.6
 
   node-api-version@0.2.1:
     dependencies:
@@ -26665,10 +26890,9 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 22.0.0
 
-  yauzl@2.10.0:
+  yauzl@3.4.0:
     dependencies:
-      buffer-crc32: 0.2.13
-      fd-slicer: 1.1.0
+      pend: 1.2.0
 
   yocto-queue@0.1.0: {}
 

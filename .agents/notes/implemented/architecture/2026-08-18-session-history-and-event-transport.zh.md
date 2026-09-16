@@ -8,7 +8,7 @@ Status: implemented
 
 浏览器同时消费三类生命周期不同的数据：可持久化并分页的 Session 日志、需要 opening baseline 才能在重连后收敛的进程内状态，以及无需重放的即时通知。
 
-这三类数据不能共用一种恢复规则。Session 日志有稳定 seq 和 persistence，可以按 cursor 补齐缺口；queue、jobs、Workspace 列表等状态需要以完整 snapshot 替换旧镜像；普通通知只保证当前 Connection generation 内投递。
+这三类数据不能共用一种恢复规则。Session 日志有稳定 seq 和 persistence，可以按 cursor 补齐缺口；jobs、projection 值和 Workspace 列表等状态需要以完整 snapshot 替换旧镜像；普通通知只保证当前 Connection generation 内投递。
 
 观察 Session 历史、列表和投影必须允许冷读取。若 transport 因参数中出现 Session 或 Agent 就触发通用 Typert lookup，打开页面、切换标签或网络重连都会隐式恢复 Agent，观察操作因此产生执行副作用。
 
@@ -158,7 +158,8 @@ Session Remote 方法传递 `SessionId` 或 `SessionAddress`，不靠参数类�
 | `session.follow(address)` | 一份携带 opening page 与 projection 的 live 或 prepared observation | 先发布 snapshot，再在后台把普通冷 Session 提升一次 |
 | `session.control()` | 当前 attached Agent、pending registry 与进程内 registry | baseline 与重连不恢复 Agent |
 | `session.attachment`、fork 源读取 | 已授权的持久 Session 数据 | 读取不恢复 Agent |
-| `session.updateQueue`、`cancel` | 仅命中当前 live Agent | 不为已消失状态恢复 Agent |
+| `session.updateQueue` | live Agent 或普通持久 Session | 修改 Inbox 前恢复普通冷 Session |
+| `session.cancel` | 仅命中当前 live Agent | 不为已消失状态恢复 Agent |
 | `models`、`selectModel`、`rename`、`prompt` | 命令解析目标 Session | 仅按方法约定显式恢复 |
 | `create` 与 fork 目标 | 新 Session／Agent | 用户命令提供创建授权 |
 
@@ -204,9 +205,9 @@ initial page、repair page 或 follow 的 terminal failure 进入当前 Session 
 
 `session.control()` 是 Host 范围的 snapshot stream，一个浏览器可观察所有当前 live Session 的瞬态状态，而不必为每个 transcript 打开 journal。
 
-每个 generation 先发完整 baseline，再发 queue、jobs 与 projection 增量帧。baseline 读取 attached Agent 和进程内 registry，不恢复冷 Agent。
+每个 generation 先发完整 baseline，再发 jobs 与 projection 增量帧。baseline 读取进程内 registry 和已折叠的 projection 值，不恢复冷 Agent。
 
-queue 与 jobs 使用完整 replacement 值并按 last-wins 应用。Agent attach、detach、Session disposal 与 owner disposal 都能用空值或新 baseline 清除陈旧镜像。
+jobs 使用完整 replacement 值并按 last-wins 应用。Projection update 携带单调递增 revision，新 baseline 则替换完整 projection map。Session 与 owner disposal 会清理陈旧镜像。
 
 原始 `approval/request` 与 `user-questions/request` 是可转发 waterfall。若某个 Agent-scoped Client listener claim，请求直接返回；若所有已投递 Client 都调用 `next()`，原 Cordis waterfall 继续到后续 Host listener。Session control 不保存或重放这些请求。
 
@@ -313,7 +314,7 @@ API Proxy 只承接自身拥有的独立业务 API，不是 Session、Workspace�
 
 **把 Session transport 与 Session commands 拆成两个公开包。** 两者共同依赖 Session address、Agent 激活策略、subagent ownership、错误映射和 Client 挂载顺序；一个公开 Controller 保持统一所有权，内部 class 仍可独立演化。
 
-**把 queue、jobs、projection、Workspace 与日志都改成普通 `$on`。** 普通事件没有 reconnect baseline、cursor 或 gap repair，漏掉一次推送就会留下永久陈旧状态；只有无需恢复、可由独立查询修复，或以 waterfall 本身持有请求生命周期的通知适合 `$on`。
+**把 jobs、projection、Workspace 与日志都改成普通 `$on`。** 普通事件没有 reconnect baseline、cursor 或 gap repair，漏掉一次推送就会留下永久陈旧状态；只有无需恢复、可由独立查询修复，或以 waterfall 本身持有请求生命周期的通知适合 `$on`。
 
 **让每个领域 Controller 继承一个 page／follow／retry 基类。** Session journal 与 Workspace snapshot 的 opening、恢复和排序规则不同；Gateway 的三个组合式 stream 对象复用 transport 生命周期，同时让领域 adapter 只声明自己的 frame 语义。
 
@@ -345,7 +346,7 @@ Connection 测试固定 generation source 缺失、重复注册、撤回、ready
 
 Session Host 测试固定 cold page／follow 不增加 attached Agent、显式 prompt 后 cold follow 收到连续事件、direct subagent ownership、message-aligned pagination 和终止错误投影。
 
-Session control 测试固定 baseline-first、冷 Session 不恢复、attach／detach 清理、queue 与 jobs replacement，以及 projection watermark。
+Session control 测试固定 baseline-first、冷 Session 不恢复、jobs replacement 与 projection watermark。
 
 Session Client 测试固定每 Session 单一 journal owner、旧 open epoch 不写回、control 与 journal 独立取消，以及 carrier retry 期间保留已发布窗口。
 

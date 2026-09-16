@@ -59,6 +59,8 @@ const DEFAULT_BAND: SidebarRightTabPriority = 'extension'
 
 /** One entry capsule the guide page offers, contributed by the type it opens (picking it opens that type as a page). */
 export interface SidebarRightGuideEntry {
+  /** Stable entry identity within its provider. */
+  readonly id: string
   /** Ascending position among every registered type's entries. */
   readonly order: number
   /**
@@ -79,6 +81,8 @@ export interface SidebarRightGuideEntry {
 
 /** A guide entry as the registry lists it: with the kind of the type that contributed it, which is what picking it opens. */
 export interface SidebarRightGuideBox extends SidebarRightGuideEntry {
+  /** Active implementation identity used to dispatch the entry renderer. */
+  readonly providerId: string
   readonly kind: string
 }
 
@@ -243,6 +247,8 @@ export class SidebarRightTabRegistry {
    */
   register(definition: SidebarRightTabDefinition): () => void {
     const { id, kind } = definition
+    const entries = definition.guide ?? []
+    if (new Set(entries.map(entry => entry.id)).size !== entries.length) throw new Error(`sidebarRight: duplicate guide entry id in "${id}"`)
     const band = definition.priority ?? DEFAULT_BAND
     if (this.ids.has(id)) throw new Error(`sidebarRight: tab type id "${id}" is already registered`)
     const held = this.kinds.get(kind)
@@ -396,7 +402,7 @@ export class SidebarRightTabRegistry {
   private refresh(): void {
     this.cached = this.active().map(entry => entry.definition)
     this.guideEntries = this.cached
-      .flatMap(definition => (definition.guide ?? []).map(entry => ({ ...entry, kind: definition.kind })))
+      .flatMap(definition => (definition.guide ?? []).map(entry => ({ ...entry, kind: definition.kind, providerId: definition.id })))
       .sort((left, right) => left.order - right.order)
     notifySubscribers(this.listeners, '[ui-sidebar-right] tab registry')
   }

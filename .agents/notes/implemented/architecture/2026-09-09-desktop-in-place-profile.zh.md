@@ -10,13 +10,15 @@ staging 能保留旧插件安装，但增加 profile 复制、目录移动、恢
 
 ## 决策
 
-Desktop 停止 Host 后直接修改当前 profile。修改包前解除宿主共享链接，操作结束后恢复链接。保留包锁、依赖验证和已批准的原生构建。兼容升级只刷新链接，不复制插件文件。
+应用管理包的保留范围受[生产清理决策](../bug-fix/2026-09-15-desktop-profile-core-cleanup.zh.md)限定。
+
+Desktop 停止 Host 后直接修改当前 profile。共享 app-boot 清理在包变更前分离其拥有的模块补全链接；Host 的共享 profile runner 在启动时补全所需链接。包锁及配置允许的生命周期脚本保留。升级刷新模块链接，不复制插件文件。
 
 包操作或 Host 失败会保留部分修改，供修复和重试。不使用 staging profile、激活日志、目录切换恢复或自动回滚。已有临时目录不会被解释或删除。
 
-本决策取代以下记录中的 staging 和回滚：[2026-08-25-electron-desktop-packaging-and-updates](2026-08-25-electron-desktop-packaging-and-updates.zh.md), [2026-09-08-desktop-bundled-runtime-and-external-plugins](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md), [2026-09-09-desktop-immediate-window-and-direct-start](2026-09-09-desktop-immediate-window-and-direct-start.zh.md)。其他发布、模块实例和窗口生命周期决策继续有效。
+本记录取代[打包决策](2026-08-25-electron-desktop-packaging-and-updates.zh.md)、[内置运行时决策](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md)及[立即显示窗口决策](2026-09-09-desktop-immediate-window-and-direct-start.zh.md)中的暂存与回滚。Host 启动遵循[薄壳决策](2026-09-10-desktop-web-wrapper.zh.md)；发布、模块归属与窗口生命周期仍由各自决策负责。
 
-持久的 `desktop-packages-pending` 标记先于包写入或原生运行时重建，仅在安装、获准构建和验证成功后删除。后续启动发现该标记时，会重新安装锁定的依赖图并重试待执行构建，即使记录的运行时元数据已经匹配。普通未变化的启动复用 profile，不扫描插件依赖图；包修改和运行时校准保留验证。
+Desktop 将安装和生命周期脚本交给 pnpm，不设置待完成操作启动门禁、不强制按锁文件重装，也不自动重建。包操作失败会保留部分变更，仍可禁用、删除和重试启动。Host 继承用户环境，profile 可以使用目录链接。未经修改的旧版 Desktop 生成 pnpm 配置替换为 Web 默认值；自定义配置仍由用户管理。
 
 ## 考虑过的替代方案
 

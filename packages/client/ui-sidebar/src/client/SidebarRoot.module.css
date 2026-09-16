@@ -22,6 +22,12 @@
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
 }
 
+/* macOS desktop: the AppFrame column owns the translucent sidebar tint; an
+   opaque fill here would sit on top of it and block the window vibrancy. */
+:global([data-platform='darwin']) .root {
+  background: transparent;
+}
+
 /* Rail geometry (figma rail spec): 36x36 control boxes centered in the 56px
    rail (10px side padding), 12px vertical rhythm, 18px from the rail top to
    the whale's box (24px to the 24-wide whale glyph itself). */
@@ -83,6 +89,32 @@
 
 @keyframes rail-fade-in {
   from { opacity: 0; }
+}
+
+/* macOS hiddenInset titlebar: the strip spans the column's top edge (negative
+   margins cancel the root padding) so it clears the traffic lights at
+   (16, 18) and doubles as the window drag region; the toggle opts out. */
+.topStrip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 52px;
+  box-sizing: border-box;
+  margin: -6px calc(-1 * var(--dsh-sidebar-inline-padding)) 0;
+  padding: 0 12px;
+  -webkit-app-region: drag;
+}
+
+.topStrip .iconButton {
+  -webkit-app-region: no-drag;
+}
+
+/* The strip's full 52px foot leaves the wordmark too low; the content column
+   tucks 12px back under it, still clear of the toggle (28px control centered
+   in the strip ends at y 40). */
+.topStrip + .logoRow {
+  margin-top: -12px;
 }
 
 /* Logo row (figma pad (4,8,4,8)): expanded keeps the panel toggle at the
@@ -200,6 +232,8 @@
 .collapsed .iconButton {
   width: 36px;
   height: 36px;
+  /* Rail hovers share the panel rows' and New Session's 12px rounding. */
+  border-radius: 12px;
 }
 
 /* Rail logo swap: collapsed, the toggle rests as the whale mark (brand ink,
@@ -255,7 +289,7 @@
   gap: 6px;
   height: 38px;
   padding: 8px 16px;
-  margin: 0 2px 8px;
+  margin: 0 2px 12px;
   box-sizing: border-box;
   border: 0.5px solid var(--dsw-alias-border-l3);
   border-radius: 12px;
@@ -270,6 +304,17 @@
 
 .newSession:hover {
   background: var(--dsw-alias-button-floating-hover);
+}
+
+/* macOS: the solid elevated fill reads as a foreign slab on the vibrancy
+   sidebar; letting a quarter of the material through keeps the card visible
+   while it sits in the glass. */
+:global([data-platform='darwin']) .newSession {
+  background: color-mix(in srgb, var(--dsw-alias-button-elevated-fill) 75%, transparent);
+}
+
+:global([data-platform='darwin']) .newSession:hover {
+  background: color-mix(in srgb, var(--dsw-alias-button-floating-hover) 75%, transparent);
 }
 
 .collapsed .newSession {
@@ -305,18 +350,20 @@
   margin-bottom: 8px;
 }
 
+/* Panel entries share the New Session bar's 12px radius and 2px inset, the
+   session rows' hover/selected surface, and the primary ink. */
 .panelRow {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
+  margin: 0 2px;
   min-height: 36px;
   padding: 7px 8px;
   box-sizing: border-box;
   border: none;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
-  color: var(--dsw-alias-label-secondary);
+  color: var(--dsw-alias-label-primary);
   font: inherit;
   line-height: 22px;
   text-align: left;
@@ -328,9 +375,8 @@
 }
 
 .panelRow.panelActive {
-  background: var(--dsw-alias-interactive-bg-active);
+  background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
-  font-weight: 500;
 }
 
 .panelRow:focus-visible {
@@ -361,6 +407,7 @@
   width: 36px;
   height: 36px;
   justify-content: center;
+  margin: 0;
   padding: 0;
   color: var(--dsw-alias-label-primary);
 }

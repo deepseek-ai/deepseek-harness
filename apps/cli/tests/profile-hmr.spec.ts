@@ -20,27 +20,26 @@ function hmr(layers: PatchOptions[][]) {
   return row
 }
 
-describe('profile module-HMR policy', () => {
-  it.each(['web-app', 'headless', 'sdk-app', 'acp-app'] as const)(
-    '%s inherits the disabled base row without a mode override',
-    (mode) => {
-      const modePatches = bundle(mode)
-      expect(modePatches.some(patch => patch.id === 'hmr')).toBe(false)
-      expect(hmr([bundle('base'), modePatches])).toMatchObject({
-        disabled: true,
-        config: { root: ['.'] },
-      })
-    },
-  )
+describe('YAML-owned profile HMR', () => {
+  it('enables configuration watching in the base and web compositions', () => {
+    expect(hmr([bundle('base'), bundle('web-app')])).toMatchObject({ config: { root: [] } })
+    expect(hmr([bundle('base')]).disabled).not.toBe(true)
+  })
 
-  it('requires an explicit later layer to enable source-module reload', () => {
-    expect(hmr([bundle('base'), [{ id: 'hmr', disabled: false }]])).toMatchObject({
-      disabled: false,
+  it.each(['headless', 'sdk-app', 'acp-app'] as const)('%s disables HMR with a bundle override', (mode) => {
+    expect(hmr([bundle('base'), bundle(mode)])).toMatchObject({ disabled: true })
+    expect(hmr([bundle('base'), bundle(mode), [{ id: 'hmr', disabled: false }]])).toMatchObject({
+      disabled: false, config: { root: [] },
+    })
+  })
+
+  it('selects module roots through a later YAML layer', () => {
+    expect(hmr([bundle('base'), [{ id: 'hmr', config: { root: ['.'] } }]])).toMatchObject({
       config: { root: ['.'] },
     })
   })
 
-  it('keeps the standalone sdk-minimal tree free of module HMR', () => {
+  it('keeps the standalone sdk-minimal tree free of HMR', () => {
     expect(composeEntries([bundle('sdk-minimal')]).find(entry => entry.id === 'hmr')).toBeUndefined()
   })
 })

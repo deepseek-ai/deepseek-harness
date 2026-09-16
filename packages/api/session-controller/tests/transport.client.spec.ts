@@ -658,10 +658,10 @@ describe('Session Client stream adapters', () => {
   it('maps the Host-wide control baseline and deltas into one snapshot stream', async () => {
     const baseline: SessionControlFrame = {
       type: 'baseline',
-      value: { queues: {}, jobs: {}, projections: {} },
+      value: { jobs: {}, projections: {} },
     }
     const update: SessionControlFrame = {
-      type: 'queue', sessionId: 'session-1' as never, items: [],
+      type: 'jobs', sessionId: 'session-1' as never, jobs: [],
     }
     const remote = new ScriptedSessionRemote([], [], [baseline, update])
     const accept = vi.fn<(frame: SessionControlFrame) => void>()
@@ -693,7 +693,7 @@ describe('Session Client stream adapters', () => {
 
     const baseline: SessionControlFrame = {
       type: 'baseline',
-      value: { queues: {}, jobs: {}, projections: {} },
+      value: { jobs: {}, projections: {} },
     }
     const carrierFailed = vi.fn()
     const failed = vi.fn()

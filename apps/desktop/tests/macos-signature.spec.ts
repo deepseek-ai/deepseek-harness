@@ -1,10 +1,3 @@
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, relative } from 'node:path'
-import { createRequire } from 'node:module'
-import { FileMatcher } from 'app-builder-lib/out/fileMatcher.js'
-import { runtimeFixture } from './runtime-fixture.ts'
-import { verifyDesktopRuntime } from '../src/runtime-tree.ts'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { NotarizeOptions } from '@electron/notarize'
 import {
@@ -17,11 +10,6 @@ import {
   assertMacOSRuntimeSignatureDetails,
   assertMacOSSignatureDetails,
 } from '../scripts/verify-macos-signature.mjs'
-
-// app-builder-lib omits this internal copier from its declarations; the regression exercises its actual file filter.
-const { copyFiles } = createRequire(import.meta.url)('app-builder-lib/out/fileMatcher.js') as {
-  copyFiles: (matchers: FileMatcher[]) => Promise<void>
-}
 
 const RELEASE_ENVIRONMENT = {
   DSH_DESKTOP_APP_ID: 'com.example.desktop',
@@ -52,18 +40,28 @@ describe('desktop macOS release signature', () => {
     const { createElectronBuilderConfig } = await import('../electron-builder.config.mjs')
     const config = createElectronBuilderConfig(RELEASE_ENVIRONMENT, 'darwin', 'arm64')
     expect(portablePath(config.directories.output)).toContain('/.desktop-build/targets/mac-arm64/artifacts')
-    expect(config.extraResources).toHaveLength(3)
+    expect(config.extraResources).toHaveLength(1)
     expect(config.extraResources[0]?.to).toBe('runtime')
-    expect(config.extraResources[1]?.to).toBe('dsh')
     expect(portablePath(config.extraResources[0]?.from ?? '')).toContain('/.desktop-build/targets/mac-arm64/runtime')
-    expect(portablePath(config.extraResources[1]?.from ?? '')).toContain('/.desktop-build/targets/mac-arm64/dsh')
+    const [dshFiles, dshNodeModules] = config.files.slice(-2)
+    if (!dshFiles || !dshNodeModules || typeof dshFiles === 'string' || typeof dshNodeModules === 'string') {
+      throw new Error('desktop DSH resources must use electron-builder file mappings')
+    }
+    expect(portablePath(dshFiles.from)).toContain('/.desktop-build/targets/mac-arm64/dsh')
+    expect(dshFiles.to).toBe('dsh')
+    expect(portablePath(dshNodeModules.from)).toContain('/.desktop-build/targets/mac-arm64/dsh/node_modules')
+    expect(dshNodeModules.to).toBe('dsh/node_modules')
+    expect(config.asarUnpack).toEqual(expect.arrayContaining([
+      '**/*.{node,dylib,dll,so,exe}',
+      '**/@vscode/ripgrep/bin/rg',
+    ]))
     expect(config).toMatchObject({
       appId: RELEASE_ENVIRONMENT.DSH_DESKTOP_APP_ID,
       mac: {
         identity: RELEASE_ENVIRONMENT.DSH_DESKTOP_MACOS_SIGNING_IDENTITY,
         forceCodeSigning: true,
         notarize: true,
-        signIgnore: ['/Contents/Resources/dsh(?:/|$)', '\\.pak$'],
+        signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
       },
       dmg: {
         sign: true,
@@ -90,26 +88,6 @@ describe('desktop macOS release signature', () => {
       '/App.app/Contents/Frameworks/Electron.framework',
       '/App.app',
     ]) expect(ignored(path)).toBe(false)
-  })
-
-  it('copies the complete runtime despite electron-builder excluding root node_modules', async () => {
-    const { createElectronBuilderConfig } = await import('../electron-builder.config.mjs')
-    const config = createElectronBuilderConfig(RELEASE_ENVIRONMENT, 'darwin', 'arm64')
-    const root = mkdtempSync(join(tmpdir(), 'desktop-resource-copy-'))
-    try {
-      const source = join(root, 'source')
-      const destination = join(root, 'resources')
-      runtimeFixture(source)
-      const sourceRoot = config.extraResources[1].from
-      const matchers = config.extraResources.slice(1).map(entry => new FileMatcher(
-        join(source, relative(sourceRoot, entry.from)), join(destination, entry.to), value => value,
-      ))
-      await copyFiles(matchers.slice(0, 1))
-      await expect(verifyDesktopRuntime(join(destination, 'dsh'), '1.0.0')).rejects.toThrow(/ENOENT/u)
-      rmSync(destination, { recursive: true })
-      await copyFiles(matchers)
-      await expect(verifyDesktopRuntime(join(destination, 'dsh'), '1.0.0')).resolves.toMatchObject({ release: { version: '1.0.0' } })
-    } finally { rmSync(root, { recursive: true, force: true }) }
   })
 
   it('validates Windows signing without requiring macOS identifiers for a Windows target', async () => {

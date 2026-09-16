@@ -1,0 +1,3 @@
+- insert:
+    - id: fixture-live-client
+      name: '@fixture/live-client'

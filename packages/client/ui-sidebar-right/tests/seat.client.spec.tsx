@@ -94,7 +94,7 @@ async function mountSeat(viewportWidth = 1440, canShow = true, entryCount = 0) {
     runtime.ctx.sidebarRightTabs.register({
       id: 'test/text', kind: 'text', priority: 'builtin', patterns: ['dsh-resource://file/**'],
       title: address => address.slice(address.lastIndexOf('/') + 1),
-      guide: Array.from({ length: entryCount }, (_, order) => ({ order, title: () => 'Test', description: () => 'Test page' })),
+      guide: Array.from({ length: entryCount }, (_, order) => ({ id: String(order), order, title: () => 'Test', description: () => 'Test page' })),
     })
     runtime.slots.register({ name: 'sidebar.right.pane.tab', key: 'test/text' }, Body)
     runtime.slots.register({ name: 'sidebar.right.pane.tab.title', key: 'test/text' }, Title)
@@ -459,7 +459,7 @@ describe('slot-owned useTabInfo', () => {
     await act(async () => {
       h.runtime.ctx.sidebarRightTabs.register({
         id: 'test/files', kind: 'files', title: () => 'Files',
-        guide: [{ order: 1, title: () => 'Files' }],
+        guide: [{ id: 'default', order: 1, title: () => 'Files' }],
       })
     })
     expect(h.view.container.querySelector('[data-sidebar-right-guide-entry="files"]')).not.toBeNull()

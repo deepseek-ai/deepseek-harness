@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import {
   resolveDesktopAppId,
   resolveMacOSNotarizationEnvironment,
@@ -10,9 +12,11 @@ import { verifyMacOSSignatureAfterSign } from './scripts/verify-macos-signature.
 import {
   createWindowsTokenSigner,
   installWindowsNsisBootstrapSigner,
+  scrubWindowsSigningEnvironment,
 } from './scripts/windows-sign.mjs'
 import { resolveDesktopAutoUpdateConfig } from './scripts/desktop-auto-update-environment.mjs'
 import { desktopTargetBuildPaths, resolveDesktopBuildTarget } from './scripts/desktop-build-paths.mjs'
+import { installWindowsDirectoryInstaller } from './scripts/windows-directory-installer.mjs'
 
 /**
  * Create electron-builder configuration from one release environment.
@@ -37,6 +41,7 @@ export function createElectronBuilderConfig(
   if (unsigned && resolvedPlatform !== 'win32') throw new Error('desktop package: unsigned builds require Windows')
   const packagesMacOS = targetPlatform === 'darwin' || (targetPlatform === undefined && hostPlatform === 'darwin')
   const packagesWindows = targetPlatform === 'win32'
+  if (resolvedPlatform === 'win32') installWindowsDirectoryInstaller()
   const macOSSigning = packagesMacOS ? resolveMacOSSigningEnvironment(env) : undefined
   if (packagesMacOS) resolveMacOSNotarizationEnvironment(env)
   const windowsSigner = packagesWindows && !unsigned
@@ -58,25 +63,47 @@ export function createElectronBuilderConfig(
     artifactName: 'deepseek-harness-${version}-${os}-${arch}.${ext}',
     directories: { output: unsigned ? join(buildPaths.root, 'unsigned-artifacts') : buildPaths.artifacts },
     asar: true,
+    electronDist: buildPaths.electron,
+    electronFuses: { runAsNode: true },
+    beforeBuild: async () => {
+      if (resolvedPlatform !== 'win32') return true
+      await promisify(execFile)('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+        fileURLToPath(new URL('./scripts/prepare-windows-installer.ps1', import.meta.url)),
+        '-OutputDirectory', join(buildPaths.root, 'installer-ui')], {
+        env: scrubWindowsSigningEnvironment(env), windowsHide: true,
+      })
+      if (windowsSigner !== undefined) {
+        await windowsSigner({ path: join(buildPaths.root, 'installer-ui', 'window-frame.dll'), hash: 'sha256', isNest: false })
+      }
+      // A falsy result tells electron-builder to omit its production node_modules collection.
+      return true
+    },
     files: [
       'lib/*.js',
       'lib/*.cjs',
       'renderer/**/*',
       'package.json',
+      { from: buildPaths.dsh, to: 'dsh', filter: ['**/*'] },
+      // electron-builder excludes a source directory's root node_modules.
+      { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules', filter: ['**/*'] },
+    ],
+    asarUnpack: [
+      '**/*.{node,dylib,dll,so,exe}',
+      '**/*.so.*',
+      '**/spawn-helper',
+      '**/@vscode/ripgrep/bin/rg',
     ],
     extraResources: [
       { from: buildPaths.runtime, to: 'runtime' },
-      { from: buildPaths.dsh, to: 'dsh' },
-      // electron-builder excludes a source directory's root node_modules.
-      { from: join(buildPaths.dsh, 'node_modules'), to: 'dsh/node_modules' },
     ],
     mac: {
+      icon: fileURLToPath(new URL('./resources/icon-macos.png', import.meta.url)),
       category: 'public.app-category.developer-tools',
       identity: macOSSigning?.signingIdentity,
       forceCodeSigning: true,
       hardenedRuntime: true,
-      // Native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
-      signIgnore: ['/Contents/Resources/dsh(?:/|$)', '\\.pak$'],
+      // ASAR-unpacked native runtime files are pre-signed; PAK resources are sealed by their enclosing bundle.
+      signIgnore: ['/Contents/Resources/app\\.asar\\.unpacked/dsh(?:/|$)', '/Contents/Resources/runtime/primary-runtime(?:/|$)', '\\.pak$'],
       notarize: true,
       target: ['dmg', 'zip'],
     },
@@ -84,16 +111,8 @@ export function createElectronBuilderConfig(
       sign: true,
       writeUpdateInfo: false,
     },
-    afterPack: async context => {
-      const { verifyDesktopRuntime } = await import('./lib/types/runtime-tree.js')
-      await verifyDesktopRuntime(join(context.packager.getResourcesDir(context.appOutDir), 'dsh'),
-        context.packager.appInfo.version, { platform: resolvedPlatform, arch: resolvedArch })
-    },
     afterSign: async context => {
       if (context.electronPlatformName !== 'darwin') return
-      const { verifyDesktopRuntime } = await import('./lib/types/runtime-tree.js')
-      await verifyDesktopRuntime(join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources', 'dsh'),
-        context.packager.appInfo.version, { platform: 'darwin', arch: resolvedArch })
       verifyMacOSSignatureAfterSign(context, macOSSigning ?? resolveMacOSSigningEnvironment(env))
     },
     artifactBuildCompleted: artifact => {
@@ -105,6 +124,7 @@ export function createElectronBuilderConfig(
       )
     },
     win: {
+      icon: fileURLToPath(new URL('./resources/icon-windows.png', import.meta.url)),
       forceCodeSigning: !unsigned,
       signtoolOptions: {
         sign: windowsSigner,
@@ -117,9 +137,14 @@ export function createElectronBuilderConfig(
       target: ['AppImage'],
     },
     nsis: {
+      installerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
+      uninstallerSidebar: join(buildPaths.root, 'installer-ui', 'uninstaller-sidebar.bmp'),
       include: fileURLToPath(new URL('./scripts/installer.nsh', import.meta.url)),
       oneClick: false,
-      allowToChangeInstallationDirectory: true,
+      perMachine: false,
+      allowElevation: false,
+      allowToChangeInstallationDirectory: false,
+      installerLanguages: ['en_US', 'zh_CN'],
       differentialPackage: true,
     },
     publish: update === undefined ? null : [{ provider: 'generic', url: update.publicUrl }],

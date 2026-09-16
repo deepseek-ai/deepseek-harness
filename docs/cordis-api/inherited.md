@@ -18,7 +18,6 @@ This file is GENERATED from source (`scripts/gen-cordis-catalog.ts`) and verifie
 - `ctx.root / ctx.fiber / ctx.registry / ctx.reflect / ctx.events / ctx.logger` — Ambient handles onto the running context graph. ([`vendor/cordis/src/context.ts:16`](../../vendor/cordis/src/context.ts))
 - `ctx.timer (+ interval / timeout / throttle / debounce)` — Disposable timer helpers. The `timer` key is provided at runtime; the four supported helpers are mixed onto ctx directly (declared via Pick). ([`vendor/timer/src/index.ts:4`](../../vendor/timer/src/index.ts))
 - `ctx.loader` — The config Loader that booted the app (present under the loader). ([`vendor/loader/src/index.ts:30`](../../vendor/loader/src/index.ts))
-- `ctx.hmr` — The hot-module-reload watcher (present under the hmr plugin). ([`vendor/hmr/src/index.ts:15`](../../vendor/hmr/src/index.ts))
 
 ## Inherited events (cordis core + loader/hmr/timer)
 
@@ -30,8 +29,6 @@ This file is GENERATED from source (`scripts/gen-cordis-catalog.ts`) and verifie
 - `internal/set` — Waterfall: a service is being written to the store. ([`vendor/cordis/src/events.ts:338`](../../vendor/cordis/src/events.ts))
 - `internal/listener` — A listener was registered. ([`vendor/cordis/src/events.ts:340`](../../vendor/cordis/src/events.ts))
 - `internal/dispatch` — An event is being dispatched to listeners. ([`vendor/cordis/src/events.ts:342`](../../vendor/cordis/src/events.ts))
-- `hmr/change` — A watched source file changed on disk. ([`vendor/hmr/src/index.ts:20`](../../vendor/hmr/src/index.ts))
-- `hmr/reload` — Plugins are being reloaded after a change. ([`vendor/hmr/src/index.ts:21`](../../vendor/hmr/src/index.ts))
 - `exit` — The process is exiting on a signal. ([`vendor/loader/src/index.ts:23`](../../vendor/loader/src/index.ts))
 - `loader/config-update` — The loader config tree changed. ([`vendor/loader/src/index.ts:24`](../../vendor/loader/src/index.ts))
 - `loader/entry-init` — A config entry is being initialized. ([`vendor/loader/src/index.ts:25`](../../vendor/loader/src/index.ts))

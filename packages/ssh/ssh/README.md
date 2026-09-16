@@ -62,6 +62,8 @@ Connection disposal joins forwarding and cancellation subprocesses and partially
 
 Failed startup and process results release their reservations after native quiescence; the bounded completion cache preserves the original rejection for later result reads. Helper shutdown also joins endpoint and directory cleanup already in progress.
 
+For terminals opting into shell activity observation, root exit retains the reservation and its remaining work. Activity RPC continues to reach the provider; explicit termination awaits quiescence before releasing endpoints and recording the completed result. Helper connection disposal and lease expiry retain their existing termination authority.
+
 The helper starts with `--disable-sigusr1`, so a same-user process signal cannot open its Node debugger.
 
 </details>

@@ -7,6 +7,7 @@ import type {
   SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
   SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
+import { HeaderLeadingControls, type HeaderLeadingControlsProps } from '../src/client/HeaderLeadingControls.tsx'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
 import { en as commonEn } from '@deepseek-ai/dsh-client-locale/src/locales/en.ts'
@@ -22,6 +23,7 @@ const t: SidebarRootComponentProps['t'] = key =>
 
 afterEach(() => {
   cleanup()
+  delete document.documentElement.dataset.platform
   vi.unstubAllEnvs()
   vi.useRealTimers()
 })
@@ -188,4 +190,28 @@ describe('SidebarRoot shell', () => {
     expect(b.regionOwner().wide).toBe(false)
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })
+})
+
+it('keeps the macOS sidebar toggle in its top strip', () => {
+  document.documentElement.dataset.platform = 'darwin'
+  const shell = mountShell()
+  fireEvent.click(screen.getByRole('button', { name: en['toggle.collapse'] }))
+  expect(shell.toggleSidebar).toHaveBeenCalledOnce()
+})
+
+it.each([undefined, 'win32', 'linux', 'darwin'])('shows header sidebar controls only on macOS desktop (%s)', (platform) => {
+  if (platform !== undefined) document.documentElement.dataset.platform = platform
+  const toggleSidebar = vi.fn()
+  const startSession = vi.fn()
+  // This occupant only consumes its two actions and locale, not Session hooks.
+  const props = { toggleSidebar, startSession, t } as HeaderLeadingControlsProps
+  const view = render(<HeaderLeadingControls {...props} />)
+  if (platform !== 'darwin') {
+    expect(view.container.innerHTML).toBe('')
+    return
+  }
+  fireEvent.click(screen.getByRole('button', { name: en['toggle.open'] }))
+  fireEvent.click(screen.getByRole('button', { name: en['session.new.label'] }))
+  expect(toggleSidebar).toHaveBeenCalledOnce()
+  expect(startSession).toHaveBeenCalledOnce()
 })

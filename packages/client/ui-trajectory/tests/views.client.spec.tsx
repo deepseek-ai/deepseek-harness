@@ -117,7 +117,6 @@ function historySnapshot(
 function sessionSnapshot(nodes: LegacyConversationSlice['nodes']): SessionSnapshot {
   return {
     sessionId: SID,
-    queue: [],
     pendingSubmissions: [],
     running: false,
     subagent: null,

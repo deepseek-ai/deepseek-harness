@@ -1,0 +1,9 @@
+DeepSeek Harness is unavailable
+The application could not start or stopped unexpectedly.
+Desktop Host failed
+Plugin initialization failed
+
+If application files are missing or damaged, close the application and reinstall it. Your tasks are stored separately.
+Exit
+Restart
+Disable all third-party plugins and restart

@@ -8,6 +8,7 @@
 // root listener routes them through the keymap commands); draft writes drive
 // the shell (jsdom's beforeinput lacks the ranges Lexical needs).
 
+import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -80,7 +81,8 @@ interface BenchOptions {
   onRequestWorkspace?: () => void
   promptError?: SessionSnapshot['promptError']
   /** Authoritative queue rows served to the machine overlay (empty = none). */
-  queue?: SessionSnapshot['queue']
+  queue?: InboxState['next-turn']
+  nextStep?: InboxState['next-step']
   /** The hub's steer-all face (empty-draft accelerated Enter). */
   steerQueue?: () => void
   variant?: 'hero' | 'composer'
@@ -101,10 +103,10 @@ interface BenchOptions {
 }
 
 /** One pending queue row (the runtime snapshot shape, as the dock tests build it). */
-function row(id: string): SessionSnapshot['queue'][number] {
+function row(id: string): InboxState['next-turn'][number] {
   return {
-    id: id as never, messageId: `message-${id}` as never, placement: 'queued',
-    content: [{ type: 'text', text: id }], preview: id, text: id,
+    id: id as never, role: 'user', source: { kind: 'user' },
+    content: [{ type: 'text', text: id }],
   }
 }
 
@@ -122,17 +124,16 @@ function bench(over?: BenchOptions) {
     subagent: over?.subagent ?? null,
     removed: over?.disabled ?? false,
     promptError: over?.promptError ?? null,
-    queue: over?.queue ?? [],
   }))
   type ShellDeps = ConstructorParameters<typeof SessionInputShell>[0]
   const shell = new SessionInputShell({
     actx: SCTX,
     defaultSink: sink,
     commandAttachments: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} attachments-unsupported` },
-    queue: {
-      getSnapshot: () => session.getSnapshot().queue,
-      subscribe: fn => session.subscribe(fn),
-    },
+    inbox: createSnapshotStore<InboxState>({
+      'next-turn': over?.queue ?? [],
+      'next-step': over?.nextStep ?? [],
+    }),
     ...(over?.steerQueue !== undefined ? { steerQueue: over.steerQueue } : {}),
     // Lexicon-only stub: adjudication untouched (undefined slash methods are
     // never reached — these benches drive plain-draft flows only).
@@ -665,7 +666,7 @@ describe('Enter semantics', () => {
     // Pending steering rows are not the queue: nothing to flush.
     const steering = bench({
       running: true,
-      queue: [{ ...row('s-1'), placement: 'steering' }],
+      nextStep: [row('s-1')],
       steerQueue: vi.fn(),
     })
     fireEvent.keyDown(steering.textarea, { key: 'Enter', metaKey: true })

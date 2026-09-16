@@ -26,3 +26,7 @@
     # Publish the persisted agent before the driver selects the single root.
     - id: resumed-agent
       name: './tests/fixtures/subagent-diagnostic-agent.ts'
+
+- id: session-log-deepseek
+  config:
+    enabled: false

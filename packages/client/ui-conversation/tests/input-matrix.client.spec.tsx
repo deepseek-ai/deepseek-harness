@@ -122,6 +122,25 @@ function bench(over?: {
 }
 
 describe('matrix row: plain', () => {
+  it('unsubscribes from the Inbox projection when disposed', () => {
+    const unsubscribe = vi.fn()
+    const subscribe = vi.fn(() => unsubscribe)
+    const shell = new SessionInputShell({
+      actx: SCTX,
+      defaultSink: () => Promise.resolve({ kind: 'success' }),
+      inbox: { getSnapshot: () => undefined, subscribe },
+      commandAttachments: {
+        serialize: () => Promise.resolve([]),
+        release: () => {},
+        unsupportedNotice: token => `${token.trim()} attachments-unsupported`,
+      },
+    })
+
+    expect(subscribe).toHaveBeenCalledOnce()
+    shell.dispose()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
   it('enter falls to the default sink; no claim on the currency; edits free', async () => {
     const { textarea, shell, sink } = bench()
     act(() => { shell.setDraft('普通消息') })

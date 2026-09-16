@@ -4,7 +4,9 @@ import { dirname, join } from 'node:path'
 import type { UserConfig } from 'tsdown'
 import { clientBundle } from '../tsdown.client.ts'
 
-const bundle = clientBundle('@deepseek-ai/dsh-client-ui-sidebar-documentpreview', ['lib/types/index.js'])
+const bundle = clientBundle('@deepseek-ai/dsh-client-ui-sidebar-documentpreview', ['lib/types/index.js'], {
+  clientBanner: fileName => fileName.endsWith('client.pdf.js') ? pdfLicenseBanner() : undefined,
+})
 const require = createRequire(import.meta.url)
 const workerSpecifier = 'pdfjs-dist/build/pdf.worker.min.mjs?raw'
 const workerModule = '\0dsh-pdf-worker.mjs'
@@ -54,7 +56,6 @@ const pdfWorker: NonNullable<UserConfig['plugins']> = [{
 export default (options: Parameters<typeof bundle>[0]): UserConfig[] => bundle(options).map(config =>
   config.name?.endsWith('/client') === true ? {
     ...config,
-    banner: pdfLicenseBanner(),
     plugins: [config.plugins, pdfWorker],
     define: { ...config.define, __DSH_PDFJS_ASSETS__: pdfAssets() },
   } : config,

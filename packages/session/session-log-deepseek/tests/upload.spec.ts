@@ -146,13 +146,13 @@ describe('incremental DeepSeek session-log upload', () => {
     }
   })
 
-  it('does not contribute the session log under its default configuration', async () => {
+  it('does not contribute the session log when explicitly disabled', async () => {
     const ctx = new Context()
     contexts.push(ctx)
     await ctx.plugin(SessionStore)
     await ctx.plugin(DeepSeekLlmApiExtensionRegistry)
-    await ctx.plugin(SessionLogDeepSeek)
-    const session = ctx.sessions.create(SessionId('default-off'))
+    await ctx.plugin(SessionLogDeepSeek, { enabled: false })
+    const session = ctx.sessions.create(SessionId('explicit-off'))
     session.append('turn/start', { turn: 1 })
 
     const prepared = await ctx.deepseekLlmApiExtensions.prepare({

@@ -14,7 +14,7 @@ Status: implemented
 
 live 消息反馈变更通过所属 Session 追加，并等待其持久化检查点；cold 变更在读取、比较、追加和 flush 期间持有持久化写句柄，不创建 Session 或 Agent。匹配版本的无变更操作不追加事件，但仍等待持久化。故障会原样传播，live flush 失败可能留下可观测的内存条目以供重试。逐条版本避免不同消息的编辑互相冲突；严格拒绝陈旧写入避免 ABA 覆盖，即使期望值已经匹配也不例外。目标校验把判断绑定到已发送的 assistant 消息，fork 保持独立判断。这些选择保留[已归档伴随记录决策](../../archived/architecture/2026-08-10-message-feedback-sidecar.md)记载的理由，但其存储与提交机制已被取代。
 
-现有需显式启用的 [session-log-deepseek 贡献](../../../../packages/session/session-log-deepseek/README.zh.md)会在后续符合条件的请求中，把反馈纳入普通 `dsh_session_log` 后缀。它使用现有的 DeepSeek 目标选择和接受水位。没有独立的 `dsh_feedback` 上传器、反馈触发的 LLM 请求或模型输入字段。[显式反馈 OTel 决策](2026-09-05-nonofficial-feedback-otel.zh.md)负责面向所有用户和提供方的独立反馈触发上传。
+现有默认开启的 [session-log-deepseek 贡献](../../../../packages/session/session-log-deepseek/README.zh.md)会在后续符合条件的请求中，把反馈纳入普通 `dsh_session_log` 后缀。它使用现有的 DeepSeek 目标选择和接受水位。没有独立的 `dsh_feedback` 上传器、反馈触发的 LLM 请求或模型输入字段。[显式反馈 OTel 决策](2026-09-05-nonofficial-feedback-otel.zh.md)负责面向所有用户和提供方的独立反馈触发上传。
 
 命令用 Session 与匿名用户 id 确认记录，不依赖遥测，也不披露其策略。其追加仍不执行 flush。这取代[已归档共享披露记录](../../archived/feature/2026-08-07-feedback-acknowledgement-sharing-disclosure.md)中的命令文案决策。[遥测服务的策略 API](../../../../packages/session/session-telemetry/README.zh.md#the-sharing-disclosure) 仍可独立使用：后端披露策略，而不保证投递或保留，可选 OTel 包不拥有这套词汇。
 
@@ -24,7 +24,7 @@ live 消息反馈变更通过所属 Session 追加，并等待其持久化检查
 
 **对消息编辑复用 `feedback/record`。** 自由文本的 Session 备注不能标识条目变更。独立事件保留消息身份和删除语义；上传策略仍由消费方负责。
 
-**增加专用反馈上传器或立即发起 LLM 请求。** 需显式启用的日志贡献在符合条件的请求上传送权威事件。现有 OTel 流水线独立处理所有提供方的显式反馈上传，无需自定义反馈上传器或另一个模型请求。
+**增加专用反馈上传器或立即发起 LLM 请求。** 默认开启的日志贡献在符合条件的请求上传送权威事件。现有 OTel 流水线独立处理所有提供方的显式反馈上传，无需自定义反馈上传器或另一个模型请求。
 
 ## 后果
 

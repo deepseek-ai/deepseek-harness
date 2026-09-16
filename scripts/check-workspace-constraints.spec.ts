@@ -1,5 +1,6 @@
 /** Experimental-package publication and dependency constraints. */
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   isPublicExperimentalPackageDirectory,
@@ -7,6 +8,7 @@ import {
 } from './experimental-package-policy.ts'
 import {
   checkDshFamilyVersion,
+  checkWorkspaceManifest,
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
   expectedDshPackageFiles,
@@ -86,6 +88,22 @@ describe('experimental workspace constraints', () => {
     },
   )
 
+  it('allows the dsh installation to ship the optional bundles the launcher names, and nothing else experimental', () => {
+    const listed = { '@deepseek-ai/dsh-experimental-prototype': 'workspace:^' }
+    const installation = { dir: 'apps/cli', manifest: { name: '@deepseek-ai/dsh', dependencies: listed } } satisfies WorkspaceManifest
+    expect(checkExperimentalDependencyIsolation([experimental, installation], ['@deepseek-ai/dsh-experimental-prototype'])).toEqual([])
+    expect(checkExperimentalDependencyIsolation([experimental, installation], [])).toEqual([
+      '@deepseek-ai/dsh: dependencies.@deepseek-ai/dsh-experimental-prototype must not reference an experimental package',
+    ])
+    // Only a plain dependency edge is offered; a peer would make the bundle a requirement of every consumer.
+    expect(checkExperimentalDependencyIsolation([experimental, {
+      dir: 'apps/cli',
+      manifest: { name: '@deepseek-ai/dsh', peerDependencies: listed },
+    }], ['@deepseek-ai/dsh-experimental-prototype'])).toEqual([
+      '@deepseek-ai/dsh: peerDependencies.@deepseek-ai/dsh-experimental-prototype must not reference an experimental package',
+    ])
+  })
+
   it('allows development and experimental consumers but rejects the Python release runtime', () => {
     const manifests: WorkspaceManifest[] = [experimental, {
       dir: 'packages/core/test-only',
@@ -156,4 +174,27 @@ describe('package payload constraints', () => {
       'lib/types/**/*.d.ts',
     ])
   })
+
+  it.each([
+    'packages/client/ui-sidebar-documentpreview',
+    'packages/client/ui-sidebar-terminal',
+  ])('accepts package-local Client chunks from %s', (dir) => {
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+  })
+})
+
+it('publishes CLI runtime declarations and rejects a payload that omits them', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../apps/cli/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest })).toEqual([])
+  expect(checkWorkspaceManifest({ dir: 'apps/cli', manifest: { ...manifest, files: ['lib/*.js'] } }))
+    .toEqual([expect.stringContaining('@deepseek-ai/dsh: package.json files must be ["lib/*.js","lib/types/*.d.ts"]')])
+})
+
+it('requires the shared Web injection entry in the published payload', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../packages/client/web/package.json', import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+  expect(checkWorkspaceManifest({ dir: 'packages/client/web', manifest })).toEqual([])
+  expect(checkWorkspaceManifest({ dir: 'packages/client/web', manifest: {
+    ...manifest, files: ['lib/index.js', 'lib/**/*.css', 'lib/types/**/*.d.ts'],
+  } })).toEqual([expect.stringContaining('package.json files must be')])
 })

@@ -139,22 +139,31 @@ interface WebPluginRecord {
   bundle: Buffer
   /** Pre-read filesystem baseline handed to the HMR watcher. */
   baseline: ClientArtifactBaseline
-  /** Optional authored source map snapshot; generated-file identity mapping is the fallback. */
-  sourceMap?: { body: Buffer; parsed: Record<string, unknown> }
 }
 
-/** Fields shared by every generated combo response. */
-interface ComboArtifactBase {
+/** Immutable inputs captured for one resource in a generated combo. */
+interface ComboResource {
+  id: string
+  rev: string
+  clientPath: string
+  fileName: string
+  bundle: Buffer
+}
+
+/** One lazily materialized immutable response body. */
+interface LazyResponse {
+  contentType: string
+  body: () => Promise<Buffer>
+}
+
+/** Fields shared by every generated combo plan. */
+interface ComboArtifact {
   url: string
   rev: string
   entries: string[]
-  script: Buffer
-}
-
-/** One generated combo response over an ordered list of plugin resources. */
-interface ComboArtifact extends ComboArtifactBase {
-  sourceMap: Buffer
   sourceMapUrl: string
+  scriptBody: () => Promise<Buffer>
+  sourceMapBody: () => Promise<Buffer>
 }
 
 /** One generated initial-load response and its wire descriptor. */
@@ -171,6 +180,8 @@ const COMBO_REVISION_PLACEHOLDER = '0'.repeat(HASH_REVISION_LENGTH)
 const SOURCE_MAP_TRAILER = /(?:\r?\n)?\/\/# sourceMappingURL=[^\r\n]*(?:\r?\n)?$/
 /** Debugger source name appended to page bundles in the WebWorker image. */
 const SOURCE_URL_TRAILER = /(?:\r?\n)?\/\/# sourceURL=([^\r\n]+)(?:\r?\n)?$/
+/** Published package-local client chunk names accepted by the on-demand route. */
+const CLIENT_CHUNK = /^client\.[A-Za-z0-9][A-Za-z0-9._-]*\.js$/
 
 /** Resolve `exports["./client"]` to a relative path, accepting the string and one-level conditional forms. */
 function clientExportOf(pkgName: string, exportsField: unknown): string | undefined {
@@ -197,15 +208,20 @@ function framedHash(domain: string, parts: readonly Buffer[]): string {
   return hash.digest('hex').slice(0, HASH_REVISION_LENGTH)
 }
 
-/** Hash every artifact input served after HMR observes one plugin change. */
-function artifactRevision(bundle: Buffer, sourceMap: WebPluginRecord['sourceMap']): string {
-  return framedHash('plugin-artifact', sourceMap === undefined ? [bundle] : [bundle, sourceMap.body])
+/** Hash one completed build generation observed through its entry artifact. */
+function artifactRevision(bundle: Buffer, baseline: ClientArtifactBaseline): string {
+  return framedHash('plugin-artifact', [bundle, Buffer.from(String(baseline.mtimeMs))])
 }
 
 /** Address one ordered plugin-file list through the shared combo route. */
 function comboUrl(ids: readonly string[], rev: string, sourceMap = false): string {
   const resources = ids.map(id => `${id}/client.js${sourceMap ? '.map' : ''}`).join(',')
   return `/plugins/??${resources}&rev=${rev}`
+}
+
+/** Address one package-local chunk through the same revision as its entry. */
+function chunkUrl(id: string, fileName: string, rev: string, sourceMap = false): string {
+  return `/plugins/${id}/${fileName}${sourceMap ? '.map' : ''}?rev=${rev}`
 }
 
 /** Measure the longer map-form URL used to partition a startup resource list. */
@@ -245,19 +261,19 @@ function partitionComboRecords(records: readonly WebPluginRecord[]): WebPluginRe
 }
 
 /** Executable source plus the generated-file name used when no authored map exists. */
-interface ComboSource {
+interface PreparedSource {
   source: string
   fallbackSource: string
 }
 
 /** Remove bundle-local debug directives and retain their stable generated-file name. */
-function comboSource(record: WebPluginRecord): ComboSource {
-  let source = record.bundle.toString('utf8')
+function prepareSource(resource: ComboResource): PreparedSource {
+  let source = resource.bundle.toString('utf8')
   const sourceUrl = SOURCE_URL_TRAILER.exec(source)?.[1]
   source = source.replace(SOURCE_URL_TRAILER, '').replace(SOURCE_MAP_TRAILER, '')
   if (!source.endsWith('\n')) source += '\n'
   const fallbackSource = sourceUrl === undefined
-    ? `/plugins/${record.entry.id}/client.js`
+    ? `/plugins/${resource.id}/${resource.fileName}`
     : /^(?:[A-Za-z][A-Za-z\d+.-]*:|\/)/.test(sourceUrl) ? sourceUrl : `/${sourceUrl}`
   return { source, fallbackSource }
 }
@@ -267,8 +283,8 @@ function comboScript(input: string, sourceMapUrl?: string): Buffer {
   return Buffer.from(sourceMapUrl === undefined ? input : `${input}//# sourceMappingURL=${sourceMapUrl}\n`)
 }
 
-/** Parse an optional source-map artifact; missing maps do not prevent plugin execution. */
-function sourceMapSnapshot(clientPath: string): WebPluginRecord['sourceMap'] {
+/** Read and parse an optional source map when its combo-map endpoint is requested. */
+function readSourceMap(clientPath: string): Record<string, unknown> | undefined {
   let body: Buffer
   try {
     body = readFileSync(`${clientPath}.map`)
@@ -289,7 +305,7 @@ function sourceMapSnapshot(clientPath: string): WebPluginRecord['sourceMap'] {
   ) {
     throw new Error(`client-modules: ${clientPath}.map is not a regular Source Map v3 object`)
   }
-  return { body, parsed }
+  return parsed
 }
 
 /** Count generated lines while assembling indexed-map section offsets. */
@@ -300,13 +316,10 @@ function newlineCount(value: string): number {
 }
 
 /** Resolve section sources against their original per-plugin map URL before combo relocation. */
-function comboSectionMap(record: WebPluginRecord): Record<string, unknown> {
-  const original = record.sourceMap?.parsed
-  /* v8 ignore next -- callers add sections only for records with a source map. */
-  if (original === undefined) throw new Error(`client-modules: source map missing for ${record.entry.id}`)
+function comboSectionMap(resource: ComboResource, original: Record<string, unknown>): Record<string, unknown> {
   const sourcePaths = original.sources as string[]
   const sourceRoot = typeof original.sourceRoot === 'string' ? original.sourceRoot : ''
-  const base = new URL(`/plugins/${record.entry.id}/client.js.map`, 'http://dsh.invalid')
+  const base = new URL(`/plugins/${resource.id}/client.js.map`, 'http://dsh.invalid')
   const relocated = sourcePaths.map((source) => {
     const separator = sourceRoot !== '' && !sourceRoot.endsWith('/') && !source.startsWith('/') ? '/' : ''
     const resolved = new URL(`${sourceRoot}${separator}${source}`, base)
@@ -332,33 +345,90 @@ function identitySectionMap(source: string, sourceUrl: string): Record<string, u
   }
 }
 
-/** Concatenate one or more factory registrations and compose their maps as indexed sections. */
-function buildCombo(records: readonly WebPluginRecord[], revision?: string): ComboArtifact {
+/** Run one producer in the first requester's microtask, not off-thread, and share its settlement. */
+function lazyBody(produce: () => Buffer): () => Promise<Buffer> {
+  let result: Promise<Buffer> | undefined
+  return () => {
+    result ??= Promise.resolve().then(produce)
+    return result
+  }
+}
+
+/** Derive one combo revision from the ordered immutable row revisions. */
+function comboRevision(resources: readonly ComboResource[]): string {
+  return framedHash('combo', resources.flatMap(resource => [
+    Buffer.from(resource.id),
+    Buffer.from(resource.rev),
+  ]))
+}
+
+/** Concatenate one or more factory registrations without reading or composing source maps. */
+function buildComboScript(resources: readonly ComboResource[], sourceMapUrl: string): Buffer {
   let source = ''
+  for (const resource of resources) source += `${prepareSource(resource).source};\n`
+  return comboScript(source, sourceMapUrl)
+}
+
+/** Compose one indexed map from source-map files read only for this request. */
+function buildComboSourceMap(
+  resources: readonly ComboResource[],
+  sourceMapOf: (clientPath: string) => Record<string, unknown> | undefined,
+  fileName = 'client.js',
+): Buffer {
   const sections: { offset: { line: number; column: 0 }; map: Record<string, unknown> }[] = []
   let line = 0
-  for (const record of records) {
-    const prepared = comboSource(record)
-    const section = record.sourceMap === undefined
-      ? identitySectionMap(prepared.source, prepared.fallbackSource)
-      : comboSectionMap(record)
+  for (const resource of resources) {
+    const prepared = prepareSource(resource)
+    const sourceMap = sourceMapOf(resource.clientPath)
+    let section = identitySectionMap(prepared.source, prepared.fallbackSource)
+    if (sourceMap !== undefined) {
+      try {
+        section = comboSectionMap(resource, sourceMap)
+      } catch {
+        // An invalid authored source URL is a malformed map, so the generated
+        // bundle remains debuggable through the same identity fallback.
+      }
+    }
     sections.push({ offset: { line, column: 0 }, map: section })
-    const bundle = `${prepared.source};\n`
-    source += bundle
-    line += newlineCount(bundle)
+    line += newlineCount(`${prepared.source};\n`)
   }
-  const sourceMap = Buffer.from(`${JSON.stringify({ version: 3, file: 'client.js', sections })}\n`)
-  const sourceBytes = Buffer.from(source)
-  const rev = revision ?? framedHash('combo', [sourceBytes, sourceMap])
-  const entries = records.map(record => record.entry.id)
+  return Buffer.from(`${JSON.stringify({ version: 3, file: fileName, sections })}\n`)
+}
+
+/** Describe one combo and defer its executable and debug payloads independently. */
+function buildCombo(
+  records: readonly WebPluginRecord[],
+  sourceMapOf: (clientPath: string) => Record<string, unknown> | undefined,
+  revision?: string,
+): ComboArtifact {
+  const resources = records.map(record => ({
+    id: record.entry.id,
+    rev: record.entry.rev,
+    clientPath: record.meta.clientPath,
+    fileName: 'client.js',
+    bundle: record.bundle,
+  }))
+  const rev = revision ?? comboRevision(resources)
+  const entries = resources.map(resource => resource.id)
   const url = comboUrl(entries, rev)
   const sourceMapUrl = comboUrl(entries, rev, true)
-  return { url, rev, entries, script: comboScript(source, sourceMapUrl), sourceMap, sourceMapUrl }
+  return {
+    url,
+    rev,
+    entries,
+    sourceMapUrl,
+    scriptBody: lazyBody(() => buildComboScript(resources, sourceMapUrl)),
+    sourceMapBody: lazyBody(() => buildComboSourceMap(resources, sourceMapOf)),
+  }
 }
 
 /** Add initial-load scheduling metadata to a combo artifact. */
-function buildBatch(phase: WebBootBatchPhase, records: readonly WebPluginRecord[]): BatchArtifact {
-  const artifact = buildCombo(records)
+function buildBatch(
+  phase: WebBootBatchPhase,
+  records: readonly WebPluginRecord[],
+  sourceMapOf: (clientPath: string) => Record<string, unknown> | undefined,
+): BatchArtifact {
+  const artifact = buildCombo(records, sourceMapOf)
   return {
     ...artifact,
     descriptor: { phase, url: artifact.url, rev: artifact.rev, entries: artifact.entries },
@@ -495,10 +565,10 @@ export class ClientModuleRegistry extends Service {
   private readonly dirty = new Set<string>()
   private readonly initialRevisionNonce = randomBytes(8).toString('hex')
   private nextInitialRevision = 0
-  private responses = new Map<string, { body: Buffer; contentType: string }>()
-  private batchResponses = new Map<string, { body: Buffer; contentType: string }>()
+  private responses = new Map<string, LazyResponse>()
+  private batchResponses = new Map<string, LazyResponse>()
   /** One prior graph generation covers a request racing the HMR recomposition that replaced its URL. */
-  private previousBatchResponses = new Map<string, { body: Buffer; contentType: string }>()
+  private previousBatchResponses = new Map<string, LazyResponse>()
   private flushQueued = false
   private composed: WebBootGraph
 
@@ -567,12 +637,13 @@ export class ClientModuleRegistry extends Service {
   /**
    * Serve an advertised revisioned bundle or source map without a Web server.
    * Unknown URLs return 404, unsupported methods return 405, and `HEAD`
-   * returns the same immutable headers without a body.
+   * returns the same immutable headers without materializing a body. Each body
+   * is built once on its first `GET`; script construction never reads maps.
    * @param request - shell-carrier request for a `/plugins` resource.
    * @returns the exact response also exposed by the optional Web route.
    */
-  fetchBundle(request: Request): Response {
-    const resource = this.bundleResource(request.method, request.url)
+  async fetchBundle(request: Request): Promise<Response> {
+    const resource = await this.bundleResource(request.method, request.url)
     const body = resource.body === undefined ? null : Uint8Array.from(resource.body)
     return new Response(body, {
       status: resource.status,
@@ -594,8 +665,8 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Re-hash one bundle (the HMR watch's registration hook — the only entry
-   * point through which bundle content changes reach the graph).
+   * Publish one completed bundle generation (the HMR watch's registration
+   * hook — the only entry point through which build changes reach the graph).
    * @param id - entry id (package name).
    * @returns the new rev, or undefined for an unknown id.
    */
@@ -604,14 +675,11 @@ export class ClientModuleRegistry extends Service {
     if (record === undefined) return undefined
     const baseline = this.captureArtifactBaseline(record.meta.clientPath)
     const bundle = readFileSync(record.meta.clientPath)
-    const sourceMap = this.readSourceMapSnapshot(record.meta.clientPath)
-    const rev = artifactRevision(bundle, sourceMap)
+    const rev = artifactRevision(bundle, baseline)
     record.baseline = baseline
     if (rev === record.entry.rev) return rev
     record.entry = graphRow(id, rev, record.meta)
     record.bundle = bundle
-    if (sourceMap === undefined) delete record.sourceMap
-    else record.sourceMap = sourceMap
     this.composed = this.compose()
     for (const notify of this.rebuildListeners) {
       // Containment: rebuilt() runs inside the HMR watch callback — a
@@ -659,34 +727,37 @@ export class ClientModuleRegistry extends Service {
       .filter((record): record is WebPluginRecord => record !== undefined)
     const artifacts: BatchArtifact[] = []
     for (const records of partitionComboRecords(bootstrap)) {
-      artifacts.push(buildBatch('bootstrap', records))
+      artifacts.push(buildBatch('bootstrap', records, this.readSourceMap))
     }
     for (const records of partitionComboRecords(application)) {
-      artifacts.push(buildBatch('application', records))
+      artifacts.push(buildBatch('application', records, this.readSourceMap))
     }
 
-    const batchResponses = new Map<string, { body: Buffer; contentType: string }>()
+    const batchResponses = new Map<string, LazyResponse>()
     for (const artifact of artifacts) {
-      batchResponses.set(artifact.descriptor.url, {
-        body: artifact.script,
+      batchResponses.set(artifact.descriptor.url, this.responses.get(artifact.descriptor.url) ?? {
+        body: artifact.scriptBody,
         contentType: 'text/javascript; charset=utf-8',
       })
-      batchResponses.set(artifact.sourceMapUrl, {
-        body: artifact.sourceMap,
+      batchResponses.set(artifact.sourceMapUrl, this.responses.get(artifact.sourceMapUrl) ?? {
+        body: artifact.sourceMapBody,
         contentType: 'application/json; charset=utf-8',
       })
     }
     const responses = new Map(batchResponses)
     for (const record of this.table.values()) {
-      const artifact = buildCombo([record], record.entry.rev)
-      responses.set(artifact.url, {
-        body: artifact.script,
+      const artifact = buildCombo([record], this.readSourceMap, record.entry.rev)
+      responses.set(artifact.url, responses.get(artifact.url) ?? this.responses.get(artifact.url) ?? {
+        body: artifact.scriptBody,
         contentType: 'text/javascript; charset=utf-8',
       })
-      responses.set(artifact.sourceMapUrl, {
-        body: artifact.sourceMap,
+      responses.set(artifact.sourceMapUrl, responses.get(artifact.sourceMapUrl) ?? this.responses.get(artifact.sourceMapUrl) ?? {
+        body: artifact.sourceMapBody,
         contentType: 'application/json; charset=utf-8',
       })
+    }
+    for (const [resourceUrl, response] of this.responses) {
+      if (this.chunkRequest(new URL(resourceUrl, 'http://x')) !== undefined) responses.set(resourceUrl, response)
     }
     this.previousBatchResponses = this.batchResponses
     this.batchResponses = batchResponses
@@ -838,7 +909,7 @@ export class ClientModuleRegistry extends Service {
   }
 
   /**
-   * Read the activation-time bundle and optional source-map snapshots.
+   * Read the activation-time bundle snapshot.
    * @param pkgName - package that declares the client bundle.
    * @param clientPath - absolute path of the built client artifact.
    * @returns the immutable bytes plus the pre-read filesystem baseline.
@@ -847,23 +918,21 @@ export class ClientModuleRegistry extends Service {
   private initialBundleSnapshot(pkgName: string, clientPath: string): {
     bundle: Buffer
     baseline: ClientArtifactBaseline
-    sourceMap?: WebPluginRecord['sourceMap']
   } {
     try {
       const baseline = this.captureArtifactBaseline(clientPath)
       const bundle = readFileSync(clientPath)
-      const sourceMap = this.readSourceMapSnapshot(clientPath)
-      return { bundle, baseline, ...(sourceMap === undefined ? {} : { sourceMap }) }
+      return { bundle, baseline }
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       throw new MissingClientBundleError(pkgName, clientPath, error)
     }
   }
 
-  /** Treat a missing, torn, or malformed development map as an identity-mapped artifact revision. */
-  private readSourceMapSnapshot(clientPath: string): WebPluginRecord['sourceMap'] {
+  /** Treat a missing, torn, or malformed development map as an identity section. */
+  private readonly readSourceMap = (clientPath: string): Record<string, unknown> | undefined => {
     try {
-      return sourceMapSnapshot(clientPath)
+      return readSourceMap(clientPath)
     } catch (error) {
       this.ctx.logger.warn(error)
       return undefined
@@ -938,7 +1007,6 @@ export class ClientModuleRegistry extends Service {
       meta: source.meta,
       bundle: snapshot.bundle,
       baseline: snapshot.baseline,
-      ...(snapshot.sourceMap === undefined ? {} : { sourceMap: snapshot.sourceMap }),
     })
     return true
   }
@@ -971,20 +1039,71 @@ export class ClientModuleRegistry extends Service {
     this.notifyGraphChanged()
   }
 
-  private bundleResource(method: string | undefined, url: string): {
+  /** Match an exact current-revision package-local chunk URL without reading its file. */
+  private chunkRequest(requestUrl: URL): {
+    record: WebPluginRecord
+    fileName: string
+    sourceMap: boolean
+    resourceUrl: string
+  } | undefined {
+    const resourceUrl = `${requestUrl.pathname}${requestUrl.search}`
+    for (const record of this.table.values()) {
+      const prefix = `/plugins/${record.entry.id}/`
+      if (!requestUrl.pathname.startsWith(prefix)) continue
+      const requested = requestUrl.pathname.slice(prefix.length)
+      const sourceMap = requested.endsWith('.map')
+      const fileName = sourceMap ? requested.slice(0, -'.map'.length) : requested
+      if (!CLIENT_CHUNK.test(fileName)) return undefined
+      if (resourceUrl !== chunkUrl(record.entry.id, fileName, record.entry.rev, sourceMap)) return undefined
+      return { record, fileName, sourceMap, resourceUrl }
+    }
+    return undefined
+  }
+
+  /** Build a package-local chunk response only when its URL is requested. */
+  private chunkResponse(requestUrl: URL): LazyResponse | undefined {
+    const request = this.chunkRequest(requestUrl)
+    if (request === undefined) return undefined
+    const { record, fileName, sourceMap, resourceUrl } = request
+    const clientPath = join(dirname(record.meta.clientPath), fileName)
+    if (!existsSync(clientPath)) return undefined
+    const sourceMapUrl = chunkUrl(record.entry.id, fileName, record.entry.rev, true)
+    const resource = (): ComboResource => ({
+      id: record.entry.id,
+      rev: record.entry.rev,
+      clientPath,
+      fileName,
+      bundle: readFileSync(clientPath),
+    })
+    const response: LazyResponse = sourceMap
+      ? {
+        body: lazyBody(() => buildComboSourceMap([resource()], this.readSourceMap, fileName)),
+        contentType: 'application/json; charset=utf-8',
+      }
+      : {
+        body: lazyBody(() => buildComboScript([resource()], sourceMapUrl)),
+        contentType: 'text/javascript; charset=utf-8',
+      }
+    this.responses.set(resourceUrl, response)
+    return response
+  }
+
+  private async bundleResource(method: string | undefined, url: string): Promise<{
     status: number
     headers?: Record<string, string>
     body?: Buffer
-  } {
+  }> {
     if (method !== 'GET' && method !== 'HEAD') return { status: 405 }
     const requestUrl = new URL(url, 'http://x')
     const resourceUrl = `${requestUrl.pathname}${requestUrl.search}`
-    const response = this.responses.get(resourceUrl) ?? this.previousBatchResponses.get(resourceUrl)
+    const response = this.responses.get(resourceUrl)
+      ?? this.previousBatchResponses.get(resourceUrl)
+      ?? this.chunkResponse(requestUrl)
     if (response !== undefined) {
       return {
         status: 200,
         headers: { 'content-type': response.contentType, 'cache-control': IMMUTABLE_CACHE },
-        ...(method === 'HEAD' ? {} : { body: response.body }),
+        ...(method === 'HEAD' ? {} : { body: await response.body() }),
       }
     }
     // Anything else under /plugins (including unadvertised combinations and
@@ -992,9 +1111,9 @@ export class ClientModuleRegistry extends Service {
     return { status: 404 }
   }
 
-  private readonly serveBundle = (req: IncomingMessage, res: ServerResponse): void => {
+  private readonly serveBundle = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     /* v8 ignore next -- `?? '/'` arm: node:http always sets url on server requests. */
-    const response = this.bundleResource(req.method, req.url ?? '/')
+    const response = await this.bundleResource(req.method, req.url ?? '/')
     res.writeHead(response.status, response.headers)
     res.end(response.body)
   }

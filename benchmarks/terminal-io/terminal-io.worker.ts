@@ -43,6 +43,7 @@ async function measure(capacityBytes: number, mode: string): Promise<TerminalIoR
     done: ended.promise,
     async write() { writeReady.resolve() },
     async resize() {},
+    async inspectActivity() { return { state: 'unknown', revision: 0 } },
     async inspectForeground() { return { processGroupId: 1, inputWaiting: false } },
     async signalForeground() { return 1 },
     async terminate() {

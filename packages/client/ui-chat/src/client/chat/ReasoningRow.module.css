@@ -13,6 +13,22 @@
   overflow: hidden;
 }
 
+/* Think's body flows uncapped with the page (unlike the capped tool cards,
+   which scroll inside their own card), so a long reasoning chain carries the
+   disclosure header off the top of the viewport and buries the collapse toggle.
+   Pin the header to the conversation scroll container's top while the row is
+   open so the toggle stays reachable; the base background masks the prose
+   scrolling under it. Gated on DisclosureRow's `data-open` so a collapsed row
+   scrolls away normally. The body is plain text with no sticky descendant, so
+   any positive z-index clears the flow; the compaction marker, whose markdown
+   body can pin a code-block banner, needs a higher rank. */
+.root[data-expanded] [data-open] [data-disclosure-row] {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--dsw-alias-bg-base);
+}
+
 .root[data-state='running'] .row::after {
   content: '';
   position: absolute;

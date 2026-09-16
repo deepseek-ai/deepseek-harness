@@ -12,7 +12,7 @@ macOS Sandbox 运行 (run 34238200206, job 102101292119) 在等待首次用户 p
 
 [用户 patch 测试](../../../../packages/boot/app-boot/tests/user-patches.spec.ts) 写入真实 patch 文件，并通过不持有原生监听句柄的 Chokidar watcher 投递 add、change 和 unlink 事件。应用启动监视器注册、刷新串行化、Include 重组、插件激活、失败报告与恢复仍使用真实实现；[Loader 策略](../simplification/2026-09-09-nontransactional-loader.zh.md) 不提供插件回滚。即使初始化在进入局部清理块前失败，夹具也会恢复 watcher 工厂并销毁 Context。
 
-独立的 [监视器测试](../../../../packages/boot/app-boot/tests/watch-config.spec.ts) 负责原生通知投递，包括 add/change/unlink、初始不存在的父目录和文件系统别名。刷新测试不验证操作系统的投递保证。
+独立的 [监视器测试](../../../../packages/boot/hmr/tests/watch-config.spec.ts) 负责原生通知投递，包括 add/change/unlink、初始不存在的父目录和文件系统别名。刷新测试不验证操作系统的投递保证。
 
 ## 考虑过的替代方案
 

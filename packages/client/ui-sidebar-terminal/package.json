@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-sidebar-terminal",
   "description": "Interactive shell tabs for the right Sidebar",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -73,6 +73,7 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/client.*.js",
     "lib/types/**/*.d.ts"
   ]
 }

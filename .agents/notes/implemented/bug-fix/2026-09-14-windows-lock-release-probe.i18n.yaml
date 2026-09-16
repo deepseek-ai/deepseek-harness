@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-14-windows-lock-release-probe.md
+2026-09-14-windows-lock-release-probe.md: 76a21f655fc8c1b299e3507beffabfacde3ac0d9
+2026-09-14-windows-lock-release-probe.zh.md: 292203d3931225f0000d56cd5cb5d700ecb0bcc7

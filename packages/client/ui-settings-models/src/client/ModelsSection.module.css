@@ -432,8 +432,8 @@
 }
 
 /* Model list, shared with the pi-ai provider form: one bordered
-   entry per model, id and display name on the row, capacities behind the
-   row's own disclosure. The rules use this stylesheet's token vocabulary —
+   entry per model, id and display name on the row, capacities and image input
+   behind the row's own disclosure. The rules use this stylesheet's token vocabulary —
    `--dsw-alias-border-subtle`, `--dsw-alias-text-tertiary`, and
    `--dsw-alias-text-primary` are undefined here and would resolve to their
    light-mode literals. */

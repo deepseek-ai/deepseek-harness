@@ -52,6 +52,8 @@ describe('parseAnsiLines: basic colors mapped onto theme tokens', () => {
     ['93', 'bright yellow', 'var(--dsw-alias-state-warn-secondary)'],
     ['34', 'blue', 'var(--dsw-alias-state-business-primary)'],
     ['94', 'bright blue', 'var(--dsw-static-blue-400)'],
+    ['36', 'cyan', 'var(--dsw-static-blue-600)'],
+    ['96', 'bright cyan', 'var(--dsw-static-blue-500)'],
   ])('SGR %s (%s) resolves to %s', (code, _name, token) => {
     expect(onlySpan(sgr(code, 'x'))).toEqual({ text: 'x', style: { color: token } })
   })
@@ -60,7 +62,6 @@ describe('parseAnsiLines: basic colors mapped onto theme tokens', () => {
 describe('parseAnsiLines: colors with no token equivalent', () => {
   it.each<[string, string, string]>([
     ['35', 'magenta', 'rgb(187, 0, 187)'],
-    ['36', 'cyan', 'rgb(0, 187, 187)'],
     ['38;5;208', '256-palette orange', 'rgb(255, 135, 0)'],
     ['38;2;10;20;30', 'truecolor', 'rgb(10, 20, 30)'],
   ])('SGR %s (%s) falls through to %s', (code, _name, literal) => {

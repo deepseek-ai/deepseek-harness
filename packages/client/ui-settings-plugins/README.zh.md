@@ -70,6 +70,7 @@ subagent 卡会同时暂存其权限开关与精确模型复选框。启用时�
 
 - [ui-settings](../ui-settings/README.zh.md)——声明 `settings.plugins.tab` 与 settings scope 的领域底座。
 - [ui-settings-plugin-inventory](../ui-settings-plugin-inventory/README.zh.md)——同一分区中的只读「插件列表」标签页。
+- [ui-plugin-manager](../ui-plugin-manager/README.zh.md)——管理已安装包与全局行的侧栏页面。
 - [settings](../../settings/README.zh.md)——持久化用户设置 seam 及其文件提供方。
 - [credentials](../../credentials/README.zh.md)——secret 字段写入所经的凭据引用 seam。
 - [ui-settings-general](../ui-settings-general/README.zh.md)——承载本分区的设置外壳。

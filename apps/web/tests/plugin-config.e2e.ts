@@ -60,9 +60,6 @@ describe('web e2e: plugin configuration section', () => {
     await expect
       .poll(() => dialog.getByRole('button', { name: '插件', exact: true }).getAttribute('aria-current'), { timeout: 5_000 })
       .toBe('true')
-    await expect
-      .poll(() => dialog.getByRole('tab', { name: '插件配置', exact: true }).getAttribute('aria-selected'), { timeout: 5_000 })
-      .toBe('true')
     return dialog
   }
 

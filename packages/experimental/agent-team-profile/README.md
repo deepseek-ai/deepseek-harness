@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-experimental-agent-team-profile` is a published experimental profile layer that enables [Agent Teams](../agent-team/README.md) over `@deepseek-ai/dsh-base`. Its patch inserts the Team domain and Team-scoped tools and disables ordinary subagent delegation and the overlapping global continuable-child controls. Workflow remains available with fresh children. Add it explicitly to an initialized profile; no shipped profile enables it by default.
+`dsh-experimental-agent-team-profile` is a published experimental profile layer that enables [Agent Teams](../agent-team/README.md) over `@deepseek-ai/dsh-base`. Its patch inserts the Team domain and Team-scoped tools and disables ordinary subagent delegation and the overlapping global continuable-child controls. Workflow remains available with fresh children. The dsh installation ships it as an optional bundle that no shipped profile enables; switch it on from the Web sidebar's Plugins page, or add it explicitly to an initialized profile.
 
 ## Table of Contents
 
@@ -91,7 +91,7 @@ The bundle's composition is prefix-stable while its patch, Team identity, and co
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- **Opt-in only** — the package is public, but no shipped CLI, Web, SDK, ACP, or Python profile enables it.
+- **Opt-in only** — the package ships with the installation switched off; no shipped CLI, Web, SDK, ACP, or Python profile enables it.
 - **Workflow child tools** — the [Team tool visibility limitation](../tool-agent-team/README.md#known-limitations-and-deferred-work) also applies to workflow children.
 - **Shared checkout** — every teammate observes the same working directory; this bundle adds no worktree isolation or filesystem locking.
 - **Base profile required** — the patch depends on row ids and Subagent providers supplied by `dsh-base`; it is not a standalone profile.

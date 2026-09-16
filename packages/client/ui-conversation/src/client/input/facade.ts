@@ -9,32 +9,23 @@
  * listeners onto it.
  */
 import type { Context } from '@deepseek-ai/cordis'
+import type { InboxState } from '@deepseek-ai/dsh-agent/types'
 import {
   createSnapshotStore, type ObservableSnapshot, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
-import type { LexicalEditor, NodeKey } from 'lexical'
-import {
-  $addUpdateTag, $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection,
-  CLEAR_HISTORY_COMMAND, createEditor, HISTORY_MERGE_TAG, PASTE_TAG,
-} from 'lexical'
-import { registerPlainText } from '@lexical/plain-text'
-import { createEmptyHistoryState, registerHistory } from '@lexical/history'
-import { mergeRegister } from '@lexical/utils'
+import type { LexicalEditor } from 'lexical'
 import type {
-  ArbitrateKey, ArbitrateOutcome, CommandClaim, ComposerKeyboard, ConsumeTokenRequest, DraftAttachmentId,
+  CommandClaim, ConsumeTokenRequest, DraftAttachmentId,
   InputActions, InputEffect, InputNotice, InputState, InputTriggerController, PickOutcome,
-  Occurrence, QueuedMessage, ReferenceInsert, SessionInput, SubmitAttempt, SubmitAttachment,
-  SubmitOutcome, TokenSpan,
+  SessionInput, SubmitAttempt, SubmitAttachment, SubmitOutcome,
 } from '../contract/input.ts'
+import type {
+  ArbitrateKey, ArbitrateOutcome, ComposerKeyboard, Occurrence, ReferenceInsert, TokenSpan,
+} from '../contract/draft-editor.ts'
 import type { InputSubmitMode } from '../contract/composer-submission.ts'
 import { SubmitMachine } from './machine.ts'
-import { registerReferenceActivation } from './editor/reference-activation.ts'
-import { ReferenceChipNode, $createReferenceChipNode } from './editor/chip-node.tsx'
-import { refreshClaimDecoration, registerClaimDecoration } from './editor/claim-decor.ts'
-import { registerTextRefDecoration, rescanTextRefs, TextRefNode } from './editor/text-ref.ts'
+import { DraftEditorRuntime } from './editor/runtime.ts'
 import type { EditorProjection } from './editor/projection.ts'
-import { $composerLayout, $projectComposer, detectOffsetOfClipboardOffset } from './editor/projection.ts'
-import { $replaceDetectSpanWithNodes, $replaceDetectSpanWithText } from './editor/span-map.ts'
 
 /** Popup face the shell needs (dismissal only; typed structurally to avoid a value import). */
 export interface PopupDismissFace {
@@ -54,8 +45,8 @@ export interface SessionInputDeps {
   inputTriggers?: (() => InputTriggerController | undefined) | undefined
   /** PopupSelect shell face resolver (dismissal on submit lock / escape). */
   popup?: (() => PopupDismissFace | undefined) | undefined
-  /** Queue read face; overlaid onto InputState.queue (absent = empty). */
-  queue?: ObservableSnapshot<readonly QueuedMessage[]> | undefined
+  /** Agent Inbox projection; its next-turn list is overlaid onto InputState.queue. */
+  inbox?: ObservableSnapshot<InboxState | undefined> | undefined
   /**
    * Steer every still-pending queued message into the running turn, in FIFO
    * order (the empty-draft accelerated-Enter gesture); absent = unsupported.
@@ -98,21 +89,10 @@ function projectionContentChanged(prev: EditorProjection, next: EditorProjection
   })
 }
 
-const EMPTY_QUEUE: readonly QueuedMessage[] = []
+const EMPTY_QUEUE: InboxState['next-turn'] = []
 
 /** No-pipeline lexicon: zero text-ref decorations. */
 const EMPTY_LEXICON: ReadonlyMap<'/' | '@', readonly string[]> = new Map()
-
-/**
- * Detect-projection and legacy reference placeholders stripped from every
- * external text entering the document (paste, persisted-draft seed): a chip
- * is the only legitimate source of U+FFFC in the detect projection, so a
- * literal one in text would forge chip positions.
- */
-const REFERENCE_PLACEHOLDER_RE = /[\uE100-\uE11D\uFFFC]/gu
-
-/** Undo merge window for contiguous typing, in ms (the old machine's mergeWindowMs). */
-const HISTORY_MERGE_DELAY_MS = 1000
 
 /** Editor and attachment snapshot owned by one detached default send. */
 interface DetachedDraft {
@@ -132,7 +112,9 @@ export class SessionInputShell implements SessionInput {
   /** Latest surfaced notice (null after clear); the bar renders errors as banners and information inline. */
   readonly notices: SnapshotStore<InputNotice | null> = createSnapshotStore<InputNotice | null>(null)
   /** The shell-owned editor (text + chip truth); the composer binds its contenteditable to it. */
-  readonly editor: LexicalEditor
+  get editor(): LexicalEditor {
+    return this.draftEditor.editor
+  }
   /** The public provide-channel action face (one stable identity per session). */
   readonly actions: InputActions = {
     setDraft: (text) => { this.setDraft(text) },
@@ -143,11 +125,11 @@ export class SessionInputShell implements SessionInput {
   }
 
   private readonly core = new SubmitMachine()
-  private projection: EditorProjection = { detectText: '', clipboardText: '', occurrences: [], selection: null, caret: null }
+  private readonly draftEditor: DraftEditorRuntime
+  private get projection(): EditorProjection {
+    return this.draftEditor.projection
+  }
   private rev = 0
-  /** Stable occurrence ids per chip NodeKey (undo restores keys, so ids survive it too). */
-  private readonly occurrenceIds = new Map<NodeKey, number>()
-  private occurrenceSeq = 0
   private readonly unregister: () => void
   private noticeSeq = 0
   private lastMirroredDraft = ''
@@ -157,8 +139,6 @@ export class SessionInputShell implements SessionInput {
   private mirrorFn: ((text: string) => void) | undefined
   /** The mounted composer's file-picker opener (scoped pick-files event target). */
   private filePicker: Parameters<ComposerKeyboard['bindFilePicker']>[0] | undefined
-  /** Live lexicon subscription disposer; undefined until the controller resolves. */
-  private lexiconOff: (() => void) | undefined
   /** Default sends retained until admission settles or scope disposal releases their attachments. */
   private readonly detachedDrafts = new Map<number, DetachedDraft>()
   /** Failed default sends waiting to be restored together in submission order. */
@@ -173,68 +153,27 @@ export class SessionInputShell implements SessionInput {
     readonly attachmentIds: readonly DraftAttachmentId[]
   }>()
 
+  private readonly unsubscribeInbox: (() => void) | undefined
+
   constructor(private readonly deps: SessionInputDeps) {
-    this.editor = createEditor({
-      namespace: 'dsh-composer',
-      nodes: [ReferenceChipNode, TextRefNode],
-      onError: (error) => { throw error },
+    this.draftEditor = new DraftEditorRuntime({
+      onUpdate: () => { this.onEditorUpdate() },
+      openReference: (source, reference) =>
+        this.deps.inputTriggers?.()?.openReference(source, reference) ?? false,
+      activeClaimToken: () => this.activeClaimToken(),
+      lexicon: () => this.lexicon.getSnapshot(),
+      resolveLexicon: () => this.deps.inputTriggers?.()?.lexicon,
     })
-    this.unregister = mergeRegister(
-      registerPlainText(this.editor),
-      registerReferenceActivation(this.editor, (source, reference) =>
-        this.deps.inputTriggers?.()?.openReference(source, reference) ?? false),
-      registerHistory(this.editor, createEmptyHistoryState(), HISTORY_MERGE_DELAY_MS),
-      this.editor.registerUpdateListener(() => { this.onEditorUpdate() }),
-      registerClaimDecoration(this.editor, () => this.activeClaimToken()),
-      registerTextRefDecoration(this.editor, () => this.lexicon.getSnapshot(), () => this.activeClaimToken()),
-      () => { this.lexiconOff?.() },
-    )
+    this.unregister = this.draftEditor.register()
     this.state = createSnapshotStore<InputState>(this.compose())
-    deps.queue?.subscribe(() => { this.publish() })
+    this.unsubscribeInbox = deps.inbox?.subscribe(() => { this.publish() })
   }
 
   // ---- editor plumbing ----
 
-  /**
-   * Run one editor edit whose result is observable on return. At the top
-   * level this is a discrete update. Inside this editor's own update —
-   * command handlers land here synchronously (space/enter picks, paste) —
-   * $-functions are already legal, and wrapping them in update() would DEFER
-   * them past the synchronous bail answer (and a nested discrete throws);
-   * the body runs directly and the outer update commits it.
-   * @param fn - the $-edit body.
-   */
-  private applyEdit(fn: () => void, tag?: string): void {
-    if (this.editor._updating) {
-      // Nested application joins the enclosing update (the PASTE_COMMAND
-      // dispatch path always lands here), so the tag attaches to that update.
-      if (tag !== undefined) $addUpdateTag(tag)
-      fn()
-      return
-    }
-    this.editor.update(fn, { discrete: true, ...(tag === undefined ? {} : { tag }) })
-  }
-
-
-  /**
-   * Subscribe the text-ref re-scan to the controller's lexicon once the
-   * controller resolves. The deps thunk cannot resolve at construction (the
-   * shell is created inside the sessions provide materialization), so the
-   * first interactive updates retry until it can.
-   */
-  private ensureLexiconSubscription(): void {
-    if (this.lexiconOff !== undefined) return
-    const controller = this.deps.inputTriggers?.()
-    if (controller === undefined) return
-    this.lexiconOff = controller.lexicon.subscribe(() => { rescanTextRefs(this.editor) })
-  }
-
   /** Re-project, run the claim watch, publish, and feed trigger tracking after every editor commit. */
   private onEditorUpdate(): void {
-    this.ensureLexiconSubscription()
-    const prev = this.projection
-    this.projection = this.editor.getEditorState().read(() =>
-      $projectComposer(key => this.occurrenceIdOf(key)))
+    const prev = this.draftEditor.refreshProjection()
     // Selection-only commits advance neither the revision nor the published
     // state: menus still track the caret below, while draftRev moves only
     // with content so a snapshot-built span (apply.ts) stays CAS-valid across
@@ -255,14 +194,6 @@ export class SessionInputShell implements SessionInput {
     }
   }
 
-  private occurrenceIdOf(key: NodeKey): number {
-    const existing = this.occurrenceIds.get(key)
-    if (existing !== undefined) return existing
-    this.occurrenceSeq += 1
-    this.occurrenceIds.set(key, this.occurrenceSeq)
-    return this.occurrenceSeq
-  }
-
   // ---- SessionInput face ----
 
   /**
@@ -272,18 +203,7 @@ export class SessionInputShell implements SessionInput {
    * @param text - the full next draft.
    */
   setDraft(text: string): void {
-    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
-    if (clean === this.projection.clipboardText) return
-    this.editor.update(() => {
-      const root = $getRoot()
-      root.clear()
-      for (const line of clean.split('\n')) {
-        const paragraph = $createParagraphNode()
-        if (line !== '') paragraph.append($createTextNode(line))
-        root.append(paragraph)
-      }
-      root.selectEnd()
-    }, { discrete: true, tag: HISTORY_MERGE_TAG })
+    this.draftEditor.setDraft(text)
   }
 
   /** Append ordered attachment ids unless an admission transaction is locked. */
@@ -341,20 +261,7 @@ export class SessionInputShell implements SessionInput {
    * @param text - pasted plain text.
    */
   paste(text: string): void {
-    const clean = text.replace(REFERENCE_PLACEHOLDER_RE, '')
-    if (clean === '') return
-    this.applyEdit(() => {
-      const selection = $getSelection()
-      if ($isRangeSelection(selection)) {
-        selection.insertText(clean)
-        return
-      }
-      // No selection yet (never-focused surface): land at the document end,
-      // growing the first paragraph when the tree is empty.
-      const root = $getRoot()
-      if (root.getChildrenSize() === 0) root.append($createParagraphNode())
-      root.selectEnd().insertText(clean)
-    }, PASTE_TAG)
+    this.draftEditor.paste(text)
   }
 
   /**
@@ -446,9 +353,7 @@ export class SessionInputShell implements SessionInput {
    * @returns the ordered [start, end) span in detect coordinates.
    */
   caretSpan(): { start: number; end: number } {
-    if (this.projection.selection !== null) return this.projection.selection
-    const at = this.projection.detectText.length
-    return { start: at, end: at }
+    return this.draftEditor.caretSpan()
   }
 
   /**
@@ -479,10 +384,7 @@ export class SessionInputShell implements SessionInput {
     // Leading-trigger contract: only whitespace may precede the span; the
     // whitespace prefix is dropped so the claimed watch (startsWith) holds.
     if (this.projection.detectText.slice(0, span.start).trim() !== '') return false
-    let applied = false as boolean
-    this.applyEdit(() => {
-      applied = $replaceDetectSpanWithText({ start: 0, end: span.end }, claim.token)
-    })
+    const applied = this.draftEditor.replaceText({ start: 0, end: span.end }, claim.token)
     if (!applied) return false
     this.dispatchRun(({ type: 'claim', claim }))
     return true
@@ -501,14 +403,7 @@ export class SessionInputShell implements SessionInput {
     if (phase !== 'plain' && phase !== 'claimed') return false
     if (span.draftRev !== this.rev) return false
     const tail = this.projection.detectText.slice(span.end, span.end + 1)
-    let applied = false
-    this.applyEdit(() => {
-      const nodes = tail === ' '
-        ? [$createReferenceChipNode(ref)]
-        : [$createReferenceChipNode(ref), $createTextNode(' ')]
-      applied = $replaceDetectSpanWithNodes(span, nodes)
-    })
-    return applied
+    return this.draftEditor.insertReference(span, ref, tail)
   }
 
   /**
@@ -521,11 +416,7 @@ export class SessionInputShell implements SessionInput {
   consumeToken(guard: ConsumeTokenRequest['guard']): boolean {
     if (guard.kind === 'span') {
       if (guard.span.draftRev !== this.rev || guard.span.start === guard.span.end) return false
-      let applied = false
-      this.applyEdit(() => {
-        applied = $replaceDetectSpanWithText(guard.span, '')
-      })
-      return applied
+      return this.draftEditor.replaceText(guard.span, '')
     }
     if (guard.token === '' || this.projection.clipboardText.trim() !== guard.token) return false
     this.setDraft('')
@@ -548,11 +439,7 @@ export class SessionInputShell implements SessionInput {
   insertText(text: string, span: TokenSpan, keepCompleting = false): boolean {
     void keepCompleting
     if (span.draftRev !== this.rev) return false
-    let applied = false
-    this.applyEdit(() => {
-      applied = $replaceDetectSpanWithText(span, text)
-    })
-    return applied
+    return this.draftEditor.replaceText(span, text)
   }
 
   /**
@@ -584,8 +471,8 @@ export class SessionInputShell implements SessionInput {
     }
     this.disposed = true
     this.dispatchRun(({ type: 'release' }))
+    this.unsubscribeInbox?.()
     this.unregister()
-    this.editor.setRootElement(null)
     this.detachedDrafts.clear()
     this.failedDetached.clear()
     this.attachmentFlights.clear()
@@ -656,7 +543,7 @@ export class SessionInputShell implements SessionInput {
   private dispatchRun(ev: Parameters<SubmitMachine['dispatch']>[0]): void {
     const beforeToken = this.activeClaimToken()
     this.run(this.core.dispatch(ev))
-    if (this.activeClaimToken() !== beforeToken) refreshClaimDecoration(this.editor)
+    if (this.activeClaimToken() !== beforeToken) this.draftEditor.refreshClaimDecoration()
   }
 
   private run(effects: readonly InputEffect[]): void {
@@ -696,20 +583,13 @@ export class SessionInputShell implements SessionInput {
    * undo history so sent content cannot resurrect.
    */
   private commitDraft(retainSuffixOf: string | null): void {
-    this.editor.update(() => {
-      const layout = $composerLayout()
-      const clip = layout.clipboardText
+    this.draftEditor.clearCommittedDraft((clip) => {
       if (retainSuffixOf !== null && clip !== retainSuffixOf && clip.startsWith(retainSuffixOf)) {
-        $replaceDetectSpanWithText(
-          { start: 0, end: detectOffsetOfClipboardOffset(layout, retainSuffixOf.length) }, '',
-        )
-        return
+        return retainSuffixOf.length
       }
-      const root = $getRoot()
-      root.clear()
-      root.selectEnd()
-    }, { discrete: true, tag: HISTORY_MERGE_TAG })
-    this.editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined)
+      return null
+    })
+    this.draftEditor.clearHistory()
   }
 
   /**
@@ -819,38 +699,8 @@ export class SessionInputShell implements SessionInput {
     }
     this.restoringFailures = true
     try {
-      this.editor.update(() => {
-        const root = $getRoot()
-        root.clear()
-        let paragraph = $createParagraphNode()
-        root.append(paragraph)
-        const appendText = (text: string): void => {
-          const lines = text.split('\n')
-          for (let i = 0; i < lines.length; i += 1) {
-            const line = lines[i]
-            if (line !== '') paragraph.append($createTextNode(line))
-            if (i < lines.length - 1) {
-              paragraph = $createParagraphNode()
-              root.append(paragraph)
-            }
-          }
-        }
-        let cursor = 0
-        for (const occurrence of occurrences) {
-          appendText(draft.slice(cursor, occurrence.offset))
-          paragraph.append(new ReferenceChipNode({
-            source: occurrence.source,
-            ref: occurrence.ref,
-            label: occurrence.label,
-            ...(occurrence.appearance === undefined ? {} : { appearance: occurrence.appearance }),
-            clipboardText: occurrence.clipboardText,
-          }, occurrence.invalid === true))
-          cursor = occurrence.offset + occurrence.length
-        }
-        appendText(draft.slice(cursor))
-        root.selectEnd()
-      }, { discrete: true, tag: HISTORY_MERGE_TAG })
-      this.editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined)
+      this.draftEditor.restoreDraft(draft, occurrences)
+      this.draftEditor.clearHistory()
       this.failedRestoreRev = this.rev
     } finally {
       this.restoringFailures = false
@@ -944,7 +794,7 @@ export class SessionInputShell implements SessionInput {
       phase: core.phase,
       ...(core.claim !== undefined ? { claim: core.claim } : {}),
       occurrences: this.projection.occurrences,
-      queue: this.deps.queue?.getSnapshot() ?? EMPTY_QUEUE,
+      queue: this.deps.inbox?.getSnapshot()?.['next-turn'] ?? EMPTY_QUEUE,
     }
   }
 

@@ -1,0 +1,8 @@
+.entry { box-sizing: border-box; display: flex; align-items: stretch; width: 100%; overflow: hidden; border: 0.5px solid var(--dsw-alias-border-l4); border-radius: 24px; background: var(--dsw-alias-bg-layer-1); }
+.main { flex: 1; justify-content: flex-start; gap: 14px; min-width: 0; height: auto; min-height: 56px; padding: 14px 20px; border-radius: 24px 0 0 24px; text-align: left; }
+.icon { flex: none; }
+.text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.title { overflow: hidden; color: var(--dsw-alias-label-primary); font-size: 15px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.description { overflow: hidden; color: var(--dsw-alias-label-caption); font-size: 13px; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; }
+.trigger { align-self: stretch; flex: none; height: auto; width: 44px; padding: 0; border-radius: 0 24px 24px 0; }
+.menu { display: flex; align-self: stretch; flex: none; }

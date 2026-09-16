@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-attachment-local",
   "description": "Private content-addressed DSH_HOME attachment storage",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -26,6 +26,7 @@
     "@deepseek-ai/cordis": "workspace:^"
   },
   "dependencies": {
+    "@deepseek-ai/dsh-lazy-require": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "sharp": "^0.35.3"
   },

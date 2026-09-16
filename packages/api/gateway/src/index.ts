@@ -1140,7 +1140,7 @@ function decode(
 ): unknown {
   try {
     if (codec.mode === 'strict') {
-      value = codec.schema.parse(value)
+      value = codec.create().parse(value)
       /* v8 ignore next -- generated optional-input codecs are the only strict codecs that return undefined. */
       if (value === undefined) return value
     }

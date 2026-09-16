@@ -39,6 +39,10 @@ Plugins add an icon component to the root-scoped `sidebar.panellist` list with a
 
 During a live collapse, the expanded content fades out at its current width, the upper controls share one fade and leftward translation into the 56px rail, and the layout's column slide ends the motion. A page that starts collapsed renders the rail statically, and reduced-motion mode disables both transitions. The bottom-pinned `sidebar.settings` control shares the fade timing but has no horizontal translation.
 
+### macOS desktop
+
+Under `html[data-platform='darwin']` (set only by the desktop preload) the expanded column opens with a 52px top strip that clears the hiddenInset traffic lights, carries the collapse toggle, and acts as the window drag region; collapsing hides the column entirely instead of leaving the rail. The package registers `HeaderLeadingControls` into the conversation header's `conversation.session.header.leading` seat — the open-sidebar and New Session controls shown, purely via CSS against the AppFrame-published `data-sidebar-collapsed` attribute, only while the column is hidden. Rationale and the window-integration contract: the [macOS hidden-titlebar Agent Note](../../../.agents/notes/implemented/feature/2026-09-13-macos-hidden-titlebar-vibrancy.md).
+
 ### Scrollbars
 
 Scrollbars in the column are a pointer affordance: the shell rebinds the scrollbar indirection to `transparent` whenever the pointer is outside the column and keeps the thumb drawn for 2s after the pointer leaves, so a list nobody is pointing at carries no bar. The reservation that keeps rows from moving belongs to the scrolling region (ui-workspace), so revealing a thumb never reflows.

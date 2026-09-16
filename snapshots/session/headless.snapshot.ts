@@ -1085,7 +1085,7 @@ describe('headless recorded-session snapshots', () => {
             await mkdir(join(cwd, patchRoot), { recursive: true })
             patchSources.forEach((source, index) => {
               if (source.endsWith('.snapshot.yml')) {
-                materializeProfilePatch(source, cwd, join(cwd, patchRoot), index)
+                materializeProfilePatch(source, cwd, 'headless', join(cwd, patchRoot), index)
               }
             })
             await seedWorkspace(scenario, cwd)

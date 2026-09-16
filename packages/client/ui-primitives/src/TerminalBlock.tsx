@@ -19,6 +19,8 @@ export interface TerminalBlockLabels {
   signal: (signal: string) => string
   /** Status pill text for a non-zero exit code. */
   exitCode: (exitCode: number) => string
+  /** Status pill text for a command that ended without an exit code: killed by a signal the view does not know, or never started. */
+  noExitCode: string
   /** Run-state text while the command is still running. */
   running: string
   /** Run-state text for a signal or non-zero-exit settle. */
@@ -50,11 +52,14 @@ export interface TerminalBlockProps {
   home?: string | undefined
   /** The command's output text; may contain ANSI escape sequences. */
   output?: string | undefined
-  /** Settled exit code; a non-zero value renders the status pill. */
-  exitCode?: number | undefined
+  /** Settled exit code; a non-zero value renders the status pill, and null (settled without one) the no-exit-code pill. */
+  exitCode?: number | null | undefined
   /** Settled terminating signal name; any value renders the status pill, taking precedence over the exit code. */
   signal?: string | undefined
-  /** The command is still running: the block shows the prompt line alone. */
+  /**
+   * The command is still running: the block shows the prompt line, and the
+   * output printed so far when there is any, with no copy control until it settles.
+   */
   running?: boolean | undefined
   /** Height cap in output lines before the middle collapses (default {@link DEFAULT_TERMINAL_MAX_LINES}); Infinity disables the cap. */
   maxLines?: number | undefined
@@ -84,17 +89,18 @@ function promptLabel(cwd: string, home: string | undefined): string {
  * Status pill text for a settled command, or undefined when the command
  * settled cleanly (exit 0, no signal) and needs no pill — the same
  * distinction the bash tool's own exit-status markers draw.
- * @param exitCode - settled exit code, when known.
+ * @param exitCode - settled exit code, when known; null when the command settled without one.
  * @param signal - settled terminating signal name, when known.
  * @param labels - display copy for the pill text.
  * @returns the pill text, or undefined for a clean exit.
  */
 function statusText(
-  exitCode: number | undefined,
+  exitCode: number | null | undefined,
   signal: string | undefined,
   labels: TerminalBlockLabels,
 ): string | undefined {
   if (signal !== undefined) return labels.signal(signal)
+  if (exitCode === null) return labels.noExitCode
   if (exitCode !== undefined && exitCode !== 0) return labels.exitCode(exitCode)
   return undefined
 }
@@ -110,14 +116,14 @@ function statusText(
  * settled command whose exit status never reached the view counts as a clean
  * settle: the view says it finished and says nothing went wrong.
  * @param running - the command has not settled.
- * @param exitCode - settled exit code, when known.
+ * @param exitCode - settled exit code, when known; null when the command settled without one.
  * @param signal - settled terminating signal name, when known.
  * @param labels - display copy for the text label.
  * @returns the dot's state and its text label, since the dot is aria-hidden.
  */
 function runState(
   running: boolean,
-  exitCode: number | undefined,
+  exitCode: number | null | undefined,
   signal: string | undefined,
   labels: TerminalBlockLabels,
 ): { state: StateDotState; label: string } {
@@ -194,9 +200,17 @@ export function TerminalBlock({
   // for invisible bytes, and hide the placeholder that belongs there.
   const empty = lines.every(line => line.every(span => span.text.trim() === ''))
   const { hidden, capped, headLines, tailLines } = headTailCap(lines.length, maxLines, expanded)
+  // A running command with nothing printed yet is banner-only; once it has
+  // printed, the output streams in under the banner as it would in a terminal.
+  const body = !running || !empty
 
   return (
-    <div className={clsx(css.block, className)} data-terminal="" data-running={running ? '' : undefined}>
+    <div
+      className={clsx(css.block, className)}
+      data-terminal=""
+      data-running={running ? '' : undefined}
+      data-body={body ? '' : undefined}
+    >
       <div className={css.header}>
         <div className={css.prompt}>
           <span className={css.runStateLabel}>{state.label}</span>
@@ -227,7 +241,7 @@ export function TerminalBlock({
           </button>
         )}
       </div>
-      {!running && (empty
+      {body && (empty
         ? <div className={css.empty}>{copy.noOutput}</div>
         : (
           <div className={css.output}>

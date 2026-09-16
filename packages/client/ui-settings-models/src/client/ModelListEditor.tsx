@@ -22,6 +22,7 @@ import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { ModelsOperations } from './operations.ts'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import type { en } from './locales.ts'
+import { ModelImageInput } from './ModelImageInput.tsx'
 import styles from './ModelsSection.module.css'
 
 /**
@@ -163,8 +164,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   const [candidates, setCandidates] = useState<readonly LlmDiscoveredModel[] | undefined>(undefined)
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
   const [candidateQuery, setCandidateQuery] = useState('')
-  // Rows carry an id and a name; capacities are the exception, so they stay
-  // folded until asked for rather than crowding every row with four inputs.
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
   // Capacities are edited as text, so a field's keystrokes are held here rather
   // than re-derived from the parsed count on every change — that would rewrite
@@ -433,6 +432,14 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                <ModelImageInput
+                  model={model}
+                  field="input"
+                  position={index + 1}
+                  disabled={disabled}
+                  t={t}
+                  onChange={(next) => { onChange(models.map((row, at) => at === index ? next : row)) }}
+                />
               </div>
             )
             : null}

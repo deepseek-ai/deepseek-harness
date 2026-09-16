@@ -182,36 +182,27 @@ describe('list lifecycle', () => {
     expect(items.find(item => item.sessionId === S2)?.title).toBe('Pushed')
   })
 
-  it('drops a projection row beyond the subscription baseline before accepting its durable replay', async ({ mock, remote }) => {
+  it('discards the previous generation title before accepting its lower-seq replay', async ({ mock, remote }) => {
     remote.session.list.mockResolvedValue(ok({ items: [summary(S1)] as never[] }))
     const manager = makeManager(mock, remote)
-    await manager.refreshList()
-    const frame = (payload: SessionControlFrame) => { manager.handleControlFrame(payload) }
-    frame({ type: 'projection', sessionId: S1, key: 'title', value: 'Unflushed', seq: 4 })
+    try {
+      await manager.refreshList()
+      manager.handleControlFrame({ type: 'projection', sessionId: S1, key: 'title', value: 'Unflushed', seq: 4 })
 
-    // The durable baseline says the host only knows up to seq 2: the phantom
-    // row rode lost state and must drop, or last-wins pins it forever.
-    frame({
-      type: 'baseline',
-      value: {
-        queues: {}, jobs: {},
-        projections: { [S1]: { asOfSeq: 2, values: {} } },
-      },
-    })
-    expect(manager.getListSnapshot().items[0]?.title).toBeUndefined()
-
-    frame({ type: 'projection', sessionId: S1, key: 'title', value: 'Durable', seq: 2 })
-    expect(manager.getListSnapshot().items[0]?.title).toBe('Durable')
-
-    // A baseline at or past the row's seq keeps it (nothing phantom to drop).
-    frame({
-      type: 'baseline',
-      value: {
-        queues: {}, jobs: {},
-        projections: { [S1]: { asOfSeq: 2, values: { title: 'Durable' } } },
-      },
-    })
-    expect(manager.getListSnapshot().items[0]?.title).toBe('Durable')
+      manager.handleConnected()
+      await manager.refreshList()
+      expect(manager.getListSnapshot().items[0]?.title).toBeUndefined()
+      manager.handleControlFrame({
+        type: 'baseline',
+        value: {
+          jobs: {},
+          projections: { [S1]: { asOfSeq: 2, values: { title: 'Durable' } } },
+        },
+      })
+      expect(manager.getListSnapshot().items[0]?.title).toBe('Durable')
+    } finally {
+      await manager.dispose()
+    }
   })
 })
 
@@ -721,6 +712,64 @@ describe('remaining branches', () => {
     expect(manager.getListSnapshot().items).toBe(after.items)
   })
 
+  it('reuses refreshed rows and evicts missing rows while retaining the selection candidate', async ({ mock, remote }) => {
+    const manager = makeManager(mock, remote, S2)
+    remote.session.list.mockResolvedValue(ok({ items: [summary(S1), summary(S2)] as never[] }))
+    await manager.refreshList()
+    const first = manager.getListSnapshot()
+    expect(first.current).toBe(S2)
+
+    remote.session.list.mockResolvedValue(ok({ items: [summary(S1), summary(S2)] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items).toBe(first.items)
+    expect(manager.getListSnapshot().current).toBe(S2)
+
+    remote.session.list.mockResolvedValue(ok({ items: [summary(S1)] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items).toEqual([first.items[0]])
+    expect(manager.getListSnapshot().items[0]).toBe(first.items[0])
+    expect(manager.getListSnapshot().current).toBeUndefined()
+
+    remote.session.list.mockResolvedValue(ok({ items: [summary(S1), summary(S2)] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]).toBe(first.items[0])
+    expect(manager.getListSnapshot().items[1]).not.toBe(first.items[1])
+    expect(manager.getListSnapshot().current).toBe(S2)
+
+    remote.session.list.mockResolvedValue(ok({ items: [] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items).toEqual([])
+    expect(manager.getListSnapshot().current).toBeUndefined()
+
+    remote.session.list.mockResolvedValue(ok({ items: [summary(S1)] as never[] }))
+    await manager.refreshList()
+    expect(manager.getListSnapshot().items[0]).not.toBe(first.items[0])
+  })
+
+  it('bounds cached-row ID reads linearly during repeated list refreshes', async ({ mock, remote }) => {
+    const count = 1_000
+    const summaries = Array.from({ length: count }, (_, i) => summary(`list-${i}` as SessionId))
+    const manager = makeManager(mock, remote, summaries[count - 1]!.sessionId)
+    remote.session.list.mockResolvedValue(ok({ items: summaries as never[] }))
+    await manager.refreshList()
+    const first = manager.getListSnapshot()
+    let reads = 0
+    // Instance-local accessors count membership work without a machine-dependent timing budget.
+    for (const entry of first.items) {
+      const id = entry.sessionId
+      Object.defineProperty(entry, 'sessionId', { get: () => { reads++; return id }, configurable: true })
+    }
+    for (let refresh = 0; refresh < 2; refresh++) {
+      reads = 0
+      remote.session.list.mockResolvedValue(ok({ items: summaries.map(item => ({ ...item })) as never[] }))
+      await manager.refreshList()
+      const snapshot = manager.getListSnapshot()
+      expect(snapshot.items).toBe(first.items)
+      expect(snapshot.current).toBe(summaries[count - 1]!.sessionId)
+      expect(reads).toBeLessThanOrEqual(count * 3)
+    }
+  })
+
   it('carries parentSessionId from the added event into the lineage row', ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     manager.handleSessionAdded(summary(S1, { blank: true }))
@@ -735,6 +784,74 @@ describe('remaining branches', () => {
 })
 
 describe('connected generation', () => {
+  it.for(['old-first', 'new-first'] as const)(
+    'ignores a previous generation list response (%s)',
+    async (order, { mock, remote }) => {
+      const oldList = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.list>>>()
+      const newList = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.list>>>()
+      let calls = 0
+      remote.session.list.mockImplementation(() => calls++ === 0 ? oldList.promise : newList.promise)
+      const manager = makeManager(mock, remote)
+      const oldResult = ok({ items: [{ ...summary(S1), projections: {
+        asOfSeq: 20, values: { title: 'Unpersisted title' },
+      } }] as never[] })
+      const newResult = ok({ items: [{ ...summary(S1), projections: {
+        asOfSeq: 1, values: { title: 'Durable title' },
+      } }] as never[] })
+      const oldPull = manager.refreshList()
+      let newPull: Promise<void> | undefined
+      try {
+        manager.handleConnected()
+        newPull = manager.refreshList()
+        expect(remote.session.list.mock.calls).toHaveLength(2)
+        if (order === 'old-first') {
+          oldList.resolve(oldResult)
+          await oldPull
+          expect(manager.getListSnapshot().state).toBe('loading')
+          expect(manager.refreshList()).toBe(newPull)
+        }
+        newList.resolve(newResult)
+        await newPull
+        oldList.resolve(oldResult)
+        await oldPull
+
+        expect(manager.getListSnapshot()).toMatchObject({ state: 'idle', error: null })
+        expect(manager.getListSnapshot().items[0]?.title).toBe('Durable title')
+      } finally {
+        oldList.resolve(oldResult)
+        newList.resolve(newResult)
+        await Promise.all([oldPull, newPull])
+        await manager.dispose()
+      }
+    },
+  )
+
+  it('ignores a previous generation request failure while the new list is loading', async ({ mock, remote }) => {
+    const oldList = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.list>>>()
+    const newList = Promise.withResolvers<Awaited<ReturnType<typeof remote.session.list>>>()
+    let calls = 0
+    remote.session.list.mockImplementation(() => calls++ === 0 ? oldList.promise : newList.promise)
+    const manager = makeManager(mock, remote)
+    const oldPull = manager.refreshList()
+    let newPull: Promise<void> | undefined
+    try {
+      manager.handleConnected()
+      newPull = manager.refreshList()
+      oldList.reject(new RemoteError('gateway/internal', 'old Host disconnected', {}))
+      await oldPull
+      expect(manager.getListSnapshot()).toMatchObject({ state: 'loading', error: null })
+      expect(manager.refreshList()).toBe(newPull)
+      newList.resolve(ok({ items: [summary(S1)] as never[] }))
+      await newPull
+      expect(manager.getListSnapshot()).toMatchObject({ state: 'idle', error: null })
+    } finally {
+      oldList.resolve(ok({ items: [] }))
+      newList.resolve(ok({ items: [] }))
+      await Promise.all([oldPull, newPull])
+      await manager.dispose()
+    }
+  })
+
   it('refreshes query baselines without rebuilding independently resumed Session sources', async ({ mock, remote, start }) => {
     mock.stream(FOLLOW, followScript(ok({
       records: entries(plainTurn(SessionSeq(0), 0, 'a', 'b')) as never[],
@@ -939,7 +1056,7 @@ describe('background-job mirror', () => {
     manager.handleControlFrame(tasksFrame(S1, [view()]))
     manager.handleControlFrame({
       type: 'baseline',
-      value: { queues: {}, jobs: {}, projections: {} },
+      value: { jobs: {}, projections: {} },
     })
     expect(S1 in manager.getListSnapshot().jobsBySession).toBe(false)
   })

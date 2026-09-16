@@ -69,6 +69,7 @@ export const MODULE_PROXIES: Record<string, string> = {
   'koffi': './node/external_packages/koffi.ts',
   'sharp': './node/external_packages/sharp.ts',
   'node-pty': './node/external_packages/node-pty.ts',
+  'execa': './node/external_packages/execa.ts',
   '@vscode/ripgrep': './node/external_packages/ripgrep.ts',
   '@earendil-works/pi-ai': './node/external_packages/pi-ai.ts',
   // Constructible fakes whose methods are never reached.

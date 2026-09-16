@@ -81,7 +81,7 @@ Four rules the carrier keeps:
 
 `SessionListState` carries `jobsBySession: Readonly<Record<SessionId, readonly JobView[]>>`, owned by `SessionManager` and folded from the frame under last-wins, with an emptied set stored as an absent key so absence and `[]` are one representation.
 
-It lives on the list mirror rather than on `Session` for three reasons: the header action already reads list state through `useSessions`, nothing needs the pre-instantiation buffering `session/queue` requires (no composer behavior depends on tasks), and a later sidebar indicator gets the data without opening a second channel.
+It lives on the list mirror rather than on `Session` for three reasons: the header action already reads list state through `useSessions`, no composer behavior depends on tasks, and a later sidebar indicator gets the data without opening a second channel.
 
 Two replacement points keep it honest. Each control-stream generation clears the complete jobs mirror before installing the new baseline's non-empty sets. An `api-session/removed` event also drops that Session's entry, independently of the job-registry disposal notification's ordering.
 

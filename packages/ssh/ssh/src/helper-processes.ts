@@ -189,6 +189,7 @@ export class RemoteProcesses {
       const done = terminal.done.then(outcome => ({ outcome, spills: {}, collected: {} }))
       record.done = done
       void done.then(async () => {
+        if (request.terminal?.shellActivity === true) { await output; return }
         await terminal.terminate()
         await output
         await this.rememberCompleted(id, record, done)
@@ -312,7 +313,12 @@ export class RemoteProcesses {
     record.controller.abort(new Error('SSH process termination requested'))
     record.ordinary?.terminate()
     if (record.ordinary !== undefined) await record.ordinary.waitForExit()
-    if (record.terminal !== undefined) await record.terminal.terminate()
+    if (record.terminal !== undefined) {
+      await record.terminal.terminate()
+      if (record.request.terminal?.shellActivity === true && record.done !== undefined) {
+        await this.rememberCompleted(id, record, record.done)
+      }
+    }
     if (record.ordinary === undefined && record.terminal === undefined) await this.release(id)
   }
 
@@ -323,11 +329,12 @@ export class RemoteProcesses {
    * @param value - input bytes as text or the signal name.
    * @returns the operation's wire result.
    */
-  async terminal(id: SshProcessId, operation: 'write' | 'inspect' | 'signal', value?: string): Promise<unknown> {
+  async terminal(id: SshProcessId, operation: 'write' | 'inspect' | 'activity' | 'signal', value?: string): Promise<unknown> {
     const terminal = this.record(id).terminal
     if (terminal === undefined) throw new Error('SSH handle does not own a terminal')
     if (operation === 'write') { await terminal.write(z.string().parse(value)); return null }
     if (operation === 'inspect') return await terminal.inspectForeground() ?? null
+    if (operation === 'activity') return terminal.inspectActivity()
     return terminal.signalForeground(z.enum(['SIGINT', 'SIGTERM', 'SIGKILL', 'SIGTSTP', 'SIGHUP']).parse(value))
   }
 

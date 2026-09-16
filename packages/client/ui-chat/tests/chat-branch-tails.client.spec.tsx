@@ -830,6 +830,24 @@ describe('MessageItem arms', () => {
     expect(row.getAttribute('aria-expanded')).toBe('false')
   })
 
+  it('anchors the sticky-header selector: the compaction body sits under compactionRow only while open', () => {
+    const view = render(
+      <MessageItem t={t} node={{
+        kind: 'compaction', seq: 5, time: 1_000,
+        summary: '## 摘要标题\n\n保留的事实。',
+        summaryEventSeq: 4,
+        shadowedItemCount: 16,
+        shadowedTokenCount: 11_309,
+      }}
+      />,
+    )
+    // Collapsed there is no body sibling, so the rule's `:has(.compactionBody)`
+    // gate never matches.
+    expect(view.container.querySelector('[class*="compactionRow"] [class*="compactionBody"]')).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: /上下文已压缩/ }))
+    expect(view.container.querySelector('[class*="compactionRow"] [class*="compactionBody"]')).not.toBeNull()
+  })
+
   it('a marker whose cited summary event fell outside the window is not expandable', () => {
     const view = render(<MessageItem t={t} node={{
       kind: 'compaction', seq: 6, time: 1_000, summary: null,

@@ -9,7 +9,7 @@ kind: "package-bundle"
 
 ## 概述
 
-为 Web profile 当前会话权限选择器添加 Auto review。每次原生或 PTC inner 工具调用前，当前 agent 的 provider 与模型会评估待执行动作；获准调用以 Full access 执行。在显式安装此层之前，默认 Web 保持三种权限模式。Auto review 是实验功能：它可能误放行不安全动作、误拒绝有用操作，并消耗额外 token。
+为 Web profile 当前会话权限选择器添加 Auto review。每次原生或 PTC inner 工具调用前，当前 agent 的 provider 与模型会评估待执行动作；获准调用以 Full access 执行。dsh 安装随附此层但默认关闭；在 Web 侧栏插件页开启或显式安装之前，默认 Web 保持三种权限模式。Auto review 是实验功能：它可能误放行不安全动作、误拒绝有用操作，并消耗额外 token。
 
 ## 目录
 
@@ -112,7 +112,7 @@ Reviewer 使用最新 `request/header.config` 的 provider 与模型，并沿用
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Auto 需要显式安装 Web 层；默认 Web、Headless、通用设置与新会话默认值都不包含它。
+- Auto 需要开启此 Web 层；默认 Web、Headless、通用设置与新会话默认值都不包含它。
 - Auto 不提供文件沙箱。外层 `run_code` transport 及PTC 程序内直接 Node 效果不经过 inner-tool review。
 - 模型分类可能出错。不提供确定性工具豁免、持久 grant、人工 fallback、可配置策略或重试层。
 - 进程内 Auto child 独立审查自身调用。进程外 child 在父委派调用获准后保留原生权限系统。

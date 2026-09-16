@@ -53,6 +53,10 @@
    hover/focus disclosure for the summary body. Dimmed title (not
    label-primary) — the row is a boundary notice, not conversation content. */
 .compactionRow {
+  /* The toggle's line, and the band a pinned toggle occupies. The button's
+     height and the offset that holds a summary's code banner below that band
+     are the same measurement, so both read it from here. */
+  --dsh-compaction-header-height: calc(24px + var(--dsh-content-font-delta, 0px));
   padding: 2px 0;
 }
 
@@ -60,7 +64,7 @@
   display: flex;
   align-items: center;
   width: 100%;
-  height: calc(24px + var(--dsh-content-font-delta, 0px));
+  height: var(--dsh-compaction-header-height);
   min-width: 0;
   padding: 0;
   border: none;
@@ -69,6 +73,41 @@
   color: inherit;
   font: inherit;
   text-align: left;
+}
+
+/* The summary body flows uncapped with the page, so a long checkpoint summary
+   carries this toggle off the top of the viewport. Pin it to the conversation
+   scroll container's top while the row is open (the body is a sibling rendered
+   only when expanded); the base background masks the prose scrolling under it.
+   The square corners apply for as long as the row is open, pinned or not: the
+   fill is what masks the prose, and a 6px radius would leave that prose visible
+   in the corners. z-index outranks the markdown code block's own sticky banner
+   (z-index 6 in CodeBlock.module.css); that banner itself stops below this
+   toggle (rule below), so a summary's fenced code block never puts a control
+   inside the toggle's band. */
+.compactionRow:has(.compactionBody) .compactionButton {
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  border-radius: 0;
+  background: var(--dsw-alias-bg-base);
+}
+
+/* A fenced code block in the summary pins its banner at the scrollport top,
+   where this pinned toggle already sits, and the toggle's band covers the
+   banner's Copy control. Stop the banner below the toggle instead, on the same
+   measurement the toggle's own height uses. This rule beats CodeBlock's
+   `.bannerWrap { top: 0 }` by specificity (0,2,0 against 0,1,0), not by
+   declaration order: the two sheets load in their own packages. */
+.compactionBody :has(> [data-code-block-banner]) {
+  top: var(--dsh-compaction-header-height);
+}
+
+/* Pinned, the toggle needs an opaque hover fill: the default translucent hover
+   token below would let the scrolling prose show through the moment the pointer
+   lands on the toggle to collapse it. */
+.compactionRow:has(.compactionBody) .compactionButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
 }
 
 .compactionButton:not(:disabled) {

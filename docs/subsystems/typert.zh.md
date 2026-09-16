@@ -38,7 +38,7 @@ interface TypertLookupDefinition {
 
 ## 调用 descriptor
 
-`InvocationDescriptor` 是本地反射信息，不是 wire message。Host 与消费方构建会生成彼此对应的 descriptor；请求只发送 endpoint 与具名 `args`。strict codec 携带生成的 schema，SRC codec 则在不恢复结构类型的前提下强制要求 JSON 安全值。取消通过带外 carrier signal 表达：它在业务参数之后注入，绝不进入 `args`。
+`InvocationDescriptor` 是本地反射信息，不是 wire message。Host 与消费方构建会生成彼此对应的 descriptor；请求只发送 endpoint 与具名 `args`。strict codec 携带生成的 schema factory，SRC codec 则在不恢复结构类型的前提下强制要求 JSON 安全值。取消通过带外 carrier signal 表达：它在业务参数之后注入，绝不进入 `args`。
 
 ```ts type-equiv
 /** Codec attached to one invocation parameter or result. */
@@ -46,7 +46,8 @@ type TypertCodec =
   | {
     readonly mode: 'strict'
     readonly typeSymbol: string
-    readonly schema: TypertSchema
+    /** Materialize and return the process-realm schema on first boundary use. */
+    readonly create: () => TypertSchema
   }
   | {
     readonly mode: 'src-json'
@@ -261,14 +262,14 @@ register(contribution: TypertContribution): TypertDisposer
 /**
  * Look up one schema by `<package>#<name>`.
  * @param key - global schema key.
- * @returns the live schema record, or `undefined` when absent.
+ * @returns a record containing the cached schema, or `undefined` when absent.
  */
 get(key: string): TypertSchemaRecord | undefined
 
 /**
  * Resolve one required schema.
  * @param key - global schema key.
- * @returns the live schema record.
+ * @returns a record containing the cached schema.
  * @throws when the key is malformed, the package face is absent, or the schema is not contributed.
  */
 resolve(key: string): TypertSchemaRecord
@@ -276,7 +277,7 @@ resolve(key: string): TypertSchemaRecord
 /**
  * Enumerate live schemas in registration order.
  * @param filter - optional package and face restriction.
- * @returns matching schema records.
+ * @returns matching records containing the cached schemas.
  */
 list(filter: TypertSchemaFilter = {}): TypertSchemaRecord[]
 

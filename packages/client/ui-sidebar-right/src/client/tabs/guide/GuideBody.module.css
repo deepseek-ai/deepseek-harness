@@ -117,3 +117,5 @@
   flex: none;
   color: var(--dsw-alias-label-tertiary);
 }
+
+.entryCell { width: 380px; max-width: 100%; }

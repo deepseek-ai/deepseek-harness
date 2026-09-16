@@ -4,8 +4,8 @@ import { createUserMessage, freezeMessage } from '@deepseek-ai/dsh-llm'
 import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import type { UserMessage } from '@deepseek-ai/dsh-session'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import { describe, expect, it } from 'vitest'
-import { ReactLoopInbox } from '../src/inbox.ts'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { inboxProjectionDefinition, ReactLoopInbox } from '../src/inbox.ts'
 
 function unsupportedInbox(): Agent['inbox'] {
   const rejectMutation = (): never => {
@@ -46,8 +46,10 @@ async function inboxAgent(rawId: string): Promise<{
   inbox: ReactLoopInbox
 }> {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   await ctx.plugin(SessionProjectionRegistry)
+  ctx.sessionProjections.register(inboxProjectionDefinition)
   const session = ctx.sessions.create(SessionId(rawId))
   const agent = stubAgent(rawId, { ctx, session })
   const inbox = new ReactLoopInbox(ctx.sessionProjections, session, agentEvents(ctx, agent))
@@ -60,10 +62,12 @@ async function reconstructPersistedInbox(
   populate: (session: Session) => void,
 ): Promise<Error> {
   const ctx = new Context()
+  onTestFinished(() => ctx.fiber.dispose())
   await ctx.plugin(SessionStore)
   const session = ctx.sessions.create(SessionId(rawId))
   populate(session)
   await ctx.plugin(SessionProjectionRegistry)
+  ctx.sessionProjections.register(inboxProjectionDefinition)
   const agent = stubAgent(rawId, { ctx, session })
   const inbox = new ReactLoopInbox(ctx.sessionProjections, session, agentEvents(ctx, agent))
   try {
@@ -76,10 +80,12 @@ async function reconstructPersistedInbox(
 }
 
 describe('ReactLoopInbox', () => {
-  it('registers the durable projection in its constructor', async () => {
+  it('reads the shared projection without owning its registration', async () => {
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    const unregister = ctx.sessionProjections.register(inboxProjectionDefinition)
     const session = ctx.sessions.create(SessionId('inbox-projection'))
     const pending = createUserMessage({
       content: [{ type: 'text', text: 'pending' }],
@@ -99,6 +105,10 @@ describe('ReactLoopInbox', () => {
       'next-turn': [pending],
       'next-step': [],
     })
+
+    unregister()
+    expect(ctx.sessionProjections.stateOf(session, 'inbox')).toBeUndefined()
+    expect(() => first.nextTurn).toThrow('its projection registration is not active')
   })
 
   it('rejects invalid durable coordinates and duplicate identities during reconstruction', async () => {
@@ -128,8 +138,10 @@ describe('ReactLoopInbox', () => {
 
   it('projects inherited inbox events in a forked session', async () => {
     const ctx = new Context()
+    onTestFinished(() => ctx.fiber.dispose())
     await ctx.plugin(SessionStore)
     await ctx.plugin(SessionProjectionRegistry)
+    ctx.sessionProjections.register(inboxProjectionDefinition)
     const parent = ctx.sessions.create(SessionId('inbox-fork-parent'))
     const parentAgent = stubAgent('inbox-fork-parent', { ctx, session: parent })
     const parentInbox = new ReactLoopInbox(ctx.sessionProjections, parent, agentEvents(ctx, parentAgent))

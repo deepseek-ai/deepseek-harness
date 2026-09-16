@@ -1,23 +1,9 @@
 /** Session-owned observable state excluding Conversation target data. */
-import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
 import type { FileAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client'
 import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import type { SessionRequestId } from '../../types.ts'
-
-/** One transient inbox occurrence from the authoritative queue snapshot. */
-export interface QueuedMessage {
-  readonly id: MessageId
-  readonly messageId: MessageId
-  readonly placement: 'queued' | 'steering' | 'context'
-  /** Prompt-RPC identity of a browser-submitted occurrence; correlates the local submission echo. */
-  readonly rpcId?: SessionRequestId
-  readonly content: readonly ContentBlock[]
-  readonly preview: string
-  readonly text: string | null
-}
 
 /** One image displayed by a local submission echo before durable admission. */
 export interface PendingSubmissionImage {
@@ -82,7 +68,6 @@ export interface PromptError {
 /** Immutable Session lifecycle and control snapshot. */
 export interface SessionSnapshot {
   readonly sessionId: SessionId
-  readonly queue: readonly QueuedMessage[]
   /** Local prompt-submission echoes not yet observed as durable events or queue occurrences. */
   readonly pendingSubmissions: readonly PendingSubmission[]
   readonly running: boolean

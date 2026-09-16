@@ -24,7 +24,7 @@ import type { Browser, ConsoleMessage, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { createMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
+import { acknowledgeReloadConnectionLoss, launchWebScaffold, watchConsole, type WebScaffold } from './scaffold.ts'
 import {
   connectFreshWorkspace, newEnglishPage, saveFailureShot, ZH_BROWSER_LOCALE,
 } from './support.ts'
@@ -126,8 +126,13 @@ async function ensureExpanded(page: Page, column: Locator): Promise<void> {
   await column.locator('[data-sidebar-right-open]').waitFor({ timeout: 10_000 })
 }
 
-/** Reload the session's transient sidebar state before an independent gesture case. */
+/** Clear only this fixture's saved layouts before an independent gesture case. */
 async function resetSidebar(page: Page): Promise<Locator> {
+  await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('dsh.sidebar-right.v1.')) localStorage.removeItem(key)
+    }
+  })
   await page.reload({ waitUntil: 'load' })
   const column = page.locator('[data-rightbar-col]')
   await expandOf(page).waitFor({ timeout: 15_000 })
@@ -800,7 +805,7 @@ describe('web e2e: shipped right Sidebar', () => {
     // panel by product decision, and copy has no service method yet:
     // `duplicateTab` is a store/kit intent only, which service.client.spec.ts covers.
 
-    it('keeps each session\'s surface to itself, and restores it on return', async () => {
+    it('keeps each session\'s surface to itself across switching and page reload', async () => {
       const fx = await newEnglishPage(browser)
       const fxTripwire = watchConsole(fx)
       onTestFailed(() => saveFailureShot(fx, 'web-e2e-sidebar-right-sessions'))
@@ -843,6 +848,24 @@ describe('web e2e: shipped right Sidebar', () => {
         expect(await column.locator('[data-sidebar-right-open]').count()).toBe(1)
         expect(await wrap.getAttribute('aria-pressed')).toBe('false')
         expect(await column.locator('pre').first().innerText()).toContain('produced by the seeded turn')
+        let warningStart = fxTripwire.warnings.length
+        await fx.reload({ waitUntil: 'load' })
+        acknowledgeReloadConnectionLoss(fxTripwire, warningStart)
+        await expect.poll(records, { timeout: 15_000 }).toEqual(before)
+        await expect.poll(async () => await column.locator('pre').first().innerText()).toContain('produced by the seeded turn')
+        await column.locator('[data-sidebar-right-toggle]').click()
+        warningStart = fxTripwire.warnings.length
+        await fx.reload({ waitUntil: 'load' })
+        acknowledgeReloadConnectionLoss(fxTripwire, warningStart)
+        await fx.locator('[data-sidebar-right-expand]').waitFor()
+        expect(await column.locator('[data-sidebar-right-open]').count()).toBe(0)
+        await fx.locator('[data-sidebar-right-expand]').click()
+        await expect.poll(records, { timeout: 15_000 }).toEqual(before)
+        expect(await width(column)).toBeGreaterThan(0)
+        await column.locator('[data-sidebar-right-panel]').evaluate(async (node) => {
+          await Promise.allSettled(node.getAnimations().map(animation => animation.finished))
+        })
+        await shot(fx, 'session-layout-restored')
         expect(fxTripwire.pageErrors).toEqual([])
         expect(fxTripwire.warnings).toEqual([])
       } finally {
@@ -990,18 +1013,19 @@ describe('web e2e: shipped right Sidebar', () => {
       expect(tripwire.warnings).toEqual([])
     }, 90_000)
 
-    it('§9.7 returns to the default surface after a reload', async () => {
+    it('preserves the open surface after a reload', async () => {
       onTestFailed(() => saveFailureShot(page, 'web-e2e-sidebar-right-reload'))
-      await page.reload({ waitUntil: 'load' })
-      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       const frame = page.locator('[class*="frame"]').first()
       const column = page.locator('[data-rightbar-col]')
+      await ensureExpanded(page, column)
+      const titles = await tabTitles(column)
+      await page.reload({ waitUntil: 'load' })
+      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
       await column.waitFor({ state: 'attached', timeout: 15_000 })
-      // The surface is view state, not durable session data: a reload zeroes it
-      // back to the collapsed default. Expected behaviour, not a defect.
-      await expect.poll(async () => await frame.getAttribute('data-rightbar-collapsed')).toBe('true')
-      await expect.poll(async () => await expandOf(page).count()).toBe(1)
-      expect(await column.locator('[data-sidebar-right-open]').count()).toBe(0)
+      await expect.poll(async () => await tabTitles(column)).toEqual(titles)
+      await expect.poll(async () => await frame.getAttribute('data-rightbar-collapsed')).toBe(null)
+      expect(await expandOf(page).count()).toBe(0)
+      expect(await column.locator('[data-sidebar-right-open]').count()).toBe(1)
     })
 
     it('opens a context menu on right-click that the strip cannot clip', async () => {

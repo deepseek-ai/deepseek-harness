@@ -17,6 +17,8 @@ const CLIENT_ARTIFACT_PATTERNS = [
   'apps/web/dist/**/*',
   'packages/*/*/lib/client.js',
   'packages/*/*/lib/client.js.map',
+  'packages/*/*/lib/client.*.js',
+  'packages/*/*/lib/client.*.js.map',
 ]
 
 /** Return every artifact that `pnpm run dev:web` can rewrite. */

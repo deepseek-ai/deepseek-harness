@@ -12,6 +12,7 @@ import {
   healProfilesModuleFallback,
   loadOverlayPatches,
   loadProfile,
+  PluginPackages,
   type ProfileLayer,
 } from '@deepseek-ai/dsh-app-boot'
 
@@ -96,6 +97,9 @@ export async function bootProductionProfile(options: ProductionProfileOptions): 
       ...profile.layers.flatMap(layer => layer.patches),
       ...overlays.flat(),
     ],
-    options.prepare,
+    async (ctx) => {
+      await ctx.plugin(PluginPackages, {})
+      await options.prepare?.(ctx)
+    },
   )
 }

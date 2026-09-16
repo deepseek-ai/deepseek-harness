@@ -8,6 +8,9 @@
   "references": [
     {
       "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../util/lazy-require"
     }
   ]
 }

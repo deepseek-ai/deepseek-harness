@@ -2,7 +2,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '../index.ts'
 import type { DocumentPreviewDefinition } from '../document/registry.ts'
-import { PdfBody, type PdfBodyInjected } from './PdfBody.tsx'
+import type { PdfBodyInjected } from './pdf.tsx'
+import { LazyPdfBody } from './LazyPdfBody.tsx'
 import { createPdfStore } from './store.ts'
 import { en, zh } from './locales.ts'
 
@@ -43,5 +44,5 @@ export function apply(ctx: Context): void {
         signal.addEventListener('abort', forget, { once: true })
       },
     }),
-  }, PdfBody)))
+  }, LazyPdfBody)))
 }

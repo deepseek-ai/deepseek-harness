@@ -14,7 +14,7 @@ The canonical Session log owns feedback. Session-level remarks use `feedback/rec
 
 Live message-feedback mutations append through the owning Session and await its durability checkpoint; cold mutations hold a persistence write handle across read, comparison, append, and flush without creating a Session or Agent. A matching no-op appends nothing but still awaits persistence. Failures propagate, and a failed live flush can leave an observable in-memory item for retry. Per-item versions prevent unrelated message edits from conflicting; strict stale-write rejection prevents ABA overwrites even when the desired value matches. Target validation binds a judgment to a sent assistant message, and forks keep independent judgments. These choices retain rationale recorded in the [archived sidecar decision](../../archived/architecture/2026-08-10-message-feedback-sidecar.md), whose storage and commit mechanism is superseded.
 
-The existing opt-in [session-log-deepseek contribution](../../../../packages/session/session-log-deepseek/README.md) includes feedback in the ordinary `dsh_session_log` suffix on a subsequent eligible request. It uses the existing DeepSeek destination selection and acceptance watermark. There is no separate `dsh_feedback` uploader, feedback-triggered LLM request, or model-input field. The [explicit-feedback OTel decision](2026-09-05-nonofficial-feedback-otel.md) owns the independent feedback-triggered upload for all users and providers.
+The existing default-on [session-log-deepseek contribution](../../../../packages/session/session-log-deepseek/README.md) includes feedback in the ordinary `dsh_session_log` suffix on a subsequent eligible request. It uses the existing DeepSeek destination selection and acceptance watermark. There is no separate `dsh_feedback` uploader, feedback-triggered LLM request, or model-input field. The [explicit-feedback OTel decision](2026-09-05-nonofficial-feedback-otel.md) owns the independent feedback-triggered upload for all users and providers.
 
 The command confirms recording with the Session and anonymous user ids, without depending on telemetry or disclosing its policy. Its append remains unflushed. This supersedes the command-copy decision in the [archived sharing disclosure note](../../archived/feature/2026-08-07-feedback-acknowledgement-sharing-disclosure.md). The [telemetry service's policy API](../../../../packages/session/session-telemetry/README.md#the-sharing-disclosure) remains independently available: a backend discloses its policy, not delivery or retention, and the optional OTel package does not own that vocabulary.
 
@@ -24,7 +24,7 @@ The command confirms recording with the Session and anonymous user ids, without 
 
 **Reuse `feedback/record` for message edits.** A free-text Session remark does not identify an item mutation. Distinct events preserve message identity and deletion semantics; upload policy remains consumer-owned.
 
-**Add a dedicated feedback uploader or immediate LLM request.** The opt-in log contribution carries canonical events on eligible requests. The existing OTel pipeline independently handles explicit-feedback uploads for all providers, without a custom feedback uploader or another model request.
+**Add a dedicated feedback uploader or immediate LLM request.** The default-on log contribution carries canonical events on eligible requests. The existing OTel pipeline independently handles explicit-feedback uploads for all providers, without a custom feedback uploader or another model request.
 
 ## Consequences
 

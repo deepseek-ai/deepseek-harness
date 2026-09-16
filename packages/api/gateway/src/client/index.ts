@@ -53,7 +53,6 @@ interface MountToken {
 interface ScopedProjection {
   readonly context: string
   readonly wire: string
-  readonly codec: TypertCodec
   readonly parameterIndex?: number
 }
 
@@ -284,7 +283,7 @@ class ClientRemoteService extends Service implements ClientRemote {
       }
     }
     for (const descriptor of contribution.descriptors) {
-      requireStrictDescriptor(descriptor)
+      requireStrictInputs(descriptor)
       if (descriptor.invocation.kind === 'direct') add(direct, descriptor, 'direct')
       if (scopedProjection(descriptor) !== undefined) add(scoped, descriptor, 'scoped')
     }
@@ -505,12 +504,12 @@ class ClientRemoteService extends Service implements ClientRemote {
       if (identity === undefined) {
         throw new Error(`client api: ${endpoint} requires a ${JSON.stringify(projection.context)} Context`)
       }
-      args[projection.wire] = parseInput(projection.codec, identity, endpoint, projection.wire)
+      args[projection.wire] = identity
     }
     let valueIndex = 0
     descriptor.parameters.forEach((parameter, parameterIndex) => {
       if (parameterIndex === projection?.parameterIndex) return
-      const value = parseInput(parameter.codec, values[valueIndex], endpoint, parameter.wire)
+      const value = values[valueIndex]
       if (value !== undefined) args[parameter.wire] = value
       valueIndex += 1
     })
@@ -673,7 +672,6 @@ function scopedProjection(descriptor: InvocationDescriptor): ScopedProjection | 
     return {
       context: descriptor.invocation.context,
       wire: descriptor.invocation.wire,
-      codec: descriptor.invocation.codec,
     }
   }
   if (descriptor.scope === undefined) return undefined
@@ -691,12 +689,11 @@ function scopedProjection(descriptor: InvocationDescriptor): ScopedProjection | 
   return {
     context: descriptor.scope.context,
     wire: descriptor.scope.wire,
-    codec: selected.parameter.codec,
     parameterIndex: selected.index,
   }
 }
 
-function requireStrictDescriptor(descriptor: InvocationDescriptor): void {
+function requireStrictInputs(descriptor: InvocationDescriptor): void {
   const endpoint = endpointOf(descriptor)
   for (const parameter of descriptor.parameters) {
     requireStrictCodec(parameter.codec, endpoint, parameter.wire)
@@ -709,17 +706,6 @@ function requireStrictDescriptor(descriptor: InvocationDescriptor): void {
 function requireStrictCodec(codec: TypertCodec, endpoint: string, field: string): void {
   if (codec.mode !== 'strict') {
     throw new Error(`client api: generated Remote ${endpoint} field ${JSON.stringify(field)} has no strict codec`)
-  }
-}
-
-function parseInput(codec: TypertCodec, value: unknown, endpoint: string, field: string): unknown {
-  if (codec.mode !== 'strict') {
-    throw new Error(`client api: generated Remote ${endpoint} field ${JSON.stringify(field)} has no strict codec`)
-  }
-  try {
-    return codec.schema.parse(value)
-  } catch (cause) {
-    throw new Error(`client api: ${endpoint} rejected ${JSON.stringify(field)}`, { cause })
   }
 }
 

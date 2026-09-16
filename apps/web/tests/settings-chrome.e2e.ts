@@ -97,18 +97,23 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: '模型' }).click()
     await expect.poll(() => dialog.getByRole('button', { name: '模型' }).getAttribute('aria-current'), { timeout: 5_000 }).toBe('true')
     expect(await dialog.getByRole('button', { name: '通用设置' }).getAttribute('aria-current')).toBeNull()
-    // Plugins is a read-only projection of the same assembled Loader tree.
-    // Capture one stable shipped row rather than the whole inventory so adding
-    // an unrelated plugin does not rewrite this surface's golden.
+    // Plugins: the configuration tab beside the read-only Plugin list, a
+    // projection of the same assembled Loader tree; management lives on the
+    // sidebar's Plugins panel (its own scenario file drives that page over a
+    // profile runtime). Capture one stable shipped row rather than the whole
+    // inventory so adding an unrelated plugin does not rewrite this surface's golden.
     await dialog.getByRole('button', { name: '插件', exact: true }).click()
     await dialog.getByRole('heading', { name: '插件', exact: true }).waitFor({ timeout: 10_000 })
     await dialog.getByRole('tab', { name: '插件列表', exact: true }).click()
-    // The preset group opens first with its display-only switcher; the global
-    // plane starts collapsed and expands on demand.
+    // Both groups start collapsed; the preset group's header still carries its display-only switcher.
     const presetSwitcher = dialog.getByRole('button', { name: '选择要查看的 Agent 预设' })
     await presetSwitcher.waitFor({ timeout: 10_000 })
     // The shipped default's zh display name comes from the zh dictionaries.
     expect(await presetSwitcher.textContent()).toBe('标准模式（默认）')
+    const presetToggle = dialog.getByRole('button', { name: '会话插件', exact: true })
+    expect(await presetToggle.getAttribute('aria-expanded')).toBe('false')
+    expect(await dialog.locator('[data-plugin-scope="preset"] [data-plugin-entry]').count()).toBe(0)
+    await presetToggle.click()
     await dialog.getByRole('button', { name: /^全局/ }).click()
     const pluginRow = dialog.locator(PLUGIN_ROW_SELECTOR)
     await pluginRow.waitFor({ timeout: 10_000 })
@@ -274,7 +279,7 @@ describe('web e2e: settings modal and General preferences', () => {
         return {
           attr: document.body.hasAttribute('data-ds-dark-theme'),
           background: getComputedStyle(boot).backgroundColor,
-          colorScheme: document.documentElement.style.colorScheme,
+          colorScheme: getComputedStyle(document.documentElement).colorScheme,
         }
       })
       expect(state).toEqual({
@@ -656,6 +661,13 @@ describe('web e2e: settings modal and General preferences', () => {
       const presetSwitcher = dialog.getByRole('button', { name: 'Choose the agent preset to inspect' })
       await presetSwitcher.waitFor({ timeout: 10_000 })
       expect(await presetSwitcher.textContent()).toBe('Standard mode (default)')
+      // The plugin manager speaks the en dictionary too: its sidebar entry
+      // and the unavailable notice a scaffold without a profile runtime shows.
+      await enPage.keyboard.press('Escape')
+      await expect.poll(() => enPage.getByRole('dialog', { name: 'Settings' }).count(), { timeout: 5_000 }).toBe(0)
+      await enPage.getByRole('navigation', { name: 'Global panels' }).getByRole('button', { name: 'Plugins', exact: true }).click()
+      await enPage.getByText('This deployment runs without a manageable profile, so plugins cannot be installed or switched here.', { exact: true })
+        .waitFor({ timeout: 10_000 })
       // This page has no closing inventory spec to sweep its console, so the
       // scenario clears both tripwire channels itself.
       expect(enTripwire.pageErrors).toEqual([])

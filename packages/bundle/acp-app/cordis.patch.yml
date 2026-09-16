@@ -19,3 +19,6 @@
       config:
         provider: deepseek-official
         model: deepseek-v4-flash
+
+- id: hmr
+  disabled: true

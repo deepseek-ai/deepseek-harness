@@ -52,6 +52,7 @@ The plugin waits for `conversation.input.attachments`, `conversation.message.ima
 | File | Role |
 |---|---|
 | [`src/client/ComposerAttachments.tsx`](src/client/ComposerAttachments.tsx) | Ordered image/file rail + drop overlay assembly |
+| [`src/client/drop-events.ts`](src/client/drop-events.ts) | Document drag-and-drop listeners installed by each mounted attachment view's effect |
 | [`src/AttachmentRail.tsx`](src/AttachmentRail.tsx) | Horizontal attachment overflow, wheel translation, edge arrows |
 | [`src/client/MessageImages.tsx`](src/client/MessageImages.tsx) | Per-message gallery + lightbox assembly |
 | [`src/MessageImage.tsx`](src/MessageImage.tsx) | Single image sizing, load/retry, click-to-open; local submission-echo previews render their object URL directly |

@@ -4,11 +4,16 @@ export interface DesktopElectronBuilderConfig {
   readonly directories: {
     readonly output: string
   }
-  readonly extraResources: readonly [
-    { readonly from: string, readonly to: 'runtime' },
-    { readonly from: string, readonly to: 'dsh' },
-    { readonly from: string, readonly to: 'dsh/node_modules' },
+  readonly files: readonly [
+    string,
+    string,
+    string,
+    string,
+    { readonly from: string, readonly to: 'dsh', readonly filter: readonly ['**/*'] },
+    { readonly from: string, readonly to: 'dsh/node_modules', readonly filter: readonly ['**/*'] },
   ]
+  readonly asarUnpack: readonly string[]
+  readonly extraResources: readonly [{ readonly from: string, readonly to: 'runtime' }]
   readonly mac: {
     readonly identity: string | undefined
     readonly forceCodeSigning: boolean
@@ -21,7 +26,13 @@ export interface DesktopElectronBuilderConfig {
   }
   readonly nsis: {
     readonly include: string
+    readonly oneClick: false
+    readonly perMachine: false
+    readonly allowElevation: false
+    readonly allowToChangeInstallationDirectory: false
+    readonly installerLanguages: readonly ['en_US', 'zh_CN']
   }
+  readonly beforeBuild: () => Promise<boolean>
   readonly artifactBuildCompleted: (artifact: { readonly file: string }) => Promise<void> | undefined
   readonly publish: readonly [{ readonly provider: 'generic', readonly url: string }] | null
 }

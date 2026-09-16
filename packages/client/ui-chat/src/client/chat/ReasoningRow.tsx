@@ -17,23 +17,16 @@ function latestLine(text: string): string {
 }
 
 /**
- * Render one assistant reasoning block as the Think disclosure row. The
+ * Render one assistant reasoning block collapsed until the reader opens it. The
  * collapsed summary omits double-asterisk markers; expanded content preserves
  * the complete text.
  * @param props.text - complete or streaming reasoning text.
  * @param props.running - whether this block is the streaming tail.
- * @param props.defaultExpanded - expanded state until the reader toggles it.
  * @param props.t - conversation locale seat for the running status.
  * @returns the reasoning disclosure.
  */
-export function ReasoningRow({ text, running, defaultExpanded, t }: {
-  text: string
-  running: boolean
-  defaultExpanded: boolean
-  t: ChatViewSlotProps['t']
-}) {
-  const [expandedOverride, setExpandedOverride] = useState<boolean>()
-  const expanded = expandedOverride ?? defaultExpanded
+export function ReasoningRow({ text, running, t }: { text: string; running: boolean; t: ChatViewSlotProps['t'] }) {
+  const [expanded, setExpanded] = useState(false)
   const summary = (running ? latestLine(text) : firstLine(text)).replaceAll('**', '')
 
   return (
@@ -54,7 +47,7 @@ export function ReasoningRow({ text, running, defaultExpanded, t }: {
         open={expanded}
         expandable
         expandOnRowClick
-        onToggle={() => { setExpandedOverride(!expanded) }}
+        onToggle={() => { setExpanded(value => !value) }}
         collapsedContent={(
           <>
             <span className={css.separator} aria-hidden />

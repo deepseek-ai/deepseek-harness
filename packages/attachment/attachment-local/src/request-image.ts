@@ -3,7 +3,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import sharp, { type Sharp } from 'sharp'
+import type { Sharp } from 'sharp'
 import { AttachmentError, ImageVariantId } from '@deepseek-ai/dsh-attachment'
 import type {
   ImageMediaType,
@@ -20,6 +20,7 @@ import {
   isExhaustedEncoding,
 } from './encoding.ts'
 import { detectImage, encodedAlphaIsCompatible, probeImage } from './image.ts'
+import { requireSharp } from './sharp.ts'
 
 /** Transform version included in every cache and upload-index identity. */
 export const REQUEST_IMAGE_TRANSFORM_VERSION = 'request-image-v6'
@@ -90,6 +91,7 @@ function pipeline(attachment: StoredImageAttachment, target: ImageRequestTarget)
 }
 
 function sourcePipeline(attachment: StoredImageAttachment): Sharp {
+  const sharp = requireSharp()
   return sharp(attachment.data, { failOn: 'error', limitInputPixels: false }).toColourspace('srgb')
 }
 

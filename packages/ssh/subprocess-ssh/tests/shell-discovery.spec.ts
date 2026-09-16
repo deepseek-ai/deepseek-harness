@@ -43,9 +43,10 @@ it.skipIf(process.platform === 'win32')('queries the real helper and resizes its
   try {
     expect(await runtime.terminalEnvironment()).toMatchObject({ platform: 'posix' })
     await expect(runtime.resolveExecutable(`${helper.root}/absent`)).rejects.toBeInstanceOf(SubprocessExecutableNotFoundError)
-    const terminal = await runtime.spawnTerminal({ argv: ['/bin/sh', '-i'], cwd: helper.root, cols: 80, rows: 24, terminalType: 'xterm-256color', graceMs: 100 })
+    const terminal = await runtime.spawnTerminal({ argv: ['/bin/sh', '-i'], cwd: helper.root, cols: 80, rows: 24, terminalType: 'xterm-256color', graceMs: 100, shellActivity: true })
     let output = ''
     terminal.output.on('data', (chunk: Buffer) => { output += chunk.toString() })
+    expect((await terminal.inspectActivity()).state).toBe('unknown')
     await terminal.resize(120, 40)
     await terminal.write('printf "REMOTE_TERM:%s\\n" "$TERM"; stty size\n')
     await expect.poll(() => output).toContain('REMOTE_TERM:xterm-256color')

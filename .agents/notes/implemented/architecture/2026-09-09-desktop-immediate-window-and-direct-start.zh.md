@@ -12,11 +12,11 @@ profile 修改与恢复遵循[直接修改 profile 决策](2026-09-09-desktop-in
 
 ## 决策
 
-Electron 在 profile 校准或 Host 启动前创建带本地加载页的主窗口。该页面仅依赖已打包的壳资源，并通过自有 preload 接收 starting、ready 或 error 状态。就绪后在同一窗口加载产品 UI；启动失败时显示诊断和可用恢复操作。加载期间关闭窗口会取消后续启动工作，并等待正在启动的子进程退出。
+Electron 在 profile 校准或 Host 启动前创建带打包 Web 加载页的主窗口。Web 入口先显示启动页，再等待 Host 就绪。自有 preload 交付结构化启动注入，现有文档应用注入后激活客户端插件；启动失败时显示诊断和可用恢复操作。加载期间关闭窗口会取消后续启动工作，并等待正在启动的子进程退出。
 
-主窗口提供恢复操作，因为失败的 Host 无法提供自身控件。错误页保留诊断、重启和重装指导。只有已打包应用加载了运行时元数据且资源可用时，才提供禁用插件和重置 Desktop。重置会删除 profile 中除所持锁文件外的所有内容，不保留备份；共享产品数据和 Harness-home 环境文件保持完整。profile 目录保持原位，避免清理期间另一事务获取替代锁。preload 不可用时，独立恢复控件使用被拦截的表单导航。渲染进程崩溃会使导航缓存失效，以重新加载启动页。
+致命错误展示遵循[原生 Desktop 恢复](2026-09-15-desktop-native-fatal-recovery.zh.md)。窗口展示时机、直接启动 Host 和关闭所有权仍由本文规定。
 
-Desktop 直接准备 profile 后启动实际 Host，不另行启动健康检查后端。包修改保留依赖验证、获准生命周期构建、运行时标识检查和锁。失败后保留部分修改，供显式修复；不自动回滚 profile。
+Desktop 原位准备 profile 后，通过[共享 Web runner](2026-09-10-desktop-web-wrapper.zh.md)启动实际 Host。就绪消息提供认证 Host URL 与启动注入。壳使用该 URL 换取 Host cookie，转发应用 HTTP 请求，并仅为归属的应用 origin 认证直接 WebSocket 请求。这一载体适配保留 Web 路由与流语义，同时允许静态 HTML 在 Host 之前显示。包变更保留 pnpm 生命周期脚本与锁。失败保留部分变更以供显式修复，不会自动回滚 profile。
 
 本决策部分取代[打包决策](2026-08-25-electron-desktop-packaging-and-updates.zh.md)和[内置运行时决策](2026-09-08-desktop-bundled-runtime-and-external-plugins.zh.md)中的 staging 后端探针与延迟创建主窗口。这两份记录仍保留发布、签名、传输、资源归属与依赖事务的理由。完整运行时文件验证仍属于打包操作。
 

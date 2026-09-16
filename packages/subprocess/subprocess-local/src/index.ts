@@ -14,8 +14,9 @@ import { userInfo } from 'node:os'
 import { delimiter, extname, isAbsolute, resolve } from 'node:path'
 import type { Duplex } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
-import * as nodePty from 'node-pty'
+import type * as NodePty from 'node-pty'
 import type { IPtyForkOptions } from 'node-pty'
+import { createLazyRequire } from '@deepseek-ai/dsh-lazy-require'
 import { SubprocessRuntime, SubprocessExecutableNotFoundError } from '@deepseek-ai/dsh-subprocess'
 import type {
   SubprocessHandle,
@@ -44,6 +45,9 @@ import { targetEnvironment } from './runner-launch.ts'
 import { createProcessInspector } from './process-inspector.ts'
 import type { ProcessInspector } from './process-inspector.ts'
 import { LocalTerminalHandle } from './terminal.ts'
+import { prepareShellActivity } from './shell-activity.ts'
+
+const requireNodePty = createLazyRequire<typeof NodePty>('node-pty', import.meta.url)
 
 /**
  * Local subprocess service: platform-selected managed ranges, Node-shaped stdio
@@ -259,36 +263,33 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       throw new Error('subprocess-local: terminal argv must contain a program')
     }
     spec.signal?.throwIfAborted()
+    const inspector = this.terminalInspector ?? createProcessInspector()
+    const containmentMode = this.selectContainmentMode('terminal')
     const env = targetEnvironment(spec)
+    const activity = prepareShellActivity(spec, env, this.internals.platform ?? process.platform)
+    const launch = activity === undefined ? spec : { ...spec, argv: activity.argv, env: activity.env }
     const options: IPtyForkOptions = {
       name: spec.terminalType,
       rows: spec.rows,
       cols: spec.cols,
       cwd: spec.cwd,
-      env: { ...env, TERM: spec.terminalType },
+      env: { ...activity?.env ?? env, TERM: spec.terminalType },
     }
-    const inspector = this.terminalInspector ?? createProcessInspector()
-    const containmentMode = this.selectContainmentMode('terminal')
-    const scope = containmentMode === 'linux-scope'
-      ? prepareLinuxTerminalScope(spec, {
-        ...env,
-        PWD: spec.cwd,
-        TERM: spec.terminalType,
-      })
-      : undefined
-    if (scope !== undefined) {
-      options.cwd = scope.cwd
-      options.env = scope.env
-    }
-    let terminal: nodePty.IPty
+    let scope: ReturnType<typeof prepareLinuxTerminalScope> | undefined
+    let terminal: NodePty.IPty
     try {
-      terminal = nodePty.spawn(
+      scope = containmentMode === 'linux-scope'
+        ? prepareLinuxTerminalScope(launch, { ...activity?.env ?? env, PWD: spec.cwd, TERM: spec.terminalType })
+        : undefined
+      if (scope !== undefined) { options.cwd = scope.cwd; options.env = scope.env }
+      terminal = requireNodePty().spawn(
         scope?.command ?? file,
-        scope?.args ?? [...spec.argv.slice(1)],
+        scope?.args ?? [...launch.argv.slice(1)],
         options,
       )
     } catch (error) {
       scope?.cleanup()
+      activity?.dispose()
       throw error
     }
     // oxlint-disable-next-line eslint/prefer-const -- The owner can query readiness before the handle is published.
@@ -307,11 +308,15 @@ export class LocalSubprocessRuntime extends SubprocessRuntime {
       this.internals.platform ?? process.platform,
       owner,
       scope?.resolveOutcome,
+      activity,
+      () => { this.terminals.delete(handle as LocalTerminalHandle) },
+      spec.shellActivity === true,
     )
     this.terminals.add(handle)
     const release = async (): Promise<void> => {
       // terminate() can wait on this direct-exit promise.
       directSettlement.resolve()
+      if (spec.shellActivity === true) return
       await handle.terminate()
       this.terminals.delete(handle)
     }

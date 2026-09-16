@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-挂载 `dsh-typert-loader` 后，Loader 组合中每个挂载的包都会自动把其生成的 Typert 反射与 schema 贡献给运行时注册表——并在包或本插件卸载时自动撤销。没有该导出的包会被跳过，因此在任何 Loader 组合中挂载它都是安全的。显式 `packages` 用于覆盖嵌套在另一 Loader 配置项之下的插件，这些插件的 fiber 不携带可解析的包说明符。它是仅支持 Node 的插件，需要配置树解析锚点才能解析包。
+挂载 `dsh-typert-loader` 后，Loader 组合中每个挂载的包都会自动把其生成的 Typert 反射与 schema factory 贡献给运行时注册表——并在包或本插件卸载时自动撤销。没有该导出的包会被跳过，因此在任何 Loader 组合中挂载它都是安全的。显式 `packages` 用于覆盖嵌套在另一 Loader 配置项之下的插件，这些插件的 fiber 不携带可解析的包说明符。它是仅支持 Node 的插件，需要配置树解析锚点才能解析包。
 
 ## 目录
 
@@ -44,7 +44,7 @@ kind: "package-reference"
 
 ### 注册什么
 
-每个符合条件的 Loader 配置项都会把其生成的宿主侧反射与 schema 贡献给运行时注册表。注册跟随配置项生命周期：配置项或本插件卸载时撤销；在配置项或本插件任一方卸载后才结束的导入操作会被丢弃。
+每个符合条件的 Loader 配置项都会把其生成的宿主侧反射与 schema factory 贡献给运行时注册表。注册跟随配置项生命周期：配置项或本插件卸载时撤销；在配置项或本插件任一方卸载后才结束的导入操作会被丢弃。
 
 ### 可观察行为与失败
 
@@ -66,7 +66,7 @@ kind: "package-reference"
 
 ### Manifest 校验
 
-`validateTypertManifest()` 是模块／文件边界：manifest 从构建产物进入类型化注册表，因此每个字段都会被检查。manifest 必须指名导出它的包、携带 `host` face、持有 zod v4 schema 实例，并保持服务、事件、对象、成员、类型与文档记录格式正确；调用描述符必须使用严格编解码器。每次失败都会指名包与缺陷。
+`validateTypertManifest()` 是模块／文件边界：manifest 从构建产物进入类型化注册表，因此每个字段都会被检查。manifest 必须指名导出它的包、携带 `host` face、持有 schema factory，并保持服务、事件、对象、成员、类型与文档记录格式正确；调用描述符必须使用带 factory 的严格编解码器。每次失败都会指名包与缺陷。
 
 ### 缓存与归属
 

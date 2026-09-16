@@ -202,7 +202,7 @@ export class FaceModelEmitter {
     lines.push(`  face: ${quote(this.face.face)},`)
     lines.push('  schemas: [')
     for (const schema of schemas.exports) {
-      lines.push(`    { name: ${quote(schema.exportName)}, schema: ${schema.exportName} },`)
+      lines.push(`    { name: ${quote(schema.exportName)}, create: ${schema.exportName} },`)
     }
     lines.push('  ],')
     lines.push('  invocations: [')
@@ -232,7 +232,7 @@ export class FaceModelEmitter {
     }
     lines.push('')
     for (const schema of schemas.exports) {
-      lines.push(`export declare const ${schema.exportName}: z.ZodType<${schema.exportName}$source>`)
+      lines.push(`export declare const ${schema.exportName}: () => z.ZodType<${schema.exportName}$source>`)
     }
     if (schemas.exports.length > 0) lines.push('')
     // The Loader validates and narrows this generated module boundary before
@@ -556,7 +556,8 @@ class SchemaEmitter {
   emit(): SchemaArtifact {
     const definitions = this.declarations.map(declaration => this.declarationDefinition(declaration))
     for (const boundary of this.boundaries) {
-      definitions.push(`const ${this.boundaryName(boundary.key)} = ${this.typeSchema(boundary.type)}`)
+      const name = this.boundaryName(boundary.key)
+      definitions.push(`let ${name}$value\nconst ${name} = () => (${name}$value ??= ${this.typeSchema(boundary.type)})`)
     }
     const exports = this.schemas.map((model): SchemaExport => ({
       model,
@@ -573,7 +574,7 @@ class SchemaEmitter {
   private declarationDefinition(declaration: TypeDeclarationModel): string {
     const name = this.schemaName(declaration.id)
     if (declaration.typeParameters.length === 0) {
-      return `const ${name} = ${this.declarationSchema(declaration, new Map())}`
+      return `let ${name}$value\nconst ${name} = () => (${name}$value ??= ${this.declarationSchema(declaration, new Map())})`
     }
     const parameters = declaration.typeParameters.map((parameter, index) =>
       [`type${String(index)}$schema`, parameter.id] as const)
@@ -655,7 +656,7 @@ class SchemaEmitter {
         if (node.arguments.length > 0) {
           this.fail(node.name, `non-generic declaration received ${String(node.arguments.length)} type arguments`)
         }
-        return `z.lazy(() => ${name})`
+        return `z.lazy(() => ${name}())`
       }
       const arguments_ = this.declarationArguments(node, declaration, substitutions)
       return `z.lazy(() => ${name}(${arguments_.join(', ')}))`
@@ -873,7 +874,7 @@ function strictCodec(boundary: RemoteBoundaryModel, schema: string): string {
     '{',
     '  mode: \'strict\',',
     `  typeSymbol: ${quote(boundary.typeSymbol)},`,
-    `  schema: ${schema},`,
+    `  create: ${schema},`,
     '}',
   ].join('\n')
 }

@@ -13,6 +13,7 @@ import {
 import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import { inspectSystemPrompt } from '../../ui-conversation/src/client/contract/system-prompt.ts'
 import { AssistantStreamAccumulator } from '@deepseek-ai/dsh-llm/assistant-stream'
+import { LlmAttemptId } from '@deepseek-ai/dsh-llm/brand'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 import { hasAssistantReplyContent } from '../src/client/contract/assistant-content.ts'
 import { assistantDefinition } from '../src/client/conversation-nodes/assistant.ts'
@@ -941,6 +942,56 @@ describe('built-in conversation node Definitions', () => {
     })
   })
 
+  it('omits first-token metrics after live settlement and after reopening the same history', () => {
+    const attemptId = LlmAttemptId('settled-chat-timing')
+    const starts = [
+      at(1, 'turn/start', { turn: 1 }, { time: 1_000 }),
+      at(2, 'step/start', { turn: 1, step: 1 }, { time: 1_010 }),
+    ]
+    const value = assembler(starts)
+    const chunk = { type: 'text-delta' as const, index: 0, text: 'Answer' }
+    value.append({
+      type: 'transient',
+      event: {
+        type: 'assistant/live-chunk', seq: 2.5, time: 1_030,
+        data: { attemptId, turn: 1, step: 1, chunk },
+      },
+    })
+    value.flush()
+    expect(node(snapshot(value), 'assistant-step')?.data).toMatchObject({
+      status: 'running', time: 1_030, blocks: [{ kind: 'text', text: 'Answer' }],
+    })
+
+    const stream = new AssistantStreamAccumulator()
+    stream.push({ time: 1_030, chunk })
+    const event = at(3, 'assistant/message', {
+      turn: 1, step: 1, message: assistantMessage('settled-timing', 'Answer'),
+      stream: stream.snapshot(), usage: { outputTokens: 10 },
+    }, { surfaceOp: 'append', time: 1_050 }).event
+    if (event.type !== 'assistant/message') throw new Error('expected Assistant settlement')
+    const settlement = { type: 'event' as const, event }
+    value.settleAssistant(attemptId, settlement)
+    const ends = [
+      at(4, 'step/end', { turn: 1, step: 1 }, { time: 1_060 }),
+      at(5, 'turn/end', { turn: 1, reason: { kind: 'completed' } }, { time: 1_070 }),
+    ]
+    for (const end of ends) value.append(end)
+    value.flush()
+
+    const reopened = assembler([...starts, settlement, ...ends])
+    for (const current of [value, reopened]) {
+      const view = snapshot(current)
+      const assistant = (node(view, 'assistant-step')?.data as AssistantChatData).finalNode
+      expect(assistant?.timing).toEqual({
+        stepStartTime: 1_010, firstTokenTime: null, completedTime: 1_050,
+      })
+      const tail = node(view, 'turn-tail')?.data as TurnTailChatData
+      expect(tail.turn).toBe(1)
+      expect(tail.ttftMs).toBeUndefined()
+      expect(tail.tokensPerSecond).toBeUndefined()
+    }
+  })
+
   it('uses live Assistant deltas without replaying settled embedded streams', () => {
     const runningHistory = [
       at(1, 'turn/start', { turn: 1 }),
@@ -1056,15 +1107,8 @@ describe('built-in conversation node Definitions', () => {
     const finalNode = (node(finalizedPacked, 'assistant-step')?.data as AssistantChatData).finalNode
     expect(finalNode).toMatchObject({
       blocks: [{ kind: 'text', text: 'done' }],
-      timing: { firstTokenTime: 1_999 },
+      timing: { firstTokenTime: null },
     })
-
-    const windowed = assembler(finalizedInputs.slice(2), true)
-    const timing = () => (node(snapshot(windowed), 'assistant-step')?.data as AssistantChatData).finalNode?.timing
-    expect(timing()).toMatchObject({ stepStartTime: null, firstTokenTime: 1_999 })
-    windowed.prepend(finalizedInputs.slice(0, 2), false)
-    windowed.flush()
-    expect(timing()).toEqual(finalNode?.timing)
 
     const namedToolHistory = [
       at(40, 'turn/start', { turn: 3 }),
@@ -1090,7 +1134,7 @@ describe('built-in conversation node Definitions', () => {
     const namedTool = (node(namedToolPacked, 'assistant-step')?.data as AssistantChatData).finalNode
     expect(namedTool).toMatchObject({
       blocks: [{ kind: 'tool-call', callId: 'call-2', name: 'read', argsRaw: '' }],
-      timing: { firstTokenTime: 4_000 },
+      timing: { firstTokenTime: null },
     })
   })
 

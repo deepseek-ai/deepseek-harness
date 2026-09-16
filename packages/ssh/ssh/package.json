@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ssh",
   "description": "Shared OpenSSH connection and versioned POSIX remote helper",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },

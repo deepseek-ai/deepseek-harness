@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-root",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "license": "MIT",
   "private": true,
   "type": "module",
@@ -58,7 +58,7 @@
     "test:bench:built": "vitest run --config vitest.bench.config.ts",
     "test:expected": "vitest run --config vitest.expected.config.ts",
     "test:expected:refresh": "DSH_SNAPSHOT=refresh vitest run --config vitest.expected.config.ts",
-    "test:approval-policy": "node --test .github/review-ownership/check-approval.test.mjs",
+    "test:approval-policy": "node --test .github/review-ownership/check-approval.test.mjs .github/review-ownership/blame-ownership.test.mjs .github/review-ownership/author-weight.test.mjs",
     "test:issue-management": "node .github/issue-management/policy.test.mjs",
     "test:snapshot": "vitest run --config vitest.snapshot.config.ts",
     "test:snapshot:record": "DSH_SNAPSHOT=record vitest run --config vitest.snapshot.config.ts --update",

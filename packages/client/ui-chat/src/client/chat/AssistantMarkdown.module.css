@@ -42,6 +42,14 @@
   padding-left: var(--dsh-table-lead);
 }
 
+/* Only the painted table outranks Conversation's z-index 0 width handle. The
+   full-width scroll wrapper and its transparent alignment padding stay below,
+   so a fitting four-column table does not disable the surrounding gutter. */
+.body :global(.md-table-wide) > table {
+  position: relative;
+  z-index: 1;
+}
+
 /* hidden="until-found" keeps a zero-height reasoning box in flex layout.
    Cancel the one gap that box would otherwise leave before the visible reply;
    visible Assistant blocks retain the ordinary 16px rhythm. */

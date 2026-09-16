@@ -3,18 +3,16 @@
  * `session/*` and `subagents/*` endpoint a `Session` or its manager calls, builders for
  * the two history-shaped answers, the `session/follow` opening snapshot and
  * the `session/page` page, both derived from event lists the way the Host
- * derives them from its log, and builders for the `session/control` queue
- * frame and the attachment references the Host's log carries.
+ * derives them from its log, and builders for the attachment references
+ * the Host's log carries.
  */
 import { AttachmentId, type FileAttachmentRef, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
-import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
 import { ok, type RemoteMock, type RemoteTable, type StreamScript, type UnaryRuleFn } from '@deepseek-ai/dsh-remote-mock'
-import type { SessionEvent, SessionId } from '@deepseek-ai/dsh-session/types'
+import type { SessionEvent } from '@deepseek-ai/dsh-session/types'
 import type { RemoteFailure, RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import type {
-  SessionAssistantStreamBaseline, SessionControlFrame, SessionFollowFrame, SessionFollowRequest,
-  SessionPage, SessionPageRequest, SessionQueuedItem, SessionRequestId,
+  SessionAssistantStreamBaseline, SessionFollowFrame, SessionFollowRequest,
+  SessionPage, SessionPageRequest,
 } from '../../src/types.ts'
 import { entries, historyValue } from '../event-script.client.ts'
 import { followSnapshot, pageThrough } from './history.client.ts'
@@ -133,47 +131,6 @@ export function imageRef(id: string): ImageAttachmentRef {
  */
 export function fileRef(id: string, name = 'notes.txt'): FileAttachmentRef {
   return { attachmentId: AttachmentId(id), name, bytes: 3 }
-}
-
-/** One pending inbox occurrence of a queue frame; the message id defaults to the item id. */
-export interface QueueItemFixture {
-  readonly id: string
-  readonly placement?: SessionQueuedItem['placement']
-  /** Prompt identity the Host copied from the queued message's user source. */
-  readonly rpcId?: SessionRequestId
-  /** Queued message content; ignored when `message` is given. */
-  readonly content?: readonly ContentBlock[]
-  /** The queued message itself, for a test that also lands it durably (the queue mirror correlates by `id`). */
-  readonly message?: { readonly id: MessageId; readonly content: readonly ContentBlock[] }
-}
-
-/**
- * One pending inbox occurrence as the Host lists it.
- * @param fixture - item fields.
- * @returns the item.
- */
-export function queueItem(fixture: QueueItemFixture): SessionQueuedItem {
-  const message = fixture.message ?? { id: fixture.id as MessageId, content: fixture.content ?? [] }
-  return {
-    id: fixture.id as MessageId,
-    placement: fixture.placement ?? 'queued',
-    ...(fixture.rpcId === undefined ? {} : { rpcId: fixture.rpcId }),
-    // The Host serializes queued content to JSON; the blocks cross unchanged.
-    message: { id: message.id, content: message.content as unknown as SessionQueuedItem['message']['content'] },
-  }
-}
-
-/**
- * One authoritative queue frame of the `session/control` stream.
- * @param sessionId - the addressed Session.
- * @param items - the complete pending queue.
- * @returns the frame.
- */
-export function queueFrame(
-  sessionId: SessionId,
-  items: readonly QueueItemFixture[],
-): Extract<SessionControlFrame, { type: 'queue' }> {
-  return { type: 'queue', sessionId, items: items.map(queueItem) }
 }
 
 /** Default answers: every command accepted, empty history and subagent catalog, one attachment of one zero byte. */

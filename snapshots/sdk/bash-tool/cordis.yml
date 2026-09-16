@@ -25,3 +25,7 @@
     backgroundMode: one-shot
     enableRunInBackground: false
     maxDepth: 1
+
+- id: session-log-deepseek
+  config:
+    enabled: false

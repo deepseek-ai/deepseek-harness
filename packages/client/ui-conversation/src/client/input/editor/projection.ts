@@ -11,7 +11,7 @@ import type { ElementNode, LexicalNode, NodeKey, Point } from 'lexical'
 import {
   $getRoot, $getSelection, $isElementNode, $isLineBreakNode, $isRangeSelection, $isTextNode,
 } from 'lexical'
-import type { Occurrence } from '../../contract/input.ts'
+import type { Occurrence } from '../../contract/draft-editor.ts'
 import { $isReferenceChipNode } from './chip-node.tsx'
 
 /** The detect-projection stand-in for one chip (object replacement character). */

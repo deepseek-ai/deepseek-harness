@@ -1,19 +1,32 @@
+// @vitest-environment jsdom
 /** PDF metadata, keyed slot, dictionary, and tab-view lifetime registration. */
+import { createElement } from 'react'
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { TabId } from '@deepseek-ai/dsh-client-ui-dockkit'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { DocumentPreviewRegistry } from '../src/client/document/registry.ts'
 import { createPdfStore } from '../src/client/pdf/store.ts'
-import type { PdfBodyInjected } from '../src/client/pdf/PdfBody.tsx'
+import type { PdfBodyInjected } from '../src/client/pdf/pdf.tsx'
 
 vi.mock('../src/client/pdf/runtime.ts', () => ({ openPdf: vi.fn() }))
+const renderedPdf = vi.hoisted(() => vi.fn(() => null))
+vi.mock('../src/client/pdf/pdf.tsx', () => ({ PdfBody: renderedPdf }))
 import { apply, PDF_BODY_ID } from '../src/client/pdf/index.ts'
-import { PdfBody } from '../src/client/pdf/PdfBody.tsx'
+import { LazyPdfBody } from '../src/client/pdf/LazyPdfBody.tsx'
 import { en, zh } from '../src/client/pdf/locales.ts'
 
+afterEach(() => { cleanup(); renderedPdf.mockClear() })
+
 describe('PDF registration', () => {
+  it('shows localized loading feedback while the PDF chunk resolves', async () => {
+    render(createElement(LazyPdfBody, { t: makeTranslate(en) } as never))
+    expect(screen.getByRole('status', { name: en.loading })).toBeDefined()
+    await waitFor(() => { expect(renderedPdf).toHaveBeenCalledOnce() })
+  })
+
   it('registers a builtin complete-bytes body and removes all contributions and retained view state on dispose', async () => {
     const ctx = new Context()
     const previews = new DocumentPreviewRegistry()
@@ -26,7 +39,7 @@ describe('PDF registration', () => {
       inject: (sessionId: SessionId, actions: ReturnType<ReturnType<typeof createPdfStore>['create']>['actions']) => PdfBodyInjected
     }> = []
     const register = vi.fn((options: typeof entries[number], component: unknown) => {
-      expect(component).toBe(PdfBody)
+      expect(component).toBe(LazyPdfBody)
       entries.push(options)
       return () => { entries.splice(entries.indexOf(options), 1) }
     })

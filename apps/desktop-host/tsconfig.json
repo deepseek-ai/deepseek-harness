@@ -4,16 +4,23 @@
     "rootDir": "src",
     "outDir": "lib/types"
   },
-  "include": ["src"],
+  "include": [
+    "src"
+  ],
   "references": [
-    { "path": "../../vendor/cordis" },
-    { "path": "../../vendor/include" },
-    { "path": "../../packages/api/gateway/tsconfig.host.json" },
-    { "path": "../../packages/boot/app-boot" },
-    { "path": "../../packages/boot/cmdline" },
-    { "path": "../../packages/client/connection/tsconfig.host.json" },
-    { "path": "../../packages/client/modules" },
-    { "path": "../../packages/host/webserver" },
-    { "path": "../../packages/util/launch-environment" }
+    { "path": "../../packages/util/home-paths" },
+    { "path": "../../packages/core/tools" },
+    {
+      "path": "../cli"
+    },
+    {
+      "path": "../../packages/boot/app-boot"
+    },
+    {
+      "path": "../../packages/client/connection/tsconfig.host.json"
+    },
+    {
+      "path": "../../packages/host/webserver"
+    }
   ]
 }

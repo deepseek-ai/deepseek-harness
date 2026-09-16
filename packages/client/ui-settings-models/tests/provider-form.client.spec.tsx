@@ -256,6 +256,22 @@ describe('protocolChoices', () => {
 })
 
 describe('model list editing', () => {
+  it('changes image input without rewriting a neighboring model declaration', async () => {
+    const neighbor = { id: 'vision', input: ['image'], name: 'Kept vision model' }
+    const { mutate } = await mountSection({
+      providers: { openai: { models: [{ id: 'preview' }, neighbor] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'enabled' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops).toEqual([{
+      op: 'set', path: ['providers', 'openai', 'models'],
+      value: [{ id: 'preview', input: ['text', 'image'] }, neighbor],
+    }])
+  })
+
   it('adds, edits, and removes rows without storing emptied optional fields', async () => {
     const { mutate } = await mountSection()
     openEditor('openai')
@@ -264,6 +280,7 @@ describe('model list editing', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     expandModel(1)
     fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '65536' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelImageInput} 1`), { target: { value: 'enabled' } })
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Acme' } })
     // Clearing an optional field must drop it rather than store an empty value.
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: '' } })
@@ -273,7 +290,7 @@ describe('model list editing', () => {
     expect(firstMutate(mutate)).toMatchObject({
       ns: 'llm-pi-ai',
       expectedRevision: 3,
-      ops: [{ op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536 }] }],
+      ops: [{ op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] }] }],
     })
   })
 

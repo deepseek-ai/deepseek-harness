@@ -1,5 +1,5 @@
 ---
-description: "Development-only hot reload for browser client plugins: rebuilding a plugin bundle swaps the running plugin in place, for developers iterating on the web GUI."
+description: "Live graph synchronization and development bundle reloads for Web client plugins."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-hmr` reloads a browser client plugin in place when its bundle is rebuilt, so a developer editing plugin source sees the change without a full page reload. The reload chain stays idle without a rebuild watcher: only a `pnpm run dev:web`-style process rewriting client bundles produces the rebuilds it reacts to. Each reload swaps one plugin with fresh component state while the data layer (connection, runtime, and Session objects) stays untouched. Everything here is development machinery in the browser; the model never sees it.
+`dsh-client-hmr` keeps open Web pages in sync with the Host plugin graph and reloads rebuilt browser bundles. Ordinary plugin enable/disable changes take effect without reloading the page or restarting the Host. Code rebuilds replace the affected plugin with fresh component state. The model sees no new input or output.
 
 ## Table of Contents
 
@@ -25,15 +25,15 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Enable the rebuild watcher for the plugin you are editing, then save: the browser picks up the rebuilt bundle from the dev server and swaps the plugin without reloading the page. Use it during client development; nothing observable happens in a production build, where no watcher rewrites bundles.
+The shipped Web composition mounts this transport for live plugin changes. During development, a bundle watcher also supplies code rebuilds. Disabling the transport stops graph delivery to open pages.
 
 ### Starting the reload chain
 
-Run `pnpm run dev:web` (or any tsdown watch process that writes the plugin's `lib/client.js`) against the same host; rebuilt plugins are then swapped into the running browser automatically, one at a time.
+Run `pnpm run dev:web` (or a watch process using the shared Client tsdown preset) against the same host; rebuilt plugins are then swapped into the running browser automatically, one at a time. The preset stamps `lib/client.js` after all package-local chunks are written, so a chunk-only rebuild also advances the package revision without Host-side chunk scanning.
 
 ### What a reload does
 
-Each reload re-executes the plugin bundle and remounts the plugin with fresh state. Plugins that depend on the reloaded one reload with it automatically. A reload that fails is reported visibly and retried from scratch on the next rebuild.
+Each successful reload re-executes the plugin bundle and remounts the plugin with fresh state. Plugins that depend on the reloaded one reload with it automatically. Failures appear in the plugin list, where they can be retried without waiting for another rebuild.
 
 ### Configuration
 
@@ -59,11 +59,11 @@ This section explains how the reload chain is built; observable behavior is cove
 
 ### Design concept
 
-The chain is two halves with one contract: the node half owns bundle detection and notification, the browser half owns the swap. The node half runs one interval that stat-polls each graph bundle from the module host's pre-read baseline. An unchanged startup row starts watching without a content read or hash; a changed row, or a dirty row whose artifact reappears, enters `rebuilt()`, and only real revision changes are broadcast. `rebuilt()` reads the current source map together with the changed bundle; a map-only write does not reload executable code. The node half also serves `/plugins/events`, an SSE channel broadcasting `graph` and `rebuilt` frames.
+The Host half watches each package's stamped entry artifact and serves `/plugins/events`. It forwards existing graph-change and rebuilt notifications; every new connection receives the current full graph. A graph describes the browser’s desired entries and carries no Host cleanup-completion guarantee. Host activation and cleanup remain owned by the Host lifecycle. The entry bytes plus completed-build timestamp identify the revision; unchanged artifacts require no content read. The browser half delegates both frame kinds to Client Modules, which serializes entry changes and waits for browser resource cleanup.
 
 ### The browser swap
 
-On a `rebuilt` frame the revision makes `invalidate` select that plugin's immutable one-resource combo URL instead of its initial multi-resource URL. `prefetch` loads and registers the new factory while the old fiber still serves. The remaining order is registry-first teardown (`registry.delete` before the fiber's disposer emits `internal/plugin`, or the vendored Loader flags the entry disabled), drain the old fiber's unload, delete `entry.fiber`, remove owned `<style data-plugin>` tags, then `entry.refresh()` re-imports and remounts, and `fiber.await()` rethrows startup failures loudly. The swap is safe because execution is pure registration under the lazy-CJS model: every module side effect lives in the factory closure and runs at materialization.
+On a `rebuilt` frame, the controller invalidates the old module and prefetches its single-resource script while the old fiber still serves. It then deletes the registry runtime, drains the old fiber, clears its entry reference and removes owned styles. The module system materializes the new exports before `entry.refresh()` mounts them through Loader; this exposes import failures to page diagnostics even when Loader would only log them. CSS is injected after old effects have finished.
 
 ### Cascade and self-reload
 
@@ -71,14 +71,14 @@ A fiber's activation epoch strings its service providers' uids, so replacing a p
 
 ### Failure policy
 
-No rollback: an import failure leaves the entry fiberless (the next rebuilt frame retries from scratch), and an apply failure leaves a FAILED fiber visible in the shell's status projection. Both log loudly.
+Download failures leave the running plugin active. After the old fiber is torn down, import or activation failure does not restore the previous bundle. Failures appear as page-local synchronization errors. Settings → Plugins → Plugin list retries the latest graph, even when its revision is unchanged; a later rebuild also retries the affected plugin. Successful unrelated plugins remain active.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Node half: bundle stat-poll, `rebuilt` reporting, `/plugins/events` SSE channel |
-| [`src/client/index.ts`](src/client/index.ts) | Browser half: SSE subscription, serialized reload queue, fiber swap |
+| [`src/client/index.ts`](src/client/index.ts) | Browser half: SSE subscription and delegation to the shared entry controller |
 | [`src/events.ts`](src/events.ts) | Shared frame types (`graph` / `rebuilt`) and the endpoint constant |
 
 </details>
@@ -114,8 +114,8 @@ None; this package neither assembles nor sends a provider request.
 These limits define what the reload driver does not preserve or restore. They are current package constraints, not a task backlog.
 
 - **Reload is coarse by design** — a fresh fiber and fresh components; React state inside the reloaded plugin is lost while the data layer (connection/runtime fibers, Session objects) is untouched. react-refresh-grade state preservation conflicts with re-executing the bundle and is deliberately out.
-- **No failure rollback** — a reload that fails leaves the entry FAILED and visible in the loader status projection; the previous bundle is not restored automatically.
-- **Rebuilt frames do not replace the boot graph** — each frame carries the plugin-artifact revision needed for its one-resource combo reload; a page reload receives the recomposed startup graph.
+- **No failure rollback** — after the old fiber is torn down, a failed replacement does not restore the previous bundle.
+- **Web transport only** — Electron installation and backend restart handling do not use this SSE path. Entry reconciliation itself is transport-independent.
 
 <a id="dev-note"></a>
 ### Dev Note

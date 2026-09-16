@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import type { Agent, Inbox } from '@deepseek-ai/dsh-agent'
+import type { Agent, Inbox, InboxState } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -37,15 +37,15 @@ function message(text: string, source: 'user' | 'plugin' = 'user') {
   })
 }
 
-describe('Session control queue projection', () => {
-  /** Consume frames until the next queue replacement (inbox projection frames interleave). */
-  async function nextQueueFrame(
+describe('Session control Inbox projection', () => {
+  /** Consume frames until the next durable Inbox value. */
+  async function nextInboxFrame(
     iterator: AsyncIterator<SessionControlFrame>,
-  ): Promise<Extract<SessionControlFrame, { type: 'queue' }>> {
+  ): Promise<Extract<SessionControlFrame, { type: 'projection' }>> {
     for (;;) {
       const next = await iterator.next()
-      if (next.done) throw new Error('stream ended before a queue frame')
-      if (next.value.type === 'queue') return next.value
+      if (next.done) throw new Error('stream ended before an Inbox value')
+      if (next.value.type === 'projection' && next.value.key === 'inbox') return next.value
     }
   }
 
@@ -64,23 +64,21 @@ describe('Session control queue projection', () => {
     expect(opened.value).toMatchObject({
       type: 'baseline',
       value: {
-        queues: {
-          'queue-session': [
-            { id: queued.id, placement: 'queued' },
-            { id: steering.id, placement: 'steering' },
-            { id: context.id, placement: 'context' },
-          ],
+        projections: {
+          'queue-session': { values: { inbox: {
+            'next-turn': [queued], 'next-step': [steering, context],
+          } } },
         },
       },
     })
 
     const replacement = message('replacement')
     inbox.append('next-turn', replacement)
-    const replaced = await nextQueueFrame(iterator)
-    expect(replaced.items.map(item => item.id)).toContain(replacement.id)
+    const replaced = await nextInboxFrame(iterator)
+    expect(replaced.value).toMatchObject({ 'next-turn': [queued, replacement] })
     inbox.remove(steering.id)
-    const removed = await nextQueueFrame(iterator)
-    expect(removed.items.map(item => item.id)).not.toContain(steering.id)
+    const removed = await nextInboxFrame(iterator)
+    expect(removed.value).toMatchObject({ 'next-step': [context] })
 
     abort.abort()
     await iterator.next()
@@ -108,9 +106,6 @@ describe('Session control queue projection', () => {
         value: { 'next-turn': [{ id: pending.id }], 'next-step': [] },
       },
     })
-    await expect(nextQueueFrame(iterator)).resolves.toMatchObject({
-      items: [{ id: pending.id, placement: 'queued' }],
-    })
 
     abort.abort()
     await iterator.next()
@@ -129,33 +124,28 @@ describe('Session control queue projection', () => {
     const iterator = control.control(abort.signal)[Symbol.asyncIterator]()
     const opened = await iterator.next()
     if (opened.done || opened.value.type !== 'baseline') throw new Error('missing baseline')
-    const items = opened.value.value.queues['queue-session' as SessionId] ?? []
-    expect(items.map(item => ({ id: item.id, placement: item.placement, rpcId: item.rpcId }))).toEqual([
-      { id: identified.id, placement: 'queued', rpcId: 'req-42' },
-      { id: items[1]?.id, placement: 'steering', rpcId: undefined },
-    ])
-    expect('rpcId' in (items[1] ?? {})).toBe(false)
+    const inboxValue = opened.value.value.projections['queue-session' as SessionId]?.values.inbox as unknown as InboxState
+    expect(inboxValue['next-turn'][0]?.source).toMatchObject({ kind: 'user', rpcId: 'req-42' })
+    expect(inboxValue['next-step'][0]?.source).toEqual({ kind: 'user' })
 
     abort.abort()
     await iterator.next()
   })
 
-  it('ignores inbox events without the exact live Agent session', async () => {
-    const { ctx, control, agent, inbox } = await harness()
+  it('publishes Inbox values for sessions without a live Agent', async () => {
+    const { ctx, control } = await harness()
     const abort = new AbortController()
     const iterator = control.control(abort.signal)[Symbol.asyncIterator]()
     await iterator.next()
-
-    const unrelated = ctx.sessions.create(SessionId('unrelated-queue'))
-    unrelated.append('agent/inbox/spliced', {
-      target: 'next-turn',
-      start: 0,
-      inserted: [message('unrelated')],
+    const session = ctx.sessions.create(SessionId('unattached-inbox'))
+    const pending = message('unattached')
+    session.append('agent/inbox/spliced', {
+      target: 'next-turn', start: 0, inserted: [pending],
     })
-    const replacement = ctx.sessions.create(SessionId('replacement-session'))
-    Object.defineProperty(agent, 'session', { configurable: true, value: replacement })
-    inbox.append('next-turn', message('wrong-session'))
-
+    expect(ctx.agents.get(session.id)).toBeUndefined()
+    await expect(nextInboxFrame(iterator)).resolves.toMatchObject({
+      sessionId: session.id, value: { 'next-turn': [pending], 'next-step': [] },
+    })
     abort.abort()
     await iterator.next()
   })
@@ -183,14 +173,14 @@ describe('Session control queue projection', () => {
     inbox.append('next-turn', first)
     inbox.append('next-turn', second)
 
-    const queues: Extract<SessionControlFrame, { type: 'queue' }>[] = []
+    const values: InboxState[] = []
     ownedContexts.delete(ctx)
     await ctx.fiber.dispose()
     for (;;) {
       const next = await iterator.next()
       if (next.done) break
-      if (next.value.type === 'queue') queues.push(next.value)
+      if (next.value.type === 'projection' && next.value.key === 'inbox') values.push(next.value.value as unknown as InboxState)
     }
-    expect(queues.map(queue => queue.items.map(item => item.id))).toEqual([[first.id], [first.id, second.id]])
+    expect(values.map(value => value['next-turn'].map(item => item.id))).toEqual([[first.id], [first.id, second.id]])
   })
 })

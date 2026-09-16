@@ -145,8 +145,9 @@
     # assembly fact of dsh-web-app, never user config), mounts the
     # frontend-static fallback owner, registers the web-surface prompt
     # section and the bash runtime variable, prints the URL line, and opens the
-    # canonical local URL after the full tree settles. The webStartup provider
-    # supplies invocation-only values; after the server binds, this row samples
+    # canonical local URL after the full Loader tree settles and the required-
+    # entry audit passes. The
+    # webStartup provider supplies invocation-only values; after the server binds, this row samples
     # LAN trust once and provides `webRuntime`. A complete agent-preset persona
     # suppresses the prompt section for that agent while retaining the host-owned
     # shell variable.
@@ -244,6 +245,14 @@
     - id: ui-settings-models
       name: '@deepseek-ai/dsh-client-ui-settings-models'
 
+    # Plugin management: the sidebar Plugins page installs, enables, disables,
+    # and removes the profile's bundles through the `pluginManager` Remote.
+    # Without a profile-backed Host it reports itself unavailable.
+    - id: ui-plugin-manager
+      name: '@deepseek-ai/dsh-client-ui-plugin-manager'
+
+    # Read-only Plugin list tab in the Settings Plugins section; the built-in
+    # bundles the sidebar page leaves out are inspected here.
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
 
@@ -368,6 +377,9 @@
 # the criterion for host-plane ownership — injection resolves before any session
 # exists, so there is no agent to key by. Behind a preset realm those variables
 # would never reach the model's shell at all.
+
+- id: tool-plugin-manager
+  disabled: true
 
 - id: tool-bash
   disabled: true

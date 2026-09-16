@@ -4,6 +4,8 @@ import type {} from '@deepseek-ai/dsh-typert-protocol'
 
 declare module '@deepseek-ai/dsh-typert-protocol' {
   interface RemoteErrorDetailsMap {
+    /** The terminal identity is missing or has begun process cleanup. */
+    'terminal/unavailable': Record<string, never>
     /** Input or resize was refused without invalidating the output attachment. */
     'terminal/control-unavailable': { readonly reason: 'read-only' | 'not-running' }
     /** Retained screens and pending allocations consume the Session's terminal quota. */
@@ -15,6 +17,11 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
 export type WebTerminalId = Branded<'WebTerminalId'>
 /** An attachment allowed to write and resize one terminal. */
 export type TerminalAttachmentId = Branded<'TerminalAttachmentId'>
+
+/** Acknowledges one physical window hold without taking screen or input control. */
+export interface TerminalRetentionFrame {
+  readonly type: 'retained'
+}
 
 /** An executable shell verified in the subprocess provider's execution environment. */
 export interface TerminalShell {

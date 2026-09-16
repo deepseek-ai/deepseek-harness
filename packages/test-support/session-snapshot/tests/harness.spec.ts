@@ -233,9 +233,9 @@ describe('runScenario', () => {
     expect(materialized).toContain(pathToFileURL(join(patchDir, 'plugin.mjs')).href)
     expect(materialized).toContain(pathToFileURL(join(dir, 'nested.mjs')).href)
     expect(materialized).toContain('example-package')
-    expect(await realpath(join(dir, '.dsh', 'profiles', 'node_modules', 'example-package')))
+    expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'example-package')))
       .toBe(await realpath(packageDir))
-    expect(await realpath(join(dir, '.dsh', 'profiles', 'node_modules', '@fixture', 'example-package')))
+    expect(await realpath(join(dir, '.dsh', 'profiles', 'acp', 'node_modules', '@fixture', 'example-package')))
       .toBe(await realpath(scopedPackageDir))
     expect(await readFile(await materializedPatch(materializedRoot, '1-selected.cordis.yml'), 'utf8')).toContain('[]')
 
@@ -255,7 +255,7 @@ describe('runScenario', () => {
     const conflictPatch = join(dir, 'conflict.cordis.yml')
     const conflictPackage = join(dir, 'node_modules', 'conflict-package')
     const otherPackage = join(dir, 'other-conflict-package')
-    const conflictLink = join(dir, '.dsh', 'profiles', 'node_modules', 'conflict-package')
+    const conflictLink = join(dir, '.dsh', 'profiles', 'acp', 'node_modules', 'conflict-package')
     await Promise.all([
       mkdir(conflictPackage, { recursive: true }),
       mkdir(otherPackage, { recursive: true }),

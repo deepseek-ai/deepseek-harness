@@ -4,7 +4,7 @@ import {
   CLICK_COMMAND, COMMAND_PRIORITY_LOW,
 } from 'lexical'
 import type { LexicalEditor } from 'lexical'
-import type { ReferenceInsert } from '../../contract/input.ts'
+import type { ReferenceInsert } from '../../contract/draft-editor.ts'
 import { $isReferenceChipNode } from './chip-node.tsx'
 import { TextRefNode } from './text-ref.ts'
 

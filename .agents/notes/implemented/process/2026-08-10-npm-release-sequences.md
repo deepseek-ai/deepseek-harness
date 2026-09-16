@@ -96,6 +96,8 @@ A dependency in `optionalDependencies`, or a peer carrying `peerDependenciesMeta
 
 A violation names the package, the declaration that made it optional, and the way out in order — import it as a type, which is all that declaration merging needs, or restructure so module scope does not need the package. A dynamic `import()` only moves the failure to first use, so it belongs to a caller that genuinely requires the package and handles its absence; reaching for it is a sign the dependency is not optional, and the gate does not offer it as the remedy.
 
+A required CommonJS-compatible Host dependency whose initialization is unrelated to startup may use `createLazyRequire(specifier, import.meta.url)`. The caller keeps a type-only import, supplies a literal dependency specifier, and invokes the returned loader at the owning operation. `verify-package-dependencies` recognizes that literal as a Host runtime edge, so Client/Host packages retain it in `dependencies` even though no static value import remains. The utility caches only a successful load and preserves caller-relative resolution; it does not make an optional dependency required or hide first-use failure.
+
 ### Release family objects
 
 The entity in this domain is a **release family**: a set of packages sharing one version baseline and tag naming that publishes as a unit. Adding a family means adding a subclass and a workflow lane, not changing the core.

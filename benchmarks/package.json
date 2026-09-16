@@ -19,6 +19,7 @@
     "@deepseek-ai/dsh-client-store": "workspace:^",
     "@deepseek-ai/dsh-client-ui-chat": "workspace:^",
     "@deepseek-ai/dsh-deque": "workspace:^",
+    "@deepseek-ai/dsh-lazy-require": "workspace:^",
     "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-sdk-client": "workspace:^",
     "@deepseek-ai/dsh-session": "workspace:^",

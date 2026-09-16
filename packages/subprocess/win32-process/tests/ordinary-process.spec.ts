@@ -17,7 +17,7 @@ import {
   JobObjectBasicAccountingInformation,
   WAIT_TIMEOUT,
 } from '../src/abi.ts'
-import { PROCESS_INFORMATION, STARTUPINFOW } from '../src/ffi.ts'
+import { processInformationType, startupInfoType } from '../src/ffi.ts'
 import type {
   CurrentTokenProcessSpawnOptions,
   CurrentTokenProcessBindings,
@@ -50,7 +50,7 @@ function api(overrides: Partial<CurrentTokenProcessBindings> = {}): CurrentToken
     uvGetOsfhandle: vi.fn((fileDescriptor: number) => BigInt(100 + fileDescriptor)),
     setHandleInformation: vi.fn(() => 1),
     createProcessW: vi.fn((_app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, _startup, info) => {
-      koffi.encode(info, PROCESS_INFORMATION, {
+      koffi.encode(info, processInformationType(), {
         hProcess: 60n,
         hThread: 61n,
         dwProcessId: 1234,
@@ -82,9 +82,9 @@ describe('ordinary Job process operations', () => {
       getFileType: vi.fn(handle => handle === 107n ? 3 : standardType),
       setHandleInformation: flags,
       createProcessW: vi.fn((_app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, startupPointer, processInfo) => {
-        const startup = koffi.decode(startupPointer, STARTUPINFOW) as { cbReserved2: number; lpReserved2: NativePtr }
+        const startup = koffi.decode(startupPointer, startupInfoType()) as { cbReserved2: number; lpReserved2: NativePtr }
         descriptorBytes = Buffer.from(koffi.decode(startup.lpReserved2, 'uint8', startup.cbReserved2) as number[])
-        koffi.encode(processInfo, PROCESS_INFORMATION, { hProcess: 60n, hThread: 61n, dwProcessId: 1234, dwThreadId: 5678 })
+        koffi.encode(processInfo, processInformationType(), { hProcess: 60n, hThread: 61n, dwProcessId: 1234, dwThreadId: 5678 })
         return 1
       }),
     })
@@ -129,7 +129,7 @@ describe('ordinary Job process operations', () => {
       info: NativePtr,
     ) => {
       events.push('create')
-      koffi.encode(info, PROCESS_INFORMATION, { hProcess: 60n, hThread: 61n, dwProcessId: 1234, dwThreadId: 5678 })
+      koffi.encode(info, processInformationType(), { hProcess: 60n, hThread: 61n, dwProcessId: 1234, dwThreadId: 5678 })
       return 1
     })
     const bindings = api({
@@ -190,8 +190,8 @@ describe('ordinary Job process operations', () => {
       setHandleInformation,
       uvGetOsfhandle,
       createProcessW: vi.fn((_app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, infoPtr, processInfo) => {
-        startup = koffi.decode(infoPtr, STARTUPINFOW) as Record<string, unknown>
-        koffi.encode(processInfo, PROCESS_INFORMATION, {
+        startup = koffi.decode(infoPtr, startupInfoType()) as Record<string, unknown>
+        koffi.encode(processInfo, processInformationType(), {
           hProcess: 60n,
           hThread: 61n,
           dwProcessId: 1234,

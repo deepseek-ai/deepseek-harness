@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-conversation",
   "description": "Target-neutral Conversation assembly, shell, composer, queue, and view navigation",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -92,7 +92,8 @@
     "@lexical/utils": "^0.49.0",
     "@lexical/text": "^0.49.0",
     "@lexical/plain-text": "^0.49.0",
-    "@lexical/history": "^0.49.0"
+    "@lexical/history": "^0.49.0",
+    "@deepseek-ai/dsh-agent": "workspace:^"
   },
   "files": [
     "lib/index.js",

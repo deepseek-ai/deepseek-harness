@@ -99,6 +99,30 @@ const GROUP_ORDER = [
 
 const SERVICE_ROLES: ServiceRole[] = [
   {
+    key: 'hmr',
+    pkg: 'hmr',
+    title: 'Serialized module and configuration reloads',
+    mode: 'core',
+    consumers: ['app-boot'],
+    note: 'Owns module and exact configuration watchers; application mutations share its queue and automatic reloads await the application file lock.',
+  },
+  {
+    key: 'pluginManager',
+    pkg: 'plugin-manager',
+    title: 'Current-profile plugin and bundle management',
+    mode: 'core',
+    consumers: ['plugin-manager', 'ui-settings-plugin-inventory'],
+    note: 'Shares profile package operations with the CLI and reports persisted and running state to Web and agent callers.',
+  },
+  {
+    key: 'profileContext',
+    pkg: 'app-boot',
+    title: 'Launcher-owned profile data',
+    mode: 'core',
+    consumers: ['plugin-manager'],
+    note: 'The dsh launcher supplies data-only profile locations and composition inputs; reload scheduling belongs to dsh-hmr.',
+  },
+  {
     key: 'mcpResources',
     pkg: 'mcp-resources',
     title: 'Scoped MCP resource access',

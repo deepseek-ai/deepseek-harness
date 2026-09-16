@@ -17,9 +17,13 @@ import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
 import { createLaunchEnvironmentSnapshot, type LaunchEnvironmentSnapshot } from '@deepseek-ai/dsh-launch-environment'
-import type {} from '@deepseek-ai/cordis-plugin-hmr'
-import { watchConfig } from './watch-config.ts'
+export { readProfilePatches, resolveTelemetryPatch, type ProfileContext } from './profile-context.ts'
 import type {} from '@deepseek-ai/dsh-system-prompt'
+
+export {
+  readProfilePlugins, reconcileProfilePlugins, writeProfileBundles,
+  type ProfilePluginLocation, type ProfilePluginDependency, type ProfilePluginInventory, type ProfilePluginReconciliation,
+} from './profile-plugins.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -30,9 +34,12 @@ declare module '@deepseek-ai/cordis' {
 
 export {
   composeEntries,
+  createProfileResolutionGeneration,
   DEFAULT_PROFILE_BUNDLES,
-  DEFAULT_PROFILE_PATCH_RELOAD,
+  OPTIONAL_BUNDLES,
   healProfilesModuleFallback,
+  healIsolatedProfileModuleFallback,
+  unlinkProfileModuleFallback,
   initProfile,
   loadProfile,
   loadProfileDirectory,
@@ -47,8 +54,16 @@ export {
   type ProfileLayer,
   type ProfileManifest,
   type ProfileModuleFallbackOptions,
+  type ProfileResolutionEntry,
+  type ProfileResolutionGeneration,
+  type ProfileResolutionMode,
   type ProfileTemplate,
 } from './profile.ts'
+export {
+  PluginPackages,
+  type PluginPackage,
+  type PluginPackagesConfig,
+} from './profile-resolution/service.ts'
 
 /**
  * Resolve the config to boot. Replay swaps a `cordis.yml` basename for
@@ -225,65 +240,38 @@ const bootstrapIncludes = new WeakMap<Context, Entry>()
 // reference `process.env`.
 const userPatchesSchema = entryListSchema
 
-/** Options for live user patch-layer reconciliation. */
-export interface UserPatchWatchOptions {
-  /** Diagnostic prefix used by {@link loadOptionalPatches}. */
-  binName: string
-  /** Absolute path of the watched patch file (a profile's `cordis.patch.yml`). */
-  filename: string
-  /**
-   * Compose the full patch list for a fresh user-layer generation —
-   * the same composition the app booted with, so a reload can interleave the
-   * new user patches between app-owned layers (bundle layers below,
-   * overlays above). Identity when omitted: the user layer
-   * is the whole patch list.
-   */
-  compose?: (userPatches: PatchOptions[]) => PatchOptions[]
-}
-
-/**
- * Watch the user patch layer and reapply it to the boot Include without rollback.
- * @param ctx - settled app context containing the root Include and an active HMR service.
- * @param options - diagnostic, file, and patch-composition inputs.
- * @returns an asynchronous disposer after the exact-path watcher is ready.
- * @throws when HMR or the root Include is absent, watcher setup fails, or initial path resolution fails.
+/** Apply one complete patch generation and wait for Loader activation diagnostics.
+ * @param ctx Booted root context.
+ * @param patches Complete ordered patch list.
+ * @param binName Diagnostic prefix.
+ * @param requiredIds Explicit enablement targets whose existing failures also reject reconciliation.
+ * @returns Diagnostics for unchanged pre-existing inactive entries; new or changed failures reject.
  */
-export async function watchUserPatches(
-  ctx: Context,
-  options: UserPatchWatchOptions,
-): Promise<() => Promise<void>> {
-  const { binName, filename, compose = (patches: PatchOptions[]) => patches } = options
-  const hmr = ctx.get('hmr')
-  if (hmr === undefined) throw new Error(`${binName}: user patch-layer watching requires the Cordis HMR service`)
+export async function reconcileProfilePatches(
+  ctx: Context, patches: PatchOptions[], binName: string, requiredIds: readonly string[] = [],
+): Promise<string[]> {
   const entry = bootstrapIncludes.get(ctx)
-  if (entry === undefined) throw new Error(`${binName}: user patch-layer watching requires the root Include entry`)
-  const register = watchConfig(ctx, filename, hmr.config, async () => {
-    // Re-read the include's non-patch options per refresh so a writer that
-    // updates another option between refreshes is not silently reverted.
-    const { patches: _previousPatches, ...includeConfig } = entry.options.config as Include.Config
-    const userPatches = loadOptionalPatches(binName, filename) ?? []
-    const patches = compose(userPatches)
-    await entry.update({
-      config: {
-        ...includeConfig,
-        patches,
-      },
-    })
-    await ctx.loader.await()
-    await Promise.allSettled([...ctx.loader.entries()].map(entry => Promise.resolve(entry.fiber?.await())))
-    const failures = await inactiveEntries(ctx)
-    if (failures.length > 0) throw new Error(activationDiagnostic(binName, 'warning', failures).trimEnd())
-  })
-  try {
-    return await register
-  } catch (error) {
-    // A surface can dispose the whole tree while the watcher is still opening;
-    // the HMR effect registration then fails with INACTIVE_EFFECT. That is the
-    // app exiting exactly as asked, not a watch failure, so return a no-op
-    // disposer instead of crashing.
-    if ((error as { code?: string } | null)?.code === 'INACTIVE_EFFECT') return async () => {}
-    throw error
+  if (entry === undefined) throw new Error(`${binName}: profile reload requires the root Include entry`)
+  const previousFailures = (await inactiveEntries(ctx)).map(failure => ({
+    ...failure, fiber: failure.entry.fiber, options: JSON.stringify(failure.entry.options),
+  }))
+  // Removed entries leave the Loader store before their async disposers finish.
+  const previousFibers = [...ctx.loader.entries()].flatMap(row => row.fiber === undefined ? [] : [{
+    fiber: row.fiber, failed: row.fiber.state === FIBER_FAILED || row.fiber.state === FIBER_DISPOSED,
+  }])
+  const { patches: _previous, ...includeConfig } = entry.options.config as Include.Config
+  await entry.update({ config: { ...includeConfig, patches } })
+  const results = await Promise.allSettled(previousFibers.map(({ fiber }) => fiber.await()))
+  await ctx.loader.await()
+  const failures = await inactiveEntries(ctx)
+  const introduced = failures.filter(failure => requiredIds.includes(failure.entry.options.id) || !previousFailures.some(previous =>
+    previous.entry === failure.entry && previous.fiber === failure.entry.fiber
+    && previous.options === JSON.stringify(failure.entry.options) && previous.diagnostic === failure.diagnostic))
+  if (introduced.length > 0) throw new Error(activationDiagnostic(binName, 'warning', introduced).trimEnd())
+  for (const [index, result] of results.entries()) {
+    if (result.status === 'rejected' && !previousFibers[index]?.failed) throw result.reason
   }
+  return failures.map(failure => failure.diagnostic)
 }
 
 /**
@@ -691,6 +679,7 @@ export function installFailLoud(
 const FIBER_PENDING = 0 as FiberState.PENDING
 const FIBER_ACTIVE = 2 as FiberState.ACTIVE
 const FIBER_FAILED = 3 as FiberState.FAILED
+const FIBER_DISPOSED = 4 as FiberState.DISPOSED
 
 /**
  * Entry ids whose presence defines a usable DSH application.

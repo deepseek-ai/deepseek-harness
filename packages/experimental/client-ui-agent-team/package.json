@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-client-ui-agent-team",
   "description": "Web Agent Teams roster, task board, and teammate navigation",
-  "version": "0.1.5-rc.2",
+  "version": "0.1.6-alpha.1",
   "publishConfig": {
     "access": "public"
   },
@@ -42,9 +42,6 @@
     "watch": "tsdown --watch"
   },
   "license": "MIT",
-  "dependencies": {
-    "react": "^18.2.0"
-  },
   "peerDependencies": {
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-api-session-controller": "workspace:^",
@@ -75,6 +72,7 @@
     "@testing-library/react": "^16.1.0",
     "@types/react": "~18.3.1",
     "@deepseek-ai/cordis": "workspace:^",
+    "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "files": [

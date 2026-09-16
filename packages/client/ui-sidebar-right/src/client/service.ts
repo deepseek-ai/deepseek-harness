@@ -38,6 +38,7 @@ import type { SidebarRightTabClaim, SidebarRightTabRegistry } from './tab-regist
 import { canCloseTab, type SidebarRightState, type SurfaceState } from './stores.ts'
 import type { createSidebarRightStore } from './stores.ts'
 import { TabDomain, type PinResource } from './tab-domain.ts'
+import { SidebarTabInventory } from './tab-inventory.ts'
 
 /** The seat's bound action set. */
 export type SurfaceActions = BoundActions<ReturnType<typeof createSidebarRightStore>>
@@ -57,27 +58,32 @@ interface Adoption {
 
 /**
  * Create the public controller and the plugin-private store adoption callback.
- * Adoption subscribes without reconciling; the first store commit creates occurrences.
+ * Adoption reconciles restored records before any seat renders, then follows commits.
  * @param tabs - registered tab types.
  * @param pin - resource retention for an occurrence's lifetime.
- * @returns the controller and a callback releasing exactly its own adoption.
+ * @returns the controller and plugin-owned adoption and scope-removal callbacks.
  */
 export function createSidebarRightController(tabs: SidebarRightTabRegistry, pin: PinResource): {
   controller: SidebarRightController
   adopt: (sessionId: SessionId, store: SidebarRightSurfaceStore) => () => void
+  forget: (sessionId: SessionId) => void
 } {
   const adopted = new Map<SessionId, Adoption>()
-  const controller = new SidebarRightController(tabs, pin, adopted)
+  const inventory = new SidebarTabInventory()
+  const controller = new SidebarRightController(tabs, pin, adopted, inventory.source)
   return {
     controller,
+    forget: (sessionId) => { inventory.remove(sessionId) },
     adopt(sessionId, store) {
       adopted.get(sessionId)?.unsubscribe()
       const sync = (): void => {
         const surface = store.getSnapshot().bySession[sessionId]
+        inventory.update(sessionId, Object.values(surface?.layout.tabs ?? {}))
         if (surface !== undefined) controller.tabDomain.sync(sessionId, surface.layout)
       }
       const adoption: Adoption = { store, unsubscribe: store.subscribe(sync) }
       adopted.set(sessionId, adoption)
+      sync()
       return () => {
         adoption.unsubscribe()
         if (adopted.get(sessionId) === adoption) adopted.delete(sessionId)
@@ -206,6 +212,8 @@ export interface ISidebarRight {
 
 /** Cross-plugin right-Sidebar face (ctx.sidebarRight). */
 export class SidebarRightController implements ISidebarRight {
+  /** Open tab metadata across saved and adopted Sessions, independent of visible seats. */
+  readonly openTabs: SidebarTabInventory['source']
   private binding: SidebarRightBinding | undefined
   private readonly closeHandlers = new Map<string, SidebarRightCloseHandler>()
 
@@ -231,13 +239,25 @@ export class SidebarRightController implements ISidebarRight {
    * @param tabs - the tab-type registry consulted to claim an address.
    * @param pin - `ctx.resources.pin`, which the Tab domain holds addresses with.
    * @param adopted - plugin-owned session stores used by occurrence actions.
+   * @param openTabs - plugin-owned metadata source across saved and adopted layouts.
    */
   constructor(
     private readonly tabs: SidebarRightTabRegistry,
     pin: PinResource,
     private readonly adopted = new Map<SessionId, Adoption>(),
+    openTabs: SidebarTabInventory['source'] = new SidebarTabInventory().source,
   ) {
+    this.openTabs = openTabs
     this.tabDomain = new TabDomain(this, pin)
+  }
+
+  /**
+   * Read the committed tabs of a Session so providers can restore their content.
+   * @param sessionId - Session whose layout has been adopted.
+   * @returns its open records, or an empty list before adoption.
+   */
+  tabsIn(sessionId: SessionId): readonly TabRecord[] {
+    return Object.values(this.adopted.get(sessionId)?.store.getSnapshot().bySession[sessionId]?.layout.tabs ?? {})
   }
 
   /**

@@ -53,6 +53,21 @@ describe('DeepSeekFilesClient', () => {
     expect(uploaded).toEqual({ id: 'file-api-one', bytes: 3, createdAt, filename: 'image.png', purpose: 'user_data', expiresAt: createdAt + 3_600 })
   })
 
+  it.each([
+    ['https://provider.example/anthropic/v1', 'https://provider.example/anthropic/v1/files'],
+    ['https://provider.example/v1beta/', 'https://provider.example/v1beta/v1/files'],
+  ])('resolves the Messages Files endpoint from %s', async (baseURL, expected) => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(messagesFile())))
+    const client = new DeepSeekFilesClient({ protocol: 'messages', baseURL, apiKey: 'key', fetch: fetchImpl })
+
+    await client.upload({
+      data: Uint8Array.of(1, 2, 3), mediaType: 'image/png', filename: 'image.png', expiresAfterSeconds: 3_600,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledOnce()
+    expect(requestUrl(fetchImpl.mock.calls[0]![0])).toBe(expected)
+  })
+
   it('maps Messages list cursors, file metadata and deletion without OpenAI-only fields', async () => {
     const fetchImpl = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       const url = new URL(requestUrl(input))

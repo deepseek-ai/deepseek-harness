@@ -291,10 +291,9 @@ describe('Python SDK dsh profile keyless smoke', () => {
 
       const profile = JSON.parse(
         await readFile(join(root, '.dsh', 'profiles', 'sdk-minimal', 'package.json'), 'utf8'),
-      ) as { dsh?: { profile?: { bundles?: string[]; patchReload?: string } } }
+      ) as { dsh?: { profile?: { bundles?: string[] } } }
       expect(profile.dsh?.profile).toEqual({
         bundles: ['@deepseek-ai/dsh-sdk-minimal'],
-        patchReload: 'startup',
       })
       expect(modelRequests[0]?.tools).toEqual(expect.any(Array))
       const tools = modelRequests[0]?.tools as { name?: string }[]

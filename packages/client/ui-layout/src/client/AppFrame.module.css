@@ -36,6 +36,31 @@
   overflow: hidden;
 }
 
+/* macOS desktop: the frame goes transparent so window vibrancy reaches the
+   sidebar column, which keeps only a translucent tint; the centre paints the
+   base background itself to stay opaque. The sidebar/centre separator moves
+   to the opaque centre: on the translucent sidebar the alpha border mixes
+   with the wallpaper and reads as a dark seam. */
+:global([data-platform='darwin']) .frame {
+  background: transparent;
+}
+
+:global([data-platform='darwin']) .sidebarCol {
+  background: color-mix(in srgb, var(--dsw-specific-sidebar-fill) 60%, transparent);
+  border-right: none;
+}
+
+:global([data-platform='darwin']) .centerCol {
+  background: var(--dsw-alias-bg-base);
+  border-left: 0.5px solid var(--dsw-alias-border-l3);
+}
+
+/* The darwin closed sidebar has no rail: the centre reaches the window edge,
+   where a separator would draw a seam against nothing. */
+:global([data-platform='darwin']) [data-sidebar-collapsed] .centerCol {
+  border-left: none;
+}
+
 /* Drag handles are frame children (columns clip overflow): an 8px hit strip
    centered on the column border via inline left, above column content. No
    handle draws a visible pill: the details column was the only one that did,

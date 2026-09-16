@@ -3,7 +3,7 @@
  * docs/subsystems/session-projection.md): the single
  * higher-seq-wins rule on both paths (a stale baseline cannot overwrite a
  * newer push frame; a replayed frame cannot regress), capability absence as
- * undefined, generation truncation, and the Session/manager wiring (tail-page
+ * undefined, generation invalidation, and the Session/manager wiring (tail-page
  * seeding, control-stream projection routing pre- and post-instantiation, the
  * list rows' title projection).
  */
@@ -75,13 +75,30 @@ describe('Session projection value semantics', () => {
     expect(store.get('test/marks')).toBeUndefined()
   })
 
-  it('truncate drops rows past the durable baseline and keeps the rest', () => {
+  it('clears all generation watermarks without replacing subscribed faces', async () => {
     const store = new ProjectionValueStore()
-    store.apply('test/marks', { marks: ['durable'] }, SessionSeq(5))
-    store.apply('other', 'phantom', SessionSeq(50))
-    store.truncate(SessionSeq(10))
-    expect(store.get('test/marks')).toEqual({ marks: ['durable'] })
-    expect(store.get('other')).toBeUndefined()
+    const face = store.faceOf('test/marks')
+    const observed: unknown[] = []
+    const unsubscribe = face.subscribe(() => { observed.push(face.getSnapshot()) })
+    try {
+      store.apply('test/marks', { marks: ['lost-tail'] }, SessionSeq(20))
+      store.apply('empty-session', 'old generation', -1)
+      const previous = store.values()
+      await Promise.resolve()
+      store.clear()
+      await Promise.resolve()
+
+      expect(face.getSnapshot()).toBeUndefined()
+      expect(store.get('empty-session')).toBeUndefined()
+      expect(store.faceOf('test/marks')).toBe(face)
+      expect(store.values()).toEqual({})
+      expect(store.values()).not.toBe(previous)
+      store.seed({ asOfSeq: SessionSeq(1), values: { 'test/marks': { marks: ['durable'] } } })
+      await Promise.resolve()
+      expect(observed).toEqual([{ marks: ['lost-tail'] }, undefined, { marks: ['durable'] }])
+    } finally {
+      unsubscribe()
+    }
   })
 
   it('notifies the key face on change (batched) and not on dropped applications', async () => {
@@ -167,7 +184,7 @@ describe('manager frame routing', () => {
     expect(session.projections.get('test/marks')).toEqual({ marks: ['later'] })
   })
 
-  it('projects the title key into list rows and truncates phantom rows on the control baseline', async ({ mock, remote }) => {
+  it('preserves a newer title when the control baseline omits it', async ({ mock, remote }) => {
     const manager = makeManager(mock, remote)
     remote.session.list.mockResolvedValue(ok({
       items: [{ sessionId: sid('s1'), updatedAt: 1, running: false, blank: false }],
@@ -178,17 +195,15 @@ describe('manager frame routing', () => {
     })
     await Promise.resolve()
     expect(manager.getListSnapshot().items[0]?.title).toBe('Projected title')
-    // The durable baseline says the host only knows up to seq 2: the row rode
-    // lost state and must drop (the un-flushed title precedent).
     manager.handleControlFrame({
       type: 'baseline',
       value: {
-        queues: {}, jobs: {},
+        jobs: {},
         projections: { [sid('s1')]: { asOfSeq: 2, values: {} } },
       },
     })
     await Promise.resolve()
-    expect(manager.getListSnapshot().items[0]?.title).toBeUndefined()
+    expect(manager.getListSnapshot().items[0]?.title).toBe('Projected title')
   })
 
   it('projects every retained value into list rows with stable snapshot identity', async ({ mock, remote }) => {

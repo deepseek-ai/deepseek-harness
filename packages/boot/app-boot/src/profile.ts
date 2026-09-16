@@ -25,7 +25,7 @@
 
 import { createRequire } from 'node:module'
 import {
-  existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, realpathSync, rmSync, statSync,
+  existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, readlinkSync, rmSync, statSync,
   symlinkSync, unlinkSync, writeFileSync,
 } from 'node:fs'
 import { basename, dirname, join, relative, resolve } from 'node:path'
@@ -34,9 +34,17 @@ import { withFileLock } from '@deepseek-ai/dsh-atomic-write'
 import type { EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import { applyEntryPatches, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import { resolveDshHome } from '@deepseek-ai/dsh-home-paths'
-import type { DshPackageManifest, ProfilePatchReload } from '@deepseek-ai/dsh-package-manifest'
+import type { DshPackageManifest } from '@deepseek-ai/dsh-package-manifest'
 import { resolve as resolvePackage, type Package as ResolvePackageManifest } from 'resolve.exports'
 import { loadOverlayPatches } from './index.ts'
+import {
+  canonicalLinkPath,
+  isPackagedExecutable,
+  isProfileModuleFallbackLink,
+  PROFILE_MODULE_FALLBACK_DIR,
+  realModuleDirectory,
+  symlinkPointsTo,
+} from './profile-resolution/legacy-links.ts'
 
 /** Directory under the Harness home holding every profile. */
 export const PROFILES_DIR = 'profiles'
@@ -44,15 +52,10 @@ export const PROFILES_DIR = 'profiles'
 /** The user patch layer inside a profile directory (hot-reloaded on long-lived surfaces). */
 export const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
 
-/** Profile-private package links projected into its pnpm-managed node_modules. */
-const PROFILE_MODULE_FALLBACK_DIR = '.dsh-module-fallback'
-
 /** Installation-owned defaults used when a shipped profile is first opened. */
 export interface ProfileTemplate {
   /** Ordered bundle layer list. */
   bundles: readonly string[]
-  /** User patch-file lifecycle for the generated profile. */
-  patchReload: ProfilePatchReload
 }
 
 /** Package metadata accepted by the profile reader; local profiles need no published identity. */
@@ -82,9 +85,36 @@ export interface Profile {
   patchPath: string
   /** The profile's own patches; empty when the file is absent. */
   patches: PatchOptions[]
-  /** Whether the launcher watches user patch files after boot. */
-  patchReload: ProfilePatchReload
 }
+
+/** One package selected by the profile module-fallback rules. */
+export interface ProfileResolutionEntry {
+  /** Bare package name. */
+  readonly name: string
+  /** Package directory selected by the existing dependency traversal. */
+  readonly packageDir: string
+  /** Selected package version when its manifest declares one. */
+  readonly version: string | undefined
+  /** Manifest whose dependency edge selected this package. */
+  readonly declarer: string
+  /** Whether every profile or only the active profile receives this fallback. */
+  readonly scope: 'installation' | 'profile'
+}
+
+/** Complete immutable fallback table for one profile launch. */
+export interface ProfileResolutionGeneration {
+  /** Directory containing every profile and the shared fallback position. */
+  readonly profilesDir: string
+  /** Active profile directory, when bundle-only fallbacks were included. */
+  readonly profileDir: string | undefined
+  /** Profile-declared packages already installed before the fallback position. */
+  readonly localPackageNames: readonly string[]
+  /** Installation entries followed by bundle-only entries in precedence order. */
+  readonly entries: readonly ProfileResolutionEntry[]
+}
+
+/** Startup backend selection for one computed profile resolution generation. */
+export type ProfileResolutionMode = 'link' | 'dual' | 'runtime'
 
 /**
  * Resolve a profile's directory under the Harness home.
@@ -105,23 +135,18 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
 export const PROFILE_TEMPLATES: Record<string, ProfileTemplate> = {
   acp: {
     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-acp-app'],
-    patchReload: 'startup',
   },
   web: {
     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
-    patchReload: 'live',
   },
   headless: {
     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
-    patchReload: 'startup',
   },
   sdk: {
     bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-sdk-app'],
-    patchReload: 'startup',
   },
   'sdk-minimal': {
     bundles: ['@deepseek-ai/dsh-sdk-minimal'],
-    patchReload: 'startup',
   },
 }
 
@@ -133,8 +158,17 @@ const INSTALLATION_OWNED_PROFILE_TUPLES: Record<string, readonly string[]> = {
 /** The bundle list a `dsh plugin` init uses for a name with no shipped template. */
 export const DEFAULT_PROFILE_BUNDLES: readonly string[] = ['@deepseek-ai/dsh-base']
 
-/** Custom profiles retain the historical live patch-file behavior. */
-export const DEFAULT_PROFILE_PATCH_RELOAD: ProfilePatchReload = 'live'
+/**
+ * The bundles the dsh installation ships for a person to switch on: each a
+ * runtime dependency of the installation that declares `dsh.bundle.patch`,
+ * selected by no shipped template, and offered switched off by the plugin
+ * manager ([rationale](../../../../.agents/notes/implemented/process/2026-09-15-shipped-optional-bundles.md)).
+ */
+export const OPTIONAL_BUNDLES: readonly string[] = [
+  '@deepseek-ai/dsh-experimental-agent-team-profile',
+  '@deepseek-ai/dsh-experimental-agent-team-web-profile',
+  '@deepseek-ai/dsh-experimental-auto-review',
+]
 
 const PROFILE_PATCH_TEMPLATE = `# Your patch layer for this dsh profile, applied after every bundle layer:
 # a top-level YAML array of loader patch entries (id-targeted config
@@ -160,12 +194,10 @@ autoInstallPeers: false
  * so re-running is a no-op on an initialized profile.
  * @param dir - the profile directory from {@link resolveProfileDir}.
  * @param bundles - the initial `dsh.profile.bundles` layer list.
- * @param patchReload - user patch-file lifecycle; custom profiles default to live reload.
  */
 export function initProfile(
   dir: string,
   bundles: readonly string[],
-  patchReload: ProfilePatchReload = DEFAULT_PROFILE_PATCH_RELOAD,
 ): void {
   mkdirSync(dir, { recursive: true })
   const manifestPath = join(dir, 'package.json')
@@ -174,7 +206,7 @@ export function initProfile(
       name: `dsh-profile-${basename(dir)}`,
       private: true,
       dependencies: {},
-      dsh: { profile: { bundles: [...bundles], patchReload } },
+      dsh: { profile: { bundles: [...bundles] } },
     }
     writeFileSync(manifestPath, JSON.stringify(manifest, undefined, 2) + '\n')
   }
@@ -234,27 +266,6 @@ function ensureSymlink(link: string, target: string): void {
   }
 }
 
-/** Resolve a link target without following the final path component. */
-function canonicalLinkPath(path: string): string | undefined {
-  try {
-    return join(realpathSync.native(dirname(path)), basename(path))
-  } catch (error) {
-    // A missing parent means the candidate cannot identify an existing owned link.
-    /* v8 ignore next 2 -- a non-ENOENT realpath failure requires a host filesystem fault */
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
-    /* v8 ignore next -- see the host-filesystem exception above */
-    throw error
-  }
-}
-
-/** Return whether a symlink or junction points at the same path as `target`. */
-function symlinkPointsTo(link: string, target: string): boolean {
-  const actual = resolve(dirname(link), readlinkSync(link))
-  const canonicalActual = canonicalLinkPath(actual)
-  const canonicalTarget = canonicalLinkPath(resolve(target))
-  return canonicalActual !== undefined && canonicalActual === canonicalTarget
-}
-
 /** Add one profile-owned fallback link without replacing a pnpm-managed entry. */
 function ensureProfileSymlink(link: string, target: string): void {
   try {
@@ -309,11 +320,6 @@ interface ModuleProxyManifest {
 interface ModuleProxyRecord {
   version?: unknown
   dsh?: { moduleFallback?: { targets?: unknown } }
-}
-
-/** Return whether the process reads application modules from pkg's virtual filesystem. */
-function isPackagedExecutable(): boolean {
-  return (process as NodeJS.Process & { pkg?: unknown }).pkg !== undefined
 }
 
 /** Resolve one available explicit package export under Node ESM import conditions. */
@@ -463,12 +469,24 @@ function profileDependencyNames(manifest: ProfileManifest): string[] {
 
 /** Resolve the installation generation that every profile must find through the fallback directory. */
 function resolveModuleFallbackEntries(
-  installAnchor: string,
-): { entries: ModuleFallbackEntry[]; packageNames: ReadonlySet<string> } {
+  installAnchor: string, materialize = true,
+): {
+  entries: ModuleFallbackEntry[]
+  packageNames: ReadonlySet<string>
+  packageDirs: ReadonlyMap<string, string>
+  declarers: ReadonlyMap<string, string>
+  versions: ReadonlyMap<string, string | undefined>
+} {
   const appManifest = readModuleFallbackManifest(installAnchor)
   const links = new Map<string, string>()
+  const declarers = new Map<string, string>()
+  const versions = new Map<string, string | undefined>()
   /* v8 ignore next -- a real app manifest always declares its name */
-  if (appManifest.name !== undefined) links.set(appManifest.name, dirname(installAnchor))
+  if (appManifest.name !== undefined) {
+    links.set(appManifest.name, dirname(installAnchor))
+    declarers.set(appManifest.name, installAnchor)
+    versions.set(appManifest.name, appManifest.version)
+  }
   // BFS over the resolvable dependency graph; the visited set is the link
   // map itself (first resolution wins, matching Node's own nearest-wins).
   const queue: { anchor: string; manifest: ProfileManifest }[] = [{ anchor: installAnchor, manifest: appManifest }]
@@ -484,19 +502,24 @@ function resolveModuleFallbackEntries(
       // plugin; skip it rather than fail the whole boot.
       if (dir === undefined) continue
       links.set(dep, dir)
+      declarers.set(dep, next.anchor)
       const manifestPath = join(dir, 'package.json')
-      queue.push({ anchor: manifestPath, manifest: readModuleFallbackManifest(manifestPath) })
+      const manifest = readModuleFallbackManifest(manifestPath)
+      versions.set(dep, manifest.version)
+      queue.push({ anchor: manifestPath, manifest })
     }
   }
-  const entries = !isPackagedExecutable()
-    ? [...links].map(([packageName, packageDir]) => ({ kind: 'symlink' as const, packageName, packageDir }))
-    : [...links].flatMap(([packageName, packageDir]) => {
-      const source = packageProxySource(packageName, packageDir)
-      return Object.keys(source.targets).length === 0
-        ? []
-        : [{ kind: 'proxy' as const, packageName, version: source.version, targets: source.targets }]
-    })
-  return { entries, packageNames: new Set(links.keys()) }
+  const entries = !materialize
+    ? []
+    : !isPackagedExecutable()
+      ? [...links].map(([packageName, packageDir]) => ({ kind: 'symlink' as const, packageName, packageDir }))
+      : [...links].flatMap(([packageName, packageDir]) => {
+        const source = packageProxySource(packageName, packageDir)
+        return Object.keys(source.targets).length === 0
+          ? []
+          : [{ kind: 'proxy' as const, packageName, version: source.version, targets: source.targets }]
+      })
+  return { entries, packageNames: new Set(links.keys()), packageDirs: links, declarers, versions }
 }
 
 /** Return whether one existing fallback entry already matches its resolved installation generation. */
@@ -530,6 +553,8 @@ export interface ProfileModuleFallbackOptions {
   profile?: Profile
   /** Harness home; defaults to {@link resolveDshHome}. */
   home?: string
+  /** Whether to materialize the computed generation; defaults to true. */
+  materialize?: boolean
 }
 
 /**
@@ -542,21 +567,95 @@ export interface ProfileModuleFallbackOptions {
  * `node_modules`; pnpm-managed entries remain authoritative, and another
  * profile's links cannot change its resolution.
  * @param options - installation anchor, optional loaded profile, and Harness home.
- * @returns settlement after the shared fallback and profile-local links are current.
+ * @returns the computed fallback generation after optional materialization.
  */
-export async function healProfilesModuleFallback(options: ProfileModuleFallbackOptions): Promise<void> {
-  const { installAnchor, profile, home = resolveDshHome() } = options
+export async function healProfilesModuleFallback(
+  options: ProfileModuleFallbackOptions,
+): Promise<ProfileResolutionGeneration> {
+  const { installAnchor, profile, home = resolveDshHome(), materialize = true } = options
   const profilesDir = join(home, PROFILES_DIR)
   const modulesDir = join(profilesDir, 'node_modules')
-  mkdirSync(modulesDir, { recursive: true })
-  const { entries, packageNames } = resolveModuleFallbackEntries(installAnchor)
-  if (!moduleFallbackCurrent(modulesDir, entries)) {
+  if (materialize) mkdirSync(modulesDir, { recursive: true })
+  const { entries, packageNames, packageDirs, declarers, versions } = resolveModuleFallbackEntries(installAnchor, materialize)
+  if (materialize && !moduleFallbackCurrent(modulesDir, entries)) {
     await withFileLock(modulesDir, () => {
       if (!moduleFallbackCurrent(modulesDir, entries)) healProfilesModuleFallbackLocked(entries, modulesDir)
       return Promise.resolve()
     })
   }
-  if (profile !== undefined) healProfileModuleFallback(profile, packageNames)
+  const profileDeclarers = new Map<string, string>()
+  const profileVersions = new Map<string, string | undefined>()
+  const localPackageNames = profile === undefined ? [] : installedProfilePackageNames(profile)
+  const profilePackages: ReadonlyMap<string, string> = profile === undefined
+    ? new Map<string, string>()
+    : healProfileModuleFallback(profile, packageNames, materialize, profileDeclarers, profileVersions)
+  return Object.freeze({
+    profilesDir,
+    profileDir: profile?.dir,
+    localPackageNames: Object.freeze(localPackageNames),
+    entries: Object.freeze([
+      ...[...packageDirs].map(([name, packageDir]) => Object.freeze({
+        name, packageDir, version: versions.get(name),
+        declarer: declarers.get(name) as string, scope: 'installation' as const,
+      })),
+      ...[...profilePackages].map(([name, packageDir]) => Object.freeze({
+        name, packageDir, version: profileVersions.get(name),
+        declarer: profileDeclarers.get(name) as string, scope: 'profile' as const,
+      })),
+    ]),
+  })
+}
+
+/** Return installed direct dependencies that Node resolves before profile fallback. */
+function installedProfilePackageNames(profile: Profile): string[] {
+  let manifest: ProfileManifest
+  try {
+    manifest = readModuleFallbackManifest(join(profile.dir, 'package.json'))
+  } catch (error) {
+    // Direct helper callers can supply a synthetic Profile without its on-disk manifest.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    throw error
+  }
+  return profileDependencyNames(manifest).filter((name) => {
+    const candidate = join(profile.dir, 'node_modules', name)
+    if (!existsSync(join(candidate, 'package.json'))) return false
+    return !isProfileModuleFallbackLink(profile.dir, name)
+  })
+}
+
+/**
+ * Compute a profile resolution generation without materializing links or proxies.
+ * @param options - installation anchor, profile, and optional Harness home.
+ * @returns the complete immutable generation.
+ */
+export function createProfileResolutionGeneration(
+  options: Omit<ProfileModuleFallbackOptions, 'materialize'>,
+): Promise<ProfileResolutionGeneration> {
+  return healProfilesModuleFallback({ ...options, materialize: false })
+}
+
+/**
+ * Supply an application-owned profile with filesystem packages from its installation and selected bundles.
+ * All fallback links belong to the profile; no shared Harness-home directory is written.
+ * Existing pnpm-managed packages remain authoritative. The caller serializes profile mutations.
+ * @param options - owning installation package.json and the loaded application profile.
+ */
+export function healIsolatedProfileModuleFallback(options: { installAnchor: string; profile: Profile }): void {
+  const installationLinks = resolveModuleFallbackEntries(options.installAnchor, false).packageDirs
+  healProfileModuleFallback(options.profile, new Set(installationLinks.keys()), true, undefined, undefined, installationLinks)
+}
+
+/**
+ * Detach this profile's fallback links before a package-manager mutation.
+ * Installed packages and links replaced by pnpm remain untouched; the next profile launch restores fallbacks.
+ * @param profileDir - profile directory whose package mutation is serialized by the caller.
+ */
+export function unlinkProfileModuleFallback(profileDir: string): void {
+  const ownedModulesDir = join(profileDir, PROFILE_MODULE_FALLBACK_DIR, 'node_modules')
+  if (!existsSync(ownedModulesDir)) return
+  for (const name of ownedPackageNames(ownedModulesDir)) {
+    removeProfileSymlink(join(profileDir, 'node_modules'), ownedModulesDir, name)
+  }
 }
 
 /** Heal one module-fallback generation while the cross-process writer lock is held. */
@@ -576,17 +675,21 @@ function healProfilesModuleFallbackLocked(entries: readonly ModuleFallbackEntry[
 function dependencyClosure(
   anchors: readonly string[], reserved: ReadonlySet<string>,
   exclude: (candidate: string, packageName: string) => boolean,
+  declarers?: Map<string, string>,
+  versions?: Map<string, string | undefined>,
 ): Map<string, string> {
   const links = new Map<string, string>()
   const visited = new Set(reserved)
   for (const anchor of anchors) {
-    const canonicalAnchor = realpathSync.native(anchor)
+    const canonicalAnchor = join(realModuleDirectory(dirname(anchor)), basename(anchor))
     const manifest = readModuleFallbackManifest(canonicalAnchor)
     /* v8 ignore next -- an installable package manifest always declares its name */
     if (manifest.name === undefined) continue
     if (!visited.has(manifest.name)) {
       visited.add(manifest.name)
       links.set(manifest.name, dirname(canonicalAnchor))
+      declarers?.set(manifest.name, canonicalAnchor)
+      versions?.set(manifest.name, manifest.version)
     }
     const queue: { anchor: string; manifest: ProfileManifest }[] = [{ anchor: canonicalAnchor, manifest }]
     for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
@@ -599,8 +702,11 @@ function dependencyClosure(
         if (dir === undefined) continue
         visited.add(dep)
         links.set(dep, dir)
+        declarers?.set(dep, next.anchor)
         const manifestPath = join(dir, 'package.json')
-        queue.push({ anchor: manifestPath, manifest: readModuleFallbackManifest(manifestPath) })
+        const dependencyManifest = readModuleFallbackManifest(manifestPath)
+        versions?.set(dep, dependencyManifest.version)
+        queue.push({ anchor: manifestPath, manifest: dependencyManifest })
       }
     }
   }
@@ -608,11 +714,18 @@ function dependencyClosure(
 }
 
 /** Reconcile packages carried only by selected bundles into one profile. */
-function healProfileModuleFallback(profile: Profile, installationPackageNames: ReadonlySet<string>): void {
+function healProfileModuleFallback(
+  profile: Profile, installationPackageNames: ReadonlySet<string>, materialize = true,
+  declarers?: Map<string, string>,
+  versions?: Map<string, string | undefined>,
+  installationLinks: ReadonlyMap<string, string> = new Map(),
+): Map<string, string> {
   const profileModulesDir = join(profile.dir, 'node_modules')
   const ownedModulesDir = join(profile.dir, PROFILE_MODULE_FALLBACK_DIR, 'node_modules')
-  mkdirSync(profileModulesDir, { recursive: true })
-  mkdirSync(ownedModulesDir, { recursive: true })
+  if (materialize) {
+    mkdirSync(profileModulesDir, { recursive: true })
+    mkdirSync(ownedModulesDir, { recursive: true })
+  }
   const bundleAnchors = profile.layers
     .filter(layer => !installationPackageNames.has(layer.packageName))
     .map(layer => join(layer.packageDir, 'package.json'))
@@ -629,12 +742,14 @@ function healProfileModuleFallback(profile: Profile, installationPackageNames: R
       /* v8 ignore next -- see the host-filesystem exception above */
       throw error
     }
-  })
+  }, declarers, versions)
   for (const layer of profile.layers) bundleLinks.delete(layer.packageName)
+  const links = new Map([...installationLinks, ...bundleLinks])
+  if (!materialize) return links
   for (const packageName of ownedPackageNames(ownedModulesDir)) {
-    if (!bundleLinks.has(packageName)) removeProfileSymlink(profileModulesDir, ownedModulesDir, packageName)
+    if (!links.has(packageName)) removeProfileSymlink(profileModulesDir, ownedModulesDir, packageName)
   }
-  for (const [packageName, target] of bundleLinks) {
+  for (const [packageName, target] of links) {
     const ownedLink = join(ownedModulesDir, packageName)
     mkdirSync(dirname(ownedLink), { recursive: true })
     ensureSymlink(ownedLink, target)
@@ -642,6 +757,7 @@ function healProfileModuleFallback(profile: Profile, installationPackageNames: R
     mkdirSync(dirname(profileLink), { recursive: true })
     ensureProfileSymlink(profileLink, ownedLink)
   }
+  return links
 }
 
 /**
@@ -682,9 +798,7 @@ function sameBundles(left: readonly string[], right: readonly string[]): boolean
 
 /**
  * Normalize an exact installation-owned bundle tuple to its shipped template,
- * or add the shipped reload default to an exact current tuple. A changed value
- * is written back during profile loading while every other manifest field is
- * preserved; any other bundle list is user-owned and remains untouched.
+ * preserving all other manifest fields. Other bundle lists remain untouched.
  */
 function normalizeShippedProfile(name: string, dir: string, manifest: ProfileManifest): ProfileManifest {
   const installationOwned = INSTALLATION_OWNED_PROFILE_TUPLES[name]
@@ -692,9 +806,7 @@ function normalizeShippedProfile(name: string, dir: string, manifest: ProfileMan
   const bundles = manifest.dsh?.profile?.bundles
   if (template === undefined || bundles === undefined) return manifest
   const isRetiredTuple = installationOwned !== undefined && sameBundles(bundles, installationOwned)
-  const isCurrentTuple = sameBundles(bundles, template.bundles)
-  const needsReloadDefault = manifest.dsh?.profile?.patchReload === undefined && isCurrentTuple
-  if (!isRetiredTuple && !needsReloadDefault) return manifest
+  if (!isRetiredTuple) return manifest
   const normalized: ProfileManifest = {
     ...manifest,
     dsh: {
@@ -702,7 +814,6 @@ function normalizeShippedProfile(name: string, dir: string, manifest: ProfileMan
       profile: {
         ...manifest.dsh?.profile,
         bundles: [...template.bundles],
-        patchReload: manifest.dsh?.profile?.patchReload ?? template.patchReload,
       },
     },
   }
@@ -774,13 +885,6 @@ export function loadProfileDirectory(
 ): Profile {
   const manifest = readProfileManifest(binName, dir)
   const bundles = manifest.dsh?.profile?.bundles ?? []
-  const rawPatchReload: unknown = manifest.dsh?.profile?.patchReload
-  if (rawPatchReload !== undefined && rawPatchReload !== 'live' && rawPatchReload !== 'startup') {
-    throw new Error(
-      `${binName}: profile manifest ${join(dir, 'package.json')} dsh.profile.patchReload must be "live" or "startup"`,
-    )
-  }
-  const patchReload = rawPatchReload ?? DEFAULT_PROFILE_PATCH_RELOAD
   const layers = bundles.map((packageName): ProfileLayer => {
     const packageDir = resolveBundleDir(binName, packageName, installAnchor, dir)
     const bundleManifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8')) as ProfileManifest
@@ -795,7 +899,7 @@ export function loadProfileDirectory(
   const patches = options.userLayer !== false && existsSync(patchPath)
     ? loadOverlayPatches(binName, patchPath)
     : []
-  return { name: basename(dir), dir, layers, patchPath, patches, patchReload }
+  return { name: basename(dir), dir, layers, patchPath, patches }
 }
 
 /**
@@ -824,7 +928,7 @@ export function loadProfile(
         `${binName}: profile ${JSON.stringify(name)} does not exist; create it with 'dsh plugin --profile ${name} add <package>'`,
       )
     }
-    initProfile(dir, template.bundles, template.patchReload)
+    initProfile(dir, template.bundles)
   }
   normalizeShippedProfile(name, dir, readProfileManifest(binName, dir))
   return loadProfileDirectory(binName, dir, installAnchor, options)

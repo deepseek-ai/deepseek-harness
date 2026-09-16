@@ -2,7 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent/types'
-import type {} from '@deepseek-ai/dsh-client-connection/client'
+import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type {} from '@deepseek-ai/dsh-client-file-upload/client'
 import { createSessionControlStream } from './transport.ts'
 import { ClientSessions } from './sessions/service.ts'
@@ -70,7 +70,6 @@ export type {
   PendingSubmissionImageAttachment,
   PendingSubmissionPlacement,
   PromptError,
-  QueuedMessage,
   SessionSnapshot,
 } from './contract/snapshot.ts'
 
@@ -98,6 +97,7 @@ export const inject = [
  */
 export function apply(ctx: Context): void {
   const remotes = ctx.remote as unknown as SessionRemotes
+  const connection = ctx.get('connection') as ConnectionHandle
   const sessions = new ClientSessions(ctx, remotes)
   ctx.remote.$on('api-session/added', (summary) => { sessions.handleSessionAdded(summary) })
   ctx.remote.$on('api-session/removed', (sessionId) => { sessions.handleSessionRemoved(sessionId) })
@@ -115,9 +115,15 @@ export function apply(ctx: Context): void {
     accept: (frame) => { sessions.handleControlFrame(frame) },
     failed: (error) => { console.error('[session-controller] control stream failed:', error) },
   })
-  control.start()
-  ctx.on('connection/reset', () => { sessions.handleConnected() })
-  if (ctx.remote.$host.home !== undefined) sessions.handleConnected()
+  const connected = (): void => {
+    if (connection.generation.getSnapshot() === undefined) return
+    // A ready control baseline may arrive before Cordis delivers connection/reset.
+    sessions.handleConnected()
+    control.restart()
+    control.start()
+  }
+  ctx.effect(() => connection.generation.subscribe(connected), 'session-controller.client.generation')
+  connected()
   ctx.typert.contexts.registerClient('agent', {
     identity: candidate => sessions.scopeOf(candidate),
     resolve: sessionId => sessions.resolveAgentScope(sessionId),

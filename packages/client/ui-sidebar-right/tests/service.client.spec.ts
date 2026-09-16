@@ -524,8 +524,8 @@ describe('SidebarRightController — a tab\'s own actions', () => {
   it('adoption syncs the Tab domain on each commit of that store: the seeded guide is pinned, a closed tab aborted', () => {
     const { controller, adopt, instance, pin } = harness()
     const first = adopt(SESSION, instance)
-    // Nothing is synced at adoption, and a commit that materializes another
-    // session leaves this session's occurrences alone.
+    // An empty adopted surface has no resources to pin; another Session's
+    // commits do not populate it.
     instance.actions.open(OTHER)
     expect(pin).not.toHaveBeenCalled()
     instance.actions.setExpanded(SESSION, true)

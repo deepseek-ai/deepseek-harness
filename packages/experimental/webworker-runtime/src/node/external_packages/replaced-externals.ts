@@ -12,6 +12,7 @@ export const REPLACED_EXTERNAL_PACKAGES: readonly string[] = [
   '@deepseek-ai/node-addon-system/flock',
   'koffi',
   'node-pty',
+  'execa',
   'sharp',
   'ws',
 ]

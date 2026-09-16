@@ -7,9 +7,6 @@ export interface PdfView {
   readonly page: number
 }
 
-/** Initial viewing position before a tab reaches another page. */
-export const DEFAULT_PDF_VIEW: PdfView = { page: 1 }
-
 /** Page state isolated by the owning tab record. */
 export interface PdfState {
   byTab: Record<TabId, PdfView>

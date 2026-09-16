@@ -58,12 +58,7 @@ export interface DshBundleManifest {
 export interface DshProfileManifest {
   /** Ordered bundle layer list, using installed package names. */
   bundles?: string[]
-  /** User patch lifecycle; omitted means `live` for custom profiles. */
-  patchReload?: ProfilePatchReload
 }
-
-/** Whether user patch files reload while a profile remains active or apply only at startup. */
-export type ProfilePatchReload = 'live' | 'startup'
 
 /** Client module declaration read by client-modules and the client build. */
 export interface DshClientManifest {

@@ -21,9 +21,6 @@
       "path": "../../../vendor/group"
     },
     {
-      "path": "../../../vendor/hmr"
-    },
-    {
       "path": "../../core/system-prompt"
     },
     {
