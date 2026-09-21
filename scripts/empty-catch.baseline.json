@@ -2,6 +2,15 @@
   "apps/cli/tests/built-bin.e2e.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
+  "apps/desktop/scripts/desktop-publish.ts": {
+    "3b036b0072b7f055aaebb8f06b8573cef49a85fb6a93c2a427ee9af1ec83fce5": 1
+  },
+  "apps/desktop/src/client/WelcomePage.tsx": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "apps/desktop/src/preload-platform-account.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
   "apps/web/tests/chat-scroll-contract.e2e.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
@@ -20,11 +29,14 @@
   "packages/boot/app-boot/src/index.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
-  "packages/boot/hmr/src/index.ts": {
-    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
-  },
   "packages/boot/plugin-manager/src/registry.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/boot/plugin-manager/tests/operations-process.spec.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 2
+  },
+  "packages/boot/plugin-market/src/repository-cache.ts": {
+    "7e75c6700190a354f1bbce07a4bcb3f4b2c897e56c66891ea495b8f4d007f714": 1
   },
   "packages/client/modules/src/index.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 2
@@ -33,10 +45,13 @@
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
   "packages/client/ui-open-in-app/src/client/controller.ts": {
-    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+    "fcfce66431fe6341a798a6fc6d80e9eedbfee291f1a5b790e4726c80bac6324d": 1
   },
   "packages/client/ui-open-in-app/src/client/open-path.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 2
+  },
+  "packages/client/ui-schedule/src/client/recent-time-zones.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
   "packages/client/ui-sidebar-browser/src/client/browser/url.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
@@ -49,6 +64,15 @@
   },
   "packages/context/file-reference-local/tests/search.spec.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/credentials/deepseek-account/src/index.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/credentials/deepseek-account/src/logout.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/experimental/client-ui-forge/src/panel.ts": {
+    "fcfce66431fe6341a798a6fc6d80e9eedbfee291f1a5b790e4726c80bac6324d": 1
   },
   "packages/experimental/inspector/src/client/bridge/transport.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
@@ -92,8 +116,32 @@
   "packages/experimental/inspector/src/worker/realms/host/sources.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
+  "packages/experimental/liveshare/src/client/owner-login.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 3
+  },
+  "packages/experimental/liveshare/src/client/share-relay-address.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/experimental/liveshare/src/client/ShareEditPanel.tsx": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 2
+  },
+  "packages/experimental/liveshare/src/host/shareable-catalog.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 2
+  },
+  "packages/experimental/liveshare/src/host/tunnel-supervision.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/experimental/liveshare/src/host/viewer-dispatch.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
+  "packages/experimental/liveshare/tests/fixtures/base-llm.mjs": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
+  },
   "packages/experimental/ptc-runtime-python/src/index.ts": {
-    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 5
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 2
+  },
+  "packages/experimental/webhook-github/src/handler.ts": {
+    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
   "packages/experimental/webworker-runtime/src/client/client.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
@@ -213,12 +261,6 @@
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 6
   },
   "packages/test-support/client-runtime/src/assembly/test-client.ts": {
-    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
-  },
-  "packages/webhook/webhook-github/src/handler.ts": {
-    "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
-  },
-  "scripts/gen-cordis-catalog.ts": {
     "d47e64f018c8caf61f05cc0c9aede6d0ecac10ec4829d61d9978c50380f1b945": 1
   },
   "scripts/gen-session-format-catalog.ts": {
