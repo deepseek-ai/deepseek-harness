@@ -1,12 +1,18 @@
 /**
  * Reject empty `catch` clauses that break the recorded rule, retiring the legacy clauses.
  *
- * A clause with statements carries a disposition this checker cannot judge, so only an empty
- * block is in scope. An empty clause must name the discarded error, state in a comment why the
- * error needs no handling, and wrap a `try` holding one statement; a wider `try` hides
- * statements whose failures the clause also discards. Legacy clauses that break a condition are
- * recorded in `scripts/empty-catch.baseline.json`, and fixing one requires `--prune` to retire
- * its entry.
+ * An empty clause — a body whose statements, if any, are all bare `;` — must name the discarded
+ * error, state in a comment why the error needs no handling, and wrap a `try` holding one
+ * statement; a wider `try` hides statements whose failures the clause also discards.
+ *
+ * A body holding any other statement is out of scope: whether it handles the error is not
+ * decidable from syntax, so `catch { "use strict" }` and similar no-ops stay legal and the
+ * specification records that boundary. So is a file the parser cannot read past, which yields
+ * whatever clauses it recovered; the typecheck covers tracked source.
+ *
+ * Legacy clauses that break a condition are recorded in `scripts/empty-catch.baseline.json`.
+ * Fixing one requires `--prune` to retire its entry, and a merge that brings recorded clauses
+ * requires `--record <merged-ref>`.
  */
 
 import { readFileSync } from 'node:fs'
@@ -15,6 +21,7 @@ import ts from 'typescript'
 import {
   countInventory,
   listInventorySources,
+  recordInventory,
   runInventoryGate,
   syntaxFingerprint,
   verifyInventory,
@@ -58,7 +65,7 @@ function scriptKind(file: string): ts.ScriptKind {
 /**
  * Whether the span holds a comment token.
  *
- * Scanning the span keeps comment markers inside a string or template literal from counting.
+ * Scanning the span keeps a comment marker inside a string or template literal from counting.
  * @param text - the whole source file.
  * @param from - inclusive start offset of the span.
  * @param to - exclusive end offset of the span.
@@ -72,14 +79,40 @@ function hasComment(text: string, from: number, to: number): boolean {
   return false
 }
 
-/** Bound name of the thrown value, or `undefined` for `catch {`. */
-function bindingName(clause: ts.CatchClause, source: ts.SourceFile): string | undefined {
-  const declaration = clause.variableDeclaration
-  return declaration === undefined ? undefined : declaration.name.getText(source)
+/**
+ * Span that can carry a clause's reason: from just after the preceding token — a line above the
+ * `catch` keyword belongs to the clause — through the end of the line closing its block.
+ * @param clause - the catch clause whose reason to look for.
+ * @param text - the whole source file.
+ * @returns inclusive start and exclusive end offsets.
+ */
+function reasonSpan(clause: ts.CatchClause, text: string): { from: number; to: number } {
+  const lineEnd = text.indexOf('\n', clause.end)
+  return { from: clause.getFullStart(), to: lineEnd === -1 ? text.length : lineEnd }
 }
 
-/** Statements that do something, so a bare `;` cannot stand in for handling an error. */
-function meaningfulStatements(block: ts.Block): readonly ts.Statement[] {
+/** Names a binding pattern binds, so `catch ({})` names nothing. */
+function boundNames(name: ts.BindingName, names: string[]): void {
+  if (ts.isIdentifier(name)) {
+    names.push(name.text)
+    return
+  }
+  for (const element of name.elements) {
+    if (!ts.isOmittedExpression(element)) boundNames(element.name, names)
+  }
+}
+
+/** Bound names of the thrown value; empty for `catch {` and for a pattern that binds nothing. */
+function bindingNames(clause: ts.CatchClause): readonly string[] {
+  const declaration = clause.variableDeclaration
+  if (declaration === undefined) return []
+  const names: string[] = []
+  boundNames(declaration.name, names)
+  return names
+}
+
+/** Statements other than a bare `;`, which cannot stand in for handling an error. */
+function nonEmptyStatements(block: ts.Block): readonly ts.Statement[] {
   return block.statements.filter(statement => !ts.isEmptyStatement(statement))
 }
 
@@ -91,12 +124,13 @@ function analyze(file: string, text: string): EmptyCatchScan {
   const visit = (node: ts.Node): void => {
     if (ts.isCatchClause(node)) {
       clauses += 1
-      if (meaningfulStatements(node.block).length === 0) {
-        const name = bindingName(node, source)
+      if (nonEmptyStatements(node.block).length === 0) {
+        const names = bindingNames(node)
         const defects: EmptyCatchDefect[] = []
-        if (name === undefined || name === '_') defects.push('unnamed')
-        if (!hasComment(text, node.getStart(source), node.end)) defects.push('unexplained')
-        if (!ts.isTryStatement(node.parent) || meaningfulStatements(node.parent.tryBlock).length !== 1) {
+        if (!names.some(name => name !== '_')) defects.push('unnamed')
+        const span = reasonSpan(node, text)
+        if (!hasComment(text, span.from, span.to)) defects.push('unexplained')
+        if (!ts.isTryStatement(node.parent) || nonEmptyStatements(node.parent.tryBlock).length !== 1) {
           defects.push('wide-try')
         }
         if (defects.length > 0) {
@@ -119,7 +153,7 @@ function analyze(file: string, text: string): EmptyCatchScan {
  * Find empty catch clauses that break the rule.
  * @param file - repository-relative source path; its extension selects the parse mode.
  * @param text - source contents.
- * @returns findings in AST traversal order; clauses with statements never match.
+ * @returns findings in AST traversal order; a clause whose body holds a real statement never matches.
  */
 export function findEmptyCatches(file: string, text: string): EmptyCatch[] {
   return analyze(file, text).findings
@@ -168,6 +202,18 @@ export function countEmptyCatches(findings: readonly EmptyCatch[]): EmptyCatchBa
  */
 export function verifyEmptyCatch(repoRoot: string, prune = false): number {
   return verifyInventory(gate, repoRoot, prune)
+}
+
+/**
+ * Record the current clauses, after proving every clause the inventory does not allow already
+ * exists at `ref`. A merge that lands recorded clauses is the only case that adds entries.
+ * @param repoRoot - repository root to scan and write.
+ * @param ref - a revision the repository contains, normally the merged target branch.
+ * @returns the number of recorded clauses.
+ * @throws when `ref` is not an ancestor of the current commit, or a newly allowed clause is absent at `ref`.
+ */
+export function recordEmptyCatch(repoRoot: string, ref: string): number {
+  return recordInventory(gate, repoRoot, ref)
 }
 
 if (import.meta.filename === resolve(process.argv[1] ?? '')) {

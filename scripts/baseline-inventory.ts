@@ -6,12 +6,18 @@
  * the finding's syntax tokens keeps an allowance across formatting and comment edits, while a
  * changed form needs a new allowance. Fixing a recorded finding leaves a stale allowance, which
  * `--prune` retires.
+ *
+ * The inventory grows in exactly one case: a merge that brings findings recorded on the target
+ * branch. `--record REF` writes the current findings only after proving each one the inventory did
+ * not already allow is also a finding at `REF`, so no command can allow a finding this branch
+ * introduced.
  */
 
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import ts from 'typescript'
 
 /** Source areas every inventory gate must find, so a narrowed scan cannot pass silently. */
@@ -190,18 +196,77 @@ export function verifyInventory<T extends InventoryFinding>(
   return findings.length
 }
 
+/** Scan one gate's corpus at another revision, checked out through a temporary Git worktree. */
+function scanRevision<T extends InventoryFinding>(gate: InventoryGate<T>, repoRoot: string, ref: string): T[] {
+  const path = mkdtempSync(join(tmpdir(), 'dsh-inventory-'))
+  try {
+    execFileSync('git', ['worktree', 'add', '--detach', path, ref], { cwd: repoRoot, stdio: 'pipe' })
+    return gate.scan(path)
+  } finally {
+    try {
+      execFileSync('git', ['worktree', 'remove', '--force', path], { cwd: repoRoot, stdio: 'pipe' })
+    } catch (_worktreeNeverAdded) {
+      // A checkout that failed to materialize leaves nothing to remove.
+    }
+    rmSync(path, { recursive: true, force: true })
+  }
+}
+
+/** Identity of one finding inside a revision, for set membership across revisions. */
+function findingKey(finding: InventoryFinding): string {
+  return `${finding.file}\0${finding.fingerprint}`
+}
+
 /**
- * Run one gate as a command: `--prune` retires stale entries, anything else fails the process.
+ * Record the current findings, after proving every finding the inventory does not allow also
+ * exists at `ref`. Entries whose findings are gone are dropped in the same write.
+ * @param gate - the gate whose inventory to write.
+ * @param repoRoot - repository root to scan and write.
+ * @param ref - a revision the repository contains, normally the merged target branch.
+ * @returns the number of recorded findings.
+ * @throws when `ref` is not an ancestor of the current commit, or a newly allowed finding is absent at `ref`.
+ */
+export function recordInventory<T extends InventoryFinding>(
+  gate: InventoryGate<T>,
+  repoRoot: string,
+  ref: string,
+): number {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', ref, 'HEAD'], { cwd: repoRoot, stdio: 'pipe' })
+  } catch (_notAnAncestor) {
+    throw new Error(`${gate.name}: --record needs a revision the current branch already contains: ${ref}`)
+  }
+  const baseline = readInventoryBaseline(gate, repoRoot)
+  const findings = gate.scan(repoRoot)
+  const recorded = new Set(scanRevision(gate, repoRoot, ref).map(findingKey))
+  const unproven = findings.filter(finding =>
+    (baseline[finding.file]?.[finding.fingerprint] ?? 0) === 0 && !recorded.has(findingKey(finding)))
+  if (unproven.length > 0) {
+    throw new Error(`${gate.name}: --record refuses findings absent at ${ref}:\n`
+      + unproven.map(finding => `  ${gate.describe(finding)}`).join('\n'))
+  }
+  writeFileSync(resolve(repoRoot, gate.baselinePath), `${JSON.stringify(countInventory(findings), null, 2)}\n`)
+  return findings.length
+}
+
+/**
+ * Run one gate as a command: `--prune` retires stale entries, `--record REF` writes the inventory
+ * for a merged tree, no argument verifies, anything else fails the process.
  * @param gate - the gate to enforce.
  * @param root - repository root to scan.
  */
 export function runInventoryGate<T extends InventoryFinding>(gate: InventoryGate<T>, root: string): void {
   try {
-    const args = process.argv.slice(2)
-    if (args.length > 1 || (args.length === 1 && args[0] !== '--prune')) {
-      throw new Error(`Usage: pnpm run ${gate.name} [--prune]`)
+    const [first, second] = process.argv.slice(2)
+    if (process.argv.length === 3 && first === '--prune') {
+      console.log(gate.success(verifyInventory(gate, root, true)))
+    } else if (process.argv.length === 4 && first === '--record' && second !== undefined) {
+      console.log(`${gate.name}: recorded ${String(recordInventory(gate, root, second))} findings.`)
+    } else if (process.argv.length === 2) {
+      console.log(gate.success(verifyInventory(gate, root)))
+    } else {
+      throw new Error(`Usage: pnpm run ${gate.name} [--prune | --record <ref>]`)
     }
-    console.log(gate.success(verifyInventory(gate, root, args[0] === '--prune')))
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error))
     process.exitCode = 1
