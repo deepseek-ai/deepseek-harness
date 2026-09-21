@@ -78,6 +78,11 @@ function bindingName(clause: ts.CatchClause, source: ts.SourceFile): string | un
   return declaration === undefined ? undefined : declaration.name.getText(source)
 }
 
+/** Statements that do something, so a bare `;` cannot stand in for handling an error. */
+function meaningfulStatements(block: ts.Block): readonly ts.Statement[] {
+  return block.statements.filter(statement => !ts.isEmptyStatement(statement))
+}
+
 function analyze(file: string, text: string): EmptyCatchScan {
   const normalized = file.replaceAll('\\', '/')
   const source = ts.createSourceFile(normalized, text, ts.ScriptTarget.Latest, true, scriptKind(normalized))
@@ -86,12 +91,14 @@ function analyze(file: string, text: string): EmptyCatchScan {
   const visit = (node: ts.Node): void => {
     if (ts.isCatchClause(node)) {
       clauses += 1
-      if (node.block.statements.length === 0) {
+      if (meaningfulStatements(node.block).length === 0) {
         const name = bindingName(node, source)
         const defects: EmptyCatchDefect[] = []
         if (name === undefined || name === '_') defects.push('unnamed')
         if (!hasComment(text, node.getStart(source), node.end)) defects.push('unexplained')
-        if (!ts.isTryStatement(node.parent) || node.parent.tryBlock.statements.length !== 1) defects.push('wide-try')
+        if (!ts.isTryStatement(node.parent) || meaningfulStatements(node.parent.tryBlock).length !== 1) {
+          defects.push('wide-try')
+        }
         if (defects.length > 0) {
           findings.push({
             file: normalized,

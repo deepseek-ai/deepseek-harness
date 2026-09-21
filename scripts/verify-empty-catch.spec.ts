@@ -34,6 +34,7 @@ describe('empty catch syntax', () => {
     ['reason between the keyword and the block', 'try { run() } catch /* already gone */ {}', ['unnamed']],
     ['comment above the statement', '// already gone\ntry { run() } catch {}', ['unnamed', 'unexplained']],
     ['multi-statement try', 'try { first(); second() } catch (_missing) { /* already gone */ }', ['wide-try']],
+    ['a body of empty statements', 'try { run() } catch { ;;; }', ['unnamed', 'unexplained']],
     ['a nested clause inside a handled clause', 'try { run() } catch (error) { try { log() } catch {} }', ['unnamed', 'unexplained']],
   ])('reports %s', (_name, text, expected) => {
     expect(defects('input.ts', text)).toEqual([expected])
@@ -43,6 +44,7 @@ describe('empty catch syntax', () => {
     ['a named and explained clause', 'try { run() } catch (_missing) { /* already gone */ }'],
     ['an ordinary binding name', 'try { run() } catch (error) { /* reported above */ }'],
     ['a finally block', 'try { run() } catch (_missing) { /* already gone */ } finally { stop() }'],
+    ['empty statements beside the try statement', 'try { ; run() } catch (_missing) { /* already gone */ }'],
     ['a destructured binding', 'try { run() } catch ({ message }) { /* reported above */ }'],
     ['a handled clause around a conforming clause', 'try { run() } catch (error) { try { log() } catch (_inner) { /* reported */ } }'],
   ])('accepts %s', (_name, text) => {
